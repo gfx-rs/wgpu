@@ -92,6 +92,7 @@ pub trait DynAccelerationStructure: DynResource + std::fmt::Debug {}
 pub trait DynBindGroup: DynResource + std::fmt::Debug {}
 pub trait DynBindGroupLayout: DynResource + std::fmt::Debug {}
 pub trait DynBuffer: DynResource + std::fmt::Debug {}
+pub trait DynCommandBuffer: DynResource + std::fmt::Debug {}
 pub trait DynComputePipeline: DynResource + std::fmt::Debug {}
 pub trait DynFence: DynResource + std::fmt::Debug {}
 pub trait DynPipelineCache: DynResource + std::fmt::Debug {}
