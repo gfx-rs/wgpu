@@ -693,6 +693,8 @@ pub struct Fence {
     pending: Vec<(crate::FenceValue, glow::Fence)>,
 }
 
+impl crate::DynFence for Fence {}
+
 #[cfg(any(
     not(target_arch = "wasm32"),
     all(

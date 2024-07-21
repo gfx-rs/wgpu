@@ -431,7 +431,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     /// before a lower-valued operation, then waiting for the fence to reach the
     /// lower value could return before the lower-valued operation has actually
     /// finished.
-    type Fence: fmt::Debug + WasmNotSendSync;
+    type Fence: DynFence + fmt::Debug;
 
     type BindGroupLayout: fmt::Debug + WasmNotSendSync;
     type BindGroup: DynBindGroup;

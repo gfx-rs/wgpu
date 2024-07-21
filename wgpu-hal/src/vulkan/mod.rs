@@ -901,6 +901,8 @@ pub enum Fence {
     },
 }
 
+impl crate::DynFence for Fence {}
+
 impl Fence {
     /// Return the highest [`FenceValue`] among the signalled fences in `active`.
     ///
