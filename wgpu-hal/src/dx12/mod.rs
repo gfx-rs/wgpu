@@ -525,6 +525,8 @@ pub struct Fence {
     raw: d3d12::Fence,
 }
 
+impl crate::DynFence for Fence {}
+
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
