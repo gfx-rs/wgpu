@@ -1,9 +1,11 @@
 mod command;
 mod device;
+mod queue;
 mod surface;
 
 pub use command::DynCommandEncoder;
 pub use device::DynDevice;
+pub use queue::DynQueue;
 pub use surface::{DynAcquiredSurfaceTexture, DynSurface};
 
 use std::any::Any;
