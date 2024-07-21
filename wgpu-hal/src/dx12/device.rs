@@ -35,11 +35,7 @@ impl super::Device {
         library: &Arc<D3D12Lib>,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, crate::DeviceError> {
-        let mem_allocator = if private_caps.suballocation_supported {
-            super::suballocation::create_allocator_wrapper(&raw, memory_hints)?
-        } else {
-            None
-        };
+        let mem_allocator = super::suballocation::create_allocator_wrapper(&raw, memory_hints)?;
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -383,9 +379,8 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn exit(mut self, _queue: super::Queue) {
+    unsafe fn exit(self, _queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
-        self.mem_allocator = None;
     }
 
     unsafe fn create_buffer(
@@ -415,7 +410,6 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        // TODO: Return HR as part of DeviceError straight away?
         let allocation =
             super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
 
@@ -436,17 +430,12 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
-        // Only happens when it's using the windows_rs feature and there's an allocation
+        // Always Some except on Intel Xe: https://github.com/gfx-rs/wgpu/issues/3552
         if let Some(alloc) = buffer.allocation.take() {
             // Resource should be dropped before free suballocation
             drop(buffer);
 
-            super::suballocation::free_buffer_allocation(
-                self,
-                alloc,
-                // SAFETY: for allocations to exist, the allocator must exist
-                unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
-            );
+            super::suballocation::free_buffer_allocation(self, alloc, &self.mem_allocator);
         }
 
         self.counters.buffers.sub(1);
@@ -536,7 +525,7 @@ impl crate::Device for super::Device {
                 self,
                 alloc,
                 // SAFETY: for allocations to exist, the allocator must exist
-                unsafe { self.mem_allocator.as_ref().unwrap_unchecked() },
+                &self.mem_allocator,
             );
         }
 
@@ -1829,15 +1818,8 @@ impl crate::Device for super::Device {
         self.counters.clone()
     }
 
-    #[cfg(feature = "windows_rs")]
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let mut upstream = {
-            self.mem_allocator
-                .as_ref()?
-                .lock()
-                .allocator
-                .generate_report()
-        };
+        let mut upstream = self.mem_allocator.lock().allocator.generate_report();
 
         let allocations = upstream
             .allocations

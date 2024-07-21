@@ -548,7 +548,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
+    mem_allocator: Mutex<suballocation::GpuAllocatorWrapper>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     counters: wgt::HalCounters,
 }

@@ -76,7 +76,6 @@ dx12 = [
     "dep:range-alloc",
     "dep:windows-core",
     "gpu-allocator/d3d12",
-    "windows_rs",
     "naga/hlsl-out-if-target-windows",
     "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D",
@@ -90,9 +89,6 @@ dx12 = [
     "windows/Win32_System_Threading",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
-windows_rs = [
-    "dep:gpu-allocator",
-] # TODO: This feature is optional after the migration to windows-rs
 dxc_shader_compiler = ["dep:hassle-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]

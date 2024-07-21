@@ -1,26 +1,18 @@
+// TODO: Refactor this module to not be split between two interchangeable APIs, as both are used
+// at the same time.
 pub(crate) use allocation::{
     create_allocator_wrapper, create_buffer_resource, create_texture_resource,
     free_buffer_allocation, free_texture_allocation, AllocationWrapper, GpuAllocatorWrapper,
 };
 
-#[cfg(not(feature = "windows_rs"))]
-use committed as allocation;
-#[cfg(feature = "windows_rs")]
+/// Placed allocations are always favoured
 use placed as allocation;
 
-// TODO: windows_rs is the default now?
-// This exists to work around https://github.com/gfx-rs/wgpu/issues/3207
-// Currently this will work the older, slower way if the windows_rs feature is disabled,
-// and will use the fast path of suballocating buffers and textures using gpu_allocator if
-// the windows_rs feature is enabled.
-
 // This is the fast path using gpu_allocator to suballocate buffers and textures.
-#[cfg(feature = "windows_rs")]
 mod placed {
 
     use gpu_allocator::{d3d12::AllocationCreateDesc, MemoryLocation};
     use parking_lot::Mutex;
-    use wgt::assertions::StrictAssertUnwrapExt;
     use windows::Win32::Graphics::Direct3D12;
 
     use crate::auxil::dxgi::result::HResult as _;
@@ -38,7 +30,7 @@ mod placed {
     pub(crate) fn create_allocator_wrapper(
         raw: &Direct3D12::ID3D12Device,
         memory_hints: &wgt::MemoryHints,
-    ) -> Result<Option<Mutex<GpuAllocatorWrapper>>, crate::DeviceError> {
+    ) -> Result<Mutex<GpuAllocatorWrapper>, crate::DeviceError> {
         // TODO: the allocator's configuration should take hardware capability into
         // account.
         let mb = 1024 * 1024;
@@ -61,7 +53,7 @@ mod placed {
             debug_settings: Default::default(),
             allocation_sizes,
         }) {
-            Ok(allocator) => Ok(Some(Mutex::new(GpuAllocatorWrapper { allocator }))),
+            Ok(allocator) => Ok(Mutex::new(GpuAllocatorWrapper { allocator })),
             Err(e) => {
                 log::error!("Failed to create d3d12 allocator, error: {}", e);
                 Err(e)?
@@ -78,10 +70,10 @@ mod placed {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
-        // It's a workaround for Intel Xe drivers.
+        // Workaround for Intel Xe drivers
         if !device.private_caps.suballocation_supported {
             return super::committed::create_buffer_resource(device, desc, raw_desc, resource)
-                .map(|_| None);
+                .map(|()| None);
         }
 
         let location = match (is_cpu_read, is_cpu_write) {
@@ -93,16 +85,8 @@ mod placed {
 
         let name = desc.label.unwrap_or("Unlabeled buffer");
 
-        // SAFETY: allocator exists when the windows_rs feature is enabled
-        let mut allocator = unsafe {
-            device
-                .mem_allocator
-                .as_ref()
-                .strict_unwrap_unchecked()
-                .lock()
-        };
+        let mut allocator = device.mem_allocator.lock();
 
-        // let mut allocator = unsafe { device.mem_allocator.as_ref().unwrap_unchecked().lock() };
         let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
             allocator.allocator.device(),
             &raw_desc,
@@ -141,24 +125,17 @@ mod placed {
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
         resource: &mut Option<Direct3D12::ID3D12Resource>,
     ) -> Result<Option<AllocationWrapper>, crate::DeviceError> {
-        // It's a workaround for Intel Xe drivers.
+        // Workaround for Intel Xe drivers
         if !device.private_caps.suballocation_supported {
             return super::committed::create_texture_resource(device, desc, raw_desc, resource)
-                .map(|_| None);
+                .map(|()| None);
         }
 
         let location = MemoryLocation::GpuOnly;
 
         let name = desc.label.unwrap_or("Unlabeled texture");
 
-        // SAFETY: allocator exists when the windows_rs feature is enabled
-        let mut allocator = unsafe {
-            device
-                .mem_allocator
-                .as_ref()
-                .strict_unwrap_unchecked()
-                .lock()
-        };
+        let mut allocator = device.mem_allocator.lock();
         let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
             allocator.allocator.device(),
             &raw_desc,
@@ -261,36 +238,19 @@ mod placed {
     }
 }
 
-// This is the older, slower path where it doesn't suballocate buffers.
-// Tracking issue for when it can be removed: https://github.com/gfx-rs/wgpu/issues/3207
+// This is the older, slower path where it doesn't suballocate buffers, which appears to
+// be broken on Intel Xe: https://github.com/gfx-rs/wgpu/issues/3552
 mod committed {
-    use parking_lot::Mutex;
     use windows::Win32::Graphics::Direct3D12;
 
     use crate::auxil::dxgi::result::HResult;
-
-    // Allocator isn't needed when not suballocating with gpu_allocator
-    #[derive(Debug)]
-    pub(crate) struct GpuAllocatorWrapper {}
-
-    // Allocations aren't needed when not suballocating with gpu_allocator
-    #[derive(Debug)]
-    pub(crate) struct AllocationWrapper {}
-
-    #[allow(unused)]
-    pub(crate) fn create_allocator_wrapper(
-        _raw: &Direct3D12::ID3D12Device,
-        _memory_hints: &wgt::MemoryHints,
-    ) -> Result<Option<Mutex<GpuAllocatorWrapper>>, crate::DeviceError> {
-        Ok(None)
-    }
 
     pub(crate) fn create_buffer_resource(
         device: &crate::dx12::Device,
         desc: &crate::BufferDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
         resource: &mut Option<Direct3D12::ID3D12Resource>,
-    ) -> Result<Option<AllocationWrapper>, crate::DeviceError> {
+    ) -> Result<(), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
@@ -333,7 +293,7 @@ mod committed {
             return Err(crate::DeviceError::ResourceCreationFailed);
         }
 
-        Ok(None)
+        Ok(())
     }
 
     pub(crate) fn create_texture_resource(
@@ -341,7 +301,7 @@ mod committed {
         _desc: &crate::TextureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
         resource: &mut Option<Direct3D12::ID3D12Resource>,
-    ) -> Result<Option<AllocationWrapper>, crate::DeviceError> {
+    ) -> Result<(), crate::DeviceError> {
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
             Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
             CPUPageProperty: Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
@@ -373,24 +333,6 @@ mod committed {
             return Err(crate::DeviceError::ResourceCreationFailed);
         }
 
-        Ok(None)
-    }
-
-    #[allow(unused)]
-    pub(crate) fn free_buffer_allocation(
-        _device: &crate::dx12::Device,
-        _allocation: AllocationWrapper,
-        _allocator: &Mutex<GpuAllocatorWrapper>,
-    ) {
-        // No-op when not using gpu-allocator
-    }
-
-    #[allow(unused)]
-    pub(crate) fn free_texture_allocation(
-        _device: &crate::dx12::Device,
-        _allocation: AllocationWrapper,
-        _allocator: &Mutex<GpuAllocatorWrapper>,
-    ) {
-        // No-op when not using gpu-allocator
+        Ok(())
     }
 }
