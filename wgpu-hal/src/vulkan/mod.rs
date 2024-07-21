@@ -94,6 +94,7 @@ crate::impl_dyn_resource!(
     Sampler,
     ShaderModule,
     Surface,
+    SurfaceTexture,
     Texture,
     TextureView
 );
@@ -376,6 +377,8 @@ pub struct SurfaceTexture {
     texture: Texture,
     surface_semaphores: Arc<Mutex<SwapchainImageSemaphores>>,
 }
+
+impl crate::DynSurfaceTexture for SurfaceTexture {}
 
 impl Borrow<Texture> for SurfaceTexture {
     fn borrow(&self) -> &Texture {

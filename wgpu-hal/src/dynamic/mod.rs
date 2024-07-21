@@ -84,6 +84,7 @@ pub trait DynQuerySet: DynResource + std::fmt::Debug {}
 pub trait DynRenderPipeline: DynResource + std::fmt::Debug {}
 pub trait DynSampler: DynResource + std::fmt::Debug {}
 pub trait DynShaderModule: DynResource + std::fmt::Debug {}
+pub trait DynSurfaceTexture: DynResource + std::fmt::Debug {}
 pub trait DynTexture: DynResource + std::fmt::Debug {}
 pub trait DynTextureView: DynResource + std::fmt::Debug {}
 

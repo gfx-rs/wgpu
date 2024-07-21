@@ -456,6 +456,7 @@ pub struct Texture {
 }
 
 impl crate::DynTexture for Texture {}
+impl crate::DynSurfaceTexture for Texture {}
 
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}

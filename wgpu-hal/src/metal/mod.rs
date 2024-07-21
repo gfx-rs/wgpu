@@ -87,6 +87,7 @@ crate::impl_dyn_resource!(
     Sampler,
     ShaderModule,
     Surface,
+    SurfaceTexture,
     Texture,
     TextureView
 );
@@ -381,6 +382,8 @@ pub struct SurfaceTexture {
     drawable: metal::MetalDrawable,
     present_with_transaction: bool,
 }
+
+impl crate::DynSurfaceTexture for SurfaceTexture {}
 
 impl std::borrow::Borrow<Texture> for SurfaceTexture {
     fn borrow(&self) -> &Texture {

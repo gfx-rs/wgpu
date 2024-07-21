@@ -269,7 +269,7 @@ pub use dynamic::{
     DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynBuffer, DynCommandBuffer,
     DynCommandEncoder, DynComputePipeline, DynDevice, DynFence, DynPipelineCache,
     DynPipelineLayout, DynQuerySet, DynRenderPipeline, DynResource, DynSampler, DynShaderModule,
-    DynTexture, DynTextureView,
+    DynSurfaceTexture, DynTexture, DynTextureView,
 };
 
 use std::{
@@ -409,7 +409,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
 
     type Buffer: DynBuffer;
     type Texture: DynTexture;
-    type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
+    type SurfaceTexture: DynSurfaceTexture + fmt::Debug + Borrow<Self::Texture>;
     type TextureView: DynTextureView;
     type Sampler: fmt::Debug + WasmNotSendSync;
     type QuerySet: DynQuerySet;
