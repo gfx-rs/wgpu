@@ -46,6 +46,7 @@ impl crate::DynBindGroup for Resource {}
 impl crate::DynBuffer for Resource {}
 impl crate::DynCommandBuffer for Resource {}
 impl crate::DynComputePipeline for Resource {}
+impl crate::DynFence for Resource {}
 impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
 impl crate::DynRenderPipeline for Resource {}
