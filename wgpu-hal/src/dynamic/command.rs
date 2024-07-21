@@ -8,7 +8,7 @@ use crate::{
     RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
 };
 
-use super::DynResourceExt;
+use super::DynResourceExt as _;
 
 pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
