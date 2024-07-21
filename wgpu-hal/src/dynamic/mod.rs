@@ -1,8 +1,10 @@
 mod command;
 mod device;
+mod surface;
 
-pub use self::command::DynCommandEncoder;
-pub use self::device::DynDevice;
+pub use command::DynCommandEncoder;
+pub use device::DynDevice;
+pub use surface::{DynAcquiredSurfaceTexture, DynSurface};
 
 use std::any::Any;
 
