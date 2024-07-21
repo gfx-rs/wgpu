@@ -908,6 +908,8 @@ pub struct CommandBuffer {
     raw: metal::CommandBuffer,
 }
 
+impl crate::DynCommandBuffer for CommandBuffer {}
+
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 

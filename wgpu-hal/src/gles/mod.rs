@@ -993,6 +993,8 @@ pub struct CommandBuffer {
     queries: Vec<glow::Query>,
 }
 
+impl crate::DynCommandBuffer for CommandBuffer {}
+
 impl fmt::Debug for CommandBuffer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut builder = f.debug_struct("CommandBuffer");
