@@ -40,8 +40,7 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-crate::impl_dyn_resource!(Resource);
-crate::impl_dyn_resource!(Encoder);
+crate::impl_dyn_resource!(Resource, Encoder, Context);
 
 impl crate::DynBindGroup for Resource {}
 impl crate::DynBuffer for Resource {}
