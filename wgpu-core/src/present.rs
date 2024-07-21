@@ -90,7 +90,7 @@ pub enum ConfigureSurfaceError {
         available: Vec<wgt::CompositeAlphaMode>,
     },
     #[error("Requested usage {requested:?} is not in the list of supported usages: {available:?}")]
-    UnsupportedUsage  {
+    UnsupportedUsage {
         requested: hal::TextureUses,
         available: hal::TextureUses,
     },
