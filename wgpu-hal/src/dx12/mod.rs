@@ -94,6 +94,7 @@ crate::impl_dyn_resource!(
     CommandBuffer,
     CommandEncoder,
     ComputePipeline,
+    Device,
     Fence,
     PipelineCache,
     PipelineLayout,
