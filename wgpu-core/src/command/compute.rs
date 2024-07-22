@@ -1,4 +1,5 @@
 use crate::{
+    api_log,
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
     },
@@ -25,7 +26,6 @@ use crate::{
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
     Label,
 };
-
 use hal::CommandEncoder as _;
 
 use thiserror::Error;
@@ -533,6 +533,8 @@ impl Global {
             None
         };
 
+        let api_log_enabled = crate::api_log_enabled();
+
         let hal_desc = hal::ComputePassDescriptor {
             label: hal_label(base.label.as_deref(), self.instance.flags),
             timestamp_writes,
@@ -552,6 +554,13 @@ impl Global {
                     bind_group,
                 } => {
                     let scope = PassErrorScope::SetBindGroup;
+
+                    api_log!(
+                        if api_log_enabled,
+                        "ComputePass::set_bind_group {index} {}",
+                        bind_group.error_ident()
+                    );
+
                     set_bind_group(
                         &mut state,
                         cmd_buf,
@@ -564,6 +573,7 @@ impl Global {
                 }
                 ArcComputeCommand::SetPipeline(pipeline) => {
                     let scope = PassErrorScope::SetPipelineCompute;
+                    api_log!(if api_log_enabled, "ComputePass::set_pipeline {}", pipeline.error_ident());
                     set_pipeline(&mut state, cmd_buf, pipeline).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::SetPushConstant {
@@ -572,6 +582,7 @@ impl Global {
                     values_offset,
                 } => {
                     let scope = PassErrorScope::SetPushConstant;
+                    api_log!(if api_log_enabled, "ComputePass::set_push_constants");
                     set_push_constant(
                         &mut state,
                         &base.push_constant_data,
@@ -582,28 +593,36 @@ impl Global {
                     .map_pass_err(scope)?;
                 }
                 ArcComputeCommand::Dispatch(groups) => {
+                    api_log!(if api_log_enabled, "ComputePass::dispatch {groups:?}");
                     let scope = PassErrorScope::Dispatch { indirect: false };
                     dispatch(&mut state, groups).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::DispatchIndirect { buffer, offset } => {
                     let scope = PassErrorScope::Dispatch { indirect: true };
+                    api_log!(if api_log_enabled, "ComputePass::dispatch_indirect {} {offset}", buffer.error_ident());
                     dispatch_indirect(&mut state, cmd_buf, buffer, offset).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::PushDebugGroup { color: _, len } => {
-                    push_debug_group(&mut state, &base.string_data, len);
+                    push_debug_group(&mut state, &base.string_data, len, api_log_enabled);
                 }
                 ArcComputeCommand::PopDebugGroup => {
                     let scope = PassErrorScope::PopDebugGroup;
-                    pop_debug_group(&mut state).map_pass_err(scope)?;
+                    pop_debug_group(&mut state, api_log_enabled).map_pass_err(scope)?;
                 }
                 ArcComputeCommand::InsertDebugMarker { color: _, len } => {
-                    insert_debug_marker(&mut state, &base.string_data, len);
+                    insert_debug_marker(&mut state, &base.string_data, len, api_log_enabled);
                 }
                 ArcComputeCommand::WriteTimestamp {
                     query_set,
                     query_index,
                 } => {
                     let scope = PassErrorScope::WriteTimestamp;
+                    api_log!(
+                        if api_log_enabled,
+                        "ComputePass::write_timestamps {query_index} {}",
+                        query_set.error_ident()
+                    );
+
                     write_timestamp(&mut state, cmd_buf, query_set, query_index)
                         .map_pass_err(scope)?;
                 }
@@ -612,6 +631,8 @@ impl Global {
                     query_index,
                 } => {
                     let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+                    api_log!(if api_log_enabled, "ComputePass::begin_occlusion_query {query_index}");
+
                     validate_and_begin_pipeline_statistics_query(
                         query_set,
                         state.raw_encoder,
@@ -625,6 +646,7 @@ impl Global {
                 }
                 ArcComputeCommand::EndPipelineStatisticsQuery => {
                     let scope = PassErrorScope::EndPipelineStatisticsQuery;
+                    api_log!(if api_log_enabled, "ComputePass::end_pipeline_statistics_query");
                     end_pipeline_statistics_query(state.raw_encoder, &mut state.active_query)
                         .map_pass_err(scope)?;
                 }
@@ -916,7 +938,12 @@ fn dispatch_indirect<A: HalApi>(
     Ok(())
 }
 
-fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: usize) {
+fn push_debug_group<A: HalApi>(
+    state: &mut State<A>,
+    string_data: &[u8],
+    len: usize,
+    api_log_enabled: bool,
+) {
     state.debug_scope_depth += 1;
     if !state
         .device
@@ -925,6 +952,9 @@ fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: us
     {
         let label =
             str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+
+        api_log!(if api_log_enabled, "ComputePass::push_debug_group {label:?}");
+
         unsafe {
             state.raw_encoder.begin_debug_marker(label);
         }
@@ -932,7 +962,10 @@ fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: us
     state.string_offset += len;
 }
 
-fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), ComputePassErrorInner> {
+fn pop_debug_group<A: HalApi>(
+    state: &mut State<A>,
+    api_log_enabled: bool,
+) -> Result<(), ComputePassErrorInner> {
     if state.debug_scope_depth == 0 {
         return Err(ComputePassErrorInner::InvalidPopDebugGroup);
     }
@@ -942,6 +975,8 @@ fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), ComputePassErr
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
     {
+        api_log!(if api_log_enabled, "ComputePass::pop_debug_group");
+
         unsafe {
             state.raw_encoder.end_debug_marker();
         }
@@ -949,7 +984,12 @@ fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), ComputePassErr
     Ok(())
 }
 
-fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: usize) {
+fn insert_debug_marker<A: HalApi>(
+    state: &mut State<A>,
+    string_data: &[u8],
+    len: usize,
+    api_log_enabled: bool,
+) {
     if !state
         .device
         .instance_flags
@@ -957,6 +997,9 @@ fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len:
     {
         let label =
             str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+
+        api_log!(if api_log_enabled, "ComputePass::insert_debug_marker {label}");
+
         unsafe { state.raw_encoder.insert_debug_marker(label) }
     }
     state.string_offset += len;
