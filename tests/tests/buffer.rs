@@ -230,7 +230,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
                         cache: None,
                     });
             },
-            None,
+            Some("shader global resourcebinding { group: 0, binding: 0 } is not available in the pipeline layout"),
         );
     });
 
@@ -335,7 +335,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 drop(pass);
                 let _ = encoder.finish();
             },
-            None,
+            Some("buffer is bound with size 16 where the shader expects 32 in group[0] compact index 0"),
         );
     });
 
