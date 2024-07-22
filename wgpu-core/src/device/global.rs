@@ -2009,7 +2009,10 @@ impl Global {
                 config.composite_alpha_mode = new_alpha_mode;
             }
             if !caps.usage.contains(config.usage) {
-                return Err(E::UnsupportedUsage);
+                return Err(E::UnsupportedUsage {
+                    requested: config.usage,
+                    available: caps.usage,
+                });
             }
             if width == 0 || height == 0 {
                 return Err(E::ZeroArea);

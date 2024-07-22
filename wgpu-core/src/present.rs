@@ -89,8 +89,11 @@ pub enum ConfigureSurfaceError {
         requested: wgt::CompositeAlphaMode,
         available: Vec<wgt::CompositeAlphaMode>,
     },
-    #[error("Requested usage is not supported")]
-    UnsupportedUsage,
+    #[error("Requested usage {requested:?} is not in the list of supported usages: {available:?}")]
+    UnsupportedUsage {
+        requested: hal::TextureUses,
+        available: hal::TextureUses,
+    },
     #[error("Gpu got stuck :(")]
     StuckGpu,
 }
