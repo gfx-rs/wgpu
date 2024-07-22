@@ -11,7 +11,7 @@ extern "C" {
 ///
 /// returns true on success
 ///
-/// # Safety:
+/// # Safety
 ///
 /// - opengl context MUST BE current
 /// - extension_name_null_terminated argument must be a valid string with null terminator.
