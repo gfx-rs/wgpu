@@ -144,20 +144,21 @@ mod compat {
 
                         let mut errors = Vec::new();
 
-                        let mut expected_bgl_entries = expected_bgl.entries.iter();
-                        let mut assigned_bgl_entries = assigned_bgl.entries.iter();
+                        let mut expected_bgl_entries = expected_bgl.entries.values();
+                        let mut assigned_bgl_entries = assigned_bgl.entries.values();
                         let zipped = crate::utils::ZipWithProperAdvance::new(
                             &mut expected_bgl_entries,
                             &mut assigned_bgl_entries,
                         );
 
-                        for ((&binding, expected_entry), (_, assigned_entry)) in zipped {
+                        for (expected_entry, assigned_entry) in zipped {
                             if assigned_entry.binding != expected_entry.binding {
                                 errors.push(EntryError::Binding {
                                     expected: expected_entry.binding,
                                     assigned: assigned_entry.binding,
                                 });
                             }
+                            let binding = expected_entry.binding;
                             if assigned_entry.visibility != expected_entry.visibility {
                                 errors.push(EntryError::Visibility {
                                     binding,
@@ -181,12 +182,16 @@ mod compat {
                             }
                         }
 
-                        for (&binding, _) in expected_bgl_entries {
-                            errors.push(EntryError::ExtraExpected { binding });
+                        for expected_entry in expected_bgl_entries {
+                            errors.push(EntryError::ExtraExpected {
+                                binding: expected_entry.binding,
+                            });
                         }
 
-                        for (&binding, _) in assigned_bgl_entries {
-                            errors.push(EntryError::ExtraAssigned { binding });
+                        for assigned_entry in assigned_bgl_entries {
+                            errors.push(EntryError::ExtraAssigned {
+                                binding: assigned_entry.binding,
+                            });
                         }
 
                         Err(Error::Incompatible {
