@@ -666,7 +666,7 @@ impl Global {
 
         // Note: `_source_bytes_per_array_layer` is ignored since we
         // have a staging copy, and it can have a different value.
-        let (_, _source_bytes_per_array_layer) = validate_linear_texture_data(
+        let (required_bytes_in_copy, _source_bytes_per_array_layer) = validate_linear_texture_data(
             data_layout,
             dst.desc.format,
             destination.aspect,
@@ -681,32 +681,6 @@ impl Global {
                 .require_downlevel_flags(wgt::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES)
                 .map_err(TransferError::from)?;
         }
-
-        let (block_width, block_height) = dst.desc.format.block_dimensions();
-        let width_blocks = size.width / block_width;
-        let height_blocks = size.height / block_height;
-
-        let block_rows_per_image = data_layout.rows_per_image.unwrap_or(
-            // doesn't really matter because we need this only if we copy
-            // more than one layer, and then we validate for this being not
-            // None
-            height_blocks,
-        );
-
-        let block_size = dst
-            .desc
-            .format
-            .block_copy_size(Some(destination.aspect))
-            .unwrap();
-        let bytes_per_row_alignment =
-            get_lowest_common_denom(device.alignments.buffer_copy_pitch.get() as u32, block_size);
-        let stage_bytes_per_row =
-            wgt::math::align_to(block_size * width_blocks, bytes_per_row_alignment);
-
-        let block_rows_in_copy =
-            (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
-        let stage_size =
-            wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64).unwrap();
 
         let mut pending_writes = device.pending_writes.lock();
         let encoder = pending_writes.activate();
@@ -763,33 +737,47 @@ impl Global {
 
         let dst_raw = dst.try_raw(&snatch_guard)?;
 
-        let bytes_per_row = data_layout
-            .bytes_per_row
-            .unwrap_or(width_blocks * block_size);
+        let (block_width, block_height) = dst.desc.format.block_dimensions();
+        let width_in_blocks = size.width / block_width;
+        let height_in_blocks = size.height / block_height;
+
+        let block_size = dst
+            .desc
+            .format
+            .block_copy_size(Some(destination.aspect))
+            .unwrap();
+        let bytes_in_last_row = width_in_blocks * block_size;
+
+        let bytes_per_row = data_layout.bytes_per_row.unwrap_or(bytes_in_last_row);
+        let rows_per_image = data_layout.rows_per_image.unwrap_or(height_in_blocks);
+
+        let bytes_per_row_alignment =
+            get_lowest_common_denom(device.alignments.buffer_copy_pitch.get() as u32, block_size);
+        let stage_bytes_per_row = wgt::math::align_to(bytes_in_last_row, bytes_per_row_alignment);
 
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let mut staging_buffer = StagingBuffer::new(device, stage_size)?;
-
-        if stage_bytes_per_row == bytes_per_row {
+        let staging_buffer = if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
             // Fast path if the data is already being aligned optimally.
-            unsafe {
-                staging_buffer.write_with_offset(
-                    data,
-                    data_layout.offset as isize,
-                    0,
-                    (data.len() as u64 - data_layout.offset) as usize,
-                );
-            }
+            let stage_size = wgt::BufferSize::new(required_bytes_in_copy).unwrap();
+            let mut staging_buffer = StagingBuffer::new(device, stage_size)?;
+            staging_buffer.write(&data[data_layout.offset as usize..]);
+            staging_buffer
         } else {
             profiling::scope!("copy chunked");
             // Copy row by row into the optimal alignment.
+            let block_rows_in_copy =
+                (size.depth_or_array_layers - 1) * rows_per_image + height_in_blocks;
+            let stage_size =
+                wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
+                    .unwrap();
+            let mut staging_buffer = StagingBuffer::new(device, stage_size)?;
             let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
             for layer in 0..size.depth_or_array_layers {
-                let rows_offset = layer * block_rows_per_image;
-                for row in rows_offset..rows_offset + height_blocks {
+                let rows_offset = layer * rows_per_image;
+                for row in rows_offset..rows_offset + height_in_blocks {
                     let src_offset = data_layout.offset as u32 + row * bytes_per_row;
                     let dst_offset = row * stage_bytes_per_row;
                     unsafe {
@@ -802,20 +790,21 @@ impl Global {
                     }
                 }
             }
-        }
+            staging_buffer
+        };
 
         let staging_buffer = staging_buffer.flush();
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
+        let regions = (0..array_layer_count).map(|array_layer_offset| {
             let mut texture_base = dst_base.clone();
-            texture_base.array_layer += rel_array_layer;
+            texture_base.array_layer += array_layer_offset;
             hal::BufferTextureCopy {
                 buffer_layout: wgt::ImageDataLayout {
-                    offset: rel_array_layer as u64
-                        * block_rows_per_image as u64
+                    offset: array_layer_offset as u64
+                        * rows_per_image as u64
                         * stage_bytes_per_row as u64,
                     bytes_per_row: Some(stage_bytes_per_row),
-                    rows_per_image: Some(block_rows_per_image),
+                    rows_per_image: Some(rows_per_image),
                 },
                 texture_base,
                 size: hal_copy_size,

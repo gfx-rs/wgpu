@@ -225,7 +225,7 @@ pub(crate) fn validate_linear_texture_data(
     // the copy size before calling this function (for example via `validate_texture_copy_range`).
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
-    let copy_depth = copy_size.depth_or_array_layers as BufferAddress;
+    let depth_or_array_layers = copy_size.depth_or_array_layers as BufferAddress;
 
     let offset = layout.offset;
 
@@ -253,19 +253,19 @@ pub(crate) fn validate_linear_texture_data(
         }
         bytes_per_row
     } else {
-        if copy_depth > 1 || height_in_blocks > 1 {
+        if depth_or_array_layers > 1 || height_in_blocks > 1 {
             return Err(TransferError::UnspecifiedBytesPerRow);
         }
         0
     };
-    let block_rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
+    let rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
         let rows_per_image = rows_per_image as BufferAddress;
         if rows_per_image < height_in_blocks {
             return Err(TransferError::InvalidRowsPerImage);
         }
         rows_per_image
     } else {
-        if copy_depth > 1 {
+        if depth_or_array_layers > 1 {
             return Err(TransferError::UnspecifiedRowsPerImage);
         }
         0
@@ -287,12 +287,12 @@ pub(crate) fn validate_linear_texture_data(
         }
     }
 
-    let bytes_per_image = bytes_per_row * block_rows_per_image;
+    let bytes_per_image = bytes_per_row * rows_per_image;
 
-    let required_bytes_in_copy = if copy_depth == 0 {
+    let required_bytes_in_copy = if depth_or_array_layers == 0 {
         0
     } else {
-        let mut required_bytes_in_copy = bytes_per_image * (copy_depth - 1);
+        let mut required_bytes_in_copy = bytes_per_image * (depth_or_array_layers - 1);
         if height_in_blocks > 0 {
             required_bytes_in_copy += bytes_per_row * (height_in_blocks - 1) + bytes_in_last_row;
         }
