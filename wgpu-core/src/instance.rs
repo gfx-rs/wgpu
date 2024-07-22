@@ -293,11 +293,7 @@ impl<A: HalApi> Adapter<A> {
             instance_flags,
         ) {
             let device = Arc::new(device);
-            let queue = Queue {
-                device: device.clone(),
-                raw: Some(hal_device.queue),
-            };
-            let queue = Arc::new(queue);
+            let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
             device.set_queue(&queue);
             return Ok((device, queue));
         }

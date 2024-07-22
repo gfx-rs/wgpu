@@ -326,13 +326,7 @@ impl Global {
                             log::error!("Presented frame is from a different surface");
                             Err(hal::SurfaceError::Lost)
                         } else {
-                            unsafe {
-                                queue
-                                    .raw
-                                    .as_ref()
-                                    .unwrap()
-                                    .present(suf.unwrap(), raw.take().unwrap())
-                            }
+                            unsafe { queue.raw().present(suf.unwrap(), raw.take().unwrap()) }
                         }
                     }
                     _ => unreachable!(),
