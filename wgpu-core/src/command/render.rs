@@ -1632,6 +1632,8 @@ impl Global {
 
             let raw = &mut encoder.raw;
 
+            let api_log_enabled = crate::api_log_enabled();
+
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),
                 binder: Binder::new(),
@@ -1668,6 +1670,13 @@ impl Global {
                         bind_group,
                     } => {
                         let scope = PassErrorScope::SetBindGroup;
+
+                        api_log!(
+                            if api_log_enabled,
+                            "RenderPass::set_bind_group {index} {}",
+                            bind_group.error_ident()
+                        );
+
                         set_bind_group(
                             &mut state,
                             cmd_buf,
@@ -1680,6 +1689,7 @@ impl Global {
                     }
                     ArcRenderCommand::SetPipeline(pipeline) => {
                         let scope = PassErrorScope::SetPipelineRender;
+                        api_log!(if api_log_enabled, "RenderPass::set_pipeline {}", pipeline.error_ident());
                         set_pipeline(&mut state, cmd_buf, pipeline).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetIndexBuffer {
@@ -1689,6 +1699,7 @@ impl Global {
                         size,
                     } => {
                         let scope = PassErrorScope::SetIndexBuffer;
+                        api_log!(if api_log_enabled, "RenderPass::set_index_buffer {}", buffer.error_ident());
                         set_index_buffer(&mut state, cmd_buf, buffer, index_format, offset, size)
                             .map_pass_err(scope)?;
                     }
@@ -1699,13 +1710,21 @@ impl Global {
                         size,
                     } => {
                         let scope = PassErrorScope::SetVertexBuffer;
+                        api_log!(
+                            if api_log_enabled,
+                            "RenderPass::set_vertex_buffer {slot} {}",
+                            buffer.error_ident()
+                        );
+
                         set_vertex_buffer(&mut state, cmd_buf, slot, buffer, offset, size)
                             .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetBlendConstant(ref color) => {
+                        api_log!(if api_log_enabled, "RenderPass::set_blend_constant");
                         set_blend_constant(&mut state, color);
                     }
                     ArcRenderCommand::SetStencilReference(value) => {
+                        api_log!(if api_log_enabled, "RenderPass::set_stencil_reference {value}");
                         set_stencil_reference(&mut state, value);
                     }
                     ArcRenderCommand::SetViewport {
@@ -1714,6 +1733,7 @@ impl Global {
                         depth_max,
                     } => {
                         let scope = PassErrorScope::SetViewport;
+                        api_log!(if api_log_enabled, "RenderPass::set_viewport {rect:?}");
                         set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::SetPushConstant {
@@ -1723,6 +1743,7 @@ impl Global {
                         values_offset,
                     } => {
                         let scope = PassErrorScope::SetPushConstant;
+                        api_log!(if api_log_enabled, "RenderPass::set_push_constants");
                         set_push_constant(
                             &mut state,
                             &base.push_constant_data,
@@ -1735,6 +1756,7 @@ impl Global {
                     }
                     ArcRenderCommand::SetScissor(rect) => {
                         let scope = PassErrorScope::SetScissorRect;
+                        api_log!(if api_log_enabled, "RenderPass::set_scissor_rect {rect:?}");
                         set_scissor(&mut state, rect).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::Draw {
@@ -1747,6 +1769,9 @@ impl Global {
                             kind: DrawKind::Draw,
                             indexed: false,
                         };
+
+                        api_log!(if api_log_enabled, "RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}");
+
                         draw(
                             &mut state,
                             vertex_count,
@@ -1767,6 +1792,9 @@ impl Global {
                             kind: DrawKind::Draw,
                             indexed: true,
                         };
+
+                        api_log!(if api_log_enabled, "RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
+
                         draw_indexed(
                             &mut state,
                             index_count,
@@ -1791,6 +1819,13 @@ impl Global {
                             },
                             indexed,
                         };
+
+                        api_log!(
+                            if api_log_enabled,
+                            "RenderPass::draw_indirect (indexed:{indexed}) {} {offset} {count:?}",
+                            buffer.error_ident()
+                        );
+
                         multi_draw_indirect(&mut state, cmd_buf, buffer, offset, count, indexed)
                             .map_pass_err(scope)?;
                     }
@@ -1806,6 +1841,14 @@ impl Global {
                             kind: DrawKind::MultiDrawIndirectCount,
                             indexed,
                         };
+
+                        api_log!(
+                            if api_log_enabled,
+                            "RenderPass::multi_draw_indirect_count (indexed:{indexed}) {} {offset} {} {count_buffer_offset:?} {max_count:?}",
+                            buffer.error_ident(),
+                            count_buffer.error_ident()
+                        );
+
                         multi_draw_indirect_count(
                             &mut state,
                             cmd_buf,
@@ -1819,20 +1862,27 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::PushDebugGroup { color: _, len } => {
-                        push_debug_group(&mut state, &base.string_data, len);
+                        api_log!(if api_log_enabled, "RenderPass::push_debug_group");
+                        push_debug_group(&mut state, &base.string_data, len, api_log_enabled);
                     }
                     ArcRenderCommand::PopDebugGroup => {
                         let scope = PassErrorScope::PopDebugGroup;
-                        pop_debug_group(&mut state).map_pass_err(scope)?;
+                        pop_debug_group(&mut state, api_log_enabled).map_pass_err(scope)?;
                     }
                     ArcRenderCommand::InsertDebugMarker { color: _, len } => {
-                        insert_debug_marker(&mut state, &base.string_data, len);
+                        insert_debug_marker(&mut state, &base.string_data, len, api_log_enabled);
                     }
                     ArcRenderCommand::WriteTimestamp {
                         query_set,
                         query_index,
                     } => {
                         let scope = PassErrorScope::WriteTimestamp;
+                        api_log!(
+                            if api_log_enabled,
+                            "RenderPass::write_timestamps {query_index} {}",
+                            query_set.error_ident()
+                        );
+
                         write_timestamp(
                             &mut state,
                             cmd_buf,
@@ -1843,8 +1893,8 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::BeginOcclusionQuery { query_index } => {
-                        api_log!("RenderPass::begin_occlusion_query {query_index}");
                         let scope = PassErrorScope::BeginOcclusionQuery;
+                        api_log!(if api_log_enabled, "RenderPass::begin_occlusion_query {query_index}");
 
                         let query_set = pass
                             .occlusion_query_set
@@ -1863,8 +1913,8 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::EndOcclusionQuery => {
-                        api_log!("RenderPass::end_occlusion_query");
                         let scope = PassErrorScope::EndOcclusionQuery;
+                        api_log!(if api_log_enabled, "RenderPass::end_occlusion_query");
 
                         end_occlusion_query(state.raw_encoder, &mut state.active_occlusion_query)
                             .map_pass_err(scope)?;
@@ -1873,11 +1923,12 @@ impl Global {
                         query_set,
                         query_index,
                     } => {
+                        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
                         api_log!(
+                            if api_log_enabled,
                             "RenderPass::begin_pipeline_statistics_query {query_index} {}",
                             query_set.error_ident()
                         );
-                        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
                         validate_and_begin_pipeline_statistics_query(
                             query_set,
@@ -1891,9 +1942,8 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                     ArcRenderCommand::EndPipelineStatisticsQuery => {
-                        api_log!("RenderPass::end_pipeline_statistics_query");
+                        api_log!(if api_log_enabled, "RenderPass::end_pipeline_statistics_query");
                         let scope = PassErrorScope::EndPipelineStatisticsQuery;
-
                         end_pipeline_statistics_query(
                             state.raw_encoder,
                             &mut state.active_pipeline_statistics_query,
@@ -1902,6 +1952,7 @@ impl Global {
                     }
                     ArcRenderCommand::ExecuteBundle(bundle) => {
                         let scope = PassErrorScope::ExecuteBundle;
+                        api_log!(if api_log_enabled, "RenderPass::execute_bundle {}", bundle.error_ident());
                         execute_bundle(&mut state, cmd_buf, bundle).map_pass_err(scope)?;
                     }
                 }
@@ -1955,11 +2006,6 @@ fn set_bind_group<A: HalApi>(
     num_dynamic_offsets: usize,
     bind_group: Arc<BindGroup<A>>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!(
-        "RenderPass::set_bind_group {index} {}",
-        bind_group.error_ident()
-    );
-
     let max_bind_groups = state.device.limits.max_bind_groups;
     if index >= max_bind_groups {
         return Err(RenderCommandError::BindGroupIndexOutOfRange {
@@ -2033,8 +2079,6 @@ fn set_pipeline<A: HalApi>(
     cmd_buf: &Arc<CommandBuffer<A>>,
     pipeline: Arc<RenderPipeline<A>>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
-
     state.pipeline = Some(pipeline.clone());
 
     let pipeline = state.tracker.render_pipelines.insert_single(pipeline);
@@ -2145,8 +2189,6 @@ fn set_index_buffer<A: HalApi>(
     offset: u64,
     size: Option<BufferSize>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::set_index_buffer {}", buffer.error_ident());
-
     state
         .info
         .usage_scope
@@ -2191,11 +2233,6 @@ fn set_vertex_buffer<A: HalApi>(
     offset: u64,
     size: Option<BufferSize>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!(
-        "RenderPass::set_vertex_buffer {slot} {}",
-        buffer.error_ident()
-    );
-
     state
         .info
         .usage_scope
@@ -2250,8 +2287,6 @@ fn set_vertex_buffer<A: HalApi>(
 }
 
 fn set_blend_constant<A: HalApi>(state: &mut State<A>, color: &Color) {
-    api_log!("RenderPass::set_blend_constant");
-
     state.blend_constant = OptionalState::Set;
     let array = [
         color.r as f32,
@@ -2265,8 +2300,6 @@ fn set_blend_constant<A: HalApi>(state: &mut State<A>, color: &Color) {
 }
 
 fn set_stencil_reference<A: HalApi>(state: &mut State<A>, value: u32) {
-    api_log!("RenderPass::set_stencil_reference {value}");
-
     state.stencil_reference = value;
     if state
         .pipeline_flags
@@ -2284,7 +2317,6 @@ fn set_viewport<A: HalApi>(
     depth_min: f32,
     depth_max: f32,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::set_viewport {rect:?}");
     if rect.x < 0.0
         || rect.y < 0.0
         || rect.w <= 0.0
@@ -2317,8 +2349,6 @@ fn set_push_constant<A: HalApi>(
     size_bytes: u32,
     values_offset: Option<u32>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::set_push_constants");
-
     let values_offset = values_offset.ok_or(RenderPassErrorInner::InvalidValuesOffset)?;
 
     let end_offset_bytes = offset + size_bytes;
@@ -2347,8 +2377,6 @@ fn set_scissor<A: HalApi>(
     state: &mut State<A>,
     rect: Rect<u32>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::set_scissor_rect {rect:?}");
-
     if rect.x + rect.w > state.info.extent.width || rect.y + rect.h > state.info.extent.height {
         return Err(RenderCommandError::InvalidScissorRect(rect, state.info.extent).into());
     }
@@ -2371,8 +2399,6 @@ fn draw<A: HalApi>(
     first_vertex: u32,
     first_instance: u32,
 ) -> Result<(), DrawError> {
-    api_log!("RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}");
-
     state.is_ready(false)?;
 
     let last_vertex = first_vertex as u64 + vertex_count as u64;
@@ -2412,8 +2438,6 @@ fn draw_indexed<A: HalApi>(
     base_vertex: i32,
     first_instance: u32,
 ) -> Result<(), DrawError> {
-    api_log!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
-
     state.is_ready(true)?;
 
     let last_index = first_index as u64 + index_count as u64;
@@ -2456,11 +2480,6 @@ fn multi_draw_indirect<A: HalApi>(
     count: Option<NonZeroU32>,
     indexed: bool,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!(
-        "RenderPass::draw_indirect (indexed:{indexed}) {} {offset} {count:?}",
-        indirect_buffer.error_ident()
-    );
-
     state.is_ready(indexed)?;
 
     let stride = match indexed {
@@ -2533,12 +2552,6 @@ fn multi_draw_indirect_count<A: HalApi>(
     max_count: u32,
     indexed: bool,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!(
-        "RenderPass::multi_draw_indirect_count (indexed:{indexed}) {} {offset} {} {count_buffer_offset:?} {max_count:?}",
-        indirect_buffer.error_ident(),
-        count_buffer.error_ident()
-    );
-
     state.is_ready(indexed)?;
 
     let stride = match indexed {
@@ -2631,7 +2644,12 @@ fn multi_draw_indirect_count<A: HalApi>(
     Ok(())
 }
 
-fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: usize) {
+fn push_debug_group<A: HalApi>(
+    state: &mut State<A>,
+    string_data: &[u8],
+    len: usize,
+    api_log_enabled: bool,
+) {
     state.debug_scope_depth += 1;
     if !state
         .device
@@ -2641,7 +2659,7 @@ fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: us
         let label =
             str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
 
-        api_log!("RenderPass::push_debug_group {label:?}");
+        api_log!(if api_log_enabled, "RenderPass::push_debug_group {label:?}");
         unsafe {
             state.raw_encoder.begin_debug_marker(label);
         }
@@ -2649,9 +2667,10 @@ fn push_debug_group<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: us
     state.string_offset += len;
 }
 
-fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::pop_debug_group");
-
+fn pop_debug_group<A: HalApi>(
+    state: &mut State<A>,
+    api_log_enabled: bool,
+) -> Result<(), RenderPassErrorInner> {
     if state.debug_scope_depth == 0 {
         return Err(RenderPassErrorInner::InvalidPopDebugGroup);
     }
@@ -2661,6 +2680,8 @@ fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), RenderPassErro
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
     {
+        api_log!(if api_log_enabled, "RenderPass::pop_debug_group");
+
         unsafe {
             state.raw_encoder.end_debug_marker();
         }
@@ -2668,7 +2689,12 @@ fn pop_debug_group<A: HalApi>(state: &mut State<A>) -> Result<(), RenderPassErro
     Ok(())
 }
 
-fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len: usize) {
+fn insert_debug_marker<A: HalApi>(
+    state: &mut State<A>,
+    string_data: &[u8],
+    len: usize,
+    api_log_enabled: bool,
+) {
     if !state
         .device
         .instance_flags
@@ -2676,7 +2702,7 @@ fn insert_debug_marker<A: HalApi>(state: &mut State<A>, string_data: &[u8], len:
     {
         let label =
             str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
-        api_log!("RenderPass::insert_debug_marker {label:?}");
+        api_log!(if api_log_enabled, "RenderPass::insert_debug_marker {label:?}");
         unsafe {
             state.raw_encoder.insert_debug_marker(label);
         }
@@ -2691,11 +2717,6 @@ fn write_timestamp<A: HalApi>(
     query_set: Arc<QuerySet<A>>,
     query_index: u32,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!(
-        "RenderPass::write_timestamps {query_index} {}",
-        query_set.error_ident()
-    );
-
     query_set.same_device_as(cmd_buf)?;
 
     state
@@ -2717,8 +2738,6 @@ fn execute_bundle<A: HalApi>(
     cmd_buf: &Arc<CommandBuffer<A>>,
     bundle: Arc<super::RenderBundle<A>>,
 ) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
-
     // Have to clone the bundle arc, otherwise we keep a mutable reference to the bundle
     // while later trying to add the bundle's resources to the tracker.
     let bundle = state.tracker.bundles.insert_single(bundle).clone();

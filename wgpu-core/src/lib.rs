@@ -316,13 +316,23 @@ macro_rules! gfx_select {
 
 #[cfg(feature = "api_log_info")]
 macro_rules! api_log {
+    (if $cond:expr, $($arg:tt)+) => (if $cond { log::info!($($arg)+) });
     ($($arg:tt)+) => (log::info!($($arg)+))
 }
 #[cfg(not(feature = "api_log_info"))]
 macro_rules! api_log {
+    (if $cond:expr, $($arg:tt)+) => (if $cond { log::trace!($($arg)+) });
     ($($arg:tt)+) => (log::trace!($($arg)+))
 }
 pub(crate) use api_log;
+
+pub(crate) fn api_log_enabled() -> bool {
+    #[cfg(feature = "api_log_info")]
+    return log::STATIC_MAX_LEVEL <= log::Level::Info && log::max_level() <= log::Level::Info;
+
+    #[cfg(not(feature = "api_log_info"))]
+    return log::STATIC_MAX_LEVEL <= log::Level::Trace && log::max_level() <= log::Level::Trace;
+}
 
 #[cfg(feature = "resource_log_info")]
 macro_rules! resource_log {
