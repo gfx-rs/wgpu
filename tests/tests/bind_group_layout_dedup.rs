@@ -373,7 +373,7 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
         || {
             drop(pass);
         },
-        None,
+        Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
     );
 }
 
@@ -445,7 +445,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
         || {
             drop(pass);
         },
-        None,
+        Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
     )
 }
 
