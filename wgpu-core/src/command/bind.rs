@@ -116,6 +116,8 @@ mod compat {
 
                         #[derive(Clone, Debug, Error)]
                         enum EntryError {
+                            #[error("Entries differ in binding: expected {expected:?}, got {assigned:?}")]
+                            Binding { expected: u32, assigned: u32 },
                             #[error("Entries with binding {binding} differ in visibility: expected {expected:?}, got {assigned:?}")]
                             Visibility {
                                 binding: u32,
@@ -150,6 +152,12 @@ mod compat {
                         );
 
                         for ((&binding, expected_entry), (_, assigned_entry)) in zipped {
+                            if assigned_entry.binding != expected_entry.binding {
+                                errors.push(EntryError::Binding {
+                                    expected: expected_entry.binding,
+                                    assigned: assigned_entry.binding,
+                                });
+                            }
                             if assigned_entry.visibility != expected_entry.visibility {
                                 errors.push(EntryError::Visibility {
                                     binding,
