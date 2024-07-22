@@ -1601,7 +1601,7 @@ impl<A: HalApi> Device<A> {
 
         let encoder = self
             .command_allocator
-            .acquire_encoder(self.raw(), queue.raw.as_ref().unwrap())?;
+            .acquire_encoder(self.raw(), queue.raw())?;
 
         Ok(command::CommandBuffer::new(
             encoder,

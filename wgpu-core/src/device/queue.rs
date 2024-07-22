@@ -30,7 +30,7 @@ use smallvec::SmallVec;
 
 use std::{
     iter,
-    mem::{self},
+    mem::{self, ManuallyDrop},
     ptr::NonNull,
     sync::{atomic::Ordering, Arc},
 };
@@ -39,8 +39,21 @@ use thiserror::Error;
 use super::Device;
 
 pub struct Queue<A: HalApi> {
-    pub(crate) raw: Option<A::Queue>,
+    raw: ManuallyDrop<A::Queue>,
     pub(crate) device: Arc<Device<A>>,
+}
+
+impl<A: HalApi> Queue<A> {
+    pub(crate) fn new(device: Arc<Device<A>>, raw: A::Queue) -> Self {
+        Queue {
+            raw: ManuallyDrop::new(raw),
+            device,
+        }
+    }
+
+    pub(crate) fn raw(&self) -> &A::Queue {
+        &self.raw
+    }
 }
 
 crate::impl_resource_type!(Queue);
@@ -56,7 +69,8 @@ crate::impl_storage_item!(Queue);
 impl<A: HalApi> Drop for Queue<A> {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
-        let queue = self.raw.take().unwrap();
+        // SAFETY: we never access `self.raw` beyond this point.
+        let queue = unsafe { std::mem::ManuallyDrop::take(&mut self.raw) };
         self.device.release_queue(queue);
     }
 }
@@ -1272,11 +1286,9 @@ impl Global {
                 }
             }
 
-            if let Some(pending_execution) = pending_writes.pre_submit(
-                &device.command_allocator,
-                device.raw(),
-                queue.raw.as_ref().unwrap(),
-            )? {
+            if let Some(pending_execution) =
+                pending_writes.pre_submit(&device.command_allocator, device.raw(), queue.raw())?
+            {
                 active_executions.insert(0, pending_execution);
             }
 
@@ -1298,9 +1310,7 @@ impl Global {
 
                 unsafe {
                     queue
-                        .raw
-                        .as_ref()
-                        .unwrap()
+                        .raw()
                         .submit(
                             &hal_command_buffers,
                             &submit_surface_textures,
@@ -1356,7 +1366,7 @@ impl Global {
     ) -> Result<f32, InvalidQueue> {
         let hub = A::hub(self);
         match hub.queues.get(queue_id) {
-            Ok(queue) => Ok(unsafe { queue.raw.as_ref().unwrap().get_timestamp_period() }),
+            Ok(queue) => Ok(unsafe { queue.raw().get_timestamp_period() }),
             Err(_) => Err(InvalidQueue),
         }
     }
