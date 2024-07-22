@@ -73,7 +73,7 @@ version = "22.0.0"
 anyhow = "1.0.86"
 arrayvec = "0.7"
 bincode = "1"
-bit-vec = "0.7"
+bit-vec = "0.8"
 bitflags = "2"
 bytemuck = { version = "1.16", features = ["derive"] }
 cfg_aliases = "0.1"
@@ -145,7 +145,7 @@ gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
 # DX dependencies
-bit-set = "0.6"
+bit-set = "0.8"
 gpu-allocator = { version = "0.26", default-features = false, features = [
     "d3d12",
     "public-winapi",
@@ -157,7 +157,7 @@ hassle-rs = "0.11.0"
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.13.1"
+glow = "0.14.0"
 glutin = "0.29.1"
 
 # wasm32 dependencies
@@ -177,7 +177,7 @@ deno_url = "0.143.0"
 deno_web = "0.174.0"
 deno_webidl = "0.143.0"
 deno_webgpu = { version = "0.118.0", path = "./deno_webgpu" }
-tokio = "1.38.0"
+tokio = "1.38.1"
 termcolor = "1.4.1"
 
 [patch."https://github.com/gfx-rs/naga"]

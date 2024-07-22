@@ -60,7 +60,7 @@ compact = []
 [dependencies]
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
 bitflags = "2.6"
-bit-set = "0.6"
+bit-set = "0.8"
 termcolor = { version = "1.4.1" }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
@@ -70,7 +70,7 @@ rustc-hash = "1.1.0"
 indexmap = { version = "2", features = ["std"] }
 log = "0.4"
 spirv = { version = "0.3", optional = true }
-thiserror = "1.0.62"
+thiserror = "1.0.63"
 serde = { version = "1.0.204", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
