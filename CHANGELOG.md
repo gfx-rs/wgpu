@@ -48,6 +48,13 @@ Bottom level categories:
 - Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003)
 - Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007)
 
+### Performance
+
+#### General
+
+- Reduce the overhead of api logging when disabled at runtime. By @nical in [#6010](https://github.com/gfx-rs/wgpu/pull/6010)
+6010
+
 ## 22.0.0 (2024-07-17)
 
 ### Overview
@@ -57,7 +64,7 @@ Bottom level categories:
 For the first time ever, WGPU is being released with a major version (i.e., 22.* instead of 0.22.*)! Maintainership has decided to fully adhere to [Semantic Versioning](https://semver.org/)'s recommendations for versioning production software. According to [SemVer 2.0.0's Q&A about when to use 1.0.0 versions (and beyond)](https://semver.org/spec/v2.0.0.html#how-do-i-know-when-to-release-100):
 
 > ### How do I know when to release 1.0.0?
-> 
+>
 > If your software is being used in production, it should probably already be 1.0.0. If you have a stable API on which users have come to depend, you should be 1.0.0. If you’re worrying a lot about backward compatibility, you should probably already be 1.0.0.
 
 It is a well-known fact that WGPU has been used for applications and platforms already in production for years, at this point. We are often concerned with tracking breaking changes, and affecting these consumers' ability to ship. By releasing our first major version, we publicly acknowledge that this is the case. We encourage other projects in the Rust ecosystem to follow suit.
