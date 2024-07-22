@@ -116,8 +116,6 @@ mod compat {
 
                         #[derive(Clone, Debug, Error)]
                         enum EntryError {
-                            #[error("Entries differ in binding: expected {expected:?}, got {assigned:?}")]
-                            Binding { expected: u32, assigned: u32 },
                             #[error("Entries with binding {binding} differ in visibility: expected {expected:?}, got {assigned:?}")]
                             Visibility {
                                 binding: u32,
@@ -144,54 +142,38 @@ mod compat {
 
                         let mut errors = Vec::new();
 
-                        let mut expected_bgl_entries = expected_bgl.entries.values();
-                        let mut assigned_bgl_entries = assigned_bgl.entries.values();
-                        let zipped = crate::utils::ZipWithProperAdvance::new(
-                            &mut expected_bgl_entries,
-                            &mut assigned_bgl_entries,
-                        );
-
-                        for (expected_entry, assigned_entry) in zipped {
-                            if assigned_entry.binding != expected_entry.binding {
-                                errors.push(EntryError::Binding {
-                                    expected: expected_entry.binding,
-                                    assigned: assigned_entry.binding,
-                                });
-                            }
-                            let binding = expected_entry.binding;
-                            if assigned_entry.visibility != expected_entry.visibility {
-                                errors.push(EntryError::Visibility {
-                                    binding,
-                                    expected: expected_entry.visibility,
-                                    assigned: assigned_entry.visibility,
-                                });
-                            }
-                            if assigned_entry.ty != expected_entry.ty {
-                                errors.push(EntryError::Type {
-                                    binding,
-                                    expected: expected_entry.ty,
-                                    assigned: assigned_entry.ty,
-                                });
-                            }
-                            if assigned_entry.count != expected_entry.count {
-                                errors.push(EntryError::Count {
-                                    binding,
-                                    expected: expected_entry.count,
-                                    assigned: assigned_entry.count,
-                                });
+                        for (&binding, expected_entry) in expected_bgl.entries.iter() {
+                            if let Some(assigned_entry) = assigned_bgl.entries.get(binding) {
+                                if assigned_entry.visibility != expected_entry.visibility {
+                                    errors.push(EntryError::Visibility {
+                                        binding,
+                                        expected: expected_entry.visibility,
+                                        assigned: assigned_entry.visibility,
+                                    });
+                                }
+                                if assigned_entry.ty != expected_entry.ty {
+                                    errors.push(EntryError::Type {
+                                        binding,
+                                        expected: expected_entry.ty,
+                                        assigned: assigned_entry.ty,
+                                    });
+                                }
+                                if assigned_entry.count != expected_entry.count {
+                                    errors.push(EntryError::Count {
+                                        binding,
+                                        expected: expected_entry.count,
+                                        assigned: assigned_entry.count,
+                                    });
+                                }
+                            } else {
+                                errors.push(EntryError::ExtraExpected { binding });
                             }
                         }
 
-                        for expected_entry in expected_bgl_entries {
-                            errors.push(EntryError::ExtraExpected {
-                                binding: expected_entry.binding,
-                            });
-                        }
-
-                        for assigned_entry in assigned_bgl_entries {
-                            errors.push(EntryError::ExtraAssigned {
-                                binding: assigned_entry.binding,
-                            });
+                        for (&binding, _) in assigned_bgl.entries.iter() {
+                            if !expected_bgl.entries.contains_key(binding) {
+                                errors.push(EntryError::ExtraAssigned { binding });
+                            }
                         }
 
                         Err(Error::Incompatible {
