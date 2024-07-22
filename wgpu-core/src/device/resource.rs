@@ -721,7 +721,7 @@ impl<A: HalApi> Device<A> {
 
         // Renderable textures can only be 2D or 3D
         if desc.dimension == wgt::TextureDimension::D1
-            && desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) 
+            && desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
         {
             return Err(CreateTextureError::InvalidDimensionUsages(
                 wgt::TextureUsages::RENDER_ATTACHMENT,
@@ -922,7 +922,7 @@ impl<A: HalApi> Device<A> {
             let dimension = match desc.dimension {
                 wgt::TextureDimension::D1 => TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => unreachable!(),
+                wgt::TextureDimension::D3 => TextureViewDimension::D3,
             };
 
             let clear_label = hal_label(
