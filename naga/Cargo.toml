@@ -67,7 +67,7 @@ termcolor = { version = "1.4.1" }
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
 codespan-reporting = { version = "0.11.0" }
 rustc-hash = "1.1.0"
-indexmap = { version = "2", features = ["std"] }
+indexmap = "2"
 log = "0.4"
 spirv = { version = "0.3", optional = true }
 thiserror = "1.0.63"
