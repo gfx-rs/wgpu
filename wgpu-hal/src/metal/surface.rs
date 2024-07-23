@@ -82,7 +82,7 @@ impl super::Surface {
         view: *mut c_void,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
-        let view = view as *mut Object;
+        let view = view.cast::<Object>();
         let render_layer = {
             let layer = unsafe { Self::get_metal_layer(view, delegate) };
             let layer = layer.cast::<metal::MetalLayerRef>();
