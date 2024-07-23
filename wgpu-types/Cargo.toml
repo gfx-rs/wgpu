@@ -35,12 +35,12 @@ serde = ["dep:serde"]
 counters = []
 
 [dependencies]
-bitflags = "2"
-serde = { version = "1", features = ["derive"], optional = true }
+bitflags.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3.69"
-web-sys = { version = "0.3.69", features = [
+js-sys.workspace = true
+web-sys = { workspace = true, features = [
     "ImageBitmap",
     "HtmlVideoElement",
     "HtmlCanvasElement",
@@ -48,5 +48,5 @@ web-sys = { version = "0.3.69", features = [
 ] }
 
 [dev-dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1.0.120"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
