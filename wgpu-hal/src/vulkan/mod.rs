@@ -7,7 +7,6 @@ Ash expects slices, which we don't generally have available.
 We cope with this requirement by the combination of the following ways:
   - temporarily allocating `Vec` on heap, where overhead is permitted
   - growing temporary local storage
-  - using `implace_it` on iterators
 
 ## Framebuffers and Render passes
 
@@ -714,7 +713,6 @@ impl Temp {
         self.marker.clear();
         self.buffer_barriers.clear();
         self.image_barriers.clear();
-        //see also - https://github.com/NotIntMan/inplace_it/issues/8
     }
 
     fn make_c_str(&mut self, name: &str) -> &CStr {
