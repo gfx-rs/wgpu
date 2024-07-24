@@ -713,7 +713,7 @@ pub trait Device: WasmNotSendSync {
     /// - Zero-sized mappings are not allowed.
     ///
     /// - The returned [`BufferMapping::ptr`] must not be used after a call to
-    /// [`Device::unmap_buffer`].
+    ///   [`Device::unmap_buffer`].
     ///
     /// [`MAP_READ`]: BufferUses::MAP_READ
     /// [`MAP_WRITE`]: BufferUses::MAP_WRITE
