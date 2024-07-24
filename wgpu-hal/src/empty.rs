@@ -50,6 +50,7 @@ impl crate::DynFence for Resource {}
 impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
 impl crate::DynRenderPipeline for Resource {}
+impl crate::DynSampler for Resource {}
 impl crate::DynShaderModule for Resource {}
 impl crate::DynSurfaceTexture for Resource {}
 impl crate::DynTexture for Resource {}

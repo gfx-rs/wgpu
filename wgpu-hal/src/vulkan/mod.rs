@@ -715,6 +715,8 @@ pub struct Sampler {
     raw: vk::Sampler,
 }
 
+impl crate::DynSampler for Sampler {}
+
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,

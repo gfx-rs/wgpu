@@ -542,6 +542,8 @@ pub struct Sampler {
     raw: metal::SamplerState,
 }
 
+impl crate::DynSampler for Sampler {}
+
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
