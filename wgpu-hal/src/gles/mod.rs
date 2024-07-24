@@ -471,6 +471,8 @@ pub struct Sampler {
     raw: glow::Sampler,
 }
 
+impl crate::DynSampler for Sampler {}
+
 #[derive(Debug)]
 pub struct BindGroupLayout {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,

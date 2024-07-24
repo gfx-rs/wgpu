@@ -507,6 +507,8 @@ pub struct Sampler {
     handle: descriptor::Handle,
 }
 
+impl crate::DynSampler for Sampler {}
+
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 

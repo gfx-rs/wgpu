@@ -411,7 +411,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type Texture: DynTexture;
     type SurfaceTexture: DynSurfaceTexture + fmt::Debug + Borrow<Self::Texture>;
     type TextureView: DynTextureView;
-    type Sampler: fmt::Debug + WasmNotSendSync;
+    type Sampler: DynSampler + fmt::Debug;
     type QuerySet: DynQuerySet;
 
     /// A value you can block on to wait for something to finish.
