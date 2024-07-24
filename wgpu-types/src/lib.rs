@@ -4848,7 +4848,7 @@ pub enum StencilOperation {
 pub struct StencilFaceState {
     /// Comparison function that determines if the fail_op or pass_op is used on the stencil buffer.
     pub compare: CompareFunction,
-    /// Operation that is preformed when stencil test fails.
+    /// Operation that is performed when stencil test fails.
     pub fail_op: StencilOperation,
     /// Operation that is performed when depth test fails but stencil test succeeds.
     pub depth_fail_op: StencilOperation,

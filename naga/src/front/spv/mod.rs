@@ -3460,7 +3460,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             .insert(target, (case_body_idx, vec![literal as i32]));
                     }
 
-                    // Loop trough the collected target blocks creating a new case for each
+                    // Loop through the collected target blocks creating a new case for each
                     // literal pointing to it, only one case will have the true body and all the
                     // others will be empty fallthrough so that they all execute the same body
                     // without duplicating code.
