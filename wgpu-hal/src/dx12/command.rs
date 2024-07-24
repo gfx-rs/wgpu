@@ -69,7 +69,7 @@ impl super::CommandEncoder {
         self.pass.kind = kind;
         if let Some(label) = label {
             let (wide_label, size) = self.temp.prepare_marker(label);
-            unsafe { list.BeginEvent(0, wide_label.as_ptr() as *const _, size) };
+            unsafe { list.BeginEvent(0, wide_label.as_ptr().cast(), size) };
             self.pass.has_label = true;
         }
         self.pass.dirty_root_elements = 0;
@@ -950,7 +950,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.list
                 .as_ref()
                 .unwrap()
-                .SetMarker(0, wide_label.as_ptr() as *const _, size)
+                .SetMarker(0, wide_label.as_ptr().cast(), size)
         };
     }
     unsafe fn begin_debug_marker(&mut self, group_label: &str) {
@@ -959,7 +959,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.list
                 .as_ref()
                 .unwrap()
-                .BeginEvent(0, wide_label.as_ptr() as *const _, size)
+                .BeginEvent(0, wide_label.as_ptr().cast(), size)
         };
     }
     unsafe fn end_debug_marker(&mut self) {

@@ -59,7 +59,7 @@ impl AdapterContext {
     }
 
     pub fn raw_context(&self) -> *mut c_void {
-        self.inner.lock().context.context as *mut _
+        self.inner.lock().context.context.cast()
     }
 
     /// Obtain a lock to the WGL context and get handle to the [`glow::Context`] that can be used to
@@ -184,7 +184,7 @@ fn load_gl_func(name: &str, module: Option<HMODULE>) -> *const c_void {
 
 fn get_extensions(extra: &Wgl, dc: HDC) -> HashSet<String> {
     if extra.GetExtensionsStringARB.is_loaded() {
-        unsafe { CStr::from_ptr(extra.GetExtensionsStringARB(dc as *const _)) }
+        unsafe { CStr::from_ptr(extra.GetExtensionsStringARB(dc.cast())) }
             .to_str()
             .unwrap_or("")
     } else {
@@ -427,7 +427,7 @@ impl crate::Instance for Instance {
 
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WGL) Backend");
-        let opengl_module = unsafe { LoadLibraryA("opengl32.dll\0".as_ptr() as *const _) };
+        let opengl_module = unsafe { LoadLibraryA("opengl32.dll\0".as_ptr().cast()) };
         if opengl_module.is_null() {
             return Err(crate::InstanceError::with_source(
                 String::from("unable to load the OpenGL library"),
@@ -472,7 +472,7 @@ impl crate::Instance for Instance {
                 0, // End of list
             ];
             let context = unsafe {
-                extra.CreateContextAttribsARB(dc as *const _, ptr::null(), attributes.as_ptr())
+                extra.CreateContextAttribsARB(dc.cast(), ptr::null(), attributes.as_ptr())
             };
             if context.is_null() {
                 return Err(crate::InstanceError::with_source(
@@ -481,7 +481,7 @@ impl crate::Instance for Instance {
                 ));
             }
             WglContext {
-                context: context as *mut _,
+                context: context.cast_mut().cast(),
             }
         } else {
             context

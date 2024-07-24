@@ -20,7 +20,7 @@ pub unsafe fn enable_extension(extension_name_null_terminated: &str) -> bool {
     unsafe {
         emscripten_webgl_enable_extension(
             emscripten_webgl_get_current_context(),
-            extension_name_null_terminated.as_ptr() as _,
+            extension_name_null_terminated.as_ptr().cast(),
         ) == 1
     }
 }

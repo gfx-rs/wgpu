@@ -362,7 +362,7 @@ impl crate::Device for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> DeviceResult<crate::BufferMapping> {
-        let ptr = buffer.raw.contents() as *mut u8;
+        let ptr = buffer.raw.contents().cast::<u8>();
         assert!(!ptr.is_null());
         Ok(crate::BufferMapping {
             ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),

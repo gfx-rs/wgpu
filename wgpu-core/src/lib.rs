@@ -55,6 +55,7 @@ the documentation for `wgpu-core` is empty unless built with
     rustdoc::private_intra_doc_links
 )]
 #![warn(
+    clippy::ptr_as_ptr,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,

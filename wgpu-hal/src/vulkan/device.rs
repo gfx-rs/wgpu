@@ -343,7 +343,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
             self.raw
                 .map_memory(*memory, offset, size, vk::MemoryMapFlags::empty())
         } {
-            Ok(ptr) => Ok(ptr::NonNull::new(ptr as *mut u8)
+            Ok(ptr) => Ok(ptr::NonNull::new(ptr.cast::<u8>())
                 .expect("Pointer to memory mapping must not be null")),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(gpu_alloc::DeviceMapError::OutOfDeviceMemory)
@@ -1513,7 +1513,7 @@ impl crate::Device for super::Device {
                     // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
                     // mutable reference which is also guaranteed to be valid for writes.
                     unsafe {
-                        &mut *(to_init as *mut [MaybeUninit<T>] as *mut [T])
+                        &mut *(ptr::from_mut::<[MaybeUninit<T>]>(to_init) as *mut [T])
                     }
                 };
                 (Self { remainder }, init)

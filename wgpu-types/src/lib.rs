@@ -6,7 +6,7 @@
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
 )]
-#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
+#![warn(clippy::ptr_as_ptr, missing_docs, unsafe_op_in_unsafe_fn)]
 
 #[cfg(any(feature = "serde", test))]
 use serde::Deserialize;
@@ -7068,7 +7068,7 @@ impl DrawIndirectArgs {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
-                self as *const _ as *const u8,
+                std::ptr::from_ref(self).cast::<u8>(),
                 std::mem::size_of::<Self>(),
             ))
         }
@@ -7098,7 +7098,7 @@ impl DrawIndexedIndirectArgs {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
-                self as *const _ as *const u8,
+                std::ptr::from_ref(self).cast::<u8>(),
                 std::mem::size_of::<Self>(),
             ))
         }
@@ -7122,7 +7122,7 @@ impl DispatchIndirectArgs {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
-                self as *const _ as *const u8,
+                std::ptr::from_ref(self).cast::<u8>(),
                 std::mem::size_of::<Self>(),
             ))
         }

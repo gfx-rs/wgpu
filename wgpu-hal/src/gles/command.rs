@@ -81,9 +81,8 @@ impl super::CommandBuffer {
     }
 
     fn add_push_constant_data(&mut self, data: &[u32]) -> Range<u32> {
-        let data_raw = unsafe {
-            std::slice::from_raw_parts(data.as_ptr() as *const _, mem::size_of_val(data))
-        };
+        let data_raw =
+            unsafe { std::slice::from_raw_parts(data.as_ptr().cast(), mem::size_of_val(data)) };
         let start = self.data_bytes.len();
         assert!(start < u32::MAX as usize);
         self.data_bytes.extend_from_slice(data_raw);

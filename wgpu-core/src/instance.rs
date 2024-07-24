@@ -642,7 +642,7 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_visual");
         self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_visual(visual as _)
+            inst.create_surface_from_visual(visual.cast())
         })
     }
 
@@ -672,7 +672,7 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
         self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_swap_chain_panel(swap_chain_panel as _)
+            inst.create_surface_from_swap_chain_panel(swap_chain_panel.cast())
         })
     }
 
