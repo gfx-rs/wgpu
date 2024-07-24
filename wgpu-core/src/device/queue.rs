@@ -70,7 +70,7 @@ impl<A: HalApi> Drop for Queue<A> {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
         // SAFETY: we never access `self.raw` beyond this point.
-        let queue = unsafe { std::mem::ManuallyDrop::take(&mut self.raw) };
+        let queue = unsafe { ManuallyDrop::take(&mut self.raw) };
         self.device.release_queue(queue);
     }
 }

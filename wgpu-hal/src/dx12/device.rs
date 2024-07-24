@@ -1816,7 +1816,7 @@ impl crate::Device for super::Device {
             .allocations
             .iter_mut()
             .map(|alloc| wgt::AllocationReport {
-                name: std::mem::take(&mut alloc.name),
+                name: mem::take(&mut alloc.name),
                 offset: alloc.offset,
                 size: alloc.size,
             })
