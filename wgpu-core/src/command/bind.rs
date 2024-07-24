@@ -142,49 +142,50 @@ mod compat {
 
                         let mut errors = Vec::new();
 
-                        let mut expected_bgl_entries = expected_bgl.entries.iter();
-                        let mut assigned_bgl_entries = assigned_bgl.entries.iter();
-                        let zipped = crate::utils::ZipWithProperAdvance::new(
-                            &mut expected_bgl_entries,
-                            &mut assigned_bgl_entries,
-                        );
-
-                        for ((&binding, expected_entry), (_, assigned_entry)) in zipped {
-                            if assigned_entry.visibility != expected_entry.visibility {
-                                errors.push(EntryError::Visibility {
-                                    binding,
-                                    expected: expected_entry.visibility,
-                                    assigned: assigned_entry.visibility,
-                                });
-                            }
-                            if assigned_entry.ty != expected_entry.ty {
-                                errors.push(EntryError::Type {
-                                    binding,
-                                    expected: expected_entry.ty,
-                                    assigned: assigned_entry.ty,
-                                });
-                            }
-                            if assigned_entry.count != expected_entry.count {
-                                errors.push(EntryError::Count {
-                                    binding,
-                                    expected: expected_entry.count,
-                                    assigned: assigned_entry.count,
-                                });
+                        for (&binding, expected_entry) in expected_bgl.entries.iter() {
+                            if let Some(assigned_entry) = assigned_bgl.entries.get(binding) {
+                                if assigned_entry.visibility != expected_entry.visibility {
+                                    errors.push(EntryError::Visibility {
+                                        binding,
+                                        expected: expected_entry.visibility,
+                                        assigned: assigned_entry.visibility,
+                                    });
+                                }
+                                if assigned_entry.ty != expected_entry.ty {
+                                    errors.push(EntryError::Type {
+                                        binding,
+                                        expected: expected_entry.ty,
+                                        assigned: assigned_entry.ty,
+                                    });
+                                }
+                                if assigned_entry.count != expected_entry.count {
+                                    errors.push(EntryError::Count {
+                                        binding,
+                                        expected: expected_entry.count,
+                                        assigned: assigned_entry.count,
+                                    });
+                                }
+                            } else {
+                                errors.push(EntryError::ExtraExpected { binding });
                             }
                         }
 
-                        for (&binding, _) in expected_bgl_entries {
-                            errors.push(EntryError::ExtraExpected { binding });
+                        for (&binding, _) in assigned_bgl.entries.iter() {
+                            if !expected_bgl.entries.contains_key(binding) {
+                                errors.push(EntryError::ExtraAssigned { binding });
+                            }
                         }
 
-                        for (&binding, _) in assigned_bgl_entries {
-                            errors.push(EntryError::ExtraAssigned { binding });
-                        }
+                        #[derive(Clone, Debug, Error)]
+                        #[error("Unknown reason")]
+                        struct Unknown();
 
                         Err(Error::Incompatible {
                             expected_bgl: expected_bgl.error_ident(),
                             assigned_bgl: assigned_bgl.error_ident(),
-                            inner: MultiError::new(errors.drain(..)).unwrap(),
+                            inner: MultiError::new(errors.drain(..)).unwrap_or_else(|| {
+                                MultiError::new(core::iter::once(Unknown())).unwrap()
+                            }),
                         })
                     }
                 } else {
