@@ -116,7 +116,7 @@ parking_lot = ">=0.11, <0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", optional = true }
 ron = { version = "0.8", optional = true }
-rustc-hash = "1.1"
+rustc-hash = "2.0"
 serde = { version = "1", features = ["derive"], optional = true }
 smallvec = "1"
 thiserror = "1"

@@ -920,7 +920,7 @@ name = "d3d12"
 version = "22.0.0"
 dependencies = [
  "bitflags 2.6.0",
- "libloading 0.7.4",
+ "libloading 0.8.5",
  "winapi",
 ]
 
@@ -1140,7 +1140,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
 dependencies = [
- "libloading 0.7.4",
+ "libloading 0.8.5",
 ]
 
 [[package]]
@@ -1747,7 +1747,7 @@ dependencies = [
  "bitflags 2.6.0",
  "com",
  "libc",
- "libloading 0.7.4",
+ "libloading 0.8.5",
  "thiserror",
  "widestring",
  "winapi",
@@ -2014,7 +2014,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -2197,7 +2197,7 @@ dependencies = [
  "pp-rs",
  "ron",
  "rspirv",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "serde",
  "spirv 0.3.0+sdk-1.3.268.0",
  "termcolor",
@@ -3008,7 +3008,7 @@ name = "rspirv"
 version = "0.11.0+sdk-1.2.198"
 source = "git+https://github.com/gfx-rs/rspirv?rev=b969f175d5663258b4891e44b76c1544da9661ab#b969f175d5663258b4891e44b76c1544da9661ab"
 dependencies = [
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "spirv 0.2.0+sdk-1.2.198",
 ]
 
@@ -3023,6 +3023,12 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
 
 [[package]]
 name = "rustc_version"
@@ -4262,7 +4268,7 @@ dependencies = [
  "profiling",
  "raw-window-handle 0.6.2",
  "ron",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "serde",
  "smallvec",
  "thiserror",
@@ -4327,7 +4333,7 @@ dependencies = [
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading 0.7.4",
+ "libloading 0.8.5",
  "log",
  "metal",
  "naga",
@@ -4339,7 +4345,7 @@ dependencies = [
  "range-alloc",
  "raw-window-handle 0.6.2",
  "renderdoc-sys",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "smallvec",
  "thiserror",
  "wasm-bindgen",

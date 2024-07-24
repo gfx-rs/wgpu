@@ -66,7 +66,7 @@ termcolor = { version = "1.4.1" }
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
 codespan-reporting = { version = "0.11.0" }
-rustc-hash = "1.1.0"
+rustc-hash = "2.0.0"
 indexmap = "2"
 log = "0.4"
 spirv = { version = "0.3", optional = true }
