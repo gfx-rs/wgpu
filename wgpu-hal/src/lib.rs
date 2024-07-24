@@ -227,6 +227,7 @@
     clippy::pattern_type_mismatch,
 )]
 #![warn(
+    clippy::ptr_as_ptr,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,

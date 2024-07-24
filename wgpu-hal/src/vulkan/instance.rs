@@ -23,7 +23,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     let cd = unsafe { &*callback_data_ptr };
-    let user_data = unsafe { &*(user_data as *mut super::DebugUtilsMessengerUserData) };
+    let user_data = unsafe { &*user_data.cast::<super::DebugUtilsMessengerUserData>() };
 
     const VUID_VKCMDENDDEBUGUTILSLABELEXT_COMMANDBUFFER_01912: i32 = 0x56146426;
     if cd.message_id_number == VUID_VKCMDENDDEBUGUTILSLABELEXT_COMMANDBUFFER_01912 {
@@ -515,7 +515,7 @@ impl super::Instance {
         }
 
         let layer = unsafe {
-            crate::metal::Surface::get_metal_layer(view as *mut objc::runtime::Object, None)
+            crate::metal::Surface::get_metal_layer(view.cast::<objc::runtime::Object>(), None)
         };
 
         let surface = {
@@ -523,7 +523,7 @@ impl super::Instance {
                 ext::metal_surface::Instance::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::default()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
-                .layer(layer as *mut _);
+                .layer(layer.cast());
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };

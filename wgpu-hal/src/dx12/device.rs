@@ -1386,7 +1386,7 @@ impl crate::Device for super::Device {
             };
             for attribute in vbuf.attributes {
                 input_element_descs.push(d3d12_ty::D3D12_INPUT_ELEMENT_DESC {
-                    SemanticName: NAGA_LOCATION_SEMANTIC.as_ptr() as *const _,
+                    SemanticName: NAGA_LOCATION_SEMANTIC.as_ptr().cast(),
                     SemanticIndex: attribute.shader_location,
                     Format: auxil::dxgi::conv::map_vertex_format(attribute.format),
                     InputSlot: i as u32,
@@ -1749,7 +1749,7 @@ impl crate::Device for super::Device {
         {
             unsafe {
                 self.render_doc
-                    .start_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+                    .start_frame_capture(self.raw.as_mut_ptr().cast(), ptr::null_mut())
             }
         }
         #[cfg(not(feature = "renderdoc"))]
@@ -1760,7 +1760,7 @@ impl crate::Device for super::Device {
         #[cfg(feature = "renderdoc")]
         unsafe {
             self.render_doc
-                .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+                .end_frame_capture(self.raw.as_mut_ptr().cast(), ptr::null_mut())
         }
     }
 

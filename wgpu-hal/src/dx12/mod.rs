@@ -720,7 +720,7 @@ impl crate::Surface for Surface {
                         self.factory
                             .unwrap_factory2()
                             .create_swapchain_for_composition(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 &desc,
                             )
                             .into_result()
@@ -733,7 +733,7 @@ impl crate::Surface for Surface {
                             .clone()
                             .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
                             .create_swapchain_for_composition_surface_handle(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 handle,
                                 &desc,
                             )
@@ -745,7 +745,7 @@ impl crate::Surface for Surface {
                             .as_factory2()
                             .unwrap()
                             .create_swapchain_for_hwnd(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 hwnd,
                                 &desc,
                             )
