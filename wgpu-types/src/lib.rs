@@ -6,7 +6,12 @@
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
 )]
-#![warn(clippy::ptr_as_ptr, missing_docs, unsafe_op_in_unsafe_fn)]
+#![warn(
+    clippy::ptr_as_ptr,
+    clippy::ref_as_ptr,
+    missing_docs,
+    unsafe_op_in_unsafe_fn
+)]
 
 #[cfg(any(feature = "serde", test))]
 use serde::Deserialize;
