@@ -10,23 +10,35 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::DeviceState;
 
-const DISPATCH_COUNT: usize = 10_000;
+fn dispatch_count() -> usize {
+    // On CI we only want to run a very lightweight version of the benchmark
+    // to ensure that it does not break.
+    if std::env::var("WGPU_TESTING").is_ok() {
+        8
+    } else {
+        10_000
+    }
+}
 
 // Currently bindless is _much_ slower than with regularly resources,
 // since wgpu needs to issues barriers for all resources between each dispatch for all read/write textures & buffers.
 // This is in fact so slow that it makes the benchmark unusable when we use the same amount of
 // resources as the regular benchmark.
 // For details see https://github.com/gfx-rs/wgpu/issues/5766
-const DISPATCH_COUNT_BINDLESS: usize = 1_000;
+fn dispatch_count_bindless() -> usize {
+    // On CI we only want to run a very lightweight version of the benchmark
+    // to ensure that it does not break.
+    if std::env::var("WGPU_TESTING").is_ok() {
+        8
+    } else {
+        1_000
+    }
+}
 
 // Must match the number of textures in the computepass.wgsl shader
 const TEXTURES_PER_DISPATCH: usize = 2;
 const STORAGE_TEXTURES_PER_DISPATCH: usize = 2;
 const STORAGE_BUFFERS_PER_DISPATCH: usize = 2;
-
-const TEXTURE_COUNT: usize = DISPATCH_COUNT * TEXTURES_PER_DISPATCH;
-const STORAGE_TEXTURE_COUNT: usize = DISPATCH_COUNT * STORAGE_TEXTURES_PER_DISPATCH;
-const STORAGE_BUFFER_COUNT: usize = DISPATCH_COUNT * STORAGE_BUFFERS_PER_DISPATCH;
 
 const BUFFER_SIZE: u64 = 16;
 
@@ -44,6 +56,12 @@ impl ComputepassState {
     /// Create and prepare all the resources needed for the computepass benchmark.
     fn new() -> Self {
         let device_state = DeviceState::new();
+
+        let dispatch_count = dispatch_count();
+        let dispatch_count_bindless = dispatch_count_bindless();
+        let texture_count = dispatch_count * TEXTURES_PER_DISPATCH;
+        let storage_buffer_count = dispatch_count * STORAGE_BUFFERS_PER_DISPATCH;
+        let storage_texture_count = dispatch_count * STORAGE_TEXTURES_PER_DISPATCH;
 
         let supports_bindless = device_state.device.features().contains(
             wgpu::Features::BUFFER_BINDING_ARRAY
@@ -106,8 +124,8 @@ impl ComputepassState {
                     entries: &bind_group_layout_entries,
                 });
 
-        let mut texture_views = Vec::with_capacity(TEXTURE_COUNT);
-        for i in 0..TEXTURE_COUNT {
+        let mut texture_views = Vec::with_capacity(texture_count);
+        for i in 0..texture_count {
             let texture = device_state
                 .device
                 .create_texture(&wgpu::TextureDescriptor {
@@ -132,8 +150,8 @@ impl ComputepassState {
         random.shuffle(&mut texture_views);
         let texture_view_refs: Vec<_> = texture_views.iter().collect();
 
-        let mut storage_texture_views = Vec::with_capacity(STORAGE_TEXTURE_COUNT);
-        for i in 0..TEXTURE_COUNT {
+        let mut storage_texture_views = Vec::with_capacity(storage_texture_count);
+        for i in 0..storage_texture_count {
             let texture = device_state
                 .device
                 .create_texture(&wgpu::TextureDescriptor {
@@ -158,8 +176,8 @@ impl ComputepassState {
         random.shuffle(&mut storage_texture_views);
         let storage_texture_view_refs: Vec<_> = storage_texture_views.iter().collect();
 
-        let mut storage_buffers = Vec::with_capacity(STORAGE_BUFFER_COUNT);
-        for i in 0..STORAGE_BUFFER_COUNT {
+        let mut storage_buffers = Vec::with_capacity(storage_buffer_count);
+        for i in 0..storage_buffer_count {
             storage_buffers.push(device_state.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(&format!("Buffer {i}")),
                 size: BUFFER_SIZE,
@@ -173,8 +191,8 @@ impl ComputepassState {
             .map(|b| b.as_entire_buffer_binding())
             .collect();
 
-        let mut bind_groups = Vec::with_capacity(DISPATCH_COUNT);
-        for dispatch_idx in 0..DISPATCH_COUNT {
+        let mut bind_groups = Vec::with_capacity(dispatch_count);
+        for dispatch_idx in 0..dispatch_count {
             let mut entries = Vec::with_capacity(TEXTURES_PER_DISPATCH);
             for tex_idx in 0..TEXTURES_PER_DISPATCH {
                 entries.push(wgpu::BindGroupEntry {
@@ -258,7 +276,7 @@ impl ComputepassState {
                                     view_dimension: wgpu::TextureViewDimension::D2,
                                     multisampled: false,
                                 },
-                                count: Some(NonZeroU32::new(TEXTURE_COUNT as u32).unwrap()),
+                                count: Some(NonZeroU32::new(texture_count as u32).unwrap()),
                             },
                             wgpu::BindGroupLayoutEntry {
                                 binding: 1,
@@ -268,7 +286,7 @@ impl ComputepassState {
                                     format: wgpu::TextureFormat::R32Float,
                                     view_dimension: wgpu::TextureViewDimension::D2,
                                 },
-                                count: Some(NonZeroU32::new(STORAGE_TEXTURE_COUNT as u32).unwrap()),
+                                count: Some(NonZeroU32::new(storage_texture_count as u32).unwrap()),
                             },
                             wgpu::BindGroupLayoutEntry {
                                 binding: 2,
@@ -278,7 +296,7 @@ impl ComputepassState {
                                     has_dynamic_offset: false,
                                     min_binding_size: std::num::NonZeroU64::new(BUFFER_SIZE),
                                 },
-                                count: Some(NonZeroU32::new(STORAGE_BUFFER_COUNT as u32).unwrap()),
+                                count: Some(NonZeroU32::new(storage_buffer_count as u32).unwrap()),
                             },
                         ],
                     });
@@ -293,19 +311,19 @@ impl ComputepassState {
                             wgpu::BindGroupEntry {
                                 binding: 0,
                                 resource: wgpu::BindingResource::TextureViewArray(
-                                    &texture_view_refs[..DISPATCH_COUNT_BINDLESS],
+                                    &texture_view_refs[..dispatch_count_bindless],
                                 ),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
                                 resource: wgpu::BindingResource::TextureViewArray(
-                                    &storage_texture_view_refs[..DISPATCH_COUNT_BINDLESS],
+                                    &storage_texture_view_refs[..dispatch_count_bindless],
                                 ),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 2,
                                 resource: wgpu::BindingResource::BufferArray(
-                                    &storage_buffer_bindings[..DISPATCH_COUNT_BINDLESS],
+                                    &storage_buffer_bindings[..dispatch_count_bindless],
                                 ),
                             },
                         ],
@@ -354,7 +372,8 @@ impl ComputepassState {
     fn run_subpass(&self, pass_number: usize, total_passes: usize) -> wgpu::CommandBuffer {
         profiling::scope!("Computepass", &format!("Pass {pass_number}/{total_passes}"));
 
-        let dispatch_per_pass = DISPATCH_COUNT / total_passes;
+        let dispatch_count = dispatch_count();
+        let dispatch_per_pass = dispatch_count / total_passes;
 
         let mut encoder = self
             .device_state
@@ -379,7 +398,7 @@ impl ComputepassState {
         encoder.finish()
     }
 
-    fn run_bindless_pass(&self) -> wgpu::CommandBuffer {
+    fn run_bindless_pass(&self, dispatch_count_bindless: usize) -> wgpu::CommandBuffer {
         profiling::scope!("Bindless Computepass");
 
         let mut encoder = self
@@ -394,7 +413,7 @@ impl ComputepassState {
 
         compute_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
         compute_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]);
-        for _ in 0..DISPATCH_COUNT_BINDLESS {
+        for _ in 0..dispatch_count_bindless {
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
 
@@ -407,13 +426,19 @@ impl ComputepassState {
 fn run_bench(ctx: &mut Criterion) {
     let state = Lazy::new(ComputepassState::new);
 
+    let dispatch_count = dispatch_count();
+    let dispatch_count_bindless = dispatch_count_bindless();
+    let texture_count = dispatch_count * TEXTURES_PER_DISPATCH;
+    let storage_buffer_count = dispatch_count * STORAGE_BUFFERS_PER_DISPATCH;
+    let storage_texture_count = dispatch_count * STORAGE_TEXTURES_PER_DISPATCH;
+
     // Test 10k dispatch calls split up into 1, 2, 4, and 8 computepasses
     let mut group = ctx.benchmark_group("Computepass: Single Threaded");
-    group.throughput(Throughput::Elements(DISPATCH_COUNT as _));
+    group.throughput(Throughput::Elements(dispatch_count as _));
 
     for time_submit in [false, true] {
         for cpasses in [1, 2, 4, 8] {
-            let dispatch_per_pass = DISPATCH_COUNT / cpasses;
+            let dispatch_per_pass = dispatch_count / cpasses;
 
             let label = if time_submit {
                 "Submit Time"
@@ -466,10 +491,10 @@ fn run_bench(ctx: &mut Criterion) {
 
     // Test 10k dispatch calls split up over 2, 4, and 8 threads.
     let mut group = ctx.benchmark_group("Computepass: Multi Threaded");
-    group.throughput(Throughput::Elements(DISPATCH_COUNT as _));
+    group.throughput(Throughput::Elements(dispatch_count as _));
 
     for threads in [2, 4, 8] {
-        let dispatch_per_pass = DISPATCH_COUNT / threads;
+        let dispatch_per_pass = dispatch_count / threads;
         group.bench_function(
             &format!("{threads} threads x {dispatch_per_pass} dispatch"),
             |b| {
@@ -510,9 +535,9 @@ fn run_bench(ctx: &mut Criterion) {
 
     // Test 10k dispatch calls split up over 1, 2, 4, and 8 threads.
     let mut group = ctx.benchmark_group("Computepass: Bindless");
-    group.throughput(Throughput::Elements(DISPATCH_COUNT_BINDLESS as _));
+    group.throughput(Throughput::Elements(dispatch_count_bindless as _));
 
-    group.bench_function(&format!("{DISPATCH_COUNT_BINDLESS} dispatch"), |b| {
+    group.bench_function(&format!("{dispatch_count_bindless} dispatch"), |b| {
         Lazy::force(&state);
 
         b.iter_custom(|iters| {
@@ -535,7 +560,7 @@ fn run_bench(ctx: &mut Criterion) {
 
                 let start = Instant::now();
 
-                let buffer = state.run_bindless_pass();
+                let buffer = state.run_bindless_pass(dispatch_count_bindless);
 
                 duration += start.elapsed();
 
@@ -551,7 +576,7 @@ fn run_bench(ctx: &mut Criterion) {
     ctx.bench_function(
         &format!(
             "Computepass: Empty Submit with {} Resources",
-            TEXTURE_COUNT + STORAGE_TEXTURE_COUNT + STORAGE_BUFFER_COUNT
+            texture_count + storage_texture_count + storage_buffer_count
         ),
         |b| {
             Lazy::force(&state);
