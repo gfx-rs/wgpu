@@ -39,6 +39,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### General
+
+- Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
+
 ## 22.0.0 (2024-07-17)
 
 ### Overview
