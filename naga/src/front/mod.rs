@@ -275,7 +275,7 @@ where
         Name: std::borrow::Borrow<Q>,
         Q: std::hash::Hash + Eq + ?Sized,
     {
-        // Iterate backwards trough the scopes and try to find the variable
+        // Iterate backwards through the scopes and try to find the variable
         for scope in self.scopes[..self.cursor].iter().rev() {
             if let Some(var) = scope.get(name) {
                 return Some(var);
