@@ -59,6 +59,7 @@ env:
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
+  WGPU_TESTING: true
 
 # We distinguish the following kinds of builds:
 # - native: build for the same target as we compile on

@@ -39,6 +39,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+#### Naga
+
+* Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
+
 ### Bug Fixes
 
 #### General

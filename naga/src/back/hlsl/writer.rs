@@ -3063,8 +3063,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
-                    Mf::FindLsb => Function::MissingIntReturnType("firstbitlow"),
-                    Mf::FindMsb => Function::MissingIntReturnType("firstbithigh"),
+                    Mf::FirstTrailingBit => Function::MissingIntReturnType("firstbitlow"),
+                    Mf::FirstLeadingBit => Function::MissingIntReturnType("firstbithigh"),
                     Mf::ExtractBits => Function::Regular(EXTRACT_BITS_FUNCTION),
                     Mf::InsertBits => Function::Regular(INSERT_BITS_FUNCTION),
                     // Data Packing

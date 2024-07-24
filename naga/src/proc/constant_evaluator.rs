@@ -27,6 +27,8 @@ macro_rules! gen_component_wise_extractor {
         scalar_kinds: [$( $scalar_kind:ident ),* $(,)?],
     ) => {
         /// A subset of [`Literal`]s intended to be used for implementing numeric built-ins.
+        #[derive(Debug)]
+        #[cfg_attr(test, derive(PartialEq))]
         enum $target<const N: usize> {
             $(
                 #[doc = concat!(
@@ -1231,6 +1233,12 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::ReverseBits => {
                 component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
             }
+            crate::MathFunction::FirstTrailingBit => {
+                component_wise_concrete_int(self, span, [arg], |ci| Ok(first_trailing_bit(ci)))
+            }
+            crate::MathFunction::FirstLeadingBit => {
+                component_wise_concrete_int(self, span, [arg], |ci| Ok(first_leading_bit(ci)))
+            }
 
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
@@ -2093,6 +2101,174 @@ impl<'a> ConstantEvaluator<'a> {
         };
 
         Ok(resolution)
+    }
+}
+
+fn first_trailing_bit(concrete_int: ConcreteInt<1>) -> ConcreteInt<1> {
+    // NOTE: Bit indices for this built-in start at 0 at the "right" (or LSB). For example, a value
+    // of 1 means the least significant bit is set. Therefore, an input of `0x[80 00…]` would
+    // return a right-to-left bit index of 0.
+    let trailing_zeros_to_bit_idx = |e: u32| -> u32 {
+        match e {
+            idx @ 0..=31 => idx,
+            32 => u32::MAX,
+            _ => unreachable!(),
+        }
+    };
+    match concrete_int {
+        ConcreteInt::U32([e]) => ConcreteInt::U32([trailing_zeros_to_bit_idx(e.trailing_zeros())]),
+        ConcreteInt::I32([e]) => {
+            ConcreteInt::I32([trailing_zeros_to_bit_idx(e.trailing_zeros()) as i32])
+        }
+    }
+}
+
+#[test]
+fn first_trailing_bit_smoke() {
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([0])),
+        ConcreteInt::I32([-1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([1])),
+        ConcreteInt::I32([0])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([2])),
+        ConcreteInt::I32([1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([-1])),
+        ConcreteInt::I32([0]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([i32::MIN])),
+        ConcreteInt::I32([31]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([i32::MAX])),
+        ConcreteInt::I32([0]),
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_trailing_bit(ConcreteInt::I32([1 << idx])),
+            ConcreteInt::I32([idx])
+        )
+    }
+
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([0])),
+        ConcreteInt::U32([u32::MAX])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([1])),
+        ConcreteInt::U32([0])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([2])),
+        ConcreteInt::U32([1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([1 << 31])),
+        ConcreteInt::U32([31]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([u32::MAX])),
+        ConcreteInt::U32([0]),
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_trailing_bit(ConcreteInt::U32([1 << idx])),
+            ConcreteInt::U32([idx])
+        )
+    }
+}
+
+fn first_leading_bit(concrete_int: ConcreteInt<1>) -> ConcreteInt<1> {
+    // NOTE: Bit indices for this built-in start at 0 at the "right" (or LSB). For example, 1 means
+    // the least significant bit is set. Therefore, an input of 1 would return a right-to-left bit
+    // index of 0.
+    let rtl_to_ltr_bit_idx = |e: u32| -> u32 {
+        match e {
+            idx @ 0..=31 => 31 - idx,
+            32 => u32::MAX,
+            _ => unreachable!(),
+        }
+    };
+    match concrete_int {
+        ConcreteInt::I32([e]) => ConcreteInt::I32([{
+            let rtl_bit_index = if e.is_negative() {
+                e.leading_ones()
+            } else {
+                e.leading_zeros()
+            };
+            rtl_to_ltr_bit_idx(rtl_bit_index) as i32
+        }]),
+        ConcreteInt::U32([e]) => ConcreteInt::U32([rtl_to_ltr_bit_idx(e.leading_zeros())]),
+    }
+}
+
+#[test]
+fn first_leading_bit_smoke() {
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([-1])),
+        ConcreteInt::I32([-1])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([0])),
+        ConcreteInt::I32([-1])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([1])),
+        ConcreteInt::I32([0])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([-2])),
+        ConcreteInt::I32([0])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([1234 + 4567])),
+        ConcreteInt::I32([12])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([i32::MAX])),
+        ConcreteInt::I32([30])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([i32::MIN])),
+        ConcreteInt::I32([30])
+    );
+    // NOTE: Ignore the sign bit, which is a separate (above) case.
+    for idx in 0..(32 - 1) {
+        assert_eq!(
+            first_leading_bit(ConcreteInt::I32([1 << idx])),
+            ConcreteInt::I32([idx])
+        );
+    }
+    for idx in 1..(32 - 1) {
+        assert_eq!(
+            first_leading_bit(ConcreteInt::I32([-(1 << idx)])),
+            ConcreteInt::I32([idx - 1])
+        );
+    }
+
+    assert_eq!(
+        first_leading_bit(ConcreteInt::U32([0])),
+        ConcreteInt::U32([u32::MAX])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::U32([1])),
+        ConcreteInt::U32([0])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::U32([u32::MAX])),
+        ConcreteInt::U32([31])
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_leading_bit(ConcreteInt::U32([1 << idx])),
+            ConcreteInt::U32([idx])
+        )
     }
 }
 
