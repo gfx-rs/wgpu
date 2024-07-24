@@ -10,20 +10,14 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::DeviceState;
 
-#[cfg(not(test))]
 const DISPATCH_COUNT: usize = 10_000;
-#[cfg(test)]
-const DISPATCH_COUNT: usize = 8; // Running with up to 8 threads.
 
 // Currently bindless is _much_ slower than with regularly resources,
 // since wgpu needs to issues barriers for all resources between each dispatch for all read/write textures & buffers.
 // This is in fact so slow that it makes the benchmark unusable when we use the same amount of
 // resources as the regular benchmark.
 // For details see https://github.com/gfx-rs/wgpu/issues/5766
-#[cfg(not(test))]
 const DISPATCH_COUNT_BINDLESS: usize = 1_000;
-#[cfg(test)]
-const DISPATCH_COUNT_BINDLESS: usize = 8; // Running with up to 8 threads.
 
 // Must match the number of textures in the computepass.wgsl shader
 const TEXTURES_PER_DISPATCH: usize = 2;
