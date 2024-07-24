@@ -369,16 +369,16 @@ impl ObservationLog {
         self.write_location(new_location);
         self.write_action(&Action::Acquisition {
             older_rank: older_lock.rank.bit.number(),
-            older_location: older_lock.location as *const _ as usize,
+            older_location: std::ptr::from_ref(older_lock.location) as usize,
             newer_rank: new_rank.bit.number(),
-            newer_location: new_location as *const _ as usize,
+            newer_location: std::ptr::from_ref(new_location) as usize,
         });
     }
 
     fn write_location(&mut self, location: &'static Location<'static>) {
         if self.locations_seen.insert(location) {
             self.write_action(&Action::Location {
-                address: location as *const _ as usize,
+                address: std::ptr::from_ref(location) as usize,
                 file: location.file(),
                 line: location.line(),
                 column: location.column(),
