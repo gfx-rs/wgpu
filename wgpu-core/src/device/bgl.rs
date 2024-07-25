@@ -126,4 +126,9 @@ impl EntryMap {
         self.sorted = false;
         self.inner.entry(key)
     }
+
+    pub fn sort(&mut self) {
+        self.inner.sort_unstable_keys();
+        self.sorted = true;
+    }
 }

@@ -176,16 +176,10 @@ mod compat {
                             }
                         }
 
-                        #[derive(Clone, Debug, Error)]
-                        #[error("Unknown reason")]
-                        struct Unknown();
-
                         Err(Error::Incompatible {
                             expected_bgl: expected_bgl.error_ident(),
                             assigned_bgl: assigned_bgl.error_ident(),
-                            inner: MultiError::new(errors.drain(..)).unwrap_or_else(|| {
-                                MultiError::new(core::iter::once(Unknown())).unwrap()
-                            }),
+                            inner: MultiError::new(errors.drain(..)).unwrap(),
                         })
                     }
                 } else {
