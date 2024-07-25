@@ -916,15 +916,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
-name = "d3d12"
-version = "22.0.0"
-dependencies = [
- "bitflags 2.6.0",
- "libloading 0.8.5",
- "winapi",
-]
-
-[[package]]
 name = "darling"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1684,7 +1675,6 @@ dependencies = [
  "log",
  "presser",
  "thiserror",
- "winapi",
  "windows",
 ]
 
@@ -4325,7 +4315,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "core-graphics-types",
- "d3d12",
  "env_logger",
  "glam",
  "glow",
@@ -4356,8 +4345,8 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "wgpu-types",
- "winapi",
  "windows",
+ "windows-core",
  "winit 0.29.15",
 ]
 

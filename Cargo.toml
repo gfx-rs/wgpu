@@ -6,7 +6,6 @@ members = [
 
     # default members
     "benches",
-    "d3d12",
     "examples",
     "naga-cli",
     "naga",
@@ -24,7 +23,6 @@ members = [
 exclude = []
 default-members = [
     "benches",
-    "d3d12",
     "examples",
     "naga-cli",
     "naga",
@@ -96,8 +94,7 @@ indexmap = "2"
 itertools = { version = "0.10.5" }
 ktx2 = "0.3"
 libc = "0.2"
-# libloading 0.8 switches from `winapi` to `windows-sys`; permit either
-libloading = ">=0.7, <0.9"
+libloading = "0.8"
 libtest-mimic = "0.6"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
@@ -148,14 +145,10 @@ gpu-descriptor = "0.3"
 
 # DX dependencies
 bit-set = "0.8"
-gpu-allocator = { version = "0.27", default-features = false, features = [
-    "d3d12",
-    "public-winapi",
-] }
-d3d12 = { version = "22.0.0", path = "./d3d12/" }
+gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
-winapi = "0.3"
 hassle-rs = "0.11.0"
+windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
 khronos-egl = "6"
