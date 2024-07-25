@@ -54,6 +54,7 @@ Bottom level categories:
 - Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003)
 - Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007)
 - Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
+- Deduplicate bind group layouts that are created from pipelines with "auto" layouts. By @teoxoy [#6049](https://github.com/gfx-rs/wgpu/pull/6049)
 
 ## 22.0.0 (2024-07-17)
 
