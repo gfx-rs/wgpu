@@ -22,7 +22,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     fmt::Debug,
     iter,
     mem::{self, ManuallyDrop},
@@ -78,7 +78,7 @@ impl TrackingData {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ResourceErrorIdent {
-    r#type: &'static str,
+    r#type: Cow<'static, str>,
     label: String,
 }
 
@@ -156,7 +156,7 @@ pub(crate) trait Labeled: ResourceType {
 
     fn error_ident(&self) -> ResourceErrorIdent {
         ResourceErrorIdent {
-            r#type: Self::TYPE,
+            r#type: Cow::Borrowed(Self::TYPE),
             label: self.label().to_owned(),
         }
     }
@@ -343,7 +343,6 @@ pub struct BufferMapOperation {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[non_exhaustive]
 pub enum BufferAccessError {
     #[error(transparent)]
@@ -393,7 +392,6 @@ pub enum BufferAccessError {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[error("Usage flags {actual:?} of {res} do not contain required usage flags {expected:?}")]
 pub struct MissingBufferUsageError {
     pub(crate) res: ResourceErrorIdent,
@@ -411,7 +409,6 @@ pub struct MissingTextureUsageError {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[error("{0} has been destroyed")]
 pub struct DestroyedResourceError(pub ResourceErrorIdent);
 

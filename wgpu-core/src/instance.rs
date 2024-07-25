@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
     api_log,
@@ -26,7 +26,7 @@ type HalSurface<A> = <A as hal::Api>::Surface;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
 pub struct FailedLimit {
-    name: &'static str,
+    name: Cow<'static, str>,
     requested: u64,
     allowed: u64,
 }
@@ -36,7 +36,7 @@ fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLim
 
     requested.check_limits_with_fail_fn(allowed, false, |name, requested, allowed| {
         failed.push(FailedLimit {
-            name,
+            name: Cow::Borrowed(name),
             requested,
             allowed,
         })
@@ -389,7 +389,6 @@ pub enum GetSurfaceSupportError {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 /// Error when requesting a device from the adaptor
 #[non_exhaustive]
 pub enum RequestDeviceError {
