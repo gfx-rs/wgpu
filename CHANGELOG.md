@@ -39,6 +39,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Added
+
+#### Naga
+
+- Added back implementations of PartialEq for more IR types. By @teoxoy in [#6045](https://github.com/gfx-rs/wgpu/pull/6045)
+
 ### Bug Fixes
 
 #### General
