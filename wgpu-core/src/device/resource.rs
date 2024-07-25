@@ -443,7 +443,7 @@ impl<A: HalApi> Device<A> {
                     .map_err(DeviceError::from)?
             };
         }
-        log::info!("Device::maintain: waiting for submission index {submission_index}");
+        log::debug!("Device::maintain: waiting for submission index {submission_index}");
 
         let mut life_tracker = self.lock_life();
         let submission_closures =
