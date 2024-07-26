@@ -1981,7 +1981,7 @@ impl crate::Context for ContextWgpuCore {
                 &encoder_data.error_sink,
                 cause,
                 desc.label,
-                "CommandEncoder::begin_compute_pass",
+                "CommandEncoder::begin_render_pass",
             );
         }
 
