@@ -35,6 +35,7 @@ async fn run(_path: Option<String>) {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )
@@ -101,6 +102,7 @@ async fn run(_path: Option<String>) {
         module: &shader,
         entry_point: "main",
         compilation_options: Default::default(),
+        cache: None,
     });
 
     log::info!("Wgpu context set up.");

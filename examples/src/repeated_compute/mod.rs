@@ -172,6 +172,7 @@ impl WgpuContext {
                     label: None,
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
             )
@@ -246,6 +247,7 @@ impl WgpuContext {
             module: &shader,
             entry_point: "main",
             compilation_options: Default::default(),
+            cache: None,
         });
 
         WgpuContext {

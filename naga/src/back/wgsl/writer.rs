@@ -1,6 +1,6 @@
 use super::Error;
 use crate::{
-    back,
+    back::{self, Baked},
     proc::{self, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
@@ -641,7 +641,7 @@ impl<W: Write> Writer<W> {
                             _ => false,
                         };
                         if min_ref_count <= info.ref_count || required_baking_expr {
-                            Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
+                            Some(Baked(handle).to_string())
                         } else {
                             None
                         }
@@ -733,7 +733,7 @@ impl<W: Write> Writer<W> {
             } => {
                 write!(self.out, "{level}")?;
                 if let Some(expr) = result {
-                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
+                    let name = Baked(expr).to_string();
                     self.start_named_expr(module, expr, func_ctx, &name)?;
                     self.named_expressions.insert(expr, name);
                 }
@@ -754,9 +754,11 @@ impl<W: Write> Writer<W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                self.start_named_expr(module, result, func_ctx, &res_name)?;
-                self.named_expressions.insert(result, res_name);
+                if let Some(result) = result {
+                    let res_name = Baked(result).to_string();
+                    self.start_named_expr(module, result, func_ctx, &res_name)?;
+                    self.named_expressions.insert(result, res_name);
+                }
 
                 let fun_str = fun.to_wgsl();
                 write!(self.out, "atomic{fun_str}(")?;
@@ -772,7 +774,7 @@ impl<W: Write> Writer<W> {
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 write!(self.out, "{level}")?;
                 // TODO: Obey named expressions here.
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_name = Baked(result).to_string();
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
                 write!(self.out, "workgroupUniformLoad(")?;
@@ -932,7 +934,7 @@ impl<W: Write> Writer<W> {
             Statement::RayQuery { .. } => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_name = Baked(result).to_string();
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
@@ -949,7 +951,7 @@ impl<W: Write> Writer<W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_name = Baked(result).to_string();
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
@@ -1004,7 +1006,7 @@ impl<W: Write> Writer<W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_name = Baked(result).to_string();
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
@@ -1096,7 +1098,7 @@ impl<W: Write> Writer<W> {
             Ex::Access { base, .. } | Ex::AccessIndex { base, .. } => {
                 let base_ty = func_ctx.resolve_type(base, &module.types);
                 match *base_ty {
-                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                    TypeInner::Pointer { .. } | TypeInner::ValuePointer { .. } => {
                         Indirection::Reference
                     }
                     _ => Indirection::Ordinary,
@@ -1716,12 +1718,16 @@ impl<W: Write> Writer<W> {
                     Mf::Pack2x16snorm => Function::Regular("pack2x16snorm"),
                     Mf::Pack2x16unorm => Function::Regular("pack2x16unorm"),
                     Mf::Pack2x16float => Function::Regular("pack2x16float"),
+                    Mf::Pack4xI8 => Function::Regular("pack4xI8"),
+                    Mf::Pack4xU8 => Function::Regular("pack4xU8"),
                     // data unpacking
                     Mf::Unpack4x8snorm => Function::Regular("unpack4x8snorm"),
                     Mf::Unpack4x8unorm => Function::Regular("unpack4x8unorm"),
                     Mf::Unpack2x16snorm => Function::Regular("unpack2x16snorm"),
                     Mf::Unpack2x16unorm => Function::Regular("unpack2x16unorm"),
                     Mf::Unpack2x16float => Function::Regular("unpack2x16float"),
+                    Mf::Unpack4xI8 => Function::Regular("unpack4xI8"),
+                    Mf::Unpack4xU8 => Function::Regular("unpack4xU8"),
                     Mf::Inverse | Mf::Outer => {
                         return Err(Error::UnsupportedMathFunction(fun));
                     }

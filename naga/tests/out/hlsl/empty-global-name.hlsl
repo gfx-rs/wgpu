@@ -6,8 +6,8 @@ RWByteAddressBuffer unnamed : register(u0);
 
 void function()
 {
-    int _expr3 = asint(unnamed.Load(0));
-    unnamed.Store(0, asuint((_expr3 + 1)));
+    int _e3 = asint(unnamed.Load(0));
+    unnamed.Store(0, asuint((_e3 + 1)));
     return;
 }
 

@@ -18,7 +18,10 @@ use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
+mod counters;
 pub mod math;
+
+pub use counters::*;
 
 // Use this macro instead of the one provided by the bitflags_serde_shim crate
 // because the latter produces an error when deserializing bits that are not
@@ -799,14 +802,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 45;
-        /// Allows vertex shaders to have outputs which are not consumed
-        /// by the fragment shader.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL
-        const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 46;
         /// Allows for creation of textures of format [`TextureFormat::NV12`]
         ///
         /// Supported platforms:
@@ -914,6 +909,32 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SUBGROUP_BARRIER = 1 << 58;
+        /// Allows the use of pipeline cache objects
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// Unimplemented Platforms:
+        /// - DX12
+        /// - Metal
+        const PIPELINE_CACHE = 1 << 59;
+        /// Allows shaders to use i64 and u64 atomic min and max.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_shader_atomic_int64)
+        /// - DX12 (with SM 6.6+)
+        /// - Metal (with MSL 2.4+)
+        ///
+        /// This is a native only feature.
+        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 60;
+        /// Allows shaders to use all i64 and u64 atomic operations.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_shader_atomic_int64)
+        /// - DX12 (with SM 6.6+)
+        ///
+        /// This is a native only feature.
+        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 61;
     }
 }
 
@@ -1748,11 +1769,43 @@ pub struct AdapterInfo {
     pub backend: Backend,
 }
 
+/// Hints to the device about the memory allocation strategy.
+///
+/// Some backends may ignore these hints.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum MemoryHints {
+    /// Favor performance over memory usage (the default value).
+    #[default]
+    Performance,
+    /// Favor memory usage over performance.
+    MemoryUsage,
+    /// Applications that have control over the content that is rendered
+    /// (typically games) may find an optimal compromise between memory
+    /// usage and performance by specifying the allocation configuration.
+    Manual {
+        /// Defines the range of allowed memory block sizes for sub-allocated
+        /// resources.
+        ///
+        /// The backend may attempt to group multiple resources into fewer
+        /// device memory blocks (sub-allocation) for performance reasons.
+        /// The start of the provided range specifies the initial memory
+        /// block size for sub-allocated resources. After running out of
+        /// space in existing memory blocks, the backend may chose to
+        /// progressively increase the block size of subsequent allocations
+        /// up to a limit specified by the end of the range.
+        ///
+        /// This does not limit resource sizes. If a resource does not fit
+        /// in the specified range, it will typically be placed in a dedicated
+        /// memory block.
+        suballocated_device_memory_block_size: Range<u64>,
+    },
+}
+
 /// Describes a [`Device`](../wgpu/struct.Device.html).
 ///
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#gpudevicedescriptor).
-#[repr(C)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor<L> {
@@ -1770,6 +1823,8 @@ pub struct DeviceDescriptor<L> {
     /// Exactly the specified limits, and no better or worse,
     /// will be allowed in validation of API calls on the resulting device.
     pub required_limits: Limits,
+    /// Hints for memory allocation strategies.
+    pub memory_hints: MemoryHints,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1779,6 +1834,7 @@ impl<L> DeviceDescriptor<L> {
             label: fun(&self.label),
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
+            memory_hints: self.memory_hints.clone(),
         }
     }
 }
@@ -2242,11 +2298,11 @@ bitflags::bitflags! {
         const FILTERABLE = 1 << 0;
         /// Allows [`TextureDescriptor::sample_count`] to be `2`.
         const MULTISAMPLE_X2 = 1 << 1;
-          /// Allows [`TextureDescriptor::sample_count`] to be `4`.
+        /// Allows [`TextureDescriptor::sample_count`] to be `4`.
         const MULTISAMPLE_X4 = 1 << 2 ;
-          /// Allows [`TextureDescriptor::sample_count`] to be `8`.
+        /// Allows [`TextureDescriptor::sample_count`] to be `8`.
         const MULTISAMPLE_X8 = 1 << 3 ;
-          /// Allows [`TextureDescriptor::sample_count`] to be `16`.
+        /// Allows [`TextureDescriptor::sample_count`] to be `16`.
         const MULTISAMPLE_X16 = 1 << 4;
         /// Allows a texture of this format to back a view passed as `resolve_target`
         /// to a render pass for an automatic driver-implemented resolve.
@@ -4444,7 +4500,7 @@ impl Default for ColorWrites {
 }
 
 /// Passed to `Device::poll` to control how and if it should block.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Maintain<T> {
     /// On wgpu-core based backends, block until the given submission has
     /// completed execution, and any callbacks have been invoked.
@@ -5497,9 +5553,9 @@ pub enum TextureDimension {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin2d {
-    ///
+    #[allow(missing_docs)]
     pub x: u32,
-    ///
+    #[allow(missing_docs)]
     pub y: u32,
 }
 
@@ -7098,7 +7154,7 @@ pub struct InstanceDescriptor {
     pub flags: InstanceFlags,
     /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
-    /// Which OpenGL ES 3 minor version to request.
+    /// Which OpenGL ES 3 minor version to request. Will be ignored if OpenGL is available.
     pub gles_minor_version: Gles3MinorVersion,
 }
 
@@ -7320,6 +7376,7 @@ mod send_sync {
 /// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeviceLostReason {
     /// Triggered by driver
     Unknown = 0,

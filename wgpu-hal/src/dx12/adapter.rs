@@ -354,6 +354,25 @@ impl super::Adapter {
                 && features1.WaveOps != 0,
         );
 
+        let atomic_int64_on_typed_resource_supported = {
+            let mut features9: crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS9 =
+                unsafe { mem::zeroed() };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    37, // D3D12_FEATURE_D3D12_OPTIONS9
+                    &mut features9 as *mut _ as *mut _,
+                    mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS9>() as _,
+                )
+            };
+            hr == 0
+                && features9.AtomicInt64OnGroupSharedSupported != 0
+                && features9.AtomicInt64OnTypedResourceSupported != 0
+        };
+        features.set(
+            wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
+            atomic_int64_on_typed_resource_supported,
+        );
+
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
 
@@ -415,7 +434,7 @@ impl super::Adapter {
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         d3d12_ty::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
-                    max_storage_buffer_binding_size: crate::auxil::MAX_I32_BINDING_SIZE,
+                    max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
                     max_vertex_buffers: d3d12_ty::D3D12_VS_INPUT_REGISTER_COUNT
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: d3d12_ty::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
@@ -484,6 +503,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         _features: wgt::Features,
         limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = {
             profiling::scope!("ID3D12Device::CreateCommandQueue");
@@ -501,6 +521,7 @@ impl crate::Adapter for super::Adapter {
             self.device.clone(),
             queue.clone(),
             limits,
+            memory_hints,
             self.private_caps,
             &self.library,
             self.dxc_container.clone(),

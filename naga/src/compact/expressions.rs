@@ -88,28 +88,38 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     match self.global_expressions_used {
                         Some(ref mut used) => used.insert(init),
                         None => self.expressions_used.insert(init),
-                    }
+                    };
                 }
                 Ex::Override(_) => {
                     // All overrides are considered used by definition. We mark
                     // their types and initialization expressions as used in
                     // `compact::compact`, so we have no more work to do here.
                 }
-                Ex::ZeroValue(ty) => self.types_used.insert(ty),
+                Ex::ZeroValue(ty) => {
+                    self.types_used.insert(ty);
+                }
                 Ex::Compose { ty, ref components } => {
                     self.types_used.insert(ty);
                     self.expressions_used
                         .insert_iter(components.iter().cloned());
                 }
                 Ex::Access { base, index } => self.expressions_used.insert_iter([base, index]),
-                Ex::AccessIndex { base, index: _ } => self.expressions_used.insert(base),
-                Ex::Splat { size: _, value } => self.expressions_used.insert(value),
+                Ex::AccessIndex { base, index: _ } => {
+                    self.expressions_used.insert(base);
+                }
+                Ex::Splat { size: _, value } => {
+                    self.expressions_used.insert(value);
+                }
                 Ex::Swizzle {
                     size: _,
                     vector,
                     pattern: _,
-                } => self.expressions_used.insert(vector),
-                Ex::Load { pointer } => self.expressions_used.insert(pointer),
+                } => {
+                    self.expressions_used.insert(vector);
+                }
+                Ex::Load { pointer } => {
+                    self.expressions_used.insert(pointer);
+                }
                 Ex::ImageSample {
                     image,
                     sampler,
@@ -130,7 +140,9 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     use crate::SampleLevel as Sl;
                     match *level {
                         Sl::Auto | Sl::Zero => {}
-                        Sl::Exact(expr) | Sl::Bias(expr) => self.expressions_used.insert(expr),
+                        Sl::Exact(expr) | Sl::Bias(expr) => {
+                            self.expressions_used.insert(expr);
+                        }
                         Sl::Gradient { x, y } => self.expressions_used.insert_iter([x, y]),
                     }
                     self.expressions_used.insert_iter(depth_ref);
@@ -156,7 +168,9 @@ impl<'tracer> ExpressionTracer<'tracer> {
                         Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
                     }
                 }
-                Ex::Unary { op: _, expr } => self.expressions_used.insert(expr),
+                Ex::Unary { op: _, expr } => {
+                    self.expressions_used.insert(expr);
+                }
                 Ex::Binary { op: _, left, right } => {
                     self.expressions_used.insert_iter([left, right]);
                 }
@@ -171,8 +185,12 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     axis: _,
                     ctrl: _,
                     expr,
-                } => self.expressions_used.insert(expr),
-                Ex::Relational { fun: _, argument } => self.expressions_used.insert(argument),
+                } => {
+                    self.expressions_used.insert(expr);
+                }
+                Ex::Relational { fun: _, argument } => {
+                    self.expressions_used.insert(argument);
+                }
                 Ex::Math {
                     fun: _,
                     arg,
@@ -189,15 +207,23 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     expr,
                     kind: _,
                     convert: _,
-                } => self.expressions_used.insert(expr),
-                Ex::AtomicResult { ty, comparison: _ } => self.types_used.insert(ty),
-                Ex::WorkGroupUniformLoadResult { ty } => self.types_used.insert(ty),
-                Ex::ArrayLength(expr) => self.expressions_used.insert(expr),
-                Ex::SubgroupOperationResult { ty } => self.types_used.insert(ty),
+                } => {
+                    self.expressions_used.insert(expr);
+                }
+                Ex::ArrayLength(expr) => {
+                    self.expressions_used.insert(expr);
+                }
+                Ex::AtomicResult { ty, comparison: _ }
+                | Ex::WorkGroupUniformLoadResult { ty }
+                | Ex::SubgroupOperationResult { ty } => {
+                    self.types_used.insert(ty);
+                }
                 Ex::RayQueryGetIntersection {
                     query,
                     committed: _,
-                } => self.expressions_used.insert(query),
+                } => {
+                    self.expressions_used.insert(query);
+                }
             }
         }
     }

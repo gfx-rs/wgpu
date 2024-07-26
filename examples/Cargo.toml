@@ -10,6 +10,10 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[package.metadata.cargo-machete]
+# Cargo machete struggles with this dev dependency:
+ignored = ["wasm_bindgen_test"]
+
 [lib]
 path = "src/lib.rs"
 harness = false
@@ -18,6 +22,11 @@ harness = false
 name = "wgpu-examples"
 path = "src/main.rs"
 test = false
+
+[features]
+default = []
+webgl = ["wgpu/webgl"]
+webgpu = ["wgpu/webgpu"]
 
 [dependencies]
 bytemuck.workspace = true
@@ -34,7 +43,11 @@ obj.workspace = true
 png.workspace = true
 pollster.workspace = true
 web-time.workspace = true
-wgpu.workspace = true
+wgpu = { workspace = true, default-features = false, features = [
+    "wgsl",
+    "dx12",
+    "metal",
+] }
 winit.workspace = true
 
 [dev-dependencies]
@@ -47,10 +60,8 @@ env_logger.workspace = true
 console_error_panic_hook.workspace = true
 console_log.workspace = true
 fern.workspace = true
-js-sys.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
-hal = { workspace = true, optional = true }
 # We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
     "Location",

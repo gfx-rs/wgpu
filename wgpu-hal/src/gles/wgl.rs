@@ -558,7 +558,10 @@ impl crate::Instance for Instance {
     }
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&Surface>,
+    ) -> Vec<crate::ExposedAdapter<super::Api>> {
         unsafe {
             super::Adapter::expose(AdapterContext {
                 inner: self.inner.clone(),
@@ -798,6 +801,7 @@ impl crate::Surface for Surface {
     unsafe fn acquire_texture(
         &self,
         _timeout_ms: Option<Duration>,
+        _fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();

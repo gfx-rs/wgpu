@@ -98,6 +98,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             entry_point: "main",
             compilation_options: Default::default(),
             module: &module,
+            cache: None,
         });
 
         let mut encoder =

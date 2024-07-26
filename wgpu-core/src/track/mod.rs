@@ -102,22 +102,25 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv,
+    binding_model, command,
     hal_api::HalApi,
-    id,
     lock::{rank, Mutex, RwLock},
-    pipeline, resource,
+    pipeline,
+    resource::{self, Labeled, ResourceErrorIdent},
     snatch::SnatchGuard,
 };
 
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
-pub(crate) use buffer::{BufferBindGroupState, BufferTracker, BufferUsageScope};
+pub(crate) use buffer::{
+    BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
+};
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
-pub(crate) use stateless::{StatelessBindGroupSate, StatelessTracker};
+pub(crate) use stateless::{StatelessBindGroupState, StatelessTracker};
 pub(crate) use texture::{
-    TextureBindGroupState, TextureSelector, TextureTracker, TextureUsageScope,
+    DeviceTextureTracker, TextureBindGroupState, TextureSelector, TextureTracker,
+    TextureTrackerSetSingle, TextureUsageScope,
 };
 use wgt::strict_assert_ne;
 
@@ -126,11 +129,7 @@ use wgt::strict_assert_ne;
 pub(crate) struct TrackerIndex(u32);
 
 impl TrackerIndex {
-    /// A dummy value to place in ResourceInfo for resources that are never tracked.
-    pub const INVALID: Self = TrackerIndex(u32::MAX);
-
     pub fn as_usize(self) -> usize {
-        debug_assert!(self != Self::INVALID);
         self.0 as usize
     }
 }
@@ -180,8 +179,8 @@ impl TrackerIndexAllocator {
     }
 }
 
-impl std::fmt::Debug for TrackerIndexAllocator {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Debug for TrackerIndexAllocator {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         Ok(())
     }
 }
@@ -217,7 +216,6 @@ impl SharedTrackerIndexAllocator {
 
 pub(crate) struct TrackerIndexAllocators {
     pub buffers: Arc<SharedTrackerIndexAllocator>,
-    pub staging_buffers: Arc<SharedTrackerIndexAllocator>,
     pub textures: Arc<SharedTrackerIndexAllocator>,
     pub texture_views: Arc<SharedTrackerIndexAllocator>,
     pub samplers: Arc<SharedTrackerIndexAllocator>,
@@ -230,13 +228,13 @@ pub(crate) struct TrackerIndexAllocators {
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
     pub blas_s: Arc<SharedTrackerIndexAllocator>,
     pub tlas_s: Arc<SharedTrackerIndexAllocator>,
+    pub pipeline_caches: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
     pub fn new() -> Self {
         TrackerIndexAllocators {
             buffers: Arc::new(SharedTrackerIndexAllocator::new()),
-            staging_buffers: Arc::new(SharedTrackerIndexAllocator::new()),
             textures: Arc::new(SharedTrackerIndexAllocator::new()),
             texture_views: Arc::new(SharedTrackerIndexAllocator::new()),
             samplers: Arc::new(SharedTrackerIndexAllocator::new()),
@@ -247,6 +245,7 @@ impl TrackerIndexAllocators {
             pipeline_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
+            pipeline_caches: Arc::new(SharedTrackerIndexAllocator::new()),
             blas_s: Arc::new(SharedTrackerIndexAllocator::new()),
             tlas_s: Arc::new(SharedTrackerIndexAllocator::new()),
         }
@@ -272,7 +271,7 @@ impl PendingTransition<hal::BufferUses> {
         buf: &'a resource::Buffer<A>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> hal::BufferBarrier<'a, A> {
-        let buffer = buf.raw.get(snatch_guard).expect("Buffer is destroyed");
+        let buffer = buf.raw(snatch_guard).expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
             usage: self.usage,
@@ -329,7 +328,7 @@ pub(crate) trait ResourceUses:
 fn invalid_resource_state<T: ResourceUses>(state: T) -> bool {
     // Is power of two also means "is one bit set". We check for this as if
     // we're in any exclusive state, we must only be in a single state.
-    state.any_exclusive() && !conv::is_power_of_two_u16(state.bits())
+    state.any_exclusive() && !state.bits().is_power_of_two()
 }
 
 /// Returns true if the transition from one state to another does not require
@@ -340,34 +339,32 @@ fn skip_barrier<T: ResourceUses>(old_state: T, new_state: T) -> bool {
     old_state == new_state && old_state.all_ordered()
 }
 
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
-pub enum UsageConflict {
-    #[error("Attempted to use invalid buffer")]
-    BufferInvalid { id: id::BufferId },
-    #[error("Attempted to use invalid texture")]
-    TextureInvalid { id: id::TextureId },
-    #[error("Attempted to use buffer with {invalid_use}.")]
+#[derive(Clone, Debug, Error)]
+pub enum ResourceUsageCompatibilityError {
+    #[error("Attempted to use {res} with {invalid_use}.")]
     Buffer {
-        id: id::BufferId,
+        res: ResourceErrorIdent,
         invalid_use: InvalidUse<hal::BufferUses>,
     },
-    #[error("Attempted to use a texture (mips {mip_levels:?} layers {array_layers:?}) with {invalid_use}.")]
+    #[error(
+        "Attempted to use {res} (mips {mip_levels:?} layers {array_layers:?}) with {invalid_use}."
+    )]
     Texture {
-        id: id::TextureId,
+        res: ResourceErrorIdent,
         mip_levels: ops::Range<u32>,
         array_layers: ops::Range<u32>,
         invalid_use: InvalidUse<hal::TextureUses>,
     },
 }
 
-impl UsageConflict {
-    fn from_buffer(
-        id: id::BufferId,
+impl ResourceUsageCompatibilityError {
+    fn from_buffer<A: HalApi>(
+        buffer: &resource::Buffer<A>,
         current_state: hal::BufferUses,
         new_state: hal::BufferUses,
     ) -> Self {
         Self::Buffer {
-            id,
+            res: buffer.error_ident(),
             invalid_use: InvalidUse {
                 current_state,
                 new_state,
@@ -375,40 +372,20 @@ impl UsageConflict {
         }
     }
 
-    fn from_texture(
-        id: id::TextureId,
+    fn from_texture<A: HalApi>(
+        texture: &resource::Texture<A>,
         selector: TextureSelector,
         current_state: hal::TextureUses,
         new_state: hal::TextureUses,
     ) -> Self {
         Self::Texture {
-            id,
+            res: texture.error_ident(),
             mip_levels: selector.mips,
             array_layers: selector.layers,
             invalid_use: InvalidUse {
                 current_state,
                 new_state,
             },
-        }
-    }
-}
-
-impl crate::error::PrettyError for UsageConflict {
-    fn fmt_pretty(&self, fmt: &mut crate::error::ErrorFormatter) {
-        fmt.error(self);
-        match *self {
-            Self::BufferInvalid { id } => {
-                fmt.buffer_label(&id);
-            }
-            Self::TextureInvalid { id } => {
-                fmt.texture_label(&id);
-            }
-            Self::Buffer { id, .. } => {
-                fmt.buffer_label(&id);
-            }
-            Self::Texture { id, .. } => {
-                fmt.texture_label(&id);
-            }
         }
     }
 }
@@ -449,9 +426,9 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
     pub textures: TextureBindGroupState<A>,
-    pub views: StatelessBindGroupSate<resource::TextureView<A>>,
-    pub samplers: StatelessBindGroupSate<resource::Sampler<A>>,
-    pub acceleration_structures: StatelessBindGroupSate<resource::Tlas<A>>,
+    pub views: StatelessBindGroupState<resource::TextureView<A>>,
+    pub samplers: StatelessBindGroupState<resource::Sampler<A>>,
+    pub acceleration_structures: StatelessBindGroupState<resource::Tlas<A>>,
 }
 
 impl<A: HalApi> BindGroupStates<A> {
@@ -459,9 +436,9 @@ impl<A: HalApi> BindGroupStates<A> {
         Self {
             buffers: BufferBindGroupState::new(),
             textures: TextureBindGroupState::new(),
-            views: StatelessBindGroupSate::new(),
-            samplers: StatelessBindGroupSate::new(),
-            acceleration_structures: StatelessBindGroupSate::new(),
+            views: StatelessBindGroupState::new(),
+            samplers: StatelessBindGroupState::new(),
+            acceleration_structures: StatelessBindGroupState::new(),
         }
     }
 
@@ -530,7 +507,7 @@ impl<A: HalApi> RenderBundleScope<A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe { self.buffers.write().merge_bind_group(&bind_group.buffers)? };
         unsafe {
             self.textures
@@ -600,7 +577,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     pub unsafe fn merge_bind_group(
         &mut self,
         bind_group: &BindGroupStates<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe {
             self.buffers.merge_bind_group(&bind_group.buffers)?;
             self.textures.merge_bind_group(&bind_group.textures)?;
@@ -621,7 +598,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     pub unsafe fn merge_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         self.buffers
             .merge_usage_scope(&*render_bundle.buffers.read())?;
         self.textures
@@ -631,16 +608,26 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     }
 }
 
-pub(crate) trait ResourceTracker {
-    fn remove_abandoned(&mut self, index: TrackerIndex) -> bool;
+/// A tracker used by Device.
+pub(crate) struct DeviceTracker<A: HalApi> {
+    pub buffers: DeviceBufferTracker<A>,
+    pub textures: DeviceTextureTracker<A>,
 }
 
-/// A full double sided tracker used by CommandBuffers and the Device.
+impl<A: HalApi> DeviceTracker<A> {
+    pub fn new() -> Self {
+        Self {
+            buffers: DeviceBufferTracker::new(),
+            textures: DeviceTextureTracker::new(),
+        }
+    }
+}
+
+/// A full double sided tracker used by CommandBuffers.
 pub(crate) struct Tracker<A: HalApi> {
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
     pub views: StatelessTracker<resource::TextureView<A>>,
-    pub samplers: StatelessTracker<resource::Sampler<A>>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline<A>>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
@@ -656,7 +643,6 @@ impl<A: HalApi> Tracker<A> {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
             views: StatelessTracker::new(),
-            samplers: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),
             compute_pipelines: StatelessTracker::new(),
             render_pipelines: StatelessTracker::new(),
@@ -716,7 +702,7 @@ impl<A: HalApi> Tracker<A> {
     pub unsafe fn add_from_render_bundle(
         &mut self,
         render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), UsageConflict> {
+    ) -> Result<(), ResourceUsageCompatibilityError> {
         self.bind_groups
             .add_from_tracker(&*render_bundle.bind_groups.read());
         self.render_pipelines

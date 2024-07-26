@@ -3,6 +3,7 @@ mod regression {
     mod issue_3457;
     mod issue_4024;
     mod issue_4122;
+    mod issue_5553;
 }
 
 mod bgra8unorm_storage;
@@ -11,6 +12,7 @@ mod buffer;
 mod buffer_copy;
 mod buffer_usages;
 mod clear_texture;
+mod compute_pass_ownership;
 mod create_surface_error;
 mod device;
 mod encoder;
@@ -23,11 +25,13 @@ mod nv12_texture;
 mod occlusion_query;
 mod partially_bounded_arrays;
 mod pipeline;
+mod pipeline_cache;
 mod poll;
 mod push_constants;
 mod query_set;
 mod queue_transfer;
 mod ray_tracing;
+mod render_pass_ownership;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod scissor_tests;

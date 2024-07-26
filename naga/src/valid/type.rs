@@ -16,23 +16,27 @@ bitflags::bitflags! {
         /// This flag is required on types of local variables, function
         /// arguments, array elements, and struct members.
         ///
-        /// This includes all types except `Image`, `Sampler`,
-        /// and some `Pointer` types.
+        /// This includes all types except [`Image`], [`Sampler`],
+        /// and some [`Pointer`] types.
+        ///
+        /// [`Image`]: crate::TypeInner::Image
+        /// [`Sampler`]: crate::TypeInner::Sampler
+        /// [`Pointer`]: crate::TypeInner::Pointer
         const DATA = 0x1;
 
         /// The data type has a size known by pipeline creation time.
         ///
         /// Unsized types are quite restricted. The only unsized types permitted
         /// by Naga, other than the non-[`DATA`] types like [`Image`] and
-        /// [`Sampler`], are dynamically-sized [`Array`s], and [`Struct`s] whose
+        /// [`Sampler`], are dynamically-sized [`Array`]s, and [`Struct`]s whose
         /// last members are such arrays. See the documentation for those types
         /// for details.
         ///
         /// [`DATA`]: TypeFlags::DATA
-        /// [`Image`]: crate::Type::Image
-        /// [`Sampler`]: crate::Type::Sampler
-        /// [`Array`]: crate::Type::Array
-        /// [`Struct`]: crate::Type::struct
+        /// [`Image`]: crate::TypeInner::Image
+        /// [`Sampler`]: crate::TypeInner::Sampler
+        /// [`Array`]: crate::TypeInner::Array
+        /// [`Struct`]: crate::TypeInner::Struct
         const SIZED = 0x2;
 
         /// The data can be copied around.
@@ -43,6 +47,8 @@ bitflags::bitflags! {
         /// This covers anything that can be in [`Location`] binding:
         /// non-bool scalars and vectors, matrices, and structs and
         /// arrays containing only interface types.
+        ///
+        /// [`Location`]: crate::Binding::Location
         const IO_SHAREABLE = 0x8;
 
         /// Can be used for host-shareable structures.
@@ -354,16 +360,28 @@ impl super::Validator {
                 )
             }
             Ti::Atomic(crate::Scalar { kind, width }) => {
-                let good = match kind {
+                match kind {
                     crate::ScalarKind::Bool
                     | crate::ScalarKind::Float
                     | crate::ScalarKind::AbstractInt
-                    | crate::ScalarKind::AbstractFloat => false,
-                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
+                    | crate::ScalarKind::AbstractFloat => {
+                        return Err(TypeError::InvalidAtomicWidth(kind, width))
+                    }
+                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                        if width == 8 {
+                            if !self.capabilities.intersects(
+                                Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+                                    | Capabilities::SHADER_INT64_ATOMIC_MIN_MAX,
+                            ) {
+                                return Err(TypeError::MissingCapability(
+                                    Capabilities::SHADER_INT64_ATOMIC_ALL_OPS,
+                                ));
+                            }
+                        } else if width != 4 {
+                            return Err(TypeError::InvalidAtomicWidth(kind, width));
+                        }
+                    }
                 };
-                if !good {
-                    return Err(TypeError::InvalidAtomicWidth(kind, width));
-                }
                 TypeInfo::new(
                     TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
                     Alignment::from_width(width),

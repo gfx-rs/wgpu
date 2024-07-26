@@ -3,7 +3,17 @@
 [profile.default]
 slow-timeout = { period = "45s", terminate-after = 2 }
 
-# Use two threads for tests with "2_threads" in their name
+# Use two threads for tests with "2 threads" in their name
 [[profile.default.overrides]]
-filter = 'test(~2_threads)'
+filter = 'test(~2_threads) | test(~2 threads)'
 threads-required = 2
+
+# Use four threads for tests with "4 threads" in their name
+[[profile.default.overrides]]
+filter = 'test(~4_threads) | test(~4 threads)'
+threads-required = 4
+
+# Use eight threads for tests with "8 threads" in their name
+[[profile.default.overrides]]
+filter = 'test(~8_threads) | test(~8 threads)'
+threads-required = 8

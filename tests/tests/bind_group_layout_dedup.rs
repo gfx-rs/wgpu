@@ -91,6 +91,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
             module: &module,
             entry_point: "no_resources",
             compilation_options: Default::default(),
+            cache: None,
         };
 
         let pipeline = ctx.device.create_compute_pipeline(&desc);
@@ -220,6 +221,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
             module: &module,
             entry_point: "no_resources",
             compilation_options: Default::default(),
+            cache: None,
         });
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
@@ -266,6 +268,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             module: &module,
             entry_point: "resources",
             compilation_options: Default::default(),
+            cache: None,
         });
 
     // We create two bind groups, pulling the bind_group_layout from the pipeline each time.
@@ -337,6 +340,7 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
         module: &module,
         entry_point: "resources",
         compilation_options: Default::default(),
+        cache: None,
     };
     // Create two pipelines, creating a BG from the second.
     let pipeline1 = ctx.device.create_compute_pipeline(&desc);
@@ -364,9 +368,13 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
     pass.set_bind_group(0, &bg2, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
-    fail(&ctx.device, || {
-        drop(pass);
-    });
+    fail(
+        &ctx.device,
+        || {
+            drop(pass);
+        },
+        None,
+    );
 }
 
 #[gpu_test]
@@ -399,6 +407,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
             module: &module,
             entry_point: "resources",
             compilation_options: Default::default(),
+            cache: None,
         });
 
     // Create a matching BGL
@@ -431,7 +440,11 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     pass.set_bind_group(0, &bg, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
-    fail(&ctx.device, || {
-        drop(pass);
-    })
+    fail(
+        &ctx.device,
+        || {
+            drop(pass);
+        },
+        None,
+    )
 }

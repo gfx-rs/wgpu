@@ -32,6 +32,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
                 required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                     .using_resolution(adapter.limits()),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )
@@ -72,6 +73,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
+        cache: None,
     });
 
     let mut config = surface

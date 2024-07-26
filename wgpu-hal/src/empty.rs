@@ -30,6 +30,7 @@ impl crate::Api for Api {
     type QuerySet = Resource;
     type Fence = Resource;
     type AccelerationStructure = Resource;
+    type PipelineCache = Resource;
 
     type BindGroupLayout = Resource;
     type BindGroup = Resource;
@@ -53,7 +54,10 @@ impl crate::Instance for Context {
         Ok(Context)
     }
     unsafe fn destroy_surface(&self, surface: Context) {}
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&Context>,
+    ) -> Vec<crate::ExposedAdapter<Api>> {
         Vec::new()
     }
 }
@@ -74,6 +78,7 @@ impl crate::Surface for Context {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        fence: &Resource,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
@@ -87,6 +92,7 @@ impl crate::Adapter for Context {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        _memory_hints: &wgt::MemoryHints,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Err(crate::DeviceError::Lost)
     }
@@ -113,7 +119,7 @@ impl crate::Queue for Context {
         &self,
         command_buffers: &[&Resource],
         surface_textures: &[&Resource],
-        signal_fence: Option<(&mut Resource, crate::FenceValue)>,
+        signal_fence: (&mut Resource, crate::FenceValue),
     ) -> DeviceResult<()> {
         Ok(())
     }
@@ -220,6 +226,13 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_compute_pipeline(&self, pipeline: Resource) {}
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &crate::PipelineCacheDescriptor<'_>,
+    ) -> Result<Resource, crate::PipelineCacheError> {
+        Ok(Resource)
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: Resource) {}
 
     unsafe fn create_query_set(
         &self,
@@ -267,6 +280,10 @@ impl crate::Device for Context {
         Default::default()
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
+
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        Default::default()
+    }
 }
 
 impl crate::CommandEncoder for Encoder {

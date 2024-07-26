@@ -574,6 +574,8 @@ impl crate::framework::Example for Example {
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            // No pipeline caching is used
+            cache: None,
         });
 
         // Same idea as the water pipeline.
@@ -610,6 +612,7 @@ impl crate::framework::Example for Example {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None
         });
 
         // A render bundle to draw the terrain.

@@ -32,6 +32,7 @@ async fn run() {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )
@@ -111,6 +112,7 @@ async fn run() {
         module: &shader,
         entry_point: "main",
         compilation_options: Default::default(),
+        cache: None,
     });
 
     //----------------------------------------------------------

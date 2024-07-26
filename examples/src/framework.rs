@@ -319,6 +319,7 @@ impl ExampleContext {
                     label: None,
                     required_features: (optional_features & adapter_features) | required_features,
                     required_limits: needed_limits,
+                    memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),
             )
@@ -367,6 +368,12 @@ impl FrameCounter {
 
 async fn start<E: Example>(title: &str) {
     init_logger();
+
+    log::debug!(
+        "Enabled backends: {:?}",
+        wgpu::Instance::enabled_backend_features()
+    );
+
     let window_loop = EventLoopWrapper::new(title);
     let mut surface = SurfaceWrapper::new();
     let context = ExampleContext::init_async::<E>(&mut surface, window_loop.window.clone()).await;

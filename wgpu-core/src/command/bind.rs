@@ -4,20 +4,38 @@ use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
-    id::BindGroupId,
     pipeline::LateSizedBufferGroup,
-    resource::Resource,
+    resource::{Labeled, ResourceErrorIdent},
 };
 
 use arrayvec::ArrayVec;
-
-type BindGroupMask = u8;
+use thiserror::Error;
 
 mod compat {
     use arrayvec::ArrayVec;
+    use thiserror::Error;
+    use wgt::{BindingType, ShaderStages};
 
-    use crate::{binding_model::BindGroupLayout, device::bgl, hal_api::HalApi, resource::Resource};
-    use std::{ops::Range, sync::Arc};
+    use crate::{
+        binding_model::BindGroupLayout,
+        error::MultiError,
+        hal_api::HalApi,
+        resource::{Labeled, ParentDevice, ResourceErrorIdent},
+    };
+    use std::{
+        num::NonZeroU32,
+        ops::Range,
+        sync::{Arc, Weak},
+    };
+
+    pub(crate) enum Error {
+        Incompatible {
+            expected_bgl: ResourceErrorIdent,
+            assigned_bgl: ResourceErrorIdent,
+            inner: MultiError,
+        },
+        Missing,
+    }
 
     #[derive(Debug, Clone)]
     struct Entry<A: HalApi> {
@@ -37,108 +55,141 @@ mod compat {
         }
 
         fn is_valid(&self) -> bool {
-            if self.expected.is_none() {
-                return true;
-            }
             if let Some(expected_bgl) = self.expected.as_ref() {
                 if let Some(assigned_bgl) = self.assigned.as_ref() {
-                    if expected_bgl.is_equal(assigned_bgl) {
-                        return true;
-                    }
+                    expected_bgl.is_equal(assigned_bgl)
+                } else {
+                    false
                 }
+            } else {
+                true
             }
-            false
         }
 
         fn is_incompatible(&self) -> bool {
             self.expected.is_none() || !self.is_valid()
         }
 
-        // Describe how bind group layouts are incompatible, for validation
-        // error message.
-        fn bgl_diff(&self) -> Vec<String> {
-            let mut diff = Vec::new();
-
+        fn check(&self) -> Result<(), Error> {
             if let Some(expected_bgl) = self.expected.as_ref() {
-                let expected_bgl_type = match expected_bgl.origin {
-                    bgl::Origin::Derived => "implicit",
-                    bgl::Origin::Pool => "explicit",
-                };
-                let expected_label = expected_bgl.label();
-                diff.push(format!(
-                    "Should be compatible an with an {expected_bgl_type} bind group layout {}",
-                    if expected_label.is_empty() {
-                        "without label".to_string()
-                    } else {
-                        format!("with label = `{}`", expected_label)
-                    }
-                ));
                 if let Some(assigned_bgl) = self.assigned.as_ref() {
-                    let assigned_bgl_type = match assigned_bgl.origin {
-                        bgl::Origin::Derived => "implicit",
-                        bgl::Origin::Pool => "explicit",
-                    };
-                    let assigned_label = assigned_bgl.label();
-                    diff.push(format!(
-                        "Assigned {assigned_bgl_type} bind group layout {}",
-                        if assigned_label.is_empty() {
-                            "without label".to_string()
-                        } else {
-                            format!("with label = `{}`", assigned_label)
+                    if expected_bgl.is_equal(assigned_bgl) {
+                        Ok(())
+                    } else {
+                        #[derive(Clone, Debug, Error)]
+                        #[error(
+                            "Exclusive pipelines don't match: expected {expected}, got {assigned}"
+                        )]
+                        struct IncompatibleExclusivePipelines {
+                            expected: String,
+                            assigned: String,
                         }
-                    ));
-                    for (id, e_entry) in expected_bgl.entries.iter() {
-                        if let Some(a_entry) = assigned_bgl.entries.get(*id) {
-                            if a_entry.binding != e_entry.binding {
-                                diff.push(format!(
-                                    "Entry {id} binding expected {}, got {}",
-                                    e_entry.binding, a_entry.binding
-                                ));
-                            }
-                            if a_entry.count != e_entry.count {
-                                diff.push(format!(
-                                    "Entry {id} count expected {:?}, got {:?}",
-                                    e_entry.count, a_entry.count
-                                ));
-                            }
-                            if a_entry.ty != e_entry.ty {
-                                diff.push(format!(
-                                    "Entry {id} type expected {:?}, got {:?}",
-                                    e_entry.ty, a_entry.ty
-                                ));
-                            }
-                            if a_entry.visibility != e_entry.visibility {
-                                diff.push(format!(
-                                    "Entry {id} visibility expected {:?}, got {:?}",
-                                    e_entry.visibility, a_entry.visibility
-                                ));
-                            }
-                        } else {
-                            diff.push(format!(
-                                "Entry {id} not found in assigned bind group layout"
-                            ))
-                        }
-                    }
 
-                    assigned_bgl.entries.iter().for_each(|(id, _e_entry)| {
-                        if !expected_bgl.entries.contains_key(*id) {
-                            diff.push(format!(
-                                "Entry {id} not found in expected bind group layout"
-                            ))
+                        use crate::binding_model::ExclusivePipeline;
+                        match (
+                            expected_bgl.exclusive_pipeline.get().unwrap(),
+                            assigned_bgl.exclusive_pipeline.get().unwrap(),
+                        ) {
+                            (ExclusivePipeline::None, ExclusivePipeline::None) => {}
+                            (
+                                ExclusivePipeline::Render(e_pipeline),
+                                ExclusivePipeline::Render(a_pipeline),
+                            ) if Weak::ptr_eq(e_pipeline, a_pipeline) => {}
+                            (
+                                ExclusivePipeline::Compute(e_pipeline),
+                                ExclusivePipeline::Compute(a_pipeline),
+                            ) if Weak::ptr_eq(e_pipeline, a_pipeline) => {}
+                            (expected, assigned) => {
+                                return Err(Error::Incompatible {
+                                    expected_bgl: expected_bgl.error_ident(),
+                                    assigned_bgl: assigned_bgl.error_ident(),
+                                    inner: MultiError::new(core::iter::once(
+                                        IncompatibleExclusivePipelines {
+                                            expected: expected.to_string(),
+                                            assigned: assigned.to_string(),
+                                        },
+                                    ))
+                                    .unwrap(),
+                                });
+                            }
                         }
-                    });
 
-                    if expected_bgl.origin != assigned_bgl.origin {
-                        diff.push(format!("Expected {expected_bgl_type} bind group layout, got {assigned_bgl_type}"))
+                        #[derive(Clone, Debug, Error)]
+                        enum EntryError {
+                            #[error("Entries with binding {binding} differ in visibility: expected {expected:?}, got {assigned:?}")]
+                            Visibility {
+                                binding: u32,
+                                expected: ShaderStages,
+                                assigned: ShaderStages,
+                            },
+                            #[error("Entries with binding {binding} differ in type: expected {expected:?}, got {assigned:?}")]
+                            Type {
+                                binding: u32,
+                                expected: BindingType,
+                                assigned: BindingType,
+                            },
+                            #[error("Entries with binding {binding} differ in count: expected {expected:?}, got {assigned:?}")]
+                            Count {
+                                binding: u32,
+                                expected: Option<NonZeroU32>,
+                                assigned: Option<NonZeroU32>,
+                            },
+                            #[error("Expected entry with binding {binding} not found in assigned bind group layout")]
+                            ExtraExpected { binding: u32 },
+                            #[error("Assigned entry with binding {binding} not found in expected bind group layout")]
+                            ExtraAssigned { binding: u32 },
+                        }
+
+                        let mut errors = Vec::new();
+
+                        let mut expected_bgl_entries = expected_bgl.entries.iter();
+                        let mut assigned_bgl_entries = assigned_bgl.entries.iter();
+                        let zipped = (&mut expected_bgl_entries).zip(&mut assigned_bgl_entries);
+
+                        for ((&binding, expected_entry), (_, assigned_entry)) in zipped {
+                            if assigned_entry.visibility != expected_entry.visibility {
+                                errors.push(EntryError::Visibility {
+                                    binding,
+                                    expected: expected_entry.visibility,
+                                    assigned: assigned_entry.visibility,
+                                });
+                            }
+                            if assigned_entry.ty != expected_entry.ty {
+                                errors.push(EntryError::Type {
+                                    binding,
+                                    expected: expected_entry.ty,
+                                    assigned: assigned_entry.ty,
+                                });
+                            }
+                            if assigned_entry.count != expected_entry.count {
+                                errors.push(EntryError::Count {
+                                    binding,
+                                    expected: expected_entry.count,
+                                    assigned: assigned_entry.count,
+                                });
+                            }
+                        }
+
+                        for (&binding, _) in expected_bgl_entries {
+                            errors.push(EntryError::ExtraExpected { binding });
+                        }
+
+                        for (&binding, _) in assigned_bgl_entries {
+                            errors.push(EntryError::ExtraAssigned { binding });
+                        }
+
+                        Err(Error::Incompatible {
+                            expected_bgl: expected_bgl.error_ident(),
+                            assigned_bgl: assigned_bgl.error_ident(),
+                            inner: MultiError::new(errors.drain(..)).unwrap(),
+                        })
                     }
                 } else {
-                    diff.push("Assigned bind group layout not found (internal error)".to_owned());
+                    Err(Error::Missing)
                 }
             } else {
-                diff.push("Expected bind group layout not found (internal error)".to_owned());
+                Ok(())
             }
-
-            diff
         }
     }
 
@@ -199,25 +250,32 @@ mod compat {
                 .filter_map(|(i, e)| if e.is_active() { Some(i) } else { None })
         }
 
-        pub fn invalid_mask(&self) -> super::BindGroupMask {
-            self.entries.iter().enumerate().fold(0, |mask, (i, entry)| {
-                if entry.is_valid() {
-                    mask
-                } else {
-                    mask | 1u8 << i
-                }
-            })
-        }
-
-        pub fn bgl_diff(&self) -> Vec<String> {
-            for e in &self.entries {
-                if !e.is_valid() {
-                    return e.bgl_diff();
-                }
+        pub fn get_invalid(&self) -> Result<(), (usize, Error)> {
+            for (index, entry) in self.entries.iter().enumerate() {
+                entry.check().map_err(|e| (index, e))?;
             }
-            vec![String::from("No differences detected? (internal error)")]
+            Ok(())
         }
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum BinderError {
+    #[error("The current set {pipeline} expects a BindGroup to be set at index {index}")]
+    MissingBindGroup {
+        index: usize,
+        pipeline: ResourceErrorIdent,
+    },
+    #[error("The {assigned_bgl} of current set {assigned_bg} at index {index} is not compatible with the corresponding {expected_bgl} of {pipeline}")]
+    IncompatibleBindGroup {
+        expected_bgl: ResourceErrorIdent,
+        assigned_bgl: ResourceErrorIdent,
+        assigned_bg: ResourceErrorIdent,
+        index: usize,
+        pipeline: ResourceErrorIdent,
+        #[source]
+        inner: crate::error::MultiError,
+    },
 }
 
 #[derive(Debug)]
@@ -326,9 +384,7 @@ impl<A: HalApi> Binder<A> {
         bind_group: &Arc<BindGroup<A>>,
         offsets: &[wgt::DynamicOffset],
     ) -> &'a [EntryPayload<A>] {
-        let bind_group_id = bind_group.as_info().id();
-        log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
-        debug_assert_eq!(A::VARIANT, bind_group_id.backend());
+        log::trace!("\tBinding [{}] = group {}", index, bind_group.error_ident());
 
         let payload = &mut self.payloads[index];
         payload.group = Some(bind_group.clone());
@@ -359,19 +415,37 @@ impl<A: HalApi> Binder<A> {
         &self.payloads[bind_range]
     }
 
-    pub(super) fn list_active(&self) -> impl Iterator<Item = BindGroupId> + '_ {
+    pub(super) fn list_active<'a>(&'a self) -> impl Iterator<Item = &'a Arc<BindGroup<A>>> + '_ {
         let payloads = &self.payloads;
         self.manager
             .list_active()
-            .map(move |index| payloads[index].group.as_ref().unwrap().as_info().id())
+            .map(move |index| payloads[index].group.as_ref().unwrap())
     }
 
-    pub(super) fn invalid_mask(&self) -> BindGroupMask {
-        self.manager.invalid_mask()
-    }
-
-    pub(super) fn bgl_diff(&self) -> Vec<String> {
-        self.manager.bgl_diff()
+    pub(super) fn check_compatibility<T: Labeled>(
+        &self,
+        pipeline: &T,
+    ) -> Result<(), Box<BinderError>> {
+        self.manager.get_invalid().map_err(|(index, error)| {
+            Box::new(match error {
+                compat::Error::Incompatible {
+                    expected_bgl,
+                    assigned_bgl,
+                    inner,
+                } => BinderError::IncompatibleBindGroup {
+                    expected_bgl,
+                    assigned_bgl,
+                    assigned_bg: self.payloads[index].group.as_ref().unwrap().error_ident(),
+                    index,
+                    pipeline: pipeline.error_ident(),
+                    inner,
+                },
+                compat::Error::Missing => BinderError::MissingBindGroup {
+                    index,
+                    pipeline: pipeline.error_ident(),
+                },
+            })
+        })
     }
 
     /// Scan active buffer bindings corresponding to layouts without `min_binding_size` specified.

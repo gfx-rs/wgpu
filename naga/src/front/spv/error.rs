@@ -1,5 +1,5 @@
 use super::ModuleState;
-use crate::arena::Handle;
+use crate::{arena::Handle, front::atomic_upgrade};
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
@@ -134,6 +134,9 @@ pub enum Error {
     NonBindingArrayOfImageOrSamplers,
     #[error("naga only supports specialization constant IDs up to 65535 but was given {0}")]
     SpecIdTooHigh(u32),
+
+    #[error("atomic upgrade error: {0}")]
+    AtomicUpgradeError(atomic_upgrade::Error),
 }
 
 impl Error {
@@ -144,7 +147,7 @@ impl Error {
     pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
-        let config = codespan_reporting::term::Config::default();
+        let config = term::Config::default();
         let diagnostic = Diagnostic::error().with_message(format!("{self:?}"));
 
         term::emit(writer, &config, &files, &diagnostic).expect("cannot write error");

@@ -7,7 +7,7 @@ use super::{
     PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
-    arena::{Handle, UniqueArena},
+    arena::{Handle, HandleVec, UniqueArena},
     back::spv::BindingInfo,
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
@@ -71,9 +71,9 @@ impl Writer {
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
-            constant_ids: Vec::new(),
+            constant_ids: HandleVec::new(),
             cached_constants: crate::FastHashMap::default(),
-            global_variables: Vec::new(),
+            global_variables: HandleVec::new(),
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
@@ -554,7 +554,7 @@ impl Writer {
                 continue;
             }
 
-            let mut gv = self.global_variables[handle.index()].clone();
+            let mut gv = self.global_variables[handle].clone();
             if let Some(ref mut iface) = interface {
                 // Have to include global variables in the interface
                 if self.physical_layout.version >= 0x10400 {
@@ -599,7 +599,7 @@ impl Writer {
             }
 
             // work around borrow checking in the presence of `self.xxx()` calls
-            self.global_variables[handle.index()] = gv;
+            self.global_variables[handle] = gv;
         }
 
         // Create a `BlockContext` for generating SPIR-V for the function's
@@ -877,6 +877,9 @@ impl Writer {
             }
             crate::TypeInner::RayQuery => {
                 self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
+            }
+            crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
+                self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
             }
             _ => {}
         }
@@ -1263,7 +1266,7 @@ impl Writer {
             crate::Expression::Literal(literal) => self.get_constant_scalar(literal),
             crate::Expression::Constant(constant) => {
                 let constant = &ir_module.constants[constant];
-                self.constant_ids[constant.init.index()]
+                self.constant_ids[constant.init]
             }
             crate::Expression::ZeroValue(ty) => {
                 let type_id = self.get_type_id(LookupType::Handle(ty));
@@ -1276,12 +1279,12 @@ impl Writer {
                     &ir_module.global_expressions,
                     &ir_module.types,
                 )
-                .map(|component| self.constant_ids[component.index()])
+                .map(|component| self.constant_ids[component])
                 .collect();
                 self.get_constant_composite(LookupType::Handle(ty), component_ids.as_slice())
             }
             crate::Expression::Splat { size, value } => {
-                let value_id = self.constant_ids[value.index()];
+                let value_id = self.constant_ids[value];
                 let component_ids = &[value_id; 4][..size as usize];
 
                 let ty = self.get_expression_lookup_type(&mod_info[handle]);
@@ -1291,7 +1294,7 @@ impl Writer {
             _ => unreachable!(),
         };
 
-        self.constant_ids[handle.index()] = id;
+        self.constant_ids[handle] = id;
 
         Ok(id)
     }
@@ -1344,7 +1347,7 @@ impl Writer {
                 // It's safe to use `var_id` here, not `access_id`, because only
                 // variables in the `Uniform` and `StorageBuffer` address spaces
                 // get wrapped, and we're initializing `WorkGroup` variables.
-                let var_id = self.global_variables[handle.index()].var_id;
+                let var_id = self.global_variables[handle].var_id;
                 let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
                 let init_word = self.get_constant_null(var_type_id);
                 Instruction::store(var_id, init_word, None)
@@ -1725,7 +1728,7 @@ impl Writer {
 
         let init_word = global_variable
             .init
-            .map(|constant| self.constant_ids[constant.index()]);
+            .map(|constant| self.constant_ids[constant]);
         let inner_type_id = self.get_type_id(
             substitute_inner_type_lookup.unwrap_or(LookupType::Handle(global_variable.ty)),
         );
@@ -1760,8 +1763,27 @@ impl Writer {
             if let crate::AddressSpace::Storage { .. } = global_variable.space {
                 match ir_module.types[global_variable.ty].inner {
                     crate::TypeInner::BindingArray { base, .. } => {
-                        let decorated_id = self.get_type_id(LookupType::Handle(base));
-                        self.decorate(decorated_id, Decoration::Block, &[]);
+                        let ty = &ir_module.types[base];
+                        let mut should_decorate = true;
+                        // Check if the type has a runtime array.
+                        // A normal runtime array gets validated out,
+                        // so only structs can be with runtime arrays
+                        if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
+                            // only the last member in a struct can be dynamically sized
+                            if let Some(last_member) = members.last() {
+                                if let &crate::TypeInner::Array {
+                                    size: crate::ArraySize::Dynamic,
+                                    ..
+                                } = &ir_module.types[last_member.ty].inner
+                                {
+                                    should_decorate = false;
+                                }
+                            }
+                        }
+                        if should_decorate {
+                            let decorated_id = self.get_type_id(LookupType::Handle(base));
+                            self.decorate(decorated_id, Decoration::Block, &[]);
+                        }
                     }
                     _ => (),
                 };
@@ -1964,7 +1986,7 @@ impl Writer {
         if self.flags.contains(WriterFlags::DEBUG) {
             for (_, constant) in ir_module.constants.iter() {
                 if let Some(ref name) = constant.name {
-                    let id = self.constant_ids[constant.init.index()];
+                    let id = self.constant_ids[constant.init];
                     self.debugs.push(Instruction::name(id, name));
                 }
             }
@@ -1984,7 +2006,7 @@ impl Writer {
                     GlobalVariable::new(id)
                 }
             };
-            self.global_variables.push(gvar);
+            self.global_variables.insert(handle, gvar);
         }
 
         // write all functions

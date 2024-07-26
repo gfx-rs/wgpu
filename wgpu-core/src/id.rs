@@ -313,6 +313,7 @@ ids! {
     pub type ShaderModuleId ShaderModule;
     pub type RenderPipelineId RenderPipeline;
     pub type ComputePipelineId ComputePipeline;
+    pub type PipelineCacheId PipelineCache;
     pub type CommandEncoderId CommandEncoder;
     pub type CommandBufferId CommandBuffer;
     pub type RenderPassEncoderId RenderPassEncoder;
@@ -323,6 +324,9 @@ ids! {
     pub type BlasId Blas;
     pub type TlasId Tlas;
 }
+
+// The CommandBuffer type serves both as encoder and
+// buffer, which is why the 2 functions below exist.
 
 impl CommandEncoderId {
     pub fn into_command_buffer_id(self) -> CommandBufferId {
@@ -351,7 +355,7 @@ fn test_id_backend() {
         Backend::Dx12,
         Backend::Gl,
     ] {
-        let id = crate::id::Id::<()>::zip(1, 0, b);
+        let id = Id::<()>::zip(1, 0, b);
         let (_id, _epoch, backend) = id.unzip();
         assert_eq!(id.backend(), b);
         assert_eq!(backend, b);
@@ -373,7 +377,7 @@ fn test_id() {
     for &i in &indexes {
         for &e in &epochs {
             for &b in &backends {
-                let id = crate::id::Id::<()>::zip(i, e, b);
+                let id = Id::<()>::zip(i, e, b);
                 let (index, epoch, backend) = id.unzip();
                 assert_eq!(index, i);
                 assert_eq!(epoch, e);

@@ -25,6 +25,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = self
             .shared
@@ -62,6 +63,7 @@ impl crate::Adapter for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 features,
+                counters: Default::default(),
             },
             queue: super::Queue {
                 raw: Arc::new(Mutex::new(queue)),
@@ -82,11 +84,9 @@ impl crate::Adapter for super::Adapter {
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
         // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
         let (read_write_tier1_if, read_write_tier2_if) = match pc.read_write_texture_tier {
-            metal::MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
-            metal::MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
-            metal::MTLReadWriteTextureTier::Tier2 => {
-                (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE)
-            }
+            MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
+            MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
+            MTLReadWriteTextureTier::Tier2 => (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE),
         };
         let msaa_count = pc.sample_count_mask;
 
@@ -738,7 +738,9 @@ impl super::PrivateCapabilities {
                 4
             },
             // Per https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
-            max_color_attachment_bytes_per_sample: if device.supports_family(MTLGPUFamily::Apple4) {
+            max_color_attachment_bytes_per_sample: if family_check
+                && device.supports_family(MTLGPUFamily::Apple4)
+            {
                 64
             } else {
                 32
@@ -821,6 +823,11 @@ impl super::PrivateCapabilities {
             int64: family_check
                 && (device.supports_family(MTLGPUFamily::Apple3)
                     || device.supports_family(MTLGPUFamily::Metal3)),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
+            int64_atomics: family_check
+                && ((device.supports_family(MTLGPUFamily::Apple8)
+                    && device.supports_family(MTLGPUFamily::Mac2))
+                    || device.supports_family(MTLGPUFamily::Apple9)),
         }
     }
 
@@ -896,6 +903,10 @@ impl super::PrivateCapabilities {
             F::SHADER_INT64,
             self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
         );
+        features.set(
+            F::SHADER_INT64_ATOMIC_MIN_MAX,
+            self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
+        );
 
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
@@ -904,7 +915,6 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
-        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
@@ -981,7 +991,7 @@ impl super::PrivateCapabilities {
                 max_compute_workgroup_size_z: self.max_threads_per_group,
                 max_compute_workgroups_per_dimension: 0xFFFF,
                 max_buffer_size: self.max_buffer_size,
-                max_non_sampler_bindings: std::u32::MAX,
+                max_non_sampler_bindings: u32::MAX,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

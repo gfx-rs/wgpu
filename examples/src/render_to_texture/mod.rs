@@ -21,6 +21,7 @@ async fn run(_path: Option<String>) {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )
@@ -72,6 +73,7 @@ async fn run(_path: Option<String>) {
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
+        cache: None,
     });
 
     log::info!("Wgpu context set up.");

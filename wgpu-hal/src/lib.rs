@@ -40,12 +40,10 @@
  *   taking objects by reference, returning them by value, and so on,
  *   unlike `wgpu-core`, which refers to objects by ID.
  *
- * - We map buffer contents *persistently*. This means that the buffer
- *   can remain mapped on the CPU while the GPU reads or writes to it.
- *   You must explicitly indicate when data might need to be
- *   transferred between CPU and GPU, if `wgpu-hal` indicates that the
- *   mapping is not coherent (that is, automatically synchronized
- *   between the two devices).
+ * - We map buffer contents *persistently*. This means that the buffer can
+ *   remain mapped on the CPU while the GPU reads or writes to it. You must
+ *   explicitly indicate when data might need to be transferred between CPU and
+ *   GPU, if [`Device::map_buffer`] indicates that this is necessary.
  *
  * - You must record *explicit barriers* between different usages of a
  *   resource. For example, if a buffer is written to by a compute
@@ -211,8 +209,6 @@
     clippy::arc_with_non_send_sync,
     // for `if_then_panic` until it reaches stable
     unknown_lints,
-    // We use loops for getting early-out of scope without closures.
-    clippy::never_loop,
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
     // Redundant matching is more explicit.
@@ -231,17 +227,15 @@
     clippy::non_send_fields_in_send_ty,
     // TODO!
     clippy::missing_safety_doc,
-    // Clashes with clippy::pattern_type_mismatch
-    clippy::needless_borrowed_reference,
+    // It gets in the way a lot and does not prevent bugs in practice.
+    clippy::pattern_type_mismatch,
 )]
 #![warn(
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,
     unused_extern_crates,
-    unused_qualifications,
-    // We don't match on a reference, unless required.
-    clippy::pattern_type_mismatch,
+    unused_qualifications
 )]
 
 /// DirectX12 API internals.
@@ -328,6 +322,12 @@ pub enum PipelineError {
     Linkage(wgt::ShaderStages, String),
     #[error("Entry point for stage {0:?} is invalid")]
     EntryPoint(naga::ShaderStage),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
+pub enum PipelineCacheError {
     #[error(transparent)]
     Device(#[from] DeviceError),
 }
@@ -432,6 +432,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ShaderModule: fmt::Debug + WasmNotSendSync;
     type RenderPipeline: fmt::Debug + WasmNotSendSync;
     type ComputePipeline: fmt::Debug + WasmNotSendSync;
+    type PipelineCache: fmt::Debug + WasmNotSendSync;
 
     type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
 }
@@ -446,50 +447,111 @@ pub trait Instance: Sized + WasmNotSendSync {
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<<Self::A as Api>::Surface, InstanceError>;
     unsafe fn destroy_surface(&self, surface: <Self::A as Api>::Surface);
-    unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<Self::A>>;
+    /// `surface_hint` is only used by the GLES backend targeting WebGL2
+    unsafe fn enumerate_adapters(
+        &self,
+        surface_hint: Option<&<Self::A as Api>::Surface>,
+    ) -> Vec<ExposedAdapter<Self::A>>;
 }
 
 pub trait Surface: WasmNotSendSync {
     type A: Api;
 
-    /// Configures the surface to use the given device.
+    /// Configure `self` to use `device`.
     ///
     /// # Safety
     ///
-    /// - All gpu work that uses the surface must have been completed.
+    /// - All GPU work using `self` must have been completed.
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
-    /// - All surfaces created using other devices must have been unconfigured before this call.
+    /// - The surface `self` must not currently be configured to use any other [`Device`].
     unsafe fn configure(
         &self,
         device: &<Self::A as Api>::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
-    /// Unconfigures the surface on the given device.
+    /// Unconfigure `self` on `device`.
     ///
     /// # Safety
     ///
-    /// - All gpu work that uses the surface must have been completed.
+    /// - All GPU work that uses `surface` must have been completed.
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
-    /// - The surface must have been configured on the given device.
+    /// - The surface `self` must have been configured on `device`.
     unsafe fn unconfigure(&self, device: &<Self::A as Api>::Device);
 
-    /// Returns the next texture to be presented by the swapchain for drawing
+    /// Return the next texture to be presented by `self`, for the caller to draw on.
     ///
-    /// A `timeout` of `None` means to wait indefinitely, with no timeout.
+    /// On success, return an [`AcquiredSurfaceTexture`] representing the
+    /// texture into which the caller should draw the image to be displayed on
+    /// `self`.
+    ///
+    /// If `timeout` elapses before `self` has a texture ready to be acquired,
+    /// return `Ok(None)`. If `timeout` is `None`, wait indefinitely, with no
+    /// timeout.
+    ///
+    /// # Using an [`AcquiredSurfaceTexture`]
+    ///
+    /// On success, this function returns an [`AcquiredSurfaceTexture`] whose
+    /// [`texture`] field is a [`SurfaceTexture`] from which the caller can
+    /// [`borrow`] a [`Texture`] to draw on. The [`AcquiredSurfaceTexture`] also
+    /// carries some metadata about that [`SurfaceTexture`].
+    ///
+    /// All calls to [`Queue::submit`] that draw on that [`Texture`] must also
+    /// include the [`SurfaceTexture`] in the `surface_textures` argument.
+    ///
+    /// When you are done drawing on the texture, you can display it on `self`
+    /// by passing the [`SurfaceTexture`] and `self` to [`Queue::present`].
+    ///
+    /// If you do not wish to display the texture, you must pass the
+    /// [`SurfaceTexture`] to [`self.discard_texture`], so that it can be reused
+    /// by future acquisitions.
     ///
     /// # Portability
     ///
-    /// Some backends can't support a timeout when acquiring a texture and
-    /// the timeout will be ignored.
+    /// Some backends can't support a timeout when acquiring a texture. On these
+    /// backends, `timeout` is ignored.
     ///
-    /// Returns `None` on timing out.
+    /// # Safety
+    ///
+    /// - The surface `self` must currently be configured on some [`Device`].
+    ///
+    /// - The `fence` argument must be the same [`Fence`] passed to all calls to
+    ///   [`Queue::submit`] that used [`Texture`]s acquired from this surface.
+    ///
+    /// - You may only have one texture acquired from `self` at a time. When
+    ///   `acquire_texture` returns `Ok(Some(ast))`, you must pass the returned
+    ///   [`SurfaceTexture`] `ast.texture` to either [`Queue::present`] or
+    ///   [`Surface::discard_texture`] before calling `acquire_texture` again.
+    ///
+    /// [`texture`]: AcquiredSurfaceTexture::texture
+    /// [`SurfaceTexture`]: Api::SurfaceTexture
+    /// [`borrow`]: std::borrow::Borrow::borrow
+    /// [`Texture`]: Api::Texture
+    /// [`Fence`]: Api::Fence
+    /// [`self.discard_texture`]: Surface::discard_texture
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        fence: &<Self::A as Api>::Fence,
     ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
+
+    /// Relinquish an acquired texture without presenting it.
+    ///
+    /// After this call, the texture underlying [`SurfaceTexture`] may be
+    /// returned by subsequent calls to [`self.acquire_texture`].
+    ///
+    /// # Safety
+    ///
+    /// - The surface `self` must currently be configured on some [`Device`].
+    ///
+    /// - `texture` must be a [`SurfaceTexture`] returned by a call to
+    ///   [`self.acquire_texture`] that has not yet been passed to
+    ///   [`Queue::present`].
+    ///
+    /// [`SurfaceTexture`]: Api::SurfaceTexture
+    /// [`self.acquire_texture`]: Surface::acquire_texture
     unsafe fn discard_texture(&self, texture: <Self::A as Api>::SurfaceTexture);
 }
 
@@ -500,6 +562,7 @@ pub trait Adapter: WasmNotSendSync {
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
     ) -> Result<OpenDevice<Self::A>, DeviceError>;
 
     /// Return the set of supported capabilities for a texture format.
@@ -522,6 +585,70 @@ pub trait Adapter: WasmNotSendSync {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
+/// A connection to a GPU and a pool of resources to use with it.
+///
+/// A `wgpu-hal` `Device` represents an open connection to a specific graphics
+/// processor, controlled via the backend [`Device::A`]. A `Device` is mostly
+/// used for creating resources. Each `Device` has an associated [`Queue`] used
+/// for command submission.
+///
+/// On Vulkan a `Device` corresponds to a logical device ([`VkDevice`]). Other
+/// backends don't have an exact analog: for example, [`ID3D12Device`]s and
+/// [`MTLDevice`]s are owned by the backends' [`wgpu_hal::Adapter`]
+/// implementations, and shared by all [`wgpu_hal::Device`]s created from that
+/// `Adapter`.
+///
+/// A `Device`'s life cycle is generally:
+///
+/// 1)  Obtain a `Device` and its associated [`Queue`] by calling
+///     [`Adapter::open`].
+///
+///     Alternatively, the backend-specific types that implement [`Adapter`] often
+///     have methods for creating a `wgpu-hal` `Device` from a platform-specific
+///     handle. For example, [`vulkan::Adapter::device_from_raw`] can create a
+///     [`vulkan::Device`] from an [`ash::Device`].
+///
+/// 1)  Create resources to use on the device by calling methods like
+///     [`Device::create_texture`] or [`Device::create_shader_module`].
+///
+/// 1)  Call [`Device::create_command_encoder`] to obtain a [`CommandEncoder`],
+///     which you can use to build [`CommandBuffer`]s holding commands to be
+///     executed on the GPU.
+///
+/// 1)  Call [`Queue::submit`] on the `Device`'s associated [`Queue`] to submit
+///     [`CommandBuffer`]s for execution on the GPU. If needed, call
+///     [`Device::wait`] to wait for them to finish execution.
+///
+/// 1)  Free resources with methods like [`Device::destroy_texture`] or
+///     [`Device::destroy_shader_module`].
+///
+/// 1)  Shut down the device by calling [`Device::exit`].
+///
+/// [`vkDevice`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VkDevice
+/// [`ID3D12Device`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device
+/// [`MTLDevice`]: https://developer.apple.com/documentation/metal/mtldevice
+/// [`wgpu_hal::Adapter`]: Adapter
+/// [`wgpu_hal::Device`]: Device
+/// [`vulkan::Adapter::device_from_raw`]: vulkan/struct.Adapter.html#method.device_from_raw
+/// [`vulkan::Device`]: vulkan/struct.Device.html
+/// [`ash::Device`]: https://docs.rs/ash/latest/ash/struct.Device.html
+/// [`CommandBuffer`]: Api::CommandBuffer
+///
+/// # Safety
+///
+/// As with other `wgpu-hal` APIs, [validation] is the caller's
+/// responsibility. Here are the general requirements for all `Device`
+/// methods:
+///
+/// - Any resource passed to a `Device` method must have been created by that
+///   `Device`. For example, a [`Texture`] passed to [`Device::destroy_texture`] must
+///   have been created with the `Device` passed as `self`.
+///
+/// - Resources may not be destroyed if they are used by any submitted command
+///   buffers that have not yet finished execution.
+///
+/// [validation]: index.html#validation-is-the-calling-codes-responsibility-not-wgpu-hals
+/// [`Texture`]: Api::Texture
 pub trait Device: WasmNotSendSync {
     type A: Api;
 
@@ -534,17 +661,93 @@ pub trait Device: WasmNotSendSync {
         &self,
         desc: &BufferDescriptor,
     ) -> Result<<Self::A as Api>::Buffer, DeviceError>;
+
+    /// Free `buffer` and any GPU resources it owns.
+    ///
+    /// Note that backends are allowed to allocate GPU memory for buffers from
+    /// allocation pools, and this call is permitted to simply return `buffer`'s
+    /// storage to that pool, without making it available to other applications.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must not currently be mapped.
     unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer);
+
+    /// Return a pointer to CPU memory mapping the contents of `buffer`.
+    ///
+    /// Buffer mappings are persistent: the buffer may remain mapped on the CPU
+    /// while the GPU reads or writes to it. (Note that `wgpu_core` does not use
+    /// this feature: when a `wgpu_core::Buffer` is unmapped, the underlying
+    /// `wgpu_hal` buffer is also unmapped.)
+    ///
+    /// If this function returns `Ok(mapping)`, then:
+    ///
+    /// - `mapping.ptr` is the CPU address of the start of the mapped memory.
+    ///
+    /// - If `mapping.is_coherent` is `true`, then CPU writes to the mapped
+    ///   memory are immediately visible on the GPU, and vice versa.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must have been created with the [`MAP_READ`] or
+    ///   [`MAP_WRITE`] flags set in [`BufferDescriptor::usage`].
+    ///
+    /// - The given `range` must fall within the size of `buffer`.
+    ///
+    /// - The caller must avoid data races between the CPU and the GPU. A data
+    ///   race is any pair of accesses to a particular byte, one of which is a
+    ///   write, that are not ordered with respect to each other by some sort of
+    ///   synchronization operation.
+    ///
+    /// - If this function returns `Ok(mapping)` and `mapping.is_coherent` is
+    ///   `false`, then:
+    ///
+    ///   - Every CPU write to a mapped byte followed by a GPU read of that byte
+    ///     must have at least one call to [`Device::flush_mapped_ranges`]
+    ///     covering that byte that occurs between those two accesses.
+    ///
+    ///   - Every GPU write to a mapped byte followed by a CPU read of that byte
+    ///     must have at least one call to [`Device::invalidate_mapped_ranges`]
+    ///     covering that byte that occurs between those two accesses.
+    ///
+    ///   Note that the data race rule above requires that all such access pairs
+    ///   be ordered, so it is meaningful to talk about what must occur
+    ///   "between" them.
+    ///
+    /// [`MAP_READ`]: BufferUses::MAP_READ
+    /// [`MAP_WRITE`]: BufferUses::MAP_WRITE
     //TODO: clarify if zero-sized mapping is allowed
     unsafe fn map_buffer(
         &self,
         buffer: &<Self::A as Api>::Buffer,
         range: MemoryRange,
     ) -> Result<BufferMapping, DeviceError>;
+
+    /// Remove the mapping established by the last call to [`Device::map_buffer`].
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must be currently mapped.
     unsafe fn unmap_buffer(&self, buffer: &<Self::A as Api>::Buffer) -> Result<(), DeviceError>;
+
+    /// Indicate that CPU writes to mapped buffer memory should be made visible to the GPU.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must be currently mapped.
+    ///
+    /// - All ranges produced by `ranges` must fall within `buffer`'s size.
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &<Self::A as Api>::Buffer, ranges: I)
     where
         I: Iterator<Item = MemoryRange>;
+
+    /// Indicate that GPU writes to mapped buffer memory should be made visible to the CPU.
+    ///
+    /// # Safety
+    ///
+    /// - The given `buffer` must be currently mapped.
+    ///
+    /// - All ranges produced by `ranges` must fall within `buffer`'s size.
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &<Self::A as Api>::Buffer, ranges: I)
     where
         I: Iterator<Item = MemoryRange>;
@@ -611,6 +814,14 @@ pub trait Device: WasmNotSendSync {
         desc: &ComputePipelineDescriptor<Self::A>,
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Result<<Self::A as Api>::PipelineCache, PipelineCacheError>;
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        None
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: <Self::A as Api>::PipelineCache);
 
     unsafe fn create_query_set(
         &self,
@@ -652,6 +863,14 @@ pub trait Device: WasmNotSendSync {
     unsafe fn start_capture(&self) -> bool;
     unsafe fn stop_capture(&self);
 
+    #[allow(unused_variables)]
+    unsafe fn pipeline_cache_get_data(
+        &self,
+        cache: &<Self::A as Api>::PipelineCache,
+    ) -> Option<Vec<u8>> {
+        None
+    }
+
     unsafe fn create_acceleration_structure(
         &self,
         desc: &AccelerationStructureDescriptor,
@@ -668,6 +887,8 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
+
+    fn get_internal_counters(&self) -> wgt::HalCounters;
 }
 
 pub trait Queue: WasmNotSendSync {
@@ -675,19 +896,23 @@ pub trait Queue: WasmNotSendSync {
 
     /// Submit `command_buffers` for execution on GPU.
     ///
-    /// If `signal_fence` is `Some(fence, value)`, update `fence` to `value`
-    /// when the operation is complete. See [`Fence`] for details.
+    /// Update `fence` to `value` when the operation is complete. See
+    /// [`Fence`] for details.
     ///
-    /// If two calls to `submit` on a single `Queue` occur in a particular order
-    /// (that is, they happen on the same thread, or on two threads that have
-    /// synchronized to establish an ordering), then the first submission's
-    /// commands all complete execution before any of the second submission's
-    /// commands begin. All results produced by one submission are visible to
-    /// the next.
+    /// A `wgpu_hal` queue is "single threaded": all command buffers are
+    /// executed in the order they're submitted, with each buffer able to see
+    /// previous buffers' results. Specifically:
     ///
-    /// Within a submission, command buffers execute in the order in which they
-    /// appear in `command_buffers`. All results produced by one buffer are
-    /// visible to the next.
+    /// - If two calls to `submit` on a single `Queue` occur in a particular
+    ///   order (that is, they happen on the same thread, or on two threads that
+    ///   have synchronized to establish an ordering), then the first
+    ///   submission's commands all complete execution before any of the second
+    ///   submission's commands begin. All results produced by one submission
+    ///   are visible to the next.
+    ///
+    /// - Within a submission, command buffers execute in the order in which they
+    ///   appear in `command_buffers`. All results produced by one buffer are
+    ///   visible to the next.
     ///
     /// If two calls to `submit` on a single `Queue` from different threads are
     /// not synchronized to occur in a particular order, they must pass distinct
@@ -698,28 +923,47 @@ pub trait Queue: WasmNotSendSync {
     /// themselves are unordered. If each thread uses a separate [`Fence`], this
     /// problem does not arise.
     ///
-    /// Valid usage:
+    /// # Safety
     ///
-    /// - All of the [`CommandBuffer`][cb]s were created from
-    ///   [`CommandEncoder`][ce]s that are associated with this queue.
+    /// - Each [`CommandBuffer`][cb] in `command_buffers` must have been created
+    ///   from a [`CommandEncoder`][ce] that was constructed from the
+    ///   [`Device`][d] associated with this [`Queue`].
     ///
-    /// - All of those [`CommandBuffer`][cb]s must remain alive until
-    ///   the submitted commands have finished execution. (Since
-    ///   command buffers must not outlive their encoders, this
-    ///   implies that the encoders must remain alive as well.)
+    /// - Each [`CommandBuffer`][cb] must remain alive until the submitted
+    ///   commands have finished execution. Since command buffers must not
+    ///   outlive their encoders, this implies that the encoders must remain
+    ///   alive as well.
     ///
-    /// - All of the [`SurfaceTexture`][st]s that the command buffers
-    ///   write to appear in the `surface_textures` argument.
+    /// - All resources used by a submitted [`CommandBuffer`][cb]
+    ///   ([`Texture`][t]s, [`BindGroup`][bg]s, [`RenderPipeline`][rp]s, and so
+    ///   on) must remain alive until the command buffer finishes execution.
+    ///
+    /// - Every [`SurfaceTexture`][st] that any command in `command_buffers`
+    ///   writes to must appear in the `surface_textures` argument.
+    ///
+    /// - No [`SurfaceTexture`][st] may appear in the `surface_textures`
+    ///   argument more than once.
+    ///
+    /// - Each [`SurfaceTexture`][st] in `surface_textures` must be configured
+    ///   for use with the [`Device`][d] associated with this [`Queue`],
+    ///   typically by calling [`Surface::configure`].
+    ///
+    /// - All calls to this function that include a given [`SurfaceTexture`][st]
+    ///   in `surface_textures` must use the same [`Fence`].
     ///
     /// [`Fence`]: Api::Fence
     /// [cb]: Api::CommandBuffer
     /// [ce]: Api::CommandEncoder
+    /// [d]: Api::Device
+    /// [t]: Api::Texture
+    /// [bg]: Api::BindGroup
+    /// [rp]: Api::RenderPipeline
     /// [st]: Api::SurfaceTexture
     unsafe fn submit(
         &self,
         command_buffers: &[&<Self::A as Api>::CommandBuffer],
         surface_textures: &[&<Self::A as Api>::SurfaceTexture],
-        signal_fence: Option<(&mut <Self::A as Api>::Fence, FenceValue)>,
+        signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
     ) -> Result<(), DeviceError>;
     unsafe fn present(
         &self,
@@ -1614,6 +1858,8 @@ pub struct ProgrammableStage<'a, A: Api> {
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
     pub zero_initialize_workgroup_memory: bool,
+    /// Should the pipeline attempt to transform vertex shaders to use vertex pulling.
+    pub vertex_pulling_transform: bool,
 }
 
 // Rust gets confused about the impl requirements for `A`
@@ -1624,6 +1870,7 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+            vertex_pulling_transform: self.vertex_pulling_transform,
         }
     }
 }
@@ -1636,6 +1883,13 @@ pub struct ComputePipelineDescriptor<'a, A: Api> {
     pub layout: &'a A::PipelineLayout,
     /// The compiled compute stage and its entry point.
     pub stage: ProgrammableStage<'a, A>,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a A::PipelineCache>,
+}
+
+pub struct PipelineCacheDescriptor<'a> {
+    pub label: Label<'a>,
+    pub data: Option<&'a [u8]>,
 }
 
 /// Describes how the vertex buffer is interpreted.
@@ -1672,6 +1926,8 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a A::PipelineCache>,
 }
 
 #[derive(Debug, Clone)]

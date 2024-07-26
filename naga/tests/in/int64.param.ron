@@ -2,6 +2,7 @@
 	god_mode: true,
 	spv: (
 		version: (1, 0),
+		capabilities: [ Int64 ],
 	),
 	hlsl: (
 		shader_model: V6_0,

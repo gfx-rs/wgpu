@@ -115,6 +115,7 @@ impl WgpuContext {
                     label: None,
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 None,
             )
@@ -192,8 +193,8 @@ impl WgpuContext {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
-
         let surface_config = surface
             .get_default_config(&adapter, size.width, size.height)
             .unwrap();

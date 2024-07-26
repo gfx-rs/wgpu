@@ -5,8 +5,9 @@
 
 use std::{num::NonZeroU64, ops::Range};
 
+use itertools::Itertools;
+use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
-
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 use wgt::RenderBundleDescriptor;
 
@@ -79,7 +80,7 @@ impl Draw {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum TestCase {
     /// A single draw call with 6 vertices
     Draw,
@@ -94,14 +95,6 @@ enum TestCase {
 }
 
 impl TestCase {
-    const ARRAY: [Self; 5] = [
-        Self::Draw,
-        Self::DrawNonZeroFirstVertex,
-        Self::DrawBaseVertex,
-        Self::DrawInstanced,
-        Self::DrawNonZeroFirstInstance,
-    ];
-
     // Get the draw calls for this test case
     fn draws(&self) -> &'static [Draw] {
         match self {
@@ -148,7 +141,7 @@ impl TestCase {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum IdSource {
     /// Use buffers to load the vertex and instance index
     Buffers,
@@ -156,28 +149,16 @@ enum IdSource {
     Builtins,
 }
 
-impl IdSource {
-    const ARRAY: [Self; 2] = [Self::Buffers, Self::Builtins];
-}
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum DrawCallKind {
     Direct,
     Indirect,
 }
 
-impl DrawCallKind {
-    const ARRAY: [Self; 2] = [Self::Direct, Self::Indirect];
-}
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 enum EncoderKind {
     RenderPass,
     RenderBundle,
-}
-
-impl EncoderKind {
-    const ARRAY: [Self; 2] = [Self::RenderPass, Self::RenderBundle];
 }
 
 struct Test {
@@ -185,6 +166,7 @@ struct Test {
     id_source: IdSource,
     draw_call_kind: DrawCallKind,
     encoder_kind: EncoderKind,
+    vertex_pulling_transform: bool,
 }
 
 impl Test {
@@ -295,8 +277,19 @@ async fn vertex_index_common(ctx: TestingContext) {
             })],
         }),
         multiview: None,
+        cache: None,
     };
     let builtin_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
+    pipeline_desc
+        .vertex
+        .compilation_options
+        .vertex_pulling_transform = true;
+    let builtin_pipeline_vpt = ctx.device.create_render_pipeline(&pipeline_desc);
+    pipeline_desc
+        .vertex
+        .compilation_options
+        .vertex_pulling_transform = false;
+
     pipeline_desc.vertex.entry_point = "vs_main_buffers";
     pipeline_desc.vertex.buffers = &[
         wgpu::VertexBufferLayout {
@@ -311,6 +304,15 @@ async fn vertex_index_common(ctx: TestingContext) {
         },
     ];
     let buffer_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
+    pipeline_desc
+        .vertex
+        .compilation_options
+        .vertex_pulling_transform = true;
+    let buffer_pipeline_vpt = ctx.device.create_render_pipeline(&pipeline_desc);
+    pipeline_desc
+        .vertex
+        .compilation_options
+        .vertex_pulling_transform = false;
 
     let dummy = ctx
         .device
@@ -335,34 +337,48 @@ async fn vertex_index_common(ctx: TestingContext) {
         )
         .create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut tests = Vec::with_capacity(5 * 2 * 2);
-    for case in TestCase::ARRAY {
-        for id_source in IdSource::ARRAY {
-            for draw_call_kind in DrawCallKind::ARRAY {
-                for encoder_kind in EncoderKind::ARRAY {
-                    tests.push(Test {
-                        case,
-                        id_source,
-                        draw_call_kind,
-                        encoder_kind,
-                    })
+    let tests = TestCase::iter()
+        .cartesian_product(IdSource::iter())
+        .cartesian_product(DrawCallKind::iter())
+        .cartesian_product(EncoderKind::iter())
+        .cartesian_product([false, true])
+        .map(
+            |((((case, id_source), draw_call_kind), encoder_kind), vertex_pulling_transform)| {
+                Test {
+                    case,
+                    id_source,
+                    draw_call_kind,
+                    encoder_kind,
+                    vertex_pulling_transform,
                 }
-            }
-        }
-    }
+            },
+        )
+        .collect::<Vec<_>>();
 
     let features = ctx.adapter.features();
 
     let mut failed = false;
     for test in tests {
         let pipeline = match test.id_source {
-            IdSource::Buffers => &buffer_pipeline,
-            IdSource::Builtins => &builtin_pipeline,
+            IdSource::Buffers => {
+                if test.vertex_pulling_transform {
+                    &buffer_pipeline_vpt
+                } else {
+                    &buffer_pipeline
+                }
+            }
+            IdSource::Builtins => {
+                if test.vertex_pulling_transform {
+                    &builtin_pipeline_vpt
+                } else {
+                    &builtin_pipeline
+                }
+            }
         };
 
         let expected = test.expectation(&ctx);
 
-        let buffer_size = 4 * expected.len() as u64;
+        let buffer_size = (std::mem::size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size,

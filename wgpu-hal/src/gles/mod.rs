@@ -154,6 +154,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = ();
+    type PipelineCache = ();
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -267,6 +268,7 @@ pub struct Device {
     main_vao: glow::VertexArray,
     #[cfg(all(native, feature = "renderdoc"))]
     render_doc: crate::auxil::renderdoc::RenderDoc,
+    counters: wgt::HalCounters,
 }
 
 pub struct ShaderClearProgram {

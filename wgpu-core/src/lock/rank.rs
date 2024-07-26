@@ -87,11 +87,6 @@ macro_rules! define_lock_ranks {
 }
 
 define_lock_ranks! {
-    rank DEVICE_TEMP_SUSPECTED "Device::temp_suspected" followed by {
-        SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-        COMMAND_BUFFER_DATA,
-        DEVICE_TRACKERS,
-    }
     rank COMMAND_BUFFER_DATA "CommandBuffer::data" followed by {
         DEVICE_SNATCHABLE_LOCK,
         DEVICE_USAGE_SCOPES,
@@ -123,8 +118,6 @@ define_lock_ranks! {
     }
     rank DEVICE_LIFE_TRACKER "Device::life_tracker" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
-        // Uncomment this to see an interesting cycle.
-        // DEVICE_TEMP_SUSPECTED,
         DEVICE_TRACE,
     }
     rank COMMAND_ALLOCATOR_FREE_ENCODERS "CommandAllocator::free_encoders" followed by {
@@ -158,6 +151,11 @@ define_lock_ranks! {
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
+    rank BLAS "Blas::raw" followed by { }
+    rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
+    rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
+    rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
+    rank TLAS_INSTANCE_BUFFER "Tlas::instance_buffer" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

@@ -3,7 +3,10 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
-    resource::{Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation},
+    resource::{
+        Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
+        ResourceErrorIdent,
+    },
     snatch::SnatchGuard,
     Label, DOWNLEVEL_ERROR_MESSAGE,
 };
@@ -33,9 +36,10 @@ pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;
 // value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
-const CLEANUP_WAIT_MS: u32 = 5000;
+// If a submission is not completed within this time, we go off into UB land.
+// See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
+const CLEANUP_WAIT_MS: u32 = 60000;
 
-const IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL: &str = "Implicit BindGroupLayout in the Error State";
 const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
@@ -56,21 +60,6 @@ pub(crate) struct AttachmentData<T> {
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
-impl<T> AttachmentData<T> {
-    pub(crate) fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> AttachmentData<U> {
-        AttachmentData {
-            colors: self.colors.iter().map(|c| c.as_ref().map(&fun)).collect(),
-            resolves: self.resolves.iter().map(&fun).collect(),
-            depth_stencil: self.depth_stencil.as_ref().map(&fun),
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum RenderPassCompatibilityCheckType {
-    RenderPipeline,
-    RenderBundle,
-}
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -83,44 +72,44 @@ pub(crate) struct RenderPassContext {
 #[non_exhaustive]
 pub enum RenderPassCompatibilityError {
     #[error(
-        "Incompatible color attachments at indices {indices:?}: the RenderPass uses textures with formats {expected:?} but the {ty:?} uses attachments with formats {actual:?}",
+        "Incompatible color attachments at indices {indices:?}: the RenderPass uses textures with formats {expected:?} but the {res} uses attachments with formats {actual:?}",
     )]
     IncompatibleColorAttachment {
         indices: Vec<usize>,
         expected: Vec<Option<TextureFormat>>,
         actual: Vec<Option<TextureFormat>>,
-        ty: RenderPassCompatibilityCheckType,
+        res: ResourceErrorIdent,
     },
     #[error(
-        "Incompatible depth-stencil attachment format: the RenderPass uses a texture with format {expected:?} but the {ty:?} uses an attachment with format {actual:?}",
+        "Incompatible depth-stencil attachment format: the RenderPass uses a texture with format {expected:?} but the {res} uses an attachment with format {actual:?}",
     )]
     IncompatibleDepthStencilAttachment {
         expected: Option<TextureFormat>,
         actual: Option<TextureFormat>,
-        ty: RenderPassCompatibilityCheckType,
+        res: ResourceErrorIdent,
     },
     #[error(
-        "Incompatible sample count: the RenderPass uses textures with sample count {expected:?} but the {ty:?} uses attachments with format {actual:?}",
+        "Incompatible sample count: the RenderPass uses textures with sample count {expected:?} but the {res} uses attachments with format {actual:?}",
     )]
     IncompatibleSampleCount {
         expected: u32,
         actual: u32,
-        ty: RenderPassCompatibilityCheckType,
+        res: ResourceErrorIdent,
     },
-    #[error("Incompatible multiview setting: the RenderPass uses setting {expected:?} but the {ty:?} uses setting {actual:?}")]
+    #[error("Incompatible multiview setting: the RenderPass uses setting {expected:?} but the {res} uses setting {actual:?}")]
     IncompatibleMultiview {
         expected: Option<NonZeroU32>,
         actual: Option<NonZeroU32>,
-        ty: RenderPassCompatibilityCheckType,
+        res: ResourceErrorIdent,
     },
 }
 
 impl RenderPassContext {
     // Assumes the renderpass only contains one subpass
-    pub(crate) fn check_compatible(
+    pub(crate) fn check_compatible<T: Labeled>(
         &self,
         other: &Self,
-        ty: RenderPassCompatibilityCheckType,
+        res: &T,
     ) -> Result<(), RenderPassCompatibilityError> {
         if self.attachments.colors != other.attachments.colors {
             let indices = self
@@ -135,7 +124,7 @@ impl RenderPassContext {
                 indices,
                 expected: self.attachments.colors.iter().cloned().collect(),
                 actual: other.attachments.colors.iter().cloned().collect(),
-                ty,
+                res: res.error_ident(),
             });
         }
         if self.attachments.depth_stencil != other.attachments.depth_stencil {
@@ -143,7 +132,7 @@ impl RenderPassContext {
                 RenderPassCompatibilityError::IncompatibleDepthStencilAttachment {
                     expected: self.attachments.depth_stencil,
                     actual: other.attachments.depth_stencil,
-                    ty,
+                    res: res.error_ident(),
                 },
             );
         }
@@ -151,14 +140,14 @@ impl RenderPassContext {
             return Err(RenderPassCompatibilityError::IncompatibleSampleCount {
                 expected: self.sample_count,
                 actual: other.sample_count,
-                ty,
+                res: res.error_ident(),
             });
         }
         if self.multiview != other.multiview {
             return Err(RenderPassCompatibilityError::IncompatibleMultiview {
                 expected: self.multiview,
                 actual: other.multiview,
-                ty,
+                res: res.error_ident(),
             });
         }
         Ok(())
@@ -320,9 +309,7 @@ fn map_buffer<A: HalApi>(
     kind: HostMap,
     snatch_guard: &SnatchGuard,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
-    let raw_buffer = buffer
-        .raw(snatch_guard)
-        .ok_or(BufferAccessError::Destroyed)?;
+    let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
             .map_err(DeviceError::from)?
@@ -377,25 +364,45 @@ fn map_buffer<A: HalApi>(
     Ok(mapping.ptr)
 }
 
-#[derive(Clone, Debug, Error)]
-#[error("Device is invalid")]
-pub struct InvalidDevice;
+#[derive(Clone, Debug)]
+pub struct DeviceMismatch {
+    pub(super) res: ResourceErrorIdent,
+    pub(super) res_device: ResourceErrorIdent,
+    pub(super) target: Option<ResourceErrorIdent>,
+    pub(super) target_device: ResourceErrorIdent,
+}
+
+impl std::fmt::Display for DeviceMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{} of {} doesn't match {}",
+            self.res_device, self.res, self.target_device
+        )?;
+        if let Some(target) = self.target.as_ref() {
+            write!(f, " of {target}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for DeviceMismatch {}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DeviceError {
-    #[error("Parent device is invalid.")]
-    Invalid,
+    #[error("{0} is invalid.")]
+    Invalid(ResourceErrorIdent),
     #[error("Parent device is lost")]
     Lost,
     #[error("Not enough memory left.")]
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
-    #[error("QueueId is invalid")]
-    InvalidQueueId,
-    #[error("Attempt to use a resource with a different device from the one that created it")]
-    WrongDevice,
+    #[error("DeviceId is invalid")]
+    InvalidDeviceId,
+    #[error(transparent)]
+    DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
 
 impl From<hal::DeviceError> for DeviceError {
@@ -442,4 +449,92 @@ impl ImplicitPipelineIds<'_> {
                 .collect(),
         }
     }
+}
+
+/// Create a validator with the given validation flags.
+pub fn create_validator(
+    features: wgt::Features,
+    downlevel: wgt::DownlevelFlags,
+    flags: naga::valid::ValidationFlags,
+) -> naga::valid::Validator {
+    use naga::valid::Capabilities as Caps;
+    let mut caps = Caps::empty();
+    caps.set(
+        Caps::PUSH_CONSTANT,
+        features.contains(wgt::Features::PUSH_CONSTANTS),
+    );
+    caps.set(Caps::FLOAT64, features.contains(wgt::Features::SHADER_F64));
+    caps.set(
+        Caps::PRIMITIVE_INDEX,
+        features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
+    );
+    caps.set(
+        Caps::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    // TODO: This needs a proper wgpu feature
+    caps.set(
+        Caps::SAMPLER_NON_UNIFORM_INDEXING,
+        features
+            .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+        features.contains(wgt::Features::TEXTURE_FORMAT_16BIT_NORM),
+    );
+    caps.set(Caps::MULTIVIEW, features.contains(wgt::Features::MULTIVIEW));
+    caps.set(
+        Caps::EARLY_DEPTH_TEST,
+        features.contains(wgt::Features::SHADER_EARLY_DEPTH_TEST),
+    );
+    caps.set(
+        Caps::SHADER_INT64,
+        features.contains(wgt::Features::SHADER_INT64),
+    );
+    caps.set(
+        Caps::SHADER_INT64_ATOMIC_MIN_MAX,
+        features.intersects(
+            wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX | wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS,
+        ),
+    );
+    caps.set(
+        Caps::SHADER_INT64_ATOMIC_ALL_OPS,
+        features.contains(wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS),
+    );
+    caps.set(
+        Caps::MULTISAMPLED_SHADING,
+        downlevel.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
+    );
+    caps.set(
+        Caps::DUAL_SOURCE_BLENDING,
+        features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
+    );
+    caps.set(
+        Caps::CUBE_ARRAY_TEXTURES,
+        downlevel.contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
+    );
+    caps.set(
+        Caps::SUBGROUP,
+        features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX),
+    );
+    caps.set(
+        Caps::SUBGROUP_BARRIER,
+        features.intersects(wgt::Features::SUBGROUP_BARRIER),
+    );
+    caps.set(
+        Caps::RAY_QUERY,
+        features.intersects(wgt::Features::RAY_QUERY),
+    );
+    caps.set(
+        Caps::SUBGROUP_VERTEX_STAGE,
+        features.contains(wgt::Features::SUBGROUP_VERTEX),
+    );
+
+    naga::valid::Validator::new(flags, caps)
 }

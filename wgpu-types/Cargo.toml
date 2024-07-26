@@ -30,6 +30,8 @@ targets = [
 [features]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
+# Enables some internal instrumentation for debugging purposes.
+counters = []
 
 [dependencies]
 bitflags = "2"
@@ -46,4 +48,4 @@ web-sys = { version = "0.3.69", features = [
 
 [dev-dependencies]
 serde = { version = "1", features = ["serde_derive"] }
-serde_json = "1.0.116"
+serde_json = "1.0.119"

@@ -70,8 +70,10 @@ bitflags::bitflags! {
         /// subsequent statements within the current function (only!)
         /// to be executed in a non-uniform control flow.
         const MAY_RETURN = 0x1;
-        /// Control flow may be killed. Anything after `Statement::Kill` is
+        /// Control flow may be killed. Anything after [`Statement::Kill`] is
         /// considered inside non-uniform context.
+        ///
+        /// [`Statement::Kill`]: crate::Statement::Kill
         const MAY_KILL = 0x2;
     }
 }
@@ -383,6 +385,10 @@ impl FunctionInfo {
     /// refer to a global variable. Those expressions don't contribute
     /// any usage to the global themselves; that depends on how other
     /// expressions use them.
+    ///
+    /// [`assignable_global`]: ExpressionInfo::assignable_global
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
     #[must_use]
     fn add_assignable_ref(
         &mut self,

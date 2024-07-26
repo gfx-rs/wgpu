@@ -20,8 +20,6 @@
 #![allow(
     // It is much clearer to assert negative conditions with eq! false
     clippy::bool_assert_comparison,
-    // We use loops for getting early-out of scope without closures.
-    clippy::never_loop,
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
     // Redundant matching is more explicit.
@@ -65,6 +63,7 @@ mod init_tracker;
 pub mod instance;
 mod lock;
 pub mod pipeline;
+mod pipeline_cache;
 mod pool;
 pub mod present;
 pub mod ray_tracing;
@@ -98,14 +97,10 @@ pub type RawString = *const c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
 
 trait LabelHelpers<'a> {
-    fn borrow_option(&'a self) -> Option<&'a str>;
     fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str>;
-    fn borrow_or_default(&'a self) -> &'a str;
+    fn to_string(&self) -> String;
 }
 impl<'a> LabelHelpers<'a> for Label<'a> {
-    fn borrow_option(&'a self) -> Option<&'a str> {
-        self.as_ref().map(|cow| cow.as_ref())
-    }
     fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str> {
         if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
             return None;
@@ -113,8 +108,8 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
 
         self.as_ref().map(|cow| cow.as_ref())
     }
-    fn borrow_or_default(&'a self) -> &'a str {
-        self.borrow_option().unwrap_or_default()
+    fn to_string(&self) -> String {
+        self.as_ref().map(|cow| cow.to_string()).unwrap_or_default()
     }
 }
 
