@@ -9,6 +9,7 @@ use deno_core::Resource;
 use deno_core::ResourceId;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::time::Duration;
 use wgpu_core::resource::BufferAccessResult;
@@ -30,7 +31,7 @@ impl Resource for WebGpuBuffer {
     }
 }
 
-struct WebGpuBufferMapped(*mut u8, usize);
+struct WebGpuBufferMapped(NonNull<u8>, usize);
 impl Resource for WebGpuBufferMapped {
     fn name(&self) -> Cow<str> {
         "webGPUBufferMapped".into()
@@ -164,7 +165,8 @@ pub fn op_webgpu_buffer_get_mapped_range(
     .map_err(|e| DomExceptionOperationError::new(&e.to_string()))?;
 
     // SAFETY: guarantee to be safe from wgpu
-    let slice = unsafe { std::slice::from_raw_parts_mut(slice_pointer, range_size as usize) };
+    let slice =
+        unsafe { std::slice::from_raw_parts_mut(slice_pointer.as_ptr(), range_size as usize) };
     buf.copy_from_slice(slice);
 
     let rid = state
@@ -191,7 +193,9 @@ pub fn op_webgpu_buffer_unmap(
 
     if let Some(buf) = buf {
         // SAFETY: guarantee to be safe from wgpu
-        let slice = unsafe { std::slice::from_raw_parts_mut(mapped_resource.0, mapped_resource.1) };
+        let slice = unsafe {
+            std::slice::from_raw_parts_mut(mapped_resource.0.as_ptr(), mapped_resource.1)
+        };
         slice.copy_from_slice(buf);
     }
 

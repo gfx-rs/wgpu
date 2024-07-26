@@ -216,6 +216,7 @@ async fn run() {
                 label: None,
                 required_features: features,
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
             },
             None,
         )
@@ -297,7 +298,7 @@ fn compute_pass(
         label: None,
         layout: None,
         module,
-        entry_point: "main_cs",
+        entry_point: Some("main_cs"),
         compilation_options: Default::default(),
         cache: None,
     });
@@ -353,13 +354,13 @@ fn render_pass(
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
             module,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(format.into())],
         }),
@@ -435,7 +436,7 @@ pub fn main() {
 
 #[cfg(test)]
 mod tests {
-    use wgpu_test::{gpu_test, GpuTestConfiguration};
+    use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
@@ -456,7 +457,9 @@ mod tests {
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-                ),
+                )
+                // see https://github.com/gfx-rs/wgpu/issues/2521
+                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, false));
 
@@ -469,7 +472,9 @@ mod tests {
                     wgpu::Features::TIMESTAMP_QUERY
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
-                ),
+                )
+                // see https://github.com/gfx-rs/wgpu/issues/2521
+                .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, true));
 
@@ -497,16 +502,31 @@ mod tests {
         let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
         if timestamps_on_encoder {
-            assert!(encoder_delta > 0);
-            assert!(encoder_delta >= render_delta + compute_delta);
+            assert!(encoder_delta > 0, "unexpected timestamp");
+            assert!(
+                encoder_delta >= render_delta + compute_delta,
+                "unexpected timestamp"
+            );
         }
         if let Some(render_inside_timestamp) = render_inside_timestamp {
-            assert!(render_inside_timestamp >= render_start_end_timestamps[0]);
-            assert!(render_inside_timestamp <= render_start_end_timestamps[1]);
+            assert!(
+                render_inside_timestamp >= render_start_end_timestamps[0],
+                "unexpected timestamp"
+            );
+            assert!(
+                render_inside_timestamp <= render_start_end_timestamps[1],
+                "unexpected timestamp"
+            );
         }
         if let Some(compute_inside_timestamp) = compute_inside_timestamp {
-            assert!(compute_inside_timestamp >= compute_start_end_timestamps[0]);
-            assert!(compute_inside_timestamp <= compute_start_end_timestamps[1]);
+            assert!(
+                compute_inside_timestamp >= compute_start_end_timestamps[0],
+                "unexpected timestamp"
+            );
+            assert!(
+                compute_inside_timestamp <= compute_start_end_timestamps[1],
+                "unexpected timestamp"
+            );
         }
     }
 }

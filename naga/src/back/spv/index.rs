@@ -116,7 +116,7 @@ impl<'w> BlockContext<'w> {
             _ => return Err(Error::Validation("array length expression case-4")),
         };
 
-        let gvar = self.writer.global_variables[global_handle.index()].clone();
+        let gvar = self.writer.global_variables[global_handle].clone();
         let global = &self.ir_module.global_variables[global_handle];
         let (last_member_index, gvar_id) = match opt_last_member_index {
             Some(index) => (index, gvar.access_id),

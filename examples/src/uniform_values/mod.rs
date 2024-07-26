@@ -6,10 +6,10 @@
 //! 4. the bind group layout is attached to the pipeline layout.
 //! 5. the uniform buffer and the bind group are stored alongside the pipeline.
 //! 6. an instance of `AppState` is created. This variable will be modified
-//! to change parameters in the shader and modified by app events to preform and save
-//! those changes.
+//!    to change parameters in the shader and modified by app events to preform and save
+//!    those changes.
 //! 7. (7a and 7b) the `state` variable created at (6) is modified by commands such
-//! as pressing the arrow keys or zooming in or out.
+//!    as pressing the arrow keys or zooming in or out.
 //! 8. the contents of the `AppState` are loaded into the uniform buffer in preparation.
 //! 9. the bind group with the uniform buffer is attached to the render pass.
 //!
@@ -115,6 +115,7 @@ impl WgpuContext {
                     label: None,
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 None,
             )
@@ -178,13 +179,13 @@ impl WgpuContext {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(swapchain_format.into())],
             }),

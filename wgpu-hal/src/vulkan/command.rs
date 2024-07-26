@@ -833,7 +833,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 layout.raw,
                 conv::map_shader_stage(stages),
                 offset_bytes,
-                slice::from_raw_parts(data.as_ptr() as _, data.len() * 4),
+                slice::from_raw_parts(data.as_ptr().cast(), data.len() * 4),
             )
         };
     }

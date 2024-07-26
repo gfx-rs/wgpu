@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
-use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
+use std::{os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
 use core_graphics_types::{
     base::CGFloat,
@@ -82,10 +82,19 @@ impl super::Surface {
         view: *mut c_void,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
-        let view = view as *mut Object;
+        let view = view.cast::<Object>();
         let render_layer = {
             let layer = unsafe { Self::get_metal_layer(view, delegate) };
-            unsafe { mem::transmute::<_, &metal::MetalLayerRef>(layer) }
+            let layer = layer.cast::<metal::MetalLayerRef>();
+            // SAFETY: This pointer…
+            //
+            // - …is properly aligned.
+            // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+            //   field.
+            // - …points to an _initialized_ `MetalLayerRef`.
+            // - …is only ever aliased via an immutable reference that lives within this
+            //   lexical scope.
+            unsafe { &*layer }
         }
         .to_owned();
         let _: *mut c_void = msg_send![view, retain];

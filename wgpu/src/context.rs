@@ -78,7 +78,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type SurfaceData: ContextData;
 
     type SurfaceOutputDetail: WasmNotSendSync + 'static;
-    type SubmissionIndex: ContextId + Clone + Copy + WasmNotSendSync;
     type SubmissionIndexData: ContextData + Copy;
 
     type RequestAdapterFuture: Future<Output = Option<(Self::AdapterId, Self::AdapterData)>>
@@ -471,7 +470,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &RenderPassDescriptor<'_, '_>,
+        desc: &RenderPassDescriptor<'_>,
     ) -> (Self::RenderPassId, Self::RenderPassData);
     fn command_encoder_finish(
         &self,
@@ -597,7 +596,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> (Self::SubmissionIndex, Self::SubmissionIndexData);
+    ) -> Self::SubmissionIndexData;
     fn queue_get_timestamp_period(
         &self,
         queue: &Self::QueueId,
@@ -612,6 +611,19 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     fn device_start_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+
+    fn device_get_internal_counters(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> wgt::InternalCounters;
+
+    fn device_generate_allocator_report(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport>;
+
     fn pipeline_cache_get_data(
         &self,
         cache: &Self::PipelineCacheId,
@@ -1471,7 +1483,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'_, '_>,
+        desc: &RenderPassDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
     fn command_encoder_finish(
         &self,
@@ -1593,7 +1605,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         queue: &ObjectId,
         queue_data: &crate::Data,
         command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
-    ) -> (ObjectId, Arc<crate::Data>);
+    ) -> Arc<crate::Data>;
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32;
     fn queue_on_submitted_work_done(
         &self,
@@ -1604,6 +1616,18 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
 
     fn device_start_capture(&self, device: &ObjectId, data: &crate::Data);
     fn device_stop_capture(&self, device: &ObjectId, data: &crate::Data);
+
+    fn device_get_internal_counters(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> wgt::InternalCounters;
+
+    fn generate_allocator_report(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> Option<wgt::AllocatorReport>;
 
     fn pipeline_cache_get_data(
         &self,
@@ -2787,7 +2811,7 @@ where
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        desc: &RenderPassDescriptor<'_, '_>,
+        desc: &RenderPassDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
@@ -3039,16 +3063,15 @@ where
         queue: &ObjectId,
         queue_data: &crate::Data,
         command_buffers: &mut dyn Iterator<Item = (ObjectId, Box<crate::Data>)>,
-    ) -> (ObjectId, Arc<crate::Data>) {
+    ) -> Arc<crate::Data> {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
         let command_buffers = command_buffers.map(|(id, data)| {
             let command_buffer_data: <T as Context>::CommandBufferData = *data.downcast().unwrap();
             (<T::CommandBufferId>::from(id), command_buffer_data)
         });
-        let (submission_index, data) =
-            Context::queue_submit(self, &queue, queue_data, command_buffers);
-        (submission_index.into(), Arc::new(data) as _)
+        let data = Context::queue_submit(self, &queue, queue_data, command_buffers);
+        Arc::new(data) as _
     }
 
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32 {
@@ -3078,6 +3101,26 @@ where
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_stop_capture(self, &device, device_data)
+    }
+
+    fn device_get_internal_counters(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> wgt::InternalCounters {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_get_internal_counters(self, &device, device_data)
+    }
+
+    fn generate_allocator_report(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+    ) -> Option<wgt::AllocatorReport> {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_generate_allocator_report(self, &device, device_data)
     }
 
     fn pipeline_cache_get_data(

@@ -1,5 +1,4 @@
-/*! This is a player for WebGPU traces.
-!*/
+//! This is a player for WebGPU traces.
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {

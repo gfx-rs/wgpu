@@ -158,7 +158,7 @@ impl super::Device {
                 metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
-            vertex_pulling_transform: stage.vertex_pulling_transform,
+            vertex_pulling_transform: true,
             vertex_buffer_mappings: vertex_buffer_mappings.to_vec(),
         };
 
@@ -305,6 +305,7 @@ impl super::Device {
         super::Device {
             shared: Arc::new(super::AdapterShared::new(raw)),
             features,
+            counters: Default::default(),
         }
     }
 
@@ -345,20 +346,23 @@ impl crate::Device for super::Device {
             if let Some(label) = desc.label {
                 raw.set_label(label);
             }
+            self.counters.buffers.add(1);
             Ok(super::Buffer {
                 raw,
                 size: desc.size,
             })
         })
     }
-    unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {}
+    unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
+        self.counters.buffers.sub(1);
+    }
 
     unsafe fn map_buffer(
         &self,
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> DeviceResult<crate::BufferMapping> {
-        let ptr = buffer.raw.contents() as *mut u8;
+        let ptr = buffer.raw.contents().cast::<u8>();
         assert!(!ptr.is_null());
         Ok(crate::BufferMapping {
             ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
@@ -366,9 +370,7 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn unmap_buffer(&self, _buffer: &super::Buffer) -> DeviceResult<()> {
-        Ok(())
-    }
+    unsafe fn unmap_buffer(&self, _buffer: &super::Buffer) {}
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
     unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
 
@@ -418,6 +420,8 @@ impl crate::Device for super::Device {
                 raw.set_label(label);
             }
 
+            self.counters.textures.add(1);
+
             Ok(super::Texture {
                 raw,
                 format: desc.format,
@@ -429,7 +433,9 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_texture(&self, _texture: super::Texture) {}
+    unsafe fn destroy_texture(&self, _texture: super::Texture) {
+        self.counters.textures.sub(1);
+    }
 
     unsafe fn create_texture_view(
         &self,
@@ -489,9 +495,14 @@ impl crate::Device for super::Device {
             })
         };
 
+        self.counters.texture_views.add(1);
+
         Ok(super::TextureView { raw, aspects })
     }
-    unsafe fn destroy_texture_view(&self, _view: super::TextureView) {}
+
+    unsafe fn destroy_texture_view(&self, _view: super::TextureView) {
+        self.counters.texture_views.sub(1);
+    }
 
     unsafe fn create_sampler(
         &self,
@@ -548,15 +559,20 @@ impl crate::Device for super::Device {
             }
             let raw = self.shared.device.lock().new_sampler(&descriptor);
 
+            self.counters.samplers.add(1);
+
             Ok(super::Sampler { raw })
         })
     }
-    unsafe fn destroy_sampler(&self, _sampler: super::Sampler) {}
+    unsafe fn destroy_sampler(&self, _sampler: super::Sampler) {
+        self.counters.samplers.sub(1);
+    }
 
     unsafe fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<super::Api>,
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
+        self.counters.command_encoders.add(1);
         Ok(super::CommandEncoder {
             shared: Arc::clone(&self.shared),
             raw_queue: Arc::clone(&desc.queue.raw),
@@ -565,17 +581,25 @@ impl crate::Device for super::Device {
             temp: super::Temp::default(),
         })
     }
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {}
+
+    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
+        self.counters.command_encoders.sub(1);
+    }
 
     unsafe fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> DeviceResult<super::BindGroupLayout> {
+        self.counters.bind_group_layouts.add(1);
+
         Ok(super::BindGroupLayout {
             entries: Arc::from(desc.entries),
         })
     }
-    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
+
+    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {
+        self.counters.bind_group_layouts.sub(1);
+    }
 
     unsafe fn create_pipeline_layout(
         &self,
@@ -736,6 +760,8 @@ impl crate::Device for super::Device {
             resources: info.resources,
         });
 
+        self.counters.pipeline_layouts.add(1);
+
         Ok(super::PipelineLayout {
             bind_group_infos,
             push_constants_infos,
@@ -744,7 +770,10 @@ impl crate::Device for super::Device {
             per_stage_map,
         })
     }
-    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
+
+    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {
+        self.counters.pipeline_layouts.sub(1);
+    }
 
     unsafe fn create_bind_group(
         &self,
@@ -831,16 +860,22 @@ impl crate::Device for super::Device {
             }
         }
 
+        self.counters.bind_groups.add(1);
+
         Ok(bg)
     }
 
-    unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {}
+    unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {
+        self.counters.bind_groups.sub(1);
+    }
 
     unsafe fn create_shader_module(
         &self,
         desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
+        self.counters.shader_modules.add(1);
+
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 naga,
@@ -851,7 +886,10 @@ impl crate::Device for super::Device {
             }
         }
     }
-    unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {}
+
+    unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {
+        self.counters.shader_modules.sub(1);
+    }
 
     unsafe fn create_render_pipeline(
         &self,
@@ -1094,6 +1132,8 @@ impl crate::Device for super::Device {
                     )
                 })?;
 
+            self.counters.render_pipelines.add(1);
+
             Ok(super::RenderPipeline {
                 raw,
                 vs_lib,
@@ -1117,7 +1157,10 @@ impl crate::Device for super::Device {
             })
         })
     }
-    unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {}
+
+    unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {
+        self.counters.render_pipelines.sub(1);
+    }
 
     unsafe fn create_compute_pipeline(
         &self,
@@ -1165,6 +1208,8 @@ impl crate::Device for super::Device {
                     )
                 })?;
 
+            self.counters.compute_pipelines.add(1);
+
             Ok(super::ComputePipeline {
                 raw,
                 cs_info,
@@ -1174,7 +1219,10 @@ impl crate::Device for super::Device {
             })
         })
     }
-    unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
+
+    unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {
+        self.counters.compute_pipelines.sub(1);
+    }
 
     unsafe fn create_pipeline_cache(
         &self,
@@ -1237,6 +1285,8 @@ impl crate::Device for super::Device {
                             }
                         };
 
+                    self.counters.query_sets.add(1);
+
                     Ok(super::QuerySet {
                         raw_buffer: destination_buffer,
                         counter_sample_buffer: Some(counter_sample_buffer),
@@ -1249,15 +1299,23 @@ impl crate::Device for super::Device {
             }
         })
     }
-    unsafe fn destroy_query_set(&self, _set: super::QuerySet) {}
+
+    unsafe fn destroy_query_set(&self, _set: super::QuerySet) {
+        self.counters.query_sets.add(1);
+    }
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
+        self.counters.fences.add(1);
         Ok(super::Fence {
             completed_value: Arc::new(atomic::AtomicU64::new(0)),
             pending_command_buffers: Vec::new(),
         })
     }
-    unsafe fn destroy_fence(&self, _fence: super::Fence) {}
+
+    unsafe fn destroy_fence(&self, _fence: super::Fence) {
+        self.counters.fences.sub(1);
+    }
+
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
         let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
@@ -1282,7 +1340,7 @@ impl crate::Device for super::Device {
             .iter()
             .find(|&&(value, _)| value >= wait_value)
         {
-            Some(&(_, ref cmd_buf)) => cmd_buf,
+            Some((_, cmd_buf)) => cmd_buf,
             None => {
                 log::error!("No active command buffers for fence value {}", wait_value);
                 return Err(crate::DeviceError::Lost);
@@ -1347,5 +1405,9 @@ impl crate::Device for super::Device {
         _acceleration_structure: super::AccelerationStructure,
     ) {
         unimplemented!()
+    }
+
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        self.counters.clone()
     }
 }

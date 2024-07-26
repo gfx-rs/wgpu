@@ -43,8 +43,8 @@ VertexOutput_vert_main vert_main()
     out_.perspective = float4(729.0, 1000.0, 1331.0, 1728.0);
     out_.perspective_centroid = 2197.0;
     out_.perspective_sample = 2744.0;
-    FragmentInput _expr30 = out_;
-    const FragmentInput fragmentinput = _expr30;
+    FragmentInput _e30 = out_;
+    const FragmentInput fragmentinput = _e30;
     const VertexOutput_vert_main fragmentinput_1 = { fragmentinput._flat, fragmentinput._linear, fragmentinput.linear_centroid, fragmentinput.linear_sample, fragmentinput.perspective, fragmentinput.perspective_centroid, fragmentinput.perspective_sample, fragmentinput.position };
     return fragmentinput_1;
 }

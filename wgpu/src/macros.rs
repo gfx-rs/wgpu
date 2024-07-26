@@ -95,7 +95,7 @@ macro_rules! include_wgsl {
             //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptor {
                 label: Some($($token)*),
-                source: $crate::ShaderSource::Wgsl(include_str!($($token)*).into()),
+                source: $crate::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!($($token)*))),
             }
         }
     };

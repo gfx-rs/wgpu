@@ -360,9 +360,6 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
         return_features.push("shader-early-depth-test");
     }
-    if features.contains(wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT) {
-        return_features.push("shader-unused-vertex-output");
-    }
 
     return_features
 }
@@ -648,10 +645,6 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::SHADER_EARLY_DEPTH_TEST,
             required_features.0.contains("shader-early-depth-test"),
         );
-        features.set(
-            wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT,
-            required_features.0.contains("shader-unused-vertex-output"),
-        );
 
         features
     }
@@ -675,6 +668,7 @@ pub fn op_webgpu_request_device(
         label: Some(Cow::Owned(label)),
         required_features: required_features.into(),
         required_limits: required_limits.unwrap_or_default(),
+        memory_hints: wgpu_types::MemoryHints::default(),
     };
 
     let (device, queue, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(

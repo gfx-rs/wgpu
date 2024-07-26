@@ -117,33 +117,6 @@ pub struct Function<'a> {
     pub name: Ident<'a>,
     pub arguments: Vec<FunctionArgument<'a>>,
     pub result: Option<FunctionResult<'a>>,
-
-    /// Local variable and function argument arena.
-    ///
-    /// Note that the `Local` here is actually a zero-sized type. The AST keeps
-    /// all the detailed information about locals - names, types, etc. - in
-    /// [`LocalDecl`] statements. For arguments, that information is kept in
-    /// [`arguments`]. This `Arena`'s only role is to assign a unique `Handle`
-    /// to each of them, and track their definitions' spans for use in
-    /// diagnostics.
-    ///
-    /// In the AST, when an [`Ident`] expression refers to a local variable or
-    /// argument, its [`IdentExpr`] holds the referent's `Handle<Local>` in this
-    /// arena.
-    ///
-    /// During lowering, [`LocalDecl`] statements add entries to a per-function
-    /// table that maps `Handle<Local>` values to their Naga representations,
-    /// accessed via [`StatementContext::local_table`] and
-    /// [`RuntimeExpressionContext::local_table`]. This table is then consulted when
-    /// lowering subsequent [`Ident`] expressions.
-    ///
-    /// [`LocalDecl`]: StatementKind::LocalDecl
-    /// [`arguments`]: Function::arguments
-    /// [`Ident`]: Expression::Ident
-    /// [`StatementContext::local_table`]: StatementContext::local_table
-    /// [`RuntimeExpressionContext::local_table`]: RuntimeExpressionContext::local_table
-    pub locals: Arena<Local>,
-
     pub body: Block<'a>,
 }
 

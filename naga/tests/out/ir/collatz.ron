@@ -10,7 +10,7 @@
         (
             name: None,
             inner: Array(
-                base: 1,
+                base: 0,
                 size: Dynamic,
                 stride: 4,
             ),
@@ -21,7 +21,7 @@
                 members: [
                     (
                         name: Some("data"),
-                        ty: 2,
+                        ty: 1,
                         binding: None,
                         offset: 0,
                     ),
@@ -57,7 +57,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 3,
+            ty: 2,
             init: None,
         ),
     ],
@@ -68,99 +68,99 @@
             arguments: [
                 (
                     name: Some("n_base"),
-                    ty: 1,
+                    ty: 0,
                     binding: None,
                 ),
             ],
             result: Some((
-                ty: 1,
+                ty: 0,
                 binding: None,
             )),
             local_variables: [
                 (
                     name: Some("n"),
-                    ty: 1,
+                    ty: 0,
                     init: None,
                 ),
                 (
                     name: Some("i"),
-                    ty: 1,
-                    init: Some(3),
+                    ty: 0,
+                    init: Some(2),
                 ),
             ],
             expressions: [
                 FunctionArgument(0),
-                LocalVariable(1),
+                LocalVariable(0),
                 Literal(U32(0)),
-                LocalVariable(2),
+                LocalVariable(1),
                 Load(
-                    pointer: 2,
+                    pointer: 1,
                 ),
                 Literal(U32(1)),
                 Binary(
                     op: Greater,
-                    left: 5,
-                    right: 6,
+                    left: 4,
+                    right: 5,
                 ),
                 Load(
-                    pointer: 2,
+                    pointer: 1,
                 ),
                 Literal(U32(2)),
                 Binary(
                     op: Modulo,
-                    left: 8,
-                    right: 9,
+                    left: 7,
+                    right: 8,
                 ),
                 Literal(U32(0)),
                 Binary(
                     op: Equal,
-                    left: 10,
-                    right: 11,
+                    left: 9,
+                    right: 10,
                 ),
                 Load(
-                    pointer: 2,
+                    pointer: 1,
                 ),
                 Literal(U32(2)),
                 Binary(
                     op: Divide,
-                    left: 13,
-                    right: 14,
+                    left: 12,
+                    right: 13,
                 ),
                 Literal(U32(3)),
                 Load(
-                    pointer: 2,
+                    pointer: 1,
                 ),
                 Binary(
                     op: Multiply,
-                    left: 16,
-                    right: 17,
+                    left: 15,
+                    right: 16,
                 ),
                 Literal(U32(1)),
                 Binary(
                     op: Add,
-                    left: 18,
-                    right: 19,
+                    left: 17,
+                    right: 18,
                 ),
                 Load(
-                    pointer: 4,
+                    pointer: 3,
                 ),
                 Literal(U32(1)),
                 Binary(
                     op: Add,
-                    left: 21,
-                    right: 22,
+                    left: 20,
+                    right: 21,
                 ),
                 Load(
-                    pointer: 4,
+                    pointer: 3,
                 ),
             ],
             named_expressions: {
-                1: "n_base",
+                0: "n_base",
             },
             body: [
                 Store(
-                    pointer: 2,
-                    value: 1,
+                    pointer: 1,
+                    value: 0,
                 ),
                 Loop(
                     body: [
@@ -173,7 +173,7 @@
                             end: 7,
                         )),
                         If(
-                            condition: 7,
+                            condition: 6,
                             accept: [],
                             reject: [
                                 Break,
@@ -193,7 +193,7 @@
                                 end: 12,
                             )),
                             If(
-                                condition: 12,
+                                condition: 11,
                                 accept: [
                                     Emit((
                                         start: 12,
@@ -204,8 +204,8 @@
                                         end: 15,
                                     )),
                                     Store(
-                                        pointer: 2,
-                                        value: 15,
+                                        pointer: 1,
+                                        value: 14,
                                     ),
                                 ],
                                 reject: [
@@ -218,8 +218,8 @@
                                         end: 20,
                                     )),
                                     Store(
-                                        pointer: 2,
-                                        value: 20,
+                                        pointer: 1,
+                                        value: 19,
                                     ),
                                 ],
                             ),
@@ -232,8 +232,8 @@
                                 end: 23,
                             )),
                             Store(
-                                pointer: 4,
-                                value: 23,
+                                pointer: 3,
+                                value: 22,
                             ),
                         ]),
                     ],
@@ -245,7 +245,7 @@
                     end: 24,
                 )),
                 Return(
-                    value: Some(24),
+                    value: Some(23),
                 ),
             ],
         ),
@@ -261,7 +261,7 @@
                 arguments: [
                     (
                         name: Some("global_id"),
-                        ty: 4,
+                        ty: 3,
                         binding: Some(BuiltIn(GlobalInvocationId)),
                     ),
                 ],
@@ -269,39 +269,39 @@
                 local_variables: [],
                 expressions: [
                     FunctionArgument(0),
-                    GlobalVariable(1),
+                    GlobalVariable(0),
                     AccessIndex(
+                        base: 1,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 0,
+                        index: 0,
+                    ),
+                    Access(
                         base: 2,
+                        index: 3,
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 5,
                         index: 0,
                     ),
                     AccessIndex(
-                        base: 1,
+                        base: 0,
                         index: 0,
                     ),
                     Access(
-                        base: 3,
-                        index: 4,
-                    ),
-                    GlobalVariable(1),
-                    AccessIndex(
                         base: 6,
-                        index: 0,
-                    ),
-                    AccessIndex(
-                        base: 1,
-                        index: 0,
-                    ),
-                    Access(
-                        base: 7,
-                        index: 8,
+                        index: 7,
                     ),
                     Load(
-                        pointer: 9,
+                        pointer: 8,
                     ),
-                    CallResult(1),
+                    CallResult(0),
                 ],
                 named_expressions: {
-                    1: "global_id",
+                    0: "global_id",
                 },
                 body: [
                     Emit((
@@ -313,15 +313,15 @@
                         end: 10,
                     )),
                     Call(
-                        function: 1,
+                        function: 0,
                         arguments: [
-                            10,
+                            9,
                         ],
-                        result: Some(11),
+                        result: Some(10),
                     ),
                     Store(
-                        pointer: 5,
-                        value: 11,
+                        pointer: 4,
+                        value: 10,
                     ),
                     Return(
                         value: None,

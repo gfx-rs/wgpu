@@ -121,7 +121,10 @@ impl crate::Instance for Instance {
         unsafe { surface.dispose() };
     }
 
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&Surface>,
+    ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = metal::Device::all();
         let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
             .into_iter()
@@ -272,6 +275,7 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_simd_scoped_operations: bool,
     int64: bool,
+    int64_atomics: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -338,6 +342,7 @@ impl Queue {
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
+    counters: wgt::HalCounters,
 }
 
 pub struct Surface {

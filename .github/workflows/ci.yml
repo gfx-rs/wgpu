@@ -43,7 +43,7 @@ env:
   REPO_MSRV: "1.76"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.74"
+  CORE_MSRV: "1.76"
 
   #
   # Environment variables
@@ -59,6 +59,7 @@ env:
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
+  WGPU_TESTING: true
 
 # We distinguish the following kinds of builds:
 # - native: build for the same target as we compile on
@@ -230,18 +231,20 @@ jobs:
 
           # build docs
           cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
-      - name: check private item docs
-        if: matrix.kind == 'native'
-        shell: bash
-        run: |
-          set -e
-
-          # wgpu_core package
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} \
-                --package wgpu-core \
-                --package wgpu-hal \
-                --package naga \
-                --all-features --no-deps --document-private-items
+      # wgpu-core docs are not feasible due to <https://github.com/gfx-rs/wgpu/issues/4905>
+      #
+      # - name: check private item docs
+      #   if: matrix.kind == 'native'
+      #   shell: bash
+      #   run: |
+      #     set -e
+      #
+      #     # wgpu_core package
+      #     cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} \
+      #           --package wgpu-core \
+      #           --package wgpu-hal \
+      #           --package naga \
+      #           --all-features --no-deps --document-private-items
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.
@@ -543,7 +546,8 @@ jobs:
           cargo xtask test --llvm-cov
 
       - name: check naga snapshots
-        run: git diff --exit-code -- naga/tests/out
+        # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
+        run: git add . && git diff --exit-code HEAD naga/tests/out
 
       - uses: actions/upload-artifact@v4
         if: always() # We want artifacts even if the tests fail.
@@ -567,6 +571,7 @@ jobs:
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   doctest:
     # runtime is normally 2 minutes
@@ -627,7 +632,7 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.21.0
+        uses: crate-ci/typos@v1.23.3
 
   check-cts-runner:
     # runtime is normally 2 minutes

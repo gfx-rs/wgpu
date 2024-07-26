@@ -96,7 +96,7 @@ async fn draw_test_with_reports(
             vertex: wgpu::VertexState {
                 buffers: &[],
                 module: &shader,
-                entry_point: "vs_main_builtin",
+                entry_point: Some("vs_main_builtin"),
                 compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -104,7 +104,7 @@ async fn draw_test_with_reports(
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,

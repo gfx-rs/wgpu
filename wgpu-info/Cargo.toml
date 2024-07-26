@@ -16,4 +16,4 @@ env_logger.workspace = true
 pico-args.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-wgpu.workspace = true
+wgpu = { workspace = true, features = ["serde"] }

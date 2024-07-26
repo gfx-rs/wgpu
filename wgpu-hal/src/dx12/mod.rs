@@ -261,6 +261,7 @@ pub struct Device {
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Option<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    counters: wgt::HalCounters,
 }
 
 unsafe impl Send for Device {}
@@ -719,7 +720,7 @@ impl crate::Surface for Surface {
                         self.factory
                             .unwrap_factory2()
                             .create_swapchain_for_composition(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 &desc,
                             )
                             .into_result()
@@ -732,7 +733,7 @@ impl crate::Surface for Surface {
                             .clone()
                             .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
                             .create_swapchain_for_composition_surface_handle(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 handle,
                                 &desc,
                             )
@@ -744,7 +745,7 @@ impl crate::Surface for Surface {
                             .as_factory2()
                             .unwrap()
                             .create_swapchain_for_hwnd(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 hwnd,
                                 &desc,
                             )
@@ -761,8 +762,8 @@ impl crate::Surface for Surface {
                 };
 
                 match &self.target {
-                    &SurfaceTarget::WndHandle(_) | &SurfaceTarget::SurfaceHandle(_) => {}
-                    &SurfaceTarget::Visual(ref visual) => {
+                    SurfaceTarget::WndHandle(_) | &SurfaceTarget::SurfaceHandle(_) => {}
+                    SurfaceTarget::Visual(visual) => {
                         if let Err(err) =
                             unsafe { visual.SetContent(swap_chain1.as_unknown()) }.into_result()
                         {
@@ -772,7 +773,7 @@ impl crate::Surface for Surface {
                             ));
                         }
                     }
-                    &SurfaceTarget::SwapChainPanel(ref swap_chain_panel) => {
+                    SurfaceTarget::SwapChainPanel(swap_chain_panel) => {
                         if let Err(err) =
                             unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_ptr()) }
                                 .into_result()

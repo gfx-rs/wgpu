@@ -368,7 +368,7 @@ fn copy_via_compute(
         label: Some("pipeline read"),
         layout: Some(&pll),
         module: &sm,
-        entry_point: "copy_texture_to_buffer",
+        entry_point: Some("copy_texture_to_buffer"),
         compilation_options: Default::default(),
         cache: None,
     });

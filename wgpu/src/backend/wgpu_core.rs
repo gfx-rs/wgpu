@@ -20,20 +20,15 @@ use std::{
     fmt,
     future::{ready, Ready},
     ops::Range,
+    ptr::NonNull,
     slice,
     sync::Arc,
 };
 use wgc::{
-    command::{bundle_ffi::*, render_commands::*},
-    device::DeviceLostClosure,
-    gfx_select,
-    id::CommandEncoderId,
-    id::TextureViewId,
-    pipeline::CreateShaderModuleError,
+    command::bundle_ffi::*, device::DeviceLostClosure, gfx_select, id::CommandEncoderId,
+    id::TextureViewId, pipeline::CreateShaderModuleError,
 };
 use wgt::WasmNotSendSync;
-
-const LABEL: &str = "label";
 
 pub struct ContextWgpuCore(wgc::global::Global);
 
@@ -67,10 +62,7 @@ impl ContextWgpuCore {
         Self(unsafe { wgc::global::Global::from_instance(core_instance) })
     }
 
-    pub(crate) fn global(&self) -> &wgc::global::Global {
-        &self.0
-    }
-
+    #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| None))
@@ -113,12 +105,15 @@ impl ContextWgpuCore {
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
+        if trace_dir.is_some() {
+            log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
+        }
         let (device_id, queue_id, error) = unsafe {
             self.0.create_device_from_hal(
                 *adapter,
                 hal_device,
                 &desc.map_label(|l| l.map(Borrowed)),
-                trace_dir,
+                None,
                 None,
                 None,
             )
@@ -154,7 +149,6 @@ impl ContextWgpuCore {
             self.handle_error(
                 &device.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_texture_from_hal",
             );
@@ -183,7 +177,6 @@ impl ContextWgpuCore {
             self.handle_error(
                 &device.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_buffer_from_hal",
             );
@@ -277,16 +270,14 @@ impl ContextWgpuCore {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + WasmNotSendSync + 'static,
-        label_key: &'static str,
+        source: impl Error + WasmNotSendSync + 'static,
         label: Label<'_>,
-        string: &'static str,
+        fn_ident: &'static str,
     ) {
         let error = wgc::error::ContextError {
-            string,
-            cause: Box::new(cause),
+            fn_ident,
+            source: Box::new(source),
             label: label.unwrap_or_default().to_string(),
-            label_key,
         };
         let mut sink = sink_mutex.lock();
         let mut source_opt: Option<&(dyn Error + 'static)> = Some(&error);
@@ -311,10 +302,10 @@ impl ContextWgpuCore {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + WasmNotSendSync + 'static,
-        string: &'static str,
+        source: impl Error + WasmNotSendSync + 'static,
+        fn_ident: &'static str,
     ) {
-        self.handle_error(sink_mutex, cause, "", None, string)
+        self.handle_error(sink_mutex, source, None, fn_ident)
     }
 
     #[track_caller]
@@ -327,22 +318,32 @@ impl ContextWgpuCore {
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
-        let global = self.global();
-        let mut err_descs = vec![];
+        let mut output = String::new();
+        let mut level = 1;
 
-        let mut err_str = String::new();
-        wgc::error::format_pretty_any(&mut err_str, global, err);
-        err_descs.push(err_str);
+        fn print_tree(output: &mut String, level: &mut usize, e: &(dyn Error + 'static)) {
+            let mut print = |e: &(dyn Error + 'static)| {
+                use std::fmt::Write;
+                writeln!(output, "{}{}", " ".repeat(*level * 2), e).unwrap();
 
-        let mut source_opt = err.source();
-        while let Some(source) = source_opt {
-            let mut source_str = String::new();
-            wgc::error::format_pretty_any(&mut source_str, global, source);
-            err_descs.push(source_str);
-            source_opt = source.source();
+                if let Some(e) = e.source() {
+                    *level += 1;
+                    print_tree(output, level, e);
+                    *level -= 1;
+                }
+            };
+            if let Some(multi) = e.downcast_ref::<wgc::error::MultiError>() {
+                for e in multi.errors() {
+                    print(e);
+                }
+            } else {
+                print(e);
+            }
         }
 
-        format!("Validation Error\n\nCaused by:\n{}", err_descs.join(""))
+        print_tree(&mut output, &mut level, err);
+
+        format!("Validation Error\n\nCaused by:\n{}", output)
     }
 }
 
@@ -494,7 +495,7 @@ pub struct ComputePass {
 
 #[derive(Debug)]
 pub struct RenderPass {
-    pass: wgc::command::RenderPass,
+    pass: Box<dyn wgc::command::DynRenderPass>,
     error_sink: ErrorSink,
 }
 
@@ -551,7 +552,6 @@ impl crate::Context for ContextWgpuCore {
     type SurfaceId = wgc::id::SurfaceId;
     type SurfaceData = Surface;
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = Unused;
     type SubmissionIndexData = wgc::device::queue::WrappedSubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
@@ -643,10 +643,13 @@ impl crate::Context for ContextWgpuCore {
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
+        if trace_dir.is_some() {
+            log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
+        }
         let (device_id, queue_id, error) = wgc::gfx_select!(*adapter => self.0.adapter_request_device(
             *adapter,
             &desc.map_label(|l| l.map(Borrowed)),
-            trace_dir,
+            None,
             None,
             None
         ));
@@ -928,7 +931,6 @@ impl crate::Context for ContextWgpuCore {
                 self.handle_error(
                     &device_data.error_sink,
                     cause.clone(),
-                    LABEL,
                     desc.label,
                     "Device::create_shader_module",
                 );
@@ -960,7 +962,6 @@ impl crate::Context for ContextWgpuCore {
                 self.handle_error(
                     &device_data.error_sink,
                     cause.clone(),
-                    LABEL,
                     desc.label,
                     "Device::create_shader_module_spirv",
                 );
@@ -988,7 +989,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_bind_group_layout",
             );
@@ -1102,7 +1102,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_bind_group",
             );
@@ -1144,7 +1143,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_pipeline_layout",
             );
@@ -1170,29 +1168,18 @@ impl crate::Context for ContextWgpuCore {
             })
             .collect();
 
-        let implicit_pipeline_ids = match desc.layout {
-            Some(_) => None,
-            None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: None,
-                group_ids: &[None; wgc::MAX_BIND_GROUPS],
-            }),
-        };
         let descriptor = pipe::RenderPipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|l| l.id.into()),
             vertex: pipe::VertexState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.id.into(),
-                    entry_point: Some(Borrowed(desc.vertex.entry_point)),
+                    entry_point: desc.vertex.entry_point.map(Borrowed),
                     constants: Borrowed(desc.vertex.compilation_options.constants),
                     zero_initialize_workgroup_memory: desc
                         .vertex
                         .compilation_options
                         .zero_initialize_workgroup_memory,
-                    vertex_pulling_transform: desc
-                        .vertex
-                        .compilation_options
-                        .vertex_pulling_transform,
                 },
                 buffers: Borrowed(&vertex_buffers),
             },
@@ -1202,12 +1189,11 @@ impl crate::Context for ContextWgpuCore {
             fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: frag.module.id.into(),
-                    entry_point: Some(Borrowed(frag.entry_point)),
+                    entry_point: frag.entry_point.map(Borrowed),
                     constants: Borrowed(frag.compilation_options.constants),
                     zero_initialize_workgroup_memory: frag
                         .compilation_options
                         .zero_initialize_workgroup_memory,
-                    vertex_pulling_transform: false,
                 },
                 targets: Borrowed(frag.targets),
             }),
@@ -1219,7 +1205,7 @@ impl crate::Context for ContextWgpuCore {
             *device,
             &descriptor,
             None,
-            implicit_pipeline_ids
+            None,
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
@@ -1229,7 +1215,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_render_pipeline",
             );
@@ -1244,24 +1229,16 @@ impl crate::Context for ContextWgpuCore {
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         use wgc::pipeline as pipe;
 
-        let implicit_pipeline_ids = match desc.layout {
-            Some(_) => None,
-            None => Some(wgc::device::ImplicitPipelineIds {
-                root_id: None,
-                group_ids: &[None; wgc::MAX_BIND_GROUPS],
-            }),
-        };
         let descriptor = pipe::ComputePipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|l| l.id.into()),
             stage: pipe::ProgrammableStageDescriptor {
                 module: desc.module.id.into(),
-                entry_point: Some(Borrowed(desc.entry_point)),
+                entry_point: desc.entry_point.map(Borrowed),
                 constants: Borrowed(desc.compilation_options.constants),
                 zero_initialize_workgroup_memory: desc
                     .compilation_options
                     .zero_initialize_workgroup_memory,
-                vertex_pulling_transform: false,
             },
             cache: desc.cache.map(|c| c.id.into()),
         };
@@ -1270,7 +1247,7 @@ impl crate::Context for ContextWgpuCore {
             *device,
             &descriptor,
             None,
-            implicit_pipeline_ids
+            None,
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
@@ -1284,7 +1261,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_compute_pipeline",
             );
@@ -1314,7 +1290,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::device_create_pipeline_cache_init",
             );
@@ -1337,7 +1312,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_buffer",
             );
@@ -1365,7 +1339,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_texture",
             );
@@ -1410,7 +1383,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_sampler",
             );
@@ -1448,7 +1420,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &device_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Device::create_command_encoder",
             );
@@ -1525,7 +1496,7 @@ impl crate::Context for ContextWgpuCore {
         _device_data: &Self::DeviceData,
         maintain: crate::Maintain,
     ) -> wgt::MaintainResult {
-        let maintain_inner = maintain.map_index(|i| *i.1.as_ref().downcast_ref().unwrap());
+        let maintain_inner = maintain.map_index(|i| *i.0.as_ref().downcast_ref().unwrap());
         match wgc::gfx_select!(device => self.0.device_poll(
             *device,
             maintain_inner
@@ -1659,7 +1630,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &texture_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "Texture::create_view",
             );
@@ -1918,7 +1888,7 @@ impl crate::Context for ContextWgpuCore {
         let timestamp_writes =
             desc.timestamp_writes
                 .as_ref()
-                .map(|tw| wgc::command::ComputePassTimestampWrites {
+                .map(|tw| wgc::command::PassTimestampWrites {
                     query_set: tw.query_set.id.into(),
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,
@@ -1933,7 +1903,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &encoder_data.error_sink,
                 cause,
-                LABEL,
                 desc.label,
                 "CommandEncoder::begin_compute_pass",
             );
@@ -1952,7 +1921,7 @@ impl crate::Context for ContextWgpuCore {
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'_, '_>,
+        desc: &crate::RenderPassDescriptor<'_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
             self.handle_error_fatal(
@@ -1987,27 +1956,33 @@ impl crate::Context for ContextWgpuCore {
         let timestamp_writes =
             desc.timestamp_writes
                 .as_ref()
-                .map(|tw| wgc::command::RenderPassTimestampWrites {
+                .map(|tw| wgc::command::PassTimestampWrites {
                     query_set: tw.query_set.id.into(),
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
+        let (pass, err) = gfx_select!(encoder => self.0.command_encoder_create_render_pass_dyn(*encoder, &wgc::command::RenderPassDescriptor {
+            label: desc.label.map(Borrowed),
+            timestamp_writes: timestamp_writes.as_ref(),
+            color_attachments: std::borrow::Cow::Borrowed(&colors),
+            depth_stencil_attachment: depth_stencil.as_ref(),
+            occlusion_query_set: desc.occlusion_query_set.map(|query_set| query_set.id.into()),
+        }));
+
+        if let Some(cause) = err {
+            self.handle_error(
+                &encoder_data.error_sink,
+                cause,
+                desc.label,
+                "CommandEncoder::begin_compute_pass",
+            );
+        }
+
         (
             Unused,
-            RenderPass {
-                pass: wgc::command::RenderPass::new(
-                    *encoder,
-                    &wgc::command::RenderPassDescriptor {
-                        label: desc.label.map(Borrowed),
-                        color_attachments: Borrowed(&colors),
-                        depth_stencil_attachment: depth_stencil.as_ref(),
-                        timestamp_writes: timestamp_writes.as_ref(),
-                        occlusion_query_set: desc
-                            .occlusion_query_set
-                            .map(|query_set| query_set.id.into()),
-                    },
-                ),
+            Self::RenderPassData {
+                pass,
                 error_sink: encoder_data.error_sink.clone(),
             },
         )
@@ -2214,7 +2189,7 @@ impl crate::Context for ContextWgpuCore {
         size: wgt::BufferSize,
     ) -> Option<()> {
         match wgc::gfx_select!(
-            *queue => self.0.queue_validate_write_buffer(*queue, *buffer, offset, size.get())
+            *queue => self.0.queue_validate_write_buffer(*queue, *buffer, offset, size)
         ) {
             Ok(()) => Some(()),
             Err(err) => {
@@ -2322,7 +2297,7 @@ impl crate::Context for ContextWgpuCore {
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
+    ) -> Self::SubmissionIndexData {
         let temp_command_buffers = command_buffers
             .map(|(i, _)| i)
             .collect::<SmallVec<[_; 4]>>();
@@ -2333,7 +2308,11 @@ impl crate::Context for ContextWgpuCore {
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         };
 
-        (Unused, index)
+        for cmdbuf in &temp_command_buffers {
+            wgc::gfx_select!(*queue => self.0.command_buffer_drop(*cmdbuf));
+        }
+
+        index
     }
 
     fn queue_get_timestamp_period(
@@ -2374,6 +2353,22 @@ impl crate::Context for ContextWgpuCore {
         wgc::gfx_select!(device => self.0.device_stop_capture(*device));
     }
 
+    fn device_get_internal_counters(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> wgt::InternalCounters {
+        wgc::gfx_select!(device => self.0.device_get_internal_counters(*device))
+    }
+
+    fn device_generate_allocator_report(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport> {
+        wgc::gfx_select!(device => self.0.device_generate_allocator_report(*device))
+    }
+
     fn pipeline_cache_get_data(
         &self,
         cache: &Self::PipelineCacheId,
@@ -2394,7 +2389,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::set_pipeline",
             );
@@ -2417,7 +2411,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::set_bind_group",
             );
@@ -2431,11 +2424,10 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        if let Err(cause) = pass_data.pass.set_push_constant(&self.0, offset, data) {
+        if let Err(cause) = pass_data.pass.set_push_constants(&self.0, offset, data) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::set_push_constant",
             );
@@ -2452,7 +2444,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::insert_debug_marker",
             );
@@ -2469,7 +2460,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::push_debug_group",
             );
@@ -2485,7 +2475,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::pop_debug_group",
             );
@@ -2507,7 +2496,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::write_timestamp",
             );
@@ -2530,7 +2518,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::begin_pipeline_statistics_query",
             );
@@ -2546,7 +2533,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::end_pipeline_statistics_query",
             );
@@ -2565,7 +2551,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::dispatch_workgroups",
             );
@@ -2588,7 +2573,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::dispatch_workgroups_indirect",
             );
@@ -2604,7 +2588,6 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "ComputePass::end",
             );
@@ -2803,7 +2786,14 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::RenderPipelineId,
         _pipeline_data: &Self::RenderPipelineData,
     ) {
-        wgpu_render_pass_set_pipeline(&mut pass_data.pass, *pipeline)
+        if let Err(cause) = pass_data.pass.set_pipeline(&self.0, *pipeline) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_pipeline",
+            );
+        }
     }
 
     fn render_pass_set_bind_group(
@@ -2815,7 +2805,17 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        wgpu_render_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets)
+        if let Err(cause) = pass_data
+            .pass
+            .set_bind_group(&self.0, index, *bind_group, offsets)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_bind_group",
+            );
+        }
     }
 
     fn render_pass_set_index_buffer(
@@ -2828,9 +2828,18 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        pass_data
-            .pass
-            .set_index_buffer(*buffer, index_format, offset, size)
+        if let Err(cause) =
+            pass_data
+                .pass
+                .set_index_buffer(&self.0, *buffer, index_format, offset, size)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_index_buffer",
+            );
+        }
     }
 
     fn render_pass_set_vertex_buffer(
@@ -2843,7 +2852,17 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        wgpu_render_pass_set_vertex_buffer(&mut pass_data.pass, slot, *buffer, offset, size)
+        if let Err(cause) = pass_data
+            .pass
+            .set_vertex_buffer(&self.0, slot, *buffer, offset, size)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_vertex_buffer",
+            );
+        }
     }
 
     fn render_pass_set_push_constants(
@@ -2854,7 +2873,17 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        wgpu_render_pass_set_push_constants(&mut pass_data.pass, stages, offset, data)
+        if let Err(cause) = pass_data
+            .pass
+            .set_push_constants(&self.0, stages, offset, data)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_push_constants",
+            );
+        }
     }
 
     fn render_pass_draw(
@@ -2864,13 +2893,20 @@ impl crate::Context for ContextWgpuCore {
         vertices: Range<u32>,
         instances: Range<u32>,
     ) {
-        wgpu_render_pass_draw(
-            &mut pass_data.pass,
+        if let Err(cause) = pass_data.pass.draw(
+            &self.0,
             vertices.end - vertices.start,
             instances.end - instances.start,
             vertices.start,
             instances.start,
-        )
+        ) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::draw",
+            );
+        }
     }
 
     fn render_pass_draw_indexed(
@@ -2881,14 +2917,21 @@ impl crate::Context for ContextWgpuCore {
         base_vertex: i32,
         instances: Range<u32>,
     ) {
-        wgpu_render_pass_draw_indexed(
-            &mut pass_data.pass,
+        if let Err(cause) = pass_data.pass.draw_indexed(
+            &self.0,
             indices.end - indices.start,
             instances.end - instances.start,
             indices.start,
             base_vertex,
             instances.start,
-        )
+        ) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::draw_indexed",
+            );
+        }
     }
 
     fn render_pass_draw_indirect(
@@ -2899,7 +2942,17 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_render_pass_draw_indirect(&mut pass_data.pass, *indirect_buffer, indirect_offset)
+        if let Err(cause) = pass_data
+            .pass
+            .draw_indirect(&self.0, *indirect_buffer, indirect_offset)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::draw_indirect",
+            );
+        }
     }
 
     fn render_pass_draw_indexed_indirect(
@@ -2910,11 +2963,18 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_render_pass_draw_indexed_indirect(
-            &mut pass_data.pass,
-            *indirect_buffer,
-            indirect_offset,
-        )
+        if let Err(cause) =
+            pass_data
+                .pass
+                .draw_indexed_indirect(&self.0, *indirect_buffer, indirect_offset)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::draw_indexed_indirect",
+            );
+        }
     }
 
     fn render_pass_multi_draw_indirect(
@@ -2926,12 +2986,18 @@ impl crate::Context for ContextWgpuCore {
         indirect_offset: wgt::BufferAddress,
         count: u32,
     ) {
-        wgpu_render_pass_multi_draw_indirect(
-            &mut pass_data.pass,
-            *indirect_buffer,
-            indirect_offset,
-            count,
-        )
+        if let Err(cause) =
+            pass_data
+                .pass
+                .multi_draw_indirect(&self.0, *indirect_buffer, indirect_offset, count)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::multi_draw_indirect",
+            );
+        }
     }
 
     fn render_pass_multi_draw_indexed_indirect(
@@ -2943,12 +3009,19 @@ impl crate::Context for ContextWgpuCore {
         indirect_offset: wgt::BufferAddress,
         count: u32,
     ) {
-        wgpu_render_pass_multi_draw_indexed_indirect(
-            &mut pass_data.pass,
+        if let Err(cause) = pass_data.pass.multi_draw_indexed_indirect(
+            &self.0,
             *indirect_buffer,
             indirect_offset,
             count,
-        )
+        ) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::multi_draw_indexed_indirect",
+            );
+        }
     }
 
     fn render_pass_multi_draw_indirect_count(
@@ -2963,14 +3036,21 @@ impl crate::Context for ContextWgpuCore {
         count_buffer_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        wgpu_render_pass_multi_draw_indirect_count(
-            &mut pass_data.pass,
+        if let Err(cause) = pass_data.pass.multi_draw_indirect_count(
+            &self.0,
             *indirect_buffer,
             indirect_offset,
             *count_buffer,
             count_buffer_offset,
             max_count,
-        )
+        ) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::multi_draw_indirect_count",
+            );
+        }
     }
 
     fn render_pass_multi_draw_indexed_indirect_count(
@@ -2985,14 +3065,21 @@ impl crate::Context for ContextWgpuCore {
         count_buffer_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        wgpu_render_pass_multi_draw_indexed_indirect_count(
-            &mut pass_data.pass,
+        if let Err(cause) = pass_data.pass.multi_draw_indexed_indirect_count(
+            &self.0,
             *indirect_buffer,
             indirect_offset,
             *count_buffer,
             count_buffer_offset,
             max_count,
-        )
+        ) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::multi_draw_indexed_indirect_count",
+            );
+        }
     }
 
     fn render_pass_set_blend_constant(
@@ -3001,7 +3088,14 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         color: wgt::Color,
     ) {
-        wgpu_render_pass_set_blend_constant(&mut pass_data.pass, &color)
+        if let Err(cause) = pass_data.pass.set_blend_constant(&self.0, color) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_blend_constant",
+            );
+        }
     }
 
     fn render_pass_set_scissor_rect(
@@ -3013,7 +3107,17 @@ impl crate::Context for ContextWgpuCore {
         width: u32,
         height: u32,
     ) {
-        wgpu_render_pass_set_scissor_rect(&mut pass_data.pass, x, y, width, height)
+        if let Err(cause) = pass_data
+            .pass
+            .set_scissor_rect(&self.0, x, y, width, height)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_scissor_rect",
+            );
+        }
     }
 
     fn render_pass_set_viewport(
@@ -3027,15 +3131,17 @@ impl crate::Context for ContextWgpuCore {
         min_depth: f32,
         max_depth: f32,
     ) {
-        wgpu_render_pass_set_viewport(
-            &mut pass_data.pass,
-            x,
-            y,
-            width,
-            height,
-            min_depth,
-            max_depth,
-        )
+        if let Err(cause) = pass_data
+            .pass
+            .set_viewport(&self.0, x, y, width, height, min_depth, max_depth)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_viewport",
+            );
+        }
     }
 
     fn render_pass_set_stencil_reference(
@@ -3044,7 +3150,14 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         reference: u32,
     ) {
-        wgpu_render_pass_set_stencil_reference(&mut pass_data.pass, reference)
+        if let Err(cause) = pass_data.pass.set_stencil_reference(&self.0, reference) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::set_stencil_reference",
+            );
+        }
     }
 
     fn render_pass_insert_debug_marker(
@@ -3053,7 +3166,14 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         label: &str,
     ) {
-        wgpu_render_pass_insert_debug_marker(&mut pass_data.pass, label, 0);
+        if let Err(cause) = pass_data.pass.insert_debug_marker(&self.0, label, 0) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::insert_debug_marker",
+            );
+        }
     }
 
     fn render_pass_push_debug_group(
@@ -3062,7 +3182,14 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         group_label: &str,
     ) {
-        wgpu_render_pass_push_debug_group(&mut pass_data.pass, group_label, 0);
+        if let Err(cause) = pass_data.pass.push_debug_group(&self.0, group_label, 0) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::push_debug_group",
+            );
+        }
     }
 
     fn render_pass_pop_debug_group(
@@ -3070,7 +3197,14 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        wgpu_render_pass_pop_debug_group(&mut pass_data.pass);
+        if let Err(cause) = pass_data.pass.pop_debug_group(&self.0) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::pop_debug_group",
+            );
+        }
     }
 
     fn render_pass_write_timestamp(
@@ -3081,7 +3215,17 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_render_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index)
+        if let Err(cause) = pass_data
+            .pass
+            .write_timestamp(&self.0, *query_set, query_index)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::write_timestamp",
+            );
+        }
     }
 
     fn render_pass_begin_occlusion_query(
@@ -3090,7 +3234,14 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         query_index: u32,
     ) {
-        wgpu_render_pass_begin_occlusion_query(&mut pass_data.pass, query_index)
+        if let Err(cause) = pass_data.pass.begin_occlusion_query(&self.0, query_index) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::begin_occlusion_query",
+            );
+        }
     }
 
     fn render_pass_end_occlusion_query(
@@ -3098,7 +3249,14 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        wgpu_render_pass_end_occlusion_query(&mut pass_data.pass)
+        if let Err(cause) = pass_data.pass.end_occlusion_query(&self.0) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::end_occlusion_query",
+            );
+        }
     }
 
     fn render_pass_begin_pipeline_statistics_query(
@@ -3109,11 +3267,18 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        wgpu_render_pass_begin_pipeline_statistics_query(
-            &mut pass_data.pass,
-            *query_set,
-            query_index,
-        )
+        if let Err(cause) =
+            pass_data
+                .pass
+                .begin_pipeline_statistics_query(&self.0, *query_set, query_index)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::begin_pipeline_statistics_query",
+            );
+        }
     }
 
     fn render_pass_end_pipeline_statistics_query(
@@ -3121,7 +3286,14 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        wgpu_render_pass_end_pipeline_statistics_query(&mut pass_data.pass)
+        if let Err(cause) = pass_data.pass.end_pipeline_statistics_query(&self.0) {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::end_pipeline_statistics_query",
+            );
+        }
     }
 
     fn render_pass_execute_bundles(
@@ -3131,7 +3303,17 @@ impl crate::Context for ContextWgpuCore {
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
-        wgpu_render_pass_execute_bundles(&mut pass_data.pass, &temp_render_bundles)
+        if let Err(cause) = pass_data
+            .pass
+            .execute_bundles(&self.0, &temp_render_bundles)
+        {
+            self.handle_error(
+                &pass_data.error_sink,
+                cause,
+                pass_data.pass.label(),
+                "RenderPass::execute_bundles",
+            );
+        }
     }
 
     fn render_pass_end(
@@ -3139,12 +3321,10 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        let encoder = pass_data.pass.parent_id();
-        if let Err(cause) = wgc::gfx_select!(encoder => self.0.render_pass_end(&pass_data.pass)) {
+        if let Err(cause) = pass_data.pass.end(&self.0) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
-                LABEL,
                 pass_data.pass.label(),
                 "RenderPass::end",
             );
@@ -3286,7 +3466,7 @@ impl crate::context::QueueWriteBuffer for QueueWriteBuffer {
 
 #[derive(Debug)]
 pub struct BufferMappedRange {
-    ptr: *mut u8,
+    ptr: NonNull<u8>,
     size: usize,
 }
 
@@ -3298,12 +3478,12 @@ unsafe impl Sync for BufferMappedRange {}
 impl crate::context::BufferMappedRange for BufferMappedRange {
     #[inline]
     fn slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.ptr, self.size) }
+        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
     }
 
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.ptr, self.size) }
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
     }
 }
 

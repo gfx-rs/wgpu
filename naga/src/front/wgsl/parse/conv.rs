@@ -235,8 +235,8 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "reverseBits" => Mf::ReverseBits,
         "extractBits" => Mf::ExtractBits,
         "insertBits" => Mf::InsertBits,
-        "firstTrailingBit" => Mf::FindLsb,
-        "firstLeadingBit" => Mf::FindMsb,
+        "firstTrailingBit" => Mf::FirstTrailingBit,
+        "firstLeadingBit" => Mf::FirstLeadingBit,
         // data packing
         "pack4x8snorm" => Mf::Pack4x8snorm,
         "pack4x8unorm" => Mf::Pack4x8unorm,

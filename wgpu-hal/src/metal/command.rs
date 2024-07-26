@@ -679,7 +679,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     encoder.set_vertex_bytes(
                         index as _,
                         (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr() as _,
+                        sizes.as_ptr().cast(),
                     );
                 }
             }
@@ -713,7 +713,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     encoder.set_fragment_bytes(
                         index as _,
                         (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr() as _,
+                        sizes.as_ptr().cast(),
                     );
                 }
             }
@@ -785,7 +785,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     encoder.set_bytes(
                         index as _,
                         (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr() as _,
+                        sizes.as_ptr().cast(),
                     );
                 }
             }
@@ -827,21 +827,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.state.compute.as_ref().unwrap().set_bytes(
                 layout.push_constants_infos.cs.unwrap().buffer_index as _,
                 (layout.total_push_constants as usize * WORD_SIZE) as _,
-                state_pc.as_ptr() as _,
+                state_pc.as_ptr().cast(),
             )
         }
         if stages.contains(wgt::ShaderStages::VERTEX) {
             self.state.render.as_ref().unwrap().set_vertex_bytes(
                 layout.push_constants_infos.vs.unwrap().buffer_index as _,
                 (layout.total_push_constants as usize * WORD_SIZE) as _,
-                state_pc.as_ptr() as _,
+                state_pc.as_ptr().cast(),
             )
         }
         if stages.contains(wgt::ShaderStages::FRAGMENT) {
             self.state.render.as_ref().unwrap().set_fragment_bytes(
                 layout.push_constants_infos.fs.unwrap().buffer_index as _,
                 (layout.total_push_constants as usize * WORD_SIZE) as _,
-                state_pc.as_ptr() as _,
+                state_pc.as_ptr().cast(),
             )
         }
     }
@@ -895,7 +895,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 encoder.set_vertex_bytes(
                     index as _,
                     (sizes.len() * WORD_SIZE) as u64,
-                    sizes.as_ptr() as _,
+                    sizes.as_ptr().cast(),
                 );
             }
         }
@@ -907,7 +907,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 encoder.set_fragment_bytes(
                     index as _,
                     (sizes.len() * WORD_SIZE) as u64,
-                    sizes.as_ptr() as _,
+                    sizes.as_ptr().cast(),
                 );
             }
         }
@@ -956,7 +956,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.set_vertex_bytes(
                 index as _,
                 (sizes.len() * WORD_SIZE) as u64,
-                sizes.as_ptr() as _,
+                sizes.as_ptr().cast(),
             );
         }
     }
@@ -1212,7 +1212,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.set_bytes(
                 index as _,
                 (sizes.len() * WORD_SIZE) as u64,
-                sizes.as_ptr() as _,
+                sizes.as_ptr().cast(),
             );
         }
 

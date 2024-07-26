@@ -65,3 +65,10 @@ impl<K: Ord, V> Recyclable for std::collections::BTreeMap<K, V> {
         self
     }
 }
+
+impl<K, V> Recyclable for crate::arena::HandleVec<K, V> {
+    fn recycle(mut self) -> Self {
+        self.clear();
+        self
+    }
+}

@@ -1,6 +1,9 @@
 /*!
 Backend for [MSL][msl] (Metal Shading Language).
 
+This backend does not support the [`SHADER_INT64_ATOMIC_ALL_OPS`][all-atom]
+capability.
+
 ## Binding model
 
 Metal's bindings are flat per resource. Since there isn't an obvious mapping
@@ -24,6 +27,8 @@ For the result type, if it's a structure, we re-compose it with a temporary valu
 holding the result.
 
 [msl]: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+[all-atom]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+
 */
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
@@ -290,7 +295,10 @@ pub enum VertexFormat {
     /// Four signed ints (i32). `vec4<i32>` in shaders.
     Sint32x4 = 29,
     /// Three unsigned 10-bit integers and one 2-bit integer, packed into a 32-bit integer (u32). [0, 1024] converted to float [0, 1] `vec4<f32>` in shaders.
-    #[cfg_attr(feature = "serde", serde(rename = "unorm10-10-10-2"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "unorm10-10-10-2")
+    )]
     Unorm10_10_10_2 = 34,
 }
 
@@ -346,7 +354,9 @@ pub struct PipelineOptions {
     /// to receive the vertex buffers, lengths, and vertex id as args,
     /// and bounds-check the vertex id and use the index into the
     /// vertex buffers to access attributes, rather than using Metal's
-    /// [[stage-in]] assembled attribute data.
+    /// [[stage-in]] assembled attribute data. This is true by default,
+    /// but remains configurable for use by tests via deserialization
+    /// of this struct. There is no user-facing way to set this value.
     pub vertex_pulling_transform: bool,
 
     /// vertex_buffer_mappings are used during shader translation to
@@ -660,22 +670,4 @@ pub fn write_string(
 fn test_error_size() {
     use std::mem::size_of;
     assert_eq!(size_of::<Error>(), 32);
-}
-
-impl crate::AtomicFunction {
-    fn to_msl(self) -> Result<&'static str, Error> {
-        Ok(match self {
-            Self::Add => "fetch_add",
-            Self::Subtract => "fetch_sub",
-            Self::And => "fetch_and",
-            Self::InclusiveOr => "fetch_or",
-            Self::ExclusiveOr => "fetch_xor",
-            Self::Min => "fetch_min",
-            Self::Max => "fetch_max",
-            Self::Exchange { compare: None } => "exchange",
-            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
-                "atomic CompareExchange".to_string(),
-            ))?,
-        })
-    }
 }

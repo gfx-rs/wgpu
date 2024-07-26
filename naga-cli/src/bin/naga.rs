@@ -132,6 +132,10 @@ struct Args {
     /// In bulk validation mode, these are all input files to be validated.
     #[argh(positional)]
     files: Vec<String>,
+
+    /// defines to be passed to the parser (only glsl is supported)
+    #[argh(option, short = 'D')]
+    defines: Vec<Defines>,
 }
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
@@ -285,6 +289,27 @@ impl FromStr for Overrides {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Defines {
+    pairs: Vec<(String, String)>,
+}
+
+impl FromStr for Defines {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut pairs = vec![];
+        for pair in s.split(',') {
+            let (name, value) = match pair.split_once('=') {
+                Some((name, value)) => (name, value),
+                None => (pair, ""), // Default to an empty string if no '=' is found
+            };
+            pairs.push((name.trim().to_string(), value.trim().to_string()));
+        }
+        Ok(Defines { pairs })
+    }
+}
+
 #[derive(Default)]
 struct Parameters<'a> {
     validation_flags: naga::valid::ValidationFlags,
@@ -300,6 +325,7 @@ struct Parameters<'a> {
     hlsl: naga::back::hlsl::Options,
     input_kind: Option<InputKind>,
     shader_stage: Option<ShaderStage>,
+    defines: FastHashMap<String, String>,
 }
 
 trait PrettyResult {
@@ -393,6 +419,14 @@ fn run() -> anyhow::Result<()> {
         .flat_map(|o| &o.pairs)
         .cloned()
         .collect();
+
+    params.defines = args
+        .defines
+        .iter()
+        .flat_map(|o| &o.pairs)
+        .cloned()
+        .collect();
+
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
@@ -611,7 +645,7 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                     .parse(
                         &naga::front::glsl::Options {
                             stage: shader_stage.0,
-                            defines: Default::default(),
+                            defines: params.defines.clone(),
                         },
                         &input,
                     )
@@ -777,7 +811,7 @@ fn write_output(
 
             let mut buffer = String::new();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-            writer.write(&module, &info).unwrap_pretty();
+            writer.write(&module, &info, None).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {
@@ -859,7 +893,7 @@ use codespan_reporting::{
         termcolor::{ColorChoice, StandardStream},
     },
 };
-use naga::WithSpan;
+use naga::{FastHashMap, WithSpan};
 
 pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, source: &str) {
     let files = SimpleFile::new(filename, source);

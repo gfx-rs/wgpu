@@ -12,7 +12,7 @@ use std::cell::RefCell;
 
 use super::error::WebGpuResult;
 
-pub(crate) struct WebGpuRenderPass(pub(crate) RefCell<wgpu_core::command::RenderPass>);
+pub(crate) struct WebGpuRenderPass(pub(crate) RefCell<Box<dyn wgpu_core::command::DynRenderPass>>);
 impl Resource for WebGpuRenderPass {
     fn name(&self) -> Cow<str> {
         "webGPURenderPass".into()
@@ -41,15 +41,15 @@ pub fn op_webgpu_render_pass_set_viewport(
         .resource_table
         .get::<WebGpuRenderPass>(args.render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_set_viewport(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().set_viewport(
+        state.borrow(),
         args.x,
         args.y,
         args.width,
         args.height,
         args.min_depth,
         args.max_depth,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -68,13 +68,10 @@ pub fn op_webgpu_render_pass_set_scissor_rect(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_set_scissor_rect(
-        &mut render_pass_resource.0.borrow_mut(),
-        x,
-        y,
-        width,
-        height,
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .set_scissor_rect(state.borrow(), x, y, width, height)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -90,10 +87,10 @@ pub fn op_webgpu_render_pass_set_blend_constant(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_set_blend_constant(
-        &mut render_pass_resource.0.borrow_mut(),
-        &color,
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .set_blend_constant(state.borrow(), color)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -109,10 +106,10 @@ pub fn op_webgpu_render_pass_set_stencil_reference(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_set_stencil_reference(
-        &mut render_pass_resource.0.borrow_mut(),
-        reference,
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .set_stencil_reference(state.borrow(), reference)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -128,10 +125,10 @@ pub fn op_webgpu_render_pass_begin_occlusion_query(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_begin_occlusion_query(
-        &mut render_pass_resource.0.borrow_mut(),
-        query_index,
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .begin_occlusion_query(state.borrow(), query_index)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -146,9 +143,10 @@ pub fn op_webgpu_render_pass_end_occlusion_query(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_end_occlusion_query(
-        &mut render_pass_resource.0.borrow_mut(),
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .end_occlusion_query(state.borrow())?;
 
     Ok(WebGpuResult::empty())
 }
@@ -174,10 +172,10 @@ pub fn op_webgpu_render_pass_execute_bundles(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_execute_bundles(
-        &mut render_pass_resource.0.borrow_mut(),
-        &bundles,
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .execute_bundles(state.borrow(), &bundles)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -191,11 +189,10 @@ pub fn op_webgpu_render_pass_end(
     let render_pass_resource = state
         .resource_table
         .take::<WebGpuRenderPass>(render_pass_rid)?;
-    let render_pass = &render_pass_resource.0.borrow();
-    let command_encoder = render_pass.parent_id();
-    let instance = state.borrow::<super::Instance>();
 
-    gfx_ok!(command_encoder => instance.render_pass_end(render_pass))
+    render_pass_resource.0.borrow_mut().end(state.borrow())?;
+
+    Ok(WebGpuResult::empty())
 }
 
 #[op2]
@@ -225,12 +222,12 @@ pub fn op_webgpu_render_pass_set_bind_group(
 
     let dynamic_offsets_data: &[u32] = &dynamic_offsets_data[start..start + len];
 
-    wgpu_core::command::render_commands::wgpu_render_pass_set_bind_group(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().set_bind_group(
+        state.borrow(),
         index,
         bind_group_resource.1,
         dynamic_offsets_data,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -246,11 +243,11 @@ pub fn op_webgpu_render_pass_push_debug_group(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_push_debug_group(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().push_debug_group(
+        state.borrow(),
         group_label,
         0, // wgpu#975
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -265,9 +262,10 @@ pub fn op_webgpu_render_pass_pop_debug_group(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_pop_debug_group(
-        &mut render_pass_resource.0.borrow_mut(),
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .pop_debug_group(state.borrow())?;
 
     Ok(WebGpuResult::empty())
 }
@@ -283,11 +281,11 @@ pub fn op_webgpu_render_pass_insert_debug_marker(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_insert_debug_marker(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().insert_debug_marker(
+        state.borrow(),
         marker_label,
         0, // wgpu#975
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -306,10 +304,10 @@ pub fn op_webgpu_render_pass_set_pipeline(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_set_pipeline(
-        &mut render_pass_resource.0.borrow_mut(),
-        render_pipeline_resource.1,
-    );
+    render_pass_resource
+        .0
+        .borrow_mut()
+        .set_pipeline(state.borrow(), render_pipeline_resource.1)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -341,11 +339,12 @@ pub fn op_webgpu_render_pass_set_index_buffer(
     };
 
     render_pass_resource.0.borrow_mut().set_index_buffer(
+        state.borrow(),
         buffer_resource.1,
         index_format,
         offset,
         size,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -376,13 +375,13 @@ pub fn op_webgpu_render_pass_set_vertex_buffer(
         None
     };
 
-    wgpu_core::command::render_commands::wgpu_render_pass_set_vertex_buffer(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().set_vertex_buffer(
+        state.borrow(),
         slot,
         buffer_resource.1,
         offset,
         size,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -401,13 +400,13 @@ pub fn op_webgpu_render_pass_draw(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_draw(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().draw(
+        state.borrow(),
         vertex_count,
         instance_count,
         first_vertex,
         first_instance,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -427,14 +426,14 @@ pub fn op_webgpu_render_pass_draw_indexed(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_draw_indexed(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().draw_indexed(
+        state.borrow(),
         index_count,
         instance_count,
         first_index,
         base_vertex,
         first_instance,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -454,11 +453,11 @@ pub fn op_webgpu_render_pass_draw_indirect(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_draw_indirect(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().draw_indirect(
+        state.borrow(),
         buffer_resource.1,
         indirect_offset,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -478,11 +477,11 @@ pub fn op_webgpu_render_pass_draw_indexed_indirect(
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_commands::wgpu_render_pass_draw_indexed_indirect(
-        &mut render_pass_resource.0.borrow_mut(),
+    render_pass_resource.0.borrow_mut().draw_indexed_indirect(
+        state.borrow(),
         buffer_resource.1,
         indirect_offset,
-    );
+    )?;
 
     Ok(WebGpuResult::empty())
 }

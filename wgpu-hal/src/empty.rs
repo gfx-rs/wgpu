@@ -54,7 +54,10 @@ impl crate::Instance for Context {
         Ok(Context)
     }
     unsafe fn destroy_surface(&self, surface: Context) {}
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&Context>,
+    ) -> Vec<crate::ExposedAdapter<Api>> {
         Vec::new()
     }
 }
@@ -89,6 +92,7 @@ impl crate::Adapter for Context {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        _memory_hints: &wgt::MemoryHints,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Err(crate::DeviceError::Lost)
     }
@@ -147,9 +151,7 @@ impl crate::Device for Context {
     ) -> DeviceResult<crate::BufferMapping> {
         Err(crate::DeviceError::Lost)
     }
-    unsafe fn unmap_buffer(&self, buffer: &Resource) -> DeviceResult<()> {
-        Ok(())
-    }
+    unsafe fn unmap_buffer(&self, buffer: &Resource) {}
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
 
@@ -276,6 +278,10 @@ impl crate::Device for Context {
         Default::default()
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
+
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        Default::default()
+    }
 }
 
 impl crate::CommandEncoder for Encoder {

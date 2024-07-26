@@ -1,13 +1,13 @@
-/*! Tester for WebGPU
- *  It enumerates the available backends on the system,
- *  and run the tests through them.
- *
- *  Test requirements:
- *    - all IDs have the backend `Empty`
- *    - all expected buffers have `MAP_READ` usage
- *    - last action is `Submit`
- *    - no swapchain use
-!*/
+//! Tester for WebGPU
+//!  It enumerates the available backends on the system,
+//!  and run the tests through them.
+//!
+//!  Test requirements:
+//!    - all IDs have the backend `Empty`
+//!    - all expected buffers have `MAP_READ` usage
+//!    - last action is `Submit`
+//!    - no swapchain use
+
 #![cfg(not(target_arch = "wasm32"))]
 
 use player::GlobalPlay;
@@ -112,6 +112,7 @@ impl Test<'_> {
                 label: None,
                 required_features: self.features,
                 required_limits: wgt::Limits::default(),
+                memory_hints: wgt::MemoryHints::default(),
             },
             None,
             Some(device_id),
@@ -153,7 +154,7 @@ impl Test<'_> {
             let (ptr, size) =
                 wgc::gfx_select!(device_id => global.buffer_get_mapped_range(buffer, expect.offset, Some(expect.data.len() as wgt::BufferAddress)))
                     .unwrap();
-            let contents = unsafe { slice::from_raw_parts(ptr, size as usize) };
+            let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };
             let expected_data = match expect.data {
                 ExpectedData::Raw(vec) => vec,
                 ExpectedData::File(name, size) => {
@@ -170,7 +171,6 @@ impl Test<'_> {
                     .collect::<Vec<u8>>(),
             };
 
-            #[allow(unknown_lints, clippy::if_then_panic)]
             if &expected_data[..] != contents {
                 panic!(
                     "Test expectation is not met!\nBuffer content was:\n{:?}\nbut expected:\n{:?}",

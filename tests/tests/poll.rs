@@ -125,3 +125,37 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
             .await
             .panic_on_timeout();
     });
+
+/// Submit a command buffer to the wrong device. A wait poll shouldn't hang.
+///
+/// We can't catch panics on Wasm, since they get reported directly to the
+/// console.
+#[gpu_test]
+static WAIT_AFTER_BAD_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(wgpu_test::TestParameters::default().skip(wgpu_test::FailureCase::webgl2()))
+    .run_async(wait_after_bad_submission);
+
+async fn wait_after_bad_submission(ctx: TestingContext) {
+    let (device2, queue2) =
+        wgpu_test::initialize_device(&ctx.adapter, ctx.device_features, ctx.device_limits.clone())
+            .await;
+
+    let command_buffer1 = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default())
+        .finish();
+
+    // This should panic, since the command buffer belongs to the wrong
+    // device, and queue submission errors seem to be fatal errors?
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        queue2.submit([command_buffer1]);
+    }));
+    assert!(result.is_err());
+
+    // This should not hang.
+    //
+    // Specifically, the failed submission should not cause a new fence value to
+    // be allocated that will not be signalled until further work is
+    // successfully submitted, causing a greater fence value to be signalled.
+    device2.poll(wgpu::Maintain::Wait);
+}

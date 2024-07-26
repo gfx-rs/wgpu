@@ -213,7 +213,7 @@ impl<'w> BlockContext<'w> {
 
             // The chain rule: if this `Access...`'s `base` operand was
             // previously omitted, then omit this one, too.
-            _ => self.cached.ids[expr_handle.index()] == 0,
+            _ => self.cached.ids[expr_handle] == 0,
         }
     }
 
@@ -237,7 +237,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
             crate::Expression::Constant(handle) => {
                 let init = self.ir_module.constants[handle].init;
-                self.writer.constant_ids[init.index()]
+                self.writer.constant_ids[init]
             }
             crate::Expression::Override(_) => return Err(Error::Override),
             crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
@@ -430,7 +430,7 @@ impl<'w> BlockContext<'w> {
                 }
             }
             crate::Expression::GlobalVariable(handle) => {
-                self.writer.global_variables[handle.index()].access_id
+                self.writer.global_variables[handle].access_id
             }
             crate::Expression::Swizzle {
                 size,
@@ -1183,13 +1183,13 @@ impl<'w> BlockContext<'w> {
                             count_id,
                         ))
                     }
-                    Mf::FindLsb => MathOp::Ext(spirv::GLOp::FindILsb),
-                    Mf::FindMsb => {
+                    Mf::FirstTrailingBit => MathOp::Ext(spirv::GLOp::FindILsb),
+                    Mf::FirstLeadingBit => {
                         if arg_ty.scalar_width() == Some(4) {
                             let thing = match arg_scalar_kind {
                                 Some(crate::ScalarKind::Uint) => spirv::GLOp::FindUMsb,
                                 Some(crate::ScalarKind::Sint) => spirv::GLOp::FindSMsb,
-                                other => unimplemented!("Unexpected findMSB({:?})", other),
+                                other => unimplemented!("Unexpected firstLeadingBit({:?})", other),
                             };
                             MathOp::Ext(thing)
                         } else {
@@ -1830,7 +1830,7 @@ impl<'w> BlockContext<'w> {
                     base
                 }
                 crate::Expression::GlobalVariable(handle) => {
-                    let gv = &self.writer.global_variables[handle.index()];
+                    let gv = &self.writer.global_variables[handle];
                     break gv.access_id;
                 }
                 crate::Expression::LocalVariable(variable) => {
@@ -2423,9 +2423,15 @@ impl<'w> BlockContext<'w> {
                     result,
                 } => {
                     let id = self.gen_id();
-                    let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
+                    // Compare-and-exchange operations produce a struct result,
+                    // so use `result`'s type if it is available. For no-result
+                    // operations, fall back to `value`'s type.
+                    let result_type_id =
+                        self.get_expression_type_id(&self.fun_info[result.unwrap_or(value)].ty);
 
-                    self.cached[result] = id;
+                    if let Some(result) = result {
+                        self.cached[result] = id;
+                    }
 
                     let pointer_id =
                         match self.write_expression_pointer(pointer, &mut block, None)? {

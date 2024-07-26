@@ -308,6 +308,7 @@ fn backends(c: &mut Criterion) {
                 let _ = writer.write(
                     input.module.as_ref().unwrap(),
                     input.module_info.as_ref().unwrap(),
+                    None,
                 ); // may fail on unimplemented things
                 string.clear();
             }

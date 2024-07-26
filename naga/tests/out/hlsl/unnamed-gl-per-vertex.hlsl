@@ -25,8 +25,8 @@ static int global_1 = (int)0;
 
 void function()
 {
-    int _expr9 = global_1;
-    global.member = float4(((_expr9 == 0) ? -4.0 : 1.0), ((_expr9 == 2) ? 4.0 : -1.0), 0.0, 1.0);
+    int _e9 = global_1;
+    global.member = float4(((_e9 == 0) ? -4.0 : 1.0), ((_e9 == 2) ? 4.0 : -1.0), 0.0, 1.0);
     return;
 }
 
@@ -34,8 +34,8 @@ float4 main(uint param : SV_VertexID) : SV_Position
 {
     global_1 = int(param);
     function();
-    float _expr6 = global.member.y;
-    global.member.y = -(_expr6);
-    float4 _expr8 = global.member;
-    return _expr8;
+    float _e6 = global.member.y;
+    global.member.y = -(_e6);
+    float4 _e8 = global.member;
+    return _e8;
 }

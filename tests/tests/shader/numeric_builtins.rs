@@ -52,6 +52,105 @@ static NUMERIC_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
+fn create_int64_atomic_min_max_test() -> Vec<ShaderTest> {
+    let mut tests = Vec::new();
+
+    let test = ShaderTest::new(
+        "atomicMax".into(),
+        "value: u64".into(),
+        "atomicMin(&output, 0lu); atomicMax(&output, 2lu);".into(),
+        &[0],
+        &[2],
+    )
+    .output_type("atomic<u64>".into());
+
+    tests.push(test);
+
+    let test = ShaderTest::new(
+        "atomicMin".into(),
+        "value: u64".into(),
+        "atomicMax(&output, 100lu); atomicMin(&output, 4lu);".into(),
+        &[0],
+        &[4],
+    )
+    .output_type("atomic<u64>".into());
+
+    tests.push(test);
+
+    tests
+}
+
+#[gpu_test]
+static INT64_ATOMIC_MIN_MAX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgt::Features::SHADER_INT64 | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_int64_atomic_min_max_test(),
+        )
+    });
+
+fn create_int64_atomic_all_ops_test() -> Vec<ShaderTest> {
+    let mut tests = Vec::new();
+
+    let test = ShaderTest::new(
+        "atomicAdd".into(),
+        "value: u64".into(),
+        "atomicStore(&output, 0lu); atomicAdd(&output, 1lu); atomicAdd(&output, 1lu);".into(),
+        &[0],
+        &[2],
+    )
+    .output_type("atomic<u64>".into());
+
+    tests.push(test);
+
+    let test = ShaderTest::new(
+        "atomicAnd".into(),
+        "value: u64".into(),
+        "atomicStore(&output, 31lu); atomicAnd(&output, 30lu); atomicAnd(&output, 3lu);".into(),
+        &[0],
+        &[2],
+    )
+    .output_type("atomic<u64>".into());
+
+    tests.push(test);
+
+    let test = ShaderTest::new(
+        "atomicOr".into(),
+        "value: u64".into(),
+        "atomicStore(&output, 0lu); atomicOr(&output, 3lu); atomicOr(&output, 6lu);".into(),
+        &[0],
+        &[7],
+    )
+    .output_type("atomic<u64>".into());
+
+    tests.push(test);
+
+    tests
+}
+
+#[gpu_test]
+static INT64_ATOMIC_ALL_OPS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgt::Features::SHADER_INT64 | wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_int64_atomic_all_ops_test(),
+        )
+    });
+
 // See https://github.com/gfx-rs/wgpu/issues/5276
 /*
 fn create_int64_polyfill_test() -> Vec<ShaderTest> {

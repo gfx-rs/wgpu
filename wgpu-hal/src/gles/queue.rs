@@ -955,7 +955,7 @@ impl super::Queue {
                     }
                     let query_data = unsafe {
                         slice::from_raw_parts(
-                            temp_query_results.as_ptr() as *const u8,
+                            temp_query_results.as_ptr().cast::<u8>(),
                             temp_query_results.len() * mem::size_of::<u64>(),
                         )
                     };
@@ -1526,8 +1526,7 @@ impl super::Queue {
 
                     debug_assert_eq!(data_required, raw.len());
 
-                    let slice: &[T] =
-                        unsafe { slice::from_raw_parts(raw.as_ptr() as *const _, COUNT) };
+                    let slice: &[T] = unsafe { slice::from_raw_parts(raw.as_ptr().cast(), COUNT) };
 
                     slice.try_into().unwrap()
                 }

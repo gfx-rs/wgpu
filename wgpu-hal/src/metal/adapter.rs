@@ -25,6 +25,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = self
             .shared
@@ -62,6 +63,7 @@ impl crate::Adapter for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 features,
+                counters: Default::default(),
             },
             queue: super::Queue {
                 raw: Arc::new(Mutex::new(queue)),
@@ -821,6 +823,11 @@ impl super::PrivateCapabilities {
             int64: family_check
                 && (device.supports_family(MTLGPUFamily::Apple3)
                     || device.supports_family(MTLGPUFamily::Metal3)),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
+            int64_atomics: family_check
+                && ((device.supports_family(MTLGPUFamily::Apple8)
+                    && device.supports_family(MTLGPUFamily::Mac2))
+                    || device.supports_family(MTLGPUFamily::Apple9)),
         }
     }
 
@@ -896,6 +903,10 @@ impl super::PrivateCapabilities {
             F::SHADER_INT64,
             self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
         );
+        features.set(
+            F::SHADER_INT64_ATOMIC_MIN_MAX,
+            self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
+        );
 
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
@@ -904,7 +915,6 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
-        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);

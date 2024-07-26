@@ -1158,7 +1158,6 @@ impl crate::context::Context for ContextWebGpu {
     type SurfaceData = Sendable<(Canvas, webgpu_sys::GpuCanvasContext)>;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndex = Unused;
     type SubmissionIndexData = ();
     type PipelineCacheId = Unused;
     type PipelineCacheData = ();
@@ -1881,7 +1880,9 @@ impl crate::context::Context for ContextWebGpu {
             &mapped_vertex_state,
             desc.vertex.compilation_options.constants,
         );
-        mapped_vertex_state.entry_point(desc.vertex.entry_point);
+        if let Some(ep) = desc.vertex.entry_point {
+            mapped_vertex_state.entry_point(ep);
+        }
 
         let buffers = desc
             .vertex
@@ -1958,7 +1959,9 @@ impl crate::context::Context for ContextWebGpu {
             let mut mapped_fragment_desc =
                 webgpu_sys::GpuFragmentState::new(&module.0.module, &targets);
             insert_constants_map(&mapped_vertex_state, frag.compilation_options.constants);
-            mapped_fragment_desc.entry_point(frag.entry_point);
+            if let Some(ep) = frag.entry_point {
+                mapped_fragment_desc.entry_point(ep);
+            }
             mapped_desc.fragment(&mapped_fragment_desc);
         }
 
@@ -1985,7 +1988,9 @@ impl crate::context::Context for ContextWebGpu {
         let mut mapped_compute_stage =
             webgpu_sys::GpuProgrammableStage::new(&shader_module.0.module);
         insert_constants_map(&mapped_compute_stage, desc.compilation_options.constants);
-        mapped_compute_stage.entry_point(desc.entry_point);
+        if let Some(ep) = desc.entry_point {
+            mapped_compute_stage.entry_point(ep);
+        }
         let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
         let mut mapped_desc = webgpu_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {
@@ -2571,7 +2576,7 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &crate::RenderPassDescriptor<'_, '_>,
+        desc: &crate::RenderPassDescriptor<'_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
         let mapped_color_attachments = desc
             .color_attachments
@@ -2950,14 +2955,12 @@ impl crate::context::Context for ContextWebGpu {
         _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         command_buffers: I,
-    ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
+    ) -> Self::SubmissionIndexData {
         let temp_command_buffers = command_buffers
             .map(|(_, data)| data.0)
             .collect::<js_sys::Array>();
 
         queue_data.0.submit(&temp_command_buffers);
-
-        (Unused, ())
     }
 
     fn queue_get_timestamp_period(
@@ -2980,6 +2983,22 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_start_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
     fn device_stop_capture(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {}
+
+    fn device_get_internal_counters(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> wgt::InternalCounters {
+        Default::default()
+    }
+
+    fn device_generate_allocator_report(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport> {
+        None
+    }
 
     fn pipeline_cache_get_data(
         &self,

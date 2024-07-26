@@ -1,5 +1,8 @@
 [files]
+# Include .github, .cargo, etc.
+ignore-hidden = false
 extend-exclude = [
+    '/.git',
     # spirv-asm isn't real source code
     '*.spvasm',
     'etc/big-picture.xml',
@@ -13,15 +16,22 @@ extend-exclude = [
 [default.extend-words]
 # Things that aren't typos
 lod = "lod"
-inout = "inout"
-derivate = "derivate"
-implace = "implace"
-Ded = "Ded"           # This shows up in "ANDed"
-pn = "pn"             # used as a normal name in debug-symbol-terrain.wgsl
 
 # Usernames
 Healthire = "Healthire"
 REASY = "REASY"
 
 [type.rust.extend-identifiers]
+ANDed = "ANDed"
 D3DCOLORtoUBYTE4 = "D3DCOLORtoUBYTE4"
+Derivate = "Derivate"
+inout = "inout"
+
+[type.wgsl]
+extend-glob = ["*.wgsl"]
+
+[type.wgsl.extend-identifiers]
+pn = "pn"
+
+[type.yaml.extend-words]
+dota = "dota"

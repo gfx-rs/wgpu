@@ -48,10 +48,10 @@ void no_padding_comp()
 {
     NoPadding x = (NoPadding)0;
 
-    NoPadding _expr2 = no_padding_uniform;
-    x = _expr2;
-    NoPadding _expr4 = ConstructNoPadding(asfloat(no_padding_storage.Load3(0)), asfloat(no_padding_storage.Load(12)));
-    x = _expr4;
+    NoPadding _e2 = no_padding_uniform;
+    x = _e2;
+    NoPadding _e4 = ConstructNoPadding(asfloat(no_padding_storage.Load3(0)), asfloat(no_padding_storage.Load(12)));
+    x = _e4;
     return;
 }
 
@@ -79,9 +79,9 @@ void needs_padding_comp()
 {
     NeedsPadding x_1 = (NeedsPadding)0;
 
-    NeedsPadding _expr2 = needs_padding_uniform;
-    x_1 = _expr2;
-    NeedsPadding _expr4 = ConstructNeedsPadding(asfloat(needs_padding_storage.Load(0)), asfloat(needs_padding_storage.Load3(16)), asfloat(needs_padding_storage.Load(28)));
-    x_1 = _expr4;
+    NeedsPadding _e2 = needs_padding_uniform;
+    x_1 = _e2;
+    NeedsPadding _e4 = ConstructNeedsPadding(asfloat(needs_padding_storage.Load(0)), asfloat(needs_padding_storage.Load3(16)), asfloat(needs_padding_storage.Load(28)));
+    x_1 = _e4;
     return;
 }

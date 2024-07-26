@@ -16,7 +16,7 @@ pub enum PipelineCacheValidationError {
     #[error("The pipeline cacha data was out of date and so cannot be safely used")]
     Outdated,
     #[error("The cache data was created for a different device")]
-    WrongDevice,
+    DeviceMismatch,
     #[error("Pipeline cacha data was created for a future version of wgpu")]
     Unsupported,
 }
@@ -26,7 +26,7 @@ impl PipelineCacheValidationError {
     /// That is, is there a mistake in user code interacting with the cache
     pub fn was_avoidable(&self) -> bool {
         match self {
-            PipelineCacheValidationError::WrongDevice => true,
+            PipelineCacheValidationError::DeviceMismatch => true,
             PipelineCacheValidationError::Truncated
             | PipelineCacheValidationError::Unsupported
             | PipelineCacheValidationError::Extended
@@ -57,10 +57,10 @@ pub fn validate_pipeline_cache<'d>(
         return Err(PipelineCacheValidationError::Outdated);
     }
     if header.backend != adapter.backend as u8 {
-        return Err(PipelineCacheValidationError::WrongDevice);
+        return Err(PipelineCacheValidationError::DeviceMismatch);
     }
     if header.adapter_key != adapter_key {
-        return Err(PipelineCacheValidationError::WrongDevice);
+        return Err(PipelineCacheValidationError::DeviceMismatch);
     }
     if header.validation_key != validation_key {
         // If the validation key is wrong, that means that this device has changed
@@ -420,7 +420,7 @@ mod tests {
         ];
         let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
         let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
-        assert_eq!(validation_result, Err(E::WrongDevice));
+        assert_eq!(validation_result, Err(E::DeviceMismatch));
     }
     #[test]
     fn wrong_adapter() {
@@ -436,7 +436,7 @@ mod tests {
         ];
         let cache = cache.into_iter().flatten().collect::<Vec<u8>>();
         let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
-        assert_eq!(validation_result, Err(E::WrongDevice));
+        assert_eq!(validation_result, Err(E::DeviceMismatch));
     }
     #[test]
     fn wrong_validation() {
