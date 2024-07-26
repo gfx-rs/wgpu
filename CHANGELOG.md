@@ -44,6 +44,7 @@ Bottom level categories:
 #### General
 
 - Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
+- Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
 
 ## 22.0.0 (2024-07-17)
 
