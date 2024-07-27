@@ -1385,7 +1385,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
+        desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
     ) -> Result<super::PipelineLayout, crate::DeviceError> {
         //Note: not bothering with on stack array here as it's low frequency
         let vk_set_layouts = desc

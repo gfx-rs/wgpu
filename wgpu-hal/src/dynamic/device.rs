@@ -3,13 +3,13 @@
 
 use crate::{
     Api, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,
-    Device, DeviceError, DynBuffer, DynResource, MemoryRange, SamplerDescriptor, TextureDescriptor,
-    TextureViewDescriptor,
+    Device, DeviceError, DynBuffer, DynResource, MemoryRange, PipelineLayoutDescriptor,
+    SamplerDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use super::{
-    DynBindGroupLayout, DynCommandEncoder, DynQueue, DynResourceExt as _, DynSampler, DynTexture,
-    DynTextureView,
+    DynBindGroupLayout, DynCommandEncoder, DynPipelineLayout, DynQueue, DynResourceExt as _,
+    DynSampler, DynTexture, DynTextureView,
 };
 
 pub trait DynDevice: DynResource {
@@ -59,6 +59,12 @@ pub trait DynDevice: DynResource {
         desc: &BindGroupLayoutDescriptor,
     ) -> Result<Box<dyn DynBindGroupLayout>, DeviceError>;
     unsafe fn destroy_bind_group_layout(&self, bg_layout: Box<dyn DynBindGroupLayout>);
+
+    unsafe fn create_pipeline_layout(
+        &self,
+        desc: &PipelineLayoutDescriptor<dyn DynBindGroupLayout>,
+    ) -> Result<Box<dyn DynPipelineLayout>, DeviceError>;
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Box<dyn DynPipelineLayout>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -175,5 +181,29 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_bind_group_layout(&self, bg_layout: Box<dyn DynBindGroupLayout>) {
         unsafe { D::destroy_bind_group_layout(self, bg_layout.unbox()) };
+    }
+
+    unsafe fn create_pipeline_layout(
+        &self,
+        desc: &PipelineLayoutDescriptor<dyn DynBindGroupLayout>,
+    ) -> Result<Box<dyn DynPipelineLayout>, DeviceError> {
+        let bind_group_layouts: Vec<_> = desc
+            .bind_group_layouts
+            .iter()
+            .map(|bgl| bgl.expect_downcast_ref())
+            .collect();
+        let desc = PipelineLayoutDescriptor {
+            label: desc.label,
+            bind_group_layouts: &bind_group_layouts,
+            push_constant_ranges: desc.push_constant_ranges,
+            flags: desc.flags,
+        };
+
+        unsafe { D::create_pipeline_layout(self, &desc) }
+            .map(|b| Box::new(b) as Box<dyn DynPipelineLayout>)
+    }
+
+    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Box<dyn DynPipelineLayout>) {
+        unsafe { D::destroy_pipeline_layout(self, pipeline_layout.unbox()) };
     }
 }

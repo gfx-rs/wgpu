@@ -205,7 +205,7 @@ impl crate::Device for Context {
     unsafe fn destroy_bind_group_layout(&self, bg_layout: Resource) {}
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<Api>,
+        desc: &crate::PipelineLayoutDescriptor<Resource>,
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }

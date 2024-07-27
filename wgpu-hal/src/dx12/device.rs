@@ -776,7 +776,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
+        desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
     ) -> Result<super::PipelineLayout, DeviceError> {
         use naga::back::hlsl;
         // Pipeline layouts are implemented as RootSignature for D3D12.
