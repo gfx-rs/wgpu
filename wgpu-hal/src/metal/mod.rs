@@ -82,6 +82,7 @@ crate::impl_dyn_resource!(
     Fence,
     PipelineLayout,
     QuerySet,
+    Queue,
     RenderPipeline,
     Sampler,
     ShaderModule,
