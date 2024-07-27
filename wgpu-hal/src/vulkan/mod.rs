@@ -727,6 +727,8 @@ pub struct BindGroupLayout {
     binding_arrays: Vec<(u32, NonZeroU32)>,
 }
 
+impl crate::DynBindGroupLayout for BindGroupLayout {}
+
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,

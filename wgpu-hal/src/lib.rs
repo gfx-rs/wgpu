@@ -435,7 +435,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     /// finished.
     type Fence: DynFence + fmt::Debug;
 
-    type BindGroupLayout: fmt::Debug + WasmNotSendSync;
+    type BindGroupLayout: DynBindGroupLayout + fmt::Debug;
     type BindGroup: DynBindGroup;
     type PipelineLayout: DynPipelineLayout;
     type ShaderModule: DynShaderModule;
