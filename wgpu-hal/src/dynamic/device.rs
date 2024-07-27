@@ -4,12 +4,14 @@
 use crate::{
     Api, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping,
     CommandEncoderDescriptor, Device, DeviceError, DynBuffer, DynResource, MemoryRange,
-    PipelineLayoutDescriptor, SamplerDescriptor, TextureDescriptor, TextureViewDescriptor,
+    PipelineLayoutDescriptor, SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor,
+    TextureDescriptor, TextureViewDescriptor,
 };
 
 use super::{
     DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynCommandEncoder,
-    DynPipelineLayout, DynQueue, DynResourceExt as _, DynSampler, DynTexture, DynTextureView,
+    DynPipelineLayout, DynQueue, DynResourceExt as _, DynSampler, DynShaderModule, DynTexture,
+    DynTextureView,
 };
 
 pub trait DynDevice: DynResource {
@@ -77,6 +79,13 @@ pub trait DynDevice: DynResource {
         >,
     ) -> Result<Box<dyn DynBindGroup>, DeviceError>;
     unsafe fn destroy_bind_group(&self, group: Box<dyn DynBindGroup>);
+
+    unsafe fn create_shader_module(
+        &self,
+        desc: &ShaderModuleDescriptor,
+        shader: ShaderInput,
+    ) -> Result<Box<dyn DynShaderModule>, ShaderError>;
+    unsafe fn destroy_shader_module(&self, module: Box<dyn DynShaderModule>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -260,5 +269,18 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_bind_group(&self, group: Box<dyn DynBindGroup>) {
         unsafe { D::destroy_bind_group(self, group.unbox()) };
+    }
+
+    unsafe fn create_shader_module(
+        &self,
+        desc: &ShaderModuleDescriptor,
+        shader: ShaderInput,
+    ) -> Result<Box<dyn DynShaderModule>, ShaderError> {
+        unsafe { D::create_shader_module(self, desc, shader) }
+            .map(|b| Box::new(b) as Box<dyn DynShaderModule>)
+    }
+
+    unsafe fn destroy_shader_module(&self, module: Box<dyn DynShaderModule>) {
+        unsafe { D::destroy_shader_module(self, module.unbox()) };
     }
 }
