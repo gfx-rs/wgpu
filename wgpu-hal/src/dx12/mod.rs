@@ -88,6 +88,7 @@ impl crate::Api for Api {
 }
 
 crate::impl_dyn_resource!(
+    AccelerationStructure,
     BindGroup,
     BindGroupLayout,
     Buffer,
@@ -667,6 +668,8 @@ pub struct PipelineCache;
 
 #[derive(Debug)]
 pub struct AccelerationStructure {}
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> d3d12::ComPtr<dxgi1_4::IDXGISwapChain3> {

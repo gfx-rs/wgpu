@@ -56,6 +56,7 @@ impl crate::DynShaderModule for Resource {}
 impl crate::DynSurfaceTexture for Resource {}
 impl crate::DynTexture for Resource {}
 impl crate::DynTextureView for Resource {}
+impl crate::DynAccelerationStructure for Resource {}
 
 impl crate::Instance for Context {
     type A = Api;
@@ -212,7 +213,7 @@ impl crate::Device for Context {
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
     unsafe fn create_bind_group(
         &self,
-        desc: &crate::BindGroupDescriptor<Api>,
+        desc: &crate::BindGroupDescriptor<Resource, Resource, Resource, Resource, Resource>,
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }

@@ -165,6 +165,7 @@ impl crate::Api for Api {
 }
 
 crate::impl_dyn_resource!(
+    AccelerationStructure,
     BindGroup,
     BindGroupLayout,
     Buffer,
@@ -746,6 +747,9 @@ impl Fence {
 
 #[derive(Debug)]
 pub struct AccelerationStructure;
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
+
 #[derive(Debug)]
 pub struct PipelineCache;
 

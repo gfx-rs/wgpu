@@ -2,14 +2,14 @@
 #![allow(trivial_casts)]
 
 use crate::{
-    Api, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,
-    Device, DeviceError, DynBuffer, DynResource, MemoryRange, PipelineLayoutDescriptor,
-    SamplerDescriptor, TextureDescriptor, TextureViewDescriptor,
+    Api, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping,
+    CommandEncoderDescriptor, Device, DeviceError, DynBuffer, DynResource, MemoryRange,
+    PipelineLayoutDescriptor, SamplerDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use super::{
-    DynBindGroupLayout, DynCommandEncoder, DynPipelineLayout, DynQueue, DynResourceExt as _,
-    DynSampler, DynTexture, DynTextureView,
+    DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynCommandEncoder,
+    DynPipelineLayout, DynQueue, DynResourceExt as _, DynSampler, DynTexture, DynTextureView,
 };
 
 pub trait DynDevice: DynResource {
@@ -65,6 +65,18 @@ pub trait DynDevice: DynResource {
         desc: &PipelineLayoutDescriptor<dyn DynBindGroupLayout>,
     ) -> Result<Box<dyn DynPipelineLayout>, DeviceError>;
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Box<dyn DynPipelineLayout>);
+
+    unsafe fn create_bind_group(
+        &self,
+        desc: &BindGroupDescriptor<
+            dyn DynBindGroupLayout,
+            dyn DynBuffer,
+            dyn DynSampler,
+            dyn DynTextureView,
+            dyn DynAccelerationStructure,
+        >,
+    ) -> Result<Box<dyn DynBindGroup>, DeviceError>;
+    unsafe fn destroy_bind_group(&self, group: Box<dyn DynBindGroup>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -205,5 +217,53 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Box<dyn DynPipelineLayout>) {
         unsafe { D::destroy_pipeline_layout(self, pipeline_layout.unbox()) };
+    }
+
+    unsafe fn create_bind_group(
+        &self,
+        desc: &BindGroupDescriptor<
+            dyn DynBindGroupLayout,
+            dyn DynBuffer,
+            dyn DynSampler,
+            dyn DynTextureView,
+            dyn DynAccelerationStructure,
+        >,
+    ) -> Result<Box<dyn DynBindGroup>, DeviceError> {
+        let buffers: Vec<_> = desc
+            .buffers
+            .iter()
+            .map(|b| b.clone().expect_downcast())
+            .collect();
+        let samplers: Vec<_> = desc
+            .samplers
+            .iter()
+            .map(|s| s.expect_downcast_ref())
+            .collect();
+        let textures: Vec<_> = desc
+            .textures
+            .iter()
+            .map(|t| t.clone().expect_downcast())
+            .collect();
+        let acceleration_structures: Vec<_> = desc
+            .acceleration_structures
+            .iter()
+            .map(|a| a.expect_downcast_ref())
+            .collect();
+
+        let desc = BindGroupDescriptor {
+            label: desc.label.to_owned(),
+            layout: desc.layout.expect_downcast_ref(),
+            buffers: &buffers,
+            samplers: &samplers,
+            textures: &textures,
+            entries: desc.entries,
+            acceleration_structures: &acceleration_structures,
+        };
+
+        unsafe { D::create_bind_group(self, &desc) }.map(|b| Box::new(b) as Box<dyn DynBindGroup>)
+    }
+
+    unsafe fn destroy_bind_group(&self, group: Box<dyn DynBindGroup>) {
+        unsafe { D::destroy_bind_group(self, group.unbox()) };
     }
 }
