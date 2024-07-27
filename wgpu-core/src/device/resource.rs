@@ -2072,7 +2072,7 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
         snatch_guard: &'a SnatchGuard<'a>,
-    ) -> Result<hal::TextureBinding<'a, A>, binding_model::CreateBindGroupError> {
+    ) -> Result<hal::TextureBinding<'a, A::TextureView>, binding_model::CreateBindGroupError> {
         view.same_device(self)?;
 
         let (pub_usage, internal_use) = self.texture_use_parameters(

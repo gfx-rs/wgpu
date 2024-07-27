@@ -153,7 +153,7 @@ impl crate::Api for Api {
     type Sampler = Sampler;
     type QuerySet = QuerySet;
     type Fence = Fence;
-    type AccelerationStructure = ();
+    type AccelerationStructure = AccelerationStructure;
     type PipelineCache = ();
 
     type BindGroupLayout = BindGroupLayout;
@@ -165,6 +165,7 @@ impl crate::Api for Api {
 }
 
 crate::impl_dyn_resource!(
+    AccelerationStructure,
     BindGroup,
     BindGroupLayout,
     Buffer,
@@ -749,6 +750,11 @@ impl Fence {
         self.last_completed = latest;
     }
 }
+
+#[derive(Debug)]
+pub struct AccelerationStructure;
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 #[derive(Clone, Debug, PartialEq)]
 struct StencilOps {

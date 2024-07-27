@@ -443,7 +443,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ComputePipeline: DynComputePipeline;
     type PipelineCache: fmt::Debug + WasmNotSendSync;
 
-    type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
+    type AccelerationStructure: DynAccelerationStructure + fmt::Debug + 'static;
 }
 
 pub trait Instance: Sized + WasmNotSendSync {
@@ -804,9 +804,17 @@ pub trait Device: WasmNotSendSync {
         desc: &PipelineLayoutDescriptor<<Self::A as Api>::BindGroupLayout>,
     ) -> Result<<Self::A as Api>::PipelineLayout, DeviceError>;
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: <Self::A as Api>::PipelineLayout);
+
+    #[allow(clippy::type_complexity)]
     unsafe fn create_bind_group(
         &self,
-        desc: &BindGroupDescriptor<Self::A>,
+        desc: &BindGroupDescriptor<
+            <Self::A as Api>::BindGroupLayout,
+            <Self::A as Api>::Buffer,
+            <Self::A as Api>::Sampler,
+            <Self::A as Api>::TextureView,
+            <Self::A as Api>::AccelerationStructure,
+        >,
     ) -> Result<<Self::A as Api>::BindGroup, DeviceError>;
     unsafe fn destroy_bind_group(&self, group: <Self::A as Api>::BindGroup);
 
@@ -1776,10 +1784,9 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     pub size: Option<wgt::BufferSize>,
 }
 
-// Rust gets confused about the impl requirements for `A`
-impl<B: DynBuffer> Clone for BufferBinding<'_, B> {
+impl<'a, T: DynBuffer + ?Sized> Clone for BufferBinding<'a, T> {
     fn clone(&self) -> Self {
-        Self {
+        BufferBinding {
             buffer: self.buffer,
             offset: self.offset,
             size: self.size,
@@ -1788,15 +1795,14 @@ impl<B: DynBuffer> Clone for BufferBinding<'_, B> {
 }
 
 #[derive(Debug)]
-pub struct TextureBinding<'a, A: Api> {
-    pub view: &'a A::TextureView,
+pub struct TextureBinding<'a, T: DynTextureView + ?Sized> {
+    pub view: &'a T,
     pub usage: TextureUses,
 }
 
-// Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for TextureBinding<'_, A> {
+impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
     fn clone(&self) -> Self {
-        Self {
+        TextureBinding {
             view: self.view,
             usage: self.usage,
         }
@@ -1820,14 +1826,21 @@ pub struct BindGroupEntry {
 ///    of the corresponding resource array, selected by the relevant
 ///    `BindGroupLayoutEntry`.
 #[derive(Clone, Debug)]
-pub struct BindGroupDescriptor<'a, A: Api> {
+pub struct BindGroupDescriptor<
+    'a,
+    Bgl: DynBindGroupLayout + ?Sized,
+    B: DynBuffer + ?Sized,
+    S: DynSampler + ?Sized,
+    T: DynTextureView + ?Sized,
+    A: DynAccelerationStructure + ?Sized,
+> {
     pub label: Label<'a>,
-    pub layout: &'a A::BindGroupLayout,
-    pub buffers: &'a [BufferBinding<'a, A::Buffer>],
-    pub samplers: &'a [&'a A::Sampler],
-    pub textures: &'a [TextureBinding<'a, A>],
+    pub layout: &'a Bgl,
+    pub buffers: &'a [BufferBinding<'a, B>],
+    pub samplers: &'a [&'a S],
+    pub textures: &'a [TextureBinding<'a, T>],
     pub entries: &'a [BindGroupEntry],
-    pub acceleration_structures: &'a [&'a A::AccelerationStructure],
+    pub acceleration_structures: &'a [&'a A],
 }
 
 #[derive(Clone, Debug)]

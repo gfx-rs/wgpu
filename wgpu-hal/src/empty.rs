@@ -42,6 +42,7 @@ impl crate::Api for Api {
 
 crate::impl_dyn_resource!(Context, Encoder, Resource);
 
+impl crate::DynAccelerationStructure for Resource {}
 impl crate::DynBindGroup for Resource {}
 impl crate::DynBindGroupLayout for Resource {}
 impl crate::DynBuffer for Resource {}
@@ -218,7 +219,7 @@ impl crate::Device for Context {
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
     unsafe fn create_bind_group(
         &self,
-        desc: &crate::BindGroupDescriptor<Api>,
+        desc: &crate::BindGroupDescriptor<Resource, Resource, Resource, Resource, Resource>,
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
