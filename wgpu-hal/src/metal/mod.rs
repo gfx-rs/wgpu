@@ -555,6 +555,8 @@ pub struct BindGroupLayout {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
 
+impl crate::DynBindGroupLayout for BindGroupLayout {}
+
 #[derive(Clone, Debug, Default)]
 struct ResourceData<T> {
     buffers: T,
