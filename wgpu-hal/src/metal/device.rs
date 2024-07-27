@@ -602,7 +602,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
+        desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
     ) -> DeviceResult<super::PipelineLayout> {
         #[derive(Debug)]
         struct StageInfo {

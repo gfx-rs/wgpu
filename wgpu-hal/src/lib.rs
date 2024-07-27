@@ -801,7 +801,7 @@ pub trait Device: WasmNotSendSync {
     unsafe fn destroy_bind_group_layout(&self, bg_layout: <Self::A as Api>::BindGroupLayout);
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &PipelineLayoutDescriptor<Self::A>,
+        desc: &PipelineLayoutDescriptor<<Self::A as Api>::BindGroupLayout>,
     ) -> Result<<Self::A as Api>::PipelineLayout, DeviceError>;
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: <Self::A as Api>::PipelineLayout);
     unsafe fn create_bind_group(
@@ -1743,10 +1743,10 @@ pub struct BindGroupLayoutDescriptor<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct PipelineLayoutDescriptor<'a, A: Api> {
+pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub label: Label<'a>,
     pub flags: PipelineLayoutFlags,
-    pub bind_group_layouts: &'a [&'a A::BindGroupLayout],
+    pub bind_group_layouts: &'a [&'a B],
     pub push_constant_ranges: &'a [wgt::PushConstantRange],
 }
 

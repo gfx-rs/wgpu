@@ -1140,7 +1140,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
+        desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
     ) -> Result<super::PipelineLayout, crate::DeviceError> {
         use naga::back::glsl;
 
