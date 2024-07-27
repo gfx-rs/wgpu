@@ -12,7 +12,7 @@ use std::any::Any;
 
 use wgt::WasmNotSendSync;
 
-use crate::BufferBinding;
+use crate::{BufferBinding, TextureBinding};
 
 /// Base trait for all resources, allows downcasting via [`Any`].
 pub trait DynResource: Any + WasmNotSendSync + 'static {
@@ -118,6 +118,15 @@ impl<'a> BufferBinding<'a, dyn DynBuffer> {
             buffer: self.buffer.expect_downcast_ref(),
             offset: self.offset,
             size: self.size,
+        }
+    }
+}
+
+impl<'a> TextureBinding<'a, dyn DynTextureView> {
+    pub fn expect_downcast<T: DynTextureView>(self) -> TextureBinding<'a, T> {
+        TextureBinding {
+            view: self.view.expect_downcast_ref(),
+            usage: self.usage,
         }
     }
 }

@@ -79,6 +79,7 @@ impl crate::Api for Api {
 }
 
 crate::impl_dyn_resource!(
+    AccelerationStructure,
     BindGroup,
     BindGroupLayout,
     Buffer,
@@ -669,6 +670,8 @@ pub struct AccelerationStructure {
     buffer: vk::Buffer,
     block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
 }
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 #[derive(Debug)]
 pub struct Texture {

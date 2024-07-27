@@ -72,6 +72,7 @@ impl crate::Api for Api {
 }
 
 crate::impl_dyn_resource!(
+    AccelerationStructure,
     BindGroup,
     BindGroupLayout,
     Buffer,
@@ -931,3 +932,5 @@ unsafe impl Sync for CommandBuffer {}
 
 #[derive(Debug)]
 pub struct AccelerationStructure;
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
