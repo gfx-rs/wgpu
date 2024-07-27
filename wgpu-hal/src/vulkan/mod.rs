@@ -90,6 +90,7 @@ crate::impl_dyn_resource!(
     PipelineCache,
     PipelineLayout,
     QuerySet,
+    Queue,
     RenderPipeline,
     Sampler,
     ShaderModule,

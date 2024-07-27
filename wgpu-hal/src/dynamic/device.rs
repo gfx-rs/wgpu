@@ -1,9 +1,14 @@
+// Box casts are needed, alternative would be a temporaries which are more verbose and not more expressive.
+#![allow(trivial_casts)]
+
 use crate::{
-    Api, BufferDescriptor, BufferMapping, Device, DeviceError, DynBuffer, DynResource, MemoryRange,
-    SamplerDescriptor, TextureDescriptor, TextureViewDescriptor,
+    Api, BufferDescriptor, BufferMapping, CommandEncoderDescriptor, Device, DeviceError, DynBuffer,
+    DynResource, MemoryRange, SamplerDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
-use super::{DynResourceExt as _, DynSampler, DynTexture, DynTextureView};
+use super::{
+    DynCommandEncoder, DynQueue, DynResourceExt as _, DynSampler, DynTexture, DynTextureView,
+};
 
 pub trait DynDevice: DynResource {
     unsafe fn create_buffer(
@@ -40,6 +45,12 @@ pub trait DynDevice: DynResource {
         desc: &SamplerDescriptor,
     ) -> Result<Box<dyn DynSampler>, DeviceError>;
     unsafe fn destroy_sampler(&self, sampler: Box<dyn DynSampler>);
+
+    unsafe fn create_command_encoder(
+        &self,
+        desc: &CommandEncoderDescriptor<dyn DynQueue>,
+    ) -> Result<Box<dyn DynCommandEncoder>, DeviceError>;
+    unsafe fn destroy_command_encoder(&self, pool: Box<dyn DynCommandEncoder>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -123,5 +134,21 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_sampler(&self, sampler: Box<dyn DynSampler>) {
         unsafe { D::destroy_sampler(self, sampler.unbox()) };
+    }
+
+    unsafe fn create_command_encoder(
+        &self,
+        desc: &CommandEncoderDescriptor<'_, dyn DynQueue>,
+    ) -> Result<Box<dyn DynCommandEncoder>, DeviceError> {
+        let desc = CommandEncoderDescriptor {
+            label: desc.label,
+            queue: desc.queue.expect_downcast_ref(),
+        };
+        unsafe { D::create_command_encoder(self, &desc) }
+            .map(|b| Box::new(b) as Box<dyn DynCommandEncoder>)
+    }
+
+    unsafe fn destroy_command_encoder(&self, encoder: Box<dyn DynCommandEncoder>) {
+        unsafe { D::destroy_command_encoder(self, encoder.unbox()) };
     }
 }
