@@ -2,12 +2,14 @@
 #![allow(trivial_casts)]
 
 use crate::{
-    Api, BufferDescriptor, BufferMapping, CommandEncoderDescriptor, Device, DeviceError, DynBuffer,
-    DynResource, MemoryRange, SamplerDescriptor, TextureDescriptor, TextureViewDescriptor,
+    Api, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,
+    Device, DeviceError, DynBuffer, DynResource, MemoryRange, SamplerDescriptor, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use super::{
-    DynCommandEncoder, DynQueue, DynResourceExt as _, DynSampler, DynTexture, DynTextureView,
+    DynBindGroupLayout, DynCommandEncoder, DynQueue, DynResourceExt as _, DynSampler, DynTexture,
+    DynTextureView,
 };
 
 pub trait DynDevice: DynResource {
@@ -51,6 +53,12 @@ pub trait DynDevice: DynResource {
         desc: &CommandEncoderDescriptor<dyn DynQueue>,
     ) -> Result<Box<dyn DynCommandEncoder>, DeviceError>;
     unsafe fn destroy_command_encoder(&self, pool: Box<dyn DynCommandEncoder>);
+
+    unsafe fn create_bind_group_layout(
+        &self,
+        desc: &BindGroupLayoutDescriptor,
+    ) -> Result<Box<dyn DynBindGroupLayout>, DeviceError>;
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: Box<dyn DynBindGroupLayout>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -150,5 +158,17 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_command_encoder(&self, encoder: Box<dyn DynCommandEncoder>) {
         unsafe { D::destroy_command_encoder(self, encoder.unbox()) };
+    }
+
+    unsafe fn create_bind_group_layout(
+        &self,
+        desc: &BindGroupLayoutDescriptor,
+    ) -> Result<Box<dyn DynBindGroupLayout>, DeviceError> {
+        unsafe { D::create_bind_group_layout(self, desc) }
+            .map(|b| Box::new(b) as Box<dyn DynBindGroupLayout>)
+    }
+
+    unsafe fn destroy_bind_group_layout(&self, bg_layout: Box<dyn DynBindGroupLayout>) {
+        unsafe { D::destroy_bind_group_layout(self, bg_layout.unbox()) };
     }
 }

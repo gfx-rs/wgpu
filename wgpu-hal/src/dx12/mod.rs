@@ -555,6 +555,8 @@ pub struct BindGroupLayout {
     copy_counts: Vec<u32>, // all 1's
 }
 
+impl crate::DynBindGroupLayout for BindGroupLayout {}
+
 #[derive(Debug, Clone, Copy)]
 enum BufferViewKind {
     Constant,
