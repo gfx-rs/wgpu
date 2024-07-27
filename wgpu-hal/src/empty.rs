@@ -189,7 +189,7 @@ impl crate::Device for Context {
 
     unsafe fn create_command_encoder(
         &self,
-        desc: &crate::CommandEncoderDescriptor<Api>,
+        desc: &crate::CommandEncoderDescriptor<Context>,
     ) -> DeviceResult<Encoder> {
         Ok(Encoder)
     }

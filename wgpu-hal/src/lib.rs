@@ -394,7 +394,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type Adapter: Adapter<A = Self>;
     type Device: DynDevice + Device<A = Self>;
 
-    type Queue: Queue<A = Self>;
+    type Queue: DynQueue + Queue<A = Self>;
     type CommandEncoder: DynCommandEncoder + CommandEncoder<A = Self>;
 
     /// This API's command buffer type.
@@ -788,7 +788,7 @@ pub trait Device: WasmNotSendSync {
     /// The new `CommandEncoder` is in the "closed" state.
     unsafe fn create_command_encoder(
         &self,
-        desc: &CommandEncoderDescriptor<Self::A>,
+        desc: &CommandEncoderDescriptor<<Self::A as Api>::Queue>,
     ) -> Result<<Self::A as Api>::CommandEncoder, DeviceError>;
     unsafe fn destroy_command_encoder(&self, pool: <Self::A as Api>::CommandEncoder);
 
@@ -1830,9 +1830,9 @@ pub struct BindGroupDescriptor<'a, A: Api> {
 }
 
 #[derive(Clone, Debug)]
-pub struct CommandEncoderDescriptor<'a, A: Api> {
+pub struct CommandEncoderDescriptor<'a, Q: DynQueue + ?Sized> {
     pub label: Label<'a>,
-    pub queue: &'a A::Queue,
+    pub queue: &'a Q,
 }
 
 /// Naga shader module.
