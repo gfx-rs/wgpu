@@ -42,12 +42,14 @@ impl crate::Api for Api {
 
 crate::impl_dyn_resource!(Resource, Encoder, Context);
 
+impl crate::DynAccelerationStructure for Resource {}
 impl crate::DynBindGroup for Resource {}
 impl crate::DynBindGroupLayout for Resource {}
 impl crate::DynBuffer for Resource {}
 impl crate::DynCommandBuffer for Resource {}
 impl crate::DynComputePipeline for Resource {}
 impl crate::DynFence for Resource {}
+impl crate::DynPipelineCache for Resource {}
 impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
 impl crate::DynRenderPipeline for Resource {}
@@ -56,7 +58,6 @@ impl crate::DynShaderModule for Resource {}
 impl crate::DynSurfaceTexture for Resource {}
 impl crate::DynTexture for Resource {}
 impl crate::DynTextureView for Resource {}
-impl crate::DynAccelerationStructure for Resource {}
 
 impl crate::Instance for Context {
     type A = Api;
@@ -229,14 +230,14 @@ impl crate::Device for Context {
     unsafe fn destroy_shader_module(&self, module: Resource) {}
     unsafe fn create_render_pipeline(
         &self,
-        desc: &crate::RenderPipelineDescriptor<Api>,
+        desc: &crate::RenderPipelineDescriptor<Resource, Resource, Resource>,
     ) -> Result<Resource, crate::PipelineError> {
         Ok(Resource)
     }
     unsafe fn destroy_render_pipeline(&self, pipeline: Resource) {}
     unsafe fn create_compute_pipeline(
         &self,
-        desc: &crate::ComputePipelineDescriptor<Api>,
+        desc: &crate::ComputePipelineDescriptor<Resource, Resource, Resource>,
     ) -> Result<Resource, crate::PipelineError> {
         Ok(Resource)
     }

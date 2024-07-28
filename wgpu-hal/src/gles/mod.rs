@@ -753,6 +753,8 @@ impl crate::DynAccelerationStructure for AccelerationStructure {}
 #[derive(Debug)]
 pub struct PipelineCache;
 
+impl crate::DynPipelineCache for PipelineCache {}
+
 #[derive(Clone, Debug, PartialEq)]
 struct StencilOps {
     pass: u32,

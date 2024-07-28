@@ -99,7 +99,7 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back:
 impl super::Device {
     fn load_shader(
         &self,
-        stage: &crate::ProgrammableStage<super::Api>,
+        stage: &crate::ProgrammableStage<super::ShaderModule>,
         vertex_buffer_mappings: &[naga::back::msl::VertexBufferMapping],
         layout: &super::PipelineLayout,
         primitive_class: metal::MTLPrimitiveTopologyClass,
@@ -898,7 +898,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_render_pipeline(
         &self,
-        desc: &crate::RenderPipelineDescriptor<super::Api>,
+        desc: &crate::RenderPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPipelineDescriptor::new();
@@ -1169,7 +1173,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_compute_pipeline(
         &self,
-        desc: &crate::ComputePipelineDescriptor<super::Api>,
+        desc: &crate::ComputePipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::ComputePipelineDescriptor::new();

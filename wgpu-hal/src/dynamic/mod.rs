@@ -12,7 +12,7 @@ use std::any::Any;
 
 use wgt::WasmNotSendSync;
 
-use crate::{BufferBinding, TextureBinding};
+use crate::{BufferBinding, ProgrammableStage, TextureBinding};
 
 // TODO: docs
 pub trait DynResource: Any + WasmNotSendSync + 'static {
@@ -107,6 +107,17 @@ impl<'a> TextureBinding<'a, dyn DynTextureView> {
         TextureBinding {
             view: self.view.expect_downcast_ref(),
             usage: self.usage,
+        }
+    }
+}
+
+impl<'a> ProgrammableStage<'a, dyn DynShaderModule> {
+    fn expect_downcast<T: DynShaderModule>(self) -> ProgrammableStage<'a, T> {
+        ProgrammableStage {
+            module: self.module.expect_downcast_ref(),
+            entry_point: self.entry_point,
+            constants: self.constants,
+            zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
         }
     }
 }

@@ -3,15 +3,16 @@
 
 use crate::{
     Api, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping,
-    CommandEncoderDescriptor, Device, DeviceError, DynBuffer, DynResource, MemoryRange,
-    PipelineLayoutDescriptor, SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor,
-    TextureDescriptor, TextureViewDescriptor,
+    CommandEncoderDescriptor, ComputePipelineDescriptor, Device, DeviceError, DynBuffer,
+    DynResource, MemoryRange, PipelineError, PipelineLayoutDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use super::{
     DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynCommandEncoder,
-    DynPipelineLayout, DynQueue, DynResourceExt as _, DynSampler, DynShaderModule, DynTexture,
-    DynTextureView,
+    DynComputePipeline, DynPipelineCache, DynPipelineLayout, DynQueue, DynRenderPipeline,
+    DynResourceExt as _, DynSampler, DynShaderModule, DynTexture, DynTextureView,
 };
 
 pub trait DynDevice: DynResource {
@@ -86,6 +87,26 @@ pub trait DynDevice: DynResource {
         shader: ShaderInput,
     ) -> Result<Box<dyn DynShaderModule>, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: Box<dyn DynShaderModule>);
+
+    unsafe fn create_render_pipeline(
+        &self,
+        desc: &RenderPipelineDescriptor<
+            dyn DynPipelineLayout,
+            dyn DynShaderModule,
+            dyn DynPipelineCache,
+        >,
+    ) -> Result<Box<dyn DynRenderPipeline>, PipelineError>;
+    unsafe fn destroy_render_pipeline(&self, pipeline: Box<dyn DynRenderPipeline>);
+
+    unsafe fn create_compute_pipeline(
+        &self,
+        desc: &ComputePipelineDescriptor<
+            dyn DynPipelineLayout,
+            dyn DynShaderModule,
+            dyn DynPipelineCache,
+        >,
+    ) -> Result<Box<dyn DynComputePipeline>, PipelineError>;
+    unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -287,5 +308,58 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_shader_module(&self, module: Box<dyn DynShaderModule>) {
         unsafe { D::destroy_shader_module(self, module.unbox()) };
+    }
+
+    unsafe fn create_render_pipeline(
+        &self,
+        desc: &RenderPipelineDescriptor<
+            dyn DynPipelineLayout,
+            dyn DynShaderModule,
+            dyn DynPipelineCache,
+        >,
+    ) -> Result<Box<dyn DynRenderPipeline>, PipelineError> {
+        let desc = RenderPipelineDescriptor {
+            label: desc.label,
+            layout: desc.layout.expect_downcast_ref(),
+            vertex_buffers: desc.vertex_buffers,
+            vertex_stage: desc.vertex_stage.clone().expect_downcast(),
+            primitive: desc.primitive,
+            depth_stencil: desc.depth_stencil.clone(),
+            multisample: desc.multisample,
+            fragment_stage: desc.fragment_stage.clone().map(|f| f.expect_downcast()),
+            color_targets: desc.color_targets,
+            multiview: desc.multiview,
+            cache: desc.cache.map(|c| c.expect_downcast_ref()),
+        };
+
+        unsafe { D::create_render_pipeline(self, &desc) }
+            .map(|b| Box::new(b) as Box<dyn DynRenderPipeline>)
+    }
+
+    unsafe fn destroy_render_pipeline(&self, pipeline: Box<dyn DynRenderPipeline>) {
+        unsafe { D::destroy_render_pipeline(self, pipeline.unbox()) };
+    }
+
+    unsafe fn create_compute_pipeline(
+        &self,
+        desc: &ComputePipelineDescriptor<
+            dyn DynPipelineLayout,
+            dyn DynShaderModule,
+            dyn DynPipelineCache,
+        >,
+    ) -> Result<Box<dyn DynComputePipeline>, PipelineError> {
+        let desc = ComputePipelineDescriptor {
+            label: desc.label,
+            layout: desc.layout.expect_downcast_ref(),
+            stage: desc.stage.clone().expect_downcast(),
+            cache: desc.cache.as_ref().map(|c| c.expect_downcast_ref()),
+        };
+
+        unsafe { D::create_compute_pipeline(self, &desc) }
+            .map(|b| Box::new(b) as Box<dyn DynComputePipeline>)
+    }
+
+    unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>) {
+        unsafe { D::destroy_compute_pipeline(self, pipeline.unbox()) };
     }
 }

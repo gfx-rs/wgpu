@@ -666,6 +666,8 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct PipelineCache;
 
+impl crate::DynPipelineCache for PipelineCache {}
+
 #[derive(Debug)]
 pub struct AccelerationStructure {}
 
