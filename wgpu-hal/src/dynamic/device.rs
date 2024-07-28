@@ -21,6 +21,8 @@ use super::{
 };
 
 pub trait DynDevice: DynResource {
+    unsafe fn exit(self: Box<Self>, queue: Box<dyn DynQueue>);
+
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
@@ -160,9 +162,16 @@ pub trait DynDevice: DynResource {
         &self,
         acceleration_structure: Box<dyn DynAccelerationStructure>,
     );
+
+    fn get_internal_counters(&self) -> wgt::HalCounters;
+    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
 }
 
 impl<D: Device + DynResource> DynDevice for D {
+    unsafe fn exit(self: Box<Self>, queue: Box<dyn DynQueue>) {
+        unsafe { D::exit(*self, queue.unbox()) }
+    }
+
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
@@ -557,5 +566,13 @@ impl<D: Device + DynResource> DynDevice for D {
         acceleration_structure: Box<dyn DynAccelerationStructure>,
     ) {
         unsafe { D::destroy_acceleration_structure(self, acceleration_structure.unbox()) }
+    }
+
+    fn get_internal_counters(&self) -> wgt::HalCounters {
+        D::get_internal_counters(self)
+    }
+
+    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        D::generate_allocator_report(self)
     }
 }
