@@ -1,14 +1,15 @@
 use std::ops::Range;
 
 use crate::{
-    Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, BufferTextureCopy, ColorAttachment,
-    CommandEncoder, ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynBindGroup,
-    DynBuffer, DynCommandBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet,
-    DynRenderPipeline, DynResource, DynTexture, DynTextureView, Label, MemoryRange,
-    PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
+    AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy,
+    BufferTextureCopy, BuildAccelerationStructureDescriptor, ColorAttachment, CommandEncoder,
+    ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynBindGroup, DynBuffer,
+    DynCommandBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline,
+    DynResource, DynTexture, DynTextureView, Label, MemoryRange, PassTimestampWrites, Rect,
+    RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
 };
 
-use super::DynResourceExt as _;
+use super::{DynAccelerationStructure, DynResourceExt as _};
 
 pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
@@ -172,18 +173,19 @@ pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &dyn DynBuffer, offset: wgt::BufferAddress);
 
-    // unsafe fn build_acceleration_structures<'a, T>(
-    //     &mut self,
-    //     descriptor_count: u32,
-    //     descriptors: T,
-    // ) where
-    //     Self::A: 'a,
-    //     T: IntoIterator<Item = BuildAccelerationStructureDescriptor<'a, Self::A>>;
+    unsafe fn build_acceleration_structures<'a>(
+        &mut self,
+        descriptors: &'a [BuildAccelerationStructureDescriptor<
+            'a,
+            dyn DynBuffer,
+            dyn DynAccelerationStructure,
+        >],
+    );
 
-    // unsafe fn place_acceleration_structure_barrier(
-    //     &mut self,
-    //     barrier: AccelerationStructureBarrier,
-    // );
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        barrier: AccelerationStructureBarrier,
+    );
 }
 
 impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
@@ -566,6 +568,49 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     ) {
         let binding = binding.expect_downcast();
         unsafe { C::set_vertex_buffer(self, index, binding) };
+    }
+
+    unsafe fn build_acceleration_structures<'a>(
+        &mut self,
+        descriptors: &'a [BuildAccelerationStructureDescriptor<
+            'a,
+            dyn DynBuffer,
+            dyn DynAccelerationStructure,
+        >],
+    ) {
+        // Need to collect entries here so we can reference them in the descriptor.
+        // TODO: API should be redesigned to avoid this and other descriptor copies that happen due to the dyn api.
+        let descriptor_entries = descriptors
+            .iter()
+            .map(|d| d.entries.expect_downcast())
+            .collect::<Vec<_>>();
+        let descriptors = descriptors
+            .iter()
+            .zip(descriptor_entries.iter())
+            .map(|(d, entries)| BuildAccelerationStructureDescriptor::<
+                <C::A as Api>::Buffer,
+                <C::A as Api>::AccelerationStructure,
+            > {
+                entries,
+                mode: d.mode,
+                flags: d.flags,
+                source_acceleration_structure: d
+                    .source_acceleration_structure
+                    .map(|a| a.expect_downcast_ref()),
+                destination_acceleration_structure: d
+                    .destination_acceleration_structure
+                    .expect_downcast_ref(),
+                scratch_buffer: d.scratch_buffer.expect_downcast_ref(),
+                scratch_buffer_offset: d.scratch_buffer_offset,
+            });
+        unsafe { C::build_acceleration_structures(self, descriptors.len() as _, descriptors) };
+    }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        barrier: AccelerationStructureBarrier,
+    ) {
+        unsafe { C::place_acceleration_structure_barrier(self, barrier) };
     }
 }
 
