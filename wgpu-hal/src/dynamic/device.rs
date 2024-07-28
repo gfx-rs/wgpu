@@ -4,15 +4,16 @@
 use crate::{
     Api, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping,
     CommandEncoderDescriptor, ComputePipelineDescriptor, Device, DeviceError, DynBuffer,
-    DynResource, MemoryRange, PipelineCacheDescriptor, PipelineCacheError, PipelineError,
+    DynResource, Label, MemoryRange, PipelineCacheDescriptor, PipelineCacheError, PipelineError,
     PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderError,
     ShaderInput, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use super::{
     DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynCommandEncoder,
-    DynComputePipeline, DynPipelineCache, DynPipelineLayout, DynQueue, DynRenderPipeline,
-    DynResourceExt as _, DynSampler, DynShaderModule, DynTexture, DynTextureView,
+    DynComputePipeline, DynPipelineCache, DynPipelineLayout, DynQuerySet, DynQueue,
+    DynRenderPipeline, DynResourceExt as _, DynSampler, DynShaderModule, DynTexture,
+    DynTextureView,
 };
 
 pub trait DynDevice: DynResource {
@@ -116,6 +117,12 @@ pub trait DynDevice: DynResource {
         None
     }
     unsafe fn destroy_pipeline_cache(&self, cache: Box<dyn DynPipelineCache>);
+
+    unsafe fn create_query_set(
+        &self,
+        desc: &wgt::QuerySetDescriptor<Label>,
+    ) -> Result<Box<dyn DynQuerySet>, DeviceError>;
+    unsafe fn destroy_query_set(&self, set: Box<dyn DynQuerySet>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -386,5 +393,16 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_pipeline_cache(&self, pipeline_cache: Box<dyn DynPipelineCache>) {
         unsafe { D::destroy_pipeline_cache(self, pipeline_cache.unbox()) };
+    }
+
+    unsafe fn create_query_set(
+        &self,
+        desc: &wgt::QuerySetDescriptor<Label>,
+    ) -> Result<Box<dyn DynQuerySet>, DeviceError> {
+        unsafe { D::create_query_set(self, desc) }.map(|b| Box::new(b) as Box<dyn DynQuerySet>)
+    }
+
+    unsafe fn destroy_query_set(&self, query_set: Box<dyn DynQuerySet>) {
+        unsafe { D::destroy_query_set(self, query_set.unbox()) };
     }
 }
