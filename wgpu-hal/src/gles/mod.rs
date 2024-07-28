@@ -154,7 +154,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
-    type PipelineCache = ();
+    type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -174,6 +174,7 @@ crate::impl_dyn_resource!(
     ComputePipeline,
     Device,
     Fence,
+    PipelineCache,
     PipelineLayout,
     QuerySet,
     Queue,
@@ -755,6 +756,11 @@ impl Fence {
 pub struct AccelerationStructure;
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+#[derive(Debug)]
+pub struct PipelineCache;
+
+impl crate::DynPipelineCache for PipelineCache {}
 
 #[derive(Clone, Debug, PartialEq)]
 struct StencilOps {
