@@ -3,9 +3,9 @@ use std::ops::Range;
 use crate::{
     Api, Attachment, BufferBarrier, BufferBinding, BufferCopy, BufferTextureCopy, ColorAttachment,
     CommandEncoder, ComputePassDescriptor, DepthStencilAttachment, DeviceError, DynBindGroup,
-    DynBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet, DynRenderPipeline, DynResource,
-    DynTexture, DynTextureView, Label, MemoryRange, PassTimestampWrites, Rect,
-    RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
+    DynBuffer, DynCommandBuffer, DynComputePipeline, DynPipelineLayout, DynQuerySet,
+    DynRenderPipeline, DynResource, DynTexture, DynTextureView, Label, MemoryRange,
+    PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
 };
 
 use super::DynResourceExt as _;
@@ -15,11 +15,9 @@ pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
 
     unsafe fn discard_encoding(&mut self);
 
-    //unsafe fn end_encoding(&mut self) -> Result<dyn DynCommandBuffer, DeviceError>;
+    unsafe fn end_encoding(&mut self) -> Result<Box<dyn DynCommandBuffer>, DeviceError>;
 
-    // unsafe fn reset_all<I>(&mut self, command_buffers: I)
-    // where
-    //     I: Iterator<Item = dyn DynCommandBuffer>;
+    unsafe fn reset_all(&mut self, command_buffers: Vec<Box<dyn DynCommandBuffer>>);
 
     unsafe fn transition_buffers(&mut self, barriers: &[BufferBarrier<'_, dyn DynBuffer>]);
     unsafe fn transition_textures(&mut self, barriers: &[TextureBarrier<'_, dyn DynTexture>]);
@@ -195,6 +193,18 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
 
     unsafe fn discard_encoding(&mut self) {
         unsafe { C::discard_encoding(self) }
+    }
+
+    unsafe fn end_encoding(&mut self) -> Result<Box<dyn DynCommandBuffer>, DeviceError> {
+        unsafe { C::end_encoding(self) }.map(|cb| {
+            let boxed_command_buffer: Box<<C::A as Api>::CommandBuffer> = Box::new(cb);
+            let boxed_command_buffer: Box<dyn DynCommandBuffer> = boxed_command_buffer;
+            boxed_command_buffer
+        })
+    }
+
+    unsafe fn reset_all(&mut self, command_buffers: Vec<Box<dyn DynCommandBuffer>>) {
+        unsafe { C::reset_all(self, command_buffers.into_iter().map(|cb| cb.unbox())) }
     }
 
     unsafe fn transition_buffers(&mut self, barriers: &[BufferBarrier<'_, dyn DynBuffer>]) {
