@@ -291,7 +291,7 @@ impl crate::Device for Context {
     }
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, Api>,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, Resource>,
     ) -> crate::AccelerationStructureBuildSizes {
         Default::default()
     }
@@ -494,7 +494,7 @@ impl crate::CommandEncoder for Encoder {
         descriptors: T,
     ) where
         Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, Api>>,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, Resource, Resource>>,
     {
     }
 

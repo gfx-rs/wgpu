@@ -910,7 +910,7 @@ pub trait Device: WasmNotSendSync {
     ) -> Result<<Self::A as Api>::AccelerationStructure, DeviceError>;
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        desc: &GetAccelerationStructureBuildSizesDescriptor<Self::A>,
+        desc: &GetAccelerationStructureBuildSizesDescriptor<<Self::A as Api>::Buffer>,
     ) -> AccelerationStructureBuildSizes;
     unsafe fn get_acceleration_structure_device_address(
         &self,
@@ -1352,7 +1352,13 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         descriptors: T,
     ) where
         Self::A: 'a,
-        T: IntoIterator<Item = BuildAccelerationStructureDescriptor<'a, Self::A>>;
+        T: IntoIterator<
+            Item = BuildAccelerationStructureDescriptor<
+                'a,
+                <Self::A as Api>::Buffer,
+                <Self::A as Api>::AccelerationStructure,
+            >,
+        >;
 
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
@@ -2192,13 +2198,17 @@ pub struct AccelerationStructureBuildSizes {
 /// Updates use source_acceleration_structure if present, else the update will be performed in place.
 /// For updates, only the data is allowed to change (not the meta data or sizes).
 #[derive(Clone, Debug)]
-pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
-    pub entries: &'a AccelerationStructureEntries<'a, A>,
+pub struct BuildAccelerationStructureDescriptor<
+    'a,
+    B: DynBuffer + ?Sized,
+    A: DynAccelerationStructure + ?Sized,
+> {
+    pub entries: &'a AccelerationStructureEntries<'a, B>,
     pub mode: AccelerationStructureBuildMode,
     pub flags: AccelerationStructureBuildFlags,
-    pub source_acceleration_structure: Option<&'a A::AccelerationStructure>,
-    pub destination_acceleration_structure: &'a A::AccelerationStructure,
-    pub scratch_buffer: &'a A::Buffer,
+    pub source_acceleration_structure: Option<&'a A>,
+    pub destination_acceleration_structure: &'a A,
+    pub scratch_buffer: &'a B,
     pub scratch_buffer_offset: wgt::BufferAddress,
 }
 
@@ -2208,8 +2218,8 @@ pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
 ///   may result in reduced size requirements.
 /// - Any other change may result in a bigger or smaller size requirement.
 #[derive(Clone, Debug)]
-pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
-    pub entries: &'a AccelerationStructureEntries<'a, A>,
+pub struct GetAccelerationStructureBuildSizesDescriptor<'a, B: DynBuffer + ?Sized> {
+    pub entries: &'a AccelerationStructureEntries<'a, B>,
     pub flags: AccelerationStructureBuildFlags,
 }
 
@@ -2218,31 +2228,31 @@ pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
 /// * `Triangles` - Multiple triangle meshes for a bottom level acceleration structure
 /// * `AABBs` - List of list of axis aligned bounding boxes for a bottom level acceleration structure
 #[derive(Debug)]
-pub enum AccelerationStructureEntries<'a, A: Api> {
-    Instances(AccelerationStructureInstances<'a, A>),
-    Triangles(Vec<AccelerationStructureTriangles<'a, A>>),
-    AABBs(Vec<AccelerationStructureAABBs<'a, A>>),
+pub enum AccelerationStructureEntries<'a, B: DynBuffer + ?Sized> {
+    Instances(AccelerationStructureInstances<'a, B>),
+    Triangles(Vec<AccelerationStructureTriangles<'a, B>>),
+    AABBs(Vec<AccelerationStructureAABBs<'a, B>>),
 }
 
 /// * `first_vertex` - offset in the vertex buffer (as number of vertices)
 /// * `indices` - optional index buffer with attributes
 /// * `transform` - optional transform
 #[derive(Clone, Debug)]
-pub struct AccelerationStructureTriangles<'a, A: Api> {
-    pub vertex_buffer: Option<&'a A::Buffer>,
+pub struct AccelerationStructureTriangles<'a, B: DynBuffer + ?Sized> {
+    pub vertex_buffer: Option<&'a B>,
     pub vertex_format: wgt::VertexFormat,
     pub first_vertex: u32,
     pub vertex_count: u32,
     pub vertex_stride: wgt::BufferAddress,
-    pub indices: Option<AccelerationStructureTriangleIndices<'a, A>>,
-    pub transform: Option<AccelerationStructureTriangleTransform<'a, A>>,
+    pub indices: Option<AccelerationStructureTriangleIndices<'a, B>>,
+    pub transform: Option<AccelerationStructureTriangleTransform<'a, B>>,
     pub flags: AccelerationStructureGeometryFlags,
 }
 
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
-pub struct AccelerationStructureAABBs<'a, A: Api> {
-    pub buffer: Option<&'a A::Buffer>,
+pub struct AccelerationStructureAABBs<'a, B: DynBuffer + ?Sized> {
+    pub buffer: Option<&'a B>,
     pub offset: u32,
     pub count: u32,
     pub stride: wgt::BufferAddress,
@@ -2251,25 +2261,25 @@ pub struct AccelerationStructureAABBs<'a, A: Api> {
 
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
-pub struct AccelerationStructureInstances<'a, A: Api> {
-    pub buffer: Option<&'a A::Buffer>,
+pub struct AccelerationStructureInstances<'a, B: DynBuffer + ?Sized> {
+    pub buffer: Option<&'a B>,
     pub offset: u32,
     pub count: u32,
 }
 
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
-pub struct AccelerationStructureTriangleIndices<'a, A: Api> {
+pub struct AccelerationStructureTriangleIndices<'a, B: DynBuffer + ?Sized> {
     pub format: wgt::IndexFormat,
-    pub buffer: Option<&'a A::Buffer>,
+    pub buffer: Option<&'a B>,
     pub offset: u32,
     pub count: u32,
 }
 
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
-pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
-    pub buffer: &'a A::Buffer,
+pub struct AccelerationStructureTriangleTransform<'a, B: DynBuffer + ?Sized> {
+    pub buffer: &'a B,
     pub offset: u32,
 }
 
