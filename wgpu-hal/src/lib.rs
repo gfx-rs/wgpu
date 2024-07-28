@@ -407,13 +407,13 @@ pub trait Api: Clone + fmt::Debug + Sized {
     /// them to [`CommandEncoder::reset_all`].
     ///
     /// [`CommandEncoder`]: Api::CommandEncoder
-    type CommandBuffer: DynCommandBuffer + fmt::Debug;
+    type CommandBuffer: DynCommandBuffer;
 
     type Buffer: DynBuffer;
     type Texture: DynTexture;
-    type SurfaceTexture: DynSurfaceTexture + fmt::Debug + Borrow<Self::Texture>;
+    type SurfaceTexture: DynSurfaceTexture + Borrow<Self::Texture>;
     type TextureView: DynTextureView;
-    type Sampler: DynSampler + fmt::Debug;
+    type Sampler: DynSampler;
     type QuerySet: DynQuerySet;
 
     /// A value you can block on to wait for something to finish.
@@ -433,17 +433,17 @@ pub trait Api: Clone + fmt::Debug + Sized {
     /// before a lower-valued operation, then waiting for the fence to reach the
     /// lower value could return before the lower-valued operation has actually
     /// finished.
-    type Fence: DynFence + fmt::Debug;
+    type Fence: DynFence;
 
-    type BindGroupLayout: DynBindGroupLayout + fmt::Debug;
+    type BindGroupLayout: DynBindGroupLayout;
     type BindGroup: DynBindGroup;
     type PipelineLayout: DynPipelineLayout;
     type ShaderModule: DynShaderModule;
     type RenderPipeline: DynRenderPipeline;
     type ComputePipeline: DynComputePipeline;
-    type PipelineCache: DynPipelineCache + fmt::Debug;
+    type PipelineCache: DynPipelineCache;
 
-    type AccelerationStructure: DynAccelerationStructure + fmt::Debug + 'static;
+    type AccelerationStructure: DynAccelerationStructure + 'static;
 }
 
 pub trait Instance: Sized + WasmNotSendSync {
