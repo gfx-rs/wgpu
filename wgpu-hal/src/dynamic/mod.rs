@@ -12,7 +12,11 @@ use std::any::Any;
 
 use wgt::WasmNotSendSync;
 
-use crate::{BufferBinding, ProgrammableStage, TextureBinding};
+use crate::{
+    AccelerationStructureAABBs, AccelerationStructureEntries, AccelerationStructureInstances,
+    AccelerationStructureTriangleIndices, AccelerationStructureTriangleTransform,
+    AccelerationStructureTriangles, BufferBinding, ProgrammableStage, TextureBinding,
+};
 
 /// Base trait for all resources, allows downcasting via [`Any`].
 pub trait DynResource: Any + WasmNotSendSync + 'static {
@@ -138,6 +142,61 @@ impl<'a> ProgrammableStage<'a, dyn DynShaderModule> {
             entry_point: self.entry_point,
             constants: self.constants,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+        }
+    }
+}
+
+impl<'a> AccelerationStructureEntries<'a, dyn DynBuffer> {
+    fn expect_downcast<B: DynBuffer>(&self) -> AccelerationStructureEntries<'a, B> {
+        match self {
+            AccelerationStructureEntries::Instances(instances) => {
+                AccelerationStructureEntries::Instances(AccelerationStructureInstances {
+                    buffer: instances.buffer.map(|b| b.expect_downcast_ref()),
+                    offset: instances.offset,
+                    count: instances.count,
+                })
+            }
+            AccelerationStructureEntries::Triangles(triangles) => {
+                AccelerationStructureEntries::Triangles(
+                    triangles
+                        .iter()
+                        .map(|t| AccelerationStructureTriangles {
+                            vertex_buffer: t.vertex_buffer.map(|b| b.expect_downcast_ref()),
+                            vertex_format: t.vertex_format,
+                            first_vertex: t.first_vertex,
+                            vertex_count: t.vertex_count,
+                            vertex_stride: t.vertex_stride,
+                            indices: t.indices.as_ref().map(|i| {
+                                AccelerationStructureTriangleIndices {
+                                    buffer: i.buffer.map(|b| b.expect_downcast_ref()),
+                                    format: i.format,
+                                    offset: i.offset,
+                                    count: i.count,
+                                }
+                            }),
+                            transform: t.transform.as_ref().map(|t| {
+                                AccelerationStructureTriangleTransform {
+                                    buffer: t.buffer.expect_downcast_ref(),
+                                    offset: t.offset,
+                                }
+                            }),
+                            flags: t.flags,
+                        })
+                        .collect(),
+                )
+            }
+            AccelerationStructureEntries::AABBs(entries) => AccelerationStructureEntries::AABBs(
+                entries
+                    .iter()
+                    .map(|e| AccelerationStructureAABBs {
+                        buffer: e.buffer.map(|b| b.expect_downcast_ref()),
+                        offset: e.offset,
+                        count: e.count,
+                        stride: e.stride,
+                        flags: e.flags,
+                    })
+                    .collect(),
+            ),
         }
     }
 }
