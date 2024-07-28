@@ -4,14 +4,14 @@
 use crate::{
     Api, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping,
     CommandEncoderDescriptor, ComputePipelineDescriptor, Device, DeviceError, DynBuffer,
-    DynResource, Label, MemoryRange, PipelineCacheDescriptor, PipelineCacheError, PipelineError,
-    PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderError,
-    ShaderInput, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
+    DynResource, FenceValue, Label, MemoryRange, PipelineCacheDescriptor, PipelineCacheError,
+    PipelineError, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
+    ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use super::{
     DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynCommandEncoder,
-    DynComputePipeline, DynPipelineCache, DynPipelineLayout, DynQuerySet, DynQueue,
+    DynComputePipeline, DynFence, DynPipelineCache, DynPipelineLayout, DynQuerySet, DynQueue,
     DynRenderPipeline, DynResourceExt as _, DynSampler, DynShaderModule, DynTexture,
     DynTextureView,
 };
@@ -123,6 +123,10 @@ pub trait DynDevice: DynResource {
         desc: &wgt::QuerySetDescriptor<Label>,
     ) -> Result<Box<dyn DynQuerySet>, DeviceError>;
     unsafe fn destroy_query_set(&self, set: Box<dyn DynQuerySet>);
+
+    unsafe fn create_fence(&self) -> Result<Box<dyn DynFence>, DeviceError>;
+    unsafe fn destroy_fence(&self, fence: Box<dyn DynFence>);
+    unsafe fn get_fence_value(&self, fence: &dyn DynFence) -> Result<FenceValue, DeviceError>;
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -404,5 +408,18 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_query_set(&self, query_set: Box<dyn DynQuerySet>) {
         unsafe { D::destroy_query_set(self, query_set.unbox()) };
+    }
+
+    unsafe fn create_fence(&self) -> Result<Box<dyn DynFence>, DeviceError> {
+        unsafe { D::create_fence(self) }.map(|f| Box::new(f) as Box<dyn DynFence>)
+    }
+
+    unsafe fn destroy_fence(&self, fence: Box<dyn DynFence>) {
+        unsafe { D::destroy_fence(self, fence.unbox()) };
+    }
+
+    unsafe fn get_fence_value(&self, fence: &dyn DynFence) -> Result<FenceValue, DeviceError> {
+        let fence = fence.expect_downcast_ref();
+        unsafe { D::get_fence_value(self, fence) }
     }
 }
