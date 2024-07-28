@@ -408,7 +408,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(&mut self, descriptor_count: u32, descriptors: T)
     where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+        T: IntoIterator<
+            Item = crate::BuildAccelerationStructureDescriptor<
+                'a,
+                super::Buffer,
+                super::AccelerationStructure,
+            >,
+        >,
     {
         const CAPACITY_OUTER: usize = 8;
         const CAPACITY_INNER: usize = 1;

@@ -1600,7 +1600,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
         unimplemented!()
     }
