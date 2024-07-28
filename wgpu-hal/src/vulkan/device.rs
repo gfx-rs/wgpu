@@ -1,4 +1,4 @@
-use super::{conv, PipelineCache};
+use super::conv;
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
@@ -709,7 +709,7 @@ impl super::Device {
 
     fn compile_stage(
         &self,
-        stage: &crate::ProgrammableStage<super::Api>,
+        stage: &crate::ProgrammableStage<super::ShaderModule>,
         naga_stage: naga::ShaderStage,
         binding_map: &naga::back::spv::BindingMap,
     ) -> Result<CompiledStage, crate::PipelineError> {
@@ -1725,7 +1725,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_render_pipeline(
         &self,
-        desc: &crate::RenderPipelineDescriptor<super::Api>,
+        desc: &crate::RenderPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let dynamic_states = [
             vk::DynamicState::VIEWPORT,
@@ -1955,6 +1959,7 @@ impl crate::Device for super::Device {
 
         Ok(super::RenderPipeline { raw })
     }
+
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
 
@@ -1963,7 +1968,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_compute_pipeline(
         &self,
-        desc: &crate::ComputePipelineDescriptor<super::Api>,
+        desc: &crate::ComputePipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let compiled = self.compile_stage(
             &desc.stage,
@@ -2015,7 +2024,7 @@ impl crate::Device for super::Device {
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Result<PipelineCache, crate::PipelineCacheError> {
+    ) -> Result<super::PipelineCache, crate::PipelineCacheError> {
         let mut info = vk::PipelineCacheCreateInfo::default();
         if let Some(data) = desc.data {
             info = info.initial_data(data)
@@ -2024,12 +2033,12 @@ impl crate::Device for super::Device {
         let raw = unsafe { self.shared.raw.create_pipeline_cache(&info, None) }
             .map_err(crate::DeviceError::from)?;
 
-        Ok(PipelineCache { raw })
+        Ok(super::PipelineCache { raw })
     }
     fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
         Some(self.shared.pipeline_cache_validation_key)
     }
-    unsafe fn destroy_pipeline_cache(&self, cache: PipelineCache) {
+    unsafe fn destroy_pipeline_cache(&self, cache: super::PipelineCache) {
         unsafe { self.shared.raw.destroy_pipeline_cache(cache.raw, None) }
     }
     unsafe fn create_query_set(
@@ -2160,7 +2169,7 @@ impl crate::Device for super::Device {
         }
     }
 
-    unsafe fn pipeline_cache_get_data(&self, cache: &PipelineCache) -> Option<Vec<u8>> {
+    unsafe fn pipeline_cache_get_data(&self, cache: &super::PipelineCache) -> Option<Vec<u8>> {
         let data = unsafe { self.raw_device().get_pipeline_cache_data(cache.raw) };
         data.ok()
     }

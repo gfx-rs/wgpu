@@ -862,6 +862,8 @@ pub struct PipelineCache {
     raw: vk::PipelineCache,
 }
 
+impl crate::DynPipelineCache for PipelineCache {}
+
 #[derive(Debug)]
 pub struct QuerySet {
     raw: vk::QueryPool,

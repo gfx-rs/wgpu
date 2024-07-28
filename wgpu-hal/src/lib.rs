@@ -441,7 +441,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ShaderModule: DynShaderModule;
     type RenderPipeline: DynRenderPipeline;
     type ComputePipeline: DynComputePipeline;
-    type PipelineCache: fmt::Debug + WasmNotSendSync;
+    type PipelineCache: DynPipelineCache + fmt::Debug;
 
     type AccelerationStructure: DynAccelerationStructure + fmt::Debug + 'static;
 }
@@ -824,16 +824,29 @@ pub trait Device: WasmNotSendSync {
         shader: ShaderInput,
     ) -> Result<<Self::A as Api>::ShaderModule, ShaderError>;
     unsafe fn destroy_shader_module(&self, module: <Self::A as Api>::ShaderModule);
+
+    #[allow(clippy::type_complexity)]
     unsafe fn create_render_pipeline(
         &self,
-        desc: &RenderPipelineDescriptor<Self::A>,
+        desc: &RenderPipelineDescriptor<
+            <Self::A as Api>::PipelineLayout,
+            <Self::A as Api>::ShaderModule,
+            <Self::A as Api>::PipelineCache,
+        >,
     ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
+
+    #[allow(clippy::type_complexity)]
     unsafe fn create_compute_pipeline(
         &self,
-        desc: &ComputePipelineDescriptor<Self::A>,
+        desc: &ComputePipelineDescriptor<
+            <Self::A as Api>::PipelineLayout,
+            <Self::A as Api>::ShaderModule,
+            <Self::A as Api>::PipelineCache,
+        >,
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
+
     unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
@@ -1887,9 +1900,9 @@ pub struct DebugSource {
 
 /// Describes a programmable pipeline stage.
 #[derive(Debug)]
-pub struct ProgrammableStage<'a, A: Api> {
+pub struct ProgrammableStage<'a, M: DynShaderModule + ?Sized> {
     /// The compiled shader module for this stage.
-    pub module: &'a A::ShaderModule,
+    pub module: &'a M,
     /// The name of the entry point in the compiled shader. There must be a function with this name
     ///  in the shader.
     pub entry_point: &'a str,
@@ -1902,8 +1915,7 @@ pub struct ProgrammableStage<'a, A: Api> {
     pub zero_initialize_workgroup_memory: bool,
 }
 
-// Rust gets confused about the impl requirements for `A`
-impl<A: Api> Clone for ProgrammableStage<'_, A> {
+impl<M: DynShaderModule + ?Sized> Clone for ProgrammableStage<'_, M> {
     fn clone(&self) -> Self {
         Self {
             module: self.module,
@@ -1916,14 +1928,19 @@ impl<A: Api> Clone for ProgrammableStage<'_, A> {
 
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
-pub struct ComputePipelineDescriptor<'a, A: Api> {
+pub struct ComputePipelineDescriptor<
+    'a,
+    Pl: DynPipelineLayout + ?Sized,
+    M: DynShaderModule + ?Sized,
+    Pc: DynPipelineCache + ?Sized,
+> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: &'a A::PipelineLayout,
+    pub layout: &'a Pl,
     /// The compiled compute stage and its entry point.
-    pub stage: ProgrammableStage<'a, A>,
+    pub stage: ProgrammableStage<'a, M>,
     /// The cache which will be used and filled when compiling this pipeline
-    pub cache: Option<&'a A::PipelineCache>,
+    pub cache: Option<&'a Pc>,
 }
 
 pub struct PipelineCacheDescriptor<'a> {
@@ -1944,14 +1961,19 @@ pub struct VertexBufferLayout<'a> {
 
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
-pub struct RenderPipelineDescriptor<'a, A: Api> {
+pub struct RenderPipelineDescriptor<
+    'a,
+    Pl: DynPipelineLayout + ?Sized,
+    M: DynShaderModule + ?Sized,
+    Pc: DynPipelineCache + ?Sized,
+> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: &'a A::PipelineLayout,
+    pub layout: &'a Pl,
     /// The format of any vertex buffers used with this pipeline.
     pub vertex_buffers: &'a [VertexBufferLayout<'a>],
     /// The vertex stage for this pipeline.
-    pub vertex_stage: ProgrammableStage<'a, A>,
+    pub vertex_stage: ProgrammableStage<'a, M>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
@@ -1959,14 +1981,14 @@ pub struct RenderPipelineDescriptor<'a, A: Api> {
     /// The multi-sampling properties of the pipeline.
     pub multisample: wgt::MultisampleState,
     /// The fragment stage for this pipeline.
-    pub fragment_stage: Option<ProgrammableStage<'a, A>>,
+    pub fragment_stage: Option<ProgrammableStage<'a, M>>,
     /// The effect of draw calls on the color aspect of the output target.
     pub color_targets: &'a [Option<wgt::ColorTargetState>],
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
     /// The cache which will be used and filled when compiling this pipeline
-    pub cache: Option<&'a A::PipelineCache>,
+    pub cache: Option<&'a Pc>,
 }
 
 #[derive(Debug, Clone)]
