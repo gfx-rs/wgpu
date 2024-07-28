@@ -2,17 +2,21 @@
 #![allow(trivial_casts)]
 
 use crate::{
-    Api, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping,
-    CommandEncoderDescriptor, ComputePipelineDescriptor, Device, DeviceError, DynBuffer,
-    DynResource, FenceValue, Label, MemoryRange, PipelineCacheDescriptor, PipelineCacheError,
-    PipelineError, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
-    ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
+    AccelerationStructureAABBs, AccelerationStructureBuildSizes, AccelerationStructureDescriptor,
+    AccelerationStructureEntries, AccelerationStructureInstances,
+    AccelerationStructureTriangleIndices, AccelerationStructureTriangleTransform,
+    AccelerationStructureTriangles, Api, BindGroupDescriptor, BindGroupLayoutDescriptor,
+    BufferDescriptor, BufferMapping, CommandEncoderDescriptor, ComputePipelineDescriptor, Device,
+    DeviceError, FenceValue, GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange,
+    PipelineCacheDescriptor, PipelineCacheError, PipelineError, PipelineLayoutDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor,
+    TextureDescriptor, TextureViewDescriptor,
 };
 
 use super::{
-    DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynCommandEncoder,
+    DynAccelerationStructure, DynBindGroup, DynBindGroupLayout, DynBuffer, DynCommandEncoder,
     DynComputePipeline, DynFence, DynPipelineCache, DynPipelineLayout, DynQuerySet, DynQueue,
-    DynRenderPipeline, DynResourceExt as _, DynSampler, DynShaderModule, DynTexture,
+    DynRenderPipeline, DynResource, DynResourceExt as _, DynSampler, DynShaderModule, DynTexture,
     DynTextureView,
 };
 
@@ -139,6 +143,23 @@ pub trait DynDevice: DynResource {
     unsafe fn stop_capture(&self);
 
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>>;
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &AccelerationStructureDescriptor,
+    ) -> Result<Box<dyn DynAccelerationStructure>, DeviceError>;
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        desc: &GetAccelerationStructureBuildSizesDescriptor<dyn DynBuffer>,
+    ) -> AccelerationStructureBuildSizes;
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &dyn DynAccelerationStructure,
+    ) -> wgt::BufferAddress;
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: Box<dyn DynAccelerationStructure>,
+    );
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -451,5 +472,90 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>> {
         let cache = cache.expect_downcast_ref();
         unsafe { D::pipeline_cache_get_data(self, cache) }
+    }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &AccelerationStructureDescriptor,
+    ) -> Result<Box<dyn DynAccelerationStructure>, DeviceError> {
+        unsafe { D::create_acceleration_structure(self, desc) }
+            .map(|b| Box::new(b) as Box<dyn DynAccelerationStructure>)
+    }
+
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        desc: &GetAccelerationStructureBuildSizesDescriptor<dyn DynBuffer>,
+    ) -> AccelerationStructureBuildSizes {
+        let entries = match &desc.entries {
+            AccelerationStructureEntries::Instances(instances) => {
+                AccelerationStructureEntries::Instances(AccelerationStructureInstances {
+                    buffer: instances.buffer.map(|b| b.expect_downcast_ref()),
+                    offset: instances.offset,
+                    count: instances.count,
+                })
+            }
+            AccelerationStructureEntries::Triangles(triangles) => {
+                AccelerationStructureEntries::Triangles(
+                    triangles
+                        .iter()
+                        .map(|t| AccelerationStructureTriangles {
+                            vertex_buffer: t.vertex_buffer.map(|b| b.expect_downcast_ref()),
+                            vertex_format: t.vertex_format,
+                            first_vertex: t.first_vertex,
+                            vertex_count: t.vertex_count,
+                            vertex_stride: t.vertex_stride,
+                            indices: t.indices.as_ref().map(|i| {
+                                AccelerationStructureTriangleIndices {
+                                    buffer: i.buffer.map(|b| b.expect_downcast_ref()),
+                                    format: i.format,
+                                    offset: i.offset,
+                                    count: i.count,
+                                }
+                            }),
+                            transform: t.transform.as_ref().map(|t| {
+                                AccelerationStructureTriangleTransform {
+                                    buffer: t.buffer.expect_downcast_ref(),
+                                    offset: t.offset,
+                                }
+                            }),
+                            flags: t.flags,
+                        })
+                        .collect(),
+                )
+            }
+            AccelerationStructureEntries::AABBs(entries) => AccelerationStructureEntries::AABBs(
+                entries
+                    .iter()
+                    .map(|e| AccelerationStructureAABBs {
+                        buffer: e.buffer.map(|b| b.expect_downcast_ref()),
+                        offset: e.offset,
+                        count: e.count,
+                        stride: e.stride,
+                        flags: e.flags,
+                    })
+                    .collect(),
+            ),
+        };
+
+        let desc = GetAccelerationStructureBuildSizesDescriptor {
+            entries: &entries,
+            flags: desc.flags,
+        };
+        unsafe { D::get_acceleration_structure_build_sizes(self, &desc) }
+    }
+
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &dyn DynAccelerationStructure,
+    ) -> wgt::BufferAddress {
+        let acceleration_structure = acceleration_structure.expect_downcast_ref();
+        unsafe { D::get_acceleration_structure_device_address(self, acceleration_structure) }
+    }
+
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: Box<dyn DynAccelerationStructure>,
+    ) {
+        unsafe { D::destroy_acceleration_structure(self, acceleration_structure.unbox()) }
     }
 }

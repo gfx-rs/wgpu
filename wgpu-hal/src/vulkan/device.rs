@@ -2176,7 +2176,7 @@ impl crate::Device for super::Device {
 
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
         const CAPACITY: usize = 8;
 
