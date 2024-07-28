@@ -4,9 +4,9 @@
 use crate::{
     Api, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping,
     CommandEncoderDescriptor, ComputePipelineDescriptor, Device, DeviceError, DynBuffer,
-    DynResource, MemoryRange, PipelineError, PipelineLayoutDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor,
-    TextureViewDescriptor,
+    DynResource, MemoryRange, PipelineCacheDescriptor, PipelineCacheError, PipelineError,
+    PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderError,
+    ShaderInput, ShaderModuleDescriptor, TextureDescriptor, TextureViewDescriptor,
 };
 
 use super::{
@@ -107,6 +107,15 @@ pub trait DynDevice: DynResource {
         >,
     ) -> Result<Box<dyn DynComputePipeline>, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>);
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Result<Box<dyn DynPipelineCache>, PipelineCacheError>;
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        None
+    }
+    unsafe fn destroy_pipeline_cache(&self, cache: Box<dyn DynPipelineCache>);
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -356,5 +365,21 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>) {
         unsafe { D::destroy_compute_pipeline(self, pipeline.unbox()) };
+    }
+
+    unsafe fn create_pipeline_cache(
+        &self,
+        desc: &PipelineCacheDescriptor<'_>,
+    ) -> Result<Box<dyn DynPipelineCache>, PipelineCacheError> {
+        unsafe { D::create_pipeline_cache(self, desc) }
+            .map(|b| Box::new(b) as Box<dyn DynPipelineCache>)
+    }
+
+    fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
+        D::pipeline_cache_validation_key(self)
+    }
+
+    unsafe fn destroy_pipeline_cache(&self, pipeline_cache: Box<dyn DynPipelineCache>) {
+        unsafe { D::destroy_pipeline_cache(self, pipeline_cache.unbox()) };
     }
 }
