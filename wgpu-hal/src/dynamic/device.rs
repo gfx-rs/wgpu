@@ -127,6 +127,18 @@ pub trait DynDevice: DynResource {
     unsafe fn create_fence(&self) -> Result<Box<dyn DynFence>, DeviceError>;
     unsafe fn destroy_fence(&self, fence: Box<dyn DynFence>);
     unsafe fn get_fence_value(&self, fence: &dyn DynFence) -> Result<FenceValue, DeviceError>;
+
+    unsafe fn wait(
+        &self,
+        fence: &dyn DynFence,
+        value: FenceValue,
+        timeout_ms: u32,
+    ) -> Result<bool, DeviceError>;
+
+    unsafe fn start_capture(&self) -> bool;
+    unsafe fn stop_capture(&self);
+
+    unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>>;
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -421,5 +433,28 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn get_fence_value(&self, fence: &dyn DynFence) -> Result<FenceValue, DeviceError> {
         let fence = fence.expect_downcast_ref();
         unsafe { D::get_fence_value(self, fence) }
+    }
+
+    unsafe fn wait(
+        &self,
+        fence: &dyn DynFence,
+        value: FenceValue,
+        timeout_ms: u32,
+    ) -> Result<bool, DeviceError> {
+        let fence = fence.expect_downcast_ref();
+        unsafe { D::wait(self, fence, value, timeout_ms) }
+    }
+
+    unsafe fn start_capture(&self) -> bool {
+        unsafe { D::start_capture(self) }
+    }
+
+    unsafe fn stop_capture(&self) {
+        unsafe { D::stop_capture(self) }
+    }
+
+    unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>> {
+        let cache = cache.expect_downcast_ref();
+        unsafe { D::pipeline_cache_get_data(self, cache) }
     }
 }
