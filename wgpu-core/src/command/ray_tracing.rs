@@ -14,7 +14,7 @@ use crate::{
     FastHashSet,
 };
 
-use wgt::{math::align_to, BufferUsages, BufferAddress};
+use wgt::{math::align_to, BufferAddress, BufferUsages};
 
 use super::{BakedCommands, CommandBufferMutable, CommandEncoderError};
 use crate::lock::rank;
@@ -36,6 +36,8 @@ type BufferStorage<'a, A> = Vec<(
     BlasTriangleGeometry<'a>,
     Option<Arc<Blas<A>>>,
 )>;
+
+type BlasStorage<'a, A> = Vec<(Arc<Blas<A>>, hal::AccelerationStructureEntries<'a, A>, u64)>;
 
 // This should be queried from the device, maybe the the hal api should pre aline it, since I am unsure how else we can idiomatically get this value.
 const SCRATCH_BUFFER_ALIGNMENT: u32 = 256;
@@ -146,18 +148,10 @@ impl Global {
         let tlas_iter = trace_tlas.iter();
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
-        let mut buf_storage = Vec::<(
-            Arc<Buffer<A>>,
-            Option<PendingTransition<BufferUses>>,
-            Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>,
-            Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>,
-            BlasTriangleGeometry,
-            Option<Arc<Blas<A>>>,
-        )>::new();
+        let mut buf_storage = BufferStorage::new();
 
         let mut scratch_buffer_blas_size = 0;
-        let mut blas_storage =
-            Vec::<(Arc<Blas<A>>, hal::AccelerationStructureEntries<A>, u64)>::new();
+        let mut blas_storage = BlasStorage::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -493,18 +487,10 @@ impl Global {
         });
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
-        let mut buf_storage = Vec::<(
-            Arc<Buffer<A>>,
-            Option<PendingTransition<BufferUses>>,
-            Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>,
-            Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>,
-            BlasTriangleGeometry,
-            Option<Arc<Blas<A>>>,
-        )>::new();
+        let mut buf_storage = BufferStorage::new();
 
         let mut scratch_buffer_blas_size = 0;
-        let mut blas_storage =
-            Vec::<(Arc<Blas<A>>, hal::AccelerationStructureEntries<A>, u64)>::new();
+        let mut blas_storage = BlasStorage::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -1030,7 +1016,7 @@ fn iter_buffers<'a, 'b, A: HalApi>(
     cmd_buf_data: &mut CommandBufferMutable<A>,
     buffer_guard: &RwLockReadGuard<Storage<Buffer<A>>>,
     scratch_buffer_blas_size: &mut u64,
-    blas_storage: &mut Vec<(Arc<Blas<A>>, hal::AccelerationStructureEntries<'a, A>, u64)>,
+    blas_storage: &mut BlasStorage<'a, A>,
 ) -> Result<(), BuildAccelerationStructureError> {
     let mut triangle_entries = Vec::<hal::AccelerationStructureTriangles<A>>::new();
     for buf in buf_storage {
@@ -1219,7 +1205,11 @@ fn iter_buffers<'a, 'b, A: HalApi>(
 }
 
 fn map_blas<'a, A: HalApi>(
-    storage: &'a (Arc<Blas<A>>, hal::AccelerationStructureEntries<A>, BufferAddress),
+    storage: &'a (
+        Arc<Blas<A>>,
+        hal::AccelerationStructureEntries<A>,
+        BufferAddress,
+    ),
     scratch_buffer: &'a <A as Api>::Buffer,
 ) -> hal::BuildAccelerationStructureDescriptor<'a, A> {
     let (blas, entries, scratch_buffer_offset) = storage;
