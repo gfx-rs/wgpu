@@ -59,6 +59,12 @@ impl crate::DynSurfaceTexture for Resource {}
 impl crate::DynTexture for Resource {}
 impl crate::DynTextureView for Resource {}
 
+impl std::borrow::Borrow<dyn crate::DynTexture> for Resource {
+    fn borrow(&self) -> &dyn crate::DynTexture {
+        self
+    }
+}
+
 impl crate::Instance for Context {
     type A = Api;
 

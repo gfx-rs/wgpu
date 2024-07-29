@@ -1,6 +1,6 @@
 use crate::{
-    DeviceError, DynCommandBuffer, DynFence, DynResource, DynSurface, DynTextureView, FenceValue,
-    Queue, SurfaceError,
+    DeviceError, DynCommandBuffer, DynFence, DynResource, DynSurface, DynSurfaceTexture,
+    DynTextureView, FenceValue, Queue, SurfaceError,
 };
 
 use super::DynResourceExt as _;
@@ -9,7 +9,7 @@ pub trait DynQueue: DynResource {
     unsafe fn submit(
         &self,
         command_buffers: &[&dyn DynCommandBuffer],
-        surface_textures: &[&dyn DynTextureView],
+        surface_textures: &[&dyn DynSurfaceTexture],
         signal_fence: (&mut dyn DynFence, FenceValue),
     ) -> Result<(), DeviceError>;
     unsafe fn present(
@@ -24,7 +24,7 @@ impl<Q: Queue + DynResource> DynQueue for Q {
     unsafe fn submit(
         &self,
         command_buffers: &[&dyn DynCommandBuffer],
-        surface_textures: &[&dyn DynTextureView],
+        surface_textures: &[&dyn DynSurfaceTexture],
         signal_fence: (&mut dyn DynFence, FenceValue),
     ) -> Result<(), DeviceError> {
         let command_buffers = command_buffers

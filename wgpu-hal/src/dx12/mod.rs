@@ -460,6 +460,12 @@ pub struct Texture {
 impl crate::DynTexture for Texture {}
 impl crate::DynSurfaceTexture for Texture {}
 
+impl std::borrow::Borrow<dyn crate::DynTexture> for Texture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
+        self
+    }
+}
+
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
