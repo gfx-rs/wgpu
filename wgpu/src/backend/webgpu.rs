@@ -741,6 +741,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 11] = [
         webgpu_sys::GpuFeatureName::TextureCompressionBc,
     ),
     (
+        wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionBcSliced3d,
+    ),
+    (
         wgt::Features::TEXTURE_COMPRESSION_ETC2,
         webgpu_sys::GpuFeatureName::TextureCompressionEtc2,
     ),

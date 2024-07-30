@@ -21,6 +21,7 @@ pub enum GpuFeatureName {
     DepthClipControl = "depth-clip-control",
     Depth32floatStencil8 = "depth32float-stencil8",
     TextureCompressionBc = "texture-compression-bc",
+    TextureCompressionBcSliced3d = "texture-compression-bc-sliced-3d",
     TextureCompressionEtc2 = "texture-compression-etc2",
     TextureCompressionAstc = "texture-compression-astc",
     TimestampQuery = "timestamp-query",

@@ -771,12 +771,17 @@ impl<A: HalApi> Device<A> {
                 ));
             }
 
-            // Only BCn formats are supported for 3D textures
-            if desc.dimension == wgt::TextureDimension::D3 && !desc.format.is_bcn() {
-                return Err(CreateTextureError::InvalidCompressedDimension(
-                    desc.dimension,
-                    desc.format,
-                ));
+            if desc.dimension == wgt::TextureDimension::D3 {
+                // Only BCn formats with Sliced 3D feature can be used for 3D textures
+                if desc.format.is_bcn() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else {
+                    return Err(CreateTextureError::InvalidCompressedDimension(
+                        desc.dimension,
+                        desc.format,
+                    ));
+                }
             }
         }
 

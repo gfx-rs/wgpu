@@ -385,7 +385,11 @@ static CLEAR_TEXTURE_DEPTH32_STENCIL8: GpuTestConfiguration = GpuTestConfigurati
 static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
+            .features(
+                wgpu::Features::CLEAR_TEXTURE
+                    | wgpu::Features::TEXTURE_COMPRESSION_BC
+                    | wgpu::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
+            )
             .limits(wgpu::Limits {
                 max_texture_dimension_3d: 1024,
                 ..wgpu::Limits::downlevel_defaults()
