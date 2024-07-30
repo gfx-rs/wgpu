@@ -443,7 +443,6 @@ pub trait Instance: Sized + WasmNotSendSync {
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<<Self::A as Api>::Surface, InstanceError>;
-    unsafe fn destroy_surface(&self, surface: <Self::A as Api>::Surface);
     /// `surface_hint` is only used by the GLES backend targeting WebGL2
     unsafe fn enumerate_adapters(
         &self,

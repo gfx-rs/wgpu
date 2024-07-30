@@ -18,10 +18,10 @@ doc = false
 test = false
 
 [dependencies]
-bincode = "1"
-codespan-reporting = "0.11"
-env_logger = "0.11"
-argh = "0.1.5"
+bincode.workspace = true
+codespan-reporting.workspace = true
+env_logger.workspace = true
+argh.workspace = true
 anyhow.workspace = true
 
 [dependencies.naga]

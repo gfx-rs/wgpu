@@ -1,7 +1,6 @@
 (
 	bounds_check_policies: (
 		image_load: ReadZeroSkipWrite,
-		image_store: ReadZeroSkipWrite,
 	),
 	spv: (
 		version: (1, 1),

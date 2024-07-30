@@ -248,6 +248,7 @@ mod compat {
                 .filter_map(|(i, e)| if e.is_active() { Some(i) } else { None })
         }
 
+        #[allow(clippy::result_large_err)]
         pub fn get_invalid(&self) -> Result<(), (usize, Error)> {
             for (index, entry) in self.entries.iter().enumerate() {
                 entry.check().map_err(|e| (index, e))?;

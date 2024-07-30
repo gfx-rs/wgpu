@@ -143,9 +143,6 @@ impl crate::Instance for super::Instance {
             ))),
         }
     }
-    unsafe fn destroy_surface(&self, _surface: super::Surface) {
-        // just drop
-    }
 
     unsafe fn enumerate_adapters(
         &self,

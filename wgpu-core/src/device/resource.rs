@@ -32,7 +32,7 @@ use crate::{
         UsageScopePool,
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
-    FastHashMap, LabelHelpers as _, PreHashedKey, PreHashedMap, SubmissionIndex,
+    FastHashMap, LabelHelpers as _, PreHashedKey, PreHashedMap,
 };
 
 use arrayvec::ArrayVec;
@@ -443,7 +443,7 @@ impl<A: HalApi> Device<A> {
                     .map_err(DeviceError::from)?
             };
         }
-        log::info!("Device::maintain: waiting for submission index {submission_index}");
+        log::trace!("Device::maintain: waiting for submission index {submission_index}");
 
         let mut life_tracker = self.lock_life();
         let submission_closures =
@@ -3486,27 +3486,21 @@ impl<A: HalApi> Device<A> {
         }
     }
 
+    #[cfg(feature = "replay")]
     pub(crate) fn wait_for_submit(
         &self,
-        submission_index: SubmissionIndex,
-    ) -> Result<(), WaitIdleError> {
+        submission_index: crate::SubmissionIndex,
+    ) -> Result<(), DeviceError> {
         let guard = self.fence.read();
         let fence = guard.as_ref().unwrap();
-        let last_done_index = unsafe {
-            self.raw
-                .as_ref()
-                .unwrap()
-                .get_fence_value(fence)
-                .map_err(DeviceError::from)?
-        };
+        let last_done_index = unsafe { self.raw.as_ref().unwrap().get_fence_value(fence)? };
         if last_done_index < submission_index {
             log::info!("Waiting for submission {:?}", submission_index);
             unsafe {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .wait(fence, submission_index, !0)
-                    .map_err(DeviceError::from)?
+                    .wait(fence, submission_index, !0)?
             };
             drop(guard);
             let closures = self

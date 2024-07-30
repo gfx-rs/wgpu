@@ -42,6 +42,5 @@
 		index: ReadZeroSkipWrite,
 		buffer: ReadZeroSkipWrite,
 		image_load: ReadZeroSkipWrite,
-		image_store: ReadZeroSkipWrite,
 	)
 )

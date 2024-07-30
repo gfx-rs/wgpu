@@ -22,7 +22,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     fmt::Debug,
     iter,
     mem::{self, ManuallyDrop},
@@ -78,7 +78,7 @@ impl TrackingData {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ResourceErrorIdent {
-    r#type: &'static str,
+    r#type: Cow<'static, str>,
     label: String,
 }
 
@@ -156,7 +156,7 @@ pub(crate) trait Labeled: ResourceType {
 
     fn error_ident(&self) -> ResourceErrorIdent {
         ResourceErrorIdent {
-            r#type: Self::TYPE,
+            r#type: Cow::Borrowed(Self::TYPE),
             label: self.label().to_owned(),
         }
     }
@@ -343,7 +343,6 @@ pub struct BufferMapOperation {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[non_exhaustive]
 pub enum BufferAccessError {
     #[error(transparent)]
@@ -393,7 +392,6 @@ pub enum BufferAccessError {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[error("Usage flags {actual:?} of {res} do not contain required usage flags {expected:?}")]
 pub struct MissingBufferUsageError {
     pub(crate) res: ResourceErrorIdent,
@@ -411,7 +409,6 @@ pub struct MissingTextureUsageError {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 #[error("{0} has been destroyed")]
 pub struct DestroyedResourceError(pub ResourceErrorIdent);
 
@@ -714,7 +711,7 @@ impl<A: HalApi> Buffer<A> {
             };
 
             queue::TempResource::DestroyedBuffer(DestroyedBuffer {
-                raw: Some(raw),
+                raw: ManuallyDrop::new(raw),
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
                 bind_groups,
@@ -764,7 +761,7 @@ crate::impl_trackable!(Buffer);
 /// A buffer that has been marked as destroyed and is staged for actual deletion soon.
 #[derive(Debug)]
 pub struct DestroyedBuffer<A: HalApi> {
-    raw: Option<A::Buffer>,
+    raw: ManuallyDrop<A::Buffer>,
     device: Arc<Device<A>>,
     label: String,
     bind_groups: Vec<Weak<BindGroup<A>>>,
@@ -784,13 +781,12 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
         }
         drop(deferred);
 
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
-
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_buffer(raw);
-            }
+        resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_buffer(raw);
         }
     }
 }
@@ -1177,7 +1173,7 @@ impl<A: HalApi> Texture<A> {
             };
 
             queue::TempResource::DestroyedTexture(DestroyedTexture {
-                raw: Some(raw),
+                raw: ManuallyDrop::new(raw),
                 views,
                 bind_groups,
                 device: Arc::clone(&self.device),
@@ -1366,7 +1362,7 @@ impl Global {
 /// A texture that has been marked as destroyed and is staged for actual deletion soon.
 #[derive(Debug)]
 pub struct DestroyedTexture<A: HalApi> {
-    raw: Option<A::Texture>,
+    raw: ManuallyDrop<A::Texture>,
     views: Vec<Weak<TextureView<A>>>,
     bind_groups: Vec<Weak<BindGroup<A>>>,
     device: Arc<Device<A>>,
@@ -1392,13 +1388,12 @@ impl<A: HalApi> Drop for DestroyedTexture<A> {
         }
         drop(deferred);
 
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
-
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_texture(raw);
-            }
+        resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_texture(raw);
         }
     }
 }

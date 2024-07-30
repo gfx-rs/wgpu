@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 428
+; Bound: 413
 OpCapability Shader
 OpCapability ImageQuery
 OpCapability ShaderNonUniform
@@ -77,8 +77,8 @@ OpDecorate %380 NonUniform
 OpDecorate %381 NonUniform
 OpDecorate %382 NonUniform
 OpDecorate %383 NonUniform
-OpDecorate %405 NonUniform
-OpDecorate %406 NonUniform
+OpDecorate %395 NonUniform
+OpDecorate %396 NonUniform
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeStruct %3
@@ -521,54 +521,30 @@ OpStore %72 %387
 %389 = OpAccessChain  %388  %36 %55
 %390 = OpLoad  %16  %389
 %391 = OpLoad  %22  %72
-%392 = OpImageQuerySize  %64  %390
-%393 = OpULessThan  %157  %65 %392
-%394 = OpAll  %150  %393
-OpSelectionMerge %395 None
-OpBranchConditional %394 %396 %395
-%396 = OpLabel
 OpImageWrite %390 %65 %391
-OpBranch %395
-%395 = OpLabel
-%397 = OpAccessChain  %388  %36 %77
-%398 = OpLoad  %16  %397
-%399 = OpLoad  %22  %72
-%400 = OpImageQuerySize  %64  %398
-%401 = OpULessThan  %157  %65 %400
-%402 = OpAll  %150  %401
-OpSelectionMerge %403 None
-OpBranchConditional %402 %404 %403
-%404 = OpLabel
-OpImageWrite %398 %65 %399
-OpBranch %403
-%403 = OpLabel
-%405 = OpAccessChain  %388  %36 %78
-%406 = OpLoad  %16  %405
-%407 = OpLoad  %22  %72
-%408 = OpImageQuerySize  %64  %406
-%409 = OpULessThan  %157  %65 %408
-%410 = OpAll  %150  %409
-OpSelectionMerge %411 None
-OpBranchConditional %410 %412 %411
-%412 = OpLabel
-OpImageWrite %406 %65 %407
-OpBranch %411
-%411 = OpLabel
-%413 = OpLoad  %23  %68
-%414 = OpLoad  %3  %66
-%415 = OpCompositeConstruct  %23  %414 %414
-%416 = OpIAdd  %23  %413 %415
-%417 = OpConvertUToF  %60  %416
-%418 = OpLoad  %22  %72
-%419 = OpCompositeExtract  %6  %417 0
-%420 = OpCompositeExtract  %6  %417 1
-%421 = OpCompositeExtract  %6  %417 0
-%422 = OpCompositeExtract  %6  %417 1
-%423 = OpCompositeConstruct  %22  %419 %420 %421 %422
-%424 = OpFAdd  %22  %418 %423
-%425 = OpLoad  %6  %70
-%426 = OpCompositeConstruct  %22  %425 %425 %425 %425
-%427 = OpFAdd  %22  %424 %426
-OpStore %50 %427
+%392 = OpAccessChain  %388  %36 %77
+%393 = OpLoad  %16  %392
+%394 = OpLoad  %22  %72
+OpImageWrite %393 %65 %394
+%395 = OpAccessChain  %388  %36 %78
+%396 = OpLoad  %16  %395
+%397 = OpLoad  %22  %72
+OpImageWrite %396 %65 %397
+%398 = OpLoad  %23  %68
+%399 = OpLoad  %3  %66
+%400 = OpCompositeConstruct  %23  %399 %399
+%401 = OpIAdd  %23  %398 %400
+%402 = OpConvertUToF  %60  %401
+%403 = OpLoad  %22  %72
+%404 = OpCompositeExtract  %6  %402 0
+%405 = OpCompositeExtract  %6  %402 1
+%406 = OpCompositeExtract  %6  %402 0
+%407 = OpCompositeExtract  %6  %402 1
+%408 = OpCompositeConstruct  %22  %404 %405 %406 %407
+%409 = OpFAdd  %22  %403 %408
+%410 = OpLoad  %6  %70
+%411 = OpCompositeConstruct  %22  %410 %410 %410 %410
+%412 = OpFAdd  %22  %409 %411
+OpStore %50 %412
 OpReturn
 OpFunctionEnd

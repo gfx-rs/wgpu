@@ -178,8 +178,6 @@ impl Test<'_> {
                 );
             }
         }
-
-        wgc::gfx_select!(device_id => global.clear_backend(()));
     }
 }
 
@@ -202,40 +200,42 @@ impl Corpus {
         let dir = path.parent().unwrap();
         let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
-        let global = wgc::global::Global::new(
-            "test",
-            wgt::InstanceDescriptor {
-                backends: corpus.backends,
-                flags: wgt::InstanceFlags::debugging(),
-                dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
-                gles_minor_version: wgt::Gles3MinorVersion::default(),
-            },
-        );
         for &backend in BACKENDS {
             if !corpus.backends.contains(backend.into()) {
                 continue;
             }
-            let adapter = match global.request_adapter(
-                &wgc::instance::RequestAdapterOptions {
-                    power_preference: wgt::PowerPreference::None,
-                    force_fallback_adapter: false,
-                    compatible_surface: None,
-                },
-                wgc::instance::AdapterInputs::IdSet(&[wgc::id::Id::zip(0, 0, backend)]),
-            ) {
-                Ok(adapter) => adapter,
-                Err(_) => continue,
-            };
-
-            println!("\tBackend {:?}", backend);
-            let supported_features =
-                wgc::gfx_select!(adapter => global.adapter_features(adapter)).unwrap();
-            let downlevel_caps =
-                wgc::gfx_select!(adapter => global.adapter_downlevel_capabilities(adapter))
-                    .unwrap();
             let mut test_num = 0;
             for test_path in &corpus.tests {
                 println!("\t\tTest '{:?}'", test_path);
+
+                let global = wgc::global::Global::new(
+                    "test",
+                    wgt::InstanceDescriptor {
+                        backends: backend.into(),
+                        flags: wgt::InstanceFlags::debugging(),
+                        dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+                        gles_minor_version: wgt::Gles3MinorVersion::default(),
+                    },
+                );
+                let adapter = match global.request_adapter(
+                    &wgc::instance::RequestAdapterOptions {
+                        power_preference: wgt::PowerPreference::None,
+                        force_fallback_adapter: false,
+                        compatible_surface: None,
+                    },
+                    wgc::instance::AdapterInputs::IdSet(&[wgc::id::Id::zip(0, 0, backend)]),
+                ) {
+                    Ok(adapter) => adapter,
+                    Err(_) => continue,
+                };
+
+                println!("\tBackend {:?}", backend);
+                let supported_features =
+                    wgc::gfx_select!(adapter => global.adapter_features(adapter)).unwrap();
+                let downlevel_caps =
+                    wgc::gfx_select!(adapter => global.adapter_downlevel_capabilities(adapter))
+                        .unwrap();
+
                 let test = Test::load(dir.join(test_path), adapter.backend());
                 if !supported_features.contains(test.features) {
                     println!(

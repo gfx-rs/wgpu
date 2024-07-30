@@ -736,7 +736,6 @@ impl super::Device {
                             index: naga::proc::BoundsCheckPolicy::Unchecked,
                             buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                            image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
                     }
@@ -1678,7 +1677,6 @@ impl crate::Device for super::Device {
                         index: naga::proc::BoundsCheckPolicy::Unchecked,
                         buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                         image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                        image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }

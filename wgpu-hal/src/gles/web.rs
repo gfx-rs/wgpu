@@ -171,8 +171,6 @@ impl crate::Instance for Instance {
 
         self.create_surface_from_canvas(canvas)
     }
-
-    unsafe fn destroy_surface(&self, _surface: Surface) {}
 }
 
 #[derive(Debug)]
