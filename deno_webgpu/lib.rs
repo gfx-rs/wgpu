@@ -496,7 +496,9 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         );
         features.set(
             wgpu_types::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
-            required_features.0.contains("texture-compression-bc-sliced-3d"),
+            required_features
+                .0
+                .contains("texture-compression-bc-sliced-3d"),
         );
         features.set(
             wgpu_types::Features::TEXTURE_COMPRESSION_ETC2,
