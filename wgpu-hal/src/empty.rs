@@ -53,7 +53,6 @@ impl crate::Instance for Context {
     ) -> Result<Context, crate::InstanceError> {
         Ok(Context)
     }
-    unsafe fn destroy_surface(&self, surface: Context) {}
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Context>,

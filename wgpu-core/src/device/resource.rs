@@ -32,7 +32,7 @@ use crate::{
         UsageScopePool,
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
-    FastHashMap, LabelHelpers as _, SubmissionIndex,
+    FastHashMap, LabelHelpers as _, PreHashedKey, PreHashedMap,
 };
 
 use arrayvec::ArrayVec;
@@ -2592,11 +2592,29 @@ impl<A: HalApi> Device<A> {
             derived_group_layouts.pop();
         }
 
+        let mut unique_bind_group_layouts = PreHashedMap::default();
+
         let bind_group_layouts = derived_group_layouts
             .into_iter()
-            .map(|bgl_entry_map| {
-                self.create_bind_group_layout(&None, bgl_entry_map, bgl::Origin::Derived)
-                    .map(Arc::new)
+            .map(|mut bgl_entry_map| {
+                bgl_entry_map.sort();
+                match unique_bind_group_layouts.entry(PreHashedKey::from_key(&bgl_entry_map)) {
+                    std::collections::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        match self.create_bind_group_layout(
+                            &None,
+                            bgl_entry_map,
+                            bgl::Origin::Derived,
+                        ) {
+                            Ok(bgl) => {
+                                let bgl = Arc::new(bgl);
+                                e.insert(bgl.clone());
+                                Ok(bgl)
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -2730,11 +2748,12 @@ impl<A: HalApi> Device<A> {
 
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
-                bgl.exclusive_pipeline
+                // `bind_group_layouts` might contain duplicate entries, so we need to ignore the result.
+                let _ = bgl
+                    .exclusive_pipeline
                     .set(binding_model::ExclusivePipeline::Compute(Arc::downgrade(
                         &pipeline,
-                    )))
-                    .unwrap();
+                    )));
             }
         }
 
@@ -3355,11 +3374,12 @@ impl<A: HalApi> Device<A> {
 
         if is_auto_layout {
             for bgl in pipeline.layout.bind_group_layouts.iter() {
-                bgl.exclusive_pipeline
+                // `bind_group_layouts` might contain duplicate entries, so we need to ignore the result.
+                let _ = bgl
+                    .exclusive_pipeline
                     .set(binding_model::ExclusivePipeline::Render(Arc::downgrade(
                         &pipeline,
-                    )))
-                    .unwrap();
+                    )));
             }
         }
 
@@ -3454,27 +3474,21 @@ impl<A: HalApi> Device<A> {
         }
     }
 
+    #[cfg(feature = "replay")]
     pub(crate) fn wait_for_submit(
         &self,
-        submission_index: SubmissionIndex,
-    ) -> Result<(), WaitIdleError> {
+        submission_index: crate::SubmissionIndex,
+    ) -> Result<(), DeviceError> {
         let guard = self.fence.read();
         let fence = guard.as_ref().unwrap();
-        let last_done_index = unsafe {
-            self.raw
-                .as_ref()
-                .unwrap()
-                .get_fence_value(fence)
-                .map_err(DeviceError::from)?
-        };
+        let last_done_index = unsafe { self.raw.as_ref().unwrap().get_fence_value(fence)? };
         if last_done_index < submission_index {
             log::info!("Waiting for submission {:?}", submission_index);
             unsafe {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .wait(fence, submission_index, !0)
-                    .map_err(DeviceError::from)?
+                    .wait(fence, submission_index, !0)?
             };
             drop(guard);
             let closures = self

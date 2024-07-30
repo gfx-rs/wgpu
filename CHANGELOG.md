@@ -4,7 +4,7 @@
 Please add your PR to the changelog! Choose from a top level and bottom
 level category, then write your changes like follows:
 
-- Describe your change in a user friendly format by @yourslug in [#99999](https://github.com/gfx-rs/wgpu/pull/99999)
+- Describe your change in a user friendly format. By @yourslug in [#99999](https://github.com/gfx-rs/wgpu/pull/99999)
 
 You can add additional user facing information if it's a major breaking change. You can use the following to help:
 
@@ -54,6 +54,15 @@ Bottom level categories:
 - Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003)
 - Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007)
 - Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
+- Deduplicate bind group layouts that are created from pipelines with "auto" layouts. By @teoxoy [#6049](https://github.com/gfx-rs/wgpu/pull/6049)
+- Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
+- Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
+
+### Dependency Updates
+
+#### GLES
+
+- Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006)
 
 ## 22.0.0 (2024-07-17)
 
@@ -64,7 +73,7 @@ Bottom level categories:
 For the first time ever, WGPU is being released with a major version (i.e., 22.* instead of 0.22.*)! Maintainership has decided to fully adhere to [Semantic Versioning](https://semver.org/)'s recommendations for versioning production software. According to [SemVer 2.0.0's Q&A about when to use 1.0.0 versions (and beyond)](https://semver.org/spec/v2.0.0.html#how-do-i-know-when-to-release-100):
 
 > ### How do I know when to release 1.0.0?
-> 
+>
 > If your software is being used in production, it should probably already be 1.0.0. If you have a stable API on which users have come to depend, you should be 1.0.0. If you’re worrying a lot about backward compatibility, you should probably already be 1.0.0.
 
 It is a well-known fact that WGPU has been used for applications and platforms already in production for years, at this point. We are often concerned with tracking breaking changes, and affecting these consumers' ability to ship. By releasing our first major version, we publicly acknowledge that this is the case. We encourage other projects in the Rust ecosystem to follow suit.

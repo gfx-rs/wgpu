@@ -1039,7 +1039,7 @@ impl<A: hal::Api> Example<A> {
 
             self.surface.unconfigure(&self.device);
             self.device.exit(self.queue);
-            self.instance.destroy_surface(self.surface);
+            drop(self.surface);
             drop(self.adapter);
         }
     }

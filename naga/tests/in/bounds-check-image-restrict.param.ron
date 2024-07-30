@@ -1,7 +1,6 @@
 (
 	bounds_check_policies: (
 		image_load: Restrict,
-		image_store: Restrict,
 	),
 	spv: (
 		version: (1, 1),

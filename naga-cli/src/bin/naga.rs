@@ -38,13 +38,6 @@ struct Args {
     #[argh(option)]
     image_load_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
-    /// what policy to use for texture stores bounds checking.
-    ///
-    /// Possible values are the same as for `index-bounds-check-policy`. If
-    /// omitted, defaults to the index bounds check policy.
-    #[argh(option)]
-    image_store_bounds_check_policy: Option<BoundsCheckPolicyArg>,
-
     /// directory to dump the SPIR-V block context dump to
     #[argh(option)]
     block_ctx_dir: Option<String>,
@@ -406,10 +399,6 @@ fn run() -> anyhow::Result<()> {
         None => params.bounds_check_policies.index,
     };
     params.bounds_check_policies.image_load = match args.image_load_bounds_check_policy {
-        Some(arg) => arg.0,
-        None => params.bounds_check_policies.index,
-    };
-    params.bounds_check_policies.image_store = match args.image_store_bounds_check_policy {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };

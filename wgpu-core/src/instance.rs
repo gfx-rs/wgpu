@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
     api_log,
@@ -26,7 +26,7 @@ type HalSurface<A> = <A as hal::Api>::Surface;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
 pub struct FailedLimit {
-    name: &'static str,
+    name: Cow<'static, str>,
     requested: u64,
     allowed: u64,
 }
@@ -36,7 +36,7 @@ fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLim
 
     requested.check_limits_with_fail_fn(allowed, false, |name, requested, allowed| {
         failed.push(FailedLimit {
-            name,
+            name: Cow::Borrowed(name),
             requested,
             allowed,
         })
@@ -111,24 +111,6 @@ impl Instance {
             gl: init(hal::api::Gles, &instance_desc),
             flags: instance_desc.flags,
         }
-    }
-
-    pub(crate) fn destroy_surface(&self, surface: Surface) {
-        fn destroy<A: HalApi>(instance: &Option<A::Instance>, mut surface: Option<HalSurface<A>>) {
-            if let Some(surface) = surface.take() {
-                unsafe {
-                    instance.as_ref().unwrap().destroy_surface(surface);
-                }
-            }
-        }
-        #[cfg(vulkan)]
-        destroy::<hal::api::Vulkan>(&self.vulkan, surface.vulkan);
-        #[cfg(metal)]
-        destroy::<hal::api::Metal>(&self.metal, surface.metal);
-        #[cfg(dx12)]
-        destroy::<hal::api::Dx12>(&self.dx12, surface.dx12);
-        #[cfg(gles)]
-        destroy::<hal::api::Gles>(&self.gl, surface.gl);
     }
 }
 
@@ -339,10 +321,6 @@ impl<A: HalApi> Adapter<A> {
             );
         }
 
-        if let Some(_) = desc.label {
-            //TODO
-        }
-
         if let Some(failed) = check_limits(&desc.required_limits, &caps.limits).pop() {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
@@ -389,7 +367,6 @@ pub enum GetSurfaceSupportError {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(bound(deserialize = "'de: 'static")))]
 /// Error when requesting a device from the adaptor
 #[non_exhaustive]
 pub enum RequestDeviceError {
@@ -681,15 +658,11 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        fn unconfigure<A: HalApi>(
-            global: &Global,
-            surface: &Option<HalSurface<A>>,
-            present: &Presentation,
-        ) {
+        fn unconfigure<A: HalApi>(surface: &Option<HalSurface<A>>, present: &Presentation) {
             if let Some(surface) = surface {
-                let hub = HalApi::hub(global);
                 if let Some(device) = present.device.downcast_ref::<A>() {
-                    hub.surface_unconfigure(device, surface);
+                    use hal::Surface;
+                    unsafe { surface.unconfigure(device.raw()) };
                 }
             }
         }
@@ -700,15 +673,15 @@ impl Global {
 
         if let Some(present) = surface.presentation.lock().take() {
             #[cfg(vulkan)]
-            unconfigure::<hal::api::Vulkan>(self, &surface.vulkan, &present);
+            unconfigure::<hal::api::Vulkan>(&surface.vulkan, &present);
             #[cfg(metal)]
-            unconfigure::<hal::api::Metal>(self, &surface.metal, &present);
+            unconfigure::<hal::api::Metal>(&surface.metal, &present);
             #[cfg(dx12)]
-            unconfigure::<hal::api::Dx12>(self, &surface.dx12, &present);
+            unconfigure::<hal::api::Dx12>(&surface.dx12, &present);
             #[cfg(gles)]
-            unconfigure::<hal::api::Gles>(self, &surface.gl, &present);
+            unconfigure::<hal::api::Gles>(&surface.gl, &present);
         }
-        self.instance.destroy_surface(surface);
+        drop(surface)
     }
 
     fn enumerate<A: HalApi>(

@@ -1178,32 +1178,13 @@ impl<'w> BlockContext<'w> {
             _ => {}
         }
 
-        match self.writer.bounds_check_policies.image_store {
-            crate::proc::BoundsCheckPolicy::Restrict => {
-                let (coords, _, _) =
-                    self.write_restricted_coordinates(image_id, coordinates, None, None, block)?;
-                write.generate(&mut self.writer.id_gen, coords, None, None, block);
-            }
-            crate::proc::BoundsCheckPolicy::ReadZeroSkipWrite => {
-                self.write_conditional_image_access(
-                    image_id,
-                    coordinates,
-                    None,
-                    None,
-                    block,
-                    &write,
-                )?;
-            }
-            crate::proc::BoundsCheckPolicy::Unchecked => {
-                write.generate(
-                    &mut self.writer.id_gen,
-                    coordinates.value_id,
-                    None,
-                    None,
-                    block,
-                );
-            }
-        }
+        write.generate(
+            &mut self.writer.id_gen,
+            coordinates.value_id,
+            None,
+            None,
+            block,
+        );
 
         Ok(())
     }

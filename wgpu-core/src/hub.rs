@@ -214,10 +214,7 @@ impl<A: HalApi> Hub<A> {
         }
     }
 
-    //TODO: instead of having a hacky `with_adapters` parameter,
-    // we should have `clear_device(device_id)` that specifically destroys
-    // everything related to a logical device.
-    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>, with_adapters: bool) {
+    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>) {
         use hal::Surface;
 
         let mut devices = self.devices.write();
@@ -248,7 +245,6 @@ impl<A: HalApi> Hub<A> {
                         let suf = A::surface_as_hal(surface);
                         unsafe {
                             suf.unwrap().unconfigure(device.raw());
-                            //TODO: we could destroy the surface here
                         }
                     }
                 }
@@ -258,17 +254,8 @@ impl<A: HalApi> Hub<A> {
         self.queues.write().map.clear();
         devices.map.clear();
 
-        if with_adapters {
-            drop(devices);
-            self.adapters.write().map.clear();
-        }
-    }
-
-    pub(crate) fn surface_unconfigure(&self, device: &Device<A>, surface: &A::Surface) {
-        unsafe {
-            use hal::Surface;
-            surface.unconfigure(device.raw());
-        }
+        drop(devices);
+        self.adapters.write().map.clear();
     }
 
     pub fn generate_report(&self) -> HubReport {

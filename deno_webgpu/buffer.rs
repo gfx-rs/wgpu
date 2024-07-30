@@ -27,7 +27,7 @@ impl Resource for WebGpuBuffer {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.buffer_drop(self.1, true));
+        gfx_select!(self.1 => self.0.buffer_drop(self.1));
     }
 }
 
