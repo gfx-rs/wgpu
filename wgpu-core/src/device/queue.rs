@@ -1187,7 +1187,6 @@ impl Global {
                                 ))
                                 .map_err(DeviceError::from)?
                         };
-                        log::trace!("Stitching command buffer {:?} before submission", cmb_id);
 
                         //Note: locking the trackers has to be done after the storages
                         let mut trackers = device.trackers.lock();
@@ -1241,8 +1240,6 @@ impl Global {
                             pending_textures: FastHashMap::default(),
                         });
                     }
-
-                    log::trace!("Device after submission {}", submit_index);
                 }
             }
 

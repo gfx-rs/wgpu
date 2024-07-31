@@ -5,7 +5,7 @@ use crate::{
     },
     hal_api::HalApi,
     id,
-    resource::{self, Buffer, Labeled, Texture, Trackable},
+    resource::{self, Buffer, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
