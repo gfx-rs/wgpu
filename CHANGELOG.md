@@ -39,6 +39,8 @@ Bottom level categories:
 
 ## Unreleased
 
+## 22.1.0
+
 ### Added
 
 #### Naga
