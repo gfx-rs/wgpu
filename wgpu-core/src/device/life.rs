@@ -339,12 +339,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                 .rev()
                 .find(|a| a.contains_buffer(&buffer));
 
-            log::trace!(
-                "Mapping of {} at submission {:?}",
-                buffer.error_ident(),
-                submission.as_deref().map(|s| s.index)
-            );
-
             submission
                 .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
                 .push(buffer);
