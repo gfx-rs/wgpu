@@ -269,8 +269,6 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi>
                 .set_and_remove_from_usage_scope_sparse(&mut self.scope.buffers, indirect_buffer);
         }
 
-        log::trace!("Encoding dispatch barriers");
-
         CommandBuffer::drain_barriers(
             self.raw_encoder,
             &mut self.intermediate_trackers,

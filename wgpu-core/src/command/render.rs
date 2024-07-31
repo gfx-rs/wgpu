@@ -1600,8 +1600,6 @@ impl Global {
             *status = CommandEncoderStatus::Error;
             encoder.open_pass(hal_label).map_pass_err(pass_scope)?;
 
-            log::trace!("Encoding render pass begin in {}", cmd_buf.error_ident());
-
             let info = RenderPassInfo::start(
                 device,
                 hal_label,
@@ -1907,7 +1905,6 @@ impl Global {
                 }
             }
 
-            log::trace!("Merging renderpass into {}", cmd_buf.error_ident());
             let (trackers, pending_discard_init_fixups) = state
                 .info
                 .finish(state.raw_encoder, state.snatch_guard)

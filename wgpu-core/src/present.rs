@@ -230,7 +230,6 @@ impl Global {
                     .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
 
                 let id = fid.assign(texture);
-                log::debug!("Created CURRENT Surface Texture {:?}", id);
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
@@ -301,10 +300,6 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            log::debug!(
-                "Removing swapchain texture {:?} from the device tracker",
-                texture_id
-            );
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 device
@@ -335,8 +330,6 @@ impl Global {
                 Err(hal::SurfaceError::Outdated) //TODO?
             }
         };
-
-        log::debug!("Presented. End of Frame");
 
         match result {
             Ok(()) => Ok(Status::Good),
@@ -387,11 +380,6 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            log::debug!(
-                "Removing swapchain texture {:?} from the device tracker",
-                texture_id
-            );
-
             let texture = hub.textures.unregister(texture_id);
 
             if let Some(texture) = texture {

@@ -5,7 +5,7 @@ use crate::{
     },
     hal_api::HalApi,
     id,
-    resource::{self, Buffer, Labeled, Texture, Trackable},
+    resource::{self, Buffer, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -283,7 +283,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {
-            log::debug!("Active submission {} is done", a.index);
             self.ready_to_map.extend(a.mapped);
             for encoder in a.encoders {
                 let raw = unsafe { encoder.land() };
@@ -339,12 +338,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                 .rev()
                 .find(|a| a.contains_buffer(&buffer));
 
-            log::trace!(
-                "Mapping of {} at submission {:?}",
-                buffer.error_ident(),
-                submission.as_deref().map(|s| s.index)
-            );
-
             submission
                 .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
                 .push(buffer);
@@ -369,8 +362,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             Vec::with_capacity(self.ready_to_map.len());
 
         for buffer in self.ready_to_map.drain(..) {
-            let tracker_index = buffer.tracker_index();
-
             // This _cannot_ be inlined into the match. If it is, the lock will be held
             // open through the whole match, resulting in a deadlock when we try to re-lock
             // the buffer back to active.
@@ -391,7 +382,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                 _ => panic!("No pending mapping."),
             };
             let status = if pending_mapping.range.start != pending_mapping.range.end {
-                log::debug!("Buffer {tracker_index:?} map state -> Active");
                 let host = pending_mapping.op.host;
                 let size = pending_mapping.range.end - pending_mapping.range.start;
                 match super::map_buffer(
