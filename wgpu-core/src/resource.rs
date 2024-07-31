@@ -617,7 +617,6 @@ impl<A: HalApi> Buffer<A> {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
-        log::debug!("{} map state -> Idle", self.error_ident());
         match mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle) {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]

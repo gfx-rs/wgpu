@@ -1230,12 +1230,6 @@ impl<A: HalApi> Device<A> {
             texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
 
-        log::debug!(
-            "Create view for {} filters usages to {:?}",
-            texture.error_ident(),
-            usage
-        );
-
         // use the combined depth-stencil format for the view
         let format = if resolved_format.is_depth_stencil_component(texture.desc.format) {
             texture.desc.format
@@ -2796,7 +2790,6 @@ impl<A: HalApi> Device<A> {
                     .iter()
                     .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
             } {
-                log::debug!("Color targets: {:?}", color_targets);
                 self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLEND)?;
             }
         }
