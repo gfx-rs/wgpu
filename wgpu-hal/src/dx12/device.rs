@@ -196,7 +196,6 @@ impl super::Device {
         }
 
         let value = cur_value + 1;
-        log::debug!("Waiting for idle with value {}", value);
         self.present_queue.signal(&self.idler.fence, value);
         let hr = self
             .idler
@@ -839,11 +838,6 @@ impl crate::Device for super::Device {
         if pc_start != u32::MAX && pc_end != u32::MIN {
             let parameter_index = parameters.len();
             let size = (pc_end - pc_start) / 4;
-            log::debug!(
-                "\tParam[{}] = push constant (count = {})",
-                parameter_index,
-                size,
-            );
             parameters.push(d3d12::RootParameter::constants(
                 d3d12::ShaderVisibility::All,
                 native_binding(&bind_cbv),
@@ -937,12 +931,6 @@ impl crate::Device for super::Device {
                 bt.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
             }
             if ranges.len() > range_base {
-                log::debug!(
-                    "\tParam[{}] = views (vis = {:?}, count = {})",
-                    parameters.len(),
-                    visibility_view_static,
-                    ranges.len() - range_base,
-                );
                 parameters.push(d3d12::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_view_static),
                     &ranges[range_base..],
@@ -976,12 +964,6 @@ impl crate::Device for super::Device {
                 bind_sampler.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
             }
             if ranges.len() > range_base {
-                log::debug!(
-                    "\tParam[{}] = samplers (vis = {:?}, count = {})",
-                    parameters.len(),
-                    visibility_sampler,
-                    ranges.len() - range_base,
-                );
                 parameters.push(d3d12::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_sampler),
                     &ranges[range_base..],
@@ -1031,12 +1013,6 @@ impl crate::Device for super::Device {
                 );
                 info.dynamic_buffers.push(kind);
 
-                log::debug!(
-                    "\tParam[{}] = dynamic {:?} (vis = {:?})",
-                    parameters.len(),
-                    buffer_ty,
-                    dynamic_buffers_visibility,
-                );
                 parameters.push(d3d12::RootParameter::descriptor(
                     parameter_ty,
                     dynamic_buffers_visibility,
@@ -1057,7 +1033,6 @@ impl crate::Device for super::Device {
                 | crate::PipelineLayoutFlags::NUM_WORK_GROUPS,
         ) {
             let parameter_index = parameters.len();
-            log::debug!("\tParam[{}] = special", parameter_index);
             parameters.push(d3d12::RootParameter::constants(
                 d3d12::ShaderVisibility::All, // really needed for VS and CS only
                 native_binding(&bind_cbv),
@@ -1096,8 +1071,6 @@ impl crate::Device for super::Device {
             .raw
             .create_root_signature(blob, 0)
             .into_device_result("Root signature creation")?;
-
-        log::debug!("\traw = {:?}", raw);
 
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
