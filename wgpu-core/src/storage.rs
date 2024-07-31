@@ -119,13 +119,11 @@ where
     }
 
     pub(crate) fn insert(&mut self, id: Id<T::Marker>, value: Arc<T>) {
-        log::trace!("User is inserting {}{:?}", T::TYPE, id);
         let (index, epoch, _backend) = id.unzip();
         self.insert_impl(index as usize, epoch, Element::Occupied(value, epoch))
     }
 
     pub(crate) fn insert_error(&mut self, id: Id<T::Marker>) {
-        log::trace!("User is inserting as error {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
         self.insert_impl(index as usize, epoch, Element::Error(epoch))
     }
@@ -143,7 +141,6 @@ where
     }
 
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> Option<Arc<T>> {
-        log::trace!("User is removing {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {
