@@ -220,7 +220,6 @@ impl super::CommandEncoder {
     }
 
     fn reset_signature(&mut self, layout: &super::PipelineLayoutShared) {
-        log::trace!("Reset signature {:?}", layout.signature);
         if let Some(root_index) = layout.special_constants_root_index {
             self.pass.root_elements[root_index as usize] =
                 super::RootElement::SpecialConstantBuffer {
@@ -315,17 +314,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     {
         self.temp.barriers.clear();
 
-        log::trace!(
-            "List {:p} buffer transitions",
-            self.list.as_ref().unwrap().as_ptr()
-        );
         for barrier in barriers {
-            log::trace!(
-                "\t{:p}: usage {:?}..{:?}",
-                barrier.buffer.resource.as_ptr(),
-                barrier.usage.start,
-                barrier.usage.end
-            );
             let s0 = conv::map_buffer_usage_to_state(barrier.usage.start);
             let s1 = conv::map_buffer_usage_to_state(barrier.usage.end);
             if s0 != s1 {
@@ -374,18 +363,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     {
         self.temp.barriers.clear();
 
-        log::trace!(
-            "List {:p} texture transitions",
-            self.list.as_ref().unwrap().as_ptr()
-        );
         for barrier in barriers {
-            log::trace!(
-                "\t{:p}: usage {:?}..{:?}, range {:?}",
-                barrier.texture.resource.as_ptr(),
-                barrier.usage.start,
-                barrier.usage.end,
-                barrier.range
-            );
             let s0 = conv::map_texture_usage_to_state(barrier.usage.start);
             let s1 = conv::map_texture_usage_to_state(barrier.usage.end);
             if s0 != s1 {
@@ -879,13 +857,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        log::trace!("Set group[{}]", index);
         let info = &layout.bind_group_infos[index as usize];
         let mut root_index = info.base_root_index as usize;
 
         // Bind CBV/SRC/UAV descriptor tables
         if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
-            log::trace!("\tBind element[{}] = view", root_index);
             self.pass.root_elements[root_index] =
                 super::RootElement::Table(group.handle_views.unwrap().gpu);
             root_index += 1;
@@ -893,7 +869,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         // Bind Sampler descriptor tables.
         if info.tables.contains(super::TableTypes::SAMPLERS) {
-            log::trace!("\tBind element[{}] = sampler", root_index);
             self.pass.root_elements[root_index] =
                 super::RootElement::Table(group.handle_samplers.unwrap().gpu);
             root_index += 1;
@@ -906,7 +881,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .zip(group.dynamic_buffers.iter())
             .zip(dynamic_offsets)
         {
-            log::trace!("\tBind element[{}] = dynamic", root_index);
             self.pass.root_elements[root_index] = super::RootElement::DynamicOffsetBuffer {
                 kind,
                 address: gpu_base + offset as d3d12::GpuAddress,

@@ -817,11 +817,6 @@ impl crate::Device for super::Device {
             }
         }
 
-        log::debug!(
-            "Creating Root Signature '{}'",
-            desc.label.unwrap_or_default()
-        );
-
         let mut binding_map = hlsl::BindingMap::default();
         let (mut bind_cbv, mut bind_srv, mut bind_uav, mut bind_sampler) = (
             hlsl::BindTarget::default(),
@@ -1074,9 +1069,6 @@ impl crate::Device for super::Device {
         } else {
             (None, None)
         };
-
-        log::trace!("{:#?}", parameters);
-        log::trace!("Bindings {:#?}", binding_map);
 
         let (blob, error) = self
             .library
