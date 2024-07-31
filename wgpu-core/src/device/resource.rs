@@ -3476,7 +3476,7 @@ impl<A: HalApi> Device<A> {
         let fence = guard.as_ref().unwrap();
         let last_done_index = unsafe { self.raw.as_ref().unwrap().get_fence_value(fence)? };
         if last_done_index < submission_index {
-            log::info!("Waiting for submission {:?}", submission_index);
+            log::trace!("Waiting for submission {:?}", submission_index);
             unsafe {
                 self.raw
                     .as_ref()
