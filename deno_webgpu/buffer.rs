@@ -2,7 +2,6 @@
 
 use deno_core::error::type_error;
 use deno_core::error::AnyError;
-use deno_core::futures::channel::oneshot;
 use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
@@ -11,8 +10,9 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ptr::NonNull;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
-use wgpu_core::resource::BufferAccessResult;
 
 use super::error::DomExceptionOperationError;
 use super::error::WebGpuResult;
@@ -79,9 +79,8 @@ pub async fn op_webgpu_buffer_get_map_async(
     #[number] offset: u64,
     #[number] size: u64,
 ) -> Result<WebGpuResult, AnyError> {
-    let (sender, receiver) = oneshot::channel::<BufferAccessResult>();
-
     let device;
+    let done = Arc::new(Mutex::new(None));
     {
         let state_ = state.borrow();
         let instance = state_.borrow::<super::Instance>();
@@ -92,11 +91,11 @@ pub async fn op_webgpu_buffer_get_map_async(
             .get::<super::WebGpuDevice>(device_rid)?;
         device = device_resource.1;
 
+        let done_ = done.clone();
         let callback = Box::new(move |status| {
-            sender.send(status).unwrap();
+            *done_.lock().unwrap() = Some(status);
         });
 
-        // TODO(lucacasonato): error handling
         let maybe_err = gfx_select!(buffer => instance.buffer_map_async(
             buffer,
             offset,
@@ -117,31 +116,22 @@ pub async fn op_webgpu_buffer_get_map_async(
         }
     }
 
-    let done = Rc::new(RefCell::new(false));
-    let done_ = done.clone();
-    let device_poll_fut = async move {
-        while !*done.borrow() {
-            {
-                let state = state.borrow();
-                let instance = state.borrow::<super::Instance>();
-                gfx_select!(device => instance.device_poll(device, wgpu_types::Maintain::wait()))
-                    .unwrap();
+    loop {
+        let result = done.lock().unwrap().take();
+        match result {
+            Some(Ok(())) => return Ok(WebGpuResult::empty()),
+            Some(Err(e)) => return Err(DomExceptionOperationError::new(&e.to_string()).into()),
+            None => {
+                {
+                    let state = state.borrow();
+                    let instance = state.borrow::<super::Instance>();
+                    gfx_select!(device => instance.device_poll(device, wgpu_types::Maintain::Poll))
+                        .unwrap();
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        Ok::<(), AnyError>(())
-    };
-
-    let receiver_fut = async move {
-        receiver.await??;
-        let mut done = done_.borrow_mut();
-        *done = true;
-        Ok::<(), AnyError>(())
-    };
-
-    tokio::try_join!(device_poll_fut, receiver_fut)?;
-
-    Ok(WebGpuResult::empty())
+    }
 }
 
 #[op2]
