@@ -263,6 +263,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
         return_features.push("float32-filterable");
     }
+    if features.contains(wgpu_types::Features::DUAL_SOURCE_BLENDING) {
+        return_features.push("dual-source-blending");
+    }
 
     // extended from spec
 
@@ -510,6 +513,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::FLOAT32_FILTERABLE,
             required_features.0.contains("float32-filterable"),
+        );
+        features.set(
+            wgpu_types::Features::DUAL_SOURCE_BLENDING,
+            required_features.0.contains("dual-source-blending"),
         );
 
         // extended from spec

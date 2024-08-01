@@ -6382,6 +6382,10 @@ webidl.converters["GPUBlendFactor"] = webidl.createEnumConverter(
     "src-alpha-saturated",
     "constant",
     "one-minus-constant",
+    "src1",
+    "one-minus-src1",
+    "src1-alpha",
+    "one-minus-src1-alpha",
   ],
 );
 
