@@ -164,7 +164,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                     store_op: attachment
                         .depth_store_op
                         .unwrap_or(wgpu_core::command::StoreOp::Store),
-                    // In "01_webgpu.js", `depthLoadOp` is cheked to ensure its value is not "clear"
+                    // In "01_webgpu.js", `depthLoadOp` is checked to ensure its value is not "clear"
                     // when `depthClearValue` is undefined, so the default 0.0 doesn't matter.
                     clear_value: attachment.depth_clear_value.unwrap_or(0.0),
                     read_only: attachment.depth_read_only,
