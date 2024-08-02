@@ -20,15 +20,6 @@ impl<T: Trackable> StatelessBindGroupState<T> {
         }
     }
 
-    /// Optimize the buffer bind group state by sorting it by ID.
-    ///
-    /// When this list of states is merged into a tracker, the memory
-    /// accesses will be in a constant ascending order.
-    pub(crate) fn optimize(&mut self) {
-        self.resources
-            .sort_unstable_by_key(|resource| resource.tracker_index());
-    }
-
     /// Adds the given resource.
     pub fn add_single(&mut self, resource: &Arc<T>) {
         self.resources.push(resource.clone());
