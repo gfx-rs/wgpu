@@ -119,8 +119,8 @@ pub(crate) use buffer::{
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
 pub(crate) use stateless::StatelessTracker;
 pub(crate) use texture::{
-    DeviceTextureTracker, TextureBindGroupState, TextureSelector, TextureTracker,
-    TextureTrackerSetSingle, TextureUsageScope,
+    DeviceTextureTracker, TextureSelector, TextureTracker, TextureTrackerSetSingle,
+    TextureUsageScope, TextureViewBindGroupState,
 };
 use wgt::strict_assert_ne;
 
@@ -422,8 +422,7 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 #[derive(Debug)]
 pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
-    pub textures: TextureBindGroupState<A>,
-    pub views: StatelessTracker<resource::TextureView<A>>,
+    pub views: TextureViewBindGroupState<A>,
     pub samplers: StatelessTracker<resource::Sampler<A>>,
 }
 
@@ -431,8 +430,7 @@ impl<A: HalApi> BindGroupStates<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferBindGroupState::new(),
-            textures: TextureBindGroupState::new(),
-            views: StatelessTracker::new(),
+            views: TextureViewBindGroupState::new(),
             samplers: StatelessTracker::new(),
         }
     }
@@ -443,7 +441,7 @@ impl<A: HalApi> BindGroupStates<A> {
     /// accesses will be in a constant ascending order.
     pub fn optimize(&mut self) {
         self.buffers.optimize();
-        self.textures.optimize();
+        self.views.optimize();
     }
 }
 
@@ -484,7 +482,7 @@ impl<A: HalApi> RenderBundleScope<A> {
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
-        unsafe { self.textures.merge_bind_group(&bind_group.textures)? };
+        unsafe { self.textures.merge_bind_group(&bind_group.views)? };
 
         Ok(())
     }
@@ -551,7 +549,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe {
             self.buffers.merge_bind_group(&bind_group.buffers)?;
-            self.textures.merge_bind_group(&bind_group.textures)?;
+            self.textures.merge_bind_group(&bind_group.views)?;
         }
 
         Ok(())
@@ -653,7 +651,7 @@ impl<A: HalApi> Tracker<A> {
         };
         unsafe {
             self.textures
-                .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.textures)
+                .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.views)
         };
     }
 }

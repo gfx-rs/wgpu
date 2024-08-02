@@ -37,7 +37,7 @@ impl ResourceUses for BufferUses {
     }
 }
 
-/// Stores all the buffers that a bind group stores.
+/// Stores a bind group's buffers + their usages (within the bind group).
 #[derive(Debug)]
 pub(crate) struct BufferBindGroupState<A: HalApi> {
     buffers: Vec<(Arc<Buffer<A>>, BufferUses)>,

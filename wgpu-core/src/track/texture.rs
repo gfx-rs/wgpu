@@ -21,7 +21,7 @@
 use super::{range::RangedStates, PendingTransition, PendingTransitionList, TrackerIndex};
 use crate::{
     hal_api::HalApi,
-    resource::{Texture, TextureInner, Trackable},
+    resource::{Texture, TextureInner, TextureView, Trackable},
     snatch::SnatchGuard,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
@@ -150,23 +150,14 @@ impl ComplexTextureState {
     }
 }
 
+/// Stores a bind group's texture views + their usages (within the bind group).
 #[derive(Debug)]
-struct TextureBindGroupStateData<A: HalApi> {
-    selector: Option<TextureSelector>,
-    texture: Arc<Texture<A>>,
-    usage: TextureUses,
+pub(crate) struct TextureViewBindGroupState<A: HalApi> {
+    views: Vec<(Arc<TextureView<A>>, TextureUses)>,
 }
-
-/// Stores all the textures that a bind group stores.
-#[derive(Debug)]
-pub(crate) struct TextureBindGroupState<A: HalApi> {
-    textures: Vec<TextureBindGroupStateData<A>>,
-}
-impl<A: HalApi> TextureBindGroupState<A> {
+impl<A: HalApi> TextureViewBindGroupState<A> {
     pub fn new() -> Self {
-        Self {
-            textures: Vec::new(),
-        }
+        Self { views: Vec::new() }
     }
 
     /// Optimize the texture bind group state by sorting it by ID.
@@ -174,22 +165,13 @@ impl<A: HalApi> TextureBindGroupState<A> {
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
     pub(crate) fn optimize(&mut self) {
-        self.textures
-            .sort_unstable_by_key(|v| v.texture.tracker_index());
+        self.views
+            .sort_unstable_by_key(|(view, _)| view.parent.tracker_index());
     }
 
     /// Adds the given resource with the given state.
-    pub fn insert_single(
-        &mut self,
-        texture: Arc<Texture<A>>,
-        selector: Option<TextureSelector>,
-        usage: TextureUses,
-    ) {
-        self.textures.push(TextureBindGroupStateData {
-            selector,
-            texture,
-            usage,
-        });
+    pub fn insert_single(&mut self, view: Arc<TextureView<A>>, usage: TextureUses) {
+        self.views.push((view, usage));
     }
 }
 
@@ -323,10 +305,10 @@ impl<A: HalApi> TextureUsageScope<A> {
     /// method is called.
     pub unsafe fn merge_bind_group(
         &mut self,
-        bind_group: &TextureBindGroupState<A>,
+        bind_group: &TextureViewBindGroupState<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        for t in bind_group.textures.iter() {
-            unsafe { self.merge_single(&t.texture, t.selector.clone(), t.usage)? };
+        for (view, usage) in bind_group.views.iter() {
+            unsafe { self.merge_single(&view.parent, Some(view.selector.clone()), *usage)? };
         }
 
         Ok(())
@@ -606,21 +588,21 @@ impl<A: HalApi> TextureTracker<A> {
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut TextureUsageScope<A>,
-        bind_group_state: &TextureBindGroupState<A>,
+        bind_group_state: &TextureViewBindGroupState<A>,
     ) {
         let incoming_size = scope.set.simple.len();
         if incoming_size > self.start_set.simple.len() {
             self.set_size(incoming_size);
         }
 
-        for t in bind_group_state.textures.iter() {
-            let index = t.texture.tracker_index().as_usize();
+        for (view, _) in bind_group_state.views.iter() {
+            let index = view.parent.tracker_index().as_usize();
             scope.tracker_assert_in_bounds(index);
 
             if unsafe { !scope.metadata.contains_unchecked(index) } {
                 continue;
             }
-            let texture_selector = &t.texture.full_range;
+            let texture_selector = &view.parent.full_range;
             unsafe {
                 insert_or_barrier_update(
                     texture_selector,
