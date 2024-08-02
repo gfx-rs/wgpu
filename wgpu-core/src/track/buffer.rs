@@ -68,8 +68,8 @@ impl<A: HalApi> BufferBindGroupState<A> {
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single(&mut self, buffer: &Arc<Buffer<A>>, state: BufferUses) {
-        self.buffers.push((buffer.clone(), state));
+    pub fn insert_single(&mut self, buffer: Arc<Buffer<A>>, state: BufferUses) {
+        self.buffers.push((buffer, state));
     }
 }
 

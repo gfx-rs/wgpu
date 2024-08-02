@@ -1917,7 +1917,7 @@ impl<A: HalApi> Device<A> {
 
         let buffer = &bb.buffer;
 
-        used.buffers.add_single(buffer, internal_use);
+        used.buffers.insert_single(buffer.clone(), internal_use);
 
         buffer.same_device(self)?;
 
@@ -2068,7 +2068,7 @@ impl<A: HalApi> Device<A> {
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
         used.textures
-            .add_single(texture, Some(view.selector.clone()), internal_use);
+            .insert_single(texture.clone(), Some(view.selector.clone()), internal_use);
 
         texture.check_usage(pub_usage)?;
 
