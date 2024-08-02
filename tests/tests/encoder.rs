@@ -19,8 +19,8 @@ static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
         .run_sync(|ctx| {
             // Use the device after the queue is dropped. Currently this panics
             // but it probably shouldn't
-            let device = ctx.device.clone();
-            drop(ctx);
+            let TestingContext { device, queue, .. } = ctx;
+            drop(queue);
             let _encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         });
