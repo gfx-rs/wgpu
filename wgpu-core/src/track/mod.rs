@@ -104,7 +104,7 @@ mod texture;
 use crate::{
     binding_model, command,
     hal_api::HalApi,
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex},
     pipeline,
     resource::{self, Labeled, ResourceErrorIdent},
     snatch::SnatchGuard,
@@ -452,33 +452,21 @@ impl<A: HalApi> BindGroupStates<A> {
 /// and need to be owned by the render bundles.
 #[derive(Debug)]
 pub(crate) struct RenderBundleScope<A: HalApi> {
-    pub buffers: RwLock<BufferUsageScope<A>>,
-    pub textures: RwLock<TextureUsageScope<A>>,
+    pub buffers: BufferUsageScope<A>,
+    pub textures: TextureUsageScope<A>,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
-    pub bind_groups: RwLock<StatelessTracker<binding_model::BindGroup<A>>>,
-    pub render_pipelines: RwLock<StatelessTracker<pipeline::RenderPipeline<A>>>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
 }
 
 impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new() -> Self {
         Self {
-            buffers: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_BUFFERS,
-                BufferUsageScope::default(),
-            ),
-            textures: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_TEXTURES,
-                TextureUsageScope::default(),
-            ),
-            bind_groups: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_BIND_GROUPS,
-                StatelessTracker::new(),
-            ),
-            render_pipelines: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_RENDER_PIPELINES,
-                StatelessTracker::new(),
-            ),
+            buffers: BufferUsageScope::default(),
+            textures: TextureUsageScope::default(),
+            bind_groups: StatelessTracker::new(),
+            render_pipelines: StatelessTracker::new(),
         }
     }
 
@@ -495,12 +483,8 @@ impl<A: HalApi> RenderBundleScope<A> {
         &mut self,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        unsafe { self.buffers.write().merge_bind_group(&bind_group.buffers)? };
-        unsafe {
-            self.textures
-                .write()
-                .merge_bind_group(&bind_group.textures)?
-        };
+        unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
+        unsafe { self.textures.merge_bind_group(&bind_group.textures)? };
 
         Ok(())
     }
@@ -586,10 +570,8 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
         &mut self,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        self.buffers
-            .merge_usage_scope(&*render_bundle.buffers.read())?;
-        self.textures
-            .merge_usage_scope(&*render_bundle.textures.read())?;
+        self.buffers.merge_usage_scope(&render_bundle.buffers)?;
+        self.textures.merge_usage_scope(&render_bundle.textures)?;
 
         Ok(())
     }

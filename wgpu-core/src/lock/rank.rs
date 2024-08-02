@@ -129,10 +129,6 @@ define_lock_ranks! {
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
-    rank RENDER_BUNDLE_SCOPE_BUFFERS "RenderBundleScope::buffers" followed by { }
-    rank RENDER_BUNDLE_SCOPE_TEXTURES "RenderBundleScope::textures" followed by { }
-    rank RENDER_BUNDLE_SCOPE_BIND_GROUPS "RenderBundleScope::bind_groups" followed by { }
-    rank RENDER_BUNDLE_SCOPE_RENDER_PIPELINES "RenderBundleScope::render_pipelines" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
