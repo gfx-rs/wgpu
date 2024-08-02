@@ -681,25 +681,4 @@ impl<A: HalApi> Tracker<A> {
                 .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.textures)
         };
     }
-
-    /// Tracks the stateless resources from the given renderbundle. It is expected
-    /// that the stateful resources will get merged into a usage scope first.
-    ///
-    /// # Safety
-    ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// value given to `set_size`
-    pub unsafe fn add_from_render_bundle(
-        &mut self,
-        render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), ResourceUsageCompatibilityError> {
-        self.bind_groups
-            .add_from_tracker(&*render_bundle.bind_groups.read());
-        self.render_pipelines
-            .add_from_tracker(&*render_bundle.render_pipelines.read());
-        self.query_sets
-            .add_from_tracker(&*render_bundle.query_sets.read());
-
-        Ok(())
-    }
 }

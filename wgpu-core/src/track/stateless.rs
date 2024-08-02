@@ -90,28 +90,4 @@ impl<T: Trackable> StatelessTracker<T> {
 
         unsafe { self.metadata.insert(index, resource) }
     }
-
-    /// Adds the given resources from the given tracker.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_from_tracker(&mut self, other: &Self) {
-        let incoming_size = other.metadata.size();
-        if incoming_size > self.metadata.size() {
-            self.set_size(incoming_size);
-        }
-
-        for index in other.metadata.owned_indices() {
-            self.tracker_assert_in_bounds(index);
-            other.tracker_assert_in_bounds(index);
-            unsafe {
-                let previously_owned = self.metadata.contains_unchecked(index);
-
-                if !previously_owned {
-                    let other_resource = other.metadata.get_resource_unchecked(index);
-                    self.metadata.insert(index, other_resource.clone());
-                }
-            }
-        }
-    }
 }
