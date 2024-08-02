@@ -7,7 +7,7 @@ use crate::{
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
     command, conv,
-    device::{bgl, life::WaitIdleError, queue, DeviceError, DeviceLostClosure, DeviceLostReason},
+    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -2040,7 +2040,7 @@ impl Global {
     pub fn device_poll<A: HalApi>(
         &self,
         device_id: DeviceId,
-        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
+        maintain: wgt::Maintain<crate::SubmissionIndex>,
     ) -> Result<bool, WaitIdleError> {
         api_log!("Device::poll {maintain:?}");
 
@@ -2049,15 +2049,6 @@ impl Global {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
-            if submission_index.queue_id != device_id.into_queue_id() {
-                return Err(WaitIdleError::WrongSubmissionIndex(
-                    submission_index.queue_id,
-                    device_id,
-                ));
-            }
-        }
 
         let DevicePoll {
             closures,
@@ -2071,7 +2062,7 @@ impl Global {
 
     fn poll_single_device<A: HalApi>(
         device: &crate::device::Device<A>,
-        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
+        maintain: wgt::Maintain<crate::SubmissionIndex>,
     ) -> Result<DevicePoll, WaitIdleError> {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();

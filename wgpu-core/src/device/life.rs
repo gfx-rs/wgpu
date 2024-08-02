@@ -4,7 +4,6 @@ use crate::{
         DeviceError, DeviceLostClosure,
     },
     hal_api::HalApi,
-    id,
     resource::{self, Buffer, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
@@ -112,8 +111,8 @@ impl<A: HalApi> ActiveSubmission<A> {
 pub enum WaitIdleError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Tried to wait using a submission index from the wrong device. Submission index is from device {0:?}. Called poll on device {1:?}.")]
-    WrongSubmissionIndex(id::QueueId, id::DeviceId),
+    #[error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")]
+    WrongSubmissionIndex(SubmissionIndex, SubmissionIndex),
     #[error("GPU got stuck :(")]
     StuckGpu,
 }

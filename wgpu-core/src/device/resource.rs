@@ -55,8 +55,8 @@ use std::{
 };
 
 use super::{
-    queue::{self, Queue},
-    DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR,
+    ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -407,7 +407,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn maintain<'this>(
         &'this self,
         fence_guard: crate::lock::RwLockReadGuard<Option<A::Fence>>,
-        maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
+        maintain: wgt::Maintain<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
@@ -417,9 +417,20 @@ impl<A: HalApi> Device<A> {
         // Determine which submission index `maintain` represents.
         let submission_index = match maintain {
             wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
-                // We don't need to check to see if the queue id matches
-                // as we already checked this from inside the poll call.
-                submission_index.index
+                let last_successful_submission_index = self
+                    .last_successful_submission_index
+                    .load(Ordering::Acquire);
+
+                if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
+                    if submission_index > last_successful_submission_index {
+                        return Err(WaitIdleError::WrongSubmissionIndex(
+                            submission_index,
+                            last_successful_submission_index,
+                        ));
+                    }
+                }
+
+                submission_index
             }
             wgt::Maintain::Wait => self
                 .last_successful_submission_index

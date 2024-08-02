@@ -552,7 +552,7 @@ impl crate::Context for ContextWgpuCore {
     type SurfaceId = wgc::id::SurfaceId;
     type SurfaceData = Surface;
     type SurfaceOutputDetail = SurfaceOutputDetail;
-    type SubmissionIndexData = wgc::device::queue::WrappedSubmissionIndex;
+    type SubmissionIndexData = wgc::SubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
 
@@ -666,7 +666,7 @@ impl crate::Context for ContextWgpuCore {
             id: queue_id,
             error_sink,
         };
-        ready(Ok((device_id, device, device_id.into_queue_id(), queue)))
+        ready(Ok((device_id, device, queue_id, queue)))
     }
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool {

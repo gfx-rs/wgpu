@@ -326,12 +326,6 @@ impl CommandBufferId {
     }
 }
 
-impl DeviceId {
-    pub fn into_queue_id(self) -> QueueId {
-        Id(self.0, PhantomData)
-    }
-}
-
 #[test]
 fn test_id_backend() {
     for &b in &[

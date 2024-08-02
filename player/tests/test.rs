@@ -106,6 +106,7 @@ impl Test<'_> {
     ) {
         let backend = adapter.backend();
         let device_id = wgc::id::Id::zip(test_num, 0, backend);
+        let queue_id = wgc::id::Id::zip(test_num, 0, backend);
         let (_, _, error) = wgc::gfx_select!(adapter => global.adapter_request_device(
             adapter,
             &wgt::DeviceDescriptor {
@@ -116,7 +117,7 @@ impl Test<'_> {
             },
             None,
             Some(device_id),
-            Some(device_id.into_queue_id())
+            Some(queue_id)
         ));
         if let Some(e) = error {
             panic!("{:?}", e);
@@ -125,7 +126,7 @@ impl Test<'_> {
         let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
         println!("\t\t\tRunning...");
         for action in self.actions {
-            wgc::gfx_select!(device_id => global.process(device_id, action, dir, &mut command_buffer_id_manager));
+            wgc::gfx_select!(device_id => global.process(device_id, queue_id, action, dir, &mut command_buffer_id_manager));
         }
         println!("\t\t\tMapping...");
         for expect in &self.expectations {
