@@ -5,22 +5,18 @@
 
 use std::sync::Arc;
 
-use crate::{
-    lock::{rank, Mutex},
-    resource::Trackable,
-    track::ResourceMetadata,
-};
+use crate::{resource::Trackable, track::ResourceMetadata};
 
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct StatelessBindGroupState<T: Trackable> {
-    resources: Mutex<Vec<Arc<T>>>,
+    resources: Vec<Arc<T>>,
 }
 
 impl<T: Trackable> StatelessBindGroupState<T> {
     pub fn new() -> Self {
         Self {
-            resources: Mutex::new(rank::STATELESS_BIND_GROUP_STATE_RESOURCES, Vec::new()),
+            resources: Vec::new(),
         }
     }
 
@@ -28,15 +24,14 @@ impl<T: Trackable> StatelessBindGroupState<T> {
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
-    pub(crate) fn optimize(&self) {
-        let mut resources = self.resources.lock();
-        resources.sort_unstable_by_key(|resource| resource.tracker_index());
+    pub(crate) fn optimize(&mut self) {
+        self.resources
+            .sort_unstable_by_key(|resource| resource.tracker_index());
     }
 
     /// Adds the given resource.
-    pub fn add_single(&self, resource: &Arc<T>) {
-        let mut resources = self.resources.lock();
-        resources.push(resource.clone());
+    pub fn add_single(&mut self, resource: &Arc<T>) {
+        self.resources.push(resource.clone());
     }
 }
 

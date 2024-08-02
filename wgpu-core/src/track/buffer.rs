@@ -9,7 +9,6 @@ use std::sync::{Arc, Weak};
 use super::{PendingTransition, TrackerIndex};
 use crate::{
     hal_api::HalApi,
-    lock::{rank, Mutex},
     resource::{Buffer, Trackable},
     snatch::SnatchGuard,
     track::{
@@ -41,12 +40,12 @@ impl ResourceUses for BufferUses {
 /// Stores all the buffers that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct BufferBindGroupState<A: HalApi> {
-    buffers: Mutex<Vec<(Arc<Buffer<A>>, BufferUses)>>,
+    buffers: Vec<(Arc<Buffer<A>>, BufferUses)>,
 }
 impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            buffers: Mutex::new(rank::BUFFER_BIND_GROUP_STATE_BUFFERS, Vec::new()),
+            buffers: Vec::new(),
         }
     }
 
@@ -54,27 +53,23 @@ impl<A: HalApi> BufferBindGroupState<A> {
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
-    #[allow(clippy::pattern_type_mismatch)]
-    pub(crate) fn optimize(&self) {
-        let mut buffers = self.buffers.lock();
-        buffers.sort_unstable_by_key(|(b, _)| b.tracker_index());
+    pub(crate) fn optimize(&mut self) {
+        self.buffers
+            .sort_unstable_by_key(|(b, _)| b.tracker_index());
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
-    #[allow(clippy::pattern_type_mismatch)]
     pub fn used_tracker_indices(&self) -> impl Iterator<Item = TrackerIndex> + '_ {
-        let buffers = self.buffers.lock();
-        buffers
+        self.buffers
             .iter()
-            .map(|(ref b, _)| b.tracker_index())
+            .map(|(b, _)| b.tracker_index())
             .collect::<Vec<_>>()
             .into_iter()
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single(&self, buffer: &Arc<Buffer<A>>, state: BufferUses) {
-        let mut buffers = self.buffers.lock();
-        buffers.push((buffer.clone(), state));
+    pub fn add_single(&mut self, buffer: &Arc<Buffer<A>>, state: BufferUses) {
+        self.buffers.push((buffer.clone(), state));
     }
 }
 
@@ -136,8 +131,7 @@ impl<A: HalApi> BufferUsageScope<A> {
         &mut self,
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        let buffers = bind_group.buffers.lock();
-        for &(ref resource, state) in &*buffers {
+        for &(ref resource, state) in bind_group.buffers.iter() {
             let index = resource.tracker_index().as_usize();
 
             unsafe {

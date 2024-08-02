@@ -1998,7 +1998,7 @@ impl<A: HalApi> Device<A> {
 
     fn create_sampler_binding<'a>(
         self: &Arc<Self>,
-        used: &BindGroupStates<A>,
+        used: &mut BindGroupStates<A>,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         sampler: &'a Arc<Sampler<A>>,
@@ -2177,7 +2177,7 @@ impl<A: HalApi> Device<A> {
                     (res_index, num_bindings)
                 }
                 Br::Sampler(ref sampler) => {
-                    let sampler = self.create_sampler_binding(&used, binding, decl, sampler)?;
+                    let sampler = self.create_sampler_binding(&mut used, binding, decl, sampler)?;
 
                     let res_index = hal_samplers.len();
                     hal_samplers.push(sampler);
@@ -2189,7 +2189,8 @@ impl<A: HalApi> Device<A> {
 
                     let res_index = hal_samplers.len();
                     for sampler in samplers.iter() {
-                        let sampler = self.create_sampler_binding(&used, binding, decl, sampler)?;
+                        let sampler =
+                            self.create_sampler_binding(&mut used, binding, decl, sampler)?;
 
                         hal_samplers.push(sampler);
                     }
