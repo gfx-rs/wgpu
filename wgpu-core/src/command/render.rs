@@ -2716,9 +2716,7 @@ fn execute_bundle<A: HalApi>(
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
 
-    // Have to clone the bundle arc, otherwise we keep a mutable reference to the bundle
-    // while later trying to add the bundle's resources to the tracker.
-    let bundle = state.tracker.bundles.insert_single(bundle).clone();
+    let bundle = state.tracker.bundles.insert_single(bundle);
 
     bundle.same_device_as(cmd_buf.as_ref())?;
 
@@ -2769,7 +2767,6 @@ fn execute_bundle<A: HalApi>(
 
     unsafe {
         state.info.usage_scope.merge_render_bundle(&bundle.used)?;
-        state.tracker.add_from_render_bundle(&bundle.used)?;
     };
     state.reset_bundle();
     Ok(())
