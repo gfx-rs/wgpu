@@ -380,16 +380,6 @@ impl RenderBundleEncoder {
             .textures
             .write()
             .set_size(indices.textures.size());
-        state
-            .trackers
-            .bind_groups
-            .write()
-            .set_size(indices.bind_groups.size());
-        state
-            .trackers
-            .render_pipelines
-            .write()
-            .set_size(indices.render_pipelines.size());
 
         let base = &self.base;
 
