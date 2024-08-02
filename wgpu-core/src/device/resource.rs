@@ -2054,8 +2054,6 @@ impl<A: HalApi> Device<A> {
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::TextureBinding<'a, A>, binding_model::CreateBindGroupError> {
-        used.views.insert_single(view.clone());
-
         view.same_device(self)?;
 
         let (pub_usage, internal_use) = self.texture_use_parameters(
@@ -2064,12 +2062,10 @@ impl<A: HalApi> Device<A> {
             view,
             "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
         )?;
-        let texture = &view.parent;
-        // Careful here: the texture may no longer have its own ref count,
-        // if it was deleted by the user.
-        used.textures
-            .insert_single(texture.clone(), Some(view.selector.clone()), internal_use);
 
+        used.views.insert_single(view.clone(), internal_use);
+
+        let texture = &view.parent;
         texture.check_usage(pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
