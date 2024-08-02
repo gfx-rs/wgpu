@@ -21,7 +21,6 @@
 use super::{range::RangedStates, PendingTransition, PendingTransitionList, TrackerIndex};
 use crate::{
     hal_api::HalApi,
-    lock::{rank, Mutex},
     resource::{Texture, TextureInner, Trackable},
     snatch::SnatchGuard,
     track::{
@@ -161,12 +160,12 @@ struct TextureBindGroupStateData<A: HalApi> {
 /// Stores all the textures that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct TextureBindGroupState<A: HalApi> {
-    textures: Mutex<Vec<TextureBindGroupStateData<A>>>,
+    textures: Vec<TextureBindGroupStateData<A>>,
 }
 impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            textures: Mutex::new(rank::TEXTURE_BIND_GROUP_STATE_TEXTURES, Vec::new()),
+            textures: Vec::new(),
         }
     }
 
@@ -174,20 +173,19 @@ impl<A: HalApi> TextureBindGroupState<A> {
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
-    pub(crate) fn optimize(&self) {
-        let mut textures = self.textures.lock();
-        textures.sort_unstable_by_key(|v| v.texture.tracker_index());
+    pub(crate) fn optimize(&mut self) {
+        self.textures
+            .sort_unstable_by_key(|v| v.texture.tracker_index());
     }
 
     /// Adds the given resource with the given state.
     pub fn add_single(
-        &self,
+        &mut self,
         texture: &Arc<Texture<A>>,
         selector: Option<TextureSelector>,
         state: TextureUses,
     ) {
-        let mut textures = self.textures.lock();
-        textures.push(TextureBindGroupStateData {
+        self.textures.push(TextureBindGroupStateData {
             selector,
             texture: texture.clone(),
             usage: state,
@@ -327,8 +325,7 @@ impl<A: HalApi> TextureUsageScope<A> {
         &mut self,
         bind_group: &TextureBindGroupState<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        let textures = bind_group.textures.lock();
-        for t in &*textures {
+        for t in bind_group.textures.iter() {
             unsafe { self.merge_single(&t.texture, t.selector.clone(), t.usage)? };
         }
 
@@ -616,8 +613,7 @@ impl<A: HalApi> TextureTracker<A> {
             self.set_size(incoming_size);
         }
 
-        let textures = bind_group_state.textures.lock();
-        for t in textures.iter() {
+        for t in bind_group_state.textures.iter() {
             let index = t.texture.tracker_index().as_usize();
             scope.tracker_assert_in_bounds(index);
 
