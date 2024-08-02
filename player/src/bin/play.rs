@@ -61,7 +61,7 @@ fn main() {
     }
     .unwrap();
 
-    let device = match actions.pop() {
+    let (device, queue) = match actions.pop() {
         Some(trace::Action::Init { desc, backend }) => {
             log::info!("Initializing the device for backend: {:?}", backend);
             let adapter = global
@@ -80,18 +80,19 @@ fn main() {
 
             let info = gfx_select!(adapter => global.adapter_get_info(adapter)).unwrap();
             log::info!("Picked '{}'", info.name);
-            let id = wgc::id::Id::zip(1, 0, backend);
+            let device_id = wgc::id::Id::zip(1, 0, backend);
+            let queue_id = wgc::id::Id::zip(1, 0, backend);
             let (_, _, error) = gfx_select!(adapter => global.adapter_request_device(
                 adapter,
                 &desc,
                 None,
-                Some(id),
-                Some(id.into_queue_id())
+                Some(device_id),
+                Some(queue_id)
             ));
             if let Some(e) = error {
                 panic!("{:?}", e);
             }
-            id
+            (device_id, queue_id)
         }
         _ => panic!("Expected Action::Init"),
     };
@@ -102,7 +103,7 @@ fn main() {
         gfx_select!(device => global.device_start_capture(device));
 
         while let Some(action) = actions.pop() {
-            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+            gfx_select!(device => global.process(device, queue, action, &dir, &mut command_buffer_id_manager));
         }
 
         gfx_select!(device => global.device_stop_capture(device));
@@ -156,7 +157,7 @@ fn main() {
                                 target.exit();
                         }
                         Some(action) => {
-                            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+                            gfx_select!(device => global.process(device, queue, action, &dir, &mut command_buffer_id_manager));
                         }
                         None => {
                             if !done {

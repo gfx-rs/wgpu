@@ -16,6 +16,7 @@ pub trait GlobalPlay {
     fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
+        queue: wgc::id::QueueId,
         action: trace::Action,
         dir: &Path,
         comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
@@ -131,6 +132,7 @@ impl GlobalPlay for wgc::global::Global {
     fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
+        queue: wgc::id::QueueId,
         action: trace::Action,
         dir: &Path,
         comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
@@ -327,7 +329,7 @@ impl GlobalPlay for wgc::global::Global {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
                 if queued {
-                    self.queue_write_buffer::<A>(device.into_queue_id(), id, range.start, &bin)
+                    self.queue_write_buffer::<A>(queue, id, range.start, &bin)
                         .unwrap();
                 } else {
                     self.device_set_buffer_data::<A>(id, range.start, &bin[..size])
@@ -341,11 +343,11 @@ impl GlobalPlay for wgc::global::Global {
                 size,
             } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
-                self.queue_write_texture::<A>(device.into_queue_id(), &to, &bin, &layout, &size)
+                self.queue_write_texture::<A>(queue, &to, &bin, &layout, &size)
                     .unwrap();
             }
             Action::Submit(_index, ref commands) if commands.is_empty() => {
-                self.queue_submit::<A>(device.into_queue_id(), &[]).unwrap();
+                self.queue_submit::<A>(queue, &[]).unwrap();
             }
             Action::Submit(_index, commands) => {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
@@ -361,8 +363,7 @@ impl GlobalPlay for wgc::global::Global {
                     panic!("{e}");
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
-                self.queue_submit::<A>(device.into_queue_id(), &[cmdbuf])
-                    .unwrap();
+                self.queue_submit::<A>(queue, &[cmdbuf]).unwrap();
             }
         }
     }
