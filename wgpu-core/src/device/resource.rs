@@ -2005,7 +2005,7 @@ impl<A: HalApi> Device<A> {
     ) -> Result<&'a A::Sampler, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
-        used.samplers.add_single(sampler);
+        used.samplers.insert_single(sampler.clone());
 
         sampler.same_device(self)?;
 
@@ -2054,7 +2054,7 @@ impl<A: HalApi> Device<A> {
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::TextureBinding<'a, A>, binding_model::CreateBindGroupError> {
-        used.views.add_single(view);
+        used.views.insert_single(view.clone());
 
         view.same_device(self)?;
 
