@@ -459,7 +459,6 @@ pub(crate) struct RenderBundleScope<A: HalApi> {
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
     pub bind_groups: RwLock<StatelessTracker<binding_model::BindGroup<A>>>,
     pub render_pipelines: RwLock<StatelessTracker<pipeline::RenderPipeline<A>>>,
-    pub query_sets: RwLock<StatelessTracker<resource::QuerySet<A>>>,
 }
 
 impl<A: HalApi> RenderBundleScope<A> {
@@ -480,10 +479,6 @@ impl<A: HalApi> RenderBundleScope<A> {
             ),
             render_pipelines: RwLock::new(
                 rank::RENDER_BUNDLE_SCOPE_RENDER_PIPELINES,
-                StatelessTracker::new(),
-            ),
-            query_sets: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_QUERY_SETS,
                 StatelessTracker::new(),
             ),
         }

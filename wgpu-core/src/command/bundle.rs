@@ -390,11 +390,6 @@ impl RenderBundleEncoder {
             .render_pipelines
             .write()
             .set_size(indices.render_pipelines.size());
-        state
-            .trackers
-            .query_sets
-            .write()
-            .set_size(indices.query_sets.size());
 
         let base = &self.base;
 
