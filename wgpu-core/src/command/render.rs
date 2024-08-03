@@ -1346,6 +1346,17 @@ impl Global {
             let query_sets = hub.query_sets.read();
             let texture_views = hub.texture_views.read();
 
+            // TODO: should be device.limits.max_color_attachments
+            let max_color_attachments = hal::MAX_COLOR_ATTACHMENTS;
+            if desc.color_attachments.len() > max_color_attachments {
+                return Err(CommandEncoderError::InvalidColorAttachment(
+                    ColorAttachmentError::TooMany {
+                        given: desc.color_attachments.len(),
+                        limit: hal::MAX_COLOR_ATTACHMENTS,
+                    },
+                ));
+            }
+
             for color_attachment in desc.color_attachments.iter() {
                 if let Some(RenderPassColorAttachment {
                     view: view_id,

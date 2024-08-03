@@ -596,6 +596,8 @@ pub enum CommandEncoderError {
     InvalidTimestampWritesQuerySetId(id::QuerySetId),
     #[error("Attachment TextureViewId {0:?} is invalid")]
     InvalidAttachmentId(id::TextureViewId),
+    #[error(transparent)]
+    InvalidColorAttachment(#[from] ColorAttachmentError),
     #[error("Resolve attachment TextureViewId {0:?} is invalid")]
     InvalidResolveTargetId(id::TextureViewId),
     #[error("Depth stencil attachment TextureViewId {0:?} is invalid")]
