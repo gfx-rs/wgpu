@@ -550,26 +550,25 @@ impl Inner {
         let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
 
         let mut context_attributes = vec![];
-        if supports_opengl {
-            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
-            context_attributes.push(3);
-            context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-            context_attributes.push(3);
-            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
-                log::warn!("Ignoring specified GLES minor version as OpenGL is used");
-            }
-        } else {
-            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
-            context_attributes.push(3); // Request GLES 3.0 or higher
-            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
-                context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-                context_attributes.push(match force_gles_minor_version {
-                    wgt::Gles3MinorVersion::Automatic => unreachable!(),
-                    wgt::Gles3MinorVersion::Version0 => 0,
-                    wgt::Gles3MinorVersion::Version1 => 1,
-                    wgt::Gles3MinorVersion::Version2 => 2,
-                });
-            }
+        let mut gl_context_attributes = vec![];
+        let mut gles_context_attributes = vec![];
+        gl_context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+        gl_context_attributes.push(3);
+        gl_context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+        gl_context_attributes.push(3);
+        if supports_opengl && force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+            log::warn!("Ignoring specified GLES minor version as OpenGL is used");
+        }
+        gles_context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+        gles_context_attributes.push(3); // Request GLES 3.0 or higher
+        if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+            gles_context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+            gles_context_attributes.push(match force_gles_minor_version {
+                wgt::Gles3MinorVersion::Automatic => unreachable!(),
+                wgt::Gles3MinorVersion::Version0 => 0,
+                wgt::Gles3MinorVersion::Version1 => 1,
+                wgt::Gles3MinorVersion::Version2 => 2,
+            });
         }
         if flags.contains(wgt::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
@@ -606,7 +605,29 @@ impl Inner {
             context_attributes.push(khr_context_flags);
         }
         context_attributes.push(khronos_egl::NONE);
-        let context = match egl.create_context(display, config, None, &context_attributes) {
+
+        gl_context_attributes.extend(&context_attributes);
+        gles_context_attributes.extend(&context_attributes);
+
+        let context = match egl
+            .create_context(
+                display,
+                config,
+                None,
+                if supports_opengl {
+                    &gl_context_attributes
+                } else {
+                    &gles_context_attributes
+                },
+            )
+            .or_else(|e| {
+                if supports_opengl {
+                    egl.bind_api(khronos_egl::OPENGL_ES_API).unwrap();
+                    egl.create_context(display, config, None, &gles_context_attributes)
+                } else {
+                    Err(e)
+                }
+            }) {
             Ok(context) => context,
             Err(e) => {
                 return Err(crate::InstanceError::with_source(
