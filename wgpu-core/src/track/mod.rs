@@ -441,7 +441,11 @@ impl<A: HalApi> BindGroupStates<A> {
     /// accesses will be in a constant ascending order.
     pub fn optimize(&mut self) {
         self.buffers.optimize();
+        // Views are stateless, however, `TextureViewBindGroupState`
+        // is special as it will be merged with other texture trackers.
         self.views.optimize();
+        // Samplers are stateless and don't need to be optimized
+        // since the tracker is never merged with any other tracker.
     }
 }
 
