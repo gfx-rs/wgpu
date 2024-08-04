@@ -175,6 +175,7 @@ crate::impl_dyn_resource!(
     ComputePipeline,
     Device,
     Fence,
+    Instance,
     PipelineCache,
     PipelineLayout,
     QuerySet,
