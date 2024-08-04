@@ -6,7 +6,6 @@ use crate::{
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags},
     global::Global,
-    hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
@@ -159,10 +158,10 @@ impl From<DeviceError> for CopyError {
     }
 }
 
-pub(crate) fn extract_texture_selector<A: HalApi>(
+pub(crate) fn extract_texture_selector(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Texture<A>,
+    texture: &Texture,
 ) -> Result<(TextureSelector, hal::TextureCopyBase), TransferError> {
     let format = texture.desc.format;
     let copy_aspect = hal::FormatAspects::new(format, copy_texture.aspect);
@@ -407,15 +406,15 @@ pub(crate) fn validate_texture_copy_range(
     Ok((copy_extent, array_layer_count))
 }
 
-fn handle_texture_init<A: HalApi>(
+fn handle_texture_init(
     init_kind: MemoryInitKind,
     encoder: &mut CommandEncoder,
-    trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
-    device: &Device<A>,
+    trackers: &mut Tracker,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    device: &Device,
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Arc<Texture<A>>,
+    texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
     let init_action = TextureInitTrackerAction {
@@ -457,14 +456,14 @@ fn handle_texture_init<A: HalApi>(
 ///
 /// Ensure the source texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
-fn handle_src_texture_init<A: HalApi>(
+fn handle_src_texture_init(
     encoder: &mut CommandEncoder,
-    trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
-    device: &Device<A>,
+    trackers: &mut Tracker,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    device: &Device,
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Arc<Texture<A>>,
+    texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     handle_texture_init(
@@ -485,14 +484,14 @@ fn handle_src_texture_init<A: HalApi>(
 ///
 /// Ensure the destination texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
-fn handle_dst_texture_init<A: HalApi>(
+fn handle_dst_texture_init(
     encoder: &mut CommandEncoder,
-    trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
-    device: &Device<A>,
+    trackers: &mut Tracker,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    device: &Device,
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Arc<Texture<A>>,
+    texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     // Attention: If we don't write full texture subresources, we need to a full
@@ -524,7 +523,7 @@ fn handle_dst_texture_init<A: HalApi>(
 }
 
 impl Global {
-    pub fn command_encoder_copy_buffer_to_buffer<A: HalApi>(
+    pub fn command_encoder_copy_buffer_to_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
         source: BufferId,
@@ -541,7 +540,7 @@ impl Global {
         if source == destination {
             return Err(TransferError::SameSourceDestinationBuffer.into());
         }
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers
@@ -697,7 +696,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn command_encoder_copy_buffer_to_texture<A: HalApi>(
+    pub fn command_encoder_copy_buffer_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyBuffer,
@@ -711,7 +710,7 @@ impl Global {
             destination.texture
         );
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers
@@ -865,7 +864,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn command_encoder_copy_texture_to_buffer<A: HalApi>(
+    pub fn command_encoder_copy_texture_to_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyTexture,
@@ -879,7 +878,7 @@ impl Global {
             destination.buffer
         );
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers
@@ -1045,7 +1044,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn command_encoder_copy_texture_to_texture<A: HalApi>(
+    pub fn command_encoder_copy_texture_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyTexture,
@@ -1059,7 +1058,7 @@ impl Global {
             destination.texture
         );
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers

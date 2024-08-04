@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use wgt::Backend;
-
 use crate::{
     id::Id,
     identity::IdentityManager,
@@ -40,20 +38,14 @@ pub(crate) struct Registry<T: StorageItem> {
     // Must only contain an id which has either never been used or has been released from `storage`
     identity: Arc<IdentityManager<T::Marker>>,
     storage: RwLock<Storage<T>>,
-    backend: Backend,
 }
 
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn new(backend: Backend) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             identity: Arc::new(IdentityManager::new()),
             storage: RwLock::new(rank::REGISTRY_STORAGE, Storage::new()),
-            backend,
         }
-    }
-
-    pub(crate) fn without_backend() -> Self {
-        Self::new(Backend::Empty)
     }
 }
 
@@ -89,14 +81,18 @@ impl<T: StorageItem> FutureId<'_, T> {
 }
 
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<T> {
+    pub(crate) fn prepare(
+        &self,
+        backend: wgt::Backend,
+        id_in: Option<Id<T::Marker>>,
+    ) -> FutureId<T> {
         FutureId {
             id: match id_in {
                 Some(id_in) => {
                     self.identity.mark_as_used(id_in);
                     id_in
                 }
-                None => self.identity.process(self.backend),
+                None => self.identity.process(backend),
             },
             data: &self.storage,
         }
@@ -164,13 +160,13 @@ mod tests {
 
     #[test]
     fn simultaneous_registration() {
-        let registry = Registry::without_backend();
+        let registry = Registry::new();
         std::thread::scope(|s| {
             for _ in 0..5 {
                 s.spawn(|| {
                     for _ in 0..1000 {
                         let value = Arc::new(TestData);
-                        let new_id = registry.prepare(None);
+                        let new_id = registry.prepare(wgt::Backend::Empty, None);
                         let id = new_id.assign(value);
                         registry.unregister(id);
                     }

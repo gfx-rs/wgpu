@@ -23,6 +23,7 @@ pub const UNSTABLE_FEATURE_NAME: &str = "webgpu";
 
 #[macro_use]
 mod macros {
+    // TODO(#5124): remove this macro.
     macro_rules! gfx_select {
     ($id:expr => $p0:ident.$p1:tt.$method:ident $params:tt) => {
       gfx_select!($id => {$p0.$p1}, $method $params)
@@ -33,24 +34,7 @@ mod macros {
     };
 
     ($id:expr => {$($c:tt)*}, $method:ident $params:tt) => {
-      match $id.backend() {
-        #[cfg(any(
-            all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")),
-            feature = "vulkan-portability"
-        ))]
-        wgpu_types::Backend::Vulkan => $($c)*.$method::<wgpu_core::api::Vulkan> $params,
-        #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
-        wgpu_types::Backend::Metal => $($c)*.$method::<wgpu_core::api::Metal> $params,
-        #[cfg(all(not(target_arch = "wasm32"), windows))]
-        wgpu_types::Backend::Dx12 => $($c)*.$method::<wgpu_core::api::Dx12> $params,
-        #[cfg(any(
-            all(unix, not(target_os = "macos"), not(target_os = "ios")),
-            feature = "angle",
-            target_arch = "wasm32"
-        ))]
-        wgpu_types::Backend::Gl => $($c)*.$method::<wgpu_core::api::Gles> $params,
-        other => panic!("Unexpected backend {:?}", other),
-      }
+        $($c)*.$method $params
     };
   }
 

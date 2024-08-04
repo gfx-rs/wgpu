@@ -72,10 +72,7 @@ impl ContextWgpuCore {
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
-        unsafe {
-            self.0
-                .create_adapter_from_hal::<A>(hal_adapter.into(), None)
-        }
+        unsafe { self.0.create_adapter_from_hal(hal_adapter.into(), None) }
     }
 
     pub unsafe fn adapter_as_hal<
@@ -112,7 +109,7 @@ impl ContextWgpuCore {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
         let (device_id, queue_id, error) = unsafe {
-            self.0.create_device_from_hal::<A>(
+            self.0.create_device_from_hal(
                 *adapter,
                 hal_device.into(),
                 &desc.map_label(|l| l.map(Borrowed)),
@@ -146,7 +143,7 @@ impl ContextWgpuCore {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let (id, error) = unsafe {
             self.0
-                .create_texture_from_hal::<A>(Box::new(hal_texture), device.id, &descriptor, None)
+                .create_texture_from_hal(Box::new(hal_texture), device.id, &descriptor, None)
         };
         if let Some(cause) = error {
             self.handle_error(
@@ -795,20 +792,14 @@ impl crate::Context for ContextWgpuCore {
     fn surface_get_current_texture(
         &self,
         surface: &Self::SurfaceId,
-        surface_data: &Self::SurfaceData,
+        _surface_data: &Self::SurfaceData,
     ) -> (
         Option<Self::TextureId>,
         Option<Self::TextureData>,
         SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
-        let device_id = surface_data
-            .configured_device
-            .lock()
-            .expect("Surface was not configured?");
-        match wgc::gfx_select!(
-            device_id => self.0.surface_get_current_texture(*surface, None)
-        ) {
+        match self.0.surface_get_current_texture(*surface, None) {
             Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
                 let (id, data) = {
                     (
@@ -833,19 +824,15 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
-    fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail) {
-        match wgc::gfx_select!(texture => self.0.surface_present(detail.surface_id)) {
+    fn surface_present(&self, detail: &Self::SurfaceOutputDetail) {
+        match self.0.surface_present(detail.surface_id) {
             Ok(_status) => (),
             Err(err) => self.handle_error_fatal(err, "Surface::present"),
         }
     }
 
-    fn surface_texture_discard(
-        &self,
-        texture: &Self::TextureId,
-        detail: &Self::SurfaceOutputDetail,
-    ) {
-        match wgc::gfx_select!(texture => self.0.surface_texture_discard(detail.surface_id)) {
+    fn surface_texture_discard(&self, detail: &Self::SurfaceOutputDetail) {
+        match self.0.surface_texture_discard(detail.surface_id) {
             Ok(_status) => (),
             Err(err) => self.handle_error_fatal(err, "Surface::discard_texture"),
         }

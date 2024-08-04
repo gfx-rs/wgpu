@@ -1,6 +1,5 @@
 use crate::{
     binding_model::BindGroup,
-    hal_api::HalApi,
     id,
     pipeline::RenderPipeline,
     resource::{Buffer, QuerySet},
@@ -126,10 +125,10 @@ pub enum RenderCommand {
 impl RenderCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
     #[cfg(any(feature = "serde", feature = "replay"))]
-    pub fn resolve_render_command_ids<A: HalApi>(
-        hub: &crate::hub::Hub<A>,
+    pub fn resolve_render_command_ids(
+        hub: &crate::hub::Hub,
         commands: &[RenderCommand],
-    ) -> Result<Vec<ArcRenderCommand<A>>, super::RenderPassError> {
+    ) -> Result<Vec<ArcRenderCommand>, super::RenderPassError> {
         use super::{
             DrawKind, PassErrorScope, RenderCommandError, RenderPassError, RenderPassErrorInner,
         };
@@ -140,9 +139,9 @@ impl RenderCommand {
         let pipelines_guard = hub.render_pipelines.read();
         let render_bundles_guard = hub.render_bundles.read();
 
-        let resolved_commands: Vec<ArcRenderCommand<A>> = commands
+        let resolved_commands: Vec<ArcRenderCommand> = commands
             .iter()
-            .map(|c| -> Result<ArcRenderCommand<A>, RenderPassError> {
+            .map(|c| -> Result<ArcRenderCommand, RenderPassError> {
                 Ok(match *c {
                     RenderCommand::SetBindGroup {
                         index,
@@ -381,22 +380,22 @@ impl RenderCommand {
 /// Equivalent to `RenderCommand` with the Ids resolved into resource Arcs.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
-pub enum ArcRenderCommand<A: HalApi> {
+pub enum ArcRenderCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group: Arc<BindGroup<A>>,
+        bind_group: Arc<BindGroup>,
     },
-    SetPipeline(Arc<RenderPipeline<A>>),
+    SetPipeline(Arc<RenderPipeline>),
     SetIndexBuffer {
-        buffer: Arc<Buffer<A>>,
+        buffer: Arc<Buffer>,
         index_format: wgt::IndexFormat,
         offset: BufferAddress,
         size: Option<BufferSize>,
     },
     SetVertexBuffer {
         slot: u32,
-        buffer: Arc<Buffer<A>>,
+        buffer: Arc<Buffer>,
         offset: BufferAddress,
         size: Option<BufferSize>,
     },
@@ -450,16 +449,16 @@ pub enum ArcRenderCommand<A: HalApi> {
         first_instance: u32,
     },
     MultiDrawIndirect {
-        buffer: Arc<Buffer<A>>,
+        buffer: Arc<Buffer>,
         offset: BufferAddress,
         /// Count of `None` represents a non-multi call.
         count: Option<NonZeroU32>,
         indexed: bool,
     },
     MultiDrawIndirectCount {
-        buffer: Arc<Buffer<A>>,
+        buffer: Arc<Buffer>,
         offset: BufferAddress,
-        count_buffer: Arc<Buffer<A>>,
+        count_buffer: Arc<Buffer>,
         count_buffer_offset: BufferAddress,
         max_count: u32,
         indexed: bool,
@@ -474,7 +473,7 @@ pub enum ArcRenderCommand<A: HalApi> {
         len: usize,
     },
     WriteTimestamp {
-        query_set: Arc<QuerySet<A>>,
+        query_set: Arc<QuerySet>,
         query_index: u32,
     },
     BeginOcclusionQuery {
@@ -482,9 +481,9 @@ pub enum ArcRenderCommand<A: HalApi> {
     },
     EndOcclusionQuery,
     BeginPipelineStatisticsQuery {
-        query_set: Arc<QuerySet<A>>,
+        query_set: Arc<QuerySet>,
         query_index: u32,
     },
     EndPipelineStatisticsQuery,
-    ExecuteBundle(Arc<RenderBundle<A>>),
+    ExecuteBundle(Arc<RenderBundle>),
 }

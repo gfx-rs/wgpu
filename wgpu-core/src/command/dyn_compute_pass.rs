@@ -1,6 +1,6 @@
 use wgt::WasmNotSendSync;
 
-use crate::{global, hal_api::HalApi, id};
+use crate::{global, id};
 
 use super::{ComputePass, ComputePassError};
 
@@ -74,7 +74,7 @@ pub trait DynComputePass: std::fmt::Debug + WasmNotSendSync {
     fn label(&self) -> Option<&str>;
 }
 
-impl<A: HalApi> DynComputePass for ComputePass<A> {
+impl DynComputePass for ComputePass {
     fn set_bind_group(
         &mut self,
         context: &global::Global,

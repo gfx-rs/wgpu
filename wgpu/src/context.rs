@@ -178,12 +178,8 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         SurfaceStatus,
         Self::SurfaceOutputDetail,
     );
-    fn surface_present(&self, texture: &Self::TextureId, detail: &Self::SurfaceOutputDetail);
-    fn surface_texture_discard(
-        &self,
-        texture: &Self::TextureId,
-        detail: &Self::SurfaceOutputDetail,
-    );
+    fn surface_present(&self, detail: &Self::SurfaceOutputDetail);
+    fn surface_texture_discard(&self, detail: &Self::SurfaceOutputDetail);
 
     fn device_features(&self, device: &Self::DeviceId, device_data: &Self::DeviceData) -> Features;
     fn device_limits(&self, device: &Self::DeviceId, device_data: &Self::DeviceData) -> Limits;
@@ -1241,8 +1237,8 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         SurfaceStatus,
         Box<dyn AnyWasmNotSendSync>,
     );
-    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync);
-    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync);
+    fn surface_present(&self, detail: &dyn AnyWasmNotSendSync);
+    fn surface_texture_discard(&self, detail: &dyn AnyWasmNotSendSync);
 
     fn device_features(&self, device: &ObjectId, device_data: &crate::Data) -> Features;
     fn device_limits(&self, device: &ObjectId, device_data: &crate::Data) -> Limits;
@@ -2204,14 +2200,12 @@ where
         )
     }
 
-    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync) {
-        let texture = <T::TextureId>::from(*texture);
-        Context::surface_present(self, &texture, detail.downcast_ref().unwrap())
+    fn surface_present(&self, detail: &dyn AnyWasmNotSendSync) {
+        Context::surface_present(self, detail.downcast_ref().unwrap())
     }
 
-    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync) {
-        let texture = <T::TextureId>::from(*texture);
-        Context::surface_texture_discard(self, &texture, detail.downcast_ref().unwrap())
+    fn surface_texture_discard(&self, detail: &dyn AnyWasmNotSendSync) {
+        Context::surface_texture_discard(self, detail.downcast_ref().unwrap())
     }
 
     fn device_features(&self, device: &ObjectId, device_data: &crate::Data) -> Features {
