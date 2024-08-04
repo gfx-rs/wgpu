@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::{
     binding_model::BindGroup,
-    hal_api::HalApi,
     id,
     pipeline::ComputePipeline,
     resource::{Buffer, QuerySet},
@@ -71,10 +70,10 @@ pub enum ComputeCommand {
 impl ComputeCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
     #[cfg(any(feature = "serde", feature = "replay"))]
-    pub fn resolve_compute_command_ids<A: HalApi>(
-        hub: &crate::hub::Hub<A>,
+    pub fn resolve_compute_command_ids(
+        hub: &crate::hub::Hub,
         commands: &[ComputeCommand],
-    ) -> Result<Vec<ArcComputeCommand<A>>, super::ComputePassError> {
+    ) -> Result<Vec<ArcComputeCommand>, super::ComputePassError> {
         use super::{ComputePassError, ComputePassErrorInner, PassErrorScope};
 
         let buffers_guard = hub.buffers.read();
@@ -82,9 +81,9 @@ impl ComputeCommand {
         let query_set_guard = hub.query_sets.read();
         let pipelines_guard = hub.compute_pipelines.read();
 
-        let resolved_commands: Vec<ArcComputeCommand<A>> = commands
+        let resolved_commands: Vec<ArcComputeCommand> = commands
             .iter()
-            .map(|c| -> Result<ArcComputeCommand<A>, ComputePassError> {
+            .map(|c| -> Result<ArcComputeCommand, ComputePassError> {
                 Ok(match *c {
                     ComputeCommand::SetBindGroup {
                         index,
@@ -182,14 +181,14 @@ impl ComputeCommand {
 
 /// Equivalent to `ComputeCommand` but the Ids resolved into resource Arcs.
 #[derive(Clone, Debug)]
-pub enum ArcComputeCommand<A: HalApi> {
+pub enum ArcComputeCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group: Arc<BindGroup<A>>,
+        bind_group: Arc<BindGroup>,
     },
 
-    SetPipeline(Arc<ComputePipeline<A>>),
+    SetPipeline(Arc<ComputePipeline>),
 
     /// Set a range of push constants to values stored in `push_constant_data`.
     SetPushConstant {
@@ -211,7 +210,7 @@ pub enum ArcComputeCommand<A: HalApi> {
     Dispatch([u32; 3]),
 
     DispatchIndirect {
-        buffer: Arc<Buffer<A>>,
+        buffer: Arc<Buffer>,
         offset: wgt::BufferAddress,
     },
 
@@ -228,12 +227,12 @@ pub enum ArcComputeCommand<A: HalApi> {
     },
 
     WriteTimestamp {
-        query_set: Arc<QuerySet<A>>,
+        query_set: Arc<QuerySet>,
         query_index: u32,
     },
 
     BeginPipelineStatisticsQuery {
-        query_set: Arc<QuerySet<A>>,
+        query_set: Arc<QuerySet>,
         query_index: u32,
     },
 

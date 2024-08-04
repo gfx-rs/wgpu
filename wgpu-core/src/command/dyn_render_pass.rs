@@ -1,6 +1,6 @@
 use wgt::WasmNotSendSync;
 
-use crate::{global, hal_api::HalApi, id};
+use crate::{global, id};
 
 use super::{RenderPass, RenderPassError};
 
@@ -178,7 +178,7 @@ pub trait DynRenderPass: std::fmt::Debug + WasmNotSendSync {
     fn label(&self) -> Option<&str>;
 }
 
-impl<A: HalApi> DynRenderPass for RenderPass<A> {
+impl DynRenderPass for RenderPass {
     fn set_index_buffer(
         &mut self,
         context: &global::Global,

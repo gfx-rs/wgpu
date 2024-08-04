@@ -28,16 +28,6 @@ pub(crate) trait StorageItem: ResourceType {
     type Marker: Marker;
 }
 
-// TODO(#5124): Remove the typed version.
-#[macro_export]
-macro_rules! impl_storage_item_generic {
-    ($ty:ident) => {
-        impl<A: HalApi> $crate::storage::StorageItem for $ty<A> {
-            type Marker = $crate::id::markers::$ty;
-        }
-    };
-}
-
 #[macro_export]
 macro_rules! impl_storage_item {
     ($ty:ident) => {

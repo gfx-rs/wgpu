@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
-    hal_api::HalApi,
     pipeline::LateSizedBufferGroup,
     resource::{Labeled, ResourceErrorIdent},
 };
@@ -19,7 +18,6 @@ mod compat {
     use crate::{
         binding_model::BindGroupLayout,
         error::MultiError,
-        hal_api::HalApi,
         resource::{Labeled, ParentDevice, ResourceErrorIdent},
     };
     use std::{
@@ -38,12 +36,12 @@ mod compat {
     }
 
     #[derive(Debug, Clone)]
-    struct Entry<A: HalApi> {
-        assigned: Option<Arc<BindGroupLayout<A>>>,
-        expected: Option<Arc<BindGroupLayout<A>>>,
+    struct Entry {
+        assigned: Option<Arc<BindGroupLayout>>,
+        expected: Option<Arc<BindGroupLayout>>,
     }
 
-    impl<A: HalApi> Entry<A> {
+    impl Entry {
         fn empty() -> Self {
             Self {
                 assigned: None,
@@ -192,11 +190,11 @@ mod compat {
     }
 
     #[derive(Debug, Default)]
-    pub(crate) struct BoundBindGroupLayouts<A: HalApi> {
-        entries: ArrayVec<Entry<A>, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) struct BoundBindGroupLayouts {
+        entries: ArrayVec<Entry, { hal::MAX_BIND_GROUPS }>,
     }
 
-    impl<A: HalApi> BoundBindGroupLayouts<A> {
+    impl BoundBindGroupLayouts {
         pub fn new() -> Self {
             Self {
                 entries: (0..hal::MAX_BIND_GROUPS).map(|_| Entry::empty()).collect(),
@@ -214,7 +212,7 @@ mod compat {
 
         pub fn update_expectations(
             &mut self,
-            expectations: &[Arc<BindGroupLayout<A>>],
+            expectations: &[Arc<BindGroupLayout>],
         ) -> Range<usize> {
             let start_index = self
                 .entries
@@ -236,7 +234,7 @@ mod compat {
             self.make_range(start_index)
         }
 
-        pub fn assign(&mut self, index: usize, value: Arc<BindGroupLayout<A>>) -> Range<usize> {
+        pub fn assign(&mut self, index: usize, value: Arc<BindGroupLayout>) -> Range<usize> {
             self.entries[index].assigned = Some(value);
             self.make_range(index)
         }
@@ -283,9 +281,9 @@ struct LateBufferBinding {
     bound_size: wgt::BufferAddress,
 }
 
-#[derive(Debug)]
-pub(super) struct EntryPayload<A: HalApi> {
-    pub(super) group: Option<Arc<BindGroup<A>>>,
+#[derive(Debug, Default)]
+pub(super) struct EntryPayload {
+    pub(super) group: Option<Arc<BindGroup>>,
     pub(super) dynamic_offsets: Vec<wgt::DynamicOffset>,
     late_buffer_bindings: Vec<LateBufferBinding>,
     /// Since `LateBufferBinding` may contain information about the bindings
@@ -293,18 +291,7 @@ pub(super) struct EntryPayload<A: HalApi> {
     pub(super) late_bindings_effective_count: usize,
 }
 
-impl<A: HalApi> Default for EntryPayload<A> {
-    fn default() -> Self {
-        Self {
-            group: None,
-            dynamic_offsets: Default::default(),
-            late_buffer_bindings: Default::default(),
-            late_bindings_effective_count: Default::default(),
-        }
-    }
-}
-
-impl<A: HalApi> EntryPayload<A> {
+impl EntryPayload {
     fn reset(&mut self) {
         self.group = None;
         self.dynamic_offsets.clear();
@@ -314,13 +301,13 @@ impl<A: HalApi> EntryPayload<A> {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Binder<A: HalApi> {
-    pub(super) pipeline_layout: Option<Arc<PipelineLayout<A>>>,
-    manager: compat::BoundBindGroupLayouts<A>,
-    payloads: [EntryPayload<A>; hal::MAX_BIND_GROUPS],
+pub(super) struct Binder {
+    pub(super) pipeline_layout: Option<Arc<PipelineLayout>>,
+    manager: compat::BoundBindGroupLayouts,
+    payloads: [EntryPayload; hal::MAX_BIND_GROUPS],
 }
 
-impl<A: HalApi> Binder<A> {
+impl Binder {
     pub(super) fn new() -> Self {
         Self {
             pipeline_layout: None,
@@ -338,9 +325,9 @@ impl<A: HalApi> Binder<A> {
 
     pub(super) fn change_pipeline_layout<'a>(
         &'a mut self,
-        new: &Arc<PipelineLayout<A>>,
+        new: &Arc<PipelineLayout>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
-    ) -> (usize, &'a [EntryPayload<A>]) {
+    ) -> (usize, &'a [EntryPayload]) {
         let old_id_opt = self.pipeline_layout.replace(new.clone());
 
         let mut bind_range = self.manager.update_expectations(&new.bind_group_layouts);
@@ -380,9 +367,9 @@ impl<A: HalApi> Binder<A> {
     pub(super) fn assign_group<'a>(
         &'a mut self,
         index: usize,
-        bind_group: &Arc<BindGroup<A>>,
+        bind_group: &Arc<BindGroup>,
         offsets: &[wgt::DynamicOffset],
-    ) -> &'a [EntryPayload<A>] {
+    ) -> &'a [EntryPayload] {
         let payload = &mut self.payloads[index];
         payload.group = Some(bind_group.clone());
         payload.dynamic_offsets.clear();
@@ -412,7 +399,7 @@ impl<A: HalApi> Binder<A> {
         &self.payloads[bind_range]
     }
 
-    pub(super) fn list_active<'a>(&'a self) -> impl Iterator<Item = &'a Arc<BindGroup<A>>> + '_ {
+    pub(super) fn list_active<'a>(&'a self) -> impl Iterator<Item = &'a Arc<BindGroup>> + '_ {
         let payloads = &self.payloads;
         self.manager
             .list_active()

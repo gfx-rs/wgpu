@@ -11,7 +11,6 @@ use crate::{
         AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
         RenderPassContext, CLEANUP_WAIT_MS,
     },
-    hal_api::HalApi,
     hal_label,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -77,10 +76,10 @@ use super::{
 /// Important:
 /// When locking pending_writes please check that trackers is not locked
 /// trackers should be locked only when needed for the shortest time possible
-pub struct Device<A: HalApi> {
+pub struct Device {
     raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceCell<Weak<Queue<A>>>,
+    pub(crate) queue: OnceCell<Weak<Queue>>,
     queue_to_drop: OnceCell<Box<dyn hal::DynQueue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
@@ -130,30 +129,30 @@ pub struct Device<A: HalApi> {
     ///
     /// Has to be locked temporarily only (locked last)
     /// and never before pending_writes
-    pub(crate) trackers: Mutex<DeviceTracker<A>>,
+    pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
     // Life tracker should be locked right after the device and before anything else.
-    life_tracker: Mutex<LifetimeTracker<A>>,
+    life_tracker: Mutex<LifetimeTracker>,
     /// Pool of bind group layouts, allowing deduplication.
-    pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout<A>>,
+    pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
-    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites<A>>>,
-    pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy<A>>>,
+    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
+    pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
-    pub(crate) usage_scopes: UsageScopePool<A>,
+    pub(crate) usage_scopes: UsageScopePool,
 }
 
-pub(crate) enum DeferredDestroy<A: HalApi> {
-    TextureView(Weak<TextureView<A>>),
-    BindGroup(Weak<BindGroup<A>>),
+pub(crate) enum DeferredDestroy {
+    TextureView(Weak<TextureView>),
+    BindGroup(Weak<BindGroup>),
 }
 
-impl<A: HalApi> std::fmt::Debug for Device<A> {
+impl std::fmt::Debug for Device {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Device")
             .field("label", &self.label())
@@ -164,7 +163,7 @@ impl<A: HalApi> std::fmt::Debug for Device<A> {
     }
 }
 
-impl<A: HalApi> Drop for Device<A> {
+impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
@@ -194,7 +193,7 @@ pub enum CreateDeviceError {
     FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
-impl<A: HalApi> Device<A> {
+impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
     }
@@ -218,7 +217,7 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-impl<A: HalApi> Device<A> {
+impl Device {
     pub(crate) fn new(
         raw_device: Box<dyn hal::DynDevice>,
         raw_queue: &dyn hal::DynQueue,
@@ -238,7 +237,7 @@ impl<A: HalApi> Device<A> {
         let pending_encoder = command_allocator
             .acquire_encoder(raw_device.as_ref(), raw_queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
-        let mut pending_writes = PendingWrites::<A>::new(pending_encoder);
+        let mut pending_writes = PendingWrites::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
@@ -297,7 +296,7 @@ impl<A: HalApi> Device<A> {
                     Ok(mut trace) => {
                         trace.add(trace::Action::Init {
                             desc: desc.clone(),
-                            backend: A::VARIANT,
+                            backend: adapter.raw.backend(),
                         });
                         Some(trace)
                     }
@@ -321,6 +320,11 @@ impl<A: HalApi> Device<A> {
         })
     }
 
+    /// Returns the backend this device is using.
+    pub fn backend(&self) -> wgt::Backend {
+        self.adapter.raw.backend()
+    }
+
     pub fn is_valid(&self) -> bool {
         self.valid.load(Ordering::Acquire)
     }
@@ -337,7 +341,7 @@ impl<A: HalApi> Device<A> {
         assert!(self.queue_to_drop.set(queue).is_ok());
     }
 
-    pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker<A>> {
+    pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
         self.life_tracker.lock()
     }
 
@@ -384,11 +388,11 @@ impl<A: HalApi> Device<A> {
         }
     }
 
-    pub fn get_queue(&self) -> Option<Arc<Queue<A>>> {
+    pub fn get_queue(&self) -> Option<Arc<Queue>> {
         self.queue.get().as_ref()?.upgrade()
     }
 
-    pub fn set_queue(&self, queue: &Arc<Queue<A>>) {
+    pub fn set_queue(&self, queue: &Arc<Queue>) {
         assert!(self.queue.set(Arc::downgrade(queue)).is_ok());
     }
 
@@ -504,7 +508,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_buffer(
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
-    ) -> Result<Arc<Buffer<A>>, resource::CreateBufferError> {
+    ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
         self.check_is_valid()?;
 
         if desc.size > self.limits.max_buffer_size {
@@ -652,7 +656,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Arc<Texture<A>>, resource::CreateTextureError> {
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -679,11 +683,11 @@ impl<A: HalApi> Device<A> {
 
     pub fn create_buffer_from_hal(
         self: &Arc<Self>,
-        hal_buffer: A::Buffer,
+        hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
-    ) -> Arc<Buffer<A>> {
+    ) -> Arc<Buffer> {
         let buffer = Buffer {
-            raw: Snatchable::new(Box::new(hal_buffer)),
+            raw: Snatchable::new(hal_buffer),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -710,7 +714,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_texture(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
-    ) -> Result<Arc<Texture<A>>, resource::CreateTextureError> {
+    ) -> Result<Arc<Texture>, resource::CreateTextureError> {
         use resource::{CreateTextureError, TextureDimensionError};
 
         self.check_is_valid()?;
@@ -1017,9 +1021,9 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_texture_view(
         self: &Arc<Self>,
-        texture: &Arc<Texture<A>>,
+        texture: &Arc<Texture>,
         desc: &resource::TextureViewDescriptor,
-    ) -> Result<Arc<TextureView<A>>, resource::CreateTextureViewError> {
+    ) -> Result<Arc<TextureView>, resource::CreateTextureViewError> {
         self.check_is_valid()?;
 
         let snatch_guard = texture.device.snatchable_lock.read();
@@ -1323,7 +1327,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_sampler(
         self: &Arc<Self>,
         desc: &resource::SamplerDescriptor,
-    ) -> Result<Arc<Sampler<A>>, resource::CreateSamplerError> {
+    ) -> Result<Arc<Sampler>, resource::CreateSamplerError> {
         self.check_is_valid()?;
 
         if desc
@@ -1438,7 +1442,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
-    ) -> Result<Arc<pipeline::ShaderModule<A>>, pipeline::CreateShaderModuleError> {
+    ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
 
         let (module, source) = match source {
@@ -1567,7 +1571,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: &'a [u32],
-    ) -> Result<Arc<pipeline::ShaderModule<A>>, pipeline::CreateShaderModuleError> {
+    ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
 
         self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
@@ -1606,7 +1610,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_command_encoder(
         self: &Arc<Self>,
         label: &crate::Label,
-    ) -> Result<Arc<command::CommandBuffer<A>>, DeviceError> {
+    ) -> Result<Arc<command::CommandBuffer>, DeviceError> {
         self.check_is_valid()?;
 
         let queue = self.get_queue().unwrap();
@@ -1626,7 +1630,7 @@ impl<A: HalApi> Device<A> {
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
     pub(crate) fn make_late_sized_buffer_groups(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
-        layout: &binding_model::PipelineLayout<A>,
+        layout: &binding_model::PipelineLayout,
     ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
         // Given the shader-required binding sizes and the pipeline layout,
         // return the filtered list of them in the layout order,
@@ -1664,7 +1668,7 @@ impl<A: HalApi> Device<A> {
         label: &crate::Label,
         entry_map: bgl::EntryMap,
         origin: bgl::Origin,
-    ) -> Result<Arc<BindGroupLayout<A>>, binding_model::CreateBindGroupLayoutError> {
+    ) -> Result<Arc<BindGroupLayout>, binding_model::CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
         enum WritableStorage {
             Yes,
@@ -1878,13 +1882,13 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_buffer_binding<'a>(
         self: &Arc<Self>,
-        bb: &'a binding_model::ResolvedBufferBinding<A>,
+        bb: &'a binding_model::ResolvedBufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        used_buffer_ranges: &mut Vec<BufferInitTrackerAction<A>>,
+        used_buffer_ranges: &mut Vec<BufferInitTrackerAction>,
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
-        used: &mut BindGroupStates<A>,
+        used: &mut BindGroupStates,
         limits: &wgt::Limits,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, binding_model::CreateBindGroupError>
@@ -2016,10 +2020,10 @@ impl<A: HalApi> Device<A> {
 
     fn create_sampler_binding<'a>(
         self: &Arc<Self>,
-        used: &mut BindGroupStates<A>,
+        used: &mut BindGroupStates,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        sampler: &'a Arc<Sampler<A>>,
+        sampler: &'a Arc<Sampler>,
     ) -> Result<&'a dyn hal::DynSampler, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -2067,9 +2071,9 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        view: &'a Arc<TextureView<A>>,
-        used: &mut BindGroupStates<A>,
-        used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
+        view: &'a Arc<TextureView>,
+        used: &mut BindGroupStates,
+        used_texture_ranges: &mut Vec<TextureInitTrackerAction>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::TextureBinding<'a, dyn hal::DynTextureView>, binding_model::CreateBindGroupError>
     {
@@ -2109,8 +2113,8 @@ impl<A: HalApi> Device<A> {
     // (not passing a duplicate) beforehand.
     pub(crate) fn create_bind_group(
         self: &Arc<Self>,
-        desc: binding_model::ResolvedBindGroupDescriptor<A>,
-    ) -> Result<Arc<BindGroup<A>>, binding_model::CreateBindGroupError> {
+        desc: binding_model::ResolvedBindGroupDescriptor,
+    ) -> Result<Arc<BindGroup>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{CreateBindGroupError as Error, ResolvedBindingResource as Br};
 
         let layout = desc.layout;
@@ -2357,7 +2361,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        view: &TextureView<A>,
+        view: &TextureView,
         expected: &'static str,
     ) -> Result<(wgt::TextureUsages, hal::TextureUses), binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
@@ -2486,9 +2490,8 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
-        desc: &binding_model::ResolvedPipelineLayoutDescriptor<A>,
-    ) -> Result<Arc<binding_model::PipelineLayout<A>>, binding_model::CreatePipelineLayoutError>
-    {
+        desc: &binding_model::ResolvedPipelineLayoutDescriptor,
+    ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
         self.check_is_valid()?;
@@ -2594,7 +2597,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn derive_pipeline_layout(
         self: &Arc<Self>,
         mut derived_group_layouts: ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>,
-    ) -> Result<Arc<binding_model::PipelineLayout<A>>, pipeline::ImplicitLayoutError> {
+    ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
             .map_or(false, |map| map.is_empty())
@@ -2639,8 +2642,8 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_compute_pipeline(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedComputePipelineDescriptor<A>,
-    ) -> Result<Arc<pipeline::ComputePipeline<A>>, pipeline::CreateComputePipelineError> {
+        desc: pipeline::ResolvedComputePipelineDescriptor,
+    ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
         self.check_is_valid()?;
 
         self.require_downlevel_flags(wgt::DownlevelFlags::COMPUTE_SHADERS)?;
@@ -2772,8 +2775,8 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_render_pipeline(
         self: &Arc<Self>,
-        desc: pipeline::ResolvedRenderPipelineDescriptor<A>,
-    ) -> Result<Arc<pipeline::RenderPipeline<A>>, pipeline::CreateRenderPipelineError> {
+        desc: pipeline::ResolvedRenderPipelineDescriptor,
+    ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
 
         self.check_is_valid()?;
@@ -3400,7 +3403,7 @@ impl<A: HalApi> Device<A> {
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
-    ) -> Result<Arc<pipeline::PipelineCache<A>>, pipeline::CreatePipelineCacheError> {
+    ) -> Result<Arc<pipeline::PipelineCache>, pipeline::CreatePipelineCacheError> {
         use crate::pipeline_cache;
 
         self.check_is_valid()?;
@@ -3509,7 +3512,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_query_set(
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
-    ) -> Result<Arc<QuerySet<A>>, resource::CreateQuerySetError> {
+    ) -> Result<Arc<QuerySet>, resource::CreateQuerySetError> {
         use resource::CreateQuerySetError as Error;
 
         self.check_is_valid()?;
@@ -3605,7 +3608,7 @@ impl<A: HalApi> Device<A> {
         }
     }
 
-    pub(crate) fn new_usage_scope(&self) -> UsageScope<'_, A> {
+    pub(crate) fn new_usage_scope(&self) -> UsageScope<'_> {
         UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
     }
 
@@ -3618,8 +3621,8 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-impl<A: HalApi> Device<A> {
-    pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer<A>) {
+impl Device {
+    pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer) {
         let mut baked = cmd_buf.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list);
@@ -3656,6 +3659,6 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-crate::impl_resource_type_generic!(Device);
+crate::impl_resource_type!(Device);
 crate::impl_labeled!(Device);
-crate::impl_storage_item_generic!(Device);
+crate::impl_storage_item!(Device);
