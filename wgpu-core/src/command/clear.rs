@@ -8,7 +8,6 @@ use crate::{
     device::DeviceError,
     get_lowest_common_denom,
     global::Global,
-    hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
@@ -79,7 +78,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
 }
 
 impl Global {
-    pub fn command_encoder_clear_buffer<A: HalApi>(
+    pub fn command_encoder_clear_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
@@ -89,7 +88,7 @@ impl Global {
         profiling::scope!("CommandEncoder::clear_buffer");
         api_log!("CommandEncoder::clear_buffer {dst:?}");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers
@@ -172,7 +171,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn command_encoder_clear_texture<A: HalApi>(
+    pub fn command_encoder_clear_texture(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
@@ -181,7 +180,7 @@ impl Global {
         profiling::scope!("CommandEncoder::clear_texture");
         api_log!("CommandEncoder::clear_texture {dst:?}");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers
@@ -268,8 +267,8 @@ impl Global {
     }
 }
 
-pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
-    dst_texture: &Arc<Texture<A>>,
+pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
+    dst_texture: &Arc<Texture>,
     range: TextureInitRange,
     encoder: &mut dyn hal::DynCommandEncoder,
     texture_tracker: &mut T,
@@ -440,8 +439,8 @@ fn clear_texture_via_buffer_copies(
     }
 }
 
-fn clear_texture_via_render_passes<A: HalApi>(
-    dst_texture: &Texture<A>,
+fn clear_texture_via_render_passes(
+    dst_texture: &Texture,
     range: TextureInitRange,
     is_color: bool,
     encoder: &mut dyn hal::DynCommandEncoder,
@@ -462,7 +461,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
             let (color_attachments, depth_stencil_attachment) = if is_color {
                 color_attachments_tmp = [Some(hal::ColorAttachment {
                     target: hal::Attachment {
-                        view: Texture::<A>::get_clear_view(
+                        view: Texture::get_clear_view(
                             clear_mode,
                             &dst_texture.desc,
                             mip_level,
@@ -480,7 +479,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
                     &[][..],
                     Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
-                            view: Texture::<A>::get_clear_view(
+                            view: Texture::get_clear_view(
                                 clear_mode,
                                 &dst_texture.desc,
                                 mip_level,

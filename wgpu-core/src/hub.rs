@@ -108,7 +108,6 @@ use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::{queue::Queue, Device},
-    hal_api::HalApi,
     instance::{Adapter, Surface},
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
@@ -145,10 +144,7 @@ impl HubReport {
 }
 
 #[allow(rustdoc::private_intra_doc_links)]
-/// All the resources for a particular backend in a [`crate::global::Global`].
-///
-/// To obtain `global`'s `Hub` for some [`HalApi`] backend type `A`,
-/// call [`A::hub(global)`].
+/// All the resources tracked by a [`crate::global::Global`].
 ///
 /// ## Locking
 ///
@@ -169,48 +165,48 @@ impl HubReport {
 ///
 ///
 /// [`A::hub(global)`]: HalApi::hub
-pub struct Hub<A: HalApi> {
+pub struct Hub {
     pub(crate) adapters: Registry<Adapter>,
-    pub(crate) devices: Registry<Device<A>>,
-    pub(crate) queues: Registry<Queue<A>>,
-    pub(crate) pipeline_layouts: Registry<PipelineLayout<A>>,
-    pub(crate) shader_modules: Registry<ShaderModule<A>>,
-    pub(crate) bind_group_layouts: Registry<BindGroupLayout<A>>,
-    pub(crate) bind_groups: Registry<BindGroup<A>>,
-    pub(crate) command_buffers: Registry<CommandBuffer<A>>,
-    pub(crate) render_bundles: Registry<RenderBundle<A>>,
-    pub(crate) render_pipelines: Registry<RenderPipeline<A>>,
-    pub(crate) compute_pipelines: Registry<ComputePipeline<A>>,
-    pub(crate) pipeline_caches: Registry<PipelineCache<A>>,
-    pub(crate) query_sets: Registry<QuerySet<A>>,
-    pub(crate) buffers: Registry<Buffer<A>>,
-    pub(crate) staging_buffers: Registry<StagingBuffer<A>>,
-    pub(crate) textures: Registry<Texture<A>>,
-    pub(crate) texture_views: Registry<TextureView<A>>,
-    pub(crate) samplers: Registry<Sampler<A>>,
+    pub(crate) devices: Registry<Device>,
+    pub(crate) queues: Registry<Queue>,
+    pub(crate) pipeline_layouts: Registry<PipelineLayout>,
+    pub(crate) shader_modules: Registry<ShaderModule>,
+    pub(crate) bind_group_layouts: Registry<BindGroupLayout>,
+    pub(crate) bind_groups: Registry<BindGroup>,
+    pub(crate) command_buffers: Registry<CommandBuffer>,
+    pub(crate) render_bundles: Registry<RenderBundle>,
+    pub(crate) render_pipelines: Registry<RenderPipeline>,
+    pub(crate) compute_pipelines: Registry<ComputePipeline>,
+    pub(crate) pipeline_caches: Registry<PipelineCache>,
+    pub(crate) query_sets: Registry<QuerySet>,
+    pub(crate) buffers: Registry<Buffer>,
+    pub(crate) staging_buffers: Registry<StagingBuffer>,
+    pub(crate) textures: Registry<Texture>,
+    pub(crate) texture_views: Registry<TextureView>,
+    pub(crate) samplers: Registry<Sampler>,
 }
 
-impl<A: HalApi> Hub<A> {
-    fn new() -> Self {
+impl Hub {
+    pub(crate) fn new() -> Self {
         Self {
-            adapters: Registry::new(A::VARIANT),
-            devices: Registry::new(A::VARIANT),
-            queues: Registry::new(A::VARIANT),
-            pipeline_layouts: Registry::new(A::VARIANT),
-            shader_modules: Registry::new(A::VARIANT),
-            bind_group_layouts: Registry::new(A::VARIANT),
-            bind_groups: Registry::new(A::VARIANT),
-            command_buffers: Registry::new(A::VARIANT),
-            render_bundles: Registry::new(A::VARIANT),
-            render_pipelines: Registry::new(A::VARIANT),
-            compute_pipelines: Registry::new(A::VARIANT),
-            pipeline_caches: Registry::new(A::VARIANT),
-            query_sets: Registry::new(A::VARIANT),
-            buffers: Registry::new(A::VARIANT),
-            staging_buffers: Registry::new(A::VARIANT),
-            textures: Registry::new(A::VARIANT),
-            texture_views: Registry::new(A::VARIANT),
-            samplers: Registry::new(A::VARIANT),
+            adapters: Registry::new(),
+            devices: Registry::new(),
+            queues: Registry::new(),
+            pipeline_layouts: Registry::new(),
+            shader_modules: Registry::new(),
+            bind_group_layouts: Registry::new(),
+            bind_groups: Registry::new(),
+            command_buffers: Registry::new(),
+            render_bundles: Registry::new(),
+            render_pipelines: Registry::new(),
+            compute_pipelines: Registry::new(),
+            pipeline_caches: Registry::new(),
+            query_sets: Registry::new(),
+            buffers: Registry::new(),
+            staging_buffers: Registry::new(),
+            textures: Registry::new(),
+            texture_views: Registry::new(),
+            samplers: Registry::new(),
         }
     }
 
@@ -239,11 +235,9 @@ impl<A: HalApi> Hub<A> {
         for element in surface_guard.map.iter() {
             if let Element::Occupied(ref surface, _epoch) = *element {
                 if let Some(ref mut present) = surface.presentation.lock().take() {
-                    if let Some(device) = present.device.downcast_ref::<A>() {
-                        let suf = surface.raw(A::VARIANT);
-                        unsafe {
-                            suf.unwrap().unconfigure(device.raw());
-                        }
+                    let suf = surface.raw(present.device.backend());
+                    unsafe {
+                        suf.unwrap().unconfigure(present.device.raw());
                     }
                 }
             }
@@ -275,36 +269,6 @@ impl<A: HalApi> Hub<A> {
             textures: self.textures.generate_report(),
             texture_views: self.texture_views.generate_report(),
             samplers: self.samplers.generate_report(),
-        }
-    }
-}
-
-pub struct Hubs {
-    #[cfg(vulkan)]
-    pub(crate) vulkan: Hub<hal::api::Vulkan>,
-    #[cfg(metal)]
-    pub(crate) metal: Hub<hal::api::Metal>,
-    #[cfg(dx12)]
-    pub(crate) dx12: Hub<hal::api::Dx12>,
-    #[cfg(gles)]
-    pub(crate) gl: Hub<hal::api::Gles>,
-    #[cfg(all(not(vulkan), not(metal), not(dx12), not(gles)))]
-    pub(crate) empty: Hub<hal::api::Empty>,
-}
-
-impl Hubs {
-    pub(crate) fn new() -> Self {
-        Self {
-            #[cfg(vulkan)]
-            vulkan: Hub::new(),
-            #[cfg(metal)]
-            metal: Hub::new(),
-            #[cfg(dx12)]
-            dx12: Hub::new(),
-            #[cfg(gles)]
-            gl: Hub::new(),
-            #[cfg(all(not(vulkan), not(metal), not(dx12), not(gles)))]
-            empty: Hub::new(),
         }
     }
 }

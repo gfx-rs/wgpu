@@ -1,7 +1,7 @@
 /*! Resource State and Lifetime Trackers
 
 These structures are responsible for keeping track of resource state,
-generating barriers where needed, and making sure resources are kept
+generating barriers where needednd making sure resources are kept
 alive until the trackers die.
 
 ## General Architecture
@@ -35,7 +35,7 @@ Stateless trackers only store metadata and own the given resource.
 ## Use Case
 
 Within each type of tracker, the trackers are further split into 3 different
-use cases, Bind Group, Usage Scope, and a full Tracker.
+use cases, Bind Group, Usage Scopend a full Tracker.
 
 Bind Group trackers are just a list of different resources, their refcount,
 and how they are used. Textures are used via a selector and a usage type.
@@ -60,7 +60,7 @@ not always contain every resource. Some resources (or even most resources) go
 unused in any given command buffer. So to help speed up the process of iterating
 through possibly thousands of resources, we use a bit vector to represent if
 a resource is in the buffer or not. This allows us extremely efficient memory
-utilization, as well as being able to bail out of whole blocks of 32-64 resources
+utilizations well as being able to bail out of whole blocks of 32-64 resources
 with a single usize comparison with zero. In practice this means that merging
 partially resident buffers is extremely quick.
 
@@ -103,7 +103,6 @@ mod texture;
 
 use crate::{
     binding_model, command,
-    hal_api::HalApi,
     lock::{rank, Mutex},
     pipeline,
     resource::{self, Labeled, ResourceErrorIdent},
@@ -257,9 +256,9 @@ pub(crate) type PendingTransitionList = Vec<PendingTransition<hal::TextureUses>>
 
 impl PendingTransition<hal::BufferUses> {
     /// Produce the hal barrier corresponding to the transition.
-    pub fn into_hal<'a, A: HalApi>(
+    pub fn into_hal<'a>(
         self,
-        buf: &'a resource::Buffer<A>,
+        buf: &'a resource::Buffer,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> hal::BufferBarrier<'a, dyn hal::DynBuffer> {
         let buffer = buf.raw(snatch_guard).expect("Buffer is destroyed");
@@ -352,8 +351,8 @@ pub enum ResourceUsageCompatibilityError {
 }
 
 impl ResourceUsageCompatibilityError {
-    fn from_buffer<A: HalApi>(
-        buffer: &resource::Buffer<A>,
+    fn from_buffer(
+        buffer: &resource::Buffer,
         current_state: hal::BufferUses,
         new_state: hal::BufferUses,
     ) -> Self {
@@ -366,8 +365,8 @@ impl ResourceUsageCompatibilityError {
         }
     }
 
-    fn from_texture<A: HalApi>(
-        texture: &resource::Texture<A>,
+    fn from_texture(
+        texture: &resource::Texture,
         selector: TextureSelector,
         current_state: hal::TextureUses,
         new_state: hal::TextureUses,
@@ -417,13 +416,13 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 /// All bind group states are sorted by their ID so that when adding to a tracker,
 /// they are added in the most efficient order possible (ascending order).
 #[derive(Debug)]
-pub(crate) struct BindGroupStates<A: HalApi> {
-    pub buffers: BufferBindGroupState<A>,
-    pub views: TextureViewBindGroupState<A>,
-    pub samplers: StatelessTracker<resource::Sampler<A>>,
+pub(crate) struct BindGroupStates {
+    pub buffers: BufferBindGroupState,
+    pub views: TextureViewBindGroupState,
+    pub samplers: StatelessTracker<resource::Sampler>,
 }
 
-impl<A: HalApi> BindGroupStates<A> {
+impl BindGroupStates {
     pub fn new() -> Self {
         Self {
             buffers: BufferBindGroupState::new(),
@@ -450,15 +449,15 @@ impl<A: HalApi> BindGroupStates<A> {
 /// that are not normally included in a usage scope, but are used by render bundles
 /// and need to be owned by the render bundles.
 #[derive(Debug)]
-pub(crate) struct RenderBundleScope<A: HalApi> {
-    pub buffers: BufferUsageScope<A>,
-    pub textures: TextureUsageScope<A>,
+pub(crate) struct RenderBundleScope {
+    pub buffers: BufferUsageScope,
+    pub textures: TextureUsageScope,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
-    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
-    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
 }
 
-impl<A: HalApi> RenderBundleScope<A> {
+impl RenderBundleScope {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new() -> Self {
         Self {
@@ -471,7 +470,7 @@ impl<A: HalApi> RenderBundleScope<A> {
 
     /// Merge the inner contents of a bind group into the render bundle tracker.
     ///
-    /// Only stateful things are merged in here, all other resources are owned
+    /// Only stateful things are merged in herell other resources are owned
     /// indirectly by the bind group.
     ///
     /// # Safety
@@ -480,7 +479,7 @@ impl<A: HalApi> RenderBundleScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        bind_group: &BindGroupStates<A>,
+        bind_group: &BindGroupStates,
     ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
         unsafe { self.textures.merge_bind_group(&bind_group.views)? };
@@ -492,18 +491,18 @@ impl<A: HalApi> RenderBundleScope<A> {
 /// A pool for storing the memory used by [`UsageScope`]s. We take and store this memory when the
 /// scope is dropped to avoid reallocating. The memory required only grows and allocation cost is
 /// significant when a large number of resources have been used.
-pub(crate) type UsageScopePool<A> = Mutex<Vec<(BufferUsageScope<A>, TextureUsageScope<A>)>>;
+pub(crate) type UsageScopePool = Mutex<Vec<(BufferUsageScope, TextureUsageScope)>>;
 
 /// A usage scope tracker. Only needs to store stateful resources as stateless
 /// resources cannot possibly have a usage conflict.
 #[derive(Debug)]
-pub(crate) struct UsageScope<'a, A: HalApi> {
-    pub pool: &'a UsageScopePool<A>,
-    pub buffers: BufferUsageScope<A>,
-    pub textures: TextureUsageScope<A>,
+pub(crate) struct UsageScope<'a> {
+    pub pool: &'a UsageScopePool,
+    pub buffers: BufferUsageScope,
+    pub textures: TextureUsageScope,
 }
 
-impl<'a, A: HalApi> Drop for UsageScope<'a, A> {
+impl<'a> Drop for UsageScope<'a> {
     fn drop(&mut self) {
         // clear vecs and push into pool
         self.buffers.clear();
@@ -515,14 +514,14 @@ impl<'a, A: HalApi> Drop for UsageScope<'a, A> {
     }
 }
 
-impl<A: HalApi> UsageScope<'static, A> {
+impl UsageScope<'static> {
     pub fn new_pooled<'d>(
-        pool: &'d UsageScopePool<A>,
+        pool: &'d UsageScopePool,
         tracker_indices: &TrackerIndexAllocators,
-    ) -> UsageScope<'d, A> {
+    ) -> UsageScope<'d> {
         let pooled = pool.lock().pop().unwrap_or_default();
 
-        let mut scope = UsageScope::<'d, A> {
+        let mut scope = UsageScope::<'d> {
             pool,
             buffers: pooled.0,
             textures: pooled.1,
@@ -534,10 +533,10 @@ impl<A: HalApi> UsageScope<'static, A> {
     }
 }
 
-impl<'a, A: HalApi> UsageScope<'a, A> {
+impl<'a> UsageScope<'a> {
     /// Merge the inner contents of a bind group into the usage scope.
     ///
-    /// Only stateful things are merged in here, all other resources are owned
+    /// Only stateful things are merged in herell other resources are owned
     /// indirectly by the bind group.
     ///
     /// # Safety
@@ -546,7 +545,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        bind_group: &BindGroupStates<A>,
+        bind_group: &BindGroupStates,
     ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe {
             self.buffers.merge_bind_group(&bind_group.buffers)?;
@@ -558,7 +557,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
 
     /// Merge the inner contents of a bind group into the usage scope.
     ///
-    /// Only stateful things are merged in here, all other resources are owned
+    /// Only stateful things are merged in herell other resources are owned
     /// indirectly by a bind group or are merged directly into the command buffer tracker.
     ///
     /// # Safety
@@ -567,7 +566,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_render_bundle(
         &mut self,
-        render_bundle: &RenderBundleScope<A>,
+        render_bundle: &RenderBundleScope,
     ) -> Result<(), ResourceUsageCompatibilityError> {
         self.buffers.merge_usage_scope(&render_bundle.buffers)?;
         self.textures.merge_usage_scope(&render_bundle.textures)?;
@@ -577,12 +576,12 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
 }
 
 /// A tracker used by Device.
-pub(crate) struct DeviceTracker<A: HalApi> {
-    pub buffers: DeviceBufferTracker<A>,
-    pub textures: DeviceTextureTracker<A>,
+pub(crate) struct DeviceTracker {
+    pub buffers: DeviceBufferTracker,
+    pub textures: DeviceTextureTracker,
 }
 
-impl<A: HalApi> DeviceTracker<A> {
+impl DeviceTracker {
     pub fn new() -> Self {
         Self {
             buffers: DeviceBufferTracker::new(),
@@ -592,18 +591,18 @@ impl<A: HalApi> DeviceTracker<A> {
 }
 
 /// A full double sided tracker used by CommandBuffers.
-pub(crate) struct Tracker<A: HalApi> {
-    pub buffers: BufferTracker<A>,
-    pub textures: TextureTracker<A>,
-    pub views: StatelessTracker<resource::TextureView<A>>,
-    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
-    pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline<A>>,
-    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
-    pub bundles: StatelessTracker<command::RenderBundle<A>>,
-    pub query_sets: StatelessTracker<resource::QuerySet<A>>,
+pub(crate) struct Tracker {
+    pub buffers: BufferTracker,
+    pub textures: TextureTracker,
+    pub views: StatelessTracker<resource::TextureView>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup>,
+    pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
+    pub bundles: StatelessTracker<command::RenderBundle>,
+    pub query_sets: StatelessTracker<resource::QuerySet>,
 }
 
-impl<A: HalApi> Tracker<A> {
+impl Tracker {
     pub fn new() -> Self {
         Self {
             buffers: BufferTracker::new(),
@@ -632,7 +631,7 @@ impl<A: HalApi> Tracker<A> {
     /// bind group as a source of which IDs to look at. The bind groups
     /// must have first been added to the usage scope.
     ///
-    /// Only stateful things are merged in here, all other resources are owned
+    /// Only stateful things are merged in herell other resources are owned
     /// indirectly by the bind group.
     ///
     /// # Safety
@@ -641,8 +640,8 @@ impl<A: HalApi> Tracker<A> {
     /// value given to `set_size`
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
-        scope: &mut UsageScope<A>,
-        bind_group: &BindGroupStates<A>,
+        scope: &mut UsageScope,
+        bind_group: &BindGroupStates,
     ) {
         unsafe {
             self.buffers.set_and_remove_from_usage_scope_sparse(

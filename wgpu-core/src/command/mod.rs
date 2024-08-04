@@ -37,7 +37,7 @@ use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::Labeled;
 use crate::track::{DeviceTracker, Tracker, UsageScope};
 use crate::LabelHelpers;
-use crate::{api_log, global::Global, hal_api::HalApi, id, resource_log, Label};
+use crate::{api_log, global::Global, id, resource_log, Label};
 
 use thiserror::Error;
 
@@ -240,16 +240,16 @@ impl CommandEncoder {
     }
 }
 
-pub(crate) struct BakedCommands<A: HalApi> {
+pub(crate) struct BakedCommands {
     pub(crate) encoder: Box<dyn hal::DynCommandEncoder>,
     pub(crate) list: Vec<Box<dyn hal::DynCommandBuffer>>,
-    pub(crate) trackers: Tracker<A>,
-    buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
-    texture_memory_actions: CommandBufferTextureMemoryActions<A>,
+    pub(crate) trackers: Tracker,
+    buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    texture_memory_actions: CommandBufferTextureMemoryActions,
 }
 
 /// The mutable state of a [`CommandBuffer`].
-pub struct CommandBufferMutable<A: HalApi> {
+pub struct CommandBufferMutable {
     /// The [`wgpu_hal::Api::CommandBuffer`]s we've built so far, and the encoder
     /// they belong to.
     ///
@@ -260,7 +260,7 @@ pub struct CommandBufferMutable<A: HalApi> {
     status: CommandEncoderStatus,
 
     /// All the resources that the commands recorded so far have referred to.
-    pub(crate) trackers: Tracker<A>,
+    pub(crate) trackers: Tracker,
 
     /// The regions of buffers and textures these commands will read and write.
     ///
@@ -268,18 +268,18 @@ pub struct CommandBufferMutable<A: HalApi> {
     /// buffers/textures we actually need to initialize. If we're
     /// definitely going to write to something before we read from it,
     /// we don't need to clear its contents.
-    buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
-    texture_memory_actions: CommandBufferTextureMemoryActions<A>,
+    buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    texture_memory_actions: CommandBufferTextureMemoryActions,
 
-    pub(crate) pending_query_resets: QueryResetMap<A>,
+    pub(crate) pending_query_resets: QueryResetMap,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }
 
-impl<A: HalApi> CommandBufferMutable<A> {
+impl CommandBufferMutable {
     pub(crate) fn open_encoder_and_tracker(
         &mut self,
-    ) -> Result<(&mut dyn hal::DynCommandEncoder, &mut Tracker<A>), DeviceError> {
+    ) -> Result<(&mut dyn hal::DynCommandEncoder, &mut Tracker), DeviceError> {
         let encoder = self.encoder.open()?;
         let tracker = &mut self.trackers;
 
@@ -305,8 +305,8 @@ impl<A: HalApi> CommandBufferMutable<A> {
 /// - Once a command buffer is submitted to the queue, it is removed from the id
 ///   registry, and its contents are taken to construct a [`BakedCommands`],
 ///   whose contents eventually become the property of the submission queue.
-pub struct CommandBuffer<A: HalApi> {
-    pub(crate) device: Arc<Device<A>>,
+pub struct CommandBuffer {
+    pub(crate) device: Arc<Device>,
     support_clear_texture: bool,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -317,10 +317,10 @@ pub struct CommandBuffer<A: HalApi> {
     /// When this is submitted, dropped, or destroyed, its contents are
     /// extracted into a [`BakedCommands`] by
     /// [`CommandBuffer::extract_baked_commands`].
-    pub(crate) data: Mutex<Option<CommandBufferMutable<A>>>,
+    pub(crate) data: Mutex<Option<CommandBufferMutable>>,
 }
 
-impl<A: HalApi> Drop for CommandBuffer<A> {
+impl Drop for CommandBuffer {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
         if self.data.lock().is_none() {
@@ -336,10 +336,10 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
     }
 }
 
-impl<A: HalApi> CommandBuffer<A> {
+impl CommandBuffer {
     pub(crate) fn new(
         encoder: Box<dyn hal::DynCommandEncoder>,
-        device: &Arc<Device<A>>,
+        device: &Arc<Device>,
         label: &Label,
     ) -> Self {
         CommandBuffer {
@@ -373,8 +373,8 @@ impl<A: HalApi> CommandBuffer<A> {
 
     pub(crate) fn insert_barriers_from_tracker(
         raw: &mut dyn hal::DynCommandEncoder,
-        base: &mut Tracker<A>,
-        head: &Tracker<A>,
+        base: &mut Tracker,
+        head: &Tracker,
         snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("insert_barriers");
@@ -387,8 +387,8 @@ impl<A: HalApi> CommandBuffer<A> {
 
     pub(crate) fn insert_barriers_from_scope(
         raw: &mut dyn hal::DynCommandEncoder,
-        base: &mut Tracker<A>,
-        head: &UsageScope<A>,
+        base: &mut Tracker,
+        head: &UsageScope,
         snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("insert_barriers");
@@ -401,7 +401,7 @@ impl<A: HalApi> CommandBuffer<A> {
 
     pub(crate) fn drain_barriers(
         raw: &mut dyn hal::DynCommandEncoder,
-        base: &mut Tracker<A>,
+        base: &mut Tracker,
         snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("drain_barriers");
@@ -425,8 +425,8 @@ impl<A: HalApi> CommandBuffer<A> {
 
     pub(crate) fn insert_barriers_from_device_tracker(
         raw: &mut dyn hal::DynCommandEncoder,
-        base: &mut DeviceTracker<A>,
-        head: &Tracker<A>,
+        base: &mut DeviceTracker,
+        head: &Tracker,
         snatch_guard: &SnatchGuard,
     ) {
         profiling::scope!("insert_barriers_from_device_tracker");
@@ -448,7 +448,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
-impl<A: HalApi> CommandBuffer<A> {
+impl CommandBuffer {
     fn lock_encoder_impl(&self, lock: bool) -> Result<(), CommandEncoderError> {
         let mut cmd_buf_data_guard = self.data.lock();
         let cmd_buf_data = cmd_buf_data_guard.as_mut().unwrap();
@@ -508,7 +508,7 @@ impl<A: HalApi> CommandBuffer<A> {
         }
     }
 
-    pub(crate) fn extract_baked_commands(&mut self) -> BakedCommands<A> {
+    pub(crate) fn extract_baked_commands(&mut self) -> BakedCommands {
         let data = self.data.lock().take().unwrap();
         BakedCommands {
             encoder: data.encoder.raw,
@@ -519,17 +519,17 @@ impl<A: HalApi> CommandBuffer<A> {
         }
     }
 
-    pub(crate) fn from_arc_into_baked(self: Arc<Self>) -> BakedCommands<A> {
+    pub(crate) fn from_arc_into_baked(self: Arc<Self>) -> BakedCommands {
         let mut command_buffer = Arc::into_inner(self)
             .expect("CommandBuffer cannot be destroyed because is still in use");
         command_buffer.extract_baked_commands()
     }
 }
 
-crate::impl_resource_type_generic!(CommandBuffer);
+crate::impl_resource_type!(CommandBuffer);
 crate::impl_labeled!(CommandBuffer);
 crate::impl_parent_device!(CommandBuffer);
-crate::impl_storage_item_generic!(CommandBuffer);
+crate::impl_storage_item!(CommandBuffer);
 
 /// A stream of commands for a render pass or compute pass.
 ///
@@ -609,14 +609,14 @@ pub enum CommandEncoderError {
 }
 
 impl Global {
-    pub fn command_encoder_finish<A: HalApi>(
+    pub fn command_encoder_finish(
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         profiling::scope!("CommandEncoder::finish");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let error = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => {
@@ -651,7 +651,7 @@ impl Global {
         (encoder_id.into_command_buffer_id(), error)
     }
 
-    pub fn command_encoder_push_debug_group<A: HalApi>(
+    pub fn command_encoder_push_debug_group(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
@@ -659,7 +659,7 @@ impl Global {
         profiling::scope!("CommandEncoder::push_debug_group");
         api_log!("CommandEncoder::push_debug_group {label}");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => cmd_buf,
@@ -687,7 +687,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn command_encoder_insert_debug_marker<A: HalApi>(
+    pub fn command_encoder_insert_debug_marker(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
@@ -695,7 +695,7 @@ impl Global {
         profiling::scope!("CommandEncoder::insert_debug_marker");
         api_log!("CommandEncoder::insert_debug_marker {label}");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => cmd_buf,
@@ -724,14 +724,14 @@ impl Global {
         Ok(())
     }
 
-    pub fn command_encoder_pop_debug_group<A: HalApi>(
+    pub fn command_encoder_pop_debug_group(
         &self,
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::pop_debug_marker");
         api_log!("CommandEncoder::pop_debug_group");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
             Ok(cmd_buf) => cmd_buf,

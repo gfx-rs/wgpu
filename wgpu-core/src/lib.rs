@@ -290,6 +290,8 @@ define_backend_caller! { gfx_if_empty, gfx_if_empty_hidden, "empty" if all(
 /// [`wgpu_types::Backend`]: wgt::Backend
 /// [`wgpu_core::global::Global`]: crate::global::Global
 /// [`Id`]: id::Id
+//
+// TODO(#5124): Remove this altogether.
 #[macro_export]
 macro_rules! gfx_select {
     // Simple two-component expression, like `self.0.method(..)`.
@@ -303,14 +305,7 @@ macro_rules! gfx_select {
     };
 
     ($id:expr => {$($c:tt)*}, $method:ident $params:tt) => {
-        match $id.backend() {
-            wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($($c)*.$method::<$crate::api::Vulkan> $params),
-            wgt::Backend::Metal => $crate::gfx_if_metal!($($c)*.$method::<$crate::api::Metal> $params),
-            wgt::Backend::Dx12 => $crate::gfx_if_dx12!($($c)*.$method::<$crate::api::Dx12> $params),
-            wgt::Backend::Gl => $crate::gfx_if_gles!($($c)*.$method::<$crate::api::Gles> $params),
-            wgt::Backend::Empty => $crate::gfx_if_empty!($($c)*.$method::<$crate::api::Empty> $params),
-            other => panic!("Unexpected backend {:?}", other),
-        }
+        $($c)*.$method $params
     };
 }
 

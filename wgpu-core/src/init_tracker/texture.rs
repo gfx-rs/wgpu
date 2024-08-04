@@ -1,5 +1,5 @@
 use super::{InitTracker, MemoryInitKind};
-use crate::{hal_api::HalApi, resource::Texture, track::TextureSelector};
+use crate::{resource::Texture, track::TextureSelector};
 use arrayvec::ArrayVec;
 use std::{ops::Range, sync::Arc};
 
@@ -35,8 +35,8 @@ impl From<TextureSelector> for TextureInitRange {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TextureInitTrackerAction<A: HalApi> {
-    pub(crate) texture: Arc<Texture<A>>,
+pub(crate) struct TextureInitTrackerAction {
+    pub(crate) texture: Arc<Texture>,
     pub(crate) range: TextureInitRange,
     pub(crate) kind: MemoryInitKind,
 }
@@ -57,10 +57,10 @@ impl TextureInitTracker {
         }
     }
 
-    pub(crate) fn check_action<A: HalApi>(
+    pub(crate) fn check_action(
         &self,
-        action: &TextureInitTrackerAction<A>,
-    ) -> Option<TextureInitTrackerAction<A>> {
+        action: &TextureInitTrackerAction,
+    ) -> Option<TextureInitTrackerAction> {
         let mut mip_range_start = usize::MAX;
         let mut mip_range_end = usize::MIN;
         let mut layer_range_start = u32::MAX;

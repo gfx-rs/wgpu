@@ -36,7 +36,6 @@ impl SurfaceTexture {
         self.presented = true;
         DynContext::surface_present(
             &*self.texture.context,
-            &self.texture.id,
             // This call to as_ref is essential because we want the DynContext implementation to see the inner
             // value of the Box (T::SurfaceOutputDetail), not the Box itself.
             self.detail.as_ref(),
@@ -49,7 +48,6 @@ impl Drop for SurfaceTexture {
         if !self.presented && !thread::panicking() {
             DynContext::surface_texture_discard(
                 &*self.texture.context,
-                &self.texture.id,
                 // This call to as_ref is essential because we want the DynContext implementation to see the inner
                 // value of the Box (T::SurfaceOutputDetail), not the Box itself.
                 self.detail.as_ref(),

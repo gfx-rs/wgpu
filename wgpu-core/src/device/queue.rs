@@ -10,7 +10,6 @@ use crate::{
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
-    hal_api::HalApi,
     hal_label,
     id::{self, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
@@ -37,13 +36,13 @@ use thiserror::Error;
 
 use super::Device;
 
-pub struct Queue<A: HalApi> {
+pub struct Queue {
     raw: ManuallyDrop<Box<dyn hal::DynQueue>>,
-    pub(crate) device: Arc<Device<A>>,
+    pub(crate) device: Arc<Device>,
 }
 
-impl<A: HalApi> Queue<A> {
-    pub(crate) fn new(device: Arc<Device<A>>, raw: Box<dyn hal::DynQueue>) -> Self {
+impl Queue {
+    pub(crate) fn new(device: Arc<Device>, raw: Box<dyn hal::DynQueue>) -> Self {
         Queue {
             raw: ManuallyDrop::new(raw),
             device,
@@ -55,17 +54,17 @@ impl<A: HalApi> Queue<A> {
     }
 }
 
-crate::impl_resource_type_generic!(Queue);
+crate::impl_resource_type!(Queue);
 // TODO: https://github.com/gfx-rs/wgpu/issues/4014
-impl<A: HalApi> Labeled for Queue<A> {
+impl Labeled for Queue {
     fn label(&self) -> &str {
         ""
     }
 }
 crate::impl_parent_device!(Queue);
-crate::impl_storage_item_generic!(Queue);
+crate::impl_storage_item!(Queue);
 
-impl<A: HalApi> Drop for Queue<A> {
+impl Drop for Queue {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
         // SAFETY: we never access `self.raw` beyond this point.
@@ -141,10 +140,10 @@ impl SubmittedWorkDoneClosure {
 /// - `ActiveSubmission::temp_resources`: temporary resources used by a queue
 ///   submission, to be freed when it completes
 #[derive(Debug)]
-pub enum TempResource<A: HalApi> {
-    StagingBuffer(FlushedStagingBuffer<A>),
-    DestroyedBuffer(DestroyedBuffer<A>),
-    DestroyedTexture(DestroyedTexture<A>),
+pub enum TempResource {
+    StagingBuffer(FlushedStagingBuffer),
+    DestroyedBuffer(DestroyedBuffer),
+    DestroyedTexture(DestroyedTexture),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -152,18 +151,18 @@ pub enum TempResource<A: HalApi> {
 ///
 /// [`CommandBuffer`]: hal::Api::CommandBuffer
 /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
-pub(crate) struct EncoderInFlight<A: HalApi> {
+pub(crate) struct EncoderInFlight {
     raw: Box<dyn hal::DynCommandEncoder>,
     cmd_buffers: Vec<Box<dyn hal::DynCommandBuffer>>,
-    pub(crate) trackers: Tracker<A>,
+    pub(crate) trackers: Tracker,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
-    pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
+    pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     /// These are the textures that have been tracked by `PendingWrites`.
-    pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture<A>>>,
+    pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
 }
 
-impl<A: HalApi> EncoderInFlight<A> {
+impl EncoderInFlight {
     /// Free all of our command buffers.
     ///
     /// Return the command encoder, fully reset and ready to be
@@ -203,7 +202,7 @@ impl<A: HalApi> EncoderInFlight<A> {
 ///
 /// All uses of [`StagingBuffer`]s end up here.
 #[derive(Debug)]
-pub(crate) struct PendingWrites<A: HalApi> {
+pub(crate) struct PendingWrites {
     pub command_encoder: Box<dyn hal::DynCommandEncoder>,
 
     /// True if `command_encoder` is in the "recording" state, as
@@ -213,12 +212,12 @@ pub(crate) struct PendingWrites<A: HalApi> {
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     pub is_recording: bool,
 
-    temp_resources: Vec<TempResource<A>>,
-    dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer<A>>>,
-    dst_textures: FastHashMap<TrackerIndex, Arc<Texture<A>>>,
+    temp_resources: Vec<TempResource>,
+    dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
+    dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
 }
 
-impl<A: HalApi> PendingWrites<A> {
+impl PendingWrites {
     pub fn new(command_encoder: Box<dyn hal::DynCommandEncoder>) -> Self {
         Self {
             command_encoder,
@@ -240,29 +239,29 @@ impl<A: HalApi> PendingWrites<A> {
         self.temp_resources.clear();
     }
 
-    pub fn insert_buffer(&mut self, buffer: &Arc<Buffer<A>>) {
+    pub fn insert_buffer(&mut self, buffer: &Arc<Buffer>) {
         self.dst_buffers
             .insert(buffer.tracker_index(), buffer.clone());
     }
 
-    pub fn insert_texture(&mut self, texture: &Arc<Texture<A>>) {
+    pub fn insert_texture(&mut self, texture: &Arc<Texture>) {
         self.dst_textures
             .insert(texture.tracker_index(), texture.clone());
     }
 
-    pub fn contains_buffer(&self, buffer: &Arc<Buffer<A>>) -> bool {
+    pub fn contains_buffer(&self, buffer: &Arc<Buffer>) -> bool {
         self.dst_buffers.contains_key(&buffer.tracker_index())
     }
 
-    pub fn contains_texture(&self, texture: &Arc<Texture<A>>) -> bool {
+    pub fn contains_texture(&self, texture: &Arc<Texture>) -> bool {
         self.dst_textures.contains_key(&texture.tracker_index())
     }
 
-    pub fn consume_temp(&mut self, resource: TempResource<A>) {
+    pub fn consume_temp(&mut self, resource: TempResource) {
         self.temp_resources.push(resource);
     }
 
-    pub fn consume(&mut self, buffer: FlushedStagingBuffer<A>) {
+    pub fn consume(&mut self, buffer: FlushedStagingBuffer) {
         self.temp_resources
             .push(TempResource::StagingBuffer(buffer));
     }
@@ -272,7 +271,7 @@ impl<A: HalApi> PendingWrites<A> {
         command_allocator: &CommandAllocator,
         device: &dyn hal::DynDevice,
         queue: &dyn hal::DynQueue,
-    ) -> Result<Option<EncoderInFlight<A>>, DeviceError> {
+    ) -> Result<Option<EncoderInFlight>, DeviceError> {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
@@ -362,7 +361,7 @@ pub enum QueueSubmitError {
 //TODO: move out common parts of write_xxx.
 
 impl Global {
-    pub fn queue_write_buffer<A: HalApi>(
+    pub fn queue_write_buffer(
         &self,
         queue_id: QueueId,
         buffer_id: id::BufferId,
@@ -372,7 +371,7 @@ impl Global {
         profiling::scope!("Queue::write_buffer");
         api_log!("Queue::write_buffer {buffer_id:?} {}bytes", data.len());
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let buffer = hub
             .buffers
@@ -433,14 +432,14 @@ impl Global {
         result
     }
 
-    pub fn queue_create_staging_buffer<A: HalApi>(
+    pub fn queue_create_staging_buffer(
         &self,
         queue_id: QueueId,
         buffer_size: wgt::BufferSize,
         id_in: Option<id::StagingBufferId>,
     ) -> Result<(id::StagingBufferId, NonNull<u8>), QueueWriteError> {
         profiling::scope!("Queue::create_staging_buffer");
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let queue = hub
             .queues
@@ -452,14 +451,14 @@ impl Global {
         let staging_buffer = StagingBuffer::new(device, buffer_size)?;
         let ptr = unsafe { staging_buffer.ptr() };
 
-        let fid = hub.staging_buffers.prepare(id_in);
+        let fid = hub.staging_buffers.prepare(queue_id.backend(), id_in);
         let id = fid.assign(Arc::new(staging_buffer));
         resource_log!("Queue::create_staging_buffer {id:?}");
 
         Ok((id, ptr))
     }
 
-    pub fn queue_write_staging_buffer<A: HalApi>(
+    pub fn queue_write_staging_buffer(
         &self,
         queue_id: QueueId,
         buffer_id: id::BufferId,
@@ -467,7 +466,7 @@ impl Global {
         staging_buffer_id: id::StagingBufferId,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_staging_buffer");
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let queue = hub
             .queues
@@ -503,7 +502,7 @@ impl Global {
         result
     }
 
-    pub fn queue_validate_write_buffer<A: HalApi>(
+    pub fn queue_validate_write_buffer(
         &self,
         _queue_id: QueueId,
         buffer_id: id::BufferId,
@@ -511,7 +510,7 @@ impl Global {
         buffer_size: wgt::BufferSize,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::validate_write_buffer");
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let buffer = hub
             .buffers
@@ -523,9 +522,9 @@ impl Global {
         Ok(())
     }
 
-    fn queue_validate_write_buffer_impl<A: HalApi>(
+    fn queue_validate_write_buffer_impl(
         &self,
-        buffer: &Buffer<A>,
+        buffer: &Buffer,
         buffer_offset: u64,
         buffer_size: wgt::BufferSize,
     ) -> Result<(), TransferError> {
@@ -548,16 +547,16 @@ impl Global {
         Ok(())
     }
 
-    fn queue_write_staging_buffer_impl<A: HalApi>(
+    fn queue_write_staging_buffer_impl(
         &self,
-        queue: &Arc<Queue<A>>,
-        device: &Arc<Device<A>>,
-        pending_writes: &mut PendingWrites<A>,
-        staging_buffer: &FlushedStagingBuffer<A>,
+        queue: &Arc<Queue>,
+        device: &Arc<Device>,
+        pending_writes: &mut PendingWrites,
+        staging_buffer: &FlushedStagingBuffer,
         buffer_id: id::BufferId,
         buffer_offset: u64,
     ) -> Result<(), QueueWriteError> {
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let dst = hub
             .buffers
@@ -606,7 +605,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn queue_write_texture<A: HalApi>(
+    pub fn queue_write_texture(
         &self,
         queue_id: QueueId,
         destination: &ImageCopyTexture,
@@ -617,7 +616,7 @@ impl Global {
         profiling::scope!("Queue::write_texture");
         api_log!("Queue::write_texture {:?} {size:?}", destination.texture);
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let queue = hub
             .queues
@@ -849,7 +848,7 @@ impl Global {
     }
 
     #[cfg(webgl)]
-    pub fn queue_copy_external_image_to_texture<A: HalApi>(
+    pub fn queue_copy_external_image_to_texture(
         &self,
         queue_id: QueueId,
         source: &wgt::ImageCopyExternalImage,
@@ -858,7 +857,7 @@ impl Global {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::copy_external_image_to_texture");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let queue = hub
             .queues
@@ -1039,7 +1038,7 @@ impl Global {
         Ok(())
     }
 
-    pub fn queue_submit<A: HalApi>(
+    pub fn queue_submit(
         &self,
         queue_id: QueueId,
         command_buffer_ids: &[id::CommandBufferId],
@@ -1048,7 +1047,7 @@ impl Global {
         api_log!("Queue::submit {queue_id:?}");
 
         let (submit_index, callbacks) = {
-            let hub = A::hub(self);
+            let hub = &self.hub;
 
             let queue = hub
                 .queues
@@ -1189,13 +1188,13 @@ impl Global {
 
                         //Note: locking the trackers has to be done after the storages
                         let mut trackers = device.trackers.lock();
-                        baked.initialize_buffer_memory(&mut *trackers, &snatch_guard)?;
-                        baked.initialize_texture_memory(&mut *trackers, device, &snatch_guard)?;
+                        baked.initialize_buffer_memory(&mut trackers, &snatch_guard)?;
+                        baked.initialize_texture_memory(&mut trackers, device, &snatch_guard)?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_device_tracker(
                             baked.encoder.as_mut(),
-                            &mut *trackers,
+                            &mut trackers,
                             &baked.trackers,
                             &snatch_guard,
                         );
@@ -1357,18 +1356,15 @@ impl Global {
         Ok(submit_index)
     }
 
-    pub fn queue_get_timestamp_period<A: HalApi>(
-        &self,
-        queue_id: QueueId,
-    ) -> Result<f32, InvalidQueue> {
-        let hub = A::hub(self);
+    pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> Result<f32, InvalidQueue> {
+        let hub = &self.hub;
         match hub.queues.get(queue_id) {
             Ok(queue) => Ok(unsafe { queue.raw().get_timestamp_period() }),
             Err(_) => Err(InvalidQueue),
         }
     }
 
-    pub fn queue_on_submitted_work_done<A: HalApi>(
+    pub fn queue_on_submitted_work_done(
         &self,
         queue_id: QueueId,
         closure: SubmittedWorkDoneClosure,
@@ -1376,7 +1372,7 @@ impl Global {
         api_log!("Queue::on_submitted_work_done {queue_id:?}");
 
         //TODO: flush pending writes
-        let hub = A::hub(self);
+        let hub = &self.hub;
         match hub.queues.get(queue_id) {
             Ok(queue) => queue.device.lock_life().add_work_done_closure(closure),
             Err(_) => return Err(InvalidQueue),

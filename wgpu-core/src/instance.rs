@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::{borrow::Cow, collections::HashMap};
 
+use crate::hub::Hub;
 use crate::{
     api_log,
     device::{queue::Queue, resource::Device, DeviceDescriptor},
@@ -18,8 +20,6 @@ use wgt::{Backend, Backends, PowerPreference};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
-type HalInstance<A> = <A as hal::Api>::Instance;
-type HalSurface<A> = <A as hal::Api>::Surface;
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -57,7 +57,11 @@ fn downlevel_default_limits_less_than_default_limits() {
 pub struct Instance {
     #[allow(dead_code)]
     pub name: String,
-    pub instance_per_backend: HashMap<Backend, Box<dyn hal::DynInstance>>,
+    /// List of instances per backend.
+    ///
+    /// Uses a `BTreeMap` to preserve the order of the backends.
+    /// A `HashMap` may lead to different order and thus non-deterministic adapter enumeration.
+    pub instance_per_backend: BTreeMap<Backend, Box<dyn hal::DynInstance>>,
     pub flags: wgt::InstanceFlags,
 }
 
@@ -66,7 +70,7 @@ impl Instance {
         fn init<A: HalApi>(
             _: A,
             instance_desc: &wgt::InstanceDescriptor,
-            instance_per_backend: &mut HashMap<Backend, Box<dyn hal::DynInstance>>,
+            instance_per_backend: &mut BTreeMap<Backend, Box<dyn hal::DynInstance>>,
         ) {
             if instance_desc.backends.contains(A::VARIANT.into()) {
                 let hal_desc = hal::InstanceDescriptor {
@@ -95,7 +99,7 @@ impl Instance {
             }
         }
 
-        let mut instance_per_backend = HashMap::default();
+        let mut instance_per_backend = BTreeMap::default();
 
         #[cfg(vulkan)]
         init(hal::api::Vulkan, &instance_desc, &mut instance_per_backend);
@@ -259,13 +263,13 @@ impl Adapter {
     }
 
     #[allow(clippy::type_complexity)]
-    fn create_device_and_queue_from_hal<A: HalApi>(
+    fn create_device_and_queue_from_hal(
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<(Arc<Device<A>>, Arc<Queue<A>>), RequestDeviceError> {
+    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
         if let Ok(device) = Device::new(
@@ -285,12 +289,12 @@ impl Adapter {
     }
 
     #[allow(clippy::type_complexity)]
-    fn create_device_and_queue<A: HalApi>(
+    fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<(Arc<Device<A>>, Arc<Queue<A>>), RequestDeviceError> {
+    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -299,7 +303,7 @@ impl Adapter {
         }
 
         let caps = &self.raw.capabilities;
-        if Backends::PRIMARY.contains(Backends::from(A::VARIANT))
+        if Backends::PRIMARY.contains(Backends::from(self.raw.backend()))
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;
@@ -492,7 +496,10 @@ impl Global {
             };
 
             #[allow(clippy::arc_with_non_send_sync)]
-            let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+            let id = self
+                .surfaces
+                .prepare(wgt::Backend::Empty, id_in) // No specific backend for Surface, since it's not specific.
+                .assign(Arc::new(surface));
             Ok(id)
         }
     }
@@ -508,36 +515,37 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface_metal");
 
+        let instance = self
+            .instance
+            .raw(Backend::Metal)
+            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
+        let instance_metal: &hal::metal::Instance = instance.as_any().downcast_ref().unwrap();
+
+        let layer = layer.cast();
+        // SAFETY: We do this cast and deref. (rather than using `metal` to get the
+        // object we want) to avoid direct coupling on the `metal` crate.
+        //
+        // To wit, this pointer…
+        //
+        // - …is properly aligned.
+        // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+        //   field.
+        // - …points to an _initialized_ `MetalLayerRef`.
+        // - …is only ever aliased via an immutable reference that lives within this
+        //   lexical scope.
+        let layer = unsafe { &*layer };
+        let raw_surface: Box<dyn hal::DynSurface> =
+            Box::new(instance_metal.create_surface_from_layer(layer));
+
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            metal: Some(self.instance.metal.as_ref().map_or(
-                Err(CreateSurfaceError::BackendNotEnabled(Backend::Metal)),
-                |inst| {
-                    let layer = layer.cast();
-                    // SAFETY: We do this cast and deref. (rather than using `metal` to get the
-                    // object we want) to avoid direct coupling on the `metal` crate.
-                    //
-                    // To wit, this pointer…
-                    //
-                    // - …is properly aligned.
-                    // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
-                    //   field.
-                    // - …points to an _initialized_ `MetalLayerRef`.
-                    // - …is only ever aliased via an immutable reference that lives within this
-                    //   lexical scope.
-                    let layer = unsafe { &*layer };
-                    Ok(inst.create_surface_from_layer(layer))
-                },
-            )?),
-            #[cfg(dx12)]
-            dx12: None,
-            #[cfg(vulkan)]
-            vulkan: None,
-            #[cfg(gles)]
-            gl: None,
+            surface_per_backend: std::iter::once((Backend::Metal, raw_surface)).collect(),
         };
 
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self
+            .surfaces
+            .prepare(Backend::Metal, id_in)
+            .assign(Arc::new(surface));
         Ok(id)
     }
 
@@ -545,7 +553,7 @@ impl Global {
     fn instance_create_surface_dx12(
         &self,
         id_in: Option<SurfaceId>,
-        create_surface_func: impl FnOnce(&HalInstance<hal::api::Dx12>) -> HalSurface<hal::api::Dx12>,
+        create_surface_func: impl FnOnce(&hal::dx12::Instance) -> hal::dx12::Surface,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let instance = self
             .instance
@@ -559,7 +567,10 @@ impl Global {
             surface_per_backend: std::iter::once((Backend::Dx12, surface)).collect(),
         };
 
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        let id = self
+            .surfaces
+            .prepare(Backend::Dx12, id_in)
+            .assign(Arc::new(surface));
         Ok(id)
     }
 
@@ -613,80 +624,65 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        fn unconfigure<A: HalApi>(surface: &Surface, present: &Presentation) {
-            if let Some(surface) = surface.raw(A::VARIANT) {
-                if let Some(device) = present.device.downcast_ref::<A>() {
-                    unsafe { surface.unconfigure(device.raw()) };
-                }
-            }
-        }
-
         let surface = self.surfaces.unregister(id);
         let surface = Arc::into_inner(surface.unwrap())
             .expect("Surface cannot be destroyed because is still in use");
 
         if let Some(present) = surface.presentation.lock().take() {
-            // TODO(#5124): Becomes a loop once we use Arc<Device>
-            #[cfg(vulkan)]
-            unconfigure::<hal::api::Vulkan>(&surface, &present);
-            #[cfg(metal)]
-            unconfigure::<hal::api::Metal>(&surface, &present);
-            #[cfg(dx12)]
-            unconfigure::<hal::api::Dx12>(&surface, &present);
-            #[cfg(gles)]
-            unconfigure::<hal::api::Gles>(&surface, &present);
+            for (&backend, surface) in &surface.surface_per_backend {
+                if backend == present.device.backend() {
+                    unsafe { surface.unconfigure(present.device.raw()) };
+                }
+            }
         }
         drop(surface)
-    }
-
-    fn enumerate<A: HalApi>(
-        &self,
-        inputs: &AdapterInputs<markers::Adapter>,
-        list: &mut Vec<AdapterId>,
-    ) {
-        let inst = match self.instance.instance_per_backend.get(&A::VARIANT) {
-            Some(inst) => inst,
-            None => return,
-        };
-        let id_backend = match inputs.find(A::VARIANT) {
-            Some(id) => id,
-            None => return,
-        };
-
-        profiling::scope!("enumerating", &*format!("{:?}", backend));
-        let hub: &crate::hub::Hub<A> = HalApi::hub(self);
-
-        let hal_adapters = unsafe { inst.enumerate_adapters(None) };
-        for raw in hal_adapters {
-            let adapter = Adapter::new(raw);
-            log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-            let id = hub.adapters.prepare(id_backend).assign(Arc::new(adapter));
-            list.push(id);
-        }
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<markers::Adapter>) -> Vec<AdapterId> {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
 
+        fn enumerate(
+            hub: &Hub,
+            backend: Backend,
+            instance: &dyn hal::DynInstance,
+            inputs: &AdapterInputs<markers::Adapter>,
+            list: &mut Vec<AdapterId>,
+        ) {
+            let Some(id_backend) = inputs.find(backend) else {
+                return;
+            };
+
+            profiling::scope!("enumerating", &*format!("{:?}", backend));
+
+            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
+            for raw in hal_adapters {
+                let adapter = Adapter::new(raw);
+                log::info!("Adapter {:?}", adapter.raw.info);
+                let id = hub
+                    .adapters
+                    .prepare(backend, id_backend)
+                    .assign(Arc::new(adapter));
+                list.push(id);
+            }
+        }
+
         let mut adapters = Vec::new();
-
-        // TODO(#5124): Becomes a loop once the hub is degenerified.
-
-        #[cfg(vulkan)]
-        self.enumerate::<hal::vulkan::Api>(&inputs, &mut adapters);
-        #[cfg(metal)]
-        self.enumerate::<hal::metal::Api>(&inputs, &mut adapters);
-        #[cfg(dx12)]
-        self.enumerate::<hal::dx12::Api>(&inputs, &mut adapters);
-        #[cfg(gles)]
-        self.enumerate::<hal::gles::Api>(&inputs, &mut adapters);
-
+        for (&backend, instance) in &self.instance.instance_per_backend {
+            enumerate(
+                &self.hub,
+                backend,
+                instance.as_ref(),
+                &inputs,
+                &mut adapters,
+            );
+        }
         adapters
     }
 
-    fn select<A: HalApi>(
+    fn select(
         &self,
+        backend: Backend,
         selected: &mut usize,
         new_id: Option<AdapterId>,
         mut list: Vec<hal::DynExposedAdapter>,
@@ -699,9 +695,10 @@ impl Global {
             None => {
                 let adapter = Adapter::new(list.swap_remove(*selected));
                 log::info!("Adapter {:?}", adapter.raw.info);
-                let id = A::hub(self)
+                let id = self
+                    .hub
                     .adapters
-                    .prepare(new_id)
+                    .prepare(backend, new_id)
                     .assign(Arc::new(adapter));
                 Some(id)
             }
@@ -844,19 +841,19 @@ impl Global {
 
         let mut selected = preferred_gpu.unwrap_or(0);
         #[cfg(vulkan)]
-        if let Some(id) = self.select::<hal::api::Vulkan>(&mut selected, id_vulkan, adapters_vk) {
+        if let Some(id) = self.select(Backend::Vulkan, &mut selected, id_vulkan, adapters_vk) {
             return Ok(id);
         }
         #[cfg(metal)]
-        if let Some(id) = self.select::<hal::api::Metal>(&mut selected, id_metal, adapters_metal) {
+        if let Some(id) = self.select(Backend::Metal, &mut selected, id_metal, adapters_metal) {
             return Ok(id);
         }
         #[cfg(dx12)]
-        if let Some(id) = self.select::<hal::api::Dx12>(&mut selected, id_dx12, adapters_dx12) {
+        if let Some(id) = self.select(Backend::Dx12, &mut selected, id_dx12, adapters_dx12) {
             return Ok(id);
         }
         #[cfg(gles)]
-        if let Some(id) = self.select::<hal::api::Gles>(&mut selected, id_gl, adapters_gl) {
+        if let Some(id) = self.select(Backend::Gl, &mut selected, id_gl, adapters_gl) {
             return Ok(id);
         }
         let _ = selected;
@@ -868,16 +865,16 @@ impl Global {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this global internal instance handle.
-    pub unsafe fn create_adapter_from_hal<A: HalApi>(
+    pub unsafe fn create_adapter_from_hal(
         &self,
         hal_adapter: hal::DynExposedAdapter,
         input: Option<AdapterId>,
     ) -> AdapterId {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let fid = A::hub(self).adapters.prepare(input);
+        let fid = self.hub.adapters.prepare(hal_adapter.backend(), input);
 
-        let id = match A::VARIANT {
+        let id = match hal_adapter.backend() {
             #[cfg(vulkan)]
             Backend::Vulkan => fid.assign(Arc::new(Adapter::new(hal_adapter))),
             #[cfg(metal)]
@@ -892,89 +889,78 @@ impl Global {
         id
     }
 
-    pub fn adapter_get_info<A: HalApi>(
+    pub fn adapter_get_info(
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        let hub = A::hub(self);
-
-        hub.adapters
+        self.hub
+            .adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.info.clone())
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_get_texture_format_features<A: HalApi>(
+    pub fn adapter_get_texture_format_features(
         &self,
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        let hub = A::hub(self);
-
-        hub.adapters
+        self.hub
+            .adapters
             .get(adapter_id)
             .map(|adapter| adapter.get_texture_format_features(format))
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_features<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::Features, InvalidAdapter> {
-        let hub = A::hub(self);
-
-        hub.adapters
+    pub fn adapter_features(&self, adapter_id: AdapterId) -> Result<wgt::Features, InvalidAdapter> {
+        self.hub
+            .adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.features)
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_limits<A: HalApi>(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::Limits, InvalidAdapter> {
-        let hub = A::hub(self);
-
-        hub.adapters
+    pub fn adapter_limits(&self, adapter_id: AdapterId) -> Result<wgt::Limits, InvalidAdapter> {
+        self.hub
+            .adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.capabilities.limits.clone())
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_downlevel_capabilities<A: HalApi>(
+    pub fn adapter_downlevel_capabilities(
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::DownlevelCapabilities, InvalidAdapter> {
-        let hub = A::hub(self);
-
-        hub.adapters
+        self.hub
+            .adapters
             .get(adapter_id)
             .map(|adapter| adapter.raw.capabilities.downlevel.clone())
             .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_get_presentation_timestamp<A: HalApi>(
+    pub fn adapter_get_presentation_timestamp(
         &self,
         adapter_id: AdapterId,
     ) -> Result<wgt::PresentationTimestamp, InvalidAdapter> {
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let adapter = hub.adapters.get(adapter_id).map_err(|_| InvalidAdapter)?;
 
         Ok(unsafe { adapter.raw.adapter.get_presentation_timestamp() })
     }
 
-    pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
+    pub fn adapter_drop(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
         api_log!("Adapter::drop {adapter_id:?}");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
         hub.adapters.unregister(adapter_id);
     }
 }
 
 impl Global {
-    pub fn adapter_request_device<A: HalApi>(
+    pub fn adapter_request_device(
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
@@ -985,12 +971,12 @@ impl Global {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
-        let hub = A::hub(self);
-        let device_fid = hub.devices.prepare(device_id_in);
-        let queue_fid = hub.queues.prepare(queue_id_in);
+        let backend = adapter_id.backend();
+        let device_fid = self.hub.devices.prepare(backend, device_id_in);
+        let queue_fid = self.hub.queues.prepare(backend, queue_id_in);
 
         let error = 'error: {
-            let adapter = match hub.adapters.get(adapter_id) {
+            let adapter = match self.hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
                 Err(_) => break 'error RequestDeviceError::InvalidAdapter,
             };
@@ -1018,7 +1004,7 @@ impl Global {
     ///
     /// - `hal_device` must be created from `adapter_id` or its internal handle.
     /// - `desc` must be a subset of `hal_device` features and limits.
-    pub unsafe fn create_device_from_hal<A: HalApi>(
+    pub unsafe fn create_device_from_hal(
         &self,
         adapter_id: AdapterId,
         hal_device: hal::DynOpenDevice,
@@ -1029,12 +1015,12 @@ impl Global {
     ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
         profiling::scope!("Global::create_device_from_hal");
 
-        let hub = A::hub(self);
-        let devices_fid = hub.devices.prepare(device_id_in);
-        let queues_fid = hub.queues.prepare(queue_id_in);
+        let backend = adapter_id.backend();
+        let devices_fid = self.hub.devices.prepare(backend, device_id_in);
+        let queues_fid = self.hub.queues.prepare(backend, queue_id_in);
 
         let error = 'error: {
-            let adapter = match hub.adapters.get(adapter_id) {
+            let adapter = match self.hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
                 Err(_) => break 'error RequestDeviceError::InvalidAdapter,
             };

@@ -1,6 +1,5 @@
 use crate::{
     binding_model,
-    hal_api::HalApi,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
     resource::{
@@ -19,7 +18,6 @@ use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
 use std::{num::NonZeroU32, ptr};
 
-pub mod any_device;
 pub(crate) mod bgl;
 pub mod global;
 mod life;
@@ -299,9 +297,9 @@ impl DeviceLostClosure {
     }
 }
 
-fn map_buffer<A: HalApi>(
+fn map_buffer(
     raw: &dyn hal::DynDevice,
-    buffer: &Buffer<A>,
+    buffer: &Buffer,
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
@@ -315,6 +313,7 @@ fn map_buffer<A: HalApi>(
 
     *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
+            #[allow(clippy::single_range_in_vec_init)]
             raw.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
             None
         },
@@ -439,13 +438,21 @@ pub struct ImplicitPipelineIds<'a> {
 }
 
 impl ImplicitPipelineIds<'_> {
-    fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
+    fn prepare(self, hub: &Hub) -> ImplicitPipelineContext {
+        let backend = self.root_id.backend();
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(Some(self.root_id)).into_id(),
+            root_id: hub
+                .pipeline_layouts
+                .prepare(backend, Some(self.root_id))
+                .into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(Some(*id_in)).into_id())
+                .map(|id_in| {
+                    hub.bind_group_layouts
+                        .prepare(backend, Some(*id_in))
+                        .into_id()
+                })
                 .collect(),
         }
     }

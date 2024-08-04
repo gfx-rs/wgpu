@@ -1495,15 +1495,11 @@ impl crate::context::Context for ContextWebGpu {
         )
     }
 
-    fn surface_present(&self, _texture: &Self::TextureId, _detail: &Self::SurfaceOutputDetail) {
+    fn surface_present(&self, _detail: &Self::SurfaceOutputDetail) {
         // Swapchain is presented automatically
     }
 
-    fn surface_texture_discard(
-        &self,
-        _texture: &Self::TextureId,
-        _detail: &Self::SurfaceOutputDetail,
-    ) {
+    fn surface_texture_discard(&self, _detail: &Self::SurfaceOutputDetail) {
         // Can't really discard this on the Web
     }
 
