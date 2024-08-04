@@ -1,11 +1,15 @@
+mod command;
+
+use std::any::Any;
+
 use wgt::WasmNotSendSync;
 
 use crate::{BufferBinding, CommandEncoder, Device};
 
 // TODO: docs
-pub trait DynResource: WasmNotSendSync + 'static {
-    fn as_any(&self) -> &dyn std::any::Any;
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+pub trait DynResource: Any + WasmNotSendSync + 'static {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// Utility macro for implementing `DynResource` for a list of types.
@@ -29,6 +33,12 @@ pub(crate) use impl_dyn_resource;
 trait DynResourceExt {
     fn expect_downcast_ref<T: DynResource>(&self) -> &T;
     fn expect_downcast_mut<T: DynResource>(&mut self) -> &mut T;
+
+    /// Unboxes a `Box<dyn DynResource>` to a concrete type.
+    ///
+    /// # Safety
+    /// - The `Box<dyn DynResource>` must be the correct concrete type.
+    unsafe fn unbox<T: DynResource + 'static>(self: Box<Self>) -> T;
 }
 
 impl<R: DynResource + ?Sized> DynResourceExt for R {
@@ -42,6 +52,18 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
         self.as_any_mut()
             .downcast_mut()
             .expect("Resource doesn't have the expected backend type.")
+    }
+
+    unsafe fn unbox<T: DynResource + 'static>(self: Box<Self>) -> T {
+        debug_assert!(
+            <Self as Any>::type_id(self.as_ref()) == std::any::TypeId::of::<T>(),
+            "Resource doesn't have the expected type, expected {:?}, got {:?}",
+            std::any::TypeId::of::<T>(),
+            <Self as Any>::type_id(self.as_ref())
+        );
+
+        let casted_ptr = Box::into_raw(self).cast::<T>();
+        *unsafe { Box::from_raw(casted_ptr) }
     }
 }
 
