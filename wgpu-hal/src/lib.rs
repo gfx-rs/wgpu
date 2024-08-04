@@ -266,10 +266,11 @@ mod dynamic;
 
 pub(crate) use dynamic::impl_dyn_resource;
 pub use dynamic::{
-    DynAccelerationStructure, DynAcquiredSurfaceTexture, DynBindGroup, DynBindGroupLayout,
-    DynBuffer, DynCommandBuffer, DynCommandEncoder, DynComputePipeline, DynDevice, DynFence,
-    DynPipelineCache, DynPipelineLayout, DynQuerySet, DynQueue, DynRenderPipeline, DynResource,
-    DynSampler, DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
+    DynAccelerationStructure, DynAcquiredSurfaceTexture, DynAdapter, DynBindGroup,
+    DynBindGroupLayout, DynBuffer, DynCommandBuffer, DynCommandEncoder, DynComputePipeline,
+    DynDevice, DynFence, DynOpenDevice, DynPipelineCache, DynPipelineLayout, DynQuerySet, DynQueue,
+    DynRenderPipeline, DynResource, DynSampler, DynShaderModule, DynSurface, DynSurfaceTexture,
+    DynTexture, DynTextureView,
 };
 
 use std::{
@@ -391,7 +392,7 @@ impl InstanceError {
 pub trait Api: Clone + fmt::Debug + Sized {
     type Instance: Instance<A = Self>;
     type Surface: DynSurface + Surface<A = Self>;
-    type Adapter: Adapter<A = Self>;
+    type Adapter: DynAdapter + Adapter<A = Self>;
     type Device: DynDevice + Device<A = Self>;
 
     type Queue: DynQueue + Queue<A = Self>;
