@@ -12,6 +12,13 @@ pub struct DynExposedAdapter {
     pub capabilities: Capabilities,
 }
 
+impl DynExposedAdapter {
+    /// Returns the backend this adapter is using.
+    pub fn backend(&self) -> wgt::Backend {
+        self.info.backend
+    }
+}
+
 impl<A: Api> From<ExposedAdapter<A>> for DynExposedAdapter {
     fn from(exposed_adapter: ExposedAdapter<A>) -> Self {
         Self {

@@ -526,10 +526,10 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 }
 
-crate::impl_resource_type!(CommandBuffer);
+crate::impl_resource_type_generic!(CommandBuffer);
 crate::impl_labeled!(CommandBuffer);
 crate::impl_parent_device!(CommandBuffer);
-crate::impl_storage_item!(CommandBuffer);
+crate::impl_storage_item_generic!(CommandBuffer);
 
 /// A stream of commands for a render pass or compute pass.
 ///

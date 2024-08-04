@@ -55,7 +55,7 @@ impl<A: HalApi> Queue<A> {
     }
 }
 
-crate::impl_resource_type!(Queue);
+crate::impl_resource_type_generic!(Queue);
 // TODO: https://github.com/gfx-rs/wgpu/issues/4014
 impl<A: HalApi> Labeled for Queue<A> {
     fn label(&self) -> &str {
@@ -63,7 +63,7 @@ impl<A: HalApi> Labeled for Queue<A> {
     }
 }
 crate::impl_parent_device!(Queue);
-crate::impl_storage_item!(Queue);
+crate::impl_storage_item_generic!(Queue);
 
 impl<A: HalApi> Drop for Queue<A> {
     fn drop(&mut self) {
