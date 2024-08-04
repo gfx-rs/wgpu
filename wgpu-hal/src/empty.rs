@@ -167,7 +167,7 @@ impl crate::Device for Context {
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
     }
-    unsafe fn destroy_buffer(&self, buffer: &mut Resource) {}
+    unsafe fn destroy_buffer(&self, buffer: Resource) {}
     unsafe fn map_buffer(
         &self,
         buffer: &Resource,

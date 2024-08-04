@@ -638,8 +638,8 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_buffer(&self, buffer: &mut super::Buffer) {
-        if let Some(raw) = buffer.raw.take() {
+    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+        if let Some(raw) = buffer.raw {
             let gl = &self.shared.context.lock();
             unsafe { gl.delete_buffer(raw) };
         }

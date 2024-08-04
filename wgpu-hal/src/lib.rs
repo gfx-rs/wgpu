@@ -677,8 +677,7 @@ pub trait Device: WasmNotSendSync {
     /// # Safety
     ///
     /// - The given `buffer` must not currently be mapped.
-    /// - The `buffer` musn't be used afterwards.
-    unsafe fn destroy_buffer(&self, buffer: &mut <Self::A as Api>::Buffer);
+    unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer);
 
     /// Return a pointer to CPU memory mapping the contents of `buffer`.
     ///

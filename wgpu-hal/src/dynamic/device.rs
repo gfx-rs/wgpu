@@ -174,16 +174,11 @@ impl<D: Device + DynResource> DynDevice for D {
         &self,
         desc: &BufferDescriptor,
     ) -> Result<Box<dyn DynBuffer>, DeviceError> {
-        unsafe { D::create_buffer(self, desc) }.map(|b| {
-            let boxed_buffer: Box<<D::A as Api>::Buffer> = Box::new(b);
-            let boxed_buffer: Box<dyn DynBuffer> = boxed_buffer;
-            boxed_buffer
-        })
+        unsafe { D::create_buffer(self, desc) }.map(|b| Box::new(b) as Box<dyn DynBuffer>)
     }
 
-    unsafe fn destroy_buffer(&self, mut buffer: Box<dyn DynBuffer>) {
-        let buffer = buffer.expect_downcast_mut();
-        unsafe { D::destroy_buffer(self, buffer) };
+    unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>) {
+        unsafe { D::destroy_buffer(self, buffer.unbox()) };
     }
 
     unsafe fn map_buffer(
