@@ -56,7 +56,7 @@ impl Global {
     ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_capabilities");
         self.fetch_adapter_and_surface::<A, _, _>(surface_id, adapter_id, |adapter, surface| {
-            let mut hal_caps = surface.get_capabilities(A::VARIANT, adapter)?;
+            let mut hal_caps = surface.get_capabilities(adapter)?;
 
             hal_caps.formats.sort_by_key(|f| !f.is_srgb());
 
@@ -73,7 +73,7 @@ impl Global {
 
     fn fetch_adapter_and_surface<
         A: HalApi,
-        F: FnOnce(&Adapter<A>, &Surface) -> Result<B, instance::GetSurfaceSupportError>,
+        F: FnOnce(&Adapter, &Surface) -> Result<B, instance::GetSurfaceSupportError>,
         B,
     >(
         &self,
@@ -1908,7 +1908,7 @@ impl Global {
                     Err(_) => break 'error E::InvalidSurface,
                 };
 
-                let caps = match surface.get_capabilities(A::VARIANT, &device.adapter) {
+                let caps = match surface.get_capabilities(&device.adapter) {
                     Ok(caps) => caps,
                     Err(_) => break 'error E::UnsupportedQueueFamily,
                 };

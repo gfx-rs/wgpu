@@ -135,10 +135,20 @@ pub(crate) trait ResourceType {
     const TYPE: &'static str;
 }
 
+// TODO(#5124): Remove the typed version.
+#[macro_export]
+macro_rules! impl_resource_type_generic {
+    ($ty:ident) => {
+        impl<A: HalApi> $crate::resource::ResourceType for $ty<A> {
+            const TYPE: &'static str = stringify!($ty);
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! impl_resource_type {
     ($ty:ident) => {
-        impl<A: HalApi> $crate::resource::ResourceType for $ty<A> {
+        impl $crate::resource::ResourceType for $ty {
             const TYPE: &'static str = stringify!($ty);
         }
     };
@@ -758,10 +768,10 @@ pub enum CreateBufferError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-crate::impl_resource_type!(Buffer);
+crate::impl_resource_type_generic!(Buffer);
 crate::impl_labeled!(Buffer);
 crate::impl_parent_device!(Buffer);
-crate::impl_storage_item!(Buffer);
+crate::impl_storage_item_generic!(Buffer);
 crate::impl_trackable!(Buffer);
 
 /// A buffer that has been marked as destroyed and is staged for actual deletion soon.
@@ -920,8 +930,8 @@ impl<A: HalApi> StagingBuffer<A> {
     }
 }
 
-crate::impl_resource_type!(StagingBuffer);
-crate::impl_storage_item!(StagingBuffer);
+crate::impl_resource_type_generic!(StagingBuffer);
+crate::impl_storage_item_generic!(StagingBuffer);
 
 #[derive(Debug)]
 pub struct FlushedStagingBuffer<A: HalApi> {
@@ -1519,10 +1529,10 @@ pub enum CreateTextureError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
-crate::impl_resource_type!(Texture);
+crate::impl_resource_type_generic!(Texture);
 crate::impl_labeled!(Texture);
 crate::impl_parent_device!(Texture);
-crate::impl_storage_item!(Texture);
+crate::impl_storage_item_generic!(Texture);
 crate::impl_trackable!(Texture);
 
 impl<A: HalApi> Borrow<TextureSelector> for Texture<A> {
@@ -1687,10 +1697,10 @@ pub enum CreateTextureViewError {
 #[non_exhaustive]
 pub enum TextureViewDestroyError {}
 
-crate::impl_resource_type!(TextureView);
+crate::impl_resource_type_generic!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
-crate::impl_storage_item!(TextureView);
+crate::impl_storage_item_generic!(TextureView);
 crate::impl_trackable!(TextureView);
 
 /// Describes a [`Sampler`]
@@ -1796,10 +1806,10 @@ pub enum CreateSamplerError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
-crate::impl_resource_type!(Sampler);
+crate::impl_resource_type_generic!(Sampler);
 crate::impl_labeled!(Sampler);
 crate::impl_parent_device!(Sampler);
-crate::impl_storage_item!(Sampler);
+crate::impl_storage_item_generic!(Sampler);
 crate::impl_trackable!(Sampler);
 
 #[derive(Clone, Debug, Error)]
@@ -1838,10 +1848,10 @@ impl<A: HalApi> Drop for QuerySet<A> {
     }
 }
 
-crate::impl_resource_type!(QuerySet);
+crate::impl_resource_type_generic!(QuerySet);
 crate::impl_labeled!(QuerySet);
 crate::impl_parent_device!(QuerySet);
-crate::impl_storage_item!(QuerySet);
+crate::impl_storage_item_generic!(QuerySet);
 crate::impl_trackable!(QuerySet);
 
 impl<A: HalApi> QuerySet<A> {

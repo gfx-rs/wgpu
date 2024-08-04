@@ -79,7 +79,7 @@ use super::{
 /// trackers should be locked only when needed for the shortest time possible
 pub struct Device<A: HalApi> {
     raw: Option<Box<dyn hal::DynDevice>>,
-    pub(crate) adapter: Arc<Adapter<A>>,
+    pub(crate) adapter: Arc<Adapter>,
     pub(crate) queue: OnceCell<Weak<Queue<A>>>,
     queue_to_drop: OnceCell<Box<dyn hal::DynQueue>>,
     pub(crate) zero_buffer: Option<Box<dyn hal::DynBuffer>>,
@@ -217,7 +217,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn new(
         raw_device: Box<dyn hal::DynDevice>,
         raw_queue: &dyn hal::DynQueue,
-        adapter: &Arc<Adapter<A>>,
+        adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         instance_flags: wgt::InstanceFlags,
@@ -3686,6 +3686,6 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-crate::impl_resource_type!(Device);
+crate::impl_resource_type_generic!(Device);
 crate::impl_labeled!(Device);
-crate::impl_storage_item!(Device);
+crate::impl_storage_item_generic!(Device);

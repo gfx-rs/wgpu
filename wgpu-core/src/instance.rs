@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{borrow::Cow, collections::HashMap};
 
@@ -134,21 +133,19 @@ impl crate::storage::StorageItem for Surface {
 }
 
 impl Surface {
-    pub fn get_capabilities<A: HalApi>(
+    pub fn get_capabilities(
         &self,
-        backend: Backend,
-        adapter: &Adapter<A>,
+        adapter: &Adapter,
     ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
-        self.get_capabilities_with_raw(backend, &adapter.raw)
+        self.get_capabilities_with_raw(&adapter.raw)
     }
 
     pub fn get_capabilities_with_raw(
         &self,
-        backend: Backend,
         adapter: &hal::DynExposedAdapter,
     ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
         let suf = self
-            .raw(backend)
+            .raw(adapter.backend())
             .ok_or(GetSurfaceSupportError::Unsupported)?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe { adapter.adapter.surface_capabilities(suf) }
@@ -164,12 +161,11 @@ impl Surface {
     }
 }
 
-pub struct Adapter<A: HalApi> {
+pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
-    _marker: PhantomData<A>,
 }
 
-impl<A: HalApi> Adapter<A> {
+impl Adapter {
     fn new(mut raw: hal::DynExposedAdapter) -> Self {
         // WebGPU requires this offset alignment as lower bound on all adapters.
         const MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND: u32 = 32;
@@ -183,10 +179,7 @@ impl<A: HalApi> Adapter<A> {
             .min_storage_buffer_offset_alignment
             .max(MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND);
 
-        Self {
-            raw,
-            _marker: PhantomData,
-        }
+        Self { raw }
     }
 
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
@@ -194,7 +187,7 @@ impl<A: HalApi> Adapter<A> {
         //
         // This could occur if the user is running their app on Wayland but Vulkan does not support
         // VK_KHR_wayland_surface.
-        surface.get_capabilities(A::VARIANT, self).is_ok()
+        surface.get_capabilities(self).is_ok()
     }
 
     pub(crate) fn get_texture_format_features(
@@ -266,7 +259,7 @@ impl<A: HalApi> Adapter<A> {
     }
 
     #[allow(clippy::type_complexity)]
-    fn create_device_and_queue_from_hal(
+    fn create_device_and_queue_from_hal<A: HalApi>(
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
@@ -292,7 +285,7 @@ impl<A: HalApi> Adapter<A> {
     }
 
     #[allow(clippy::type_complexity)]
-    fn create_device_and_queue(
+    fn create_device_and_queue<A: HalApi>(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
@@ -704,9 +697,9 @@ impl Global {
                 None
             }
             None => {
-                let adapter = Adapter::<A>::new(list.swap_remove(*selected));
-                log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-                let id = HalApi::hub(self)
+                let adapter = Adapter::new(list.swap_remove(*selected));
+                log::info!("Adapter {:?}", adapter.raw.info);
+                let id = A::hub(self)
                     .adapters
                     .prepare(new_id)
                     .assign(Arc::new(adapter));
@@ -741,9 +734,8 @@ impl Global {
                         adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
                     }
                     if let Some(surface) = compatible_surface {
-                        adapters.retain(|exposed| {
-                            surface.get_capabilities_with_raw(backend, exposed).is_ok()
-                        });
+                        adapters
+                            .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
                     }
                     device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
                     (id, adapters)

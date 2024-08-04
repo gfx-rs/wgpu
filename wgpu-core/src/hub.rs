@@ -170,7 +170,7 @@ impl HubReport {
 ///
 /// [`A::hub(global)`]: HalApi::hub
 pub struct Hub<A: HalApi> {
-    pub(crate) adapters: Registry<Adapter<A>>,
+    pub(crate) adapters: Registry<Adapter>,
     pub(crate) devices: Registry<Device<A>>,
     pub(crate) queues: Registry<Queue<A>>,
     pub(crate) pipeline_layouts: Registry<PipelineLayout<A>>,

@@ -1146,10 +1146,10 @@ impl<A: HalApi> RenderBundle<A> {
     }
 }
 
-crate::impl_resource_type!(RenderBundle);
+crate::impl_resource_type_generic!(RenderBundle);
 crate::impl_labeled!(RenderBundle);
 crate::impl_parent_device!(RenderBundle);
-crate::impl_storage_item!(RenderBundle);
+crate::impl_storage_item_generic!(RenderBundle);
 crate::impl_trackable!(RenderBundle);
 
 /// A render bundle's current index buffer state.

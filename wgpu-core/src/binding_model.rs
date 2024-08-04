@@ -529,10 +529,10 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
     }
 }
 
-crate::impl_resource_type!(BindGroupLayout);
+crate::impl_resource_type_generic!(BindGroupLayout);
 crate::impl_labeled!(BindGroupLayout);
 crate::impl_parent_device!(BindGroupLayout);
-crate::impl_storage_item!(BindGroupLayout);
+crate::impl_storage_item_generic!(BindGroupLayout);
 
 impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &dyn hal::DynBindGroupLayout {
@@ -760,10 +760,10 @@ impl<A: HalApi> PipelineLayout<A> {
     }
 }
 
-crate::impl_resource_type!(PipelineLayout);
+crate::impl_resource_type_generic!(PipelineLayout);
 crate::impl_labeled!(PipelineLayout);
 crate::impl_parent_device!(PipelineLayout);
-crate::impl_storage_item!(PipelineLayout);
+crate::impl_storage_item_generic!(PipelineLayout);
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -984,10 +984,10 @@ impl<A: HalApi> BindGroup<A> {
     }
 }
 
-crate::impl_resource_type!(BindGroup);
+crate::impl_resource_type_generic!(BindGroup);
 crate::impl_labeled!(BindGroup);
 crate::impl_parent_device!(BindGroup);
-crate::impl_storage_item!(BindGroup);
+crate::impl_storage_item_generic!(BindGroup);
 crate::impl_trackable!(BindGroup);
 
 #[derive(Clone, Debug, Error)]
