@@ -215,8 +215,6 @@ impl<A: HalApi> Hub<A> {
     }
 
     pub(crate) fn clear(&self, surface_guard: &Storage<Surface>) {
-        use hal::Surface;
-
         let mut devices = self.devices.write();
         for element in devices.map.iter() {
             if let Element::Occupied(ref device, _) = *element {
@@ -242,10 +240,9 @@ impl<A: HalApi> Hub<A> {
             if let Element::Occupied(ref surface, _epoch) = *element {
                 if let Some(ref mut present) = surface.presentation.lock().take() {
                     if let Some(device) = present.device.downcast_ref::<A>() {
-                        let suf = A::surface_as_hal(surface);
+                        let suf = surface.raw(A::VARIANT);
                         unsafe {
-                            suf.unwrap()
-                                .unconfigure(device.raw().as_any().downcast_ref().unwrap());
+                            suf.unwrap().unconfigure(device.raw());
                         }
                     }
                 }

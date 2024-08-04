@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use wgt::Backend;
 
 use crate::{
@@ -11,14 +13,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq)]
 pub struct GlobalReport {
     pub surfaces: RegistryReport,
-    #[cfg(vulkan)]
-    pub vulkan: Option<HubReport>,
-    #[cfg(metal)]
-    pub metal: Option<HubReport>,
-    #[cfg(dx12)]
-    pub dx12: Option<HubReport>,
-    #[cfg(gles)]
-    pub gl: Option<HubReport>,
+    pub report_per_backend: HashMap<Backend, HubReport>,
 }
 
 impl GlobalReport {
@@ -26,17 +21,7 @@ impl GlobalReport {
         &self.surfaces
     }
     pub fn hub_report(&self, backend: Backend) -> &HubReport {
-        match backend {
-            #[cfg(vulkan)]
-            Backend::Vulkan => self.vulkan.as_ref().unwrap(),
-            #[cfg(metal)]
-            Backend::Metal => self.metal.as_ref().unwrap(),
-            #[cfg(dx12)]
-            Backend::Dx12 => self.dx12.as_ref().unwrap(),
-            #[cfg(gles)]
-            Backend::Gl => self.gl.as_ref().unwrap(),
-            _ => panic!("HubReport is not supported on this backend"),
-        }
+        self.report_per_backend.get(&backend).unwrap()
     }
 }
 
@@ -61,8 +46,14 @@ impl Global {
     /// Refer to the creation of wgpu-hal Instance for every backend.
     pub unsafe fn from_hal_instance<A: HalApi>(name: &str, hal_instance: A::Instance) -> Self {
         profiling::scope!("Global::new");
+
+        let dyn_instance: Box<dyn hal::DynInstance> = Box::new(hal_instance);
         Self {
-            instance: A::create_instance_from_hal(name, hal_instance),
+            instance: Instance {
+                name: name.to_owned(),
+                instance_per_backend: std::iter::once((A::VARIANT, dyn_instance)).collect(),
+                ..Default::default()
+            },
             surfaces: Registry::without_backend(),
             hubs: Hubs::new(),
         }
@@ -72,7 +63,13 @@ impl Global {
     ///
     /// - The raw instance handle returned must not be manually destroyed.
     pub unsafe fn instance_as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
-        A::instance_as_hal(&self.instance)
+        self.instance.raw(A::VARIANT).map(|instance| {
+            instance
+                .as_any()
+                .downcast_ref()
+                // This should be impossible. It would mean that backend instance and enum type are mismatching.
+                .expect("Stored instance is not of the correct type")
+        })
     }
 
     /// # Safety
@@ -88,32 +85,41 @@ impl Global {
     }
 
     pub fn generate_report(&self) -> GlobalReport {
+        let mut report_per_backend = HashMap::default();
+        let instance_per_backend = &self.instance.instance_per_backend;
+
+        #[cfg(vulkan)]
+        if instance_per_backend
+            .iter()
+            .any(|(backend, _)| backend == &Backend::Vulkan)
+        {
+            report_per_backend.insert(Backend::Vulkan, self.hubs.vulkan.generate_report());
+        };
+        #[cfg(metal)]
+        if instance_per_backend
+            .iter()
+            .any(|(backend, _)| backend == &Backend::Metal)
+        {
+            report_per_backend.insert(Backend::Metal, self.hubs.metal.generate_report());
+        };
+        #[cfg(dx12)]
+        if instance_per_backend
+            .iter()
+            .any(|(backend, _)| backend == &Backend::Dx12)
+        {
+            report_per_backend.insert(Backend::Dx12, self.hubs.dx12.generate_report());
+        };
+        #[cfg(gles)]
+        if instance_per_backend
+            .iter()
+            .any(|(backend, _)| backend == &Backend::Gl)
+        {
+            report_per_backend.insert(Backend::Gl, self.hubs.gl.generate_report());
+        };
+
         GlobalReport {
             surfaces: self.surfaces.generate_report(),
-            #[cfg(vulkan)]
-            vulkan: if self.instance.vulkan.is_some() {
-                Some(self.hubs.vulkan.generate_report())
-            } else {
-                None
-            },
-            #[cfg(metal)]
-            metal: if self.instance.metal.is_some() {
-                Some(self.hubs.metal.generate_report())
-            } else {
-                None
-            },
-            #[cfg(dx12)]
-            dx12: if self.instance.dx12.is_some() {
-                Some(self.hubs.dx12.generate_report())
-            } else {
-                None
-            },
-            #[cfg(gles)]
-            gl: if self.instance.gl.is_some() {
-                Some(self.hubs.gl.generate_report())
-            } else {
-                None
-            },
+            report_per_backend,
         }
     }
 }

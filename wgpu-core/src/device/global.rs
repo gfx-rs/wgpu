@@ -56,7 +56,7 @@ impl Global {
     ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_capabilities");
         self.fetch_adapter_and_surface::<A, _, _>(surface_id, adapter_id, |adapter, surface| {
-            let mut hal_caps = surface.get_capabilities(adapter)?;
+            let mut hal_caps = surface.get_capabilities::<A>(A::VARIANT, adapter)?;
 
             hal_caps.formats.sort_by_key(|f| !f.is_srgb());
 
@@ -1765,7 +1765,6 @@ impl Global {
         device_id: DeviceId,
         config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
     ) -> Option<present::ConfigureSurfaceError> {
-        use hal::Surface as _;
         use present::ConfigureSurfaceError as E;
         profiling::scope!("surface_configure");
 
@@ -1909,7 +1908,7 @@ impl Global {
                     Err(_) => break 'error E::InvalidSurface,
                 };
 
-                let caps = match surface.get_capabilities(&device.adapter) {
+                let caps = match surface.get_capabilities::<A>(A::VARIANT, &device.adapter) {
                     Ok(caps) => caps,
                     Err(_) => break 'error E::UnsupportedQueueFamily,
                 };
@@ -1990,11 +1989,8 @@ impl Global {
                 //
                 // https://github.com/gfx-rs/wgpu/issues/4105
 
-                match unsafe {
-                    A::surface_as_hal(surface)
-                        .unwrap()
-                        .configure(device.raw().as_any().downcast_ref().unwrap(), &hal_config)
-                } {
+                let surface_raw = surface.raw(A::VARIANT).unwrap();
+                match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
                     Ok(()) => (),
                     Err(error) => {
                         break 'error match error {

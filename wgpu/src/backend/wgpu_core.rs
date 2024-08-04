@@ -72,7 +72,10 @@ impl ContextWgpuCore {
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
-        unsafe { self.0.create_adapter_from_hal(hal_adapter, None) }
+        unsafe {
+            self.0
+                .create_adapter_from_hal::<A>(hal_adapter.into(), None)
+        }
     }
 
     pub unsafe fn adapter_as_hal<
@@ -109,9 +112,9 @@ impl ContextWgpuCore {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
         let (device_id, queue_id, error) = unsafe {
-            self.0.create_device_from_hal(
+            self.0.create_device_from_hal::<A>(
                 *adapter,
-                hal_device,
+                hal_device.into(),
                 &desc.map_label(|l| l.map(Borrowed)),
                 None,
                 None,
