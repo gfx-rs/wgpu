@@ -1,7 +1,7 @@
 // Box casts are needed, alternative would be a temporaries which are more verbose and not more expressive.
 #![allow(trivial_casts)]
 
-use crate::{Capabilities, Instance, InstanceError};
+use crate::{Api, Capabilities, ExposedAdapter, Instance, InstanceError};
 
 use super::{DynAdapter, DynResource, DynResourceExt as _, DynSurface};
 
@@ -10,6 +10,17 @@ pub struct DynExposedAdapter {
     pub info: wgt::AdapterInfo,
     pub features: wgt::Features,
     pub capabilities: Capabilities,
+}
+
+impl<A: Api> From<ExposedAdapter<A>> for DynExposedAdapter {
+    fn from(exposed_adapter: ExposedAdapter<A>) -> Self {
+        Self {
+            adapter: Box::new(exposed_adapter.adapter),
+            info: exposed_adapter.info,
+            features: exposed_adapter.features,
+            capabilities: exposed_adapter.capabilities,
+        }
+    }
 }
 
 pub trait DynInstance: DynResource {

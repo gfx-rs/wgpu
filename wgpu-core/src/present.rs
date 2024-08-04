@@ -30,7 +30,7 @@ const FRAME_TIMEOUT_MS: u32 = 1000;
 
 #[derive(Debug)]
 pub(crate) struct Presentation {
-    pub(crate) device: AnyDevice,
+    pub(crate) device: AnyDevice, // TODO(#5124): use device: Arc<Device>
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     pub(crate) acquired_texture: Option<id::TextureId>,
 }
@@ -153,10 +153,9 @@ impl Global {
 
         let fence = device.fence.read();
 
-        let suf = A::surface_as_hal(surface.as_ref());
+        let suf = surface.raw(A::VARIANT).unwrap();
         let (texture_id, status) = match unsafe {
-            use hal::DynSurface;
-            suf.unwrap().acquire_texture(
+            suf.acquire_texture(
                 Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
                 fence.as_ref(),
             )
@@ -304,7 +303,7 @@ impl Global {
                     .lock()
                     .textures
                     .remove(texture.tracker_index());
-                let suf = A::surface_as_hal(&surface);
+                let suf = surface.raw(A::VARIANT).unwrap();
                 let exclusive_snatch_guard = device.snatchable_lock.write();
                 match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
                     resource::TextureInner::Surface { raw, parent_id } => {
@@ -312,7 +311,7 @@ impl Global {
                             log::error!("Presented frame is from a different surface");
                             Err(hal::SurfaceError::Lost)
                         } else {
-                            unsafe { queue.raw().present(suf.unwrap(), raw) }
+                            unsafe { queue.raw().present(suf, raw) }
                         }
                     }
                     _ => unreachable!(),
@@ -379,12 +378,11 @@ impl Global {
                     .lock()
                     .textures
                     .remove(texture.tracker_index());
-                let suf = A::surface_as_hal(&surface);
+                let suf = surface.raw(A::VARIANT);
                 let exclusive_snatch_guard = device.snatchable_lock.write();
                 match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
                     resource::TextureInner::Surface { raw, parent_id } => {
                         if surface_id == parent_id {
-                            use hal::DynSurface;
                             unsafe { suf.unwrap().discard_texture(raw) };
                         } else {
                             log::warn!("Surface texture is outdated");
