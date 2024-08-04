@@ -72,6 +72,7 @@ impl crate::Api for Api {
 }
 
 crate::impl_dyn_resource!(
+    Adapter,
     AccelerationStructure,
     BindGroup,
     BindGroupLayout,

@@ -1,8 +1,10 @@
+mod adapter;
 mod command;
 mod device;
 mod queue;
 mod surface;
 
+pub use adapter::{DynAdapter, DynOpenDevice};
 pub use command::DynCommandEncoder;
 pub use device::DynDevice;
 pub use queue::DynQueue;
