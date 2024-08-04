@@ -1,10 +1,21 @@
-use crate::{Adapter, DeviceError, SurfaceCapabilities, TextureFormatCapabilities};
+use crate::{
+    Adapter, Api, DeviceError, OpenDevice, SurfaceCapabilities, TextureFormatCapabilities,
+};
 
 use super::{DynDevice, DynQueue, DynResource, DynResourceExt, DynSurface};
 
 pub struct DynOpenDevice {
     pub device: Box<dyn DynDevice>,
     pub queue: Box<dyn DynQueue>,
+}
+
+impl<A: Api> From<OpenDevice<A>> for DynOpenDevice {
+    fn from(open_device: OpenDevice<A>) -> Self {
+        Self {
+            device: Box::new(open_device.device),
+            queue: Box::new(open_device.queue),
+        }
+    }
 }
 
 pub trait DynAdapter: DynResource {

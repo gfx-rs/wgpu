@@ -351,7 +351,7 @@ impl<A: HalApi> LifetimeTracker<A> {
     #[must_use]
     pub(crate) fn handle_mapping(
         &mut self,
-        raw: &A::Device,
+        raw: &dyn hal::DynDevice,
         snatch_guard: &SnatchGuard,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {

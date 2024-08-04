@@ -1289,7 +1289,10 @@ impl Global {
 
         let hub = A::hub(self);
         let adapter = hub.adapters.get(id).ok();
-        let hal_adapter = adapter.as_ref().map(|adapter| &adapter.raw.adapter);
+        let hal_adapter = adapter
+            .as_ref()
+            .map(|adapter| &adapter.raw.adapter)
+            .and_then(|adapter| adapter.as_any().downcast_ref());
 
         hal_adapter_callback(hal_adapter)
     }
@@ -1306,7 +1309,10 @@ impl Global {
 
         let hub = A::hub(self);
         let device = hub.devices.get(id).ok();
-        let hal_device = device.as_ref().map(|device| device.raw_typed());
+        let hal_device = device
+            .as_ref()
+            .map(|device| device.raw())
+            .and_then(|device| device.as_any().downcast_ref());
 
         hal_device_callback(hal_device)
     }
@@ -1346,7 +1352,8 @@ impl Global {
         let surface = self.surfaces.get(id).ok();
         let hal_surface = surface
             .as_ref()
-            .and_then(|surface| A::surface_as_hal(surface));
+            .and_then(|surface| surface.raw(A::VARIANT))
+            .and_then(|surface| surface.as_any().downcast_ref());
 
         hal_surface_callback(hal_surface)
     }

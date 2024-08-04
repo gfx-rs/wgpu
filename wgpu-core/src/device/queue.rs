@@ -270,7 +270,7 @@ impl<A: HalApi> PendingWrites<A> {
     fn pre_submit(
         &mut self,
         command_allocator: &CommandAllocator,
-        device: &A::Device,
+        device: &dyn hal::DynDevice,
         queue: &dyn hal::DynQueue,
     ) -> Result<Option<EncoderInFlight<A>>, DeviceError> {
         if self.is_recording {
@@ -1284,11 +1284,9 @@ impl Global {
                 }
             }
 
-            if let Some(pending_execution) = pending_writes.pre_submit(
-                &device.command_allocator,
-                device.raw_typed(),
-                queue.raw(),
-            )? {
+            if let Some(pending_execution) =
+                pending_writes.pre_submit(&device.command_allocator, device.raw(), queue.raw())?
+            {
                 active_executions.insert(0, pending_execution);
             }
 

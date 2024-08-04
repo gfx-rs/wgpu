@@ -36,7 +36,6 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::Device as _;
 use once_cell::sync::OnceCell;
 
 use smallvec::SmallVec;
@@ -191,9 +190,6 @@ pub enum CreateDeviceError {
 }
 
 impl<A: HalApi> Device<A> {
-    pub(crate) fn raw_typed(&self) -> &A::Device {
-        self.raw().as_any().downcast_ref().unwrap()
-    }
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref().unwrap().as_ref()
     }
@@ -462,7 +458,7 @@ impl<A: HalApi> Device<A> {
 
         life_tracker.triage_mapped();
 
-        let mapping_closures = life_tracker.handle_mapping(self.raw_typed(), &snatch_guard);
+        let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
 
         let queue_empty = life_tracker.queue_empty();
 
@@ -586,11 +582,10 @@ impl<A: HalApi> Device<A> {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let buffer =
-            unsafe { self.raw_typed().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
+        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
         let buffer = Buffer {
-            raw: Snatchable::new(Box::new(buffer)),
+            raw: Snatchable::new(buffer),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -617,7 +612,7 @@ impl<A: HalApi> Device<A> {
             } else {
                 let snatch_guard: SnatchGuard = self.snatchable_lock.read();
                 map_buffer(
-                    self.raw_typed(),
+                    self.raw(),
                     &buffer,
                     0,
                     map_size,
@@ -1632,7 +1627,7 @@ impl<A: HalApi> Device<A> {
 
         let encoder = self
             .command_allocator
-            .acquire_encoder(self.raw_typed(), queue.raw())?;
+            .acquire_encoder(self.raw(), queue.raw())?;
 
         let command_buffer = command::CommandBuffer::new(encoder, self, label);
 

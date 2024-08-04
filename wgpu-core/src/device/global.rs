@@ -24,8 +24,6 @@ use crate::{
     Label,
 };
 
-use hal::Device as _;
-
 use wgt::{BufferAddress, TextureFormat};
 
 use std::{borrow::Cow, ptr::NonNull, sync::atomic::Ordering};
@@ -58,7 +56,7 @@ impl Global {
     ) -> Result<wgt::SurfaceCapabilities, instance::GetSurfaceSupportError> {
         profiling::scope!("Surface::get_capabilities");
         self.fetch_adapter_and_surface::<A, _, _>(surface_id, adapter_id, |adapter, surface| {
-            let mut hal_caps = surface.get_capabilities(adapter)?;
+            let mut hal_caps = surface.get_capabilities(A::VARIANT, adapter)?;
 
             hal_caps.formats.sort_by_key(|f| !f.is_srgb());
 
@@ -277,7 +275,7 @@ impl Global {
         let raw_buf = buffer.try_raw(&snatch_guard)?;
         unsafe {
             let mapping = device
-                .raw_typed()
+                .raw()
                 .map_buffer(raw_buf, offset..offset + data.len() as u64)
                 .map_err(DeviceError::from)?;
             std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
@@ -1767,7 +1765,6 @@ impl Global {
         device_id: DeviceId,
         config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
     ) -> Option<present::ConfigureSurfaceError> {
-        use hal::Surface as _;
         use present::ConfigureSurfaceError as E;
         profiling::scope!("surface_configure");
 
@@ -1911,7 +1908,7 @@ impl Global {
                     Err(_) => break 'error E::InvalidSurface,
                 };
 
-                let caps = match surface.get_capabilities(&device.adapter) {
+                let caps = match surface.get_capabilities(A::VARIANT, &device.adapter) {
                     Ok(caps) => caps,
                     Err(_) => break 'error E::UnsupportedQueueFamily,
                 };
@@ -1992,11 +1989,8 @@ impl Global {
                 //
                 // https://github.com/gfx-rs/wgpu/issues/4105
 
-                match unsafe {
-                    A::surface_as_hal(surface)
-                        .unwrap()
-                        .configure(device.raw_typed(), &hal_config)
-                } {
+                let surface_raw = surface.raw(A::VARIANT).unwrap();
+                match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
                     Ok(()) => (),
                     Err(error) => {
                         break 'error match error {
@@ -2156,7 +2150,7 @@ impl Global {
             if !device.is_valid() {
                 return;
             }
-            unsafe { device.raw_typed().start_capture() };
+            unsafe { device.raw().start_capture() };
         }
     }
 
@@ -2169,7 +2163,7 @@ impl Global {
             if !device.is_valid() {
                 return;
             }
-            unsafe { device.raw_typed().stop_capture() };
+            unsafe { device.raw().stop_capture() };
         }
     }
 
