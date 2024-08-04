@@ -269,8 +269,6 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder, A: HalApi>
                 .set_and_remove_from_usage_scope_sparse(&mut self.scope.buffers, indirect_buffer);
         }
 
-        log::trace!("Encoding dispatch barriers");
-
         CommandBuffer::drain_barriers(
             self.raw_encoder,
             &mut self.intermediate_trackers,
@@ -486,15 +484,6 @@ impl Global {
         let indices = &state.device.tracker_indices;
         state.tracker.buffers.set_size(indices.buffers.size());
         state.tracker.textures.set_size(indices.textures.size());
-        state
-            .tracker
-            .bind_groups
-            .set_size(indices.bind_groups.size());
-        state
-            .tracker
-            .compute_pipelines
-            .set_size(indices.compute_pipelines.size());
-        state.tracker.query_sets.set_size(indices.query_sets.size());
 
         let timestamp_writes = if let Some(tw) = timestamp_writes.take() {
             tw.query_set

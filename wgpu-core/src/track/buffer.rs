@@ -9,7 +9,6 @@ use std::sync::{Arc, Weak};
 use super::{PendingTransition, TrackerIndex};
 use crate::{
     hal_api::HalApi,
-    lock::{rank, Mutex},
     resource::{Buffer, Trackable},
     snatch::SnatchGuard,
     track::{
@@ -38,15 +37,15 @@ impl ResourceUses for BufferUses {
     }
 }
 
-/// Stores all the buffers that a bind group stores.
+/// Stores a bind group's buffers + their usages (within the bind group).
 #[derive(Debug)]
 pub(crate) struct BufferBindGroupState<A: HalApi> {
-    buffers: Mutex<Vec<(Arc<Buffer<A>>, BufferUses)>>,
+    buffers: Vec<(Arc<Buffer<A>>, BufferUses)>,
 }
 impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            buffers: Mutex::new(rank::BUFFER_BIND_GROUP_STATE_BUFFERS, Vec::new()),
+            buffers: Vec::new(),
         }
     }
 
@@ -54,27 +53,23 @@ impl<A: HalApi> BufferBindGroupState<A> {
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant ascending order.
-    #[allow(clippy::pattern_type_mismatch)]
-    pub(crate) fn optimize(&self) {
-        let mut buffers = self.buffers.lock();
-        buffers.sort_unstable_by_key(|(b, _)| b.tracker_index());
+    pub(crate) fn optimize(&mut self) {
+        self.buffers
+            .sort_unstable_by_key(|(b, _)| b.tracker_index());
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
-    #[allow(clippy::pattern_type_mismatch)]
     pub fn used_tracker_indices(&self) -> impl Iterator<Item = TrackerIndex> + '_ {
-        let buffers = self.buffers.lock();
-        buffers
+        self.buffers
             .iter()
-            .map(|(ref b, _)| b.tracker_index())
+            .map(|(b, _)| b.tracker_index())
             .collect::<Vec<_>>()
             .into_iter()
     }
 
     /// Adds the given resource with the given state.
-    pub fn add_single(&self, buffer: &Arc<Buffer<A>>, state: BufferUses) {
-        let mut buffers = self.buffers.lock();
-        buffers.push((buffer.clone(), state));
+    pub fn insert_single(&mut self, buffer: Arc<Buffer<A>>, state: BufferUses) {
+        self.buffers.push((buffer, state));
     }
 }
 
@@ -136,8 +131,7 @@ impl<A: HalApi> BufferUsageScope<A> {
         &mut self,
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        let buffers = bind_group.buffers.lock();
-        for &(ref resource, state) in &*buffers {
+        for &(ref resource, state) in bind_group.buffers.iter() {
             let index = resource.tracker_index().as_usize();
 
             unsafe {
@@ -735,8 +729,6 @@ unsafe fn insert<T: Clone>(
     strict_assert_eq!(invalid_resource_state(new_start_state), false);
     strict_assert_eq!(invalid_resource_state(new_end_state), false);
 
-    log::trace!("\tbuf {index}: insert {new_start_state:?}..{new_end_state:?}");
-
     unsafe {
         if let Some(&mut ref mut start_state) = start_states {
             *start_state.get_unchecked_mut(index) = new_start_state;
@@ -751,7 +743,7 @@ unsafe fn insert<T: Clone>(
 #[inline(always)]
 unsafe fn merge<A: HalApi>(
     current_states: &mut [BufferUses],
-    index32: u32,
+    _index32: u32,
     index: usize,
     state_provider: BufferStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Arc<Buffer<A>>>,
@@ -768,8 +760,6 @@ unsafe fn merge<A: HalApi>(
             new_state,
         ));
     }
-
-    log::trace!("\tbuf {index32}: merge {current_state:?} + {new_state:?}");
 
     *current_state = merged_state;
 
@@ -795,8 +785,6 @@ unsafe fn barrier(
         selector: (),
         usage: current_state..new_state,
     });
-
-    log::trace!("\tbuf {index}: transition {current_state:?} -> {new_state:?}");
 }
 
 #[inline(always)]

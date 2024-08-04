@@ -1600,8 +1600,6 @@ impl Global {
             *status = CommandEncoderStatus::Error;
             encoder.open_pass(hal_label).map_pass_err(pass_scope)?;
 
-            log::trace!("Encoding render pass begin in {}", cmd_buf.error_ident());
-
             let info = RenderPassInfo::start(
                 device,
                 hal_label,
@@ -1622,13 +1620,6 @@ impl Global {
             let indices = &device.tracker_indices;
             tracker.buffers.set_size(indices.buffers.size());
             tracker.textures.set_size(indices.textures.size());
-            tracker.views.set_size(indices.texture_views.size());
-            tracker.bind_groups.set_size(indices.bind_groups.size());
-            tracker
-                .render_pipelines
-                .set_size(indices.render_pipelines.size());
-            tracker.bundles.set_size(indices.bundles.size());
-            tracker.query_sets.set_size(indices.query_sets.size());
 
             let raw = &mut encoder.raw;
 
@@ -1907,7 +1898,6 @@ impl Global {
                 }
             }
 
-            log::trace!("Merging renderpass into {}", cmd_buf.error_ident());
             let (trackers, pending_discard_init_fixups) = state
                 .info
                 .finish(state.raw_encoder, state.snatch_guard)
@@ -2719,9 +2709,7 @@ fn execute_bundle<A: HalApi>(
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
 
-    // Have to clone the bundle arc, otherwise we keep a mutable reference to the bundle
-    // while later trying to add the bundle's resources to the tracker.
-    let bundle = state.tracker.bundles.insert_single(bundle).clone();
+    let bundle = state.tracker.bundles.insert_single(bundle);
 
     bundle.same_device_as(cmd_buf.as_ref())?;
 
@@ -2772,7 +2760,6 @@ fn execute_bundle<A: HalApi>(
 
     unsafe {
         state.info.usage_scope.merge_render_bundle(&bundle.used)?;
-        state.tracker.add_from_render_bundle(&bundle.used)?;
     };
     state.reset_bundle();
     Ok(())

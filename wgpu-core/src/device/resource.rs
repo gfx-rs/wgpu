@@ -1247,12 +1247,6 @@ impl<A: HalApi> Device<A> {
             texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
 
-        log::debug!(
-            "Create view for {} filters usages to {:?}",
-            texture.error_ident(),
-            usage
-        );
-
         // use the combined depth-stencil format for the view
         let format = if resolved_format.is_depth_stencil_component(texture.desc.format) {
             texture.desc.format
@@ -1940,7 +1934,7 @@ impl<A: HalApi> Device<A> {
 
         let buffer = &bb.buffer;
 
-        used.buffers.add_single(buffer, internal_use);
+        used.buffers.insert_single(buffer.clone(), internal_use);
 
         buffer.same_device(self)?;
 
@@ -2021,14 +2015,14 @@ impl<A: HalApi> Device<A> {
 
     fn create_sampler_binding<'a>(
         self: &Arc<Self>,
-        used: &BindGroupStates<A>,
+        used: &mut BindGroupStates<A>,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         sampler: &'a Arc<Sampler<A>>,
     ) -> Result<&'a A::Sampler, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
-        used.samplers.add_single(sampler);
+        used.samplers.insert_single(sampler.clone());
 
         sampler.same_device(self)?;
 
@@ -2077,8 +2071,6 @@ impl<A: HalApi> Device<A> {
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::TextureBinding<'a, A>, binding_model::CreateBindGroupError> {
-        used.views.add_single(view);
-
         view.same_device(self)?;
 
         let (pub_usage, internal_use) = self.texture_use_parameters(
@@ -2087,12 +2079,10 @@ impl<A: HalApi> Device<A> {
             view,
             "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
         )?;
-        let texture = &view.parent;
-        // Careful here: the texture may no longer have its own ref count,
-        // if it was deleted by the user.
-        used.textures
-            .add_single(texture, Some(view.selector.clone()), internal_use);
 
+        used.views.insert_single(view.clone(), internal_use);
+
+        let texture = &view.parent;
         texture.check_usage(pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
@@ -2200,7 +2190,7 @@ impl<A: HalApi> Device<A> {
                     (res_index, num_bindings)
                 }
                 Br::Sampler(ref sampler) => {
-                    let sampler = self.create_sampler_binding(&used, binding, decl, sampler)?;
+                    let sampler = self.create_sampler_binding(&mut used, binding, decl, sampler)?;
 
                     let res_index = hal_samplers.len();
                     hal_samplers.push(sampler);
@@ -2212,7 +2202,8 @@ impl<A: HalApi> Device<A> {
 
                     let res_index = hal_samplers.len();
                     for sampler in samplers.iter() {
-                        let sampler = self.create_sampler_binding(&used, binding, decl, sampler)?;
+                        let sampler =
+                            self.create_sampler_binding(&mut used, binding, decl, sampler)?;
 
                         hal_samplers.push(sampler);
                     }
@@ -2813,7 +2804,6 @@ impl<A: HalApi> Device<A> {
                     .iter()
                     .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
             } {
-                log::debug!("Color targets: {:?}", color_targets);
                 self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLEND)?;
             }
         }
@@ -3500,7 +3490,6 @@ impl<A: HalApi> Device<A> {
         let fence = guard.as_ref().unwrap();
         let last_done_index = unsafe { self.raw.as_ref().unwrap().get_fence_value(fence)? };
         if last_done_index < submission_index {
-            log::info!("Waiting for submission {:?}", submission_index);
             unsafe {
                 self.raw
                     .as_ref()

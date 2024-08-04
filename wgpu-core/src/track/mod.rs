@@ -104,7 +104,7 @@ mod texture;
 use crate::{
     binding_model, command,
     hal_api::HalApi,
-    lock::{rank, Mutex, RwLock},
+    lock::{rank, Mutex},
     pipeline,
     resource::{self, Labeled, ResourceErrorIdent},
     snatch::SnatchGuard,
@@ -117,10 +117,10 @@ pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };
 use metadata::{ResourceMetadata, ResourceMetadataProvider};
-pub(crate) use stateless::{StatelessBindGroupState, StatelessTracker};
+pub(crate) use stateless::StatelessTracker;
 pub(crate) use texture::{
-    DeviceTextureTracker, TextureBindGroupState, TextureSelector, TextureTracker,
-    TextureTrackerSetSingle, TextureUsageScope,
+    DeviceTextureTracker, TextureSelector, TextureTracker, TextureTrackerSetSingle,
+    TextureUsageScope, TextureViewBindGroupState,
 };
 use wgt::strict_assert_ne;
 
@@ -422,18 +422,16 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 #[derive(Debug)]
 pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
-    pub textures: TextureBindGroupState<A>,
-    pub views: StatelessBindGroupState<resource::TextureView<A>>,
-    pub samplers: StatelessBindGroupState<resource::Sampler<A>>,
+    pub views: TextureViewBindGroupState<A>,
+    pub samplers: StatelessTracker<resource::Sampler<A>>,
 }
 
 impl<A: HalApi> BindGroupStates<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferBindGroupState::new(),
-            textures: TextureBindGroupState::new(),
-            views: StatelessBindGroupState::new(),
-            samplers: StatelessBindGroupState::new(),
+            views: TextureViewBindGroupState::new(),
+            samplers: StatelessTracker::new(),
         }
     }
 
@@ -443,9 +441,11 @@ impl<A: HalApi> BindGroupStates<A> {
     /// accesses will be in a constant ascending order.
     pub fn optimize(&mut self) {
         self.buffers.optimize();
-        self.textures.optimize();
+        // Views are stateless, however, `TextureViewBindGroupState`
+        // is special as it will be merged with other texture trackers.
         self.views.optimize();
-        self.samplers.optimize();
+        // Samplers are stateless and don't need to be optimized
+        // since the tracker is never merged with any other tracker.
     }
 }
 
@@ -454,38 +454,21 @@ impl<A: HalApi> BindGroupStates<A> {
 /// and need to be owned by the render bundles.
 #[derive(Debug)]
 pub(crate) struct RenderBundleScope<A: HalApi> {
-    pub buffers: RwLock<BufferUsageScope<A>>,
-    pub textures: RwLock<TextureUsageScope<A>>,
+    pub buffers: BufferUsageScope<A>,
+    pub textures: TextureUsageScope<A>,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
-    pub bind_groups: RwLock<StatelessTracker<binding_model::BindGroup<A>>>,
-    pub render_pipelines: RwLock<StatelessTracker<pipeline::RenderPipeline<A>>>,
-    pub query_sets: RwLock<StatelessTracker<resource::QuerySet<A>>>,
+    pub bind_groups: StatelessTracker<binding_model::BindGroup<A>>,
+    pub render_pipelines: StatelessTracker<pipeline::RenderPipeline<A>>,
 }
 
 impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new() -> Self {
         Self {
-            buffers: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_BUFFERS,
-                BufferUsageScope::default(),
-            ),
-            textures: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_TEXTURES,
-                TextureUsageScope::default(),
-            ),
-            bind_groups: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_BIND_GROUPS,
-                StatelessTracker::new(),
-            ),
-            render_pipelines: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_RENDER_PIPELINES,
-                StatelessTracker::new(),
-            ),
-            query_sets: RwLock::new(
-                rank::RENDER_BUNDLE_SCOPE_QUERY_SETS,
-                StatelessTracker::new(),
-            ),
+            buffers: BufferUsageScope::default(),
+            textures: TextureUsageScope::default(),
+            bind_groups: StatelessTracker::new(),
+            render_pipelines: StatelessTracker::new(),
         }
     }
 
@@ -502,12 +485,8 @@ impl<A: HalApi> RenderBundleScope<A> {
         &mut self,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        unsafe { self.buffers.write().merge_bind_group(&bind_group.buffers)? };
-        unsafe {
-            self.textures
-                .write()
-                .merge_bind_group(&bind_group.textures)?
-        };
+        unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
+        unsafe { self.textures.merge_bind_group(&bind_group.views)? };
 
         Ok(())
     }
@@ -574,7 +553,7 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
     ) -> Result<(), ResourceUsageCompatibilityError> {
         unsafe {
             self.buffers.merge_bind_group(&bind_group.buffers)?;
-            self.textures.merge_bind_group(&bind_group.textures)?;
+            self.textures.merge_bind_group(&bind_group.views)?;
         }
 
         Ok(())
@@ -593,10 +572,8 @@ impl<'a, A: HalApi> UsageScope<'a, A> {
         &mut self,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        self.buffers
-            .merge_usage_scope(&*render_bundle.buffers.read())?;
-        self.textures
-            .merge_usage_scope(&*render_bundle.textures.read())?;
+        self.buffers.merge_usage_scope(&render_bundle.buffers)?;
+        self.textures.merge_usage_scope(&render_bundle.textures)?;
 
         Ok(())
     }
@@ -678,28 +655,7 @@ impl<A: HalApi> Tracker<A> {
         };
         unsafe {
             self.textures
-                .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.textures)
+                .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.views)
         };
-    }
-
-    /// Tracks the stateless resources from the given renderbundle. It is expected
-    /// that the stateful resources will get merged into a usage scope first.
-    ///
-    /// # Safety
-    ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// value given to `set_size`
-    pub unsafe fn add_from_render_bundle(
-        &mut self,
-        render_bundle: &RenderBundleScope<A>,
-    ) -> Result<(), ResourceUsageCompatibilityError> {
-        self.bind_groups
-            .add_from_tracker(&*render_bundle.bind_groups.read());
-        self.render_pipelines
-            .add_from_tracker(&*render_bundle.render_pipelines.read());
-        self.query_sets
-            .add_from_tracker(&*render_bundle.query_sets.read());
-
-        Ok(())
     }
 }

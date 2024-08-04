@@ -91,18 +91,12 @@ define_lock_ranks! {
         DEVICE_SNATCHABLE_LOCK,
         DEVICE_USAGE_SCOPES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-        BUFFER_BIND_GROUP_STATE_BUFFERS,
-        TEXTURE_BIND_GROUP_STATE_TEXTURES,
         BUFFER_MAP_STATE,
-        STATELESS_BIND_GROUP_STATE_RESOURCES,
     }
     rank DEVICE_SNATCHABLE_LOCK "Device::snatchable_lock" followed by {
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         DEVICE_TRACE,
         BUFFER_MAP_STATE,
-        BUFFER_BIND_GROUP_STATE_BUFFERS,
-        TEXTURE_BIND_GROUP_STATE_TEXTURES,
-        STATELESS_BIND_GROUP_STATE_RESOURCES,
         // Uncomment this to see an interesting cycle.
         // COMMAND_BUFFER_DATA,
     }
@@ -125,7 +119,6 @@ define_lock_ranks! {
     }
 
     rank BUFFER_BIND_GROUPS "Buffer::bind_groups" followed by { }
-    rank BUFFER_BIND_GROUP_STATE_BUFFERS "BufferBindGroupState::buffers" followed by { }
     rank BUFFER_INITIALIZATION_STATUS "Buffer::initialization_status" followed by { }
     rank BUFFER_SYNC_MAPPED_WRITES "Buffer::sync_mapped_writes" followed by { }
     rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
@@ -136,17 +129,10 @@ define_lock_ranks! {
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
-    rank RENDER_BUNDLE_SCOPE_BUFFERS "RenderBundleScope::buffers" followed by { }
-    rank RENDER_BUNDLE_SCOPE_TEXTURES "RenderBundleScope::textures" followed by { }
-    rank RENDER_BUNDLE_SCOPE_BIND_GROUPS "RenderBundleScope::bind_groups" followed by { }
-    rank RENDER_BUNDLE_SCOPE_RENDER_PIPELINES "RenderBundleScope::render_pipelines" followed by { }
-    rank RENDER_BUNDLE_SCOPE_QUERY_SETS "RenderBundleScope::query_sets" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
-    rank STATELESS_BIND_GROUP_STATE_RESOURCES "StatelessBindGroupState::resources" followed by { }
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
-    rank TEXTURE_BIND_GROUP_STATE_TEXTURES "TextureBindGroupState::textures" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }

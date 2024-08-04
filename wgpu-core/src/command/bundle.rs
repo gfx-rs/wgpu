@@ -370,31 +370,8 @@ impl RenderBundleEncoder {
         };
 
         let indices = &state.device.tracker_indices;
-        state
-            .trackers
-            .buffers
-            .write()
-            .set_size(indices.buffers.size());
-        state
-            .trackers
-            .textures
-            .write()
-            .set_size(indices.textures.size());
-        state
-            .trackers
-            .bind_groups
-            .write()
-            .set_size(indices.bind_groups.size());
-        state
-            .trackers
-            .render_pipelines
-            .write()
-            .set_size(indices.render_pipelines.size());
-        state
-            .trackers
-            .query_sets
-            .write()
-            .set_size(indices.query_sets.size());
+        state.trackers.buffers.set_size(indices.buffers.size());
+        state.trackers.textures.set_size(indices.textures.size());
 
         let base = &self.base;
 
@@ -641,7 +618,7 @@ fn set_bind_group<A: HalApi>(
 
     state.set_bind_group(index, &bind_group, offsets_range);
     unsafe { state.trackers.merge_bind_group(&bind_group.used)? };
-    state.trackers.bind_groups.write().insert_single(bind_group);
+    state.trackers.bind_groups.insert_single(bind_group);
     // Note: stateless trackers are not merged: the lifetime reference
     // is held to the bind group itself.
     Ok(())
@@ -686,11 +663,7 @@ fn set_pipeline<A: HalApi>(
     state.invalidate_bind_groups(&pipeline_state, &pipeline.layout);
     state.pipeline = Some(pipeline_state);
 
-    state
-        .trackers
-        .render_pipelines
-        .write()
-        .insert_single(pipeline);
+    state.trackers.render_pipelines.insert_single(pipeline);
     Ok(())
 }
 
@@ -709,7 +682,6 @@ fn set_index_buffer<A: HalApi>(
     state
         .trackers
         .buffers
-        .write()
         .merge_single(&buffer, hal::BufferUses::INDEX)?;
 
     buffer.same_device(&state.device)?;
@@ -754,7 +726,6 @@ fn set_vertex_buffer<A: HalApi>(
     state
         .trackers
         .buffers
-        .write()
         .merge_single(&buffer, hal::BufferUses::VERTEX)?;
 
     buffer.same_device(&state.device)?;
@@ -896,7 +867,6 @@ fn multi_draw_indirect<A: HalApi>(
     state
         .trackers
         .buffers
-        .write()
         .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
 
     buffer.same_device(&state.device)?;
