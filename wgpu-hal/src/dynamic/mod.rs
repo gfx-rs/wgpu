@@ -1,12 +1,14 @@
 mod adapter;
 mod command;
 mod device;
+mod instance;
 mod queue;
 mod surface;
 
 pub use adapter::{DynAdapter, DynOpenDevice};
 pub use command::DynCommandEncoder;
 pub use device::DynDevice;
+pub use instance::{DynExposedAdapter, DynInstance};
 pub use queue::DynQueue;
 pub use surface::{DynAcquiredSurfaceTexture, DynSurface};
 
