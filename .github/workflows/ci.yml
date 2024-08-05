@@ -632,7 +632,7 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.23.5
+        uses: crate-ci/typos@v1.23.6
 
   check-cts-runner:
     # runtime is normally 2 minutes
