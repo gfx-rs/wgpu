@@ -1923,15 +1923,6 @@ impl crate::Context for ContextWgpuCore {
         encoder_data: &Self::CommandEncoderData,
         desc: &crate::RenderPassDescriptor<'_>,
     ) -> (Self::RenderPassId, Self::RenderPassData) {
-        if desc.color_attachments.len() > wgc::MAX_COLOR_ATTACHMENTS {
-            self.handle_error_fatal(
-                wgc::command::ColorAttachmentError::TooMany {
-                    given: desc.color_attachments.len(),
-                    limit: wgc::MAX_COLOR_ATTACHMENTS,
-                },
-                "CommandEncoder::begin_render_pass",
-            );
-        }
         let colors = desc
             .color_attachments
             .iter()
@@ -1943,7 +1934,7 @@ impl crate::Context for ContextWgpuCore {
                         channel: map_pass_channel(Some(&at.ops)),
                     })
             })
-            .collect::<ArrayVec<_, { wgc::MAX_COLOR_ATTACHMENTS }>>();
+            .collect::<Vec<_>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {
