@@ -3397,7 +3397,7 @@ impl<A: HalApi> Device<A> {
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
-    ) -> Result<pipeline::PipelineCache<A>, pipeline::CreatePipelineCacheError> {
+    ) -> Result<Arc<pipeline::PipelineCache<A>>, pipeline::CreatePipelineCacheError> {
         use crate::pipeline_cache;
 
         self.check_is_valid()?;
@@ -3436,6 +3436,9 @@ impl<A: HalApi> Device<A> {
             // This would be none in the error condition, which we don't implement yet
             raw: Some(raw),
         };
+
+        let cache = Arc::new(cache);
+
         Ok(cache)
     }
 
