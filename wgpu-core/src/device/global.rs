@@ -761,7 +761,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(Arc::new(layout));
+            let id = fid.assign(layout);
             api_log!("Device::create_pipeline_layout -> {id:?}");
             return (id, None);
         };
