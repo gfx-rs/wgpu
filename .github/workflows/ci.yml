@@ -681,7 +681,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories
           arguments: --all-features --workspace
@@ -698,7 +698,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
