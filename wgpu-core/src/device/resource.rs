@@ -2484,7 +2484,8 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::ResolvedPipelineLayoutDescriptor<A>,
-    ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
+    ) -> Result<Arc<binding_model::PipelineLayout<A>>, binding_model::CreatePipelineLayoutError>
+    {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
         self.check_is_valid()?;
@@ -2576,13 +2577,17 @@ impl<A: HalApi> Device<A> {
 
         drop(raw_bind_group_layouts);
 
-        Ok(binding_model::PipelineLayout {
+        let layout = binding_model::PipelineLayout {
             raw: Some(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
-        })
+        };
+
+        let layout = Arc::new(layout);
+
+        Ok(layout)
     }
 
     pub(crate) fn derive_pipeline_layout(
@@ -2628,7 +2633,6 @@ impl<A: HalApi> Device<A> {
         };
 
         let layout = self.create_pipeline_layout(&layout_desc)?;
-        let layout = Arc::new(layout);
         Ok(layout)
     }
 
