@@ -131,13 +131,6 @@ impl SubmittedWorkDoneClosure {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct WrappedSubmissionIndex {
-    pub queue_id: QueueId,
-    pub index: SubmissionIndex,
-}
-
 /// A texture or buffer to be freed soon.
 ///
 /// This is just a tagged raw texture or buffer, generally about to be added to
@@ -1044,7 +1037,7 @@ impl Global {
         &self,
         queue_id: QueueId,
         command_buffer_ids: &[id::CommandBufferId],
-    ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
+    ) -> Result<SubmissionIndex, QueueSubmitError> {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit {queue_id:?}");
 
@@ -1351,10 +1344,7 @@ impl Global {
 
         api_log!("Queue::submit to {queue_id:?} returned submit index {submit_index}");
 
-        Ok(WrappedSubmissionIndex {
-            queue_id,
-            index: submit_index,
-        })
+        Ok(submit_index)
     }
 
     pub fn queue_get_timestamp_period<A: HalApi>(

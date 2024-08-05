@@ -102,7 +102,7 @@ pub(crate) use hash_utils::*;
 /// The index of a queue submission.
 ///
 /// These are the values stored in `Device::fence`.
-type SubmissionIndex = hal::FenceValue;
+pub type SubmissionIndex = hal::FenceValue;
 
 type Index = u32;
 type Epoch = u32;

@@ -1,6 +1,8 @@
 use std::sync::atomic::AtomicBool;
 
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{
+    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+};
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -907,4 +909,27 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
 
         // Poll the device, which should try to clean up its resources.
         ctx.instance.poll_all(true);
+    });
+
+#[gpu_test]
+static DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_async(|ctx| async move {
+        let TestingContext {
+            adapter,
+            device_features,
+            device_limits,
+            device,
+            queue,
+            ..
+        } = ctx;
+
+        drop(device);
+
+        let (device2, queue2) =
+            wgpu_test::initialize_device(&adapter, device_features, device_limits).await;
+
+        drop(queue);
+        drop(device2);
+        drop(queue2); // this would previously panic since we would try to use the Device ID to drop the Queue
     });

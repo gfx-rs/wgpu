@@ -1342,9 +1342,20 @@ impl Global {
             hub: &crate::hub::Hub<A>,
             desc: &RenderPassDescriptor<'_>,
             arc_desc: &mut ArcRenderPassDescriptor<A>,
+            device: &Device<A>,
         ) -> Result<(), CommandEncoderError> {
             let query_sets = hub.query_sets.read();
             let texture_views = hub.texture_views.read();
+
+            let max_color_attachments = device.limits.max_color_attachments as usize;
+            if desc.color_attachments.len() > max_color_attachments {
+                return Err(CommandEncoderError::InvalidColorAttachment(
+                    ColorAttachmentError::TooMany {
+                        given: desc.color_attachments.len(),
+                        limit: max_color_attachments,
+                    },
+                ));
+            }
 
             for color_attachment in desc.color_attachments.iter() {
                 if let Some(RenderPassColorAttachment {
@@ -1447,7 +1458,7 @@ impl Global {
             Err(e) => return make_err(e, arc_desc),
         };
 
-        let err = fill_arc_desc(hub, desc, &mut arc_desc).err();
+        let err = fill_arc_desc(hub, desc, &mut arc_desc, &cmd_buf.device).err();
 
         (RenderPass::new(Some(cmd_buf), arc_desc), err)
     }
