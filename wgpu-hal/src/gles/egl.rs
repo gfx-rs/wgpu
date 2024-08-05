@@ -609,33 +609,27 @@ impl Inner {
         gl_context_attributes.extend(&context_attributes);
         gles_context_attributes.extend(&context_attributes);
 
-        let context = match egl
-            .create_context(
-                display,
-                config,
-                None,
-                if supports_opengl {
-                    &gl_context_attributes
-                } else {
-                    &gles_context_attributes
-                },
-            )
-            .or_else(|e| {
-                if supports_opengl {
+        let context = if supports_opengl {
+            egl.create_context(display, config, None, &gl_context_attributes)
+                .or_else(|_| {
                     egl.bind_api(khronos_egl::OPENGL_ES_API).unwrap();
                     egl.create_context(display, config, None, &gles_context_attributes)
-                } else {
-                    Err(e)
-                }
-            }) {
-            Ok(context) => context,
-            Err(e) => {
-                return Err(crate::InstanceError::with_source(
-                    String::from("unable to create GLES 3.x context"),
-                    e,
-                ));
-            }
-        };
+                })
+                .map_err(|e| {
+                    crate::InstanceError::with_source(
+                        String::from("unable to create OpenGL or GLES 3.x context"),
+                        e,
+                    )
+                })
+        } else {
+            egl.create_context(display, config, None, &gles_context_attributes)
+                .map_err(|e| {
+                    crate::InstanceError::with_source(
+                        String::from("unable to create GLES 3.x context"),
+                        e,
+                    )
+                })
+        }?;
 
         // Testing if context can be binded without surface
         // and creating dummy pbuffer surface if not.
