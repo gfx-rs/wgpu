@@ -1659,7 +1659,7 @@ impl<A: HalApi> Device<A> {
         label: &crate::Label,
         entry_map: bgl::EntryMap,
         origin: bgl::Origin,
-    ) -> Result<BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
+    ) -> Result<Arc<BindGroupLayout<A>>, binding_model::CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
         enum WritableStorage {
             Yes,
@@ -1858,7 +1858,7 @@ impl<A: HalApi> Device<A> {
             .validate(&self.limits)
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
-        Ok(BindGroupLayout {
+        let bgl = BindGroupLayout {
             raw: Some(raw),
             device: self.clone(),
             entries: entry_map,
@@ -1866,7 +1866,11 @@ impl<A: HalApi> Device<A> {
             exclusive_pipeline: OnceCell::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
-        })
+        };
+
+        let bgl = Arc::new(bgl);
+
+        Ok(bgl)
     }
 
     pub(crate) fn create_buffer_binding<'a>(
@@ -2607,7 +2611,6 @@ impl<A: HalApi> Device<A> {
                             bgl::Origin::Derived,
                         ) {
                             Ok(bgl) => {
-                                let bgl = Arc::new(bgl);
                                 e.insert(bgl.clone());
                                 Ok(bgl)
                             }

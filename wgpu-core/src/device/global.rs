@@ -673,9 +673,6 @@ impl Global {
                 bgl.exclusive_pipeline
                     .set(binding_model::ExclusivePipeline::None)
                     .unwrap();
-
-                let bgl = Arc::new(bgl);
-
                 Ok(bgl)
             });
 
