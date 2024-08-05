@@ -393,9 +393,9 @@ impl std::borrow::Borrow<Texture> for SurfaceTexture {
     }
 }
 
-impl Borrow<dyn crate::DynTexture> for SurfaceTexture {
+impl std::borrow::Borrow<dyn crate::DynTexture> for SurfaceTexture {
     fn borrow(&self) -> &dyn crate::DynTexture {
-        self.texture
+        &self.texture
     }
 }
 
