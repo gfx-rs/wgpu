@@ -1737,7 +1737,7 @@ impl Global {
             let cache = unsafe { device.create_pipeline_cache(desc) };
             match cache {
                 Ok(cache) => {
-                    let id = fid.assign(Arc::new(cache));
+                    let id = fid.assign(cache);
                     api_log!("Device::create_pipeline_cache -> {id:?}");
                     return (id, None);
                 }
