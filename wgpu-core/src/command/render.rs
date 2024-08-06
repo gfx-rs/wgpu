@@ -52,7 +52,7 @@ use super::{
     memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
     QueryResetMap,
 };
-use super::{DrawKind, DynRenderPass, Rect};
+use super::{DrawKind, Rect};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -1459,19 +1459,6 @@ impl Global {
         let err = fill_arc_desc(hub, desc, &mut arc_desc, &cmd_buf.device).err();
 
         (RenderPass::new(Some(cmd_buf), arc_desc), err)
-    }
-
-    /// Creates a type erased render pass.
-    ///
-    /// If creation fails, an invalid pass is returned.
-    /// Any operation on an invalid pass will return an error.
-    pub fn command_encoder_create_render_pass_dyn(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        desc: &RenderPassDescriptor<'_>,
-    ) -> (Box<dyn DynRenderPass>, Option<CommandEncoderError>) {
-        let (pass, err) = self.command_encoder_create_render_pass(encoder_id, desc);
-        (Box::new(pass), err)
     }
 
     #[doc(hidden)]
