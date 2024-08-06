@@ -24,7 +24,7 @@ impl Resource for WebGpuTexture {
     fn close(self: Rc<Self>) {
         if self.owned {
             let instance = &self.instance;
-            gfx_select!(self.id => instance.texture_drop(self.id));
+            instance.texture_drop(self.id);
         }
     }
 }
@@ -39,7 +39,7 @@ impl Resource for WebGpuTextureView {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.texture_view_drop(self.1)).unwrap();
+        self.0.texture_view_drop(self.1).unwrap();
     }
 }
 
@@ -80,11 +80,7 @@ pub fn op_webgpu_create_texture(
         view_formats: args.view_formats,
     };
 
-    let (val, maybe_err) = gfx_select!(device => instance.device_create_texture(
-      device,
-      &descriptor,
-      None
-    ));
+    let (val, maybe_err) = instance.device_create_texture(device, &descriptor, None);
 
     let rid = state.resource_table.add(WebGpuTexture {
         instance: instance.clone(),
@@ -125,9 +121,9 @@ pub fn op_webgpu_create_texture_view(
         range: args.range,
     };
 
-    gfx_put!(texture => instance.texture_create_view(
-    texture,
-    &descriptor,
-    None
-  ) => state, WebGpuTextureView)
+    gfx_put!(instance.texture_create_view(
+        texture,
+        &descriptor,
+        None
+    ) => state, WebGpuTextureView)
 }

@@ -63,7 +63,7 @@ pub fn op_webgpu_surface_configure(
         desired_maximum_frame_latency: 2,
     };
 
-    let err = gfx_select!(device => instance.surface_configure(surface, device, &conf));
+    let err = instance.surface_configure(surface, device, &conf);
 
     Ok(WebGpuResult::maybe_err(err))
 }
@@ -79,7 +79,7 @@ pub fn op_webgpu_surface_get_current_texture(
     let surface_resource = state.resource_table.get::<WebGpuSurface>(surface_rid)?;
     let surface = surface_resource.1;
 
-    let output = gfx_select!(device => instance.surface_get_current_texture(surface, None))?;
+    let output = instance.surface_get_current_texture(surface, None)?;
 
     match output.status {
         SurfaceStatus::Good | SurfaceStatus::Suboptimal => {
