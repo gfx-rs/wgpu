@@ -20,7 +20,7 @@ impl Resource for WebGpuQueue {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.queue_drop(self.1));
+        self.0.queue_drop(self.1);
     }
 }
 
@@ -44,7 +44,7 @@ pub fn op_webgpu_queue_submit(
         })
         .collect::<Result<Vec<_>, AnyError>>()?;
 
-    let maybe_err = gfx_select!(queue => instance.queue_submit(queue, &ids)).err();
+    let maybe_err = instance.queue_submit(queue, &ids).err();
 
     for rid in command_buffers {
         let resource = state.resource_table.take::<WebGpuCommandBuffer>(rid)?;
@@ -95,13 +95,9 @@ pub fn op_webgpu_write_buffer(
         Some(size) => &buf[data_offset..(data_offset + size)],
         None => &buf[data_offset..],
     };
-    let maybe_err = gfx_select!(queue => instance.queue_write_buffer(
-      queue,
-      buffer,
-      buffer_offset,
-      data
-    ))
-    .err();
+    let maybe_err = instance
+        .queue_write_buffer(queue, buffer, buffer_offset, data)
+        .err();
 
     Ok(WebGpuResult::maybe_err(maybe_err))
 }
@@ -131,11 +127,5 @@ pub fn op_webgpu_write_texture(
     };
     let data_layout = data_layout.into();
 
-    gfx_ok!(queue => instance.queue_write_texture(
-      queue,
-      &destination,
-      buf,
-      &data_layout,
-      &size
-    ))
+    gfx_ok!(instance.queue_write_texture(queue, &destination, buf, &data_layout, &size))
 }
