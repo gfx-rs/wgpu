@@ -10,10 +10,7 @@ of course `Debug`.
 [`id::BufferId`]: crate::id::BufferId
 
 Each `Id` contains not only an index for the resource it denotes but
-also a Backend indicating which `wgpu` backend it belongs to. You
-can use the [`gfx_select`] macro to dynamically dispatch on an id's
-backend to a function specialized at compile time for a specific
-backend. See that macro's documentation for details.
+also a Backend indicating which `wgpu` backend it belongs to.
 
 `Id`s also incorporate a generation number, for additional validation.
 
@@ -96,7 +93,6 @@ creation fails, the id supplied for that resource is marked to indicate
 as much, allowing subsequent operations using that id to be properly
 flagged as errors as well.
 
-[`gfx_select`]: crate::gfx_select
 [`process`]: crate::identity::IdentityManager::process
 [`Id<R>`]: crate::id::Id
 [wrapped in a mutex]: trait.IdentityHandler.html#impl-IdentityHandler%3CI%3E-for-Mutex%3CIdentityManager%3E

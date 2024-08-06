@@ -24,7 +24,7 @@ impl Resource for WebGpuPipelineLayout {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.pipeline_layout_drop(self.1));
+        self.0.pipeline_layout_drop(self.1);
     }
 }
 
@@ -38,7 +38,7 @@ impl Resource for WebGpuComputePipeline {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.compute_pipeline_drop(self.1));
+        self.0.compute_pipeline_drop(self.1);
     }
 }
 
@@ -52,7 +52,7 @@ impl Resource for WebGpuRenderPipeline {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.render_pipeline_drop(self.1));
+        self.0.render_pipeline_drop(self.1);
     }
 }
 
@@ -116,12 +116,8 @@ pub fn op_webgpu_create_compute_pipeline(
         cache: None,
     };
 
-    let (compute_pipeline, maybe_err) = gfx_select!(device => instance.device_create_compute_pipeline(
-      device,
-      &descriptor,
-      None,
-      None,
-    ));
+    let (compute_pipeline, maybe_err) =
+        instance.device_create_compute_pipeline(device, &descriptor, None, None);
 
     let rid = state
         .resource_table
@@ -150,7 +146,8 @@ pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
         .get::<WebGpuComputePipeline>(compute_pipeline_rid)?;
     let compute_pipeline = compute_pipeline_resource.1;
 
-    let (bind_group_layout, maybe_err) = gfx_select!(compute_pipeline => instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, None));
+    let (bind_group_layout, maybe_err) =
+        instance.compute_pipeline_get_bind_group_layout(compute_pipeline, index, None);
 
     let rid = state
         .resource_table
@@ -383,12 +380,8 @@ pub fn op_webgpu_create_render_pipeline(
         cache: None,
     };
 
-    let (render_pipeline, maybe_err) = gfx_select!(device => instance.device_create_render_pipeline(
-      device,
-      &descriptor,
-      None,
-      None,
-    ));
+    let (render_pipeline, maybe_err) =
+        instance.device_create_render_pipeline(device, &descriptor, None, None);
 
     let rid = state
         .resource_table
@@ -410,7 +403,8 @@ pub fn op_webgpu_render_pipeline_get_bind_group_layout(
         .get::<WebGpuRenderPipeline>(render_pipeline_rid)?;
     let render_pipeline = render_pipeline_resource.1;
 
-    let (bind_group_layout, maybe_err) = gfx_select!(render_pipeline => instance.render_pipeline_get_bind_group_layout(render_pipeline, index, None));
+    let (bind_group_layout, maybe_err) =
+        instance.render_pipeline_get_bind_group_layout(render_pipeline, index, None);
 
     let rid = state
         .resource_table
