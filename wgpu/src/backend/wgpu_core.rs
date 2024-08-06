@@ -489,13 +489,13 @@ impl Queue {
 
 #[derive(Debug)]
 pub struct ComputePass {
-    pass: Box<dyn wgc::command::DynComputePass>,
+    pass: wgc::command::ComputePass,
     error_sink: ErrorSink,
 }
 
 #[derive(Debug)]
 pub struct RenderPass {
-    pass: Box<dyn wgc::command::DynRenderPass>,
+    pass: wgc::command::RenderPass,
     error_sink: ErrorSink,
 }
 
@@ -1866,7 +1866,7 @@ impl crate::Context for ContextWgpuCore {
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
-        let (pass, err) = self.0.command_encoder_create_compute_pass_dyn(
+        let (pass, err) = self.0.command_encoder_create_compute_pass(
             *encoder,
             &wgc::command::ComputePassDescriptor {
                 label: desc.label.map(Borrowed),
@@ -1928,7 +1928,7 @@ impl crate::Context for ContextWgpuCore {
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
-        let (pass, err) = self.0.command_encoder_create_render_pass_dyn(
+        let (pass, err) = self.0.command_encoder_create_render_pass(
             *encoder,
             &wgc::command::RenderPassDescriptor {
                 label: desc.label.map(Borrowed),
@@ -2341,7 +2341,10 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::ComputePipelineId,
         _pipeline_data: &Self::ComputePipelineData,
     ) {
-        if let Err(cause) = pass_data.pass.set_pipeline(&self.0, *pipeline) {
+        if let Err(cause) = self
+            .0
+            .compute_pass_set_pipeline(&mut pass_data.pass, *pipeline)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2360,9 +2363,9 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .set_bind_group(&self.0, index, *bind_group, offsets)
+        if let Err(cause) =
+            self.0
+                .compute_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2380,7 +2383,10 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        if let Err(cause) = pass_data.pass.set_push_constants(&self.0, offset, data) {
+        if let Err(cause) =
+            self.0
+                .compute_pass_set_push_constants(&mut pass_data.pass, offset, data)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2396,7 +2402,10 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         label: &str,
     ) {
-        if let Err(cause) = pass_data.pass.insert_debug_marker(&self.0, label, 0) {
+        if let Err(cause) = self
+            .0
+            .compute_pass_insert_debug_marker(&mut pass_data.pass, label, 0)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2412,7 +2421,10 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::ComputePassData,
         group_label: &str,
     ) {
-        if let Err(cause) = pass_data.pass.push_debug_group(&self.0, group_label, 0) {
+        if let Err(cause) =
+            self.0
+                .compute_pass_push_debug_group(&mut pass_data.pass, group_label, 0)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2427,7 +2439,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        if let Err(cause) = pass_data.pass.pop_debug_group(&self.0) {
+        if let Err(cause) = self.0.compute_pass_pop_debug_group(&mut pass_data.pass) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2445,9 +2457,9 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .write_timestamp(&self.0, *query_set, query_index)
+        if let Err(cause) =
+            self.0
+                .compute_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2466,11 +2478,11 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        if let Err(cause) =
-            pass_data
-                .pass
-                .begin_pipeline_statistics_query(&self.0, *query_set, query_index)
-        {
+        if let Err(cause) = self.0.compute_pass_begin_pipeline_statistics_query(
+            &mut pass_data.pass,
+            *query_set,
+            query_index,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2485,7 +2497,10 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        if let Err(cause) = pass_data.pass.end_pipeline_statistics_query(&self.0) {
+        if let Err(cause) = self
+            .0
+            .compute_pass_end_pipeline_statistics_query(&mut pass_data.pass)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2503,7 +2518,10 @@ impl crate::Context for ContextWgpuCore {
         y: u32,
         z: u32,
     ) {
-        if let Err(cause) = pass_data.pass.dispatch_workgroups(&self.0, x, y, z) {
+        if let Err(cause) = self
+            .0
+            .compute_pass_dispatch_workgroups(&mut pass_data.pass, x, y, z)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2521,11 +2539,11 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        if let Err(cause) =
-            pass_data
-                .pass
-                .dispatch_workgroups_indirect(&self.0, *indirect_buffer, indirect_offset)
-        {
+        if let Err(cause) = self.0.compute_pass_dispatch_workgroups_indirect(
+            &mut pass_data.pass,
+            *indirect_buffer,
+            indirect_offset,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2540,7 +2558,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::ComputePassId,
         pass_data: &mut Self::ComputePassData,
     ) {
-        if let Err(cause) = pass_data.pass.end(&self.0) {
+        if let Err(cause) = self.0.compute_pass_end(&mut pass_data.pass) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2742,7 +2760,10 @@ impl crate::Context for ContextWgpuCore {
         pipeline: &Self::RenderPipelineId,
         _pipeline_data: &Self::RenderPipelineData,
     ) {
-        if let Err(cause) = pass_data.pass.set_pipeline(&self.0, *pipeline) {
+        if let Err(cause) = self
+            .0
+            .render_pass_set_pipeline(&mut pass_data.pass, *pipeline)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2761,9 +2782,9 @@ impl crate::Context for ContextWgpuCore {
         _bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .set_bind_group(&self.0, index, *bind_group, offsets)
+        if let Err(cause) =
+            self.0
+                .render_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2784,11 +2805,13 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        if let Err(cause) =
-            pass_data
-                .pass
-                .set_index_buffer(&self.0, *buffer, index_format, offset, size)
-        {
+        if let Err(cause) = self.0.render_pass_set_index_buffer(
+            &mut pass_data.pass,
+            *buffer,
+            index_format,
+            offset,
+            size,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2808,9 +2831,9 @@ impl crate::Context for ContextWgpuCore {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .set_vertex_buffer(&self.0, slot, *buffer, offset, size)
+        if let Err(cause) =
+            self.0
+                .render_pass_set_vertex_buffer(&mut pass_data.pass, slot, *buffer, offset, size)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2829,9 +2852,9 @@ impl crate::Context for ContextWgpuCore {
         offset: u32,
         data: &[u8],
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .set_push_constants(&self.0, stages, offset, data)
+        if let Err(cause) =
+            self.0
+                .render_pass_set_push_constants(&mut pass_data.pass, stages, offset, data)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2849,8 +2872,8 @@ impl crate::Context for ContextWgpuCore {
         vertices: Range<u32>,
         instances: Range<u32>,
     ) {
-        if let Err(cause) = pass_data.pass.draw(
-            &self.0,
+        if let Err(cause) = self.0.render_pass_draw(
+            &mut pass_data.pass,
             vertices.end - vertices.start,
             instances.end - instances.start,
             vertices.start,
@@ -2873,8 +2896,8 @@ impl crate::Context for ContextWgpuCore {
         base_vertex: i32,
         instances: Range<u32>,
     ) {
-        if let Err(cause) = pass_data.pass.draw_indexed(
-            &self.0,
+        if let Err(cause) = self.0.render_pass_draw_indexed(
+            &mut pass_data.pass,
             indices.end - indices.start,
             instances.end - instances.start,
             indices.start,
@@ -2898,9 +2921,9 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .draw_indirect(&self.0, *indirect_buffer, indirect_offset)
+        if let Err(cause) =
+            self.0
+                .render_pass_draw_indirect(&mut pass_data.pass, *indirect_buffer, indirect_offset)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2919,11 +2942,11 @@ impl crate::Context for ContextWgpuCore {
         _indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        if let Err(cause) =
-            pass_data
-                .pass
-                .draw_indexed_indirect(&self.0, *indirect_buffer, indirect_offset)
-        {
+        if let Err(cause) = self.0.render_pass_draw_indexed_indirect(
+            &mut pass_data.pass,
+            *indirect_buffer,
+            indirect_offset,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2942,11 +2965,12 @@ impl crate::Context for ContextWgpuCore {
         indirect_offset: wgt::BufferAddress,
         count: u32,
     ) {
-        if let Err(cause) =
-            pass_data
-                .pass
-                .multi_draw_indirect(&self.0, *indirect_buffer, indirect_offset, count)
-        {
+        if let Err(cause) = self.0.render_pass_multi_draw_indirect(
+            &mut pass_data.pass,
+            *indirect_buffer,
+            indirect_offset,
+            count,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2965,8 +2989,8 @@ impl crate::Context for ContextWgpuCore {
         indirect_offset: wgt::BufferAddress,
         count: u32,
     ) {
-        if let Err(cause) = pass_data.pass.multi_draw_indexed_indirect(
-            &self.0,
+        if let Err(cause) = self.0.render_pass_multi_draw_indexed_indirect(
+            &mut pass_data.pass,
             *indirect_buffer,
             indirect_offset,
             count,
@@ -2992,8 +3016,8 @@ impl crate::Context for ContextWgpuCore {
         count_buffer_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        if let Err(cause) = pass_data.pass.multi_draw_indirect_count(
-            &self.0,
+        if let Err(cause) = self.0.render_pass_multi_draw_indirect_count(
+            &mut pass_data.pass,
             *indirect_buffer,
             indirect_offset,
             *count_buffer,
@@ -3021,8 +3045,8 @@ impl crate::Context for ContextWgpuCore {
         count_buffer_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        if let Err(cause) = pass_data.pass.multi_draw_indexed_indirect_count(
-            &self.0,
+        if let Err(cause) = self.0.render_pass_multi_draw_indexed_indirect_count(
+            &mut pass_data.pass,
             *indirect_buffer,
             indirect_offset,
             *count_buffer,
@@ -3044,7 +3068,10 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         color: wgt::Color,
     ) {
-        if let Err(cause) = pass_data.pass.set_blend_constant(&self.0, color) {
+        if let Err(cause) = self
+            .0
+            .render_pass_set_blend_constant(&mut pass_data.pass, color)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3063,9 +3090,9 @@ impl crate::Context for ContextWgpuCore {
         width: u32,
         height: u32,
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .set_scissor_rect(&self.0, x, y, width, height)
+        if let Err(cause) =
+            self.0
+                .render_pass_set_scissor_rect(&mut pass_data.pass, x, y, width, height)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -3087,10 +3114,15 @@ impl crate::Context for ContextWgpuCore {
         min_depth: f32,
         max_depth: f32,
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .set_viewport(&self.0, x, y, width, height, min_depth, max_depth)
-        {
+        if let Err(cause) = self.0.render_pass_set_viewport(
+            &mut pass_data.pass,
+            x,
+            y,
+            width,
+            height,
+            min_depth,
+            max_depth,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3106,7 +3138,10 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         reference: u32,
     ) {
-        if let Err(cause) = pass_data.pass.set_stencil_reference(&self.0, reference) {
+        if let Err(cause) = self
+            .0
+            .render_pass_set_stencil_reference(&mut pass_data.pass, reference)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3122,7 +3157,10 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         label: &str,
     ) {
-        if let Err(cause) = pass_data.pass.insert_debug_marker(&self.0, label, 0) {
+        if let Err(cause) = self
+            .0
+            .render_pass_insert_debug_marker(&mut pass_data.pass, label, 0)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3138,7 +3176,10 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         group_label: &str,
     ) {
-        if let Err(cause) = pass_data.pass.push_debug_group(&self.0, group_label, 0) {
+        if let Err(cause) = self
+            .0
+            .render_pass_push_debug_group(&mut pass_data.pass, group_label, 0)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3153,7 +3194,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        if let Err(cause) = pass_data.pass.pop_debug_group(&self.0) {
+        if let Err(cause) = self.0.render_pass_pop_debug_group(&mut pass_data.pass) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3171,9 +3212,9 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        if let Err(cause) = pass_data
-            .pass
-            .write_timestamp(&self.0, *query_set, query_index)
+        if let Err(cause) =
+            self.0
+                .render_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -3190,7 +3231,10 @@ impl crate::Context for ContextWgpuCore {
         pass_data: &mut Self::RenderPassData,
         query_index: u32,
     ) {
-        if let Err(cause) = pass_data.pass.begin_occlusion_query(&self.0, query_index) {
+        if let Err(cause) = self
+            .0
+            .render_pass_begin_occlusion_query(&mut pass_data.pass, query_index)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3205,7 +3249,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        if let Err(cause) = pass_data.pass.end_occlusion_query(&self.0) {
+        if let Err(cause) = self.0.render_pass_end_occlusion_query(&mut pass_data.pass) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3223,11 +3267,11 @@ impl crate::Context for ContextWgpuCore {
         _query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
-        if let Err(cause) =
-            pass_data
-                .pass
-                .begin_pipeline_statistics_query(&self.0, *query_set, query_index)
-        {
+        if let Err(cause) = self.0.render_pass_begin_pipeline_statistics_query(
+            &mut pass_data.pass,
+            *query_set,
+            query_index,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3242,7 +3286,10 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        if let Err(cause) = pass_data.pass.end_pipeline_statistics_query(&self.0) {
+        if let Err(cause) = self
+            .0
+            .render_pass_end_pipeline_statistics_query(&mut pass_data.pass)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -3259,9 +3306,9 @@ impl crate::Context for ContextWgpuCore {
         render_bundles: &mut dyn Iterator<Item = (Self::RenderBundleId, &Self::RenderBundleData)>,
     ) {
         let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
-        if let Err(cause) = pass_data
-            .pass
-            .execute_bundles(&self.0, &temp_render_bundles)
+        if let Err(cause) = self
+            .0
+            .render_pass_execute_bundles(&mut pass_data.pass, &temp_render_bundles)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -3277,7 +3324,7 @@ impl crate::Context for ContextWgpuCore {
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
     ) {
-        if let Err(cause) = pass_data.pass.end(&self.0) {
+        if let Err(cause) = self.0.render_pass_end(&mut pass_data.pass) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,

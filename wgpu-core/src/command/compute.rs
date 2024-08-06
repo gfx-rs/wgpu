@@ -31,7 +31,7 @@ use wgt::{BufferAddress, DynamicOffset};
 use std::sync::Arc;
 use std::{fmt, mem, str};
 
-use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions, DynComputePass};
+use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -326,19 +326,6 @@ impl Global {
         };
 
         (ComputePass::new(Some(cmd_buf), arc_desc), None)
-    }
-
-    /// Creates a type erased compute pass.
-    ///
-    /// If creation fails, an invalid pass is returned.
-    /// Any operation on an invalid pass will return an error.
-    pub fn command_encoder_create_compute_pass_dyn(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        desc: &ComputePassDescriptor,
-    ) -> (Box<dyn DynComputePass>, Option<CommandEncoderError>) {
-        let (pass, err) = self.command_encoder_create_compute_pass(encoder_id, desc);
-        (Box::new(pass), err)
     }
 
     pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), ComputePassError> {
