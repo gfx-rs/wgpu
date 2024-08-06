@@ -3435,7 +3435,7 @@ impl From<CreateShaderModuleError> for CompilationInfo {
 
 #[derive(Debug)]
 pub struct QueueWriteBuffer {
-    buffer_id: wgc::id::StagingBufferId,
+    buffer_id: wgc::id::ExternalStagingBufferId,
     mapping: BufferMappedRange,
 }
 
