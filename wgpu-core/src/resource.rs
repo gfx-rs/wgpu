@@ -972,11 +972,11 @@ pub enum TextureClearMode<A: HalApi> {
     BufferCopy,
     // View for clear via RenderPass for every subsurface (mip/layer/slice)
     RenderPass {
-        clear_views: SmallVec<[Option<A::TextureView>; 1]>,
+        clear_views: SmallVec<[ManuallyDrop<A::TextureView>; 1]>,
         is_color: bool,
     },
     Surface {
-        clear_view: Option<A::TextureView>,
+        clear_view: ManuallyDrop<A::TextureView>,
     },
     // Texture can't be cleared, attempting to do so will cause panic.
     // (either because it is impossible for the type of texture or it is being destroyed)
@@ -1062,10 +1062,10 @@ impl<A: HalApi> Drop for Texture<A> {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
             } => {
-                if let Some(view) = clear_view.take() {
-                    unsafe {
-                        self.device.raw().destroy_texture_view(view);
-                    }
+                // SAFETY: We are in the Drop impl and we don't use clear_view anymore after this point.
+                let raw = unsafe { ManuallyDrop::take(clear_view) };
+                unsafe {
+                    self.device.raw().destroy_texture_view(raw);
                 }
             }
             TextureClearMode::RenderPass {
@@ -1073,10 +1073,10 @@ impl<A: HalApi> Drop for Texture<A> {
                 ..
             } => {
                 clear_views.iter_mut().for_each(|clear_view| {
-                    if let Some(view) = clear_view.take() {
-                        unsafe {
-                            self.device.raw().destroy_texture_view(view);
-                        }
+                    // SAFETY: We are in the Drop impl and we don't use clear_view anymore after this point.
+                    let raw = unsafe { ManuallyDrop::take(clear_view) };
+                    unsafe {
+                        self.device.raw().destroy_texture_view(raw);
                     }
                 });
             }
@@ -1129,7 +1129,7 @@ impl<A: HalApi> Texture<A> {
             TextureClearMode::None => {
                 panic!("Given texture can't be cleared")
             }
-            TextureClearMode::Surface { ref clear_view, .. } => clear_view.as_ref().unwrap(),
+            TextureClearMode::Surface { ref clear_view, .. } => clear_view,
             TextureClearMode::RenderPass {
                 ref clear_views, ..
             } => {
@@ -1140,7 +1140,7 @@ impl<A: HalApi> Texture<A> {
                 } else {
                     mip_level * desc.size.depth_or_array_layers
                 } + depth_or_layer;
-                clear_views[index as usize].as_ref().unwrap()
+                &clear_views[index as usize]
             }
         }
     }
