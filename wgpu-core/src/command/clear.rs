@@ -281,7 +281,7 @@ pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
     let dst_raw = dst_texture.try_raw(snatch_guard)?;
 
     // Issue the right barrier.
-    let clear_usage = match *dst_texture.clear_mode.read() {
+    let clear_usage = match dst_texture.clear_mode {
         TextureClearMode::BufferCopy => hal::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
@@ -322,7 +322,7 @@ pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
     }
 
     // Record actual clearing
-    match *dst_texture.clear_mode.read() {
+    match dst_texture.clear_mode {
         TextureClearMode::BufferCopy => clear_texture_via_buffer_copies::<A>(
             &dst_texture.desc,
             alignments,
@@ -453,7 +453,6 @@ fn clear_texture_via_render_passes<A: HalApi>(
         height: dst_texture.desc.size.height,
         depth_or_array_layers: 1, // Only one layer is cleared at a time.
     };
-    let clear_mode = &dst_texture.clear_mode.read();
 
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
@@ -463,7 +462,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
                 color_attachments_tmp = [Some(hal::ColorAttachment {
                     target: hal::Attachment {
                         view: Texture::get_clear_view(
-                            clear_mode,
+                            &dst_texture.clear_mode,
                             &dst_texture.desc,
                             mip_level,
                             depth_or_layer,
@@ -481,7 +480,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
                     Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
                             view: Texture::get_clear_view(
-                                clear_mode,
+                                &dst_texture.clear_mode,
                                 &dst_texture.desc,
                                 mip_level,
                                 depth_or_layer,
