@@ -303,7 +303,6 @@ pub struct PipelineCache<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for PipelineCache<A> {
@@ -322,7 +321,6 @@ crate::impl_resource_type!(PipelineCache);
 crate::impl_labeled!(PipelineCache);
 crate::impl_parent_device!(PipelineCache);
 crate::impl_storage_item!(PipelineCache);
-crate::impl_trackable!(PipelineCache);
 
 /// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug)]

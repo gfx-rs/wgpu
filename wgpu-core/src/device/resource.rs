@@ -1866,7 +1866,6 @@ impl<A: HalApi> Device<A> {
             exclusive_pipeline: OnceCell::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.bind_group_layouts.clone()),
         })
     }
 
@@ -2577,7 +2576,6 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             label: desc.label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.pipeline_layouts.clone()),
             bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
         })
@@ -3428,7 +3426,6 @@ impl<A: HalApi> Device<A> {
         let cache = pipeline::PipelineCache {
             device: self.clone(),
             label: desc.label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.pipeline_caches.clone()),
             // This would be none in the error condition, which we don't implement yet
             raw: Some(raw),
         };
