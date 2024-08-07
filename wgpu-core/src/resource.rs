@@ -995,7 +995,7 @@ pub struct Texture<A: HalApi> {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) clear_mode: RwLock<TextureClearMode<A>>,
+    pub(crate) clear_mode: TextureClearMode<A>,
     pub(crate) views: Mutex<Vec<Weak<TextureView<A>>>>,
     pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup<A>>>>,
 }
@@ -1030,7 +1030,7 @@ impl<A: HalApi> Texture<A> {
             },
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
-            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
+            clear_mode,
             views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
         }
@@ -1056,9 +1056,7 @@ impl<A: HalApi> Texture<A> {
 impl<A: HalApi> Drop for Texture<A> {
     fn drop(&mut self) {
         use hal::Device;
-        let mut clear_mode = self.clear_mode.write();
-        let clear_mode = &mut *clear_mode;
-        match *clear_mode {
+        match self.clear_mode {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
             } => {
