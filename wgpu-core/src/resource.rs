@@ -1697,7 +1697,7 @@ pub struct SamplerDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct Sampler<A: HalApi> {
-    pub(crate) raw: Option<A::Sampler>,
+    pub(crate) raw: ManuallyDrop<A::Sampler>,
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -1710,19 +1710,19 @@ pub struct Sampler<A: HalApi> {
 
 impl<A: HalApi> Drop for Sampler<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_sampler(raw);
-            }
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_sampler(raw);
         }
     }
 }
 
 impl<A: HalApi> Sampler<A> {
     pub(crate) fn raw(&self) -> &A::Sampler {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 }
 
@@ -1793,7 +1793,7 @@ pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
 
 #[derive(Debug)]
 pub struct QuerySet<A: HalApi> {
-    pub(crate) raw: Option<A::QuerySet>,
+    pub(crate) raw: ManuallyDrop<A::QuerySet>,
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -1803,12 +1803,12 @@ pub struct QuerySet<A: HalApi> {
 
 impl<A: HalApi> Drop for QuerySet<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_query_set(raw);
-            }
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_query_set(raw);
         }
     }
 }
@@ -1821,7 +1821,7 @@ crate::impl_trackable!(QuerySet);
 
 impl<A: HalApi> QuerySet<A> {
     pub(crate) fn raw(&self) -> &A::QuerySet {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 }
 

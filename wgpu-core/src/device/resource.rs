@@ -80,7 +80,7 @@ use super::{
 /// When locking pending_writes please check that trackers is not locked
 /// trackers should be locked only when needed for the shortest time possible
 pub struct Device<A: HalApi> {
-    raw: Option<A::Device>,
+    raw: ManuallyDrop<A::Device>,
     pub(crate) adapter: Arc<Adapter<A>>,
     pub(crate) queue: OnceCell<Weak<Queue<A>>>,
     queue_to_drop: OnceCell<A::Queue>,
@@ -169,7 +169,8 @@ impl<A: HalApi> std::fmt::Debug for Device<A> {
 impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
-        let raw = self.raw.take().unwrap();
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
         let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         pending_writes.dispose(&raw);
@@ -193,7 +194,7 @@ pub enum CreateDeviceError {
 
 impl<A: HalApi> Device<A> {
     pub(crate) fn raw(&self) -> &A::Device {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
     pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
         if self.features.contains(feature) {
@@ -271,7 +272,7 @@ impl<A: HalApi> Device<A> {
         let downlevel = adapter.raw.capabilities.downlevel.clone();
 
         Ok(Self {
-            raw: Some(raw_device),
+            raw: ManuallyDrop::new(raw_device),
             adapter: adapter.clone(),
             queue: OnceCell::new(),
             queue_to_drop: OnceCell::new(),
@@ -1418,7 +1419,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let sampler = Sampler {
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.samplers.clone()),
@@ -1550,7 +1551,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let module = pipeline::ShaderModule {
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: Some(interface),
             label: desc.label.to_string(),
@@ -1591,7 +1592,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let module = pipeline::ShaderModule {
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: None,
             label: desc.label.to_string(),
@@ -1861,7 +1862,7 @@ impl<A: HalApi> Device<A> {
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
         let bgl = BindGroupLayout {
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
             device: self.clone(),
             entries: entry_map,
             origin,
@@ -2576,7 +2577,7 @@ impl<A: HalApi> Device<A> {
         drop(raw_bind_group_layouts);
 
         let layout = binding_model::PipelineLayout {
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
@@ -2718,7 +2719,7 @@ impl<A: HalApi> Device<A> {
                 constants: desc.stage.constants.as_ref(),
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
-            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
+            cache: cache.as_ref().map(|it| it.raw()),
         };
 
         let raw =
@@ -2742,7 +2743,7 @@ impl<A: HalApi> Device<A> {
             )?;
 
         let pipeline = pipeline::ComputePipeline {
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
             layout: pipeline_layout,
             device: self.clone(),
             _shader_module: shader_module,
@@ -3299,7 +3300,7 @@ impl<A: HalApi> Device<A> {
             fragment_stage,
             color_targets,
             multiview: desc.multiview,
-            cache: cache.as_ref().and_then(|it| it.raw.as_ref()),
+            cache: cache.as_ref().map(|it| it.raw()),
         };
         let raw =
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
@@ -3363,7 +3364,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let pipeline = pipeline::RenderPipeline {
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
             layout: pipeline_layout,
             device: self.clone(),
             pass_context,
@@ -3434,7 +3435,7 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             label: desc.label.to_string(),
             // This would be none in the error condition, which we don't implement yet
-            raw: Some(raw),
+            raw: ManuallyDrop::new(raw),
         };
 
         let cache = Arc::new(cache);
@@ -3535,8 +3536,10 @@ impl<A: HalApi> Device<A> {
 
         let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
 
+        let raw = unsafe { self.raw().create_query_set(&hal_desc).unwrap() };
+
         let query_set = QuerySet {
-            raw: Some(unsafe { self.raw().create_query_set(&hal_desc).unwrap() }),
+            raw: ManuallyDrop::new(raw),
             device: self.clone(),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.query_sets.clone()),

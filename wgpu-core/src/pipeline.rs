@@ -10,7 +10,7 @@ use crate::{
 };
 use arrayvec::ArrayVec;
 use naga::error::ShaderError;
-use std::{borrow::Cow, marker::PhantomData, num::NonZeroU32, sync::Arc};
+use std::{borrow::Cow, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32, sync::Arc};
 use thiserror::Error;
 
 /// Information about buffer bindings, which
@@ -47,7 +47,7 @@ pub struct ShaderModuleDescriptor<'a> {
 
 #[derive(Debug)]
 pub struct ShaderModule<A: HalApi> {
-    pub(crate) raw: Option<A::ShaderModule>,
+    pub(crate) raw: ManuallyDrop<A::ShaderModule>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
     /// The `label` from the descriptor used to create the resource.
@@ -56,12 +56,12 @@ pub struct ShaderModule<A: HalApi> {
 
 impl<A: HalApi> Drop for ShaderModule<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_shader_module(raw);
-            }
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_shader_module(raw);
         }
     }
 }
@@ -73,7 +73,7 @@ crate::impl_storage_item!(ShaderModule);
 
 impl<A: HalApi> ShaderModule<A> {
     pub(crate) fn raw(&self) -> &A::ShaderModule {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 
     pub(crate) fn finalize_entry_point_name(
@@ -242,7 +242,7 @@ pub enum CreateComputePipelineError {
 
 #[derive(Debug)]
 pub struct ComputePipeline<A: HalApi> {
-    pub(crate) raw: Option<A::ComputePipeline>,
+    pub(crate) raw: ManuallyDrop<A::ComputePipeline>,
     pub(crate) layout: Arc<PipelineLayout<A>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) _shader_module: Arc<ShaderModule<A>>,
@@ -254,12 +254,12 @@ pub struct ComputePipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for ComputePipeline<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_compute_pipeline(raw);
-            }
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_compute_pipeline(raw);
         }
     }
 }
@@ -272,7 +272,7 @@ crate::impl_trackable!(ComputePipeline);
 
 impl<A: HalApi> ComputePipeline<A> {
     pub(crate) fn raw(&self) -> &A::ComputePipeline {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 }
 
@@ -301,7 +301,7 @@ impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
 
 #[derive(Debug)]
 pub struct PipelineCache<A: HalApi> {
-    pub(crate) raw: Option<A::PipelineCache>,
+    pub(crate) raw: ManuallyDrop<A::PipelineCache>,
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -309,12 +309,12 @@ pub struct PipelineCache<A: HalApi> {
 
 impl<A: HalApi> Drop for PipelineCache<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_pipeline_cache(raw);
-            }
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_pipeline_cache(raw);
         }
     }
 }
@@ -323,6 +323,12 @@ crate::impl_resource_type!(PipelineCache);
 crate::impl_labeled!(PipelineCache);
 crate::impl_parent_device!(PipelineCache);
 crate::impl_storage_item!(PipelineCache);
+
+impl<A: HalApi> PipelineCache<A> {
+    pub(crate) fn raw(&self) -> &A::PipelineCache {
+        &self.raw
+    }
+}
 
 /// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug)]
@@ -586,7 +592,7 @@ impl Default for VertexStep {
 
 #[derive(Debug)]
 pub struct RenderPipeline<A: HalApi> {
-    pub(crate) raw: Option<A::RenderPipeline>,
+    pub(crate) raw: ManuallyDrop<A::RenderPipeline>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<PipelineLayout<A>>,
     pub(crate) _shader_modules:
@@ -603,12 +609,12 @@ pub struct RenderPipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for RenderPipeline<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_render_pipeline(raw);
-            }
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_render_pipeline(raw);
         }
     }
 }
@@ -621,6 +627,6 @@ crate::impl_trackable!(RenderPipeline);
 
 impl<A: HalApi> RenderPipeline<A> {
     pub(crate) fn raw(&self) -> &A::RenderPipeline {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 }
