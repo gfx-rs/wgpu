@@ -26,6 +26,7 @@ use serde::Serialize;
 
 use std::{
     borrow::Cow,
+    mem::ManuallyDrop,
     ops::Range,
     sync::{Arc, Weak},
 };
@@ -498,7 +499,7 @@ impl<A: HalApi> std::fmt::Display for ExclusivePipeline<A> {
 /// Bind group layout.
 #[derive(Debug)]
 pub struct BindGroupLayout<A: HalApi> {
-    pub(crate) raw: Option<A::BindGroupLayout>,
+    pub(crate) raw: ManuallyDrop<A::BindGroupLayout>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) entries: bgl::EntryMap,
     /// It is very important that we know if the bind group comes from the BGL pool.
@@ -517,15 +518,15 @@ pub struct BindGroupLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
     fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
         if matches!(self.origin, bgl::Origin::Pool) {
             self.device.bgl_pool.remove(&self.entries);
         }
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_bind_group_layout(raw);
-            }
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_bind_group_layout(raw);
         }
     }
 }
@@ -537,7 +538,7 @@ crate::impl_storage_item!(BindGroupLayout);
 
 impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &A::BindGroupLayout {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 }
 
@@ -651,7 +652,7 @@ pub struct ResolvedPipelineLayoutDescriptor<'a, A: HalApi> {
 
 #[derive(Debug)]
 pub struct PipelineLayout<A: HalApi> {
-    pub(crate) raw: Option<A::PipelineLayout>,
+    pub(crate) raw: ManuallyDrop<A::PipelineLayout>,
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -661,19 +662,19 @@ pub struct PipelineLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for PipelineLayout<A> {
     fn drop(&mut self) {
-        if let Some(raw) = self.raw.take() {
-            resource_log!("Destroy raw {}", self.error_ident());
-            unsafe {
-                use hal::Device;
-                self.device.raw().destroy_pipeline_layout(raw);
-            }
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            use hal::Device;
+            self.device.raw().destroy_pipeline_layout(raw);
         }
     }
 }
 
 impl<A: HalApi> PipelineLayout<A> {
     pub(crate) fn raw(&self) -> &A::PipelineLayout {
-        self.raw.as_ref().unwrap()
+        &self.raw
     }
 
     pub(crate) fn get_binding_maps(&self) -> ArrayVec<&bgl::EntryMap, { hal::MAX_BIND_GROUPS }> {
