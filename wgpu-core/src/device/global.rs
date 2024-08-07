@@ -1100,7 +1100,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(Arc::new(command_buffer));
+            let id = fid.assign(command_buffer);
             api_log!("Device::create_command_encoder -> {id:?}");
             return (id.into_command_encoder_id(), None);
         };

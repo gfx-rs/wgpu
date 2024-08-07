@@ -1599,7 +1599,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_command_encoder(
         self: &Arc<Self>,
         label: &crate::Label,
-    ) -> Result<command::CommandBuffer<A>, DeviceError> {
+    ) -> Result<Arc<command::CommandBuffer<A>>, DeviceError> {
         self.check_is_valid()?;
 
         let queue = self.get_queue().unwrap();
@@ -1608,13 +1608,11 @@ impl<A: HalApi> Device<A> {
             .command_allocator
             .acquire_encoder(self.raw(), queue.raw())?;
 
-        Ok(command::CommandBuffer::new(
-            encoder,
-            self,
-            #[cfg(feature = "trace")]
-            self.trace.lock().is_some(),
-            label,
-        ))
+        let command_buffer = command::CommandBuffer::new(encoder, self, label);
+
+        let command_buffer = Arc::new(command_buffer);
+
+        Ok(command_buffer)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
