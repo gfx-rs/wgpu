@@ -221,13 +221,10 @@ pub(crate) struct TrackerIndexAllocators {
     pub texture_views: Arc<SharedTrackerIndexAllocator>,
     pub samplers: Arc<SharedTrackerIndexAllocator>,
     pub bind_groups: Arc<SharedTrackerIndexAllocator>,
-    pub bind_group_layouts: Arc<SharedTrackerIndexAllocator>,
     pub compute_pipelines: Arc<SharedTrackerIndexAllocator>,
     pub render_pipelines: Arc<SharedTrackerIndexAllocator>,
-    pub pipeline_layouts: Arc<SharedTrackerIndexAllocator>,
     pub bundles: Arc<SharedTrackerIndexAllocator>,
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
-    pub pipeline_caches: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
@@ -238,13 +235,10 @@ impl TrackerIndexAllocators {
             texture_views: Arc::new(SharedTrackerIndexAllocator::new()),
             samplers: Arc::new(SharedTrackerIndexAllocator::new()),
             bind_groups: Arc::new(SharedTrackerIndexAllocator::new()),
-            bind_group_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
             compute_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
             render_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
-            pipeline_layouts: Arc::new(SharedTrackerIndexAllocator::new()),
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
-            pipeline_caches: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
 }

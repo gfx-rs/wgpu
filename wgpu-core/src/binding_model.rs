@@ -513,7 +513,6 @@ pub struct BindGroupLayout<A: HalApi> {
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) tracking_data: TrackingData,
 }
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
@@ -535,7 +534,6 @@ crate::impl_resource_type!(BindGroupLayout);
 crate::impl_labeled!(BindGroupLayout);
 crate::impl_parent_device!(BindGroupLayout);
 crate::impl_storage_item!(BindGroupLayout);
-crate::impl_trackable!(BindGroupLayout);
 
 impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &A::BindGroupLayout {
@@ -657,7 +655,6 @@ pub struct PipelineLayout<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) tracking_data: TrackingData,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
@@ -769,7 +766,6 @@ crate::impl_resource_type!(PipelineLayout);
 crate::impl_labeled!(PipelineLayout);
 crate::impl_parent_device!(PipelineLayout);
 crate::impl_storage_item!(PipelineLayout);
-crate::impl_trackable!(PipelineLayout);
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
