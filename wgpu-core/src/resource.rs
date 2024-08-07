@@ -229,7 +229,7 @@ pub(crate) enum BufferMapState<A: HalApi> {
     Waiting(BufferPendingMapping<A>),
     /// Mapped
     Active {
-        ptr: NonNull<u8>,
+        mapping: hal::BufferMapping,
         range: hal::MemoryRange,
         host: HostMap,
     },
@@ -669,13 +669,18 @@ impl<A: HalApi> Buffer<A> {
             BufferMapState::Waiting(pending) => {
                 return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
             }
-            BufferMapState::Active { ptr, range, host } => {
+            BufferMapState::Active {
+                mapping,
+                range,
+                host,
+            } => {
+                #[allow(clippy::collapsible_if)]
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
                         let size = range.end - range.start;
                         let data = trace.make_binary("bin", unsafe {
-                            std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
+                            std::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
                             id: buffer_id,
@@ -684,7 +689,9 @@ impl<A: HalApi> Buffer<A> {
                             queued: false,
                         });
                     }
-                    let _ = (ptr, range);
+                    if !mapping.is_coherent {
+                        unsafe { device.raw().flush_mapped_ranges(raw_buf, iter::once(range)) };
+                    }
                 }
                 unsafe { device.raw().unmap_buffer(raw_buf) };
             }

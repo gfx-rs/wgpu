@@ -391,10 +391,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                     host,
                     snatch_guard,
                 ) {
-                    Ok(ptr) => {
+                    Ok(mapping) => {
                         *buffer.map_state.lock() = resource::BufferMapState::Active {
-                            ptr,
-                            range: pending_mapping.range.start..pending_mapping.range.start + size,
+                            mapping,
+                            range: pending_mapping.range.clone(),
                             host,
                         };
                         Ok(())
@@ -406,7 +406,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
             } else {
                 *buffer.map_state.lock() = resource::BufferMapState::Active {
-                    ptr: std::ptr::NonNull::dangling(),
+                    mapping: hal::BufferMapping {
+                        ptr: std::ptr::NonNull::dangling(),
+                        is_coherent: true,
+                    },
                     range: pending_mapping.range,
                     host: pending_mapping.op.host,
                 };

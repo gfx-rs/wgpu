@@ -18,7 +18,7 @@ use std::os::raw::c_char;
 use thiserror::Error;
 use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
-use std::{iter, num::NonZeroU32, ptr};
+use std::{iter, num::NonZeroU32};
 
 pub mod any_device;
 pub(crate) mod bgl;
@@ -307,7 +307,7 @@ fn map_buffer<A: HalApi>(
     size: BufferAddress,
     kind: HostMap,
     snatch_guard: &SnatchGuard,
-) -> Result<ptr::NonNull<u8>, BufferAccessError> {
+) -> Result<hal::BufferMapping, BufferAccessError> {
     let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
@@ -360,7 +360,7 @@ fn map_buffer<A: HalApi>(
         }
     }
 
-    Ok(mapping.ptr)
+    Ok(mapping)
 }
 
 #[derive(Clone, Debug)]
