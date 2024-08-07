@@ -152,18 +152,17 @@ impl Global {
             });
         }
 
-        let fence_guard = device.fence.read();
-        let fence = fence_guard.as_ref().unwrap();
+        let fence = device.fence.read();
 
         let suf = A::surface_as_hal(surface.as_ref());
         let (texture_id, status) = match unsafe {
             suf.unwrap().acquire_texture(
                 Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
-                fence,
+                &fence,
             )
         } {
             Ok(Some(ast)) => {
-                drop(fence_guard);
+                drop(fence);
 
                 let texture_desc = wgt::TextureDescriptor {
                     label: Some(std::borrow::Cow::Borrowed("<Surface Texture>")),
