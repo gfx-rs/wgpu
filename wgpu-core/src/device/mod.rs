@@ -349,7 +349,7 @@ fn map_buffer<A: HalApi>(
             (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
         mapped[fill_range].fill(0);
 
-        if mapping.is_coherent {
+        if !mapping.is_coherent && kind == HostMap::Read {
             unsafe { raw.flush_mapped_ranges(raw_buffer, iter::once(uninitialized)) };
         }
     }
