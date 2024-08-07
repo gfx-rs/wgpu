@@ -507,14 +507,12 @@ impl Global {
             // But no point in erroring over that nuance here!
             if let Some(range) = range {
                 unsafe {
-                    state
-                        .raw_encoder
-                        .reset_queries(query_set.raw.as_ref().unwrap(), range);
+                    state.raw_encoder.reset_queries(query_set.raw(), range);
                 }
             }
 
             Some(hal::ComputePassTimestampWrites {
-                query_set: query_set.raw.as_ref().unwrap(),
+                query_set: query_set.raw(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })

@@ -255,7 +255,7 @@ pub(super) fn end_occlusion_query<A: HalApi>(
     active_query: &mut Option<(Arc<QuerySet<A>>, u32)>,
 ) -> Result<(), QueryUseError> {
     if let Some((query_set, query_index)) = active_query.take() {
-        unsafe { raw_encoder.end_query(query_set.raw.as_ref().unwrap(), query_index) };
+        unsafe { raw_encoder.end_query(query_set.raw(), query_index) };
         Ok(())
     } else {
         Err(QueryUseError::AlreadyStopped)
