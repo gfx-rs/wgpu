@@ -431,7 +431,6 @@ pub struct Buffer<A: HalApi> {
     pub(crate) usage: wgt::BufferUsages,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) initialization_status: RwLock<BufferInitTracker>,
-    pub(crate) sync_mapped_writes: Mutex<Option<hal::MemoryRange>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
