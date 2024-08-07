@@ -1193,7 +1193,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
             }
 
             Some(hal::RenderPassTimestampWrites {
-                query_set: query_set.raw.as_ref().unwrap(),
+                query_set: query_set.raw(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -1203,7 +1203,7 @@ impl<'d, A: HalApi> RenderPassInfo<'d, A> {
 
         let occlusion_query_set_hal = if let Some(query_set) = occlusion_query_set.as_ref() {
             query_set.same_device(device)?;
-            Some(query_set.raw.as_ref().unwrap())
+            Some(query_set.raw())
         } else {
             None
         };
