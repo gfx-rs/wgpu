@@ -84,7 +84,7 @@ pub struct Device<A: HalApi> {
     pub(crate) adapter: Arc<Adapter<A>>,
     pub(crate) queue: OnceCell<Weak<Queue<A>>>,
     queue_to_drop: OnceCell<A::Queue>,
-    pub(crate) zero_buffer: Option<A::Buffer>,
+    pub(crate) zero_buffer: ManuallyDrop<A::Buffer>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
 
@@ -171,12 +171,14 @@ impl<A: HalApi> Drop for Device<A> {
         resource_log!("Drop {}", self.error_ident());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
+        let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
         let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         pending_writes.dispose(&raw);
         self.command_allocator.dispose(&raw);
         unsafe {
-            raw.destroy_buffer(self.zero_buffer.take().unwrap());
+            raw.destroy_buffer(zero_buffer);
             raw.destroy_fence(self.fence.write().take().unwrap());
             let queue = self.queue_to_drop.take().unwrap();
             raw.exit(queue);
@@ -276,7 +278,7 @@ impl<A: HalApi> Device<A> {
             adapter: adapter.clone(),
             queue: OnceCell::new(),
             queue_to_drop: OnceCell::new(),
-            zero_buffer: Some(zero_buffer),
+            zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
             active_submission_index: AtomicU64::new(0),

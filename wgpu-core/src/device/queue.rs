@@ -723,7 +723,7 @@ impl Global {
                         encoder,
                         &mut trackers.textures,
                         &device.alignments,
-                        device.zero_buffer.as_ref().unwrap(),
+                        &device.zero_buffer,
                         &device.snatchable_lock.read(),
                     )
                     .map_err(QueueWriteError::from)?;
@@ -990,7 +990,7 @@ impl Global {
                         encoder,
                         &mut trackers.textures,
                         &device.alignments,
-                        device.zero_buffer.as_ref().unwrap(),
+                        &device.zero_buffer,
                         &device.snatchable_lock.read(),
                     )
                     .map_err(QueueWriteError::from)?;
