@@ -971,7 +971,7 @@ impl<A: HalApi> Device<A> {
                                     array_layer_count: Some(1),
                                 },
                             };
-                            clear_views.push(Some(
+                            clear_views.push(ManuallyDrop::new(
                                 unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
                                     .map_err(DeviceError::from)?,
                             ));

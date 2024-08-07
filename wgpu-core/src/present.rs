@@ -9,7 +9,7 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{borrow::Borrow, sync::Arc};
+use std::{borrow::Borrow, mem::ManuallyDrop, sync::Arc};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -215,7 +215,7 @@ impl Global {
                     &texture_desc,
                     format_features,
                     resource::TextureClearMode::Surface {
-                        clear_view: Some(clear_view),
+                        clear_view: ManuallyDrop::new(clear_view),
                     },
                     true,
                 );
