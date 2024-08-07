@@ -1054,8 +1054,7 @@ impl Global {
             let snatch_guard = device.snatchable_lock.read();
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
-            let mut fence_guard = device.fence.write();
-            let fence = fence_guard.as_mut().unwrap();
+            let mut fence = device.fence.write();
             let submit_index = device
                 .active_submission_index
                 .fetch_add(1, Ordering::SeqCst)
@@ -1304,7 +1303,7 @@ impl Global {
                         .submit(
                             &hal_command_buffers,
                             &submit_surface_textures,
-                            (fence, submit_index),
+                            (&mut fence, submit_index),
                         )
                         .map_err(DeviceError::from)?;
                 }
@@ -1327,7 +1326,7 @@ impl Global {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let fence_guard = RwLockWriteGuard::downgrade(fence_guard);
+            let fence_guard = RwLockWriteGuard::downgrade(fence);
             let (closures, _) =
                 match device.maintain(fence_guard, wgt::Maintain::Poll, snatch_guard) {
                     Ok(closures) => closures,

@@ -112,7 +112,7 @@ pub struct Device<A: HalApi> {
 
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
     // `fence` lock to avoid deadlocks.
-    pub(crate) fence: RwLock<Option<A::Fence>>,
+    pub(crate) fence: RwLock<ManuallyDrop<A::Fence>>,
     pub(crate) snatchable_lock: SnatchLock,
 
     /// Is this device valid? Valid is closely associated with "lose the device",
@@ -175,11 +175,13 @@ impl<A: HalApi> Drop for Device<A> {
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
         let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
+        // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
+        let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         pending_writes.dispose(&raw);
         self.command_allocator.dispose(&raw);
         unsafe {
             raw.destroy_buffer(zero_buffer);
-            raw.destroy_fence(self.fence.write().take().unwrap());
+            raw.destroy_fence(fence);
             let queue = self.queue_to_drop.take().unwrap();
             raw.exit(queue);
         }
@@ -283,7 +285,7 @@ impl<A: HalApi> Device<A> {
             command_allocator,
             active_submission_index: AtomicU64::new(0),
             last_successful_submission_index: AtomicU64::new(0),
-            fence: RwLock::new(rank::DEVICE_FENCE, Some(fence)),
+            fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
@@ -409,13 +411,11 @@ impl<A: HalApi> Device<A> {
     ///   return it to our callers.)
     pub(crate) fn maintain<'this>(
         &'this self,
-        fence_guard: crate::lock::RwLockReadGuard<Option<A::Fence>>,
+        fence: crate::lock::RwLockReadGuard<ManuallyDrop<A::Fence>>,
         maintain: wgt::Maintain<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
-
-        let fence = fence_guard.as_ref().unwrap();
 
         // Determine which submission index `maintain` represents.
         let submission_index = match maintain {
@@ -440,7 +440,7 @@ impl<A: HalApi> Device<A> {
                 .load(Ordering::Acquire),
             wgt::Maintain::Poll => unsafe {
                 self.raw()
-                    .get_fence_value(fence)
+                    .get_fence_value(&fence)
                     .map_err(DeviceError::from)?
             },
         };
@@ -449,7 +449,7 @@ impl<A: HalApi> Device<A> {
         if maintain.is_wait() {
             unsafe {
                 self.raw()
-                    .wait(fence, submission_index, CLEANUP_WAIT_MS)
+                    .wait(&fence, submission_index, CLEANUP_WAIT_MS)
                     .map_err(DeviceError::from)?
             };
         }
@@ -490,7 +490,7 @@ impl<A: HalApi> Device<A> {
 
         // Don't hold the locks while calling release_gpu_resources.
         drop(life_tracker);
-        drop(fence_guard);
+        drop(fence);
         drop(snatch_guard);
 
         if should_release_gpu_resource {
@@ -3490,12 +3490,11 @@ impl<A: HalApi> Device<A> {
         &self,
         submission_index: crate::SubmissionIndex,
     ) -> Result<(), DeviceError> {
-        let guard = self.fence.read();
-        let fence = guard.as_ref().unwrap();
-        let last_done_index = unsafe { self.raw().get_fence_value(fence)? };
+        let fence = self.fence.read();
+        let last_done_index = unsafe { self.raw().get_fence_value(&fence)? };
         if last_done_index < submission_index {
-            unsafe { self.raw().wait(fence, submission_index, !0)? };
-            drop(guard);
+            unsafe { self.raw().wait(&fence, submission_index, !0)? };
+            drop(fence);
             let closures = self
                 .lock_life()
                 .triage_submissions(submission_index, &self.command_allocator);
@@ -3638,8 +3637,7 @@ impl<A: HalApi> Device<A> {
             .load(Ordering::Acquire);
         if let Err(error) = unsafe {
             let fence = self.fence.read();
-            let fence = fence.as_ref().unwrap();
-            self.raw().wait(fence, current_index, CLEANUP_WAIT_MS)
+            self.raw().wait(&fence, current_index, CLEANUP_WAIT_MS)
         } {
             log::error!("failed to wait for the device: {error}");
         }

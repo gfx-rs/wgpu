@@ -1312,9 +1312,8 @@ impl Global {
         let hub = A::hub(self);
 
         if let Ok(device) = hub.devices.get(id) {
-            let hal_fence = device.fence.read();
-            let hal_fence = hal_fence.as_ref();
-            hal_fence_callback(hal_fence)
+            let fence = device.fence.read();
+            hal_fence_callback(Some(&fence))
         } else {
             hal_fence_callback(None)
         }
