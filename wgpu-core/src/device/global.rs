@@ -28,11 +28,7 @@ use hal::Device as _;
 
 use wgt::{BufferAddress, TextureFormat};
 
-use std::{
-    borrow::Cow,
-    ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
-};
+use std::{borrow::Cow, ptr::NonNull, sync::atomic::Ordering};
 
 use super::{ImplicitPipelineIds, UserClosures};
 
@@ -996,7 +992,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(Arc::new(shader));
+            let id = fid.assign(shader);
             api_log!("Device::create_shader_module -> {id:?}");
             return (id, None);
         };
@@ -1050,7 +1046,7 @@ impl Global {
                 Ok(shader) => shader,
                 Err(e) => break 'error e,
             };
-            let id = fid.assign(Arc::new(shader));
+            let id = fid.assign(shader);
             api_log!("Device::create_shader_module_spirv -> {id:?}");
             return (id, None);
         };

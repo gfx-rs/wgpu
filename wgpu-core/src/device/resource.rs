@@ -1429,7 +1429,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
-    ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
+    ) -> Result<Arc<pipeline::ShaderModule<A>>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
 
         let (module, source) = match source {
@@ -1546,12 +1546,16 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        Ok(pipeline::ShaderModule {
+        let module = pipeline::ShaderModule {
             raw: Some(raw),
             device: self.clone(),
             interface: Some(interface),
             label: desc.label.to_string(),
-        })
+        };
+
+        let module = Arc::new(module);
+
+        Ok(module)
     }
 
     #[allow(unused_unsafe)]
@@ -1559,7 +1563,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: &'a [u32],
-    ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
+    ) -> Result<Arc<pipeline::ShaderModule<A>>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
 
         self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
@@ -1588,12 +1592,16 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        Ok(pipeline::ShaderModule {
+        let module = pipeline::ShaderModule {
             raw: Some(raw),
             device: self.clone(),
             interface: None,
             label: desc.label.to_string(),
-        })
+        };
+
+        let module = Arc::new(module);
+
+        Ok(module)
     }
 
     pub(crate) fn create_command_encoder(
