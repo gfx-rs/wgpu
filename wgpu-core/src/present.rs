@@ -208,7 +208,7 @@ impl Global {
                 let texture = resource::Texture::new(
                     &device,
                     resource::TextureInner::Surface {
-                        raw: Some(ast.texture),
+                        raw: ast.texture,
                         parent_id: surface_id,
                     },
                     hal_usage,
@@ -306,21 +306,15 @@ impl Global {
                     .lock()
                     .textures
                     .remove(texture.tracker_index());
-                let mut exclusive_snatch_guard = device.snatchable_lock.write();
                 let suf = A::surface_as_hal(&surface);
-                let mut inner = texture.inner_mut(&mut exclusive_snatch_guard);
-                let inner = inner.as_mut().unwrap();
-
-                match *inner {
-                    resource::TextureInner::Surface {
-                        ref mut raw,
-                        ref parent_id,
-                    } => {
-                        if surface_id != *parent_id {
+                let exclusive_snatch_guard = device.snatchable_lock.write();
+                match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
+                    resource::TextureInner::Surface { raw, parent_id } => {
+                        if surface_id != parent_id {
                             log::error!("Presented frame is from a different surface");
                             Err(hal::SurfaceError::Lost)
                         } else {
-                            unsafe { queue.raw().present(suf.unwrap(), raw.take().unwrap()) }
+                            unsafe { queue.raw().present(suf.unwrap(), raw) }
                         }
                     }
                     _ => unreachable!(),
@@ -390,9 +384,9 @@ impl Global {
                 let suf = A::surface_as_hal(&surface);
                 let exclusive_snatch_guard = device.snatchable_lock.write();
                 match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
-                    resource::TextureInner::Surface { mut raw, parent_id } => {
+                    resource::TextureInner::Surface { raw, parent_id } => {
                         if surface_id == parent_id {
-                            unsafe { suf.unwrap().discard_texture(raw.take().unwrap()) };
+                            unsafe { suf.unwrap().discard_texture(raw) };
                         } else {
                             log::warn!("Surface texture is outdated");
                         }

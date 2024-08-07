@@ -12,7 +12,7 @@ use crate::{
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{rank, Mutex, RwLock},
     resource_log,
-    snatch::{ExclusiveSnatchGuard, SnatchGuard, Snatchable},
+    snatch::{SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
     Label, LabelHelpers,
 };
@@ -953,17 +953,16 @@ pub(crate) enum TextureInner<A: HalApi> {
         raw: A::Texture,
     },
     Surface {
-        raw: Option<A::SurfaceTexture>,
+        raw: A::SurfaceTexture,
         parent_id: SurfaceId,
     },
 }
 
 impl<A: HalApi> TextureInner<A> {
-    pub(crate) fn raw(&self) -> Option<&A::Texture> {
+    pub(crate) fn raw(&self) -> &A::Texture {
         match self {
-            Self::Native { raw } => Some(raw),
-            Self::Surface { raw: Some(tex), .. } => Some(tex.borrow()),
-            _ => None,
+            Self::Native { raw } => raw,
+            Self::Surface { raw, .. } => raw.borrow(),
         }
     }
 }
@@ -1104,7 +1103,7 @@ impl<A: HalApi> Texture<A> {
     }
 
     pub(crate) fn raw<'a>(&'a self, snatch_guard: &'a SnatchGuard) -> Option<&'a A::Texture> {
-        self.inner.get(snatch_guard)?.raw()
+        Some(self.inner.get(snatch_guard)?.raw())
     }
 
     pub(crate) fn try_raw<'a>(
@@ -1113,16 +1112,10 @@ impl<A: HalApi> Texture<A> {
     ) -> Result<&'a A::Texture, DestroyedResourceError> {
         self.inner
             .get(guard)
-            .and_then(|t| t.raw())
+            .map(|t| t.raw())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
-    pub(crate) fn inner_mut<'a>(
-        &'a self,
-        guard: &'a mut ExclusiveSnatchGuard,
-    ) -> Option<&'a mut TextureInner<A>> {
-        self.inner.get_mut(guard)
-    }
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode<A>,
         desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,

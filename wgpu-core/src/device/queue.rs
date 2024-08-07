@@ -1143,12 +1143,10 @@ impl Global {
                                 for texture in cmd_buf_trackers.textures.used_resources() {
                                     let should_extend = match texture.try_inner(&snatch_guard)? {
                                         TextureInner::Native { .. } => false,
-                                        TextureInner::Surface { ref raw, .. } => {
-                                            if raw.is_some() {
-                                                // Compare the Arcs by pointer as Textures don't implement Eq.
-                                                submit_surface_textures_owned
-                                                    .insert(Arc::as_ptr(&texture), texture.clone());
-                                            }
+                                        TextureInner::Surface { .. } => {
+                                            // Compare the Arcs by pointer as Textures don't implement Eq.
+                                            submit_surface_textures_owned
+                                                .insert(Arc::as_ptr(&texture), texture.clone());
 
                                             true
                                         }
@@ -1242,12 +1240,10 @@ impl Global {
                 for texture in pending_writes.dst_textures.values() {
                     match texture.try_inner(&snatch_guard)? {
                         TextureInner::Native { .. } => {}
-                        TextureInner::Surface { ref raw, .. } => {
-                            if raw.is_some() {
-                                // Compare the Arcs by pointer as Textures don't implement Eq
-                                submit_surface_textures_owned
-                                    .insert(Arc::as_ptr(texture), texture.clone());
-                            }
+                        TextureInner::Surface { .. } => {
+                            // Compare the Arcs by pointer as Textures don't implement Eq
+                            submit_surface_textures_owned
+                                .insert(Arc::as_ptr(texture), texture.clone());
 
                             unsafe {
                                 used_surface_textures
@@ -1291,10 +1287,11 @@ impl Global {
                     SmallVec::<[_; 2]>::with_capacity(submit_surface_textures_owned.len());
 
                 for texture in submit_surface_textures_owned.values() {
-                    submit_surface_textures.extend(match texture.inner.get(&snatch_guard) {
-                        Some(TextureInner::Surface { raw, .. }) => raw.as_ref(),
-                        _ => None,
-                    });
+                    let raw = match texture.inner.get(&snatch_guard) {
+                        Some(TextureInner::Surface { raw, .. }) => raw,
+                        _ => unreachable!(),
+                    };
+                    submit_surface_textures.push(raw);
                 }
 
                 unsafe {
