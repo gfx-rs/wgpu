@@ -611,8 +611,11 @@ impl<A: HalApi> Device<A> {
         } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
             // buffer is mappable, so we are just doing that at start
             let map_size = buffer.size;
-            let ptr = if map_size == 0 {
-                std::ptr::NonNull::dangling()
+            let mapping = if map_size == 0 {
+                hal::BufferMapping {
+                    ptr: std::ptr::NonNull::dangling(),
+                    is_coherent: true,
+                }
             } else {
                 let snatch_guard: SnatchGuard = self.snatchable_lock.read();
                 map_buffer(
@@ -625,7 +628,7 @@ impl<A: HalApi> Device<A> {
                 )?
             };
             *buffer.map_state.lock() = resource::BufferMapState::Active {
-                ptr,
+                mapping,
                 range: 0..map_size,
                 host: HostMap::Write,
             };

@@ -2418,7 +2418,9 @@ impl Global {
                 Ok((ptr, range_size))
             }
             resource::BufferMapState::Active {
-                ref ptr, ref range, ..
+                ref mapping,
+                ref range,
+                ..
             } => {
                 if offset < range.start {
                     return Err(BufferAccessError::OutOfBoundsUnderrun {
@@ -2437,7 +2439,7 @@ impl Global {
                 let relative_offset = (offset - range.start) as isize;
                 unsafe {
                     Ok((
-                        NonNull::new_unchecked(ptr.as_ptr().offset(relative_offset)),
+                        NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
                         range_size,
                     ))
                 }
