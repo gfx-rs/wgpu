@@ -299,6 +299,7 @@ pub struct Buffer {
     size: wgt::BufferAddress,
     map_flags: u32,
     data: Option<Arc<std::sync::Mutex<Vec<u8>>>>,
+    offset_of_current_mapping: Arc<std::sync::Mutex<wgt::BufferAddress>>,
 }
 
 #[cfg(send_sync)]
