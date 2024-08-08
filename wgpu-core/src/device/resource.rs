@@ -1446,7 +1446,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
-    ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
+    ) -> Result<Arc<pipeline::ShaderModule<A>>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
 
         let (module, source) = match source {
@@ -1563,12 +1563,16 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        Ok(pipeline::ShaderModule {
+        let module = pipeline::ShaderModule {
             raw: Some(raw),
             device: self.clone(),
             interface: Some(interface),
             label: desc.label.to_string(),
-        })
+        };
+
+        let module = Arc::new(module);
+
+        Ok(module)
     }
 
     #[allow(unused_unsafe)]
@@ -1576,7 +1580,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: &'a [u32],
-    ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
+    ) -> Result<Arc<pipeline::ShaderModule<A>>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
 
         self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
@@ -1605,18 +1609,22 @@ impl<A: HalApi> Device<A> {
             }
         };
 
-        Ok(pipeline::ShaderModule {
+        let module = pipeline::ShaderModule {
             raw: Some(raw),
             device: self.clone(),
             interface: None,
             label: desc.label.to_string(),
-        })
+        };
+
+        let module = Arc::new(module);
+
+        Ok(module)
     }
 
     pub(crate) fn create_command_encoder(
         self: &Arc<Self>,
         label: &crate::Label,
-    ) -> Result<command::CommandBuffer<A>, DeviceError> {
+    ) -> Result<Arc<command::CommandBuffer<A>>, DeviceError> {
         self.check_is_valid()?;
 
         let queue = self.get_queue().unwrap();
@@ -1625,13 +1633,11 @@ impl<A: HalApi> Device<A> {
             .command_allocator
             .acquire_encoder(self.raw(), queue.raw())?;
 
-        Ok(command::CommandBuffer::new(
-            encoder,
-            self,
-            #[cfg(feature = "trace")]
-            self.trace.lock().is_some(),
-            label,
-        ))
+        let command_buffer = command::CommandBuffer::new(encoder, self, label);
+
+        let command_buffer = Arc::new(command_buffer);
+
+        Ok(command_buffer)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
@@ -1676,7 +1682,7 @@ impl<A: HalApi> Device<A> {
         label: &crate::Label,
         entry_map: bgl::EntryMap,
         origin: bgl::Origin,
-    ) -> Result<BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
+    ) -> Result<Arc<BindGroupLayout<A>>, binding_model::CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
         enum WritableStorage {
             Yes,
@@ -1875,7 +1881,7 @@ impl<A: HalApi> Device<A> {
             .validate(&self.limits)
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
-        Ok(BindGroupLayout {
+        let bgl = BindGroupLayout {
             raw: Some(raw),
             device: self.clone(),
             entries: entry_map,
@@ -1883,8 +1889,11 @@ impl<A: HalApi> Device<A> {
             exclusive_pipeline: OnceCell::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.bind_group_layouts.clone()),
-        })
+        };
+
+        let bgl = Arc::new(bgl);
+
+        Ok(bgl)
     }
 
     pub(crate) fn create_buffer_binding<'a>(
@@ -2498,7 +2507,8 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::ResolvedPipelineLayoutDescriptor<A>,
-    ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
+    ) -> Result<Arc<binding_model::PipelineLayout<A>>, binding_model::CreatePipelineLayoutError>
+    {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
         self.check_is_valid()?;
@@ -2590,14 +2600,17 @@ impl<A: HalApi> Device<A> {
 
         drop(raw_bind_group_layouts);
 
-        Ok(binding_model::PipelineLayout {
+        let layout = binding_model::PipelineLayout {
             raw: Some(raw),
             device: self.clone(),
             label: desc.label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.pipeline_layouts.clone()),
             bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
-        })
+        };
+
+        let layout = Arc::new(layout);
+
+        Ok(layout)
     }
 
     pub(crate) fn derive_pipeline_layout(
@@ -2626,7 +2639,6 @@ impl<A: HalApi> Device<A> {
                             bgl::Origin::Derived,
                         ) {
                             Ok(bgl) => {
-                                let bgl = Arc::new(bgl);
                                 e.insert(bgl.clone());
                                 Ok(bgl)
                             }
@@ -2644,7 +2656,6 @@ impl<A: HalApi> Device<A> {
         };
 
         let layout = self.create_pipeline_layout(&layout_desc)?;
-        let layout = Arc::new(layout);
         Ok(layout)
     }
 
@@ -3409,7 +3420,7 @@ impl<A: HalApi> Device<A> {
     pub unsafe fn create_pipeline_cache(
         self: &Arc<Self>,
         desc: &pipeline::PipelineCacheDescriptor,
-    ) -> Result<pipeline::PipelineCache<A>, pipeline::CreatePipelineCacheError> {
+    ) -> Result<Arc<pipeline::PipelineCache<A>>, pipeline::CreatePipelineCacheError> {
         use crate::pipeline_cache;
 
         self.check_is_valid()?;
@@ -3445,10 +3456,12 @@ impl<A: HalApi> Device<A> {
         let cache = pipeline::PipelineCache {
             device: self.clone(),
             label: desc.label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.pipeline_caches.clone()),
             // This would be none in the error condition, which we don't implement yet
             raw: Some(raw),
         };
+
+        let cache = Arc::new(cache);
+
         Ok(cache)
     }
 

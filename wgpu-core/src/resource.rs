@@ -173,7 +173,7 @@ macro_rules! impl_labeled {
     };
 }
 
-pub(crate) trait Trackable: Labeled {
+pub(crate) trait Trackable {
     fn tracker_index(&self) -> TrackerIndex;
 }
 
