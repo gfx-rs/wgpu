@@ -705,17 +705,20 @@ impl crate::Device for super::Device {
         I: Iterator<Item = crate::MemoryRange>,
     {
         if let Some(raw) = buffer.raw {
-            let gl = &self.shared.context.lock();
-            unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-            for range in ranges {
-                let offset_of_current_mapping = *buffer.offset_of_current_mapping.lock().unwrap();
-                unsafe {
-                    gl.flush_mapped_buffer_range(
-                        buffer.target,
-                        (range.start - offset_of_current_mapping) as i32,
-                        (range.end - range.start) as i32,
-                    )
-                };
+            if buffer.data.is_none() {
+                let gl = &self.shared.context.lock();
+                unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
+                for range in ranges {
+                    let offset_of_current_mapping =
+                        *buffer.offset_of_current_mapping.lock().unwrap();
+                    unsafe {
+                        gl.flush_mapped_buffer_range(
+                            buffer.target,
+                            (range.start - offset_of_current_mapping) as i32,
+                            (range.end - range.start) as i32,
+                        )
+                    };
+                }
             }
         }
     }
