@@ -310,7 +310,7 @@ bitflags::bitflags! {
         /// - Mobile (All Apple9 and some Apple7 and Apple8 devices)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_BC_SLICED_3D = 1 << 11;
+        const TEXTURE_COMPRESSION_BC_SLICED_3D = 1 << 3;
 
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
@@ -326,7 +326,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_ETC2 = 1 << 3;
+        const TEXTURE_COMPRESSION_ETC2 = 1 << 4;
 
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
@@ -342,7 +342,7 @@ bitflags::bitflags! {
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_ASTC = 1 << 4;
+        const TEXTURE_COMPRESSION_ASTC = 1 << 5;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished.
@@ -366,7 +366,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const TIMESTAMP_QUERY = 1 << 5;
+        const TIMESTAMP_QUERY = 1 << 6;
 
         /// Allows non-zero value for the `first_instance` member in indirect draw calls.
         ///
@@ -385,7 +385,7 @@ bitflags::bitflags! {
         /// - OpenGL ES / WebGL
         ///
         /// This is a web and native feature.
-        const INDIRECT_FIRST_INSTANCE = 1 << 6;
+        const INDIRECT_FIRST_INSTANCE = 1 << 7;
 
         /// Allows shaders to acquire the FP16 ability
         ///
@@ -396,7 +396,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const SHADER_F16 = 1 << 7;
+        const SHADER_F16 = 1 << 8;
 
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Float`] as a render target
@@ -407,7 +407,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const RG11B10UFLOAT_RENDERABLE = 1 << 8;
+        const RG11B10UFLOAT_RENDERABLE = 1 << 9;
 
         /// Allows the [`wgpu::TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8unorm`]
         ///
@@ -417,7 +417,7 @@ bitflags::bitflags! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const BGRA8UNORM_STORAGE = 1 << 9;
+        const BGRA8UNORM_STORAGE = 1 << 10;
 
 
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be filterable.
@@ -429,9 +429,9 @@ bitflags::bitflags! {
         /// - GL with one of `GL_ARB_color_buffer_float`/`GL_EXT_color_buffer_float`/`OES_texture_float_linear`
         ///
         /// This is a web and native feature.
-        const FLOAT32_FILTERABLE = 1 << 10;
+        const FLOAT32_FILTERABLE = 1 << 11;
 
-        // Bits 11-19 available for webgpu features. Should you chose to use some of them for
+        // Bits 12-19 available for webgpu features. Should you chose to use some of them for
         // for native features, don't forget to update `all_webgpu_mask` and `all_native_mask`
         // accordingly.
 
