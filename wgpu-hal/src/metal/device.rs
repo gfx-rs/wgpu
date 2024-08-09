@@ -112,7 +112,7 @@ impl super::Device {
             &stage.module.naga.info,
             stage.constants,
         )
-        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
+        .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {:?}", e)))?;
 
         let ep_resources = &layout.per_stage_map[naga_stage];
 
