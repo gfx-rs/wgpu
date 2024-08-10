@@ -248,6 +248,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_BC) {
         return_features.push("texture-compression-bc");
     }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_BC_SLICED_3D) {
+        return_features.push("texture-compression-bc-sliced-3d");
+    }
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ETC2) {
         return_features.push("texture-compression-etc2");
     }
@@ -490,6 +493,12 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::TEXTURE_COMPRESSION_BC,
             required_features.0.contains("texture-compression-bc"),
+        );
+        features.set(
+            wgpu_types::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
+            required_features
+                .0
+                .contains("texture-compression-bc-sliced-3d"),
         );
         features.set(
             wgpu_types::Features::TEXTURE_COMPRESSION_ETC2,

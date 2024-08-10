@@ -726,7 +726,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 11] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -739,6 +739,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 11] = [
     (
         wgt::Features::TEXTURE_COMPRESSION_BC,
         webgpu_sys::GpuFeatureName::TextureCompressionBc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionBcSliced3d,
     ),
     (
         wgt::Features::TEXTURE_COMPRESSION_ETC2,
