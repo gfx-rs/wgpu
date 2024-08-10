@@ -1020,16 +1020,36 @@ impl Global {
             size: hal_copy_size,
         };
 
+        let mut trackers = device.trackers.lock();
+        let transitions = trackers
+            .textures
+            .set_single(&dst, selector, hal::TextureUses::COPY_DST);
+
+        // `copy_external_image_to_texture` is exclusive to the WebGL backend.
+        // Don't go through the `DynCommandEncoder` abstraction and directly to the WebGL backend.
+        let encoder_webgl = encoder
+            .as_any_mut()
+            .downcast_mut::<hal::gles::CommandEncoder>()
+            .unwrap();
+        let dst_raw_webgl = dst_raw
+            .as_any()
+            .downcast_ref::<hal::gles::Texture>()
+            .unwrap();
+        let transitions_webgl = transitions.map(|pending| {
+            let dyn_transition = pending.into_hal(dst_raw);
+            hal::TextureBarrier {
+                texture: dst_raw_webgl,
+                range: dyn_transition.range,
+                usage: dyn_transition.usage,
+            }
+        });
+
+        use hal::CommandEncoder as _;
         unsafe {
-            let mut trackers = device.trackers.lock();
-            let transitions =
-                trackers
-                    .textures
-                    .set_single(&dst, selector, hal::TextureUses::COPY_DST);
-            encoder.transition_textures(transitions.map(|pending| pending.into_hal(dst_raw)));
-            encoder.copy_external_image_to_texture(
+            encoder_webgl.transition_textures(transitions_webgl);
+            encoder_webgl.copy_external_image_to_texture(
                 source,
-                dst_raw,
+                dst_raw_webgl,
                 destination.premultiplied_alpha,
                 iter::once(regions),
             );
