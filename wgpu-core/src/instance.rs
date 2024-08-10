@@ -495,7 +495,6 @@ impl Global {
                 surface_per_backend,
             };
 
-            #[allow(clippy::arc_with_non_send_sync)]
             let id = self
                 .surfaces
                 .prepare(wgt::Backend::Empty, id_in) // No specific backend for Surface, since it's not specific.

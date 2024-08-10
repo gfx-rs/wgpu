@@ -62,6 +62,13 @@ the documentation for `wgpu-core` is empty unless built with
     unused_extern_crates,
     unused_qualifications
 )]
+// We use `Arc` in wgpu-core, but on wasm (unless opted out via `fragile-send-sync-non-atomic-wasm`)
+// wgpu-hal resources are not Send/Sync, causing a clippy warning for unnecessary `Arc`s.
+// We could use `Rc`s in this case as recommended, but unless atomics are enabled
+// this doesn't make a difference.
+// Therefore, this is only really a concern for users targeting WebGL
+// (the only reason to use wgpu-core on the web in the first place) that have atomics enabled.
+#![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 
 pub mod binding_model;
 pub mod command;
