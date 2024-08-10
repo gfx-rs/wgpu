@@ -39,6 +39,22 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### `wgpu-core` is no longer generic over `wgpu-hal` backends
+Dynamic dispatch between different backends has been moved from the user facing `wgpu` crate,
+to a new dynamic dispatch mechanism inside the backend abstraction layer `wgpu-hal`.
+
+Whenever targeting more than a single backend (default on Windows & Linux) this leads to faster compile times and smaller binaries!
+This also solves a long standing issue with `cargo doc` failing to run for `wgpu-core`.
+
+Benchmarking indicated that compute pass recording is slower as a consequence,
+whereas on render passes speed improvements have been observed.
+However, this effort simplifies many of the internals of the wgpu family of crates
+which we're hoping to build performance improvements upon in the future.
+
+By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://github.com/gfx-rs/wgpu/pull/6099), [#6100](https://github.com/gfx-rs/wgpu/pull/6100).
+
 ### New Features
 
 #### Naga
