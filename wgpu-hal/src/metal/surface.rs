@@ -1,6 +1,7 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
 use std::ffi::c_uint;
+use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 use std::sync::Once;
 use std::thread;
@@ -14,7 +15,7 @@ use objc::{
     class,
     declare::ClassDecl,
     msg_send,
-    rc::autoreleasepool,
+    rc::{autoreleasepool, StrongPtr},
     runtime::{Class, Object, Sel, BOOL, NO, YES},
     sel, sel_impl,
 };
@@ -80,7 +81,9 @@ impl super::Surface {
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
         let layer = unsafe { Self::get_metal_layer(view, delegate) };
-        // SAFETY: The layer is an initialized instance of `CAMetalLayer`.
+        let layer = ManuallyDrop::new(layer);
+        // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
+        // we transfer the retain count to `MetalLayer` using `ManuallyDrop`.
         let layer = unsafe { metal::MetalLayer::from_ptr(layer.cast()) };
         let view: *mut Object = msg_send![view.as_ptr(), retain];
         let view = NonNull::new(view).expect("retain should return the same object");
@@ -107,7 +110,7 @@ impl super::Surface {
     pub(crate) unsafe fn get_metal_layer(
         view: NonNull<Object>,
         delegate: Option<&HalManagedMetalLayerDelegate>,
-    ) -> *mut Object {
+    ) -> StrongPtr {
         let is_main_thread: BOOL = msg_send![class!(NSThread), isMainThread];
         if is_main_thread == NO {
             panic!("get_metal_layer cannot be called in non-ui thread.");
@@ -141,7 +144,7 @@ impl super::Surface {
             // render directly into that; after all, the user passed a view
             // with an explicit Metal layer to us, so this is very likely what
             // they expect us to do.
-            root_layer
+            unsafe { StrongPtr::retain(root_layer) }
         } else {
             // The view does not have a `CAMetalLayer` as the root layer (this
             // is the default for most views).
@@ -246,7 +249,7 @@ impl super::Surface {
             if let Some(delegate) = delegate {
                 let () = msg_send![new_layer, setDelegate: delegate.0];
             }
-            new_layer
+            unsafe { StrongPtr::new(new_layer) }
         }
     }
 

@@ -519,13 +519,16 @@ impl super::Instance {
         }
 
         let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast(), None) };
+        // NOTE: The layer is retained by Vulkan's `vkCreateMetalSurfaceEXT`,
+        // so no need to retain it beyond the scope of this function.
+        let layer_ptr = (*layer).cast();
 
         let surface = {
             let metal_loader =
                 ext::metal_surface::Instance::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::default()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
-                .layer(layer.cast());
+                .layer(layer_ptr);
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
