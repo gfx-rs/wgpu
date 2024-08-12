@@ -510,7 +510,7 @@ impl super::Instance {
     #[cfg(metal)]
     fn create_surface_from_view(
         &self,
-        view: *mut c_void,
+        view: std::ptr::NonNull<c_void>,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::metal_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
@@ -518,9 +518,7 @@ impl super::Instance {
             )));
         }
 
-        let layer = unsafe {
-            crate::metal::Surface::get_metal_layer(view.cast::<objc::runtime::Object>(), None)
-        };
+        let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast(), None) };
 
         let surface = {
             let metal_loader =
@@ -870,13 +868,13 @@ impl crate::Instance for super::Instance {
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ns_view.as_ptr())
+                self.create_surface_from_view(handle.ns_view)
             }
             #[cfg(all(target_os = "ios", feature = "metal"))]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ui_view.as_ptr())
+                self.create_surface_from_view(handle.ui_view)
             }
             (_, _) => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Vulkan-compatible handle"
