@@ -1,4 +1,3 @@
-use std::mem::size_of;
 use std::num::NonZeroU64;
 
 use thiserror::Error;

@@ -1,6 +1,5 @@
 use std::{
-    ffi,
-    mem::{self, size_of, size_of_val},
+    ffi, mem,
     num::NonZeroU32,
     ptr,
     sync::Arc,

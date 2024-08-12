@@ -14,7 +14,6 @@ use player::GlobalPlay;
 use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
-    mem::size_of,
     path::{Path, PathBuf},
     slice,
 };

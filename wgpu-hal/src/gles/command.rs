@@ -1,9 +1,6 @@
 use super::{conv, Command as C};
 use arrayvec::ArrayVec;
-use std::{
-    mem::{self, size_of, size_of_val},
-    ops::Range,
-};
+use std::{mem, ops::Range};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct TextureSlotDesc {

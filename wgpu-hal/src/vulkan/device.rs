@@ -9,7 +9,7 @@ use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     ffi::{CStr, CString},
-    mem::{self, size_of, MaybeUninit},
+    mem::{self, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,

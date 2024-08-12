@@ -30,7 +30,7 @@ use wgt::{BufferAddress, DynamicOffset};
 
 use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 use crate::ray_tracing::TlasAction;
-use std::{fmt, mem::size_of, str, sync::Arc};
+use std::{fmt, str, sync::Arc};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
