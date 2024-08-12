@@ -140,6 +140,5 @@ impl<'de> serde::Deserialize<'de> for NonMaxU32 {
 
 #[test]
 fn size() {
-    use core::mem::size_of;
     assert_eq!(size_of::<Option<NonMaxU32>>(), size_of::<u32>());
 }

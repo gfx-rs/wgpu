@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     ffi::{c_void, CStr, CString},
-    mem::{self, size_of, size_of_val, ManuallyDrop},
+    mem::{self, ManuallyDrop},
     os::raw::c_int,
     ptr,
     sync::{

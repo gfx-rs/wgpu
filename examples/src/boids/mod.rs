@@ -2,7 +2,6 @@
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
 use nanorand::{Rng, WyRand};
-use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
 // number of boid particles to simulate

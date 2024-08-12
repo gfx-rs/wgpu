@@ -7,8 +7,6 @@
 //!
 //! Only parts specific to this example will be commented.
 
-use std::mem::size_of_val;
-
 use wgpu::util::DeviceExt;
 
 async fn run() {

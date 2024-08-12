@@ -2,7 +2,6 @@ use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use std::{
-    mem::size_of,
     slice,
     sync::{atomic::Ordering, Arc},
 };

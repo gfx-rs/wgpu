@@ -17,9 +17,6 @@ use std::ops::Range;
 use termcolor::{ColorChoice, NoColor, StandardStream};
 use thiserror::Error;
 
-#[cfg(test)]
-use std::mem::size_of;
-
 #[derive(Clone, Debug)]
 pub struct ParseError {
     message: String,
