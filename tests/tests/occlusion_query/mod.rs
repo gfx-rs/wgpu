@@ -1,4 +1,3 @@
-use std::mem::size_of;
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]

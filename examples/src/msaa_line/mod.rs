@@ -7,7 +7,7 @@
 //! *   Set the primitive_topology to PrimitiveTopology::LineList.
 //! *   Vertices and Indices describe the two points that make up a line.
 
-use std::{iter, mem::size_of};
+use std::iter;
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;

@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, mem::size_of};
+use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{ElementState, KeyEvent},

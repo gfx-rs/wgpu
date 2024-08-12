@@ -1,4 +1,4 @@
-use std::{f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
+use std::{f32::consts, iter, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{align_to, DeviceExt};

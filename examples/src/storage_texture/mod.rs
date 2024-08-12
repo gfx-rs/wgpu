@@ -14,8 +14,6 @@
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
 
-use std::mem::size_of_val;
-
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::output_image_native;
 #[cfg(target_arch = "wasm32")]

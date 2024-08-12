@@ -1,4 +1,4 @@
-use std::{mem::size_of, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     id::Id,

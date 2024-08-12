@@ -3,7 +3,7 @@ mod point_gen;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use nanorand::{Rng, WyRand};
-use std::{f32::consts, iter, mem::size_of};
+use std::{f32::consts, iter};
 use wgpu::util::DeviceExt;
 
 ///
