@@ -11,7 +11,7 @@ type IdType = u64;
 type ZippedIndex = Index;
 type NonZeroId = std::num::NonZeroU64;
 
-const INDEX_BITS: usize = std::mem::size_of::<ZippedIndex>() * 8;
+const INDEX_BITS: usize = ZippedIndex::BITS as usize;
 const EPOCH_BITS: usize = INDEX_BITS - BACKEND_BITS;
 const BACKEND_BITS: usize = 3;
 const BACKEND_SHIFT: usize = INDEX_BITS * 2 - BACKEND_BITS;
