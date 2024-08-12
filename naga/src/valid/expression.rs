@@ -1747,7 +1747,7 @@ fn f64_runtime_literals() {
         error,
         crate::valid::ValidationError::Function {
             source: super::FunctionError::Expression {
-                source: super::ExpressionError::Literal(super::LiteralError::Width(
+                source: ExpressionError::Literal(LiteralError::Width(
                     super::r#type::WidthError::MissingCapability {
                         name: "f64",
                         flag: "FLOAT64",
@@ -1777,7 +1777,7 @@ fn f64_const_literals() {
     assert!(matches!(
         error,
         crate::valid::ValidationError::ConstExpression {
-            source: super::ConstExpressionError::Literal(super::LiteralError::Width(
+            source: ConstExpressionError::Literal(LiteralError::Width(
                 super::r#type::WidthError::MissingCapability {
                     name: "f64",
                     flag: "FLOAT64",
