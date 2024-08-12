@@ -24,7 +24,7 @@ use parking_lot::{Mutex, RwLock};
 #[link(name = "QuartzCore", kind = "framework")]
 extern "C" {
     #[allow(non_upper_case_globals)]
-    static kCAGravityTopLeft: *mut Object;
+    static kCAGravityResize: *mut Object;
 }
 
 extern "C" fn layer_should_inherit_contents_scale_from_window(
@@ -239,7 +239,15 @@ impl super::Surface {
             let frame: CGRect = msg_send![root_layer, bounds];
             let () = msg_send![new_layer, setFrame: frame];
 
-            let _: () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityTopLeft }];
+            // The desired content gravity is `kCAGravityResize`, because it
+            // masks / alleviates issues with resizing when
+            // `present_with_transaction` is disabled, and behaves better when
+            // moving the window between monitors.
+            //
+            // Unfortunately, it also makes it harder to see changes to
+            // `width` and `height` in `configure`. When debugging resize
+            // issues, swap this for `kCAGravityTopLeft` instead.
+            let _: () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityResize }];
 
             // Set initial scale factor of the layer. This is kept in sync by
             // `configure` (on UIKit), and the delegate below (on AppKit).
