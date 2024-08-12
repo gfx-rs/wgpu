@@ -49,18 +49,19 @@ fn main() {
 
         match event {
             Event::LoopDestroyed => (),
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                _ => (),
-            },
+            Event::WindowEvent {
+                event:
+                    WindowEvent::CloseRequested
+                    | WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => *control_flow = ControlFlow::Exit,
             _ => (),
         }
     });
