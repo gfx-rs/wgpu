@@ -1,5 +1,4 @@
 use alloc::{boxed::Box, format, string::ToString as _};
-use core::mem::size_of;
 use core::num::NonZeroU64;
 
 use thiserror::Error;

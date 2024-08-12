@@ -2,7 +2,7 @@ use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
 
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
-use core::{fmt, mem::size_of, str};
+use core::{fmt, str};
 
 use crate::{
     binding_model::{

@@ -1,7 +1,6 @@
 use std::{
     borrow::Cow,
-    ffi,
-    mem::{self, size_of, size_of_val},
+    ffi, mem,
     num::NonZeroU32,
     ptr, slice,
     string::{String, ToString as _},

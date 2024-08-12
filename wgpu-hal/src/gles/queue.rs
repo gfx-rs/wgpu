@@ -1,7 +1,7 @@
 use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use alloc::sync::Arc;
 use arrayvec::ArrayVec;
-use core::{mem::size_of, slice, sync::atomic::Ordering};
+use core::{slice, sync::atomic::Ordering};
 use glow::HasContext;
 
 const DEBUG_ID: u32 = 0;
