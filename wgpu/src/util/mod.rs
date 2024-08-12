@@ -9,11 +9,7 @@ mod encoder;
 mod init;
 
 use std::sync::Arc;
-use std::{
-    borrow::Cow,
-    mem::{align_of, size_of},
-    ptr::copy_nonoverlapping,
-};
+use std::{borrow::Cow, ptr::copy_nonoverlapping};
 
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
