@@ -9,8 +9,13 @@ keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 resolver = "2"
-rust-version = "1.76"
 autotests = false
+
+# Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
+# copy the crates it actually uses out of the workspace, so it's meaningful for
+# them to have less restrictive MSRVs individually than the workspace as a
+# whole, if their code permits. See `../README.md` for details.
+rust-version = "1.76"
 
 [[test]]
 name = "naga-test"
