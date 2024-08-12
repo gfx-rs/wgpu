@@ -43,7 +43,7 @@ Bottom level categories:
 
 #### Naga
 
-* Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
+- Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
 
 ### Bug Fixes
 
@@ -59,8 +59,13 @@ Bottom level categories:
 - Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
 - Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
 
+#### GLES / OpenGL
+
+- Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
+
 ### Changes
 
+- `wgpu_hal::gles::Adapter::new_external` now requires the context to be current when dropping the adapter and related objects. By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
 - Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
 
 ### Dependency Updates
