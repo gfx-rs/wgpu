@@ -77,7 +77,7 @@ bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.6"
 bytemuck = { version = "1.20" }
-cfg_aliases = "0.1"
+cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
 codespan-reporting = "0.11"
