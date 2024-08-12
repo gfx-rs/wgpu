@@ -1696,7 +1696,7 @@ pub fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> 
     Ok(())
 }
 
-#[cfg(all(test, feature = "validate"))]
+#[cfg(test)]
 /// Validate a module containing the given expression, expecting an error.
 fn validate_with_expression(
     expr: crate::Expression,
@@ -1719,7 +1719,7 @@ fn validate_with_expression(
     validator.validate(&module)
 }
 
-#[cfg(all(test, feature = "validate"))]
+#[cfg(test)]
 /// Validate a module containing the given constant expression, expecting an error.
 fn validate_with_const_expression(
     expr: crate::Expression,
@@ -1736,7 +1736,6 @@ fn validate_with_const_expression(
 }
 
 /// Using F64 in a function's expression arena is forbidden.
-#[cfg(feature = "validate")]
 #[test]
 fn f64_runtime_literals() {
     let result = validate_with_expression(
@@ -1768,7 +1767,6 @@ fn f64_runtime_literals() {
 }
 
 /// Using F64 in a module's constant expression arena is forbidden.
-#[cfg(feature = "validate")]
 #[test]
 fn f64_const_literals() {
     let result = validate_with_const_expression(
@@ -1797,7 +1795,6 @@ fn f64_const_literals() {
 }
 
 /// Using I64 in a function's expression arena is forbidden.
-#[cfg(feature = "validate")]
 #[test]
 fn i64_runtime_literals() {
     let result = validate_with_expression(
@@ -1821,7 +1818,6 @@ fn i64_runtime_literals() {
 }
 
 /// Using I64 in a module's constant expression arena is forbidden.
-#[cfg(feature = "validate")]
 #[test]
 fn i64_const_literals() {
     let result = validate_with_const_expression(
