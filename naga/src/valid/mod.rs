@@ -533,14 +533,13 @@ impl Validator {
 
         let decl_ty = &gctx.types[o.ty].inner;
         match decl_ty {
-            &crate::TypeInner::Scalar(scalar) => match scalar {
+            &crate::TypeInner::Scalar(
                 crate::Scalar::BOOL
                 | crate::Scalar::I32
                 | crate::Scalar::U32
                 | crate::Scalar::F32
-                | crate::Scalar::F64 => {}
-                _ => return Err(OverrideError::TypeNotScalar),
-            },
+                | crate::Scalar::F64,
+            ) => {}
             _ => return Err(OverrideError::TypeNotScalar),
         }
 
