@@ -1,6 +1,6 @@
 use super::{conv, AsNative, TimestampQuerySupport};
 use crate::CommandEncoder as _;
-use std::{borrow::Cow, mem, ops::Range};
+use std::{borrow::Cow, mem::size_of, ops::Range};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -1083,7 +1083,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             encoder.draw_primitives_indirect(self.state.raw_primitive_type, &buffer.raw, offset);
-            offset += mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+            offset += size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
         }
     }
 
@@ -1104,7 +1104,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 &buffer.raw,
                 offset,
             );
-            offset += mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+            offset += size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
         }
     }
 

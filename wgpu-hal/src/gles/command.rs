@@ -1,6 +1,9 @@
 use super::{conv, Command as C};
 use arrayvec::ArrayVec;
-use std::{mem, ops::Range};
+use std::{
+    mem::{self, size_of, size_of_val},
+    ops::Range,
+};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct TextureSlotDesc {
@@ -82,7 +85,7 @@ impl super::CommandBuffer {
 
     fn add_push_constant_data(&mut self, data: &[u32]) -> Range<u32> {
         let data_raw =
-            unsafe { std::slice::from_raw_parts(data.as_ptr().cast(), mem::size_of_val(data)) };
+            unsafe { std::slice::from_raw_parts(data.as_ptr().cast(), size_of_val(data)) };
         let start = self.data_bytes.len();
         assert!(start < u32::MAX as usize);
         self.data_bytes.extend_from_slice(data_raw);
@@ -1083,7 +1086,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.prepare_draw(0);
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
-                offset + draw * mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+                offset + draw * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
             #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndirect {
                 topology: self.state.topology,
@@ -1105,8 +1108,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             wgt::IndexFormat::Uint32 => glow::UNSIGNED_INT,
         };
         for draw in 0..draw_count as wgt::BufferAddress {
-            let indirect_offset = offset
-                + draw * mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+            let indirect_offset =
+                offset + draw * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
             #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
                 topology: self.state.topology,

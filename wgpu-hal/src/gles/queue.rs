@@ -2,7 +2,8 @@ use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use std::{
-    mem, slice,
+    mem::size_of,
+    slice,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -1012,7 +1013,7 @@ impl super::Queue {
                     let query_data = unsafe {
                         slice::from_raw_parts(
                             temp_query_results.as_ptr().cast::<u8>(),
-                            temp_query_results.len() * mem::size_of::<u64>(),
+                            temp_query_results.len() * size_of::<u64>(),
                         )
                     };
                     match dst.raw {
@@ -1576,7 +1577,7 @@ impl super::Queue {
                 //
                 // This function is absolutely sketchy and we really should be using bytemuck.
                 unsafe fn get_data<T, const COUNT: usize>(data: &[u8], offset: u32) -> &[T; COUNT] {
-                    let data_required = mem::size_of::<T>() * COUNT;
+                    let data_required = size_of::<T>() * COUNT;
 
                     let raw = &data[(offset as usize)..][..data_required];
 
