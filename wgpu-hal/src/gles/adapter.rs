@@ -1097,7 +1097,7 @@ impl crate::Adapter for super::Adapter {
             Tf::Rgba8Sint => renderable | storage,
             Tf::Rgb10a2Uint => renderable,
             Tf::Rgb10a2Unorm => filterable_renderable,
-            Tf::Rg11b10Float => filterable | float_renderable,
+            Tf::Rg11b10UFloat => filterable | float_renderable,
             Tf::Rg32Uint => renderable,
             Tf::Rg32Sint => renderable,
             Tf::Rg32Float => unfilterable | float_renderable | texture_float_linear,

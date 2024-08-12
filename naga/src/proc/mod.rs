@@ -48,7 +48,7 @@ impl From<super::StorageFormat> for super::ScalarKind {
             Sf::Bgra8Unorm => Sk::Float,
             Sf::Rgb10a2Uint => Sk::Uint,
             Sf::Rgb10a2Unorm => Sk::Float,
-            Sf::Rg11b10Float => Sk::Float,
+            Sf::Rg11b10UFloat => Sk::Float,
             Sf::Rg32Uint => Sk::Uint,
             Sf::Rg32Sint => Sk::Sint,
             Sf::Rg32Float => Sk::Float,

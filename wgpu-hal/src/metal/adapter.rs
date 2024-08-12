@@ -178,7 +178,7 @@ impl crate::Adapter for super::Adapter {
                 flags.set(Tfc::STORAGE, pc.format_rgb10a2_unorm_all);
                 flags
             }
-            Tf::Rg11b10Float => {
+            Tf::Rg11b10UFloat => {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
                 flags
@@ -1036,7 +1036,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba8Sint => RGBA8Sint,
             Tf::Rgb10a2Uint => RGB10A2Uint,
             Tf::Rgb10a2Unorm => RGB10A2Unorm,
-            Tf::Rg11b10Float => RG11B10Float,
+            Tf::Rg11b10UFloat => RG11B10Float,
             Tf::Rg32Uint => RG32Uint,
             Tf::Rg32Sint => RG32Sint,
             Tf::Rg32Float => RG32Float,

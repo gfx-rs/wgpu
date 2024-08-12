@@ -275,7 +275,7 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
 
         Tf::Rgb10a2Uint => Sf::Rgb10a2Uint,
         Tf::Rgb10a2Unorm => Sf::Rgb10a2Unorm,
-        Tf::Rg11b10Float => Sf::Rg11b10Float,
+        Tf::Rg11b10UFloat => Sf::Rg11b10UFloat,
 
         Tf::Rg32Uint => Sf::Rg32Uint,
         Tf::Rg32Sint => Sf::Rg32Sint,
@@ -331,7 +331,7 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
 
         Sf::Rgb10a2Uint => Tf::Rgb10a2Uint,
         Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
-        Sf::Rg11b10Float => Tf::Rg11b10Float,
+        Sf::Rg11b10UFloat => Tf::Rg11b10UFloat,
 
         Sf::Rg32Uint => Tf::Rg32Uint,
         Sf::Rg32Sint => Tf::Rg32Sint,
@@ -658,7 +658,7 @@ impl NumericType {
             Tf::Rgba8Sint | Tf::Rgba16Sint | Tf::Rgba32Sint => {
                 (NumericDimension::Vector(Vs::Quad), Scalar::I32)
             }
-            Tf::Rg11b10Float => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
+            Tf::Rg11b10UFloat => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
             Tf::Stencil8
             | Tf::Depth16Unorm
             | Tf::Depth32Float
