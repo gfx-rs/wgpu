@@ -100,7 +100,7 @@ use crate::{
 };
 use arrayvec::ArrayVec;
 
-use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range, sync::Arc};
+use std::{borrow::Cow, mem::size_of, num::NonZeroU32, ops::Range, sync::Arc};
 use thiserror::Error;
 
 use super::{
@@ -873,7 +873,7 @@ fn multi_draw_indirect(
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
+            offset..(offset + size_of::<wgt::DrawIndirectArgs>() as u64),
             MemoryInitKind::NeedsInitializedMemory,
         ));
 

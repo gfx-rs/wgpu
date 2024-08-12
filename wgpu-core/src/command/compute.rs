@@ -29,7 +29,7 @@ use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
 
 use std::sync::Arc;
-use std::{fmt, mem, str};
+use std::{fmt, mem::size_of, str};
 
 use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 
@@ -854,7 +854,7 @@ fn dispatch_indirect(
         .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
-    let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
+    let end_offset = offset + size_of::<wgt::DispatchIndirectArgs>() as u64;
     if end_offset > buffer.size {
         return Err(ComputePassErrorInner::IndirectBufferOverrun {
             offset,
