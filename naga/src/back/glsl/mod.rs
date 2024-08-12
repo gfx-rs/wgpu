@@ -1313,14 +1313,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::MathFunction::Dot => {
                         // if the expression is a Dot product with integer arguments,
                         // then the args needs baking as well
-                        if let TypeInner::Scalar(crate::Scalar { kind, .. }) = *inner {
-                            match kind {
-                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                                    self.need_bake_expressions.insert(arg);
-                                    self.need_bake_expressions.insert(arg1.unwrap());
-                                }
-                                _ => {}
-                            }
+                        if let TypeInner::Scalar(crate::Scalar {
+                            kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                            ..
+                        }) = *inner
+                        {
+                            self.need_bake_expressions.insert(arg);
+                            self.need_bake_expressions.insert(arg1.unwrap());
                         }
                     }
                     crate::MathFunction::Pack4xI8
