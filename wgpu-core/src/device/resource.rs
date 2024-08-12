@@ -2762,6 +2762,9 @@ impl<A: HalApi> Device<A> {
             hal::PipelineError::EntryPoint(_stage) => {
                 pipeline::CreateComputePipelineError::Internal(ENTRYPOINT_FAILURE_ERROR.to_string())
             }
+            hal::PipelineError::PipelineConstants(_stages, msg) => {
+                pipeline::CreateComputePipelineError::PipelineConstants(msg)
+            }
         })?;
 
         let pipeline = pipeline::ComputePipeline {
@@ -3342,6 +3345,9 @@ impl<A: HalApi> Device<A> {
                     stage: hal::auxil::map_naga_stage(stage),
                     error: ENTRYPOINT_FAILURE_ERROR.to_string(),
                 }
+            }
+            hal::PipelineError::PipelineConstants(stage, error) => {
+                pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
             }
         })?;
 

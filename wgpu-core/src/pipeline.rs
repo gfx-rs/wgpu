@@ -234,6 +234,8 @@ pub enum CreateComputePipelineError {
     Stage(#[from] validation::StageError),
     #[error("Internal error: {0}")]
     Internal(String),
+    #[error("Pipeline constant error: {0}")]
+    PipelineConstants(String),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
@@ -522,6 +524,11 @@ pub enum CreateRenderPipelineError {
     },
     #[error("Internal error in {stage:?} shader: {error}")]
     Internal {
+        stage: wgt::ShaderStages,
+        error: String,
+    },
+    #[error("Pipeline constant error in {stage:?} shader: {error}")]
+    PipelineConstants {
         stage: wgt::ShaderStages,
         error: String,
     },

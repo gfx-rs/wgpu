@@ -321,6 +321,8 @@ pub enum PipelineError {
     EntryPoint(naga::ShaderStage),
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error("Pipeline constant error for stage {0:?}: {1}")]
+    PipelineConstants(wgt::ShaderStages, String),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]

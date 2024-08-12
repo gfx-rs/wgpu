@@ -764,7 +764,9 @@ impl super::Device {
                     &naga_shader.info,
                     stage.constants,
                 )
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
+                .map_err(|e| {
+                    crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
+                })?;
 
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");

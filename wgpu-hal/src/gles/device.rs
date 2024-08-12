@@ -223,7 +223,7 @@ impl super::Device {
         )
         .map_err(|e| {
             let msg = format!("{e}");
-            crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
+            crate::PipelineError::PipelineConstants(map_naga_stage(naga_stage), msg)
         })?;
 
         let entry_point_index = module
