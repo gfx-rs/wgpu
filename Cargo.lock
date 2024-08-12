@@ -462,6 +462,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
+
+[[package]]
 name = "cgl"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1345,7 +1351,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18fcd4ae4e86d991ad1300b8f57166e5be0c95ef1f63f3f5b827f8a164548746"
 dependencies = [
  "bitflags 2.6.0",
- "cfg_aliases",
+ "cfg_aliases 0.1.1",
  "cgl",
  "core-foundation",
  "dispatch",
@@ -1367,7 +1373,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebcdfba24f73b8412c5181e56f092b5eff16671c514ce896b258a0a64bd7735"
 dependencies = [
- "cfg_aliases",
+ "cfg_aliases 0.1.1",
  "glutin",
  "raw-window-handle 0.5.2",
  "winit",
@@ -2042,7 +2048,7 @@ dependencies = [
  "arrayvec",
  "bit-set",
  "bitflags 2.6.0",
- "cfg_aliases",
+ "cfg_aliases 0.2.1",
  "codespan-reporting",
  "diff",
  "env_logger",
@@ -3787,7 +3793,7 @@ name = "wgpu"
 version = "23.0.1"
 dependencies = [
  "arrayvec",
- "cfg_aliases",
+ "cfg_aliases 0.2.1",
  "document-features",
  "js-sys",
  "log",
@@ -3831,7 +3837,7 @@ dependencies = [
  "bit-vec",
  "bitflags 2.6.0",
  "bytemuck",
- "cfg_aliases",
+ "cfg_aliases 0.2.1",
  "document-features",
  "indexmap",
  "log",
@@ -3892,7 +3898,7 @@ dependencies = [
  "block",
  "bytemuck",
  "cfg-if",
- "cfg_aliases",
+ "cfg_aliases 0.2.1",
  "core-graphics-types",
  "env_logger",
  "glam",
@@ -4335,7 +4341,7 @@ dependencies = [
  "bitflags 2.6.0",
  "bytemuck",
  "calloop",
- "cfg_aliases",
+ "cfg_aliases 0.1.1",
  "core-foundation",
  "core-graphics",
  "cursor-icon",
