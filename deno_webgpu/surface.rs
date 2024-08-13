@@ -1,5 +1,6 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
+use super::wgpu_types;
 use super::WebGpuResult;
 use deno_core::error::AnyError;
 use deno_core::op2;
@@ -9,7 +10,7 @@ use deno_core::ResourceId;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::rc::Rc;
-use wgpu_types::SurfaceStatus;
+use wgpu_core::gfx_select;
 
 pub struct WebGpuSurface(pub crate::Instance, pub wgpu_core::id::SurfaceId);
 impl Resource for WebGpuSurface {
@@ -86,7 +87,7 @@ pub fn op_webgpu_surface_get_current_texture(
     let output = gfx_select!(device => instance.surface_get_current_texture(surface, None))?;
 
     match output.status {
-        SurfaceStatus::Good | SurfaceStatus::Suboptimal => {
+        wgpu_types::SurfaceStatus::Good | wgpu_types::SurfaceStatus::Suboptimal => {
             let id = output.texture_id.unwrap();
             let rid = state.resource_table.add(crate::texture::WebGpuTexture {
                 instance: instance.clone(),

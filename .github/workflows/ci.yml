@@ -40,7 +40,7 @@ env:
   # Once this fix hits stable Rust, we can use that instead of nightly.
   DOCS_RUST_VERSION: "nightly-2023-12-17"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.76"
+  REPO_MSRV: "1.79"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.76"

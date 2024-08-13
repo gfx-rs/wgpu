@@ -1,5 +1,6 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
+use super::wgpu_types;
 use crate::WebGpuQuerySet;
 use deno_core::error::AnyError;
 use deno_core::op2;
@@ -10,6 +11,7 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
+use wgpu_core::gfx_select;
 
 use super::error::WebGpuResult;
 
@@ -79,7 +81,7 @@ pub struct GpuRenderPassColorAttachment {
 #[serde(rename_all = "camelCase")]
 pub struct GpuRenderPassDepthStencilAttachment {
     view: ResourceId,
-    depth_clear_value: f32,
+    depth_clear_value: Option<f32>,
     depth_load_op: Option<wgpu_core::command::LoadOp>,
     depth_store_op: Option<wgpu_core::command::StoreOp>,
     depth_read_only: bool,
@@ -164,7 +166,9 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                     store_op: attachment
                         .depth_store_op
                         .unwrap_or(wgpu_core::command::StoreOp::Store),
-                    clear_value: attachment.depth_clear_value,
+                    // In "01_webgpu.js", `depthLoadOp` is checked to ensure its value is not "clear"
+                    // when `depthClearValue` is undefined, so the default 0.0 doesn't matter.
+                    clear_value: attachment.depth_clear_value.unwrap_or(0.0),
                     read_only: attachment.depth_read_only,
                 },
                 stencil: wgpu_core::command::PassChannel {

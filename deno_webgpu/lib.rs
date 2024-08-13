@@ -14,7 +14,8 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 pub use wgpu_core;
-pub use wgpu_types;
+use wgpu_core::gfx_select;
+pub use wgt as wgpu_types;
 
 use error::DomExceptionOperationError;
 use error::WebGpuResult;
@@ -23,37 +24,6 @@ pub const UNSTABLE_FEATURE_NAME: &str = "webgpu";
 
 #[macro_use]
 mod macros {
-    macro_rules! gfx_select {
-    ($id:expr => $p0:ident.$p1:tt.$method:ident $params:tt) => {
-      gfx_select!($id => {$p0.$p1}, $method $params)
-    };
-
-    ($id:expr => $p0:ident.$method:ident $params:tt) => {
-      gfx_select!($id => {$p0}, $method $params)
-    };
-
-    ($id:expr => {$($c:tt)*}, $method:ident $params:tt) => {
-      match $id.backend() {
-        #[cfg(any(
-            all(not(target_arch = "wasm32"), not(target_os = "ios"), not(target_os = "macos")),
-            feature = "vulkan-portability"
-        ))]
-        wgpu_types::Backend::Vulkan => $($c)*.$method::<wgpu_core::api::Vulkan> $params,
-        #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))]
-        wgpu_types::Backend::Metal => $($c)*.$method::<wgpu_core::api::Metal> $params,
-        #[cfg(all(not(target_arch = "wasm32"), windows))]
-        wgpu_types::Backend::Dx12 => $($c)*.$method::<wgpu_core::api::Dx12> $params,
-        #[cfg(any(
-            all(unix, not(target_os = "macos"), not(target_os = "ios")),
-            feature = "angle",
-            target_arch = "wasm32"
-        ))]
-        wgpu_types::Backend::Gl => $($c)*.$method::<wgpu_core::api::Gles> $params,
-        other => panic!("Unexpected backend {:?}", other),
-      }
-    };
-  }
-
     macro_rules! gfx_put {
     ($id:expr => $global:ident.$method:ident( $($param:expr),* ) => $state:expr, $rc:expr) => {{
       let (val, maybe_err) = gfx_select!($id => $global.$method($($param),*));
@@ -265,6 +235,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     }
     if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
         return_features.push("float32-filterable");
+    }
+    if features.contains(wgpu_types::Features::DUAL_SOURCE_BLENDING) {
+        return_features.push("dual-source-blending");
     }
 
     // extended from spec
@@ -519,6 +492,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::FLOAT32_FILTERABLE,
             required_features.0.contains("float32-filterable"),
+        );
+        features.set(
+            wgpu_types::Features::DUAL_SOURCE_BLENDING,
+            required_features.0.contains("dual-source-blending"),
         );
 
         // extended from spec
