@@ -796,6 +796,37 @@ impl<A: HalApi> Drop for DestroyedBuffer<A> {
     }
 }
 
+/// A temporary buffer, that can be created with [`queue_create_staging_buffer`]
+/// and used with [`queue_write_staging_buffer`].
+///
+/// [`queue_create_staging_buffer`]: Global::queue_create_staging_buffer
+/// [`queue_write_staging_buffer`]: Global::queue_write_staging_buffer
+#[derive(Debug)]
+pub struct ExternalStagingBuffer<A: HalApi> {
+    inner: StagingBuffer<A>,
+}
+
+impl<A: HalApi> ExternalStagingBuffer<A> {
+    pub(crate) fn new(
+        device: &Arc<Device<A>>,
+        size: wgt::BufferSize,
+    ) -> Result<(Arc<Self>, NonNull<u8>), DeviceError> {
+        let inner = StagingBuffer::new(device, size)?;
+        let ptr = unsafe { inner.ptr() };
+        let staging_buffer = Self { inner };
+        let staging_buffer = Arc::new(staging_buffer);
+        Ok((staging_buffer, ptr))
+    }
+
+    /// SAFETY: You must have stopped using the pointer returned by [`Self::new`].
+    pub(crate) unsafe fn into_inner(self) -> StagingBuffer<A> {
+        self.inner
+    }
+}
+
+crate::impl_resource_type!(ExternalStagingBuffer);
+crate::impl_storage_item!(ExternalStagingBuffer);
+
 #[cfg(send_sync)]
 unsafe impl<A: HalApi> Send for StagingBuffer<A> {}
 #[cfg(send_sync)]
@@ -807,17 +838,14 @@ unsafe impl<A: HalApi> Sync for StagingBuffer<A> {}
 /// is always created mapped, and the command that uses it destroys the buffer
 /// when it is done.
 ///
-/// [`StagingBuffer`]s can be created with [`queue_create_staging_buffer`] and
-/// used with [`queue_write_staging_buffer`]. They are also used internally by
-/// operations like [`queue_write_texture`] that need to upload data to the GPU,
-/// but that don't belong to any particular wgpu command buffer.
+/// They are used internally by operations like [`queue_write_texture`]
+/// that need to upload data to the GPU, but that don't belong to any
+/// particular wgpu command buffer.
 ///
 /// Used `StagingBuffer`s are accumulated in [`Device::pending_writes`], to be
 /// freed once their associated operation's queue submission has finished
 /// execution.
 ///
-/// [`queue_create_staging_buffer`]: Global::queue_create_staging_buffer
-/// [`queue_write_staging_buffer`]: Global::queue_write_staging_buffer
 /// [`queue_write_texture`]: Global::queue_write_texture
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
@@ -918,9 +946,6 @@ impl<A: HalApi> StagingBuffer<A> {
         }
     }
 }
-
-crate::impl_resource_type!(StagingBuffer);
-crate::impl_storage_item!(StagingBuffer);
 
 #[derive(Debug)]
 pub struct FlushedStagingBuffer<A: HalApi> {

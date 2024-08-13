@@ -291,7 +291,7 @@ ids! {
     pub type DeviceId Device;
     pub type QueueId Queue;
     pub type BufferId Buffer;
-    pub type StagingBufferId StagingBuffer;
+    pub type ExternalStagingBufferId ExternalStagingBuffer;
     pub type TextureViewId TextureView;
     pub type TextureId Texture;
     pub type SamplerId Sampler;

@@ -17,8 +17,8 @@ use crate::{
     lock::RwLockWriteGuard,
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, FlushedStagingBuffer, Labeled, ParentDevice, ResourceErrorIdent,
-        StagingBuffer, Texture, TextureInner, Trackable,
+        DestroyedTexture, ExternalStagingBuffer, FlushedStagingBuffer, Labeled, ParentDevice,
+        ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
     },
     resource_log,
     track::{self, Tracker, TrackerIndex},
@@ -438,8 +438,8 @@ impl Global {
         &self,
         queue_id: QueueId,
         buffer_size: wgt::BufferSize,
-        id_in: Option<id::StagingBufferId>,
-    ) -> Result<(id::StagingBufferId, NonNull<u8>), QueueWriteError> {
+        id_in: Option<id::ExternalStagingBufferId>,
+    ) -> Result<(id::ExternalStagingBufferId, NonNull<u8>), QueueWriteError> {
         profiling::scope!("Queue::create_staging_buffer");
         let hub = A::hub(self);
 
@@ -450,11 +450,10 @@ impl Global {
 
         let device = &queue.device;
 
-        let staging_buffer = StagingBuffer::new(device, buffer_size)?;
-        let ptr = unsafe { staging_buffer.ptr() };
+        let (staging_buffer, ptr) = ExternalStagingBuffer::new(device, buffer_size)?;
 
         let fid = hub.staging_buffers.prepare(id_in);
-        let id = fid.assign(Arc::new(staging_buffer));
+        let id = fid.assign(staging_buffer);
         resource_log!("Queue::create_staging_buffer {id:?}");
 
         Ok((id, ptr))
@@ -465,7 +464,7 @@ impl Global {
         queue_id: QueueId,
         buffer_id: id::BufferId,
         buffer_offset: wgt::BufferAddress,
-        staging_buffer_id: id::StagingBufferId,
+        staging_buffer_id: id::ExternalStagingBufferId,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_staging_buffer");
         let hub = A::hub(self);
@@ -482,6 +481,10 @@ impl Global {
             .unregister(staging_buffer_id)
             .and_then(Arc::into_inner)
             .ok_or_else(|| QueueWriteError::Transfer(TransferError::InvalidBufferId(buffer_id)))?;
+
+        // TODO: bubble up safety requirements, they currently hold but we should make functions
+        // unsafe and add safety comments
+        let staging_buffer = unsafe { staging_buffer.into_inner() };
 
         let mut pending_writes = device.pending_writes.lock();
 
