@@ -322,7 +322,6 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
                 Err(gpu_alloc::OutOfMemory::OutOfHostMemory)
             }
-            Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => panic!("Too many objects"),
             Err(err) => panic!("Unexpected Vulkan error: `{err}`"),
         }
     }
