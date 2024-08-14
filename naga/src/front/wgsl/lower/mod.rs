@@ -98,7 +98,7 @@ impl<'source> GlobalContext<'source, '_, '_> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
-            expr_type: ExpressionContextType::Constant,
+            expr_type: ExpressionContextType::Constant(None),
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -160,7 +160,8 @@ pub struct StatementContext<'source, 'temp, 'out> {
     ///
     /// [`LocalVariable`]: crate::Expression::LocalVariable
     /// [`FunctionArgument`]: crate::Expression::FunctionArgument
-    local_table: &'temp mut FastHashMap<Handle<ast::Local>, Typed<Handle<crate::Expression>>>,
+    local_table:
+        &'temp mut FastHashMap<Handle<ast::Local>, Declared<Typed<Handle<crate::Expression>>>>,
 
     const_typifier: &'temp mut Typifier,
     typifier: &'temp mut Typifier,
@@ -184,6 +185,32 @@ pub struct StatementContext<'source, 'temp, 'out> {
 }
 
 impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
+    fn as_const<'t>(
+        &'t mut self,
+        block: &'t mut crate::Block,
+        emitter: &'t mut Emitter,
+    ) -> ExpressionContext<'a, 't, '_>
+    where
+        'temp: 't,
+    {
+        ExpressionContext {
+            globals: self.globals,
+            types: self.types,
+            ast_expressions: self.ast_expressions,
+            const_typifier: self.const_typifier,
+            global_expression_kind_tracker: self.global_expression_kind_tracker,
+            module: self.module,
+            expr_type: ExpressionContextType::Constant(Some(LocalExpressionContext {
+                local_table: self.local_table,
+                function: self.function,
+                block,
+                emitter,
+                typifier: self.typifier,
+                local_expression_kind_tracker: self.local_expression_kind_tracker,
+            })),
+        }
+    }
+
     fn as_expression<'t>(
         &'t mut self,
         block: &'t mut crate::Block,
@@ -199,7 +226,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             const_typifier: self.const_typifier,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
             module: self.module,
-            expr_type: ExpressionContextType::Runtime(RuntimeExpressionContext {
+            expr_type: ExpressionContextType::Runtime(LocalExpressionContext {
                 local_table: self.local_table,
                 function: self.function,
                 block,
@@ -235,12 +262,12 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
     }
 }
 
-pub struct RuntimeExpressionContext<'temp, 'out> {
+pub struct LocalExpressionContext<'temp, 'out> {
     /// A map from [`ast::Local`] handles to the Naga expressions we've built for them.
     ///
     /// This is always [`StatementContext::local_table`] for the
     /// enclosing statement; see that documentation for details.
-    local_table: &'temp FastHashMap<Handle<ast::Local>, Typed<Handle<crate::Expression>>>,
+    local_table: &'temp FastHashMap<Handle<ast::Local>, Declared<Typed<Handle<crate::Expression>>>>,
 
     function: &'out mut crate::Function,
     block: &'temp mut crate::Block,
@@ -262,15 +289,15 @@ pub enum ExpressionContextType<'temp, 'out> {
     /// The given [`RuntimeExpressionContext`] holds information about local
     /// variables, arguments, and other definitions available only to runtime
     /// expressions, not constant or override expressions.
-    Runtime(RuntimeExpressionContext<'temp, 'out>),
+    Runtime(LocalExpressionContext<'temp, 'out>),
 
     /// We are lowering to a constant expression, to be included in the module's
     /// constant expression arena.
     ///
-    /// Everything constant expressions are allowed to refer to is
-    /// available in the [`ExpressionContext`], so this variant
-    /// carries no further information.
-    Constant,
+    /// Everything global constant expressions are allowed to refer to is
+    /// available in the [`ExpressionContext`], but local constant expressions can
+    /// also refer to other
+    Constant(Option<LocalExpressionContext<'temp, 'out>>),
 
     /// We are lowering to an override expression, to be included in the module's
     /// constant expression arena.
@@ -352,7 +379,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
             module: self.module,
-            expr_type: ExpressionContextType::Constant,
+            expr_type: ExpressionContextType::Constant(None),
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -376,8 +403,19 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 rctx.local_expression_kind_tracker,
                 rctx.emitter,
                 rctx.block,
+                false,
             ),
-            ExpressionContextType::Constant => ConstantEvaluator::for_wgsl_module(
+            ExpressionContextType::Constant(Some(ref mut rctx)) => {
+                ConstantEvaluator::for_wgsl_function(
+                    self.module,
+                    &mut rctx.function.expressions,
+                    rctx.local_expression_kind_tracker,
+                    rctx.emitter,
+                    rctx.block,
+                    true,
+                )
+            }
+            ExpressionContextType::Constant(None) => ConstantEvaluator::for_wgsl_module(
                 self.module,
                 self.global_expression_kind_tracker,
                 false,
@@ -412,15 +450,27 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
                     .ok()
             }
-            ExpressionContextType::Constant => self.module.to_ctx().eval_expr_to_u32(handle).ok(),
+            ExpressionContextType::Constant(Some(ref ctx)) => {
+                assert!(ctx.local_expression_kind_tracker.is_const(handle));
+                self.module
+                    .to_ctx()
+                    .eval_expr_to_u32_from(handle, &ctx.function.expressions)
+                    .ok()
+            }
+            ExpressionContextType::Constant(None) => {
+                self.module.to_ctx().eval_expr_to_u32(handle).ok()
+            }
             ExpressionContextType::Override => None,
         }
     }
 
     fn get_expression_span(&self, handle: Handle<crate::Expression>) -> Span {
         match self.expr_type {
-            ExpressionContextType::Runtime(ref ctx) => ctx.function.expressions.get_span(handle),
-            ExpressionContextType::Constant | ExpressionContextType::Override => {
+            ExpressionContextType::Runtime(ref ctx)
+            | ExpressionContextType::Constant(Some(ref ctx)) => {
+                ctx.function.expressions.get_span(handle)
+            }
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
                 self.module.global_expressions.get_span(handle)
             }
         }
@@ -428,20 +478,35 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
 
     fn typifier(&self) -> &Typifier {
         match self.expr_type {
-            ExpressionContextType::Runtime(ref ctx) => ctx.typifier,
-            ExpressionContextType::Constant | ExpressionContextType::Override => {
+            ExpressionContextType::Runtime(ref ctx)
+            | ExpressionContextType::Constant(Some(ref ctx)) => ctx.typifier,
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
                 self.const_typifier
             }
+        }
+    }
+
+    fn local(
+        &mut self,
+        local: &Handle<ast::Local>,
+        span: Span,
+    ) -> Result<Typed<Handle<crate::Expression>>, Error<'source>> {
+        match self.expr_type {
+            ExpressionContextType::Runtime(ref ctx) => Ok(ctx.local_table[local].runtime()),
+            ExpressionContextType::Constant(Some(ref ctx)) => ctx.local_table[local]
+                .const_time()
+                .ok_or(Error::UnexpectedOperationInConstContext(span)),
+            _ => Err(Error::UnexpectedOperationInConstContext(span)),
         }
     }
 
     fn runtime_expression_ctx(
         &mut self,
         span: Span,
-    ) -> Result<&mut RuntimeExpressionContext<'temp, 'out>, Error<'source>> {
+    ) -> Result<&mut LocalExpressionContext<'temp, 'out>, Error<'source>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut ctx) => Ok(ctx),
-            ExpressionContextType::Constant | ExpressionContextType::Override => {
+            ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
                 Err(Error::UnexpectedOperationInConstContext(span))
             }
         }
@@ -480,7 +545,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             }
             // This means a `gather` operation appeared in a constant expression.
             // This error refers to the `gather` itself, not its "component" argument.
-            ExpressionContextType::Constant | ExpressionContextType::Override => {
+            ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
                 Err(Error::UnexpectedOperationInConstContext(gather_span))
             }
         }
@@ -505,8 +570,9 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         // except that this lets the borrow checker see that it's okay
         // to also borrow self.module.types mutably below.
         let typifier = match self.expr_type {
-            ExpressionContextType::Runtime(ref ctx) => ctx.typifier,
-            ExpressionContextType::Constant | ExpressionContextType::Override => {
+            ExpressionContextType::Runtime(ref ctx)
+            | ExpressionContextType::Constant(Some(ref ctx)) => ctx.typifier,
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
                 &*self.const_typifier
             }
         };
@@ -542,7 +608,8 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         let typifier;
         let expressions;
         match self.expr_type {
-            ExpressionContextType::Runtime(ref mut ctx) => {
+            ExpressionContextType::Runtime(ref mut ctx)
+            | ExpressionContextType::Constant(Some(ref mut ctx)) => {
                 resolve_ctx = ResolveContext::with_locals(
                     self.module,
                     &ctx.function.local_variables,
@@ -551,7 +618,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 typifier = &mut *ctx.typifier;
                 expressions = &ctx.function.expressions;
             }
-            ExpressionContextType::Constant | ExpressionContextType::Override => {
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
                 resolve_ctx = ResolveContext::with_locals(self.module, &empty_arena, &[]);
                 typifier = self.const_typifier;
                 expressions = &self.module.global_expressions;
@@ -643,18 +710,20 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         span: Span,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         match self.expr_type {
-            ExpressionContextType::Runtime(ref mut rctx) => {
+            ExpressionContextType::Runtime(ref mut rctx)
+            | ExpressionContextType::Constant(Some(ref mut rctx)) => {
                 rctx.block
                     .extend(rctx.emitter.finish(&rctx.function.expressions));
             }
-            ExpressionContextType::Constant | ExpressionContextType::Override => {}
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {}
         }
         let result = self.append_expression(expression, span);
         match self.expr_type {
-            ExpressionContextType::Runtime(ref mut rctx) => {
+            ExpressionContextType::Runtime(ref mut rctx)
+            | ExpressionContextType::Constant(Some(ref mut rctx)) => {
                 rctx.emitter.start(&rctx.function.expressions);
             }
-            ExpressionContextType::Constant | ExpressionContextType::Override => {}
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {}
         }
         result
     }
@@ -714,6 +783,30 @@ impl<'source> ArgumentContext<'_, 'source> {
                 expected: self.min_args..self.args_used + 1,
                 span: self.span,
             }),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+enum Declared<T> {
+    /// Value declared as const
+    Const(T),
+
+    /// Value declared as non-const
+    Runtime(T),
+}
+
+impl<T> Declared<T> {
+    fn runtime(self) -> T {
+        match self {
+            Declared::Const(t) | Declared::Runtime(t) => t,
+        }
+    }
+
+    fn const_time(self) -> Option<T> {
+        match self {
+            Declared::Const(t) => Some(t),
+            Declared::Runtime(_) => None,
         }
     }
 }
@@ -1120,7 +1213,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let ty = self.resolve_ast_type(arg.ty, ctx)?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
-                local_table.insert(arg.handle, Typed::Plain(expr));
+                local_table.insert(arg.handle, Declared::Runtime(Typed::Plain(expr)));
                 named_expressions.insert(expr, (arg.name.name.to_string(), arg.name.span));
                 local_expression_kind_tracker.insert(expr, crate::proc::ExpressionKind::Runtime);
 
@@ -1268,7 +1361,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
 
                     block.extend(emitter.finish(&ctx.function.expressions));
-                    ctx.local_table.insert(l.handle, Typed::Plain(value));
+                    ctx.local_table
+                        .insert(l.handle, Declared::Runtime(Typed::Plain(value)));
                     ctx.named_expressions
                         .insert(value, (l.name.name.to_string(), l.name.span));
 
@@ -1350,7 +1444,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         Span::UNDEFINED,
                     )?;
                     block.extend(emitter.finish(&ctx.function.expressions));
-                    ctx.local_table.insert(v.handle, Typed::Reference(handle));
+                    ctx.local_table
+                        .insert(v.handle, Declared::Runtime(Typed::Reference(handle)));
 
                     match initializer {
                         Some(initializer) => crate::Statement::Store {
@@ -1359,6 +1454,46 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         },
                         None => return Ok(()),
                     }
+                }
+                ast::LocalDecl::Const(ref c) => {
+                    let mut emitter = Emitter::default();
+                    emitter.start(&ctx.function.expressions);
+
+                    let ectx = &mut ctx.as_const(block, &mut emitter);
+
+                    let mut init = self.expression_for_abstract(c.init, ectx)?;
+
+                    if let Some(explicit_ty) = c.ty {
+                        let explicit_ty =
+                            self.resolve_ast_type(explicit_ty, &mut ectx.as_global())?;
+                        let explicit_ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
+                        init = ectx
+                            .try_automatic_conversions(init, &explicit_ty_res, c.name.span)
+                            .map_err(|error| match error {
+                                Error::AutoConversion {
+                                    dest_span: _,
+                                    dest_type,
+                                    source_span: _,
+                                    source_type,
+                                } => Error::InitializationTypeMismatch {
+                                    name: c.name.span,
+                                    expected: dest_type,
+                                    got: source_type,
+                                },
+                                other => other,
+                            })?;
+                    } else {
+                        init = ectx.concretize(init)?;
+                        ectx.register_type(init)?;
+                    }
+
+                    block.extend(emitter.finish(&ctx.function.expressions));
+                    ctx.local_table
+                        .insert(c.handle, Declared::Const(Typed::Plain(init)));
+                    ctx.named_expressions
+                        .insert(init, (c.name.name.to_string(), c.name.span));
+
+                    return Ok(());
                 }
             },
             ast::StatementKind::If {
@@ -1658,8 +1793,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(Typed::Plain(handle));
             }
             ast::Expression::Ident(ast::IdentExpr::Local(local)) => {
-                let rctx = ctx.runtime_expression_ctx(span)?;
-                return Ok(rctx.local_table[&local]);
+                return ctx.local(&local, span);
             }
             ast::Expression::Ident(ast::IdentExpr::Unresolved(name)) => {
                 let global = ctx

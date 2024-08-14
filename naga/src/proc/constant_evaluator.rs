@@ -317,7 +317,7 @@ pub struct ConstantEvaluator<'a> {
 #[derive(Debug)]
 enum WgslRestrictions<'a> {
     /// - const-expressions will be evaluated and inserted in the arena
-    Const,
+    Const(Option<FunctionLocalData<'a>>),
     /// - const-expressions will be evaluated and inserted in the arena
     /// - override-expressions will be inserted in the arena
     Override,
@@ -556,7 +556,7 @@ impl<'a> ConstantEvaluator<'a> {
             Behavior::Wgsl(if in_override_ctx {
                 WgslRestrictions::Override
             } else {
-                WgslRestrictions::Const
+                WgslRestrictions::Const(None)
             }),
             module,
             global_expression_kind_tracker,
@@ -603,13 +603,19 @@ impl<'a> ConstantEvaluator<'a> {
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
+        is_const: bool,
     ) -> Self {
+        let local_data = FunctionLocalData {
+            global_expressions: &module.global_expressions,
+            emitter,
+            block,
+        };
         Self {
-            behavior: Behavior::Wgsl(WgslRestrictions::Runtime(FunctionLocalData {
-                global_expressions: &module.global_expressions,
-                emitter,
-                block,
-            })),
+            behavior: Behavior::Wgsl(if is_const {
+                WgslRestrictions::Const(Some(local_data))
+            } else {
+                WgslRestrictions::Runtime(local_data)
+            }),
             types: &mut module.types,
             constants: &module.constants,
             overrides: &module.overrides,
@@ -740,7 +746,7 @@ impl<'a> ConstantEvaluator<'a> {
                 Behavior::Wgsl(WgslRestrictions::Override | WgslRestrictions::Runtime(_)) => {
                     Ok(self.append_expr(expr, span, ExpressionKind::Override))
                 }
-                Behavior::Wgsl(WgslRestrictions::Const) => {
+                Behavior::Wgsl(WgslRestrictions::Const(_)) => {
                     Err(ConstantEvaluatorError::OverrideExpr)
                 }
                 Behavior::Glsl(_) => {
@@ -761,14 +767,17 @@ impl<'a> ConstantEvaluator<'a> {
     const fn is_global_arena(&self) -> bool {
         matches!(
             self.behavior,
-            Behavior::Wgsl(WgslRestrictions::Const | WgslRestrictions::Override)
+            Behavior::Wgsl(WgslRestrictions::Const(None) | WgslRestrictions::Override)
                 | Behavior::Glsl(GlslRestrictions::Const)
         )
     }
 
     const fn function_local_data(&self) -> Option<&FunctionLocalData<'a>> {
         match self.behavior {
-            Behavior::Wgsl(WgslRestrictions::Runtime(ref function_local_data))
+            Behavior::Wgsl(
+                WgslRestrictions::Runtime(ref function_local_data)
+                | WgslRestrictions::Const(Some(ref function_local_data)),
+            )
             | Behavior::Glsl(GlslRestrictions::Runtime(ref function_local_data)) => {
                 Some(function_local_data)
             }
@@ -2057,7 +2066,10 @@ impl<'a> ConstantEvaluator<'a> {
         expr_type: ExpressionKind,
     ) -> Handle<Expression> {
         let h = match self.behavior {
-            Behavior::Wgsl(WgslRestrictions::Runtime(ref mut function_local_data))
+            Behavior::Wgsl(
+                WgslRestrictions::Runtime(ref mut function_local_data)
+                | WgslRestrictions::Const(Some(ref mut function_local_data)),
+            )
             | Behavior::Glsl(GlslRestrictions::Runtime(ref mut function_local_data)) => {
                 let is_running = function_local_data.emitter.is_running();
                 let needs_pre_emit = expr.needs_pre_emit();
@@ -2480,7 +2492,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2566,7 +2578,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2684,7 +2696,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2777,7 +2789,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2859,7 +2871,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
