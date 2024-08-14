@@ -98,6 +98,7 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 mod buffer;
 mod metadata;
 mod range;
+mod ray_tracing;
 mod stateless;
 mod texture;
 
@@ -112,6 +113,7 @@ use crate::{
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
+use crate::track::ray_tracing::AccelerationStructureTracker;
 pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };

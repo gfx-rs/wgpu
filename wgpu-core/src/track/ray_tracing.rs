@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use hal::AccelerationStructureUses;
-use wgt::strict_assert;
 use crate::resource::AccelerationStructure;
 use crate::track::metadata::ResourceMetadata;
 use crate::track::ResourceUses;
+use hal::AccelerationStructureUses;
+use std::sync::Arc;
+use wgt::strict_assert;
 
 pub(crate) struct AccelerationStructureTracker<T: AccelerationStructure> {
     start: Vec<AccelerationStructureUses>,
@@ -48,7 +48,8 @@ impl<T: AccelerationStructure> AccelerationStructureTracker<T> {
 
     /// Returns true if the given buffer is tracked.
     pub fn contains(&self, acceleration_structure: &T) -> bool {
-        self.metadata.contains(acceleration_structure.tracker_index().as_usize())
+        self.metadata
+            .contains(acceleration_structure.tracker_index().as_usize())
     }
 
     /// Inserts a single resource into the resource tracker.

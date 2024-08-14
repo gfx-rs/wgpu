@@ -9,9 +9,9 @@ use crate::{
 };
 use smallvec::SmallVec;
 
+use crate::resource::{Blas, Tlas};
 use std::sync::Arc;
 use thiserror::Error;
-use crate::resource::{Blas, Tlas};
 
 /// A command submitted to the GPU for execution.
 ///
@@ -113,10 +113,7 @@ impl ActiveSubmission {
                 return true;
             }
 
-            if encoder
-                .pending_buffers
-                .contains_key(&blas.tracker_index())
-            {
+            if encoder.pending_buffers.contains_key(&blas.tracker_index()) {
                 return true;
             }
         }
@@ -135,10 +132,7 @@ impl ActiveSubmission {
                 return true;
             }
 
-            if encoder
-                .pending_buffers
-                .contains_key(&tlas.tracker_index())
-            {
+            if encoder.pending_buffers.contains_key(&tlas.tracker_index()) {
                 return true;
             }
         }
