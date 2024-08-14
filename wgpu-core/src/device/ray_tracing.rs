@@ -1,12 +1,11 @@
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use hal::{AccelerationStructureTriangleIndices, Device as _};
+use hal::AccelerationStructureTriangleIndices;
 
 use crate::{
     device::{Device, DeviceError, queue::TempResource},
     global::Global,
-    hal_api::HalApi,
     id::{self, BlasId, TlasId},
     LabelHelpers,
     lock::RwLock,
@@ -15,7 +14,7 @@ use crate::{
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::rank;
-use crate::resource::{Trackable, TrackingData};
+use crate::resource::TrackingData;
 
 impl Device {
     fn create_blas(
@@ -272,7 +271,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let blas = match hub.blas_s.unregister(blas_id) {
+        let _blas = match hub.blas_s.unregister(blas_id) {
             Some(blas) => blas,
             None => {
                 return;
@@ -280,7 +279,7 @@ impl Global {
         };
 
         #[cfg(feature = "trace")]
-        if let Some(t) = blas.device.trace.lock().as_mut() {
+        if let Some(t) = _blas.device.trace.lock().as_mut() {
             t.add(trace::Action::DestroyBlas(blas_id));
         }
     }
@@ -325,7 +324,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let tlas = match hub.tlas_s.unregister(tlas_id) {
+        let _tlas = match hub.tlas_s.unregister(tlas_id) {
             Some(tlas) => tlas,
             None => {
                 return;
@@ -333,7 +332,7 @@ impl Global {
         };
 
         #[cfg(feature = "trace")]
-        if let Some(t) = tlas.device.trace.lock().as_mut() {
+        if let Some(t) = _tlas.device.trace.lock().as_mut() {
             t.add(trace::Action::DestroyTlas(tlas_id));
         }
     }

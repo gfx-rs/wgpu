@@ -123,7 +123,6 @@ pub(crate) use texture::{
     TextureUsageScope, TextureViewBindGroupState,
 };
 use wgt::strict_assert_ne;
-use crate::resource::AccelerationStructure;
 use crate::track::ray_tracing::AccelerationStructureTracker;
 
 #[repr(transparent)]
@@ -300,17 +299,6 @@ impl PendingTransition<hal::TextureUses> {
                 base_array_layer: self.selector.layers.start,
                 array_layer_count: Some(layer_count),
             },
-            usage: self.usage,
-        }
-    }
-}
-
-impl PendingTransition<hal::AccelerationStructureUses> {
-    /// Produce the hal barrier corresponding to the transition.
-    pub fn into_hal<'a>(
-        self,
-    ) -> hal::AccelerationStructureBarrier {
-        hal::AccelerationStructureBarrier {
             usage: self.usage,
         }
     }

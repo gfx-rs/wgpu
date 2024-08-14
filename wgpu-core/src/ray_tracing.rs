@@ -1,7 +1,6 @@
 use crate::{
     command::CommandEncoderError,
     device::DeviceError,
-    hal_api::HalApi,
     id::{BlasId, BufferId, TlasId},
     resource::CreateBufferError,
 };

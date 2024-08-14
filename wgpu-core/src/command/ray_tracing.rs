@@ -1,10 +1,9 @@
 use crate::{
     device::queue::TempResource,
     global::Global,
-    hal_api::HalApi,
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
-    lock::{Mutex, RwLockReadGuard},
+    lock::RwLockReadGuard,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
         BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasPackage,
@@ -17,16 +16,15 @@ use crate::{
 use wgt::{math::align_to, BufferAddress, BufferUsages};
 
 use super::{BakedCommands, CommandBufferMutable, CommandEncoderError};
-use crate::lock::rank;
 use crate::ray_tracing::BlasTriangleGeometry;
 use crate::resource::{AccelerationStructure, Buffer, Labeled, ScratchBuffer, StagingBuffer, Trackable};
 use crate::snatch::SnatchGuard;
 use crate::storage::Storage;
 use crate::track::PendingTransition;
-use hal::{Api, BufferUses, CommandEncoder, Device};
+use hal::BufferUses;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
+use std::{cmp::max, num::NonZeroU64, ops::Range};
 
 type BufferStorage<'a> = Vec<(
     Arc<Buffer>,
@@ -594,7 +592,7 @@ impl Global {
 
         let mut tlas_descriptors = Vec::with_capacity(tlas_storage.len());
 
-        for &(tlas, ref entries, ref scratch_buffer_offset, ref range) in &tlas_storage {
+        for &(tlas, ref entries, ref scratch_buffer_offset, _) in &tlas_storage {
             if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                 log::info!("only rebuild implemented")
             }
@@ -625,12 +623,10 @@ impl Global {
 
         if tlas_present {
             let staging_buffer = if !instance_buffer_staging_source.is_empty() {
-                unsafe {
-                    let mut staging_buffer = StagingBuffer::new(device, wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap()).map_err(crate::device::DeviceError::from)?;
-                    staging_buffer.write(&instance_buffer_staging_source);
-                    let flushed = staging_buffer.flush();
-                    Some(flushed)
-                }
+                let mut staging_buffer = StagingBuffer::new(device, wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap()).map_err(crate::device::DeviceError::from)?;
+                staging_buffer.write(&instance_buffer_staging_source);
+                let flushed = staging_buffer.flush();
+                Some(flushed)
             } else {
                 None
             };

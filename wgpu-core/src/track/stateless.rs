@@ -1,6 +1,5 @@
 use std::slice::Iter;
 use std::sync::Arc;
-use std::vec::IntoIter;
 
 /// A tracker that holds strong references to resources.
 ///

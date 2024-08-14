@@ -28,9 +28,8 @@ use std::{
     ptr::NonNull,
     sync::{Arc, Weak},
 };
-use std::cmp::max;
 use std::num::NonZeroU64;
-use hal::{BufferUses, DynAccelerationStructure};
+use hal::BufferUses;
 
 /// Information about the wgpu-core resource.
 ///
@@ -945,7 +944,6 @@ impl Drop for FlushedStagingBuffer {
 pub struct ScratchBuffer {
     raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     device: Arc<Device>,
-    pub(crate) size: wgt::BufferSize,
 }
 
 impl ScratchBuffer {
@@ -964,7 +962,6 @@ impl ScratchBuffer {
         Ok(Self {
             raw: ManuallyDrop::new(raw),
             device: device.clone(),
-            size,
         })
     }
     pub(crate) fn raw(&self) -> &dyn hal::DynBuffer {
@@ -1905,13 +1902,11 @@ pub struct Blas {
 
 impl Drop for Blas {
     fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl, and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         unsafe {
-            resource_log!("Destroy raw {}", self.error_ident());
-            // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-            let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-            unsafe {
-                self.device.raw().destroy_acceleration_structure(raw);
-            }
+            self.device.raw().destroy_acceleration_structure(raw);
         }
     }
 }
@@ -1947,7 +1942,6 @@ pub struct Tlas {
 impl Drop for Tlas {
     fn drop(&mut self) {
         unsafe {
-            use hal::Device;
             let structure = ManuallyDrop::take(&mut self.raw);
             let buffer = ManuallyDrop::take(&mut self.instance_buffer);
             resource_log!("Destroy raw {}", self.error_ident());
