@@ -20,6 +20,8 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use hal::BufferUses;
+use std::num::NonZeroU64;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Debug,
@@ -28,8 +30,6 @@ use std::{
     ptr::NonNull,
     sync::{Arc, Weak},
 };
-use std::num::NonZeroU64;
-use hal::BufferUses;
 
 /// Information about the wgpu-core resource.
 ///

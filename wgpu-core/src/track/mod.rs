@@ -98,9 +98,9 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 mod buffer;
 mod metadata;
 mod range;
+mod ray_tracing;
 mod stateless;
 mod texture;
-mod ray_tracing;
 
 use crate::{
     binding_model, command,
@@ -113,6 +113,7 @@ use crate::{
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
+use crate::track::ray_tracing::AccelerationStructureTracker;
 pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };
@@ -123,7 +124,6 @@ pub(crate) use texture::{
     TextureUsageScope, TextureViewBindGroupState,
 };
 use wgt::strict_assert_ne;
-use crate::track::ray_tracing::AccelerationStructureTracker;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

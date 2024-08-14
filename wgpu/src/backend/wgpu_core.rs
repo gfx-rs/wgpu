@@ -3360,12 +3360,8 @@ impl crate::Context for ContextWgpuCore {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
         let global = &self.0;
-        let (id, handle, error) = global.device_create_blas(
-            *device,
-            &desc.map_label(|l| l.map(Borrowed)),
-            sizes,
-            None,
-        );
+        let (id, handle, error) =
+            global.device_create_blas(*device, &desc.map_label(|l| l.map(Borrowed)), sizes, None);
         if let Some(cause) = error {
             self.handle_error(
                 &device_data.error_sink,
@@ -3390,11 +3386,8 @@ impl crate::Context for ContextWgpuCore {
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (Self::TlasId, Self::TlasData) {
         let global = &self.0;
-        let (id, error) = global.device_create_tlas(
-            *device,
-            &desc.map_label(|l| l.map(Borrowed)),
-            None,
-        );
+        let (id, error) =
+            global.device_create_tlas(*device, &desc.map_label(|l| l.map(Borrowed)), None);
         if let Some(cause) = error {
             self.handle_error(
                 &device_data.error_sink,
@@ -3456,11 +3449,9 @@ impl crate::Context for ContextWgpuCore {
             },
         );
 
-        if let Err(cause) = global.command_encoder_build_acceleration_structures_unsafe_tlas(
-            *encoder,
-            blas,
-            tlas
-        ) {
+        if let Err(cause) =
+            global.command_encoder_build_acceleration_structures_unsafe_tlas(*encoder, blas, tlas)
+        {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
                 cause,
@@ -3522,11 +3513,9 @@ impl crate::Context for ContextWgpuCore {
             }
         });
 
-        if let Err(cause) = global.command_encoder_build_acceleration_structures(
-            *encoder,
-            blas,
-            tlas
-        ) {
+        if let Err(cause) =
+            global.command_encoder_build_acceleration_structures(*encoder, blas, tlas)
+        {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
                 cause,

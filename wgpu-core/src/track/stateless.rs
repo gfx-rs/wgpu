@@ -31,6 +31,6 @@ impl<'a, T> IntoIterator for &'a StatelessTracker<T> {
     type IntoIter = Iter<'a, Arc<T>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.resources.as_slice().into_iter()
+        self.resources.as_slice().iter()
     }
 }

@@ -3,18 +3,18 @@ use std::sync::Arc;
 
 use hal::AccelerationStructureTriangleIndices;
 
-use crate::{
-    device::{Device, DeviceError, queue::TempResource},
-    global::Global,
-    id::{self, BlasId, TlasId},
-    LabelHelpers,
-    lock::RwLock,
-    ray_tracing::{CreateBlasError, CreateTlasError, get_raw_tlas_instance_size}, resource,
-};
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::rank;
 use crate::resource::TrackingData;
+use crate::{
+    device::{queue::TempResource, Device, DeviceError},
+    global::Global,
+    id::{self, BlasId, TlasId},
+    lock::RwLock,
+    ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
+    resource, LabelHelpers,
+};
 
 impl Device {
     fn create_blas(
@@ -25,14 +25,18 @@ impl Device {
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { desc } => {
                 let mut entries =
-                    Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::with_capacity(desc.len());
+                    Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::with_capacity(
+                        desc.len(),
+                    );
                 for x in desc {
                     if x.index_count.is_some() != x.index_format.is_some() {
                         return Err(CreateBlasError::MissingIndexData);
                     }
                     let indices =
                         x.index_count
-                            .map(|count| AccelerationStructureTriangleIndices::<dyn hal::DynBuffer> {
+                            .map(|count| AccelerationStructureTriangleIndices::<
+                                dyn hal::DynBuffer,
+                            > {
                                 format: x.index_format.unwrap(),
                                 buffer: None,
                                 offset: 0,
@@ -70,7 +74,10 @@ impl Device {
         }
         .map_err(DeviceError::from)?;
 
-        let handle = unsafe { self.raw().get_acceleration_structure_device_address(raw.as_ref()) };
+        let handle = unsafe {
+            self.raw()
+                .get_acceleration_structure_device_address(raw.as_ref())
+        };
 
         Ok(Arc::new(resource::Blas {
             raw: ManuallyDrop::new(raw),
@@ -253,12 +260,10 @@ impl Global {
 
         let temp = TempResource::Blas(blas.clone());
         {
-            let mut device_lock = device
-                .lock_life();
+            let mut device_lock = device.lock_life();
             let last_submit_index = device_lock.get_blas_latest_submission_index(blas.as_ref());
             if let Some(last_submit_index) = last_submit_index {
-                device_lock
-                    .schedule_resource_destruction(temp, last_submit_index);
+                device_lock.schedule_resource_destruction(temp, last_submit_index);
             }
         }
 
@@ -279,8 +284,12 @@ impl Global {
         };
 
         #[cfg(feature = "trace")]
-        if let Some(t) = _blas.device.trace.lock().as_mut() {
-            t.add(trace::Action::DestroyBlas(blas_id));
+        {
+            let mut lock = _blas.device.trace.lock();
+
+            if let Some(t) = lock.as_mut() {
+                t.add(trace::Action::DestroyBlas(blas_id));
+            }
         }
     }
 
@@ -306,12 +315,10 @@ impl Global {
 
         let temp = TempResource::Tlas(tlas.clone());
         {
-            let mut device_lock = device
-                .lock_life();
+            let mut device_lock = device.lock_life();
             let last_submit_index = device_lock.get_tlas_latest_submission_index(tlas.as_ref());
             if let Some(last_submit_index) = last_submit_index {
-                device_lock
-                    .schedule_resource_destruction(temp, last_submit_index);
+                device_lock.schedule_resource_destruction(temp, last_submit_index);
             }
         }
 
@@ -332,8 +339,12 @@ impl Global {
         };
 
         #[cfg(feature = "trace")]
-        if let Some(t) = _tlas.device.trace.lock().as_mut() {
-            t.add(trace::Action::DestroyTlas(tlas_id));
+        {
+            let mut lock = _tlas.device.trace.lock();
+
+            if let Some(t) = lock.as_mut() {
+                t.add(trace::Action::DestroyTlas(tlas_id));
+            }
         }
     }
 }

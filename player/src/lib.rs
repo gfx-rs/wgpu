@@ -150,7 +150,7 @@ impl GlobalPlay for wgc::global::Global {
                         log::error!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable! skipping tlas build");
                     }
 
-                    self.command_encoder_build_acceleration_structures_unsafe_tlas::<A>(
+                    self.command_encoder_build_acceleration_structures_unsafe_tlas(
                         encoder,
                         blas_iter,
                         std::iter::empty(),
@@ -202,7 +202,7 @@ impl GlobalPlay for wgc::global::Global {
                         }
                     });
 
-                    self.command_encoder_build_acceleration_structures::<A>(
+                    self.command_encoder_build_acceleration_structures(
                         encoder, blas_iter, tlas_iter,
                     )
                     .unwrap();

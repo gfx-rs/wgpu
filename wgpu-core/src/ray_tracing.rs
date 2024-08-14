@@ -270,25 +270,18 @@ struct RawTlasInstance {
     acceleration_structure_reference: u64,
 }
 
-pub(crate) fn tlas_instance_into_bytes(
-    instance: &TlasInstance,
-    blas_address: u64,
-) -> Vec<u8> {
+pub(crate) fn tlas_instance_into_bytes(instance: &TlasInstance, blas_address: u64) -> Vec<u8> {
     // TODO: get the device to do this
     const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
     let temp = RawTlasInstance {
         transform: *instance.transform,
-        custom_index_and_mask: (instance.custom_index & MAX_U24)
-            | (u32::from(instance.mask) << 24),
+        custom_index_and_mask: (instance.custom_index & MAX_U24) | (u32::from(instance.mask) << 24),
         shader_binding_table_record_offset_and_flags: 0,
         acceleration_structure_reference: blas_address,
     };
     let temp: *const _ = &temp;
     unsafe {
-        slice::from_raw_parts::<u8>(
-            temp as *const u8,
-            std::mem::size_of::<RawTlasInstance>(),
-        )
+        slice::from_raw_parts::<u8>(temp.cast::<u8>(), std::mem::size_of::<RawTlasInstance>())
             .to_vec()
     }
 }

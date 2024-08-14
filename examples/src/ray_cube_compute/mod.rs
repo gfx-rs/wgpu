@@ -623,6 +623,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     base_test_parameters: wgpu_test::TestParameters {
         required_features: <Example as crate::framework::Example>::required_features(),
         required_limits: <Example as crate::framework::Example>::required_limits(),
+        force_fxc: false,
         skips: vec![],
         failures: Vec::new(),
         required_downlevel_caps:
