@@ -1,17 +1,15 @@
 use std::sync::Arc;
-use hal::{AccelerationStructureBarrier, AccelerationStructureUses, BufferUses};
+use hal::AccelerationStructureUses;
 use wgt::strict_assert;
-use crate::resource::{AccelerationStructure, Trackable};
+use crate::resource::AccelerationStructure;
 use crate::track::metadata::ResourceMetadata;
-use crate::track::{PendingTransition, ResourceUses};
+use crate::track::ResourceUses;
 
 pub(crate) struct AccelerationStructureTracker<T: AccelerationStructure> {
     start: Vec<AccelerationStructureUses>,
     end: Vec<AccelerationStructureUses>,
 
     metadata: ResourceMetadata<Arc<T>>,
-
-    temp: Vec<PendingTransition<AccelerationStructureUses>>,
 }
 
 impl<T: AccelerationStructure> AccelerationStructureTracker<T> {
@@ -21,8 +19,6 @@ impl<T: AccelerationStructure> AccelerationStructureTracker<T> {
             end: Vec::new(),
 
             metadata: ResourceMetadata::new(),
-
-            temp: Vec::new(),
         }
     }
 
@@ -53,21 +49,6 @@ impl<T: AccelerationStructure> AccelerationStructureTracker<T> {
     /// Returns true if the given buffer is tracked.
     pub fn contains(&self, acceleration_structure: &T) -> bool {
         self.metadata.contains(acceleration_structure.tracker_index().as_usize())
-    }
-
-    /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
-        self.metadata.owned_resources()
-    }
-
-    /// Drains all currently pending transitions.
-    pub fn drain_transitions<'a, 'b: 'a>(
-        &'b mut self,
-    ) -> impl Iterator<Item = AccelerationStructureBarrier> + 'b {
-        let buffer_barriers = self.temp.drain(..).map(|pending| {
-            pending.into_hal()
-        });
-        buffer_barriers
     }
 
     /// Inserts a single resource into the resource tracker.
