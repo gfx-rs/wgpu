@@ -82,10 +82,34 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
-    type PipelineCache = ();
+    type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
 }
+
+crate::impl_dyn_resource!(
+    Adapter,
+    AccelerationStructure,
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Device,
+    Fence,
+    Instance,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    Queue,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    Texture,
+    TextureView
+);
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
 const MAX_ROOT_ELEMENTS: usize = 64;
@@ -394,6 +418,8 @@ pub struct CommandBuffer {
     raw: d3d12::GraphicsCommandList,
 }
 
+impl crate::DynCommandBuffer for CommandBuffer {}
+
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
@@ -407,7 +433,9 @@ pub struct Buffer {
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
-impl crate::BufferBinding<'_, Api> {
+impl crate::DynBuffer for Buffer {}
+
+impl crate::BufferBinding<'_, Buffer> {
     fn resolve_size(&self) -> wgt::BufferAddress {
         match self.size {
             Some(size) => size.get(),
@@ -429,6 +457,15 @@ pub struct Texture {
     mip_level_count: u32,
     sample_count: u32,
     allocation: Option<suballocation::AllocationWrapper>,
+}
+
+impl crate::DynTexture for Texture {}
+impl crate::DynSurfaceTexture for Texture {}
+
+impl std::borrow::Borrow<dyn crate::DynTexture> for Texture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
+        self
+    }
 }
 
 unsafe impl Send for Texture {}
@@ -470,6 +507,8 @@ pub struct TextureView {
     handle_dsv_rw: Option<descriptor::Handle>,
 }
 
+impl crate::DynTextureView for TextureView {}
+
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
 
@@ -477,6 +516,8 @@ unsafe impl Sync for TextureView {}
 pub struct Sampler {
     handle: descriptor::Handle,
 }
+
+impl crate::DynSampler for Sampler {}
 
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
@@ -487,6 +528,8 @@ pub struct QuerySet {
     raw_ty: d3d12_ty::D3D12_QUERY_TYPE,
 }
 
+impl crate::DynQuerySet for QuerySet {}
+
 unsafe impl Send for QuerySet {}
 unsafe impl Sync for QuerySet {}
 
@@ -494,6 +537,8 @@ unsafe impl Sync for QuerySet {}
 pub struct Fence {
     raw: d3d12::Fence,
 }
+
+impl crate::DynFence for Fence {}
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
@@ -513,6 +558,8 @@ pub struct BindGroupLayout {
     copy_counts: Vec<u32>, // all 1's
 }
 
+impl crate::DynBindGroupLayout for BindGroupLayout {}
+
 #[derive(Debug, Clone, Copy)]
 enum BufferViewKind {
     Constant,
@@ -526,6 +573,8 @@ pub struct BindGroup {
     handle_samplers: Option<descriptor::DualHandle>,
     dynamic_buffers: Vec<d3d12::GpuAddress>,
 }
+
+impl crate::DynBindGroup for BindGroup {}
 
 bitflags::bitflags! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -571,11 +620,15 @@ pub struct PipelineLayout {
     naga_options: naga::back::hlsl::Options,
 }
 
+impl crate::DynPipelineLayout for PipelineLayout {}
+
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
 }
+
+impl crate::DynShaderModule for ShaderModule {}
 
 pub(super) enum CompiledShader {
     #[allow(unused)]
@@ -602,6 +655,8 @@ pub struct RenderPipeline {
     vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
 }
 
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
@@ -611,11 +666,20 @@ pub struct ComputePipeline {
     layout: PipelineLayoutShared,
 }
 
+impl crate::DynComputePipeline for ComputePipeline {}
+
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
+pub struct PipelineCache;
+
+impl crate::DynPipelineCache for PipelineCache {}
+
+#[derive(Debug)]
 pub struct AccelerationStructure {}
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> d3d12::ComPtr<dxgi1_4::IDXGISwapChain3> {
@@ -720,7 +784,7 @@ impl crate::Surface for Surface {
                         self.factory
                             .unwrap_factory2()
                             .create_swapchain_for_composition(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 &desc,
                             )
                             .into_result()
@@ -733,7 +797,7 @@ impl crate::Surface for Surface {
                             .clone()
                             .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
                             .create_swapchain_for_composition_surface_handle(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 handle,
                                 &desc,
                             )
@@ -745,7 +809,7 @@ impl crate::Surface for Surface {
                             .as_factory2()
                             .unwrap()
                             .create_swapchain_for_hwnd(
-                                device.present_queue.as_mut_ptr() as *mut _,
+                                device.present_queue.as_mut_ptr().cast(),
                                 hwnd,
                                 &desc,
                             )

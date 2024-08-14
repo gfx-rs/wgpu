@@ -87,8 +87,9 @@ strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
 ## Enables serialization via `serde` on common wgpu types.
 serde = ["dep:serde", "wgc/serde"]
 
-## Allow writing of trace capture files. See [`Adapter::request_device`].
-trace = ["serde", "wgc/trace"]
+# Uncomment once we get to https://github.com/gfx-rs/wgpu/issues/5974
+# ## Allow writing of trace capture files. See [`Adapter::request_device`].
+# trace = ["serde", "wgc/trace"]
 
 ## Allow deserializing of trace capture files that were written with the `trace` feature.
 ## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).

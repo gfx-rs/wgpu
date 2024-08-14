@@ -19,6 +19,11 @@ pub struct TestParameters {
     pub required_downlevel_caps: DownlevelCapabilities,
     pub required_limits: Limits,
 
+    /// On Dx12, specifically test against the Fxc compiler.
+    ///
+    /// For testing workarounds to Fxc bugs.
+    pub force_fxc: bool,
+
     /// Conditions under which this test should be skipped.
     pub skips: Vec<FailureCase>,
 
@@ -32,6 +37,7 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_downlevel_caps: LOWEST_DOWNLEVEL_PROPERTIES,
             required_limits: Limits::downlevel_webgl2_defaults(),
+            force_fxc: false,
             skips: Vec::new(),
             failures: Vec::new(),
         }
@@ -60,6 +66,11 @@ impl TestParameters {
     /// Set the limits needed for the test.
     pub fn limits(mut self, limits: Limits) -> Self {
         self.required_limits = limits;
+        self
+    }
+
+    pub fn force_fxc(mut self, force_fxc: bool) -> Self {
+        self.force_fxc = force_fxc;
         self
     }
 

@@ -2482,6 +2482,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     crate::TypeInner::Scalar(crate::Scalar { width: 8, .. })
                 );
         let result = if is_64_bit_min_max && is_statement {
+            let rctx = ctx.runtime_expression_ctx(span)?;
+            rctx.block
+                .extend(rctx.emitter.finish(&rctx.function.expressions));
+            rctx.emitter.start(&rctx.function.expressions);
             None
         } else {
             let ty = ctx.register_type(value)?;

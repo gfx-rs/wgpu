@@ -1,6 +1,5 @@
 use crate::{
     binding_model,
-    hal_api::HalApi,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
     resource::{
@@ -12,15 +11,13 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::Device as _;
 use smallvec::SmallVec;
 use std::os::raw::c_char;
 use thiserror::Error;
 use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
-use std::{iter, num::NonZeroU32, ptr};
+use std::num::NonZeroU32;
 
-pub mod any_device;
 pub(crate) mod bgl;
 pub mod global;
 mod life;
@@ -301,28 +298,26 @@ impl DeviceLostClosure {
     }
 }
 
-fn map_buffer<A: HalApi>(
-    raw: &A::Device,
-    buffer: &Buffer<A>,
+fn map_buffer(
+    raw: &dyn hal::DynDevice,
+    buffer: &Buffer,
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
     snatch_guard: &SnatchGuard,
-) -> Result<ptr::NonNull<u8>, BufferAccessError> {
+) -> Result<hal::BufferMapping, BufferAccessError> {
     let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
             .map_err(DeviceError::from)?
     };
 
-    *buffer.sync_mapped_writes.lock() = match kind {
-        HostMap::Read if !mapping.is_coherent => unsafe {
-            raw.invalidate_mapped_ranges(raw_buffer, iter::once(offset..offset + size));
-            None
-        },
-        HostMap::Write if !mapping.is_coherent => Some(offset..offset + size),
-        _ => None,
-    };
+    if !mapping.is_coherent && kind == HostMap::Read {
+        #[allow(clippy::single_range_in_vec_init)]
+        unsafe {
+            raw.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
+        }
+    }
 
     assert_eq!(offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
     assert_eq!(size % wgt::COPY_BUFFER_ALIGNMENT, 0);
@@ -340,9 +335,6 @@ fn map_buffer<A: HalApi>(
     // If this is a write mapping zeroing out the memory here is the only
     // reasonable way as all data is pushed to GPU anyways.
 
-    // No need to flush if it is flushed later anyways.
-    let zero_init_needs_flush_now =
-        mapping.is_coherent && buffer.sync_mapped_writes.lock().is_none();
     let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
     for uninitialized in buffer
@@ -356,15 +348,16 @@ fn map_buffer<A: HalApi>(
             (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
         mapped[fill_range].fill(0);
 
-        if zero_init_needs_flush_now {
-            unsafe { raw.flush_mapped_ranges(raw_buffer, iter::once(uninitialized)) };
+        if !mapping.is_coherent && kind == HostMap::Read {
+            unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
         }
     }
 
-    Ok(mapping.ptr)
+    Ok(mapping)
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeviceMismatch {
     pub(super) res: ResourceErrorIdent,
     pub(super) res_device: ResourceErrorIdent,
@@ -389,6 +382,7 @@ impl std::fmt::Display for DeviceMismatch {
 impl std::error::Error for DeviceMismatch {}
 
 #[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum DeviceError {
     #[error("{0} is invalid.")]
@@ -434,18 +428,26 @@ pub struct ImplicitPipelineContext {
 }
 
 pub struct ImplicitPipelineIds<'a> {
-    pub root_id: Option<PipelineLayoutId>,
-    pub group_ids: &'a [Option<BindGroupLayoutId>],
+    pub root_id: PipelineLayoutId,
+    pub group_ids: &'a [BindGroupLayoutId],
 }
 
 impl ImplicitPipelineIds<'_> {
-    fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
+    fn prepare(self, hub: &Hub) -> ImplicitPipelineContext {
+        let backend = self.root_id.backend();
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(self.root_id).into_id(),
+            root_id: hub
+                .pipeline_layouts
+                .prepare(backend, Some(self.root_id))
+                .into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(*id_in).into_id())
+                .map(|id_in| {
+                    hub.bind_group_layouts
+                        .prepare(backend, Some(*id_in))
+                        .into_id()
+                })
                 .collect(),
         }
     }

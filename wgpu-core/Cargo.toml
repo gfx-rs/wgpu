@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.20.0"
+version = "22.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.74"
+rust-version = "1.76"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -60,6 +60,9 @@ trace = ["dep:ron", "serde", "naga/serialize"]
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
 
+## Enable creating instances using raw-window-handle
+raw-window-handle = ["dep:raw-window-handle"]
+
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 
@@ -100,37 +103,36 @@ gles = ["hal/gles"]
 dx12 = ["hal/dx12"]
 
 [dependencies]
-arrayvec = "0.7"
-bit-vec = "0.7"
-bitflags = "2"
-bytemuck = { version = "1.16", optional = true }
+arrayvec.workspace = true
+bit-vec.workspace = true
+bitflags.workspace = true
+bytemuck = { workspace = true, optional = true }
 document-features.workspace = true
-indexmap = "2"
-log = "0.4"
-once_cell = "1"
-# parking_lot 0.12 switches from `winapi` to `windows`; permit either
-parking_lot = ">=0.11, <0.13"
-profiling = { version = "1", default-features = false }
-raw-window-handle = { version = "0.6", optional = true }
-ron = { version = "0.8", optional = true }
-rustc-hash = "1.1"
-serde = { version = "1", features = ["serde_derive"], optional = true }
-smallvec = "1"
-thiserror = "1"
+indexmap.workspace = true
+log.workspace = true
+once_cell.workspace = true
+parking_lot.workspace = true
+profiling = { workspace = true, default-features = false }
+raw-window-handle = { workspace = true, optional = true }
+ron = { workspace = true, optional = true }
+rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
+smallvec.workspace = true
+thiserror.workspace = true
 
 [dependencies.naga]
 path = "../naga"
-version = "0.20.0"
+version = "22.0.0"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.20.0"
+version = "22.0.0"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.20.0"
+version = "22.0.0"
 default-features = false
 
 [build-dependencies]

@@ -1,7 +1,6 @@
 //! The `ResourceMetadata` type.
 
 use bit_vec::BitVec;
-use std::mem;
 use wgt::strict_assert;
 
 /// A set of resources, holding a `Arc<T>` and epoch for each member.
@@ -67,7 +66,7 @@ impl<T: Clone> ResourceMetadata<T> {
 
     /// Returns true if the set contains the resource with the given index.
     pub(super) fn contains(&self, index: usize) -> bool {
-        self.owned[index]
+        self.owned.get(index).unwrap_or(false)
     }
 
     /// Returns true if the set contains the resource with the given index.
@@ -191,7 +190,7 @@ fn resize_bitvec<B: bit_vec::BitBlock>(vec: &mut BitVec<B>, size: usize) {
 ///
 /// Will skip entire usize's worth of bits if they are all false.
 fn iterate_bitvec_indices(ownership: &BitVec<usize>) -> impl Iterator<Item = usize> + '_ {
-    const BITS_PER_BLOCK: usize = mem::size_of::<usize>() * 8;
+    const BITS_PER_BLOCK: usize = usize::BITS as usize;
 
     let size = ownership.len();
 

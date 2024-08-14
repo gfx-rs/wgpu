@@ -314,7 +314,7 @@ async fn shader_input_output_test(
                 label: Some(&format!("pipeline {test_name}")),
                 layout: Some(&pll),
                 module: &sm,
-                entry_point: "cs_main",
+                entry_point: Some("cs_main"),
                 compilation_options: Default::default(),
                 cache: None,
             });

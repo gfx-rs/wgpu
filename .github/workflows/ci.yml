@@ -37,13 +37,13 @@ env:
   #
   # This needs to be newer to work around https://github.com/gfx-rs/wgpu/issues/4905.
   #
-  # Once 1.76 coes out, we can use that instead of nightly.
+  # Once this fix hits stable Rust, we can use that instead of nightly.
   DOCS_RUST_VERSION: "nightly-2023-12-17"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.76"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.74"
+  CORE_MSRV: "1.76"
 
   #
   # Environment variables
@@ -59,6 +59,7 @@ env:
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: c # cache busting
+  WGPU_TESTING: true
 
 # We distinguish the following kinds of builds:
 # - native: build for the same target as we compile on
@@ -150,10 +151,10 @@ jobs:
           cargo -V
 
       # Use special toolchain for rustdoc, see https://github.com/gfx-rs/wgpu/issues/4905
-      # - name: Install Rustdoc Toolchain
-      #   run: |
-      #     rustup toolchain install ${{ env.DOCS_RUST_VERSION }} --no-self-update --profile=minimal --component rust-docs --target ${{ matrix.target }}
-      #     cargo +${{ env.DOCS_RUST_VERSION }} -V
+      - name: Install Rustdoc Toolchain
+        run: |
+          rustup toolchain install ${{ env.DOCS_RUST_VERSION }} --no-self-update --profile=minimal --component rust-docs --target ${{ matrix.target }}
+          cargo +${{ env.DOCS_RUST_VERSION }} -V
 
       - name: disable debug
         shell: bash
@@ -195,11 +196,11 @@ jobs:
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
-          # cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
+          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
           # all features
           cargo clippy --target ${{ matrix.target }} --tests --all-features
-          # cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --all-features
+          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -229,13 +230,15 @@ jobs:
           cargo clippy --target ${{ matrix.target }} --tests --benches --all-features
 
           # build docs
-          # cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
+          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
+      # wgpu-core docs are not feasible due to <https://github.com/gfx-rs/wgpu/issues/4905>
+      #
       # - name: check private item docs
       #   if: matrix.kind == 'native'
       #   shell: bash
       #   run: |
       #     set -e
-
+      #
       #     # wgpu_core package
       #     cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} \
       #           --package wgpu-core \
@@ -568,6 +571,7 @@ jobs:
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   doctest:
     # runtime is normally 2 minutes
@@ -628,7 +632,7 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.22.9
+        uses: crate-ci/typos@v1.23.6
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -677,7 +681,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories
           arguments: --all-features --workspace
@@ -694,7 +698,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace

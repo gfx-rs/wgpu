@@ -116,7 +116,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>,
     {
         //Note: this is done so that we never end up with empty stage flags
         let mut src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
@@ -156,7 +156,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
         let mut src_stages = vk::PipelineStageFlags::empty();
         let mut dst_stages = vk::PipelineStageFlags::empty();
@@ -408,7 +408,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(&mut self, descriptor_count: u32, descriptors: T)
     where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+        T: IntoIterator<
+            Item = crate::BuildAccelerationStructureDescriptor<
+                'a,
+                super::Buffer,
+                super::AccelerationStructure,
+            >,
+        >,
     {
         const CAPACITY_OUTER: usize = 8;
         const CAPACITY_INNER: usize = 1;
@@ -644,7 +650,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
+    ) {
         let mut vk_clear_values =
             ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
         let mut vk_image_views = ArrayVec::<vk::ImageView, { super::MAX_TOTAL_ATTACHMENTS }>::new();
@@ -833,7 +842,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 layout.raw,
                 conv::map_shader_stage(stages),
                 offset_bytes,
-                slice::from_raw_parts(data.as_ptr() as _, data.len() * 4),
+                slice::from_raw_parts(data.as_ptr().cast(), data.len() * 4),
             )
         };
     }
@@ -870,7 +879,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Api>,
+        binding: crate::BufferBinding<'a, super::Buffer>,
         format: wgt::IndexFormat,
     ) {
         unsafe {
@@ -885,7 +894,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Api>,
+        binding: crate::BufferBinding<'a, super::Buffer>,
     ) {
         let vk_buffers = [binding.buffer.raw];
         let vk_offsets = [binding.offset];
@@ -1067,7 +1076,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<'_, super::Api>) {
+    unsafe fn begin_compute_pass(
+        &mut self,
+        desc: &crate::ComputePassDescriptor<'_, super::QuerySet>,
+    ) {
         self.bind_point = vk::PipelineBindPoint::COMPUTE;
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };

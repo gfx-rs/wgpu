@@ -101,13 +101,13 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
             layout: Some(&pll),
             vertex: wgpu::VertexState {
                 module: &vs_sm,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fs_sm,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,

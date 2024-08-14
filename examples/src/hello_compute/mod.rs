@@ -109,7 +109,7 @@ async fn execute_gpu_inner(
         label: None,
         layout: None,
         module: &cs_module,
-        entry_point: "main",
+        entry_point: Some("main"),
         compilation_options: Default::default(),
         cache: None,
     });

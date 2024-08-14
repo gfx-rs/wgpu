@@ -8,7 +8,6 @@ use crate::{
     device::DeviceError,
     get_lowest_common_denom,
     global::Global,
-    hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
@@ -19,7 +18,6 @@ use crate::{
     track::{TextureSelector, TextureTrackerSetSingle},
 };
 
-use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, TextureAspect};
 
@@ -80,7 +78,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
 }
 
 impl Global {
-    pub fn command_encoder_clear_buffer<A: HalApi>(
+    pub fn command_encoder_clear_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
@@ -90,7 +88,7 @@ impl Global {
         profiling::scope!("CommandEncoder::clear_buffer");
         api_log!("CommandEncoder::clear_buffer {dst:?}");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers
@@ -167,13 +165,13 @@ impl Global {
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
+            cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
         }
         Ok(())
     }
 
-    pub fn command_encoder_clear_texture<A: HalApi>(
+    pub fn command_encoder_clear_texture(
         &self,
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
@@ -182,7 +180,7 @@ impl Global {
         profiling::scope!("CommandEncoder::clear_texture");
         api_log!("CommandEncoder::clear_texture {dst:?}");
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
         let cmd_buf = match hub
             .command_buffers
@@ -263,25 +261,25 @@ impl Global {
             encoder,
             &mut tracker.textures,
             &device.alignments,
-            device.zero_buffer.as_ref().unwrap(),
+            device.zero_buffer.as_ref(),
             &snatch_guard,
         )
     }
 }
 
-pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
-    dst_texture: &Arc<Texture<A>>,
+pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
+    dst_texture: &Arc<Texture>,
     range: TextureInitRange,
-    encoder: &mut A::CommandEncoder,
+    encoder: &mut dyn hal::DynCommandEncoder,
     texture_tracker: &mut T,
     alignments: &hal::Alignments,
-    zero_buffer: &A::Buffer,
+    zero_buffer: &dyn hal::DynBuffer,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
     let dst_raw = dst_texture.try_raw(snatch_guard)?;
 
     // Issue the right barrier.
-    let clear_usage = match *dst_texture.clear_mode.read() {
+    let clear_usage = match dst_texture.clear_mode {
         TextureClearMode::BufferCopy => hal::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
@@ -316,14 +314,15 @@ pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
     // change_replace_tracked whenever possible.
     let dst_barrier = texture_tracker
         .set_single(dst_texture, selector, clear_usage)
-        .map(|pending| pending.into_hal(dst_raw));
+        .map(|pending| pending.into_hal(dst_raw))
+        .collect::<Vec<_>>();
     unsafe {
-        encoder.transition_textures(dst_barrier.into_iter());
+        encoder.transition_textures(&dst_barrier);
     }
 
     // Record actual clearing
-    match *dst_texture.clear_mode.read() {
-        TextureClearMode::BufferCopy => clear_texture_via_buffer_copies::<A>(
+    match dst_texture.clear_mode {
+        TextureClearMode::BufferCopy => clear_texture_via_buffer_copies(
             &dst_texture.desc,
             alignments,
             zero_buffer,
@@ -346,13 +345,13 @@ pub(crate) fn clear_texture<A: HalApi, T: TextureTrackerSetSingle<A>>(
     Ok(())
 }
 
-fn clear_texture_via_buffer_copies<A: HalApi>(
+fn clear_texture_via_buffer_copies(
     texture_desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     alignments: &hal::Alignments,
-    zero_buffer: &A::Buffer, // Buffer of size device::ZERO_BUFFER_SIZE
+    zero_buffer: &dyn hal::DynBuffer, // Buffer of size device::ZERO_BUFFER_SIZE
     range: TextureInitRange,
-    encoder: &mut A::CommandEncoder,
-    dst_raw: &A::Texture,
+    encoder: &mut dyn hal::DynCommandEncoder,
+    dst_raw: &dyn hal::DynTexture,
 ) {
     assert!(!texture_desc.format.is_depth_stencil_format());
 
@@ -436,15 +435,15 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
     }
 
     unsafe {
-        encoder.copy_buffer_to_texture(zero_buffer, dst_raw, zero_buffer_copy_regions.into_iter());
+        encoder.copy_buffer_to_texture(zero_buffer, dst_raw, &zero_buffer_copy_regions);
     }
 }
 
-fn clear_texture_via_render_passes<A: HalApi>(
-    dst_texture: &Texture<A>,
+fn clear_texture_via_render_passes(
+    dst_texture: &Texture,
     range: TextureInitRange,
     is_color: bool,
-    encoder: &mut A::CommandEncoder,
+    encoder: &mut dyn hal::DynCommandEncoder,
 ) {
     assert_eq!(dst_texture.desc.dimension, wgt::TextureDimension::D2);
 
@@ -453,7 +452,6 @@ fn clear_texture_via_render_passes<A: HalApi>(
         height: dst_texture.desc.size.height,
         depth_or_array_layers: 1, // Only one layer is cleared at a time.
     };
-    let clear_mode = &dst_texture.clear_mode.read();
 
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
@@ -463,7 +461,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
                 color_attachments_tmp = [Some(hal::ColorAttachment {
                     target: hal::Attachment {
                         view: Texture::get_clear_view(
-                            clear_mode,
+                            &dst_texture.clear_mode,
                             &dst_texture.desc,
                             mip_level,
                             depth_or_layer,
@@ -481,7 +479,7 @@ fn clear_texture_via_render_passes<A: HalApi>(
                     Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
                             view: Texture::get_clear_view(
-                                clear_mode,
+                                &dst_texture.clear_mode,
                                 &dst_texture.desc,
                                 mip_level,
                                 depth_or_layer,

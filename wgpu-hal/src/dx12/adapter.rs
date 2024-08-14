@@ -8,7 +8,8 @@ use winapi::{
     shared::{
         dxgi, dxgi1_2, dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM, minwindef::DWORD, windef, winerror,
     },
-    um::{d3d12 as d3d12_ty, d3d12sdklayers, winuser},
+    um::{d3d12 as d3d12_ty, d3d12sdklayers, winnt, winuser},
+    Interface,
 };
 
 impl Drop for super::Adapter {
@@ -87,7 +88,7 @@ impl super::Adapter {
         unsafe {
             device.CheckFeatureSupport(
                 d3d12_ty::D3D12_FEATURE_FEATURE_LEVELS,
-                &mut device_levels as *mut _ as *mut _,
+                ptr::from_mut(&mut device_levels).cast(),
                 mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS>() as _,
             )
         };
@@ -110,7 +111,7 @@ impl super::Adapter {
         assert_eq!(0, unsafe {
             device.CheckFeatureSupport(
                 d3d12_ty::D3D12_FEATURE_ARCHITECTURE,
-                &mut features_architecture as *mut _ as *mut _,
+                ptr::from_mut(&mut features_architecture).cast(),
                 mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_ARCHITECTURE>() as _,
             )
         });
@@ -130,7 +131,24 @@ impl super::Adapter {
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
-            driver: String::new(),
+            driver: {
+                let mut i: winnt::LARGE_INTEGER = unsafe { mem::zeroed() };
+                if 0 == unsafe {
+                    adapter.CheckInterfaceSupport(&dxgi::IDXGIDevice::uuidof(), &mut i)
+                } {
+                    let quad_part = unsafe { *i.QuadPart() };
+                    const MASK: i64 = 0xFFFF;
+                    format!(
+                        "{}.{}.{}.{}",
+                        quad_part >> 48,
+                        (quad_part >> 32) & MASK,
+                        (quad_part >> 16) & MASK,
+                        quad_part & MASK
+                    )
+                } else {
+                    String::new()
+                }
+            },
             driver_info: String::new(),
         };
 
@@ -138,7 +156,7 @@ impl super::Adapter {
         assert_eq!(0, unsafe {
             device.CheckFeatureSupport(
                 d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS,
-                &mut options as *mut _ as *mut _,
+                ptr::from_mut(&mut options).cast(),
                 mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _,
             )
         });
@@ -149,7 +167,7 @@ impl super::Adapter {
             let hr = unsafe {
                 device.CheckFeatureSupport(
                     d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS2,
-                    &mut features2 as *mut _ as *mut _,
+                    ptr::from_mut(&mut features2).cast(),
                     mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS2>() as _,
                 )
             };
@@ -162,7 +180,7 @@ impl super::Adapter {
             let hr = unsafe {
                 device.CheckFeatureSupport(
                     21, // D3D12_FEATURE_D3D12_OPTIONS3
-                    &mut features3 as *mut _ as *mut _,
+                    ptr::from_mut(&mut features3).cast(),
                     mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS3>() as _,
                 )
             };
@@ -192,7 +210,7 @@ impl super::Adapter {
                     if 0 == unsafe {
                         device.CheckFeatureSupport(
                             7, // D3D12_FEATURE_SHADER_MODEL
-                            &mut sm as *mut _ as *mut _,
+                            ptr::from_mut(&mut sm).cast(),
                             mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_SHADER_MODEL>()
                                 as _,
                         )
@@ -281,6 +299,7 @@ impl super::Adapter {
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
             | wgt::Features::TEXTURE_COMPRESSION_BC
+            | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
             | wgt::Features::PUSH_CONSTANTS
@@ -319,7 +338,7 @@ impl super::Adapter {
             let hr = unsafe {
                 device.CheckFeatureSupport(
                     d3d12_ty::D3D12_FEATURE_FORMAT_SUPPORT,
-                    &mut bgra8unorm_info as *mut _ as *mut _,
+                    ptr::from_mut(&mut bgra8unorm_info).cast(),
                     mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
                 )
             };
@@ -335,7 +354,7 @@ impl super::Adapter {
         let hr = unsafe {
             device.CheckFeatureSupport(
                 d3d12_ty::D3D12_FEATURE_D3D12_OPTIONS1,
-                &mut features1 as *mut _ as *mut _,
+                ptr::from_mut(&mut features1).cast(),
                 mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_D3D12_OPTIONS1>() as _,
             )
         };
@@ -360,7 +379,7 @@ impl super::Adapter {
             let hr = unsafe {
                 device.CheckFeatureSupport(
                     37, // D3D12_FEATURE_D3D12_OPTIONS9
-                    &mut features9 as *mut _ as *mut _,
+                    ptr::from_mut(&mut features9).cast(),
                     mem::size_of::<crate::dx12::types::D3D12_FEATURE_DATA_D3D12_OPTIONS9>() as _,
                 )
             };
@@ -568,7 +587,7 @@ impl crate::Adapter for super::Adapter {
         assert_eq!(winerror::S_OK, unsafe {
             self.device.CheckFeatureSupport(
                 d3d12_ty::D3D12_FEATURE_FORMAT_SUPPORT,
-                &mut data as *mut _ as *mut _,
+                ptr::from_mut(&mut data).cast(),
                 mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
             )
         });

@@ -257,7 +257,6 @@ impl<A: hal::Api> Example<A> {
                 entry_point: "vs_main",
                 constants: &constants,
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
             },
             vertex_buffers: &[],
             fragment_stage: Some(hal::ProgrammableStage {
@@ -265,7 +264,6 @@ impl<A: hal::Api> Example<A> {
                 entry_point: "fs_main",
                 constants: &constants,
                 zero_initialize_workgroup_memory: true,
-                vertex_pulling_transform: false,
             }),
             primitive: wgt::PrimitiveState {
                 topology: wgt::PrimitiveTopology::TriangleStrip,
@@ -301,7 +299,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 texture_data.len(),
             );
-            device.unmap_buffer(&staging_buffer).unwrap();
+            device.unmap_buffer(&staging_buffer);
             assert!(mapping.is_coherent);
         }
 
@@ -410,7 +408,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 mem::size_of::<Globals>(),
             );
-            device.unmap_buffer(&buffer).unwrap();
+            device.unmap_buffer(&buffer);
             assert!(mapping.is_coherent);
             buffer
         };
@@ -580,7 +578,7 @@ impl<A: hal::Api> Example<A> {
 
             self.surface.unconfigure(&self.device);
             self.device.exit(self.queue);
-            self.instance.destroy_surface(self.surface);
+            drop(self.surface);
             drop(self.adapter);
         }
     }
@@ -647,7 +645,7 @@ impl<A: hal::Api> Example<A> {
                     size,
                 );
                 assert!(mapping.is_coherent);
-                self.device.unmap_buffer(&self.local_buffer).unwrap();
+                self.device.unmap_buffer(&self.local_buffer);
             }
         }
 
@@ -813,6 +811,8 @@ fn main() {
 
     let example_result = Example::<Api>::init(&window);
     let mut example = Some(example_result.expect("Selected backend is not supported"));
+
+    println!("Press space to spawn bunnies.");
 
     let mut last_frame_inst = Instant::now();
     let (mut frame_count, mut accum_time) = (0, 0.0);

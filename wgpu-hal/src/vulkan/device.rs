@@ -1,4 +1,4 @@
-use super::{conv, PipelineCache};
+use super::conv;
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
@@ -343,7 +343,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
             self.raw
                 .map_memory(*memory, offset, size, vk::MemoryMapFlags::empty())
         } {
-            Ok(ptr) => Ok(ptr::NonNull::new(ptr as *mut u8)
+            Ok(ptr) => Ok(ptr::NonNull::new(ptr.cast::<u8>())
                 .expect("Pointer to memory mapping must not be null")),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(gpu_alloc::DeviceMapError::OutOfDeviceMemory)
@@ -709,7 +709,7 @@ impl super::Device {
 
     fn compile_stage(
         &self,
-        stage: &crate::ProgrammableStage<super::Api>,
+        stage: &crate::ProgrammableStage<super::ShaderModule>,
         naga_stage: naga::ShaderStage,
         binding_map: &naga::back::spv::BindingMap,
     ) -> Result<CompiledStage, crate::PipelineError> {
@@ -736,7 +736,6 @@ impl super::Device {
                             index: naga::proc::BoundsCheckPolicy::Unchecked,
                             buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                            image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
                     }
@@ -765,7 +764,9 @@ impl super::Device {
                     &naga_shader.info,
                     stage.constants,
                 )
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
+                .map_err(|e| {
+                    crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
+                })?;
 
                 let spv = {
                     profiling::scope!("naga::spv::write_vec");
@@ -951,12 +952,10 @@ impl crate::Device for super::Device {
             Err(crate::DeviceError::OutOfMemory)
         }
     }
-    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
+        // We can only unmap the buffer if it was already mapped successfully.
         if let Some(ref block) = buffer.block {
             unsafe { block.lock().unmap(&*self.shared) };
-            Ok(())
-        } else {
-            Err(crate::DeviceError::OutOfMemory)
         }
     }
 
@@ -1216,7 +1215,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_command_encoder(
         &self,
-        desc: &crate::CommandEncoderDescriptor<super::Api>,
+        desc: &crate::CommandEncoderDescriptor<super::Queue>,
     ) -> Result<super::CommandEncoder, crate::DeviceError> {
         let vk_info = vk::CommandPoolCreateInfo::default()
             .queue_family_index(desc.queue.family_index)
@@ -1388,7 +1387,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
+        desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
     ) -> Result<super::PipelineLayout, crate::DeviceError> {
         //Note: not bothering with on stack array here as it's low frequency
         let vk_set_layouts = desc
@@ -1454,7 +1453,13 @@ impl crate::Device for super::Device {
 
     unsafe fn create_bind_group(
         &self,
-        desc: &crate::BindGroupDescriptor<super::Api>,
+        desc: &crate::BindGroupDescriptor<
+            super::BindGroupLayout,
+            super::Buffer,
+            super::Sampler,
+            super::TextureView,
+            super::AccelerationStructure,
+        >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
         let mut vk_sets = unsafe {
             self.desc_allocator.lock().allocate(
@@ -1515,7 +1520,7 @@ impl crate::Device for super::Device {
                     // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
                     // mutable reference which is also guaranteed to be valid for writes.
                     unsafe {
-                        &mut *(to_init as *mut [MaybeUninit<T>] as *mut [T])
+                        &mut *(ptr::from_mut::<[MaybeUninit<T>]>(to_init) as *mut [T])
                     }
                 };
                 (Self { remainder }, init)
@@ -1680,7 +1685,6 @@ impl crate::Device for super::Device {
                         index: naga::proc::BoundsCheckPolicy::Unchecked,
                         buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                         image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                        image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }
@@ -1721,7 +1725,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_render_pipeline(
         &self,
-        desc: &crate::RenderPipelineDescriptor<super::Api>,
+        desc: &crate::RenderPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let dynamic_states = [
             vk::DynamicState::VIEWPORT,
@@ -1951,6 +1959,7 @@ impl crate::Device for super::Device {
 
         Ok(super::RenderPipeline { raw })
     }
+
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         unsafe { self.shared.raw.destroy_pipeline(pipeline.raw, None) };
 
@@ -1959,7 +1968,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_compute_pipeline(
         &self,
-        desc: &crate::ComputePipelineDescriptor<super::Api>,
+        desc: &crate::ComputePipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let compiled = self.compile_stage(
             &desc.stage,
@@ -2011,7 +2024,7 @@ impl crate::Device for super::Device {
     unsafe fn create_pipeline_cache(
         &self,
         desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Result<PipelineCache, crate::PipelineCacheError> {
+    ) -> Result<super::PipelineCache, crate::PipelineCacheError> {
         let mut info = vk::PipelineCacheCreateInfo::default();
         if let Some(data) = desc.data {
             info = info.initial_data(data)
@@ -2020,12 +2033,12 @@ impl crate::Device for super::Device {
         let raw = unsafe { self.shared.raw.create_pipeline_cache(&info, None) }
             .map_err(crate::DeviceError::from)?;
 
-        Ok(PipelineCache { raw })
+        Ok(super::PipelineCache { raw })
     }
     fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
         Some(self.shared.pipeline_cache_validation_key)
     }
-    unsafe fn destroy_pipeline_cache(&self, cache: PipelineCache) {
+    unsafe fn destroy_pipeline_cache(&self, cache: super::PipelineCache) {
         unsafe { self.shared.raw.destroy_pipeline_cache(cache.raw, None) }
     }
     unsafe fn create_query_set(
@@ -2156,14 +2169,14 @@ impl crate::Device for super::Device {
         }
     }
 
-    unsafe fn pipeline_cache_get_data(&self, cache: &PipelineCache) -> Option<Vec<u8>> {
+    unsafe fn pipeline_cache_get_data(&self, cache: &super::PipelineCache) -> Option<Vec<u8>> {
         let data = unsafe { self.raw_device().get_pipeline_cache_data(cache.raw) };
         data.ok()
     }
 
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
         const CAPACITY: usize = 8;
 

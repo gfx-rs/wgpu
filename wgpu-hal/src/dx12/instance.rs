@@ -81,7 +81,7 @@ impl crate::Instance for super::Instance {
             let hr = unsafe {
                 factory5.CheckFeatureSupport(
                     dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                    &mut allow_tearing as *mut _ as *mut _,
+                    std::ptr::from_mut(&mut allow_tearing).cast(),
                     mem::size_of::<minwindef::BOOL>() as _,
                 )
             };
@@ -142,9 +142,6 @@ impl crate::Instance for super::Instance {
                 "window handle {window_handle:?} is not a Win32 handle"
             ))),
         }
-    }
-    unsafe fn destroy_surface(&self, _surface: super::Surface) {
-        // just drop
     }
 
     unsafe fn enumerate_adapters(

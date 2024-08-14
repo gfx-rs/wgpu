@@ -196,7 +196,6 @@ impl super::Device {
         }
 
         let value = cur_value + 1;
-        log::debug!("Waiting for idle with value {}", value);
         self.present_queue.signal(&self.idler.fence, value);
         let hr = self
             .idler
@@ -212,10 +211,10 @@ impl super::Device {
     /// allowed to be a subset of the vertex outputs.
     fn load_shader(
         &self,
-        stage: &crate::ProgrammableStage<super::Api>,
+        stage: &crate::ProgrammableStage<super::ShaderModule>,
         layout: &super::PipelineLayout,
         naga_stage: naga::ShaderStage,
-        fragment_stage: Option<&crate::ProgrammableStage<super::Api>>,
+        fragment_stage: Option<&crate::ProgrammableStage<super::ShaderModule>>,
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         use naga::back::hlsl;
 
@@ -235,7 +234,7 @@ impl super::Device {
             &stage.module.naga.info,
             stage.constants,
         )
-        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
+        .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}")))?;
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
             != layout.naga_options.zero_initialize_workgroup_memory;
@@ -404,6 +403,9 @@ impl crate::Device for super::Device {
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
+            // Resource should be dropped before free suballocation
+            drop(buffer);
+
             super::suballocation::free_buffer_allocation(
                 self,
                 alloc,
@@ -434,9 +436,8 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), DeviceError> {
+    unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         unsafe { (*buffer.resource).Unmap(0, ptr::null()) };
-        Ok(())
     }
 
     unsafe fn flush_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {}
@@ -494,6 +495,9 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
         if let Some(alloc) = texture.allocation.take() {
+            // Resource should be dropped before free suballocation
+            drop(texture);
+
             super::suballocation::free_texture_allocation(
                 self,
                 alloc,
@@ -685,7 +689,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_command_encoder(
         &self,
-        desc: &crate::CommandEncoderDescriptor<super::Api>,
+        desc: &crate::CommandEncoderDescriptor<super::Queue>,
     ) -> Result<super::CommandEncoder, DeviceError> {
         let allocator = self
             .raw
@@ -772,7 +776,7 @@ impl crate::Device for super::Device {
 
     unsafe fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<super::Api>,
+        desc: &crate::PipelineLayoutDescriptor<super::BindGroupLayout>,
     ) -> Result<super::PipelineLayout, DeviceError> {
         use naga::back::hlsl;
         // Pipeline layouts are implemented as RootSignature for D3D12.
@@ -812,11 +816,6 @@ impl crate::Device for super::Device {
             }
         }
 
-        log::debug!(
-            "Creating Root Signature '{}'",
-            desc.label.unwrap_or_default()
-        );
-
         let mut binding_map = hlsl::BindingMap::default();
         let (mut bind_cbv, mut bind_srv, mut bind_uav, mut bind_sampler) = (
             hlsl::BindTarget::default(),
@@ -839,11 +838,6 @@ impl crate::Device for super::Device {
         if pc_start != u32::MAX && pc_end != u32::MIN {
             let parameter_index = parameters.len();
             let size = (pc_end - pc_start) / 4;
-            log::debug!(
-                "\tParam[{}] = push constant (count = {})",
-                parameter_index,
-                size,
-            );
             parameters.push(d3d12::RootParameter::constants(
                 d3d12::ShaderVisibility::All,
                 native_binding(&bind_cbv),
@@ -937,12 +931,6 @@ impl crate::Device for super::Device {
                 bt.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
             }
             if ranges.len() > range_base {
-                log::debug!(
-                    "\tParam[{}] = views (vis = {:?}, count = {})",
-                    parameters.len(),
-                    visibility_view_static,
-                    ranges.len() - range_base,
-                );
                 parameters.push(d3d12::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_view_static),
                     &ranges[range_base..],
@@ -976,12 +964,6 @@ impl crate::Device for super::Device {
                 bind_sampler.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
             }
             if ranges.len() > range_base {
-                log::debug!(
-                    "\tParam[{}] = samplers (vis = {:?}, count = {})",
-                    parameters.len(),
-                    visibility_sampler,
-                    ranges.len() - range_base,
-                );
                 parameters.push(d3d12::RootParameter::descriptor_table(
                     conv::map_visibility(visibility_sampler),
                     &ranges[range_base..],
@@ -1031,12 +1013,6 @@ impl crate::Device for super::Device {
                 );
                 info.dynamic_buffers.push(kind);
 
-                log::debug!(
-                    "\tParam[{}] = dynamic {:?} (vis = {:?})",
-                    parameters.len(),
-                    buffer_ty,
-                    dynamic_buffers_visibility,
-                );
                 parameters.push(d3d12::RootParameter::descriptor(
                     parameter_ty,
                     dynamic_buffers_visibility,
@@ -1057,7 +1033,6 @@ impl crate::Device for super::Device {
                 | crate::PipelineLayoutFlags::NUM_WORK_GROUPS,
         ) {
             let parameter_index = parameters.len();
-            log::debug!("\tParam[{}] = special", parameter_index);
             parameters.push(d3d12::RootParameter::constants(
                 d3d12::ShaderVisibility::All, // really needed for VS and CS only
                 native_binding(&bind_cbv),
@@ -1069,9 +1044,6 @@ impl crate::Device for super::Device {
         } else {
             (None, None)
         };
-
-        log::trace!("{:#?}", parameters);
-        log::trace!("Bindings {:#?}", binding_map);
 
         let (blob, error) = self
             .library
@@ -1099,8 +1071,6 @@ impl crate::Device for super::Device {
             .raw
             .create_root_signature(blob, 0)
             .into_device_result("Root signature creation")?;
-
-        log::debug!("\traw = {:?}", raw);
 
         if let Some(label) = desc.label {
             let cwstr = conv::map_label(label);
@@ -1134,7 +1104,13 @@ impl crate::Device for super::Device {
 
     unsafe fn create_bind_group(
         &self,
-        desc: &crate::BindGroupDescriptor<super::Api>,
+        desc: &crate::BindGroupDescriptor<
+            super::BindGroupLayout,
+            super::Buffer,
+            super::Sampler,
+            super::TextureView,
+            super::AccelerationStructure,
+        >,
     ) -> Result<super::BindGroup, DeviceError> {
         let mut cpu_views = desc
             .layout
@@ -1344,7 +1320,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_render_pipeline(
         &self,
-        desc: &crate::RenderPipelineDescriptor<super::Api>,
+        desc: &crate::RenderPipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut shader_stages = wgt::ShaderStages::VERTEX;
@@ -1381,7 +1361,7 @@ impl crate::Device for super::Device {
             };
             for attribute in vbuf.attributes {
                 input_element_descs.push(d3d12_ty::D3D12_INPUT_ELEMENT_DESC {
-                    SemanticName: NAGA_LOCATION_SEMANTIC.as_ptr() as *const _,
+                    SemanticName: NAGA_LOCATION_SEMANTIC.as_ptr().cast(),
                     SemanticIndex: attribute.shader_location,
                     Format: auxil::dxgi::conv::map_vertex_format(attribute.format),
                     InputSlot: i as u32,
@@ -1539,7 +1519,11 @@ impl crate::Device for super::Device {
 
     unsafe fn create_compute_pipeline(
         &self,
-        desc: &crate::ComputePipelineDescriptor<super::Api>,
+        desc: &crate::ComputePipelineDescriptor<
+            super::PipelineLayout,
+            super::ShaderModule,
+            super::PipelineCache,
+        >,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let blob_cs =
             self.load_shader(&desc.stage, desc.layout, naga::ShaderStage::Compute, None)?;
@@ -1583,10 +1567,10 @@ impl crate::Device for super::Device {
     unsafe fn create_pipeline_cache(
         &self,
         _desc: &crate::PipelineCacheDescriptor<'_>,
-    ) -> Result<(), crate::PipelineCacheError> {
-        Ok(())
+    ) -> Result<super::PipelineCache, crate::PipelineCacheError> {
+        Ok(super::PipelineCache)
     }
-    unsafe fn destroy_pipeline_cache(&self, (): ()) {}
+    unsafe fn destroy_pipeline_cache(&self, _: super::PipelineCache) {}
 
     unsafe fn create_query_set(
         &self,
@@ -1744,7 +1728,7 @@ impl crate::Device for super::Device {
         {
             unsafe {
                 self.render_doc
-                    .start_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+                    .start_frame_capture(self.raw.as_mut_ptr().cast(), ptr::null_mut())
             }
         }
         #[cfg(not(feature = "renderdoc"))]
@@ -1755,13 +1739,13 @@ impl crate::Device for super::Device {
         #[cfg(feature = "renderdoc")]
         unsafe {
             self.render_doc
-                .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+                .end_frame_capture(self.raw.as_mut_ptr().cast(), ptr::null_mut())
         }
     }
 
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
         // Implement using `GetRaytracingAccelerationStructurePrebuildInfo`:
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#getraytracingaccelerationstructureprebuildinfo
@@ -1795,5 +1779,42 @@ impl crate::Device for super::Device {
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         self.counters.clone()
+    }
+
+    #[cfg(feature = "windows_rs")]
+    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        let mut upstream = {
+            self.mem_allocator
+                .as_ref()?
+                .lock()
+                .allocator
+                .generate_report()
+        };
+
+        let allocations = upstream
+            .allocations
+            .iter_mut()
+            .map(|alloc| wgt::AllocationReport {
+                name: mem::take(&mut alloc.name),
+                offset: alloc.offset,
+                size: alloc.size,
+            })
+            .collect();
+
+        let blocks = upstream
+            .blocks
+            .iter()
+            .map(|block| wgt::MemoryBlockReport {
+                size: block.size,
+                allocations: block.allocations.clone(),
+            })
+            .collect();
+
+        Some(wgt::AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes: upstream.total_allocated_bytes,
+            total_reserved_bytes: upstream.total_reserved_bytes,
+        })
     }
 }

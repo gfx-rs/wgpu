@@ -261,7 +261,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
             unimplemented!("Current version of web_sys is missing {texture_format:?}")
         }
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
-        TextureFormat::Rg11b10Float => tf::Rg11b10ufloat,
+        TextureFormat::Rg11b10UFloat => tf::Rg11b10ufloat,
         // 64-bit formats
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
@@ -726,7 +726,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 11] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -739,6 +739,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 11] = [
     (
         wgt::Features::TEXTURE_COMPRESSION_BC,
         webgpu_sys::GpuFeatureName::TextureCompressionBc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionBcSliced3d,
     ),
     (
         wgt::Features::TEXTURE_COMPRESSION_ETC2,
@@ -1495,15 +1499,11 @@ impl crate::context::Context for ContextWebGpu {
         )
     }
 
-    fn surface_present(&self, _texture: &Self::TextureId, _detail: &Self::SurfaceOutputDetail) {
+    fn surface_present(&self, _detail: &Self::SurfaceOutputDetail) {
         // Swapchain is presented automatically
     }
 
-    fn surface_texture_discard(
-        &self,
-        _texture: &Self::TextureId,
-        _detail: &Self::SurfaceOutputDetail,
-    ) {
+    fn surface_texture_discard(&self, _detail: &Self::SurfaceOutputDetail) {
         // Can't really discard this on the Web
     }
 
@@ -1887,7 +1887,9 @@ impl crate::context::Context for ContextWebGpu {
             &mapped_vertex_state,
             desc.vertex.compilation_options.constants,
         );
-        mapped_vertex_state.entry_point(desc.vertex.entry_point);
+        if let Some(ep) = desc.vertex.entry_point {
+            mapped_vertex_state.entry_point(ep);
+        }
 
         let buffers = desc
             .vertex
@@ -1964,7 +1966,9 @@ impl crate::context::Context for ContextWebGpu {
             let mut mapped_fragment_desc =
                 webgpu_sys::GpuFragmentState::new(&module.0.module, &targets);
             insert_constants_map(&mapped_vertex_state, frag.compilation_options.constants);
-            mapped_fragment_desc.entry_point(frag.entry_point);
+            if let Some(ep) = frag.entry_point {
+                mapped_fragment_desc.entry_point(ep);
+            }
             mapped_desc.fragment(&mapped_fragment_desc);
         }
 
@@ -1991,7 +1995,9 @@ impl crate::context::Context for ContextWebGpu {
         let mut mapped_compute_stage =
             webgpu_sys::GpuProgrammableStage::new(&shader_module.0.module);
         insert_constants_map(&mapped_compute_stage, desc.compilation_options.constants);
-        mapped_compute_stage.entry_point(desc.entry_point);
+        if let Some(ep) = desc.entry_point {
+            mapped_compute_stage.entry_point(ep);
+        }
         let auto_layout = wasm_bindgen::JsValue::from(webgpu_sys::GpuAutoLayoutMode::Auto);
         let mut mapped_desc = webgpu_sys::GpuComputePipelineDescriptor::new(
             &match desc.layout {
@@ -2991,6 +2997,14 @@ impl crate::context::Context for ContextWebGpu {
         _device_data: &Self::DeviceData,
     ) -> wgt::InternalCounters {
         Default::default()
+    }
+
+    fn device_generate_allocator_report(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+    ) -> Option<wgt::AllocatorReport> {
+        None
     }
 
     fn pipeline_cache_get_data(

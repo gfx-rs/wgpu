@@ -36,7 +36,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba8Sint => F::R8G8B8A8_SINT,
             Tf::Rgb10a2Uint => F::A2B10G10R10_UINT_PACK32,
             Tf::Rgb10a2Unorm => F::A2B10G10R10_UNORM_PACK32,
-            Tf::Rg11b10Float => F::B10G11R11_UFLOAT_PACK32,
+            Tf::Rg11b10UFloat => F::B10G11R11_UFLOAT_PACK32,
             Tf::Rg32Uint => F::R32G32_UINT,
             Tf::Rg32Sint => F::R32G32_SINT,
             Tf::Rg32Float => F::R32G32_SFLOAT,
@@ -178,7 +178,7 @@ pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFo
     })
 }
 
-impl crate::Attachment<'_, super::Api> {
+impl crate::Attachment<'_, super::TextureView> {
     pub(super) fn make_attachment_key(
         &self,
         ops: crate::AttachmentOps,
@@ -192,7 +192,7 @@ impl crate::Attachment<'_, super::Api> {
     }
 }
 
-impl crate::ColorAttachment<'_, super::Api> {
+impl crate::ColorAttachment<'_, super::TextureView> {
     pub(super) unsafe fn make_vk_clear_color(&self) -> vk::ClearColorValue {
         let cv = &self.clear_value;
         match self

@@ -379,7 +379,6 @@ impl<A: hal::Api> Example<A> {
                     entry_point: "main",
                     constants: &Default::default(),
                     zero_initialize_workgroup_memory: true,
-                    vertex_pulling_transform: false,
                 },
                 cache: None,
             })
@@ -413,7 +412,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 vertices_size_in_bytes,
             );
-            device.unmap_buffer(&vertices_buffer).unwrap();
+            device.unmap_buffer(&vertices_buffer);
             assert!(mapping.is_coherent);
 
             vertices_buffer
@@ -438,7 +437,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 indices_size_in_bytes,
             );
-            device.unmap_buffer(&indices_buffer).unwrap();
+            device.unmap_buffer(&indices_buffer);
             assert!(mapping.is_coherent);
 
             indices_buffer
@@ -537,7 +536,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 uniforms_size,
             );
-            device.unmap_buffer(&uniform_buffer).unwrap();
+            device.unmap_buffer(&uniform_buffer);
             assert!(mapping.is_coherent);
             uniform_buffer
         };
@@ -680,7 +679,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 instances_buffer_size,
             );
-            device.unmap_buffer(&instances_buffer).unwrap();
+            device.unmap_buffer(&instances_buffer);
             assert!(mapping.is_coherent);
 
             instances_buffer
@@ -848,7 +847,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 instances_buffer_size,
             );
-            self.device.unmap_buffer(&self.instances_buffer).unwrap();
+            self.device.unmap_buffer(&self.instances_buffer);
             assert!(mapping.is_coherent);
         }
 
@@ -1040,7 +1039,7 @@ impl<A: hal::Api> Example<A> {
 
             self.surface.unconfigure(&self.device);
             self.device.exit(self.queue);
-            self.instance.destroy_surface(self.surface);
+            drop(self.surface);
             drop(self.adapter);
         }
     }

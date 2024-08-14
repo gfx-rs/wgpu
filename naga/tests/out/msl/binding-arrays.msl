@@ -150,17 +150,11 @@ fragment main_Output main_(
     metal::float4 _e278 = v4_;
     v4_ = _e278 + _e277;
     metal::float4 _e282 = v4_;
-    if (metal::all(metal::uint2(pix) < metal::uint2(texture_array_storage[0].get_width(), texture_array_storage[0].get_height()))) {
-        texture_array_storage[0].write(_e282, metal::uint2(pix));
-    }
+    texture_array_storage[0].write(_e282, metal::uint2(pix));
     metal::float4 _e285 = v4_;
-    if (metal::all(metal::uint2(pix) < metal::uint2(texture_array_storage[uniform_index].get_width(), texture_array_storage[uniform_index].get_height()))) {
-        texture_array_storage[uniform_index].write(_e285, metal::uint2(pix));
-    }
+    texture_array_storage[uniform_index].write(_e285, metal::uint2(pix));
     metal::float4 _e288 = v4_;
-    if (metal::all(metal::uint2(pix) < metal::uint2(texture_array_storage[non_uniform_index].get_width(), texture_array_storage[non_uniform_index].get_height()))) {
-        texture_array_storage[non_uniform_index].write(_e288, metal::uint2(pix));
-    }
+    texture_array_storage[non_uniform_index].write(_e288, metal::uint2(pix));
     metal::uint2 _e289 = u2_;
     uint _e290 = u1_;
     metal::float2 v2_ = static_cast<metal::float2>(_e289 + metal::uint2(_e290));

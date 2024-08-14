@@ -20,7 +20,7 @@ impl Resource for WebGpuShaderModule {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.shader_module_drop(self.1));
+        self.0.shader_module_drop(self.1);
     }
 }
 
@@ -45,7 +45,7 @@ pub fn op_webgpu_create_shader_module(
         shader_bound_checks: wgpu_types::ShaderBoundChecks::default(),
     };
 
-    gfx_put!(device => instance.device_create_shader_module(
+    gfx_put!(instance.device_create_shader_module(
     device,
     &descriptor,
     source,

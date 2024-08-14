@@ -19,6 +19,9 @@ pub mod wgsl;
 #[cfg(any(hlsl_out, msl_out, spv_out, glsl_out))]
 pub mod pipeline_constants;
 
+#[cfg(any(hlsl_out, glsl_out))]
+mod continue_forward;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
@@ -254,7 +257,9 @@ impl crate::TypeInner {
     /// Returns true if this is a handle to a type rather than the type directly.
     pub const fn is_handle(&self) -> bool {
         match *self {
-            crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => true,
+            crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure { .. } => true,
             _ => false,
         }
     }

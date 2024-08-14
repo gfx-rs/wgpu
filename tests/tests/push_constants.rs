@@ -102,7 +102,7 @@ async fn partial_update_test(ctx: TestingContext) {
             label: Some("pipeline"),
             layout: Some(&pipeline_layout),
             module: &sm,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });

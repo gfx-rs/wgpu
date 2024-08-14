@@ -8,7 +8,7 @@ pub enum QueryHeapType {
     Timestamp = d3d12::D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
     PipelineStatistics = d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS,
     SOStatistics = d3d12::D3D12_QUERY_HEAP_TYPE_SO_STATISTICS,
-    // VideoDecodeStatistcs = d3d12::D3D12_QUERY_HEAP_TYPE_VIDEO_DECODE_STATISTICS,
+    // VideoDecodeStatistics = d3d12::D3D12_QUERY_HEAP_TYPE_VIDEO_DECODE_STATISTICS,
     // CopyQueueTimestamp = d3d12::D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP,
 }
 

@@ -317,7 +317,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             label: Some("pipeline"),
             layout: Some(&pipeline_layout),
             module: &sm,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });

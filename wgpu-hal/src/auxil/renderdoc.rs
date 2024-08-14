@@ -83,7 +83,7 @@ impl RenderDoc {
         match unsafe { get_api(10401, &mut obj) } {
             1 => RenderDoc::Available {
                 api: RenderDocApi {
-                    api: unsafe { *(obj as *mut renderdoc_sys::RENDERDOC_API_1_4_1) },
+                    api: unsafe { *obj.cast::<renderdoc_sys::RENDERDOC_API_1_4_1>() },
                     lib: renderdoc_lib,
                 },
             },

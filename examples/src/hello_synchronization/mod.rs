@@ -103,7 +103,7 @@ async fn execute(
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "patient_main",
+        entry_point: Some("patient_main"),
         compilation_options: Default::default(),
         cache: None,
     });
@@ -111,7 +111,7 @@ async fn execute(
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "hasty_main",
+        entry_point: Some("hasty_main"),
         compilation_options: Default::default(),
         cache: None,
     });

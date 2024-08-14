@@ -166,7 +166,6 @@ struct Test {
     id_source: IdSource,
     draw_call_kind: DrawCallKind,
     encoder_kind: EncoderKind,
-    vertex_pulling_transform: bool,
 }
 
 impl Test {
@@ -260,7 +259,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         vertex: wgpu::VertexState {
             buffers: &[],
             module: &shader,
-            entry_point: "vs_main_builtin",
+            entry_point: Some("vs_main_builtin"),
             compilation_options: Default::default(),
         },
         primitive: wgpu::PrimitiveState::default(),
@@ -268,7 +267,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba8Unorm,
@@ -280,17 +279,8 @@ async fn vertex_index_common(ctx: TestingContext) {
         cache: None,
     };
     let builtin_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = true;
-    let builtin_pipeline_vpt = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = false;
 
-    pipeline_desc.vertex.entry_point = "vs_main_buffers";
+    pipeline_desc.vertex.entry_point = Some("vs_main_buffers");
     pipeline_desc.vertex.buffers = &[
         wgpu::VertexBufferLayout {
             array_stride: 4,
@@ -304,15 +294,6 @@ async fn vertex_index_common(ctx: TestingContext) {
         },
     ];
     let buffer_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = true;
-    let buffer_pipeline_vpt = ctx.device.create_render_pipeline(&pipeline_desc);
-    pipeline_desc
-        .vertex
-        .compilation_options
-        .vertex_pulling_transform = false;
 
     let dummy = ctx
         .device
@@ -341,18 +322,12 @@ async fn vertex_index_common(ctx: TestingContext) {
         .cartesian_product(IdSource::iter())
         .cartesian_product(DrawCallKind::iter())
         .cartesian_product(EncoderKind::iter())
-        .cartesian_product([false, true])
-        .map(
-            |((((case, id_source), draw_call_kind), encoder_kind), vertex_pulling_transform)| {
-                Test {
-                    case,
-                    id_source,
-                    draw_call_kind,
-                    encoder_kind,
-                    vertex_pulling_transform,
-                }
-            },
-        )
+        .map(|(((case, id_source), draw_call_kind), encoder_kind)| Test {
+            case,
+            id_source,
+            draw_call_kind,
+            encoder_kind,
+        })
         .collect::<Vec<_>>();
 
     let features = ctx.adapter.features();
@@ -360,20 +335,8 @@ async fn vertex_index_common(ctx: TestingContext) {
     let mut failed = false;
     for test in tests {
         let pipeline = match test.id_source {
-            IdSource::Buffers => {
-                if test.vertex_pulling_transform {
-                    &buffer_pipeline_vpt
-                } else {
-                    &buffer_pipeline
-                }
-            }
-            IdSource::Builtins => {
-                if test.vertex_pulling_transform {
-                    &builtin_pipeline_vpt
-                } else {
-                    &builtin_pipeline
-                }
-            }
+            IdSource::Buffers => &buffer_pipeline,
+            IdSource::Builtins => &builtin_pipeline,
         };
 
         let expected = test.expectation(&ctx);

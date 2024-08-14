@@ -550,26 +550,25 @@ impl Inner {
         let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
 
         let mut context_attributes = vec![];
-        if supports_opengl {
-            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
-            context_attributes.push(3);
-            context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-            context_attributes.push(3);
-            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
-                log::warn!("Ignoring specified GLES minor version as OpenGL is used");
-            }
-        } else {
-            context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
-            context_attributes.push(3); // Request GLES 3.0 or higher
-            if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
-                context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
-                context_attributes.push(match force_gles_minor_version {
-                    wgt::Gles3MinorVersion::Automatic => unreachable!(),
-                    wgt::Gles3MinorVersion::Version0 => 0,
-                    wgt::Gles3MinorVersion::Version1 => 1,
-                    wgt::Gles3MinorVersion::Version2 => 2,
-                });
-            }
+        let mut gl_context_attributes = vec![];
+        let mut gles_context_attributes = vec![];
+        gl_context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+        gl_context_attributes.push(3);
+        gl_context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+        gl_context_attributes.push(3);
+        if supports_opengl && force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+            log::warn!("Ignoring specified GLES minor version as OpenGL is used");
+        }
+        gles_context_attributes.push(khronos_egl::CONTEXT_MAJOR_VERSION);
+        gles_context_attributes.push(3); // Request GLES 3.0 or higher
+        if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+            gles_context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+            gles_context_attributes.push(match force_gles_minor_version {
+                wgt::Gles3MinorVersion::Automatic => unreachable!(),
+                wgt::Gles3MinorVersion::Version0 => 0,
+                wgt::Gles3MinorVersion::Version1 => 1,
+                wgt::Gles3MinorVersion::Version2 => 2,
+            });
         }
         if flags.contains(wgt::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
@@ -606,15 +605,31 @@ impl Inner {
             context_attributes.push(khr_context_flags);
         }
         context_attributes.push(khronos_egl::NONE);
-        let context = match egl.create_context(display, config, None, &context_attributes) {
-            Ok(context) => context,
-            Err(e) => {
-                return Err(crate::InstanceError::with_source(
-                    String::from("unable to create GLES 3.x context"),
-                    e,
-                ));
-            }
-        };
+
+        gl_context_attributes.extend(&context_attributes);
+        gles_context_attributes.extend(&context_attributes);
+
+        let context = if supports_opengl {
+            egl.create_context(display, config, None, &gl_context_attributes)
+                .or_else(|_| {
+                    egl.bind_api(khronos_egl::OPENGL_ES_API).unwrap();
+                    egl.create_context(display, config, None, &gles_context_attributes)
+                })
+                .map_err(|e| {
+                    crate::InstanceError::with_source(
+                        String::from("unable to create OpenGL or GLES 3.x context"),
+                        e,
+                    )
+                })
+        } else {
+            egl.create_context(display, config, None, &gles_context_attributes)
+                .map_err(|e| {
+                    crate::InstanceError::with_source(
+                        String::from("unable to create GLES 3.x context"),
+                        e,
+                    )
+                })
+        }?;
 
         // Testing if context can be binded without surface
         // and creating dummy pbuffer surface if not.
@@ -919,7 +934,10 @@ impl crate::Instance for Instance {
 
                 let ret = unsafe {
                     ndk_sys::ANativeWindow_setBuffersGeometry(
-                        handle.a_native_window.as_ptr() as *mut ndk_sys::ANativeWindow,
+                        handle
+                            .a_native_window
+                            .as_ptr()
+                            .cast::<ndk_sys::ANativeWindow>(),
                         0,
                         0,
                         format,
@@ -998,8 +1016,6 @@ impl crate::Instance for Instance {
             srgb_kind: inner.srgb_kind,
         })
     }
-
-    unsafe fn destroy_surface(&self, _surface: Surface) {}
 
     unsafe fn enumerate_adapters(
         &self,
@@ -1229,12 +1245,12 @@ impl crate::Surface for Surface {
                 let native_window_ptr = match (self.wsi.kind, self.raw_window_handle) {
                     (WindowKind::Unknown | WindowKind::X11, Rwh::Xlib(handle)) => {
                         temp_xlib_handle = handle.window;
-                        &mut temp_xlib_handle as *mut _ as *mut ffi::c_void
+                        ptr::from_mut(&mut temp_xlib_handle).cast::<ffi::c_void>()
                     }
                     (WindowKind::AngleX11, Rwh::Xlib(handle)) => handle.window as *mut ffi::c_void,
                     (WindowKind::Unknown | WindowKind::X11, Rwh::Xcb(handle)) => {
                         temp_xcb_handle = handle.window;
-                        &mut temp_xcb_handle as *mut _ as *mut ffi::c_void
+                        ptr::from_mut(&mut temp_xcb_handle).cast::<ffi::c_void>()
                     }
                     (WindowKind::AngleX11, Rwh::Xcb(handle)) => {
                         handle.window.get() as *mut ffi::c_void
@@ -1248,7 +1264,7 @@ impl crate::Surface for Surface {
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
                         let window =
                             unsafe { wl_egl_window_create(handle.surface.as_ptr(), 640, 480) }
-                                as *mut _;
+                                .cast();
                         wl_window = Some(window);
                         window
                     }
@@ -1265,8 +1281,8 @@ impl crate::Surface for Surface {
                             use objc::{msg_send, runtime::Object, sel, sel_impl};
                             // ns_view always have a layer and don't need to verify that it exists.
                             let layer: *mut Object =
-                                msg_send![handle.ns_view.as_ptr() as *mut Object, layer];
-                            layer as *mut ffi::c_void
+                                msg_send![handle.ns_view.as_ptr().cast::<Object>(), layer];
+                            layer.cast::<ffi::c_void>()
                         };
                         window_ptr
                     }

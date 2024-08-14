@@ -1,4 +1,4 @@
 [toolchain]
-channel = "1.76"                     # Needed for deno & cts_runner. Firefox's MSRV is 1.74
+channel = "1.76"
 components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]

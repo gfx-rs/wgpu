@@ -88,7 +88,6 @@ use crate::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
         SHADER_STAGE_COUNT,
     },
-    hal_api::HalApi,
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
@@ -104,16 +103,14 @@ use arrayvec::ArrayVec;
 use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range, sync::Arc};
 use thiserror::Error;
 
-use hal::CommandEncoder as _;
-
 use super::{
     render_command::{ArcRenderCommand, RenderCommand},
     DrawKind,
 };
 
 /// <https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw>
-fn validate_draw<A: HalApi>(
-    vertex: &[Option<VertexState<A>>],
+fn validate_draw(
+    vertex: &[Option<VertexState>],
     step: &[VertexStep],
     first_vertex: u32,
     vertex_count: u32,
@@ -153,10 +150,10 @@ fn validate_draw<A: HalApi>(
 }
 
 // See https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-drawindexed
-fn validate_indexed_draw<A: HalApi>(
-    vertex: &[Option<VertexState<A>>],
+fn validate_indexed_draw(
+    vertex: &[Option<VertexState>],
     step: &[VertexStep],
-    index_state: &IndexState<A>,
+    index_state: &IndexState,
     first_index: u32,
     index_count: u32,
     first_instance: u32,
@@ -341,12 +338,12 @@ impl RenderBundleEncoder {
     /// and accumulate buffer and texture initialization actions.
     ///
     /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
-    pub(crate) fn finish<A: HalApi>(
+    pub(crate) fn finish(
         self,
         desc: &RenderBundleDescriptor,
-        device: &Arc<Device<A>>,
-        hub: &Hub<A>,
-    ) -> Result<Arc<RenderBundle<A>>, RenderBundleError> {
+        device: &Arc<Device>,
+        hub: &Hub,
+    ) -> Result<Arc<RenderBundle>, RenderBundleError> {
         let scope = PassErrorScope::Bundle;
 
         device.check_is_valid().map_pass_err(scope)?;
@@ -370,31 +367,8 @@ impl RenderBundleEncoder {
         };
 
         let indices = &state.device.tracker_indices;
-        state
-            .trackers
-            .buffers
-            .write()
-            .set_size(indices.buffers.size());
-        state
-            .trackers
-            .textures
-            .write()
-            .set_size(indices.textures.size());
-        state
-            .trackers
-            .bind_groups
-            .write()
-            .set_size(indices.bind_groups.size());
-        state
-            .trackers
-            .render_pipelines
-            .write()
-            .set_size(indices.render_pipelines.size());
-        state
-            .trackers
-            .query_sets
-            .write()
-            .set_size(indices.query_sets.size());
+        state.trackers.buffers.set_size(indices.buffers.size());
+        state.trackers.textures.set_size(indices.textures.size());
 
         let base = &self.base;
 
@@ -602,9 +576,9 @@ impl RenderBundleEncoder {
     }
 }
 
-fn set_bind_group<A: HalApi>(
-    state: &mut State<A>,
-    bind_group_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<BindGroup<A>>>,
+fn set_bind_group(
+    state: &mut State,
+    bind_group_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<BindGroup>>,
     dynamic_offsets: &[u32],
     index: u32,
     num_dynamic_offsets: usize,
@@ -641,15 +615,15 @@ fn set_bind_group<A: HalApi>(
 
     state.set_bind_group(index, &bind_group, offsets_range);
     unsafe { state.trackers.merge_bind_group(&bind_group.used)? };
-    state.trackers.bind_groups.write().insert_single(bind_group);
+    state.trackers.bind_groups.insert_single(bind_group);
     // Note: stateless trackers are not merged: the lifetime reference
     // is held to the bind group itself.
     Ok(())
 }
 
-fn set_pipeline<A: HalApi>(
-    state: &mut State<A>,
-    pipeline_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<RenderPipeline<A>>>,
+fn set_pipeline(
+    state: &mut State,
+    pipeline_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<RenderPipeline>>,
     context: &RenderPassContext,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
@@ -686,17 +660,13 @@ fn set_pipeline<A: HalApi>(
     state.invalidate_bind_groups(&pipeline_state, &pipeline.layout);
     state.pipeline = Some(pipeline_state);
 
-    state
-        .trackers
-        .render_pipelines
-        .write()
-        .insert_single(pipeline);
+    state.trackers.render_pipelines.insert_single(pipeline);
     Ok(())
 }
 
-fn set_index_buffer<A: HalApi>(
-    state: &mut State<A>,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer<A>>>,
+fn set_index_buffer(
+    state: &mut State,
+    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
@@ -709,7 +679,6 @@ fn set_index_buffer<A: HalApi>(
     state
         .trackers
         .buffers
-        .write()
         .merge_single(&buffer, hal::BufferUses::INDEX)?;
 
     buffer.same_device(&state.device)?;
@@ -730,9 +699,9 @@ fn set_index_buffer<A: HalApi>(
     Ok(())
 }
 
-fn set_vertex_buffer<A: HalApi>(
-    state: &mut State<A>,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer<A>>>,
+fn set_vertex_buffer(
+    state: &mut State,
+    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
@@ -754,7 +723,6 @@ fn set_vertex_buffer<A: HalApi>(
     state
         .trackers
         .buffers
-        .write()
         .merge_single(&buffer, hal::BufferUses::VERTEX)?;
 
     buffer.same_device(&state.device)?;
@@ -775,8 +743,8 @@ fn set_vertex_buffer<A: HalApi>(
     Ok(())
 }
 
-fn set_push_constant<A: HalApi>(
-    state: &mut State<A>,
+fn set_push_constant(
+    state: &mut State,
     stages: wgt::ShaderStages,
     offset: u32,
     size_bytes: u32,
@@ -800,8 +768,8 @@ fn set_push_constant<A: HalApi>(
     Ok(())
 }
 
-fn draw<A: HalApi>(
-    state: &mut State<A>,
+fn draw(
+    state: &mut State,
     dynamic_offsets: &[u32],
     vertex_count: u32,
     instance_count: u32,
@@ -833,8 +801,8 @@ fn draw<A: HalApi>(
     Ok(())
 }
 
-fn draw_indexed<A: HalApi>(
-    state: &mut State<A>,
+fn draw_indexed(
+    state: &mut State,
     dynamic_offsets: &[u32],
     index_count: u32,
     instance_count: u32,
@@ -874,10 +842,10 @@ fn draw_indexed<A: HalApi>(
     Ok(())
 }
 
-fn multi_draw_indirect<A: HalApi>(
-    state: &mut State<A>,
+fn multi_draw_indirect(
+    state: &mut State,
     dynamic_offsets: &[u32],
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer<A>>>,
+    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
     indexed: bool,
@@ -896,7 +864,6 @@ fn multi_draw_indirect<A: HalApi>(
     state
         .trackers
         .buffers
-        .write()
         .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
 
     buffer.same_device(&state.device)?;
@@ -955,16 +922,16 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
 #[derive(Debug)]
-pub struct RenderBundle<A: HalApi> {
+pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
-    base: BasePass<ArcRenderCommand<A>>,
+    base: BasePass<ArcRenderCommand>,
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
-    pub(crate) device: Arc<Device<A>>,
-    pub(crate) used: RenderBundleScope<A>,
-    pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
-    pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction<A>>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) used: RenderBundleScope,
+    pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     pub(super) context: RenderPassContext,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -972,18 +939,18 @@ pub struct RenderBundle<A: HalApi> {
     discard_hal_labels: bool,
 }
 
-impl<A: HalApi> Drop for RenderBundle<A> {
+impl Drop for RenderBundle {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
     }
 }
 
 #[cfg(send_sync)]
-unsafe impl<A: HalApi> Send for RenderBundle<A> {}
+unsafe impl Send for RenderBundle {}
 #[cfg(send_sync)]
-unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
+unsafe impl Sync for RenderBundle {}
 
-impl<A: HalApi> RenderBundle<A> {
+impl RenderBundle {
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `render_pass_end`.
@@ -995,11 +962,11 @@ impl<A: HalApi> RenderBundle<A> {
     /// The only failure condition is if some of the used buffers are destroyed.
     pub(super) unsafe fn execute(
         &self,
-        raw: &mut A::CommandEncoder,
+        raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
-        let mut pipeline_layout = None::<Arc<PipelineLayout<A>>>;
+        let mut pipeline_layout = None::<Arc<PipelineLayout>>;
         if !self.discard_hal_labels {
             if let Some(ref label) = self.base.label {
                 unsafe { raw.begin_debug_marker(label) };
@@ -1036,7 +1003,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer: &A::Buffer = buffer.try_raw(snatch_guard)?;
+                    let buffer = buffer.try_raw(snatch_guard)?;
                     let bb = hal::BufferBinding {
                         buffer,
                         offset: *offset,
@@ -1190,14 +1157,14 @@ crate::impl_trackable!(RenderBundle);
 /// and calls [`State::flush_index`] before any indexed draw command to produce
 /// a `SetIndexBuffer` command if one is necessary.
 #[derive(Debug)]
-struct IndexState<A: HalApi> {
-    buffer: Arc<Buffer<A>>,
+struct IndexState {
+    buffer: Arc<Buffer>,
     format: wgt::IndexFormat,
     range: Range<wgt::BufferAddress>,
     is_dirty: bool,
 }
 
-impl<A: HalApi> IndexState<A> {
+impl IndexState {
     /// Return the number of entries in the current index buffer.
     ///
     /// Panic if no index buffer has been set.
@@ -1212,7 +1179,7 @@ impl<A: HalApi> IndexState<A> {
 
     /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
     /// command, if needed.
-    fn flush(&mut self) -> Option<ArcRenderCommand<A>> {
+    fn flush(&mut self) -> Option<ArcRenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
             Some(ArcRenderCommand::SetIndexBuffer {
@@ -1237,14 +1204,14 @@ impl<A: HalApi> IndexState<A> {
 ///
 /// [`flush`]: IndexState::flush
 #[derive(Debug)]
-struct VertexState<A: HalApi> {
-    buffer: Arc<Buffer<A>>,
+struct VertexState {
+    buffer: Arc<Buffer>,
     range: Range<wgt::BufferAddress>,
     is_dirty: bool,
 }
 
-impl<A: HalApi> VertexState<A> {
-    fn new(buffer: Arc<Buffer<A>>, range: Range<wgt::BufferAddress>) -> Self {
+impl VertexState {
+    fn new(buffer: Arc<Buffer>, range: Range<wgt::BufferAddress>) -> Self {
         Self {
             buffer,
             range,
@@ -1255,7 +1222,7 @@ impl<A: HalApi> VertexState<A> {
     /// Generate a `SetVertexBuffer` command for this slot, if necessary.
     ///
     /// `slot` is the index of the vertex buffer slot that `self` tracks.
-    fn flush(&mut self, slot: u32) -> Option<ArcRenderCommand<A>> {
+    fn flush(&mut self, slot: u32) -> Option<ArcRenderCommand> {
         if self.is_dirty {
             self.is_dirty = false;
             Some(ArcRenderCommand::SetVertexBuffer {
@@ -1272,9 +1239,9 @@ impl<A: HalApi> VertexState<A> {
 
 /// A bind group that has been set at a particular index during render bundle encoding.
 #[derive(Debug)]
-struct BindState<A: HalApi> {
+struct BindState {
     /// The id of the bind group set at this index.
-    bind_group: Arc<BindGroup<A>>,
+    bind_group: Arc<BindGroup>,
 
     /// The range of dynamic offsets for this bind group, in the original
     /// command stream's `BassPass::dynamic_offsets` array.
@@ -1286,9 +1253,9 @@ struct BindState<A: HalApi> {
 }
 
 /// The bundle's current pipeline, and some cached information needed for validation.
-struct PipelineState<A: HalApi> {
+struct PipelineState {
     /// The pipeline
-    pipeline: Arc<RenderPipeline<A>>,
+    pipeline: Arc<RenderPipeline>,
 
     /// How this pipeline's vertex shader traverses each vertex buffer, indexed
     /// by vertex buffer slot number.
@@ -1302,8 +1269,8 @@ struct PipelineState<A: HalApi> {
     used_bind_groups: usize,
 }
 
-impl<A: HalApi> PipelineState<A> {
-    fn new(pipeline: &Arc<RenderPipeline<A>>) -> Self {
+impl PipelineState {
+    fn new(pipeline: &Arc<RenderPipeline>) -> Self {
         Self {
             pipeline: pipeline.clone(),
             steps: pipeline.vertex_steps.to_vec(),
@@ -1319,7 +1286,7 @@ impl<A: HalApi> PipelineState<A> {
 
     /// Return a sequence of commands to zero the push constant ranges this
     /// pipeline uses. If no initialization is necessary, return `None`.
-    fn zero_push_constants(&self) -> Option<impl Iterator<Item = ArcRenderCommand<A>>> {
+    fn zero_push_constants(&self) -> Option<impl Iterator<Item = ArcRenderCommand>> {
         if !self.push_constant_ranges.is_empty() {
             let nonoverlapping_ranges =
                 super::bind::compute_nonoverlapping_ranges(&self.push_constant_ranges);
@@ -1350,22 +1317,22 @@ impl<A: HalApi> PipelineState<A> {
 ///
 /// [`SetBindGroup`]: RenderCommand::SetBindGroup
 /// [`SetIndexBuffer`]: RenderCommand::SetIndexBuffer
-struct State<A: HalApi> {
+struct State {
     /// Resources used by this bundle. This will become [`RenderBundle::used`].
-    trackers: RenderBundleScope<A>,
+    trackers: RenderBundleScope,
 
     /// The currently set pipeline, if any.
-    pipeline: Option<PipelineState<A>>,
+    pipeline: Option<PipelineState>,
 
     /// The bind group set at each index, if any.
-    bind: ArrayVec<Option<BindState<A>>, { hal::MAX_BIND_GROUPS }>,
+    bind: ArrayVec<Option<BindState>, { hal::MAX_BIND_GROUPS }>,
 
     /// The state of each vertex buffer slot.
-    vertex: ArrayVec<Option<VertexState<A>>, { hal::MAX_VERTEX_BUFFERS }>,
+    vertex: ArrayVec<Option<VertexState>, { hal::MAX_VERTEX_BUFFERS }>,
 
     /// The current index buffer, if one has been set. We flush this state
     /// before indexed draw commands.
-    index: Option<IndexState<A>>,
+    index: Option<IndexState>,
 
     /// Dynamic offset values used by the cleaned-up command sequence.
     ///
@@ -1375,16 +1342,16 @@ struct State<A: HalApi> {
     /// [`dynamic_offsets`]: BasePass::dynamic_offsets
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
 
-    device: Arc<Device<A>>,
-    commands: Vec<ArcRenderCommand<A>>,
-    buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
-    texture_memory_init_actions: Vec<TextureInitTrackerAction<A>>,
+    device: Arc<Device>,
+    commands: Vec<ArcRenderCommand>,
+    buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
+    texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     next_dynamic_offset: usize,
 }
 
-impl<A: HalApi> State<A> {
+impl State {
     /// Return the current pipeline state. Return an error if none is set.
-    fn pipeline(&self) -> Result<&PipelineState<A>, RenderBundleErrorInner> {
+    fn pipeline(&self) -> Result<&PipelineState, RenderBundleErrorInner> {
         self.pipeline
             .as_ref()
             .ok_or(DrawError::MissingPipeline.into())
@@ -1400,7 +1367,7 @@ impl<A: HalApi> State<A> {
     fn set_bind_group(
         &mut self,
         slot: u32,
-        bind_group: &Arc<BindGroup<A>>,
+        bind_group: &Arc<BindGroup>,
         dynamic_offsets: Range<usize>,
     ) {
         // If this call wouldn't actually change this index's state, we can
@@ -1439,7 +1406,7 @@ impl<A: HalApi> State<A> {
     ///
     /// - Changing the push constant ranges at all requires re-establishing
     ///   all bind groups.
-    fn invalidate_bind_groups(&mut self, new: &PipelineState<A>, layout: &PipelineLayout<A>) {
+    fn invalidate_bind_groups(&mut self, new: &PipelineState, layout: &PipelineLayout) {
         match self.pipeline {
             None => {
                 // Establishing entirely new pipeline state.
@@ -1473,7 +1440,7 @@ impl<A: HalApi> State<A> {
     /// Set the bundle's current index buffer and its associated parameters.
     fn set_index_buffer(
         &mut self,
-        buffer: Arc<Buffer<A>>,
+        buffer: Arc<Buffer>,
         format: wgt::IndexFormat,
         range: Range<wgt::BufferAddress>,
     ) {

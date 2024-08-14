@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "0.20.0"
+version = "22.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU types"
@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.74"
+rust-version = "1.76"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -30,16 +30,17 @@ targets = [
 [features]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
+serde = ["dep:serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 
 [dependencies]
-bitflags = "2"
-serde = { version = "1", features = ["serde_derive"], optional = true }
+bitflags.workspace = true
+serde = { workspace = true, features = ["derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3.69"
-web-sys = { version = "0.3.69", features = [
+js-sys.workspace = true
+web-sys = { workspace = true, features = [
     "ImageBitmap",
     "HtmlVideoElement",
     "HtmlCanvasElement",
@@ -47,5 +48,5 @@ web-sys = { version = "0.3.69", features = [
 ] }
 
 [dev-dependencies]
-serde = { version = "1", features = ["serde_derive"] }
-serde_json = "1.0.119"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

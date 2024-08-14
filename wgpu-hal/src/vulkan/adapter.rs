@@ -253,6 +253,7 @@ impl PhysicalDeviceFeatures {
                 )
                 .texture_compression_bc(
                     requested_features.contains(wgt::Features::TEXTURE_COMPRESSION_BC),
+                    // BC provides formats for Sliced 3D
                 )
                 //.occlusion_query_precise(requested_features.contains(wgt::Features::PRECISE_OCCLUSION_QUERY))
                 .pipeline_statistics_query(
@@ -428,12 +429,14 @@ impl PhysicalDeviceFeatures {
             shader_atomic_int64: if device_api_version >= vk::API_VERSION_1_2
                 || enabled_extensions.contains(&khr::shader_atomic_int64::NAME)
             {
+                let needed = requested_features.intersects(
+                    wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
+                        | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
+                );
                 Some(
                     vk::PhysicalDeviceShaderAtomicInt64Features::default()
-                        .shader_buffer_int64_atomics(requested_features.intersects(
-                            wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
-                                | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
-                        )),
+                        .shader_buffer_int64_atomics(needed)
+                        .shader_shared_int64_atomics(needed),
                 )
             } else {
                 None
@@ -536,6 +539,10 @@ impl PhysicalDeviceFeatures {
         features.set(
             F::TEXTURE_COMPRESSION_BC,
             self.core.texture_compression_bc != 0,
+        );
+        features.set(
+            F::TEXTURE_COMPRESSION_BC_SLICED_3D,
+            self.core.texture_compression_bc != 0, // BC guarantees Sliced 3D
         );
         features.set(
             F::PIPELINE_STATISTICS_QUERY,
@@ -1231,6 +1238,17 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            // `VK_KHR_shader_atomic_int64` is promoted to 1.2, but has no
+            // changes, so we can keep using the extension unconditionally.
+            if capabilities.device_api_version >= vk::API_VERSION_1_2
+                || capabilities.supports_extension(khr::shader_atomic_int64::NAME)
+            {
+                let next = features
+                    .shader_atomic_int64
+                    .insert(vk::PhysicalDeviceShaderAtomicInt64Features::default());
+                features2 = features2.push_next(next);
+            }
+
             if capabilities.supports_extension(ext::image_robustness::NAME) {
                 let next = features
                     .image_robustness
@@ -1763,7 +1781,6 @@ impl super::Adapter {
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
                     },
-                    image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
