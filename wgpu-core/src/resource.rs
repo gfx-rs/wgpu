@@ -28,8 +28,9 @@ use std::{
     ptr::NonNull,
     sync::{Arc, Weak},
 };
-
+use std::cmp::max;
 use std::num::NonZeroU64;
+use hal::{BufferUses, DynAccelerationStructure};
 
 /// Information about the wgpu-core resource.
 ///
@@ -932,6 +933,46 @@ impl FlushedStagingBuffer {
 }
 
 impl Drop for FlushedStagingBuffer {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw StagingBuffer");
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe { self.device.raw().destroy_buffer(raw) };
+    }
+}
+
+#[derive(Debug)]
+pub struct ScratchBuffer {
+    raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    device: Arc<Device>,
+    pub(crate) size: wgt::BufferSize,
+}
+
+impl ScratchBuffer {
+    pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
+        let raw = unsafe {
+            device
+                .raw()
+                .create_buffer(&hal::BufferDescriptor {
+                    label: Some("(wgpu) scratch buffer"),
+                    size: size.get(),
+                    usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH | BufferUses::MAP_WRITE,
+                    memory_flags: hal::MemoryFlags::empty(),
+                })
+                .map_err(crate::device::DeviceError::from)?
+        };
+        Ok(Self {
+            raw: ManuallyDrop::new(raw),
+            device: device.clone(),
+            size,
+        })
+    }
+    pub(crate) fn raw(&self) -> &dyn hal::DynBuffer {
+        self.raw.as_ref()
+    }
+}
+
+impl Drop for ScratchBuffer {
     fn drop(&mut self) {
         resource_log!("Destroy raw StagingBuffer");
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
@@ -1843,10 +1884,14 @@ pub enum DestroyError {
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
+pub(crate) trait AccelerationStructure: Trackable {
+    fn raw(&self) -> &dyn hal::DynAccelerationStructure;
+}
+
 #[derive(Debug)]
-pub struct Blas<A: HalApi> {
-    pub(crate) raw: Option<A::AccelerationStructure>,
-    pub(crate) device: Arc<Device<A>>,
+pub struct Blas {
+    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
     pub(crate) flags: wgt::AccelerationStructureFlags,
@@ -1858,15 +1903,22 @@ pub struct Blas<A: HalApi> {
     pub(crate) tracking_data: TrackingData,
 }
 
-impl<A: HalApi> Drop for Blas<A> {
+impl Drop for Blas {
     fn drop(&mut self) {
         unsafe {
-            if let Some(structure) = self.raw.take() {
-                resource_log!("Destroy raw {}", self.error_ident());
-                use hal::Device;
-                self.device.raw().destroy_acceleration_structure(structure);
+            resource_log!("Destroy raw {}", self.error_ident());
+            // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+            let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+            unsafe {
+                self.device.raw().destroy_acceleration_structure(raw);
             }
         }
+    }
+}
+
+impl AccelerationStructure for Blas {
+    fn raw(&self) -> &dyn hal::DynAccelerationStructure {
+        self.raw.as_ref()
     }
 }
 
@@ -1877,39 +1929,37 @@ crate::impl_storage_item!(Blas);
 crate::impl_trackable!(Blas);
 
 #[derive(Debug)]
-pub struct Tlas<A: HalApi> {
-    pub(crate) raw: Option<A::AccelerationStructure>,
-    pub(crate) device: Arc<Device<A>>,
+pub struct Tlas {
+    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) max_instance_count: u32,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: RwLock<Option<NonZeroU64>>,
-    pub(crate) dependencies: RwLock<Vec<Arc<Blas<A>>>>,
-    pub(crate) instance_buffer: RwLock<Option<A::Buffer>>,
+    pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
+    pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
 }
 
-impl<A: HalApi> Drop for Tlas<A> {
+impl Drop for Tlas {
     fn drop(&mut self) {
         unsafe {
             use hal::Device;
-            if let Some(structure) = self.raw.take() {
-                resource_log!("Destroy raw {}", self.error_ident());
-                self.device.raw().destroy_acceleration_structure(structure);
-            }
-            if let Some(buffer) = self.instance_buffer.write().take() {
-                self.device.raw().destroy_buffer(buffer)
-            }
+            let structure = ManuallyDrop::take(&mut self.raw);
+            let buffer = ManuallyDrop::take(&mut self.instance_buffer);
+            resource_log!("Destroy raw {}", self.error_ident());
+            self.device.raw().destroy_acceleration_structure(structure);
+            self.device.raw().destroy_buffer(buffer);
         }
     }
 }
 
-impl<A: HalApi> Tlas<A> {
-    pub(crate) fn raw(&self) -> &A::AccelerationStructure {
-        self.raw.as_ref().unwrap()
+impl AccelerationStructure for Tlas {
+    fn raw(&self) -> &dyn hal::DynAccelerationStructure {
+        self.raw.as_ref()
     }
 }
 

@@ -811,7 +811,7 @@ pub enum ResolvedBindingResource<'a> {
     SamplerArray(Cow<'a, [Arc<Sampler>]>),
     TextureView(Arc<TextureView>),
     TextureViewArray(Cow<'a, [Arc<TextureView>]>),
-    AccelerationStructure(Arc<Tlas<A>>),
+    AccelerationStructure(Arc<Tlas>),
 }
 
 #[derive(Clone, Debug, Error)]

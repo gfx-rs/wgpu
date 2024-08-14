@@ -453,22 +453,22 @@ impl GlobalPlay for wgc::global::Global {
                 self.queue_submit(queue, &[cmdbuf]).unwrap();
             }
             Action::CreateBlas { id, desc, sizes } => {
-                self.device_create_blas::<A>(device, &desc, sizes, Some(id));
+                self.device_create_blas(device, &desc, sizes, Some(id));
             }
             Action::FreeBlas(id) => {
-                self.blas_destroy::<A>(id).unwrap();
+                self.blas_destroy(id).unwrap();
             }
             Action::DestroyBlas(id) => {
-                self.blas_drop::<A>(id, true);
+                self.blas_drop(id);
             }
             Action::CreateTlas { id, desc } => {
-                self.device_create_tlas::<A>(device, &desc, Some(id));
+                self.device_create_tlas(device, &desc, Some(id));
             }
             Action::FreeTlas(id) => {
-                self.tlas_destroy::<A>(id).unwrap();
+                self.tlas_destroy(id).unwrap();
             }
             Action::DestroyTlas(id) => {
-                self.tlas_drop::<A>(id, true);
+                self.tlas_drop(id);
             }
         }
     }

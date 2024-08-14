@@ -28,12 +28,10 @@ use crate::{
 use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
 
-use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions, DynComputePass};
+use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 use crate::ray_tracing::TlasAction;
 use std::sync::Arc;
 use std::{fmt, mem, str};
-
-use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -216,7 +214,7 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     tracker: &'cmd_buf mut Tracker,
     buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction>,
     texture_memory_actions: &'cmd_buf mut CommandBufferTextureMemoryActions,
-    tlas_actions: &'cmd_buf mut Vec<TlasAction<A>>,
+    tlas_actions: &'cmd_buf mut Vec<TlasAction>,
 
     temp_offsets: Vec<u32>,
     dynamic_offset_count: usize,
@@ -694,9 +692,9 @@ fn set_bind_group(
     let used_resource = bind_group
         .used
         .acceleration_structures
-        .used_resources()
+        .into_iter()
         .map(|tlas| TlasAction {
-            tlas,
+            tlas: tlas.clone(),
             kind: crate::ray_tracing::TlasActionKind::Use,
         });
 

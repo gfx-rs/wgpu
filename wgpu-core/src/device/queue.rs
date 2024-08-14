@@ -26,7 +26,7 @@ use crate::{
 
 use smallvec::SmallVec;
 
-use crate::resource::{Blas, Tlas};
+use crate::resource::{Blas, ScratchBuffer, Tlas};
 use std::{
     iter,
     mem::{self, ManuallyDrop},
@@ -143,10 +143,11 @@ impl SubmittedWorkDoneClosure {
 #[derive(Debug)]
 pub enum TempResource {
     StagingBuffer(FlushedStagingBuffer),
+    ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
-    Blas(Arc<Blas<A>>),
-    Tlas(Arc<Tlas<A>>),
+    Blas(Arc<Blas>),
+    Tlas(Arc<Tlas>),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a

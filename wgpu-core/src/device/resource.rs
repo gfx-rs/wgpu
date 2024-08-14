@@ -41,11 +41,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension};
 
-use super::{
-    queue::{self, Queue},
-    DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
-};
-use crate::resource::Tlas;
+use crate::resource::{AccelerationStructure, Tlas};
 use std::{
     borrow::Cow,
     mem::ManuallyDrop,
@@ -2118,14 +2114,14 @@ impl Device {
 
     fn create_tlas_binding<'a>(
         self: &Arc<Self>,
-        used: &BindGroupStates<A>,
+        used: &mut BindGroupStates,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        tlas: &'a Arc<Tlas<A>>,
-    ) -> Result<&'a A::AccelerationStructure, binding_model::CreateBindGroupError> {
+        tlas: &'a Arc<Tlas>,
+    ) -> Result<&'a dyn hal::DynAccelerationStructure, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
-        used.acceleration_structures.add_single(tlas);
+        used.acceleration_structures.insert_single(tlas.clone());
 
         tlas.same_device(self)?;
 
@@ -2285,7 +2281,7 @@ impl Device {
                     (res_index, num_bindings)
                 }
                 Br::AccelerationStructure(ref tlas) => {
-                    let tlas = self.create_tlas_binding(&used, binding, decl, tlas)?;
+                    let tlas = self.create_tlas_binding(&mut used, binding, decl, tlas)?;
                     let res_index = hal_tlas_s.len();
                     hal_tlas_s.push(tlas);
                     (res_index, 1)

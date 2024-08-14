@@ -100,6 +100,7 @@ mod metadata;
 mod range;
 mod stateless;
 mod texture;
+mod ray_tracing;
 
 use crate::{
     binding_model, command,
@@ -122,6 +123,8 @@ pub(crate) use texture::{
     TextureUsageScope, TextureViewBindGroupState,
 };
 use wgt::strict_assert_ne;
+use crate::resource::AccelerationStructure;
+use crate::track::ray_tracing::AccelerationStructureTracker;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -302,6 +305,17 @@ impl PendingTransition<hal::TextureUses> {
     }
 }
 
+impl PendingTransition<hal::AccelerationStructureUses> {
+    /// Produce the hal barrier corresponding to the transition.
+    pub fn into_hal<'a>(
+        self,
+    ) -> hal::AccelerationStructureBarrier {
+        hal::AccelerationStructureBarrier {
+            usage: self.usage,
+        }
+    }
+}
+
 /// The uses that a resource or subresource can be in.
 pub(crate) trait ResourceUses:
     fmt::Debug + ops::BitAnd<Output = Self> + ops::BitOr<Output = Self> + PartialEq + Sized + Copy
@@ -424,7 +438,7 @@ pub(crate) struct BindGroupStates {
     pub buffers: BufferBindGroupState,
     pub views: TextureViewBindGroupState,
     pub samplers: StatelessTracker<resource::Sampler>,
-    pub acceleration_structures: StatelessBindGroupState<resource::Tlas<A>>,
+    pub acceleration_structures: StatelessTracker<resource::Tlas>,
 }
 
 impl BindGroupStates {
@@ -433,7 +447,7 @@ impl BindGroupStates {
             buffers: BufferBindGroupState::new(),
             views: TextureViewBindGroupState::new(),
             samplers: StatelessTracker::new(),
-            acceleration_structures: StatelessBindGroupState::new(),
+            acceleration_structures: StatelessTracker::new(),
         }
     }
 
@@ -446,9 +460,8 @@ impl BindGroupStates {
         // Views are stateless, however, `TextureViewBindGroupState`
         // is special as it will be merged with other texture trackers.
         self.views.optimize();
-        // Samplers are stateless and don't need to be optimized
+        // Samplers and Tlas's are stateless and don't need to be optimized
         // since the tracker is never merged with any other tracker.
-        self.acceleration_structures.optimize();
     }
 }
 
@@ -601,14 +614,14 @@ impl DeviceTracker {
 pub(crate) struct Tracker {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
+    pub blas_s: AccelerationStructureTracker<resource::Blas>,
+    pub tlas_s: AccelerationStructureTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
     pub query_sets: StatelessTracker<resource::QuerySet>,
-    pub blas_s: StatelessTracker<resource::Blas<A>>,
-    pub tlas_s: StatelessTracker<resource::Tlas<A>>,
 }
 
 impl Tracker {
@@ -616,14 +629,14 @@ impl Tracker {
         Self {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
+            blas_s: AccelerationStructureTracker::new(),
+            tlas_s: AccelerationStructureTracker::new(),
             views: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),
             compute_pipelines: StatelessTracker::new(),
             render_pipelines: StatelessTracker::new(),
             bundles: StatelessTracker::new(),
             query_sets: StatelessTracker::new(),
-            blas_s: StatelessTracker::new(),
-            tlas_s: StatelessTracker::new(),
         }
     }
 

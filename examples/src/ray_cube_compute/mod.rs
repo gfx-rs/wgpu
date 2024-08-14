@@ -395,7 +395,7 @@ impl crate::framework::Example for Example {
             label: Some("rt"),
             layout: None,
             module: &shader,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -426,13 +426,13 @@ impl crate::framework::Example for Example {
             layout: None,
             vertex: wgpu::VertexState {
                 module: &blit_shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &blit_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.format.into())],
             }),

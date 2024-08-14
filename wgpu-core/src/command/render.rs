@@ -1613,7 +1613,6 @@ impl Global {
             let indices = &device.tracker_indices;
             tracker.buffers.set_size(indices.buffers.size());
             tracker.textures.set_size(indices.textures.size());
-            tracker.tlas_s.set_size(indices.tlas_s.size());
 
             let mut state = State {
                 pipeline_flags: PipelineFlags::empty(),

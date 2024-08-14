@@ -180,8 +180,8 @@ pub struct Hub {
     pub(crate) textures: Registry<Texture>,
     pub(crate) texture_views: Registry<TextureView>,
     pub(crate) samplers: Registry<Sampler>,
-    pub(crate) blas_s: Registry<Blas<A>>,
-    pub(crate) tlas_s: Registry<Tlas<A>>,
+    pub(crate) blas_s: Registry<Blas>,
+    pub(crate) tlas_s: Registry<Tlas>,
 }
 
 impl Hub {

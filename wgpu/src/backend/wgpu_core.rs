@@ -3360,12 +3360,12 @@ impl crate::Context for ContextWgpuCore {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
         let global = &self.0;
-        let (id, handle, error) = wgc::gfx_select!(device => global.device_create_blas(
+        let (id, handle, error) = global.device_create_blas(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
             sizes,
             None,
-        ));
+        );
         if let Some(cause) = error {
             self.handle_error(
                 &device_data.error_sink,
@@ -3390,11 +3390,11 @@ impl crate::Context for ContextWgpuCore {
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (Self::TlasId, Self::TlasData) {
         let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_tlas(
+        let (id, error) = global.device_create_tlas(
             *device,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
-        ));
+        );
         if let Some(cause) = error {
             self.handle_error(
                 &device_data.error_sink,
@@ -3456,11 +3456,11 @@ impl crate::Context for ContextWgpuCore {
             },
         );
 
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures_unsafe_tlas(
+        if let Err(cause) = global.command_encoder_build_acceleration_structures_unsafe_tlas(
             *encoder,
             blas,
             tlas
-        )) {
+        ) {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
                 cause,
@@ -3522,11 +3522,11 @@ impl crate::Context for ContextWgpuCore {
             }
         });
 
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures(
+        if let Err(cause) = global.command_encoder_build_acceleration_structures(
             *encoder,
             blas,
             tlas
-        )) {
+        ) {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
                 cause,
@@ -3537,22 +3537,22 @@ impl crate::Context for ContextWgpuCore {
 
     fn blas_destroy(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
         let global = &self.0;
-        let _ = wgc::gfx_select!(blas => global.blas_destroy(*blas));
+        let _ = global.blas_destroy(*blas);
     }
 
     fn blas_drop(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
         let global = &self.0;
-        wgc::gfx_select!(blas => global.blas_drop(*blas, false))
+        global.blas_drop(*blas)
     }
 
     fn tlas_destroy(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
         let global = &self.0;
-        let _ = wgc::gfx_select!(tlas => global.tlas_destroy(*tlas));
+        let _ = global.tlas_destroy(*tlas);
     }
 
     fn tlas_drop(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
         let global = &self.0;
-        wgc::gfx_select!(tlas => global.tlas_drop(*tlas, false))
+        global.tlas_drop(*tlas)
     }
 }
 

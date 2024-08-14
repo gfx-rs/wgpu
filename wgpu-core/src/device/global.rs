@@ -800,7 +800,7 @@ impl Global {
                 buffer_storage: &Storage<resource::Buffer>,
                 sampler_storage: &Storage<resource::Sampler>,
                 texture_view_storage: &Storage<resource::TextureView>,
-                tlas_storage: &Storage<resource::Tlas<A>>,
+                tlas_storage: &Storage<resource::Tlas>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let map_buffer = |bb: &BufferBinding| {
