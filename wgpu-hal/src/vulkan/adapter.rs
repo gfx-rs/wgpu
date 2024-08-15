@@ -1985,8 +1985,23 @@ impl crate::Adapter for super::Adapter {
         let info = enabled_phd_features.add_to_device_create(pre_info);
         let raw_device = {
             profiling::scope!("vkCreateDevice");
-            unsafe { self.instance.raw.create_device(self.raw, &info, None)? }
+            unsafe {
+                self.instance
+                    .raw
+                    .create_device(self.raw, &info, None)
+                    .map_err(map_err)?
+            }
         };
+        fn map_err(err: vk::Result) -> crate::DeviceError {
+            match err {
+                vk::Result::ERROR_TOO_MANY_OBJECTS => crate::DeviceError::OutOfMemory,
+                vk::Result::ERROR_INITIALIZATION_FAILED => crate::DeviceError::Lost,
+                vk::Result::ERROR_EXTENSION_NOT_PRESENT | vk::Result::ERROR_FEATURE_NOT_PRESENT => {
+                    super::hal_usage_error(err)
+                }
+                other => super::map_host_device_oom_and_lost_err(other),
+            }
+        }
 
         unsafe {
             self.device_from_raw(

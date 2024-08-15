@@ -178,7 +178,11 @@ impl super::DeviceShared {
                     vk_info = vk_info.push_next(&mut multiview_info);
                 }
 
-                let raw = unsafe { self.raw.create_render_pass(&vk_info, None)? };
+                let raw = unsafe {
+                    self.raw
+                        .create_render_pass(&vk_info, None)
+                        .map_err(super::map_host_device_oom_err)?
+                };
 
                 *e.insert(raw)
             }
@@ -322,6 +326,10 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
                 Err(gpu_alloc::OutOfMemory::OutOfHostMemory)
             }
+            // We don't use VK_KHR_external_memory
+            // VK_ERROR_INVALID_EXTERNAL_HANDLE
+            // We don't use VK_KHR_buffer_device_address
+            // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
             Err(err) => handle_unexpected(err),
         }
     }
@@ -598,17 +606,20 @@ impl super::Device {
             Ok(swapchain) => swapchain,
             Err(error) => {
                 return Err(match error {
-                    vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
+                    vk::Result::ERROR_SURFACE_LOST_KHR
+                    | vk::Result::ERROR_INITIALIZATION_FAILED => crate::SurfaceError::Lost,
                     vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR => {
                         crate::SurfaceError::Other("Native window is in use")
                     }
-                    other => crate::DeviceError::from(other).into(),
-                })
+                    // We don't use VK_EXT_image_compression_control
+                    // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
+                    other => super::map_host_device_oom_and_lost_err(other).into(),
+                });
             }
         };
 
         let images =
-            unsafe { functor.get_swapchain_images(raw) }.map_err(crate::DeviceError::from)?;
+            unsafe { functor.get_swapchain_images(raw) }.map_err(super::map_host_device_oom_err)?;
 
         // NOTE: It's important that we define at least images.len() wait
         // semaphores, since we prospectively need to provide the call to
@@ -695,8 +706,16 @@ impl super::Device {
 
         let raw = unsafe {
             profiling::scope!("vkCreateShaderModule");
-            self.shared.raw.create_shader_module(&vk_info, None)?
+            self.shared
+                .raw
+                .create_shader_module(&vk_info, None)
+                .map_err(map_err)?
         };
+        fn map_err(err: vk::Result) -> crate::DeviceError {
+            // We don't use VK_NV_glsl_shader
+            // VK_ERROR_INVALID_SHADER_NV
+            super::map_host_device_oom_err(err)
+        }
         Ok(raw)
     }
 
@@ -852,7 +871,12 @@ impl crate::Device for super::Device {
             .usage(conv::map_buffer_usage(desc.usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        let raw = unsafe { self.shared.raw.create_buffer(&vk_info, None)? };
+        let raw = unsafe {
+            self.shared
+                .raw
+                .create_buffer(&vk_info, None)
+                .map_err(super::map_host_device_oom_and_ioca_err)?
+        };
         let req = unsafe { self.shared.raw.get_buffer_memory_requirements(raw) };
 
         let mut alloc_usage = if desc
@@ -902,7 +926,8 @@ impl crate::Device for super::Device {
         unsafe {
             self.shared
                 .raw
-                .bind_buffer_memory(raw, *block.memory(), block.offset())?
+                .bind_buffer_memory(raw, *block.memory(), block.offset())
+                .map_err(super::map_host_device_oom_and_ioca_err)?
         };
 
         if let Some(label) = desc.label {
@@ -1035,7 +1060,17 @@ impl crate::Device for super::Device {
             vk_info = vk_info.push_next(&mut format_list_info);
         }
 
-        let raw = unsafe { self.shared.raw.create_image(&vk_info, None)? };
+        let raw = unsafe {
+            self.shared
+                .raw
+                .create_image(&vk_info, None)
+                .map_err(map_err)?
+        };
+        fn map_err(err: vk::Result) -> crate::DeviceError {
+            // We don't use VK_EXT_image_compression_control
+            // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
+            super::map_host_device_oom_and_ioca_err(err)
+        }
         let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
 
         let block = unsafe {
@@ -1055,7 +1090,8 @@ impl crate::Device for super::Device {
         unsafe {
             self.shared
                 .raw
-                .bind_image_memory(raw, *block.memory(), block.offset())?
+                .bind_image_memory(raw, *block.memory(), block.offset())
+                .map_err(super::map_host_device_oom_err)?
         };
 
         if let Some(label) = desc.label {
@@ -1113,7 +1149,8 @@ impl crate::Device for super::Device {
             texture.usage
         };
 
-        let raw = unsafe { self.shared.raw.create_image_view(&vk_info, None) }?;
+        let raw = unsafe { self.shared.raw.create_image_view(&vk_info, None) }
+            .map_err(super::map_host_device_oom_and_ioca_err)?;
 
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
@@ -1191,7 +1228,12 @@ impl crate::Device for super::Device {
             vk_info = vk_info.border_color(conv::map_border_color(color));
         }
 
-        let raw = unsafe { self.shared.raw.create_sampler(&vk_info, None)? };
+        let raw = unsafe {
+            self.shared
+                .raw
+                .create_sampler(&vk_info, None)
+                .map_err(super::map_host_device_oom_and_ioca_err)?
+        };
 
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
@@ -1214,7 +1256,13 @@ impl crate::Device for super::Device {
         let vk_info = vk::CommandPoolCreateInfo::default()
             .queue_family_index(desc.queue.family_index)
             .flags(vk::CommandPoolCreateFlags::TRANSIENT);
-        let raw = unsafe { self.shared.raw.create_command_pool(&vk_info, None)? };
+
+        let raw = unsafe {
+            self.shared
+                .raw
+                .create_command_pool(&vk_info, None)
+                .map_err(super::map_host_device_oom_err)?
+        };
 
         self.counters.command_encoders.add(1);
 
@@ -1353,7 +1401,8 @@ impl crate::Device for super::Device {
         let raw = unsafe {
             self.shared
                 .raw
-                .create_descriptor_set_layout(&vk_info, None)?
+                .create_descriptor_set_layout(&vk_info, None)
+                .map_err(super::map_host_device_oom_err)?
         };
 
         if let Some(label) = desc.label {
@@ -1406,7 +1455,12 @@ impl crate::Device for super::Device {
 
         let raw = {
             profiling::scope!("vkCreatePipelineLayout");
-            unsafe { self.shared.raw.create_pipeline_layout(&vk_info, None)? }
+            unsafe {
+                self.shared
+                    .raw
+                    .create_pipeline_layout(&vk_info, None)
+                    .map_err(super::map_host_device_oom_err)?
+            }
         };
 
         if let Some(label) = desc.label {
@@ -1929,7 +1983,7 @@ impl crate::Device for super::Device {
                 self.shared
                     .raw
                     .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
-                    .map_err(|(_, e)| crate::DeviceError::from(e))
+                    .map_err(|(_, e)| super::map_pipeline_err(e))
             }?
         };
 
@@ -1991,7 +2045,7 @@ impl crate::Device for super::Device {
                 self.shared
                     .raw
                     .create_compute_pipelines(pipeline_cache, &vk_infos, None)
-                    .map_err(|(_, e)| crate::DeviceError::from(e))
+                    .map_err(|(_, e)| super::map_pipeline_err(e))
             }?
         };
 
@@ -2025,7 +2079,7 @@ impl crate::Device for super::Device {
         }
         profiling::scope!("vkCreatePipelineCache");
         let raw = unsafe { self.shared.raw.create_pipeline_cache(&info, None) }
-            .map_err(crate::DeviceError::from)?;
+            .map_err(super::map_host_device_oom_err)?;
 
         Ok(super::PipelineCache { raw })
     }
@@ -2059,7 +2113,8 @@ impl crate::Device for super::Device {
             .query_count(desc.count)
             .pipeline_statistics(pipeline_statistics);
 
-        let raw = unsafe { self.shared.raw.create_query_pool(&vk_info, None) }?;
+        let raw = unsafe { self.shared.raw.create_query_pool(&vk_info, None) }
+            .map_err(super::map_host_device_oom_err)?;
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
         }
@@ -2082,7 +2137,8 @@ impl crate::Device for super::Device {
             let mut sem_type_info =
                 vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::TIMELINE);
             let vk_info = vk::SemaphoreCreateInfo::default().push_next(&mut sem_type_info);
-            let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) }?;
+            let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) }
+                .map_err(super::map_host_device_oom_err)?;
 
             super::Fence::TimelineSemaphore(raw)
         } else {
@@ -2326,7 +2382,11 @@ impl crate::Device for super::Device {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         unsafe {
-            let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
+            let raw_buffer = self
+                .shared
+                .raw
+                .create_buffer(&vk_buffer_info, None)
+                .map_err(super::map_host_device_oom_and_ioca_err)?;
             let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
             let block = self.mem_allocator.lock().alloc(
@@ -2341,7 +2401,8 @@ impl crate::Device for super::Device {
 
             self.shared
                 .raw
-                .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())?;
+                .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())
+                .map_err(super::map_host_device_oom_and_ioca_err)?;
 
             if let Some(label) = desc.label {
                 self.shared.set_object_name(raw_buffer, label);
@@ -2355,7 +2416,8 @@ impl crate::Device for super::Device {
 
             let raw_acceleration_structure = ray_tracing_functions
                 .acceleration_structure
-                .create_acceleration_structure(&vk_info, None)?;
+                .create_acceleration_structure(&vk_info, None)
+                .map_err(super::map_host_oom_and_ioca_err)?;
 
             if let Some(label) = desc.label {
                 self.shared
@@ -2408,7 +2470,7 @@ impl super::DeviceShared {
         unsafe {
             self.raw
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                .map_err(crate::DeviceError::from)
+                .map_err(super::map_host_device_oom_err)
         }
     }
 
@@ -2438,7 +2500,7 @@ impl super::DeviceShared {
                 match result {
                     Ok(()) => Ok(true),
                     Err(vk::Result::TIMEOUT) => Ok(false),
-                    Err(other) => Err(other.into()),
+                    Err(other) => Err(super::map_host_device_oom_and_lost_err(other)),
                 }
             }
             super::Fence::FencePool {
@@ -2454,7 +2516,7 @@ impl super::DeviceShared {
                             match unsafe { self.raw.wait_for_fences(&[raw], true, timeout_ns) } {
                                 Ok(()) => Ok(true),
                                 Err(vk::Result::TIMEOUT) => Ok(false),
-                                Err(other) => Err(other.into()),
+                                Err(other) => Err(super::map_host_device_oom_and_lost_err(other)),
                             }
                         }
                         None => {

@@ -940,7 +940,11 @@ impl Fence {
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         for &(value, raw) in active.iter() {
             unsafe {
-                if value > last_completed && device.get_fence_status(raw)? {
+                if value > last_completed
+                    && device
+                        .get_fence_status(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?
+                {
                     last_completed = value;
                 }
             }
@@ -959,8 +963,12 @@ impl Fence {
         match *self {
             Self::TimelineSemaphore(raw) => unsafe {
                 Ok(match *extension.unwrap() {
-                    ExtensionFn::Extension(ref ext) => ext.get_semaphore_counter_value(raw)?,
-                    ExtensionFn::Promoted => device.get_semaphore_counter_value(raw)?,
+                    ExtensionFn::Extension(ref ext) => ext
+                        .get_semaphore_counter_value(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?,
+                    ExtensionFn::Promoted => device
+                        .get_semaphore_counter_value(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?,
                 })
             },
             Self::FencePool {
@@ -1000,7 +1008,8 @@ impl Fence {
                 }
                 if free.len() != base_free {
                     active.retain(|&(value, _)| value > latest);
-                    unsafe { device.reset_fences(&free[base_free..]) }?
+                    unsafe { device.reset_fences(&free[base_free..]) }
+                        .map_err(map_device_oom_err)?
                 }
                 *last_completed = latest;
             }
@@ -1095,7 +1104,8 @@ impl crate::Queue for Queue {
                     None => unsafe {
                         self.device
                             .raw
-                            .create_fence(&vk::FenceCreateInfo::default(), None)?
+                            .create_fence(&vk::FenceCreateInfo::default(), None)
+                            .map_err(map_host_device_oom_err)?
                     },
                 };
                 active.push((signal_value, fence_raw));
@@ -1126,7 +1136,8 @@ impl crate::Queue for Queue {
         unsafe {
             self.device
                 .raw
-                .queue_submit(self.raw, &[vk_info], fence_raw)?
+                .queue_submit(self.raw, &[vk_info], fence_raw)
+                .map_err(map_host_device_oom_and_lost_err)?
         };
         Ok(())
     }
@@ -1153,7 +1164,9 @@ impl crate::Queue for Queue {
                 match error {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => crate::SurfaceError::Outdated,
                     vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
-                    _ => crate::DeviceError::from(error).into(),
+                    // We don't use VK_EXT_full_screen_exclusive
+                    // VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
+                    _ => map_host_device_oom_and_lost_err(error).into(),
                 }
             })?
         };
@@ -1173,31 +1186,114 @@ impl crate::Queue for Queue {
     }
 }
 
-impl From<vk::Result> for crate::DeviceError {
-    fn from(result: vk::Result) -> Self {
-        #![allow(unreachable_code)]
-        match result {
-            vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                #[cfg(feature = "oom_panic")]
-                panic!("Out of memory ({result:?})");
-
-                Self::OutOfMemory
-            }
-            vk::Result::ERROR_DEVICE_LOST => {
-                #[cfg(feature = "device_lost_panic")]
-                panic!("Device lost");
-
-                Self::Lost
-            }
-            _ => {
-                #[cfg(feature = "internal_error_panic")]
-                panic!("Internal error: {result:?}");
-
-                log::warn!("Unrecognized device error {result:?}");
-                Self::Lost
-            }
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+fn map_host_device_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+            get_oom_err(err)
         }
+        e => get_unexpected_err(e),
     }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_ERROR_DEVICE_LOST
+fn map_host_device_oom_and_lost_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_DEVICE_LOST => get_lost_err(),
+        other => map_host_device_oom_err(other),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+fn map_host_device_oom_and_ioca_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_KHR_buffer_device_address
+    // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+    map_host_device_oom_err(err)
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+fn map_host_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY => get_oom_err(err),
+        e => get_unexpected_err(e),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+fn map_device_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => get_oom_err(err),
+        e => get_unexpected_err(e),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+fn map_host_oom_and_ioca_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_KHR_buffer_device_address
+    // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+    map_host_oom_err(err)
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_PIPELINE_COMPILE_REQUIRED_EXT
+/// - VK_ERROR_INVALID_SHADER_NV
+fn map_pipeline_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_EXT_pipeline_creation_cache_control
+    // VK_PIPELINE_COMPILE_REQUIRED_EXT
+    // We don't use VK_NV_glsl_shader
+    // VK_ERROR_INVALID_SHADER_NV
+    map_host_device_oom_err(err)
+}
+
+/// Returns [`crate::DeviceError::Lost`] or panics if the `internal_error_panic`
+/// feature flag is enabled.
+fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
+    #[cfg(feature = "internal_error_panic")]
+    panic!("Unexpected Vulkan error: {_err:?}");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::Lost
+}
+
+/// Returns [`crate::DeviceError::OutOfMemory`] or panics if the `oom_panic`
+/// feature flag is enabled.
+fn get_oom_err(_err: vk::Result) -> crate::DeviceError {
+    #[cfg(feature = "oom_panic")]
+    panic!("Out of memory ({_err:?})");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::OutOfMemory
+}
+
+/// Returns [`crate::DeviceError::Lost`] or panics if the `device_lost_panic`
+/// feature flag is enabled.
+fn get_lost_err() -> crate::DeviceError {
+    #[cfg(feature = "device_lost_panic")]
+    panic!("Device lost");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::Lost
 }
 
 fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
