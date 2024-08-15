@@ -539,8 +539,11 @@ impl Global {
 
                 cmd_buf_data.trackers.blas_s.set_single(blas.clone());
 
-                instance_buffer_staging_source
-                    .extend(tlas_instance_into_bytes(&instance, blas.handle, device.backend()));
+                instance_buffer_staging_source.extend(tlas_instance_into_bytes(
+                    &instance,
+                    blas.handle,
+                    device.backend(),
+                ));
 
                 instance_count += 1;
 
