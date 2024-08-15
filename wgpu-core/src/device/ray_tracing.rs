@@ -123,7 +123,7 @@ impl Device {
         .map_err(DeviceError::from)?;
 
         let instance_buffer_size =
-            get_raw_tlas_instance_size() * std::cmp::max(desc.max_instances, 1) as usize;
+            get_raw_tlas_instance_size(self.backend()) * std::cmp::max(desc.max_instances, 1) as usize;
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),
