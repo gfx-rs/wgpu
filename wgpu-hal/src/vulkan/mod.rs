@@ -1199,3 +1199,7 @@ impl From<vk::Result> for crate::DeviceError {
         }
     }
 }
+
+fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
+    panic!("wgpu-hal invariant was violated (usage error): {txt}")
+}
