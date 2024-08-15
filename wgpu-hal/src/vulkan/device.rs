@@ -2496,7 +2496,9 @@ impl From<gpu_alloc::MapError> for crate::DeviceError {
 }
 impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
     fn from(error: gpu_descriptor::AllocationError) -> Self {
-        log::error!("descriptor allocation: {:?}", error);
-        Self::OutOfMemory
+        use gpu_descriptor::AllocationError as Ae;
+        match error {
+            Ae::OutOfDeviceMemory | Ae::OutOfHostMemory | Ae::Fragmentation => Self::OutOfMemory,
+        }
     }
 }
