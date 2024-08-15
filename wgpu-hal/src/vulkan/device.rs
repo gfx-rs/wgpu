@@ -2559,7 +2559,7 @@ impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
     }
 }
 
-/// We usually map unexpected vulkan errors to the [`crate::DeviceError::Lost`]
+/// We usually map unexpected vulkan errors to the [`crate::DeviceError::Unexpected`]
 /// variant to be more robust even in cases where the driver is not
 /// complying with the spec.
 ///

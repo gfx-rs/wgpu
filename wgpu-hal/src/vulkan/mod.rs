@@ -1266,14 +1266,14 @@ fn map_pipeline_err(err: vk::Result) -> crate::DeviceError {
     map_host_device_oom_err(err)
 }
 
-/// Returns [`crate::DeviceError::Lost`] or panics if the `internal_error_panic`
+/// Returns [`crate::DeviceError::Unexpected`] or panics if the `internal_error_panic`
 /// feature flag is enabled.
 fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
     #[cfg(feature = "internal_error_panic")]
     panic!("Unexpected Vulkan error: {_err:?}");
 
     #[allow(unreachable_code)]
-    crate::DeviceError::Lost
+    crate::DeviceError::Unexpected
 }
 
 /// Returns [`crate::DeviceError::OutOfMemory`] or panics if the `oom_panic`
