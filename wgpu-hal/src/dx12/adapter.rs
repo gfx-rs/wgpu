@@ -47,7 +47,6 @@ impl super::Adapter {
         &self.raw
     }
 
-    #[allow(trivial_casts)]
     pub(super) fn expose(
         adapter: d3d12::DxgiAdapter,
         library: &Arc<d3d12::D3D12Lib>,
@@ -554,7 +553,6 @@ impl crate::Adapter for super::Adapter {
         })
     }
 
-    #[allow(trivial_casts)]
     unsafe fn texture_format_capabilities(
         &self,
         format: wgt::TextureFormat,

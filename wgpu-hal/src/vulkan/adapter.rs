@@ -1099,7 +1099,6 @@ impl PhysicalDeviceProperties {
 }
 
 impl super::InstanceShared {
-    #[allow(trivial_casts)] // false positives
     fn inspect(
         &self,
         phd: vk::PhysicalDevice,

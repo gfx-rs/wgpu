@@ -75,7 +75,6 @@ impl crate::Instance for super::Instance {
         };
 
         let mut supports_allow_tearing = false;
-        #[allow(trivial_casts)]
         if let Some(factory5) = factory.as_factory5() {
             let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
             let hr = unsafe {
