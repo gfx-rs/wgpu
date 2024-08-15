@@ -342,6 +342,7 @@ impl Adapter {
             hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
             hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
             hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
+            hal::DeviceError::Unexpected => RequestDeviceError::DeviceLost,
         })?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
