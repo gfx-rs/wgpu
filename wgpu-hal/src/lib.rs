@@ -314,6 +314,8 @@ pub enum DeviceError {
     Lost,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
+    #[error("Unexpected error variant (driver implementation is at fault)")]
+    Unexpected,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]

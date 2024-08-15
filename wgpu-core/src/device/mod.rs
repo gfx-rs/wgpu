@@ -404,6 +404,7 @@ impl From<hal::DeviceError> for DeviceError {
             hal::DeviceError::Lost => DeviceError::Lost,
             hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
             hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
+            hal::DeviceError::Unexpected => DeviceError::Lost,
         }
     }
 }
