@@ -45,11 +45,10 @@ impl HalManagedMetalLayerDelegate {
         CAML_DELEGATE_REGISTER.call_once(|| {
             type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
             let mut decl = ClassDecl::new(&class_name, class!(NSObject)).unwrap();
-            #[allow(trivial_casts)] // false positive
             unsafe {
-                decl.add_class_method(
+                decl.add_class_method::<Fun>(
                     sel!(layer:shouldInheritContentsScale:fromWindow:),
-                    layer_should_inherit_contents_scale_from_window as Fun,
+                    layer_should_inherit_contents_scale_from_window,
                 );
             }
             decl.register();

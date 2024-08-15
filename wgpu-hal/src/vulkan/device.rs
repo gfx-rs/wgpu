@@ -1560,16 +1560,13 @@ impl crate::Device for super::Device {
                 // we can't use the safe (yet unstable) MaybeUninit::write_slice() here because of having an iterator to write
 
                 let init = {
-                    #[allow(trivial_casts)]
                     // SAFETY: The loop above has initialized exactly as many items as to_init is
                     // long, so it is safe to cast away the MaybeUninit<T> wrapper into T.
 
                     // Additional safety docs from unstable slice_assume_init_mut
                     // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
                     // mutable reference which is also guaranteed to be valid for writes.
-                    unsafe {
-                        &mut *(ptr::from_mut::<[MaybeUninit<T>]>(to_init) as *mut [T])
-                    }
+                    unsafe { std::mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
                 };
                 (Self { remainder }, init)
             }
