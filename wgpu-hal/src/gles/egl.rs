@@ -1241,7 +1241,6 @@ impl crate::Surface for Surface {
             None => {
                 let mut wl_window = None;
                 let (mut temp_xlib_handle, mut temp_xcb_handle);
-                #[allow(trivial_casts)]
                 let native_window_ptr = match (self.wsi.kind, self.raw_window_handle) {
                     (WindowKind::Unknown | WindowKind::X11, Rwh::Xlib(handle)) => {
                         temp_xlib_handle = handle.window;
