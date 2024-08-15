@@ -322,7 +322,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
                 Err(gpu_alloc::OutOfMemory::OutOfHostMemory)
             }
-            Err(err) => panic!("Unexpected Vulkan error: `{err}`"),
+            Err(err) => handle_unexpected(err),
         }
     }
 
@@ -351,7 +351,7 @@ impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
                 Err(gpu_alloc::DeviceMapError::OutOfHostMemory)
             }
             Err(vk::Result::ERROR_MEMORY_MAP_FAILED) => Err(gpu_alloc::DeviceMapError::MapFailed),
-            Err(err) => panic!("Unexpected Vulkan error: `{err}`"),
+            Err(err) => handle_unexpected(err),
         }
     }
 
@@ -450,10 +450,7 @@ impl
             Err(vk::Result::ERROR_FRAGMENTATION) => {
                 Err(gpu_descriptor::CreatePoolError::Fragmentation)
             }
-            Err(other) => {
-                log::error!("create_descriptor_pool: {:?}", other);
-                Err(gpu_descriptor::CreatePoolError::OutOfHostMemory)
-            }
+            Err(err) => handle_unexpected(err),
         }
     }
 
@@ -494,10 +491,7 @@ impl
             Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
                 Err(gpu_descriptor::DeviceAllocationError::FragmentedPool)
             }
-            Err(other) => {
-                log::error!("allocate_descriptor_sets: {:?}", other);
-                Err(gpu_descriptor::DeviceAllocationError::OutOfHostMemory)
-            }
+            Err(err) => handle_unexpected(err),
         }
     }
 
@@ -514,7 +508,7 @@ impl
         };
         match result {
             Ok(()) => {}
-            Err(err) => log::error!("free_descriptor_sets: {:?}", err),
+            Err(err) => handle_unexpected(err),
         }
     }
 }
@@ -2501,4 +2495,14 @@ impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
             Ae::OutOfDeviceMemory | Ae::OutOfHostMemory | Ae::Fragmentation => Self::OutOfMemory,
         }
     }
+}
+
+/// We usually map unexpected vulkan errors to the [`crate::DeviceError::Lost`]
+/// variant to be more robust even in cases where the driver is not
+/// complying with the spec.
+///
+/// However, we implement a few Trait methods that don't have an equivalent
+/// error variant. In those cases we use this function.
+fn handle_unexpected(err: vk::Result) -> ! {
+    panic!("Unexpected Vulkan error: `{err}`")
 }
