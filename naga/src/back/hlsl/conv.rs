@@ -119,38 +119,29 @@ impl crate::TypeInner {
 impl crate::StorageFormat {
     pub(super) const fn to_hlsl_str(self) -> &'static str {
         match self {
-            Self::R16Float => "float",
+            Self::R16Float | Self::R32Float => "float",
             Self::R8Unorm | Self::R16Unorm => "unorm float",
             Self::R8Snorm | Self::R16Snorm => "snorm float",
-            Self::R8Uint | Self::R16Uint => "uint",
-            Self::R8Sint | Self::R16Sint => "int",
+            Self::R8Uint | Self::R16Uint | Self::R32Uint => "uint",
+            Self::R8Sint | Self::R16Sint | Self::R32Sint => "int",
 
-            Self::Rg16Float => "float2",
+            Self::Rg16Float | Self::Rg32Float => "float2",
             Self::Rg8Unorm | Self::Rg16Unorm => "unorm float2",
             Self::Rg8Snorm | Self::Rg16Snorm => "snorm float2",
 
-            Self::Rg8Sint | Self::Rg16Sint => "int2",
-            Self::Rg8Uint | Self::Rg16Uint => "uint2",
+            Self::Rg8Sint | Self::Rg16Sint | Self::Rg32Uint => "int2",
+            Self::Rg8Uint | Self::Rg16Uint | Self::Rg32Sint => "uint2",
 
             Self::Rg11b10UFloat => "float3",
 
-            Self::Rgba16Float | Self::R32Float | Self::Rg32Float | Self::Rgba32Float => "float4",
+            Self::Rgba16Float | Self::Rgba32Float => "float4",
             Self::Rgba8Unorm | Self::Bgra8Unorm | Self::Rgba16Unorm | Self::Rgb10a2Unorm => {
                 "unorm float4"
             }
             Self::Rgba8Snorm | Self::Rgba16Snorm => "snorm float4",
 
-            Self::Rgba8Uint
-            | Self::Rgba16Uint
-            | Self::R32Uint
-            | Self::Rg32Uint
-            | Self::Rgba32Uint
-            | Self::Rgb10a2Uint => "uint4",
-            Self::Rgba8Sint
-            | Self::Rgba16Sint
-            | Self::R32Sint
-            | Self::Rg32Sint
-            | Self::Rgba32Sint => "int4",
+            Self::Rgba8Uint | Self::Rgba16Uint | Self::Rgba32Uint | Self::Rgb10a2Uint => "uint4",
+            Self::Rgba8Sint | Self::Rgba16Sint | Self::Rgba32Sint => "int4",
         }
     }
 }
