@@ -24,6 +24,7 @@ use std::{
     slice,
     sync::Arc,
 };
+use wgc::error::ContextErrorSource;
 use wgc::{
     command::bundle_ffi::*, device::DeviceLostClosure, id::CommandEncoderId, id::TextureViewId,
     pipeline::CreateShaderModuleError,
@@ -267,16 +268,18 @@ impl ContextWgpuCore {
         self.0.generate_report()
     }
 
-    fn handle_error(
+    #[cold]
+    #[inline(never)]
+    fn handle_error_inner(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        source: impl Error + WasmNotSendSync + 'static,
+        source: ContextErrorSource,
         label: Label<'_>,
         fn_ident: &'static str,
     ) {
         let error = wgc::error::ContextError {
             fn_ident,
-            source: Box::new(source),
+            source,
             label: label.unwrap_or_default().to_string(),
         };
         let mut sink = sink_mutex.lock();
@@ -299,16 +302,29 @@ impl ContextWgpuCore {
         });
     }
 
+    #[inline]
+    fn handle_error(
+        &self,
+        sink_mutex: &Mutex<ErrorSinkRaw>,
+        source: impl Error + WasmNotSendSync + 'static,
+        label: Label<'_>,
+        fn_ident: &'static str,
+    ) {
+        self.handle_error_inner(sink_mutex, Box::new(source), label, fn_ident)
+    }
+
+    #[inline]
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
         source: impl Error + WasmNotSendSync + 'static,
         fn_ident: &'static str,
     ) {
-        self.handle_error(sink_mutex, source, None, fn_ident)
+        self.handle_error_inner(sink_mutex, Box::new(source), None, fn_ident)
     }
 
     #[track_caller]
+    #[cold]
     fn handle_error_fatal(
         &self,
         cause: impl Error + WasmNotSendSync + 'static,
@@ -317,6 +333,7 @@ impl ContextWgpuCore {
         panic!("Error in {operation}: {f}", f = self.format_error(&cause));
     }
 
+    #[inline(never)]
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
         let mut output = String::new();
         let mut level = 1;
