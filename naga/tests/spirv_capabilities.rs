@@ -2,7 +2,7 @@
 Test SPIR-V backend capability checks.
 */
 
-#![cfg(all(feature = "wgsl-in", feature = "spv-out"))]
+#![cfg(all(feature = "wgsl-in", spv_out))]
 
 use spirv::Capability as Ca;
 

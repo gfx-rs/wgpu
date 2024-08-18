@@ -1,7 +1,4 @@
-use super::{
-    compose::validate_compose, validate_atomic_compare_exchange_struct, FunctionInfo, ModuleInfo,
-    ShaderStages, TypeFlags,
-};
+use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
 
 use crate::{
@@ -12,8 +9,6 @@ use crate::{
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ExpressionError {
-    #[error("Doesn't exist")]
-    DoesntExist,
     #[error("Used by a statement before it was introduced into the scope by any of the dominating blocks")]
     NotInScope,
     #[error("Base type {0:?} is not compatible with this expression")]
@@ -116,8 +111,6 @@ pub enum ExpressionError {
     WrongArgumentCount(crate::MathFunction),
     #[error("Argument [{1}] to {0:?} as expression {2:?} has an invalid type.")]
     InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
-    #[error("Atomic result type can't be {0:?}")]
-    InvalidAtomicResultType(Handle<crate::Type>),
     #[error(
         "workgroupUniformLoad result type can't be {0:?}. It can only be a constructible type."
     )]
@@ -1357,8 +1350,8 @@ impl super::Validator {
                     | Mf::CountTrailingZeros
                     | Mf::CountOneBits
                     | Mf::ReverseBits
-                    | Mf::FindMsb
-                    | Mf::FindLsb => {
+                    | Mf::FirstLeadingBit
+                    | Mf::FirstTrailingBit => {
                         if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
@@ -1584,30 +1577,11 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::CallResult(function) => mod_info.functions[function.index()].available_stages,
-            E::AtomicResult { ty, comparison } => {
-                let scalar_predicate = |ty: &crate::TypeInner| match ty {
-                    &crate::TypeInner::Scalar(
-                        scalar @ Sc {
-                            kind: crate::ScalarKind::Uint | crate::ScalarKind::Sint,
-                            ..
-                        },
-                    ) => self.check_width(scalar).is_ok(),
-                    _ => false,
-                };
-                let good = match &module.types[ty].inner {
-                    ty if !comparison => scalar_predicate(ty),
-                    &crate::TypeInner::Struct { ref members, .. } if comparison => {
-                        validate_atomic_compare_exchange_struct(
-                            &module.types,
-                            members,
-                            scalar_predicate,
-                        )
-                    }
-                    _ => false,
-                };
-                if !good {
-                    return Err(ExpressionError::InvalidAtomicResultType(ty));
-                }
+            E::AtomicResult { .. } => {
+                // These expressions are validated when we check the `Atomic` statement
+                // that refers to them, because we have all the information we need at
+                // that point. The checks driven by `Validator::needs_visit` ensure
+                // that this expression is indeed visited by one `Atomic` statement.
                 ShaderStages::all()
             }
             E::WorkGroupUniformLoadResult { ty } => {
@@ -1722,7 +1696,7 @@ pub fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> 
     Ok(())
 }
 
-#[cfg(all(test, feature = "validate"))]
+#[cfg(test)]
 /// Validate a module containing the given expression, expecting an error.
 fn validate_with_expression(
     expr: crate::Expression,
@@ -1745,7 +1719,7 @@ fn validate_with_expression(
     validator.validate(&module)
 }
 
-#[cfg(all(test, feature = "validate"))]
+#[cfg(test)]
 /// Validate a module containing the given constant expression, expecting an error.
 fn validate_with_const_expression(
     expr: crate::Expression,
@@ -1762,7 +1736,6 @@ fn validate_with_const_expression(
 }
 
 /// Using F64 in a function's expression arena is forbidden.
-#[cfg(feature = "validate")]
 #[test]
 fn f64_runtime_literals() {
     let result = validate_with_expression(
@@ -1774,7 +1747,7 @@ fn f64_runtime_literals() {
         error,
         crate::valid::ValidationError::Function {
             source: super::FunctionError::Expression {
-                source: super::ExpressionError::Literal(super::LiteralError::Width(
+                source: ExpressionError::Literal(LiteralError::Width(
                     super::r#type::WidthError::MissingCapability {
                         name: "f64",
                         flag: "FLOAT64",
@@ -1794,7 +1767,6 @@ fn f64_runtime_literals() {
 }
 
 /// Using F64 in a module's constant expression arena is forbidden.
-#[cfg(feature = "validate")]
 #[test]
 fn f64_const_literals() {
     let result = validate_with_const_expression(
@@ -1805,7 +1777,7 @@ fn f64_const_literals() {
     assert!(matches!(
         error,
         crate::valid::ValidationError::ConstExpression {
-            source: super::ConstExpressionError::Literal(super::LiteralError::Width(
+            source: ConstExpressionError::Literal(LiteralError::Width(
                 super::r#type::WidthError::MissingCapability {
                     name: "f64",
                     flag: "FLOAT64",
@@ -1820,49 +1792,4 @@ fn f64_const_literals() {
         super::Capabilities::default() | super::Capabilities::FLOAT64,
     );
     assert!(result.is_ok());
-}
-
-/// Using I64 in a function's expression arena is forbidden.
-#[cfg(feature = "validate")]
-#[test]
-fn i64_runtime_literals() {
-    let result = validate_with_expression(
-        crate::Expression::Literal(crate::Literal::I64(1729)),
-        // There is no capability that enables this.
-        super::Capabilities::all(),
-    );
-    let error = result.unwrap_err().into_inner();
-    assert!(matches!(
-        error,
-        crate::valid::ValidationError::Function {
-            source: super::FunctionError::Expression {
-                source: super::ExpressionError::Literal(super::LiteralError::Width(
-                    super::r#type::WidthError::Unsupported64Bit
-                ),),
-                ..
-            },
-            ..
-        }
-    ));
-}
-
-/// Using I64 in a module's constant expression arena is forbidden.
-#[cfg(feature = "validate")]
-#[test]
-fn i64_const_literals() {
-    let result = validate_with_const_expression(
-        crate::Expression::Literal(crate::Literal::I64(1729)),
-        // There is no capability that enables this.
-        super::Capabilities::all(),
-    );
-    let error = result.unwrap_err().into_inner();
-    assert!(matches!(
-        error,
-        crate::valid::ValidationError::ConstExpression {
-            source: super::ConstExpressionError::Literal(super::LiteralError::Width(
-                super::r#type::WidthError::Unsupported64Bit,
-            ),),
-            ..
-        }
-    ));
 }

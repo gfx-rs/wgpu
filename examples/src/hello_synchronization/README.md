@@ -2,7 +2,7 @@
 
 This example is 
 1. A small demonstration of the importance of synchronization.
-2. How basic synchronization you can understand from the CPU is preformed on the GPU.
+2. How basic synchronization you can understand from the CPU is performed on the GPU.
 
 ## To Run
 

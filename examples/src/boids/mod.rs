@@ -131,7 +131,7 @@ impl crate::framework::Example for Example {
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &draw_shader,
-                entry_point: "main_vs",
+                entry_point: Some("main_vs"),
                 compilation_options: Default::default(),
                 buffers: &[
                     wgpu::VertexBufferLayout {
@@ -148,7 +148,7 @@ impl crate::framework::Example for Example {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
-                entry_point: "main_fs",
+                entry_point: Some("main_fs"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
@@ -156,6 +156,7 @@ impl crate::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         // create compute pipeline
@@ -164,8 +165,9 @@ impl crate::framework::Example for Example {
             label: Some("Compute pipeline"),
             layout: Some(&compute_pipeline_layout),
             module: &compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
+            cache: None,
         });
 
         // buffer for the three 2d triangle vertices of each instance

@@ -22,7 +22,6 @@ const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
 const GRAVITY: f32 = -9.8 * 100.0;
 const MAX_VELOCITY: f32 = 750.0;
-const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
 const DESIRED_MAX_LATENCY: u32 = 2;
 
 #[repr(C)]
@@ -112,7 +111,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         let (adapter, capabilities) = unsafe {
-            let mut adapters = instance.enumerate_adapters();
+            let mut adapters = instance.enumerate_adapters(Some(&surface));
             if adapters.is_empty() {
                 return Err("no adapters found".into());
             }
@@ -126,7 +125,11 @@ impl<A: hal::Api> Example<A> {
 
         let hal::OpenDevice { device, queue } = unsafe {
             adapter
-                .open(wgt::Features::empty(), &wgt::Limits::default())
+                .open(
+                    wgt::Features::empty(),
+                    &wgt::Limits::default(),
+                    &wgt::MemoryHints::default(),
+                )
                 .unwrap()
         };
 
@@ -274,6 +277,7 @@ impl<A: hal::Api> Example<A> {
                 write_mask: wgt::ColorWrites::default(),
             })],
             multiview: None,
+            cache: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
@@ -295,7 +299,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 texture_data.len(),
             );
-            device.unmap_buffer(&staging_buffer).unwrap();
+            device.unmap_buffer(&staging_buffer);
             assert!(mapping.is_coherent);
         }
 
@@ -404,7 +408,7 @@ impl<A: hal::Api> Example<A> {
                 mapping.ptr.as_ptr(),
                 mem::size_of::<Globals>(),
             );
-            device.unmap_buffer(&buffer).unwrap();
+            device.unmap_buffer(&buffer);
             assert!(mapping.is_coherent);
             buffer
         };
@@ -495,7 +499,7 @@ impl<A: hal::Api> Example<A> {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
             queue
-                .submit(&[&init_cmd], &[], Some((&mut fence, init_fence_value)))
+                .submit(&[&init_cmd], &[], (&mut fence, init_fence_value))
                 .unwrap();
             device.wait(&fence, init_fence_value, !0).unwrap();
             device.destroy_buffer(staging_buffer);
@@ -547,7 +551,7 @@ impl<A: hal::Api> Example<A> {
             {
                 let ctx = &mut self.contexts[self.context_index];
                 self.queue
-                    .submit(&[], &[], Some((&mut ctx.fence, ctx.fence_value)))
+                    .submit(&[], &[], (&mut ctx.fence, ctx.fence_value))
                     .unwrap();
             }
 
@@ -574,7 +578,7 @@ impl<A: hal::Api> Example<A> {
 
             self.surface.unconfigure(&self.device);
             self.device.exit(self.queue);
-            self.instance.destroy_surface(self.surface);
+            drop(self.surface);
             drop(self.adapter);
         }
     }
@@ -641,13 +645,19 @@ impl<A: hal::Api> Example<A> {
                     size,
                 );
                 assert!(mapping.is_coherent);
-                self.device.unmap_buffer(&self.local_buffer).unwrap();
+                self.device.unmap_buffer(&self.local_buffer);
             }
         }
 
         let ctx = &mut self.contexts[self.context_index];
 
-        let surface_tex = unsafe { self.surface.acquire_texture(None).unwrap().unwrap().texture };
+        let surface_tex = unsafe {
+            self.surface
+                .acquire_texture(None, &ctx.fence)
+                .unwrap()
+                .unwrap()
+                .texture
+        };
 
         let target_barrier0 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
@@ -715,7 +725,6 @@ impl<A: hal::Api> Example<A> {
         }
 
         ctx.frames_recorded += 1;
-        let do_fence = ctx.frames_recorded > COMMAND_BUFFER_PER_CONTEXT;
 
         let target_barrier1 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
@@ -729,45 +738,42 @@ impl<A: hal::Api> Example<A> {
 
         unsafe {
             let cmd_buf = ctx.encoder.end_encoding().unwrap();
-            let fence_param = if do_fence {
-                Some((&mut ctx.fence, ctx.fence_value))
-            } else {
-                None
-            };
             self.queue
-                .submit(&[&cmd_buf], &[&surface_tex], fence_param)
+                .submit(
+                    &[&cmd_buf],
+                    &[&surface_tex],
+                    (&mut ctx.fence, ctx.fence_value),
+                )
                 .unwrap();
             self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };
 
-        if do_fence {
-            log::debug!("Context switch from {}", self.context_index);
-            let old_fence_value = ctx.fence_value;
-            if self.contexts.len() == 1 {
-                let hal_desc = hal::CommandEncoderDescriptor {
-                    label: None,
-                    queue: &self.queue,
-                };
-                self.contexts.push(unsafe {
-                    ExecutionContext {
-                        encoder: self.device.create_command_encoder(&hal_desc).unwrap(),
-                        fence: self.device.create_fence().unwrap(),
-                        fence_value: 0,
-                        used_views: Vec::new(),
-                        used_cmd_bufs: Vec::new(),
-                        frames_recorded: 0,
-                    }
-                });
-            }
-            self.context_index = (self.context_index + 1) % self.contexts.len();
-            let next = &mut self.contexts[self.context_index];
-            unsafe {
-                next.wait_and_clear(&self.device);
-            }
-            next.fence_value = old_fence_value + 1;
+        log::debug!("Context switch from {}", self.context_index);
+        let old_fence_value = ctx.fence_value;
+        if self.contexts.len() == 1 {
+            let hal_desc = hal::CommandEncoderDescriptor {
+                label: None,
+                queue: &self.queue,
+            };
+            self.contexts.push(unsafe {
+                ExecutionContext {
+                    encoder: self.device.create_command_encoder(&hal_desc).unwrap(),
+                    fence: self.device.create_fence().unwrap(),
+                    fence_value: 0,
+                    used_views: Vec::new(),
+                    used_cmd_bufs: Vec::new(),
+                    frames_recorded: 0,
+                }
+            });
         }
+        self.context_index = (self.context_index + 1) % self.contexts.len();
+        let next = &mut self.contexts[self.context_index];
+        unsafe {
+            next.wait_and_clear(&self.device);
+        }
+        next.fence_value = old_fence_value + 1;
     }
 }
 
@@ -805,6 +811,8 @@ fn main() {
 
     let example_result = Example::<Api>::init(&window);
     let mut example = Some(example_result.expect("Selected backend is not supported"));
+
+    println!("Press space to spawn bunnies.");
 
     let mut last_frame_inst = Instant::now();
     let (mut frame_count, mut accum_time) = (0, 0.0);

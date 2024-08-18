@@ -9,29 +9,29 @@ struct ComputeInput_main {
 
 void main_1()
 {
-    uint _expr5 = subgroup_size_1;
-    uint _expr6 = subgroup_invocation_id_1;
-    const uint4 _e9 = WaveActiveBallot(((_expr6 & 1u) == 1u));
+    uint _e5 = subgroup_size_1;
+    uint _e6 = subgroup_invocation_id_1;
+    const uint4 _e9 = WaveActiveBallot(((_e6 & 1u) == 1u));
     const uint4 _e10 = WaveActiveBallot(true);
-    const bool _e12 = WaveActiveAllTrue((_expr6 != 0u));
-    const bool _e14 = WaveActiveAnyTrue((_expr6 == 0u));
-    const uint _e15 = WaveActiveSum(_expr6);
-    const uint _e16 = WaveActiveProduct(_expr6);
-    const uint _e17 = WaveActiveMin(_expr6);
-    const uint _e18 = WaveActiveMax(_expr6);
-    const uint _e19 = WaveActiveBitAnd(_expr6);
-    const uint _e20 = WaveActiveBitOr(_expr6);
-    const uint _e21 = WaveActiveBitXor(_expr6);
-    const uint _e22 = WavePrefixSum(_expr6);
-    const uint _e23 = WavePrefixProduct(_expr6);
-    const uint _e24 = _expr6 + WavePrefixSum(_expr6);
-    const uint _e25 = _expr6 * WavePrefixProduct(_expr6);
-    const uint _e26 = WaveReadLaneFirst(_expr6);
-    const uint _e27 = WaveReadLaneAt(_expr6, 4u);
-    const uint _e30 = WaveReadLaneAt(_expr6, ((_expr5 - 1u) - _expr6));
-    const uint _e31 = WaveReadLaneAt(_expr6, WaveGetLaneIndex() + 1u);
-    const uint _e32 = WaveReadLaneAt(_expr6, WaveGetLaneIndex() - 1u);
-    const uint _e34 = WaveReadLaneAt(_expr6, WaveGetLaneIndex() ^ (_expr5 - 1u));
+    const bool _e12 = WaveActiveAllTrue((_e6 != 0u));
+    const bool _e14 = WaveActiveAnyTrue((_e6 == 0u));
+    const uint _e15 = WaveActiveSum(_e6);
+    const uint _e16 = WaveActiveProduct(_e6);
+    const uint _e17 = WaveActiveMin(_e6);
+    const uint _e18 = WaveActiveMax(_e6);
+    const uint _e19 = WaveActiveBitAnd(_e6);
+    const uint _e20 = WaveActiveBitOr(_e6);
+    const uint _e21 = WaveActiveBitXor(_e6);
+    const uint _e22 = WavePrefixSum(_e6);
+    const uint _e23 = WavePrefixProduct(_e6);
+    const uint _e24 = _e6 + WavePrefixSum(_e6);
+    const uint _e25 = _e6 * WavePrefixProduct(_e6);
+    const uint _e26 = WaveReadLaneFirst(_e6);
+    const uint _e27 = WaveReadLaneAt(_e6, 4u);
+    const uint _e30 = WaveReadLaneAt(_e6, ((_e5 - 1u) - _e6));
+    const uint _e31 = WaveReadLaneAt(_e6, WaveGetLaneIndex() + 1u);
+    const uint _e32 = WaveReadLaneAt(_e6, WaveGetLaneIndex() - 1u);
+    const uint _e34 = WaveReadLaneAt(_e6, WaveGetLaneIndex() ^ (_e5 - 1u));
     return;
 }
 

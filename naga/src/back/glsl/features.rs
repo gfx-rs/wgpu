@@ -399,7 +399,7 @@ impl<'a, W> Writer<'a, W> {
                             | StorageFormat::Rg16Float
                             | StorageFormat::Rgb10a2Uint
                             | StorageFormat::Rgb10a2Unorm
-                            | StorageFormat::Rg11b10Float
+                            | StorageFormat::Rg11b10UFloat
                             | StorageFormat::Rg32Uint
                             | StorageFormat::Rg32Sint
                             | StorageFormat::Rg32Float => {
@@ -447,7 +447,7 @@ impl<'a, W> Writer<'a, W> {
             ..
         } = self;
 
-        // Loop trough all expressions in both functions and the entry point
+        // Loop through all expressions in both functions and the entry point
         // to check for needed features
         for (expressions, info) in module
             .functions

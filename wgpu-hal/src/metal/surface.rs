@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
-use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
+use std::{os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
 use core_graphics_types::{
     base::CGFloat,
@@ -17,7 +17,7 @@ use objc::{
 use parking_lot::{Mutex, RwLock};
 
 #[cfg(target_os = "macos")]
-#[cfg_attr(feature = "link", link(name = "QuartzCore", kind = "framework"))]
+#[link(name = "QuartzCore", kind = "framework")]
 extern "C" {
     #[allow(non_upper_case_globals)]
     static kCAGravityTopLeft: *mut Object;
@@ -45,11 +45,10 @@ impl HalManagedMetalLayerDelegate {
         CAML_DELEGATE_REGISTER.call_once(|| {
             type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
             let mut decl = ClassDecl::new(&class_name, class!(NSObject)).unwrap();
-            #[allow(trivial_casts)] // false positive
             unsafe {
-                decl.add_class_method(
+                decl.add_class_method::<Fun>(
                     sel!(layer:shouldInheritContentsScale:fromWindow:),
-                    layer_should_inherit_contents_scale_from_window as Fun,
+                    layer_should_inherit_contents_scale_from_window,
                 );
             }
             decl.register();
@@ -70,22 +69,25 @@ impl super::Surface {
         }
     }
 
-    pub unsafe fn dispose(self) {
-        if let Some(view) = self.view {
-            let () = msg_send![view.as_ptr(), release];
-        }
-    }
-
     /// If not called on the main thread, this will panic.
     #[allow(clippy::transmute_ptr_to_ref)]
     pub unsafe fn from_view(
         view: *mut c_void,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
-        let view = view as *mut Object;
+        let view = view.cast::<Object>();
         let render_layer = {
             let layer = unsafe { Self::get_metal_layer(view, delegate) };
-            unsafe { mem::transmute::<_, &metal::MetalLayerRef>(layer) }
+            let layer = layer.cast::<metal::MetalLayerRef>();
+            // SAFETY: This pointer…
+            //
+            // - …is properly aligned.
+            // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+            //   field.
+            // - …points to an _initialized_ `MetalLayerRef`.
+            // - …is only ever aliased via an immutable reference that lives within this
+            //   lexical scope.
+            unsafe { &*layer }
         }
         .to_owned();
         let _: *mut c_void = msg_send![view, retain];
@@ -169,6 +171,16 @@ impl super::Surface {
     }
 }
 
+impl Drop for super::Surface {
+    fn drop(&mut self) {
+        if let Some(view) = self.view {
+            unsafe {
+                let () = msg_send![view.as_ptr(), release];
+            }
+        }
+    }
+}
+
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
@@ -242,6 +254,7 @@ impl crate::Surface for super::Surface {
     unsafe fn acquire_texture(
         &self,
         _timeout_ms: Option<std::time::Duration>, //TODO
+        _fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
         let (drawable, texture) = match autoreleasepool(|| {

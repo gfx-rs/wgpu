@@ -80,10 +80,17 @@ The rest of the examples are for demonstrating specific features that you can co
 | - typed arena                |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |
 | - obj loading                |        |           |                     |        |                       |                  |        |           |                   |                  |        | :star: |                   |                 |                |                |        |
 
+## Running on the Web
+
+To run the examples in a browser, run `cargo xtask run-wasm`.
+Then open `http://localhost:8000` in your browser, and you can choose an example to run.
+Naturally, in order to display any of the WebGPU based examples, you need to make sure your browser supports it.
+
+Note that many cannot be downleveled to WebGL as WebGL does (among other things) not support storage texture, storage buffers and compute shaders. Running any example using these feature in a browser will require that browser to support WebGPU.
 
 ## Additional notes
 
-Note that the examples regarding computing build off of each other; repeated_compute extends hello_compute, hello_workgroups assumes you know the basic workflow of GPU computation, and hello_synchronization assumes you know what a workgroup is. Also, note that the computing examples cannot be downleveled to WebGL as WebGL does not allow storage textures. Running these in a browser will require that browser to support WebGPU.
+Note that the examples regarding computing build off of each other; repeated_compute extends hello_compute, hello_workgroups assumes you know the basic workflow of GPU computation, and hello_synchronization assumes you know what a workgroup is.
 
 All the examples use [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) shaders unless specified otherwise.
 

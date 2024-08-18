@@ -30,7 +30,7 @@ fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
             iter::once(0xFF - (count * 2) as u8)
                 .chain(iter::once(0xFF - (count * 5) as u8))
                 .chain(iter::once(0xFF - (count * 13) as u8))
-                .chain(iter::once(std::u8::MAX))
+                .chain(iter::once(u8::MAX))
         })
         .collect()
 }
@@ -92,13 +92,13 @@ impl Example {
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(TEXTURE_FORMAT.into())],
             }),
@@ -109,6 +109,7 @@ impl Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
@@ -291,13 +292,13 @@ impl crate::framework::Example for Example {
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
@@ -310,6 +311,7 @@ impl crate::framework::Example for Example {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         // Create bind group

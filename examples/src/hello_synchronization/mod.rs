@@ -19,6 +19,7 @@ async fn run() {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::Performance,
             },
             None,
         )
@@ -102,15 +103,17 @@ async fn execute(
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "patient_main",
+        entry_point: Some("patient_main"),
         compilation_options: Default::default(),
+        cache: None,
     });
     let hasty_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         module: &shaders_module,
-        entry_point: "hasty_main",
+        entry_point: Some("hasty_main"),
         compilation_options: Default::default(),
+        cache: None,
     });
 
     //----------------------------------------------------------

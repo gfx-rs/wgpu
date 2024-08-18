@@ -5,7 +5,7 @@ use xshell::Shell;
 
 use crate::util::{check_all_programs, Program};
 
-pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> Result<(), anyhow::Error> {
+pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let no_serve = args.contains("--no-serve");
     let release = args.contains("--release");
 
@@ -38,7 +38,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> Result<(), anyhow::
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgpu {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()
@@ -59,7 +59,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> Result<(), anyhow::
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features wgsl,webgl {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgl {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()
@@ -69,12 +69,12 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> Result<(), anyhow::
     log::info!("running wasm-bindgen on webgl examples");
 
     xshell::cmd!(
-            shell,
-            "wasm-bindgen target/wasm32-unknown-unknown/{output_dir}/wgpu-examples.wasm --target web --no-typescript --out-dir target/generated --out-name webgl2"
-        )
-        .quiet()
-        .run()
-        .context("Failed to run wasm-bindgen")?;
+        shell,
+        "wasm-bindgen target/wasm32-unknown-unknown/{output_dir}/wgpu-examples.wasm --target web --no-typescript --out-dir target/generated --out-name webgl2"
+    )
+    .quiet()
+    .run()
+    .context("Failed to run wasm-bindgen")?;
 
     let static_files = shell
         .read_dir("examples/static")
@@ -94,9 +94,12 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> Result<(), anyhow::
     if !no_serve {
         log::info!("serving on port 8000");
 
+        // Explicitly specify the IP address to 127.0.0.1 since otherwise simple-http-server will
+        // print http://0.0.0.0:8000 as url which is not a secure context and thus doesn't allow
+        // running WebGPU!
         xshell::cmd!(
             shell,
-            "simple-http-server target/generated -c wasm,html,js -i --coep --coop"
+            "simple-http-server target/generated -c wasm,html,js -i --coep --coop --ip 127.0.0.1"
         )
         .quiet()
         .run()

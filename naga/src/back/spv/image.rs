@@ -381,7 +381,7 @@ impl<'w> BlockContext<'w> {
     pub(super) fn get_handle_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
-                self.writer.global_variables[handle.index()].handle_id
+                self.writer.global_variables[handle].handle_id
             }
             crate::Expression::FunctionArgument(i) => {
                 self.function.parameters[i as usize].handle_id
@@ -974,7 +974,7 @@ impl<'w> BlockContext<'w> {
         };
 
         if let Some(offset_const) = offset {
-            let offset_id = self.writer.constant_ids[offset_const.index()];
+            let offset_id = self.writer.constant_ids[offset_const];
             main_instruction.add_operand(offset_id);
         }
 
@@ -1178,32 +1178,13 @@ impl<'w> BlockContext<'w> {
             _ => {}
         }
 
-        match self.writer.bounds_check_policies.image_store {
-            crate::proc::BoundsCheckPolicy::Restrict => {
-                let (coords, _, _) =
-                    self.write_restricted_coordinates(image_id, coordinates, None, None, block)?;
-                write.generate(&mut self.writer.id_gen, coords, None, None, block);
-            }
-            crate::proc::BoundsCheckPolicy::ReadZeroSkipWrite => {
-                self.write_conditional_image_access(
-                    image_id,
-                    coordinates,
-                    None,
-                    None,
-                    block,
-                    &write,
-                )?;
-            }
-            crate::proc::BoundsCheckPolicy::Unchecked => {
-                write.generate(
-                    &mut self.writer.id_gen,
-                    coordinates.value_id,
-                    None,
-                    None,
-                    block,
-                );
-            }
-        }
+        write.generate(
+            &mut self.writer.id_gen,
+            coordinates.value_id,
+            None,
+            None,
+            block,
+        );
 
         Ok(())
     }

@@ -1,10 +1,9 @@
-/*! Module analyzer.
-
-Figures out the following properties:
-  - control flow uniformity
-  - texture/sampler pairs
-  - expression reference counts
-!*/
+//! Module analyzer.
+//!
+//! Figures out the following properties:
+//! - control flow uniformity
+//! - texture/sampler pairs
+//! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
 use crate::span::{AddSpan as _, WithSpan};
@@ -70,8 +69,10 @@ bitflags::bitflags! {
         /// subsequent statements within the current function (only!)
         /// to be executed in a non-uniform control flow.
         const MAY_RETURN = 0x1;
-        /// Control flow may be killed. Anything after `Statement::Kill` is
+        /// Control flow may be killed. Anything after [`Statement::Kill`] is
         /// considered inside non-uniform context.
+        ///
+        /// [`Statement::Kill`]: crate::Statement::Kill
         const MAY_KILL = 0x2;
     }
 }
@@ -383,6 +384,10 @@ impl FunctionInfo {
     /// refer to a global variable. Those expressions don't contribute
     /// any usage to the global themselves; that depends on how other
     /// expressions use them.
+    ///
+    /// [`assignable_global`]: ExpressionInfo::assignable_global
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
     #[must_use]
     fn add_assignable_ref(
         &mut self,
@@ -588,15 +593,14 @@ impl FunctionInfo {
             E::FunctionArgument(index) => {
                 let arg = &resolve_context.arguments[index as usize];
                 let uniform = match arg.binding {
-                    Some(crate::Binding::BuiltIn(built_in)) => match built_in {
+                    Some(crate::Binding::BuiltIn(
                         // per-polygon built-ins are uniform
                         crate::BuiltIn::FrontFacing
                         // per-work-group built-ins are uniform
                         | crate::BuiltIn::WorkGroupId
                         | crate::BuiltIn::WorkGroupSize
-                        | crate::BuiltIn::NumWorkGroups => true,
-                        _ => false,
-                    },
+                        | crate::BuiltIn::NumWorkGroups)
+                    ) => true,
                     // only flat inputs are uniform
                     Some(crate::Binding::Location {
                         interpolation: Some(crate::Interpolation::Flat),

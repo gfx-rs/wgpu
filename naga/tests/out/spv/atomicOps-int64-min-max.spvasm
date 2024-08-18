@@ -1,0 +1,101 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 67
+OpCapability Shader
+OpCapability Int64Atomics
+OpCapability Int64
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %25 "cs_main" %22
+OpExecutionMode %25 LocalSize 2 1 1
+OpDecorate %4 ArrayStride 8
+OpMemberDecorate %7 0 Offset 0
+OpMemberDecorate %7 1 Offset 8
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 0
+OpDecorate %10 Block
+OpMemberDecorate %10 0 Offset 0
+OpDecorate %12 DescriptorSet 0
+OpDecorate %12 Binding 1
+OpDecorate %13 Block
+OpMemberDecorate %13 0 Offset 0
+OpDecorate %15 DescriptorSet 0
+OpDecorate %15 Binding 2
+OpDecorate %16 Block
+OpMemberDecorate %16 0 Offset 0
+OpDecorate %18 DescriptorSet 0
+OpDecorate %18 Binding 3
+OpDecorate %19 Block
+OpMemberDecorate %19 0 Offset 0
+OpDecorate %22 BuiltIn LocalInvocationId
+%2 = OpTypeVoid
+%3 = OpTypeInt 64 0
+%6 = OpTypeInt 32 0
+%5 = OpConstant  %6  2
+%4 = OpTypeArray %3 %5
+%7 = OpTypeStruct %3 %4
+%8 = OpTypeVector %6 3
+%10 = OpTypeStruct %3
+%11 = OpTypePointer StorageBuffer %10
+%9 = OpVariable  %11  StorageBuffer
+%13 = OpTypeStruct %4
+%14 = OpTypePointer StorageBuffer %13
+%12 = OpVariable  %14  StorageBuffer
+%16 = OpTypeStruct %7
+%17 = OpTypePointer StorageBuffer %16
+%15 = OpVariable  %17  StorageBuffer
+%19 = OpTypeStruct %3
+%20 = OpTypePointer Uniform %19
+%18 = OpVariable  %20  Uniform
+%23 = OpTypePointer Input %8
+%22 = OpVariable  %23  Input
+%26 = OpTypeFunction %2
+%27 = OpTypePointer StorageBuffer %3
+%28 = OpConstant  %6  0
+%30 = OpTypePointer StorageBuffer %4
+%32 = OpTypePointer StorageBuffer %7
+%34 = OpTypePointer Uniform %3
+%36 = OpConstant  %3  1
+%41 = OpTypeInt 32 1
+%40 = OpConstant  %41  1
+%42 = OpConstant  %6  64
+%46 = OpConstant  %6  1
+%54 = OpConstant  %6  264
+%25 = OpFunction  %2  None %26
+%21 = OpLabel
+%24 = OpLoad  %8  %22
+%29 = OpAccessChain  %27  %9 %28
+%31 = OpAccessChain  %30  %12 %28
+%33 = OpAccessChain  %32  %15 %28
+%35 = OpAccessChain  %34  %18 %28
+OpBranch %37
+%37 = OpLabel
+%38 = OpLoad  %3  %35
+%39 = OpAtomicUMax  %3  %29 %40 %42 %38
+%43 = OpLoad  %3  %35
+%44 = OpIAdd  %3  %36 %43
+%47 = OpAccessChain  %27  %31 %46
+%45 = OpAtomicUMax  %3  %47 %40 %42 %44
+%49 = OpAccessChain  %27  %33 %28
+%48 = OpAtomicUMax  %3  %49 %40 %42 %36
+%50 = OpCompositeExtract  %6  %24 0
+%51 = OpUConvert  %3  %50
+%53 = OpAccessChain  %27  %33 %46 %46
+%52 = OpAtomicUMax  %3  %53 %40 %42 %51
+OpControlBarrier %5 %5 %54
+%55 = OpLoad  %3  %35
+%56 = OpAtomicUMin  %3  %29 %40 %42 %55
+%57 = OpLoad  %3  %35
+%58 = OpIAdd  %3  %36 %57
+%60 = OpAccessChain  %27  %31 %46
+%59 = OpAtomicUMin  %3  %60 %40 %42 %58
+%62 = OpAccessChain  %27  %33 %28
+%61 = OpAtomicUMin  %3  %62 %40 %42 %36
+%63 = OpCompositeExtract  %6  %24 0
+%64 = OpUConvert  %3  %63
+%66 = OpAccessChain  %27  %33 %46 %46
+%65 = OpAtomicUMin  %3  %66 %40 %42 %64
+OpReturn
+OpFunctionEnd

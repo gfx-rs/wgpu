@@ -8,19 +8,24 @@ static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().
         let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR);
         let data = vec![255; BUFFER_SIZE as usize];
 
-        fail_if(&ctx.device, should_panic, || {
-            ctx.queue.write_texture(
-                wgpu::ImageCopyTexture {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                &data,
-                BUFFER_COPY_LAYOUT,
-                size,
-            )
-        });
+        fail_if(
+            &ctx.device,
+            should_panic,
+            || {
+                ctx.queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture: &texture,
+                        mip_level: 0,
+                        origin,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &data,
+                    BUFFER_COPY_LAYOUT,
+                    size,
+                )
+            },
+            None,
+        );
     };
 
     try_origin(wgpu::Origin3d { x: 0, y: 0, z: 0 }, TEXTURE_SIZE, false);

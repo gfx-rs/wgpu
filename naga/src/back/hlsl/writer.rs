@@ -4,12 +4,12 @@ use super::{
         WrappedZeroValue,
     },
     storage::StoreValue,
-    BackendResult, Error, Options,
+    BackendResult, Error, FragmentEntryPoint, Options,
 };
 use crate::{
-    back,
+    back::{self, Baked},
     proc::{self, NameKey},
-    valid, Handle, Module, ScalarKind, ShaderStage, TypeInner,
+    valid, Handle, Module, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
 use std::{fmt, mem};
 
@@ -29,6 +29,7 @@ struct EpStructMember {
     name: String,
     ty: Handle<crate::Type>,
     // technically, this should always be `Some`
+    // (we `debug_assert!` this in `write_interface_struct`)
     binding: Option<crate::Binding>,
     index: u32,
 }
@@ -103,6 +104,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             entry_point_io: Vec::new(),
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
+            continue_ctx: back::continue_forward::ContinueCtx::default(),
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
         }
@@ -121,6 +123,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.entry_point_io.clear();
         self.named_expressions.clear();
         self.wrapped.clear();
+        self.continue_ctx.clear();
         self.need_bake_expressions.clear();
     }
 
@@ -200,6 +203,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         module_info: &valid::ModuleInfo,
+        fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
         if !module.overrides.is_empty() {
             return Err(Error::Override);
@@ -300,7 +304,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write all entry points wrapped structs
         for (index, ep) in module.entry_points.iter().enumerate() {
             let ep_name = self.names[&NameKey::EntryPoint(index as u16)].clone();
-            let ep_io = self.write_ep_interface(module, &ep.function, ep.stage, &ep_name)?;
+            let ep_io = self.write_ep_interface(
+                module,
+                &ep.function,
+                ep.stage,
+                &ep_name,
+                fragment_entry_point,
+            )?;
             self.entry_point_io.push(ep_io);
         }
 
@@ -481,6 +491,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         write!(self.out, "struct {struct_name}")?;
         writeln!(self.out, " {{")?;
         for m in members.iter() {
+            // Sanity check that each IO member is a built-in or is assigned a
+            // location. Also see note about nesting in `write_ep_input_struct`.
+            debug_assert!(m.binding.is_some());
+
             if is_subgroup_builtin_binding(&m.binding) {
                 continue;
             }
@@ -508,6 +522,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         writeln!(self.out, "}};")?;
         writeln!(self.out)?;
 
+        // See ordering notes on EntryPointInterface fields
         match shader_stage.1 {
             Io::Input => {
                 // bring back the original order
@@ -539,6 +554,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         let mut fake_members = Vec::new();
         for arg in func.arguments.iter() {
+            // NOTE: We don't need to handle nesting structs. All members must
+            // be either built-ins or assigned a location. I.E. `binding` is
+            // `Some`. This is checked in `VaryingContext::validate`. See:
+            // https://gpuweb.github.io/gpuweb/wgsl/#input-output-locations
             match module.types[arg.ty].inner {
                 TypeInner::Struct { ref members, .. } => {
                     for member in members.iter() {
@@ -577,10 +596,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         result: &crate::FunctionResult,
         stage: ShaderStage,
         entry_point_name: &str,
+        frag_ep: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<EntryPointBinding, Error> {
         let struct_name = format!("{stage:?}Output_{entry_point_name}");
 
-        let mut fake_members = Vec::new();
         let empty = [];
         let members = match module.types[result.ty].inner {
             TypeInner::Struct { ref members, .. } => members,
@@ -590,14 +609,54 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         };
 
-        for member in members.iter() {
+        // Gather list of fragment input locations. We use this below to remove user-defined
+        // varyings from VS outputs that aren't in the FS inputs. This makes the VS interface match
+        // as long as the FS inputs are a subset of the VS outputs. This is only applied if the
+        // writer is supplied with information about the fragment entry point.
+        let fs_input_locs = if let (Some(frag_ep), ShaderStage::Vertex) = (frag_ep, stage) {
+            let mut fs_input_locs = Vec::new();
+            for arg in frag_ep.func.arguments.iter() {
+                let mut push_if_location = |binding: &Option<crate::Binding>| match *binding {
+                    Some(crate::Binding::Location { location, .. }) => fs_input_locs.push(location),
+                    Some(crate::Binding::BuiltIn(_)) | None => {}
+                };
+
+                // NOTE: We don't need to handle struct nesting. See note in
+                // `write_ep_input_struct`.
+                match frag_ep.module.types[arg.ty].inner {
+                    TypeInner::Struct { ref members, .. } => {
+                        for member in members.iter() {
+                            push_if_location(&member.binding);
+                        }
+                    }
+                    _ => push_if_location(&arg.binding),
+                }
+            }
+            fs_input_locs.sort();
+            Some(fs_input_locs)
+        } else {
+            None
+        };
+
+        let mut fake_members = Vec::new();
+        for (index, member) in members.iter().enumerate() {
+            if let Some(ref fs_input_locs) = fs_input_locs {
+                match member.binding {
+                    Some(crate::Binding::Location { location, .. }) => {
+                        if fs_input_locs.binary_search(&location).is_err() {
+                            continue;
+                        }
+                    }
+                    Some(crate::Binding::BuiltIn(_)) | None => {}
+                }
+            }
+
             let member_name = self.namer.call_or(&member.name, "member");
-            let index = fake_members.len() as u32;
             fake_members.push(EpStructMember {
                 name: member_name,
                 ty: member.ty,
                 binding: member.binding.clone(),
-                index,
+                index: index as u32,
             });
         }
 
@@ -613,6 +672,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         func: &crate::Function,
         stage: ShaderStage,
         ep_name: &str,
+        frag_ep: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<EntryPointInterface, Error> {
         Ok(EntryPointInterface {
             input: if !func.arguments.is_empty()
@@ -628,7 +688,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             },
             output: match func.result {
                 Some(ref fr) if fr.binding.is_none() && stage == ShaderStage::Vertex => {
-                    Some(self.write_ep_output_struct(module, fr, stage, ep_name)?)
+                    Some(self.write_ep_output_struct(module, fr, stage, ep_name, frag_ep)?)
                 }
                 _ => None,
             },
@@ -1381,6 +1441,151 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.write_barrier(crate::Barrier::WORK_GROUP, level)
     }
 
+    /// Helper method used to write switches
+    fn write_switch(
+        &mut self,
+        module: &Module,
+        func_ctx: &back::FunctionCtx<'_>,
+        level: back::Level,
+        selector: Handle<crate::Expression>,
+        cases: &[crate::SwitchCase],
+    ) -> BackendResult {
+        // Write all cases
+        let indent_level_1 = level.next();
+        let indent_level_2 = indent_level_1.next();
+
+        // See docs of `back::continue_forward` module.
+        if let Some(variable) = self.continue_ctx.enter_switch(&mut self.namer) {
+            writeln!(self.out, "{level}bool {variable} = false;",)?;
+        };
+
+        // Check if there is only one body, by seeing if all except the last case are fall through
+        // with empty bodies. FXC doesn't handle these switches correctly, so
+        // we generate a `do {} while(false);` loop instead. There must be a default case, so there
+        // is no need to check if one of the cases would have matched.
+        let one_body = cases
+            .iter()
+            .rev()
+            .skip(1)
+            .all(|case| case.fall_through && case.body.is_empty());
+        if one_body {
+            // Start the do-while
+            writeln!(self.out, "{level}do {{")?;
+            // Note: Expressions have no side-effects so we don't need to emit selector expression.
+
+            // Body
+            if let Some(case) = cases.last() {
+                for sta in case.body.iter() {
+                    self.write_stmt(module, sta, func_ctx, indent_level_1)?;
+                }
+            }
+            // End do-while
+            writeln!(self.out, "{level}}} while(false);")?;
+        } else {
+            // Start the switch
+            write!(self.out, "{level}")?;
+            write!(self.out, "switch(")?;
+            self.write_expr(module, selector, func_ctx)?;
+            writeln!(self.out, ") {{")?;
+
+            for (i, case) in cases.iter().enumerate() {
+                match case.value {
+                    crate::SwitchValue::I32(value) => {
+                        write!(self.out, "{indent_level_1}case {value}:")?
+                    }
+                    crate::SwitchValue::U32(value) => {
+                        write!(self.out, "{indent_level_1}case {value}u:")?
+                    }
+                    crate::SwitchValue::Default => write!(self.out, "{indent_level_1}default:")?,
+                }
+
+                // The new block is not only stylistic, it plays a role here:
+                // We might end up having to write the same case body
+                // multiple times due to FXC not supporting fallthrough.
+                // Therefore, some `Expression`s written by `Statement::Emit`
+                // will end up having the same name (`_expr<handle_index>`).
+                // So we need to put each case in its own scope.
+                let write_block_braces = !(case.fall_through && case.body.is_empty());
+                if write_block_braces {
+                    writeln!(self.out, " {{")?;
+                } else {
+                    writeln!(self.out)?;
+                }
+
+                // Although FXC does support a series of case clauses before
+                // a block[^yes], it does not support fallthrough from a
+                // non-empty case block to the next[^no]. If this case has a
+                // non-empty body with a fallthrough, emulate that by
+                // duplicating the bodies of all the cases it would fall
+                // into as extensions of this case's own body. This makes
+                // the HLSL output potentially quadratic in the size of the
+                // Naga IR.
+                //
+                // [^yes]: ```hlsl
+                // case 1:
+                // case 2: do_stuff()
+                // ```
+                // [^no]: ```hlsl
+                // case 1: do_this();
+                // case 2: do_that();
+                // ```
+                if case.fall_through && !case.body.is_empty() {
+                    let curr_len = i + 1;
+                    let end_case_idx = curr_len
+                        + cases
+                            .iter()
+                            .skip(curr_len)
+                            .position(|case| !case.fall_through)
+                            .unwrap();
+                    let indent_level_3 = indent_level_2.next();
+                    for case in &cases[i..=end_case_idx] {
+                        writeln!(self.out, "{indent_level_2}{{")?;
+                        let prev_len = self.named_expressions.len();
+                        for sta in case.body.iter() {
+                            self.write_stmt(module, sta, func_ctx, indent_level_3)?;
+                        }
+                        // Clear all named expressions that were previously inserted by the statements in the block
+                        self.named_expressions.truncate(prev_len);
+                        writeln!(self.out, "{indent_level_2}}}")?;
+                    }
+
+                    let last_case = &cases[end_case_idx];
+                    if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
+                        writeln!(self.out, "{indent_level_2}break;")?;
+                    }
+                } else {
+                    for sta in case.body.iter() {
+                        self.write_stmt(module, sta, func_ctx, indent_level_2)?;
+                    }
+                    if !case.fall_through && case.body.last().map_or(true, |s| !s.is_terminator()) {
+                        writeln!(self.out, "{indent_level_2}break;")?;
+                    }
+                }
+
+                if write_block_braces {
+                    writeln!(self.out, "{indent_level_1}}}")?;
+                }
+            }
+
+            writeln!(self.out, "{level}}}")?;
+        }
+
+        // Handle any forwarded continue statements.
+        use back::continue_forward::ExitControlFlow;
+        let op = match self.continue_ctx.exit_switch() {
+            ExitControlFlow::None => None,
+            ExitControlFlow::Continue { variable } => Some(("continue", variable)),
+            ExitControlFlow::Break { variable } => Some(("break", variable)),
+        };
+        if let Some((control_flow, variable)) = op {
+            writeln!(self.out, "{level}if ({variable}) {{")?;
+            writeln!(self.out, "{indent_level_1}{control_flow};")?;
+            writeln!(self.out, "{level}}}")?;
+        }
+
+        Ok(())
+    }
+
     /// Helper method used to write statements
     ///
     /// # Notes
@@ -1410,7 +1615,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
                     } else if self.need_bake_expressions.contains(&handle) {
-                        Some(format!("_expr{}", handle.index()))
+                        Some(Baked(handle).to_string())
                     } else {
                         None
                     };
@@ -1824,6 +2029,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ref continuing,
                 break_if,
             } => {
+                self.continue_ctx.enter_loop();
                 let l2 = level.next();
                 if !continuing.is_empty() || break_if.is_some() {
                     let gate_name = self.namer.call("loop_init");
@@ -1850,10 +2056,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 for sta in body.iter() {
                     self.write_stmt(module, sta, func_ctx, l2)?;
                 }
-                writeln!(self.out, "{level}}}")?
+                writeln!(self.out, "{level}}}")?;
+                self.continue_ctx.exit_loop();
             }
             Statement::Break => writeln!(self.out, "{level}break;")?,
-            Statement::Continue => writeln!(self.out, "{level}continue;")?,
+            Statement::Continue => {
+                if let Some(variable) = self.continue_ctx.continue_encountered() {
+                    writeln!(self.out, "{level}{variable} = true;")?;
+                    writeln!(self.out, "{level}break;")?
+                } else {
+                    writeln!(self.out, "{level}continue;")?
+                }
+            }
             Statement::Barrier(barrier) => {
                 self.write_barrier(barrier, level)?;
             }
@@ -1891,7 +2105,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{level}")?;
                 if let Some(expr) = result {
                     write!(self.out, "const ")?;
-                    let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
+                    let name = Baked(expr).to_string();
                     let expr_ty = &func_ctx.info[expr].ty;
                     match *expr_ty {
                         proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
@@ -1919,11 +2133,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                match func_ctx.info[result].ty {
-                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
-                    proc::TypeResolution::Value(ref value) => {
-                        self.write_value_type(module, value)?
+                let res_name = match result {
+                    None => None,
+                    Some(result) => {
+                        let name = Baked(result).to_string();
+                        match func_ctx.info[result].ty {
+                            proc::TypeResolution::Handle(handle) => {
+                                self.write_type(module, handle)?
+                            }
+                            proc::TypeResolution::Value(ref value) => {
+                                self.write_value_type(module, value)?
+                            }
+                        };
+                        write!(self.out, " {name}; ")?;
+                        Some((result, name))
                     }
                 };
 
@@ -1934,7 +2157,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     .unwrap();
 
                 let fun_str = fun.to_hlsl_suffix();
-                write!(self.out, " {res_name}; ")?;
                 match pointer_space {
                     crate::AddressSpace::WorkGroup => {
                         write!(self.out, "Interlocked{fun_str}(")?;
@@ -1947,7 +2169,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // ownership of our reusable access chain buffer.
                         let chain = mem::take(&mut self.temp_access_chain);
                         let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                        write!(self.out, "{var_name}.Interlocked{fun_str}(")?;
+                        let width = match func_ctx.resolve_type(value, &module.types) {
+                            &TypeInner::Scalar(Scalar { width: 8, .. }) => "64",
+                            _ => "",
+                        };
+                        write!(self.out, "{var_name}.Interlocked{fun_str}{width}(")?;
                         self.write_storage_address(module, &chain, func_ctx)?;
                         self.temp_access_chain = chain;
                     }
@@ -1970,13 +2196,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     _ => {}
                 }
                 self.write_expr(module, value, func_ctx)?;
-                writeln!(self.out, ", {res_name});")?;
-                self.named_expressions.insert(result, res_name);
+
+                // The `original_value` out parameter is optional for all the
+                // `Interlocked` functions we generate other than
+                // `InterlockedExchange`.
+                if let Some((result, name)) = res_name {
+                    write!(self.out, ", {name}")?;
+                    self.named_expressions.insert(result, name);
+                }
+
+                writeln!(self.out, ");")?;
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 write!(self.out, "{level}")?;
-                let name = format!("_expr{}", result.index());
+                let name = Baked(result).to_string();
                 self.write_named_expr(module, pointer, name, result, func_ctx)?;
 
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
@@ -1985,105 +2219,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 selector,
                 ref cases,
             } => {
-                // Start the switch
-                write!(self.out, "{level}")?;
-                write!(self.out, "switch(")?;
-                self.write_expr(module, selector, func_ctx)?;
-                writeln!(self.out, ") {{")?;
-
-                // Write all cases
-                let indent_level_1 = level.next();
-                let indent_level_2 = indent_level_1.next();
-
-                for (i, case) in cases.iter().enumerate() {
-                    match case.value {
-                        crate::SwitchValue::I32(value) => {
-                            write!(self.out, "{indent_level_1}case {value}:")?
-                        }
-                        crate::SwitchValue::U32(value) => {
-                            write!(self.out, "{indent_level_1}case {value}u:")?
-                        }
-                        crate::SwitchValue::Default => {
-                            write!(self.out, "{indent_level_1}default:")?
-                        }
-                    }
-
-                    // The new block is not only stylistic, it plays a role here:
-                    // We might end up having to write the same case body
-                    // multiple times due to FXC not supporting fallthrough.
-                    // Therefore, some `Expression`s written by `Statement::Emit`
-                    // will end up having the same name (`_expr<handle_index>`).
-                    // So we need to put each case in its own scope.
-                    let write_block_braces = !(case.fall_through && case.body.is_empty());
-                    if write_block_braces {
-                        writeln!(self.out, " {{")?;
-                    } else {
-                        writeln!(self.out)?;
-                    }
-
-                    // Although FXC does support a series of case clauses before
-                    // a block[^yes], it does not support fallthrough from a
-                    // non-empty case block to the next[^no]. If this case has a
-                    // non-empty body with a fallthrough, emulate that by
-                    // duplicating the bodies of all the cases it would fall
-                    // into as extensions of this case's own body. This makes
-                    // the HLSL output potentially quadratic in the size of the
-                    // Naga IR.
-                    //
-                    // [^yes]: ```hlsl
-                    // case 1:
-                    // case 2: do_stuff()
-                    // ```
-                    // [^no]: ```hlsl
-                    // case 1: do_this();
-                    // case 2: do_that();
-                    // ```
-                    if case.fall_through && !case.body.is_empty() {
-                        let curr_len = i + 1;
-                        let end_case_idx = curr_len
-                            + cases
-                                .iter()
-                                .skip(curr_len)
-                                .position(|case| !case.fall_through)
-                                .unwrap();
-                        let indent_level_3 = indent_level_2.next();
-                        for case in &cases[i..=end_case_idx] {
-                            writeln!(self.out, "{indent_level_2}{{")?;
-                            let prev_len = self.named_expressions.len();
-                            for sta in case.body.iter() {
-                                self.write_stmt(module, sta, func_ctx, indent_level_3)?;
-                            }
-                            // Clear all named expressions that were previously inserted by the statements in the block
-                            self.named_expressions.truncate(prev_len);
-                            writeln!(self.out, "{indent_level_2}}}")?;
-                        }
-
-                        let last_case = &cases[end_case_idx];
-                        if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
-                            writeln!(self.out, "{indent_level_2}break;")?;
-                        }
-                    } else {
-                        for sta in case.body.iter() {
-                            self.write_stmt(module, sta, func_ctx, indent_level_2)?;
-                        }
-                        if !case.fall_through
-                            && case.body.last().map_or(true, |s| !s.is_terminator())
-                        {
-                            writeln!(self.out, "{indent_level_2}break;")?;
-                        }
-                    }
-
-                    if write_block_braces {
-                        writeln!(self.out, "{indent_level_1}}}")?;
-                    }
-                }
-
-                writeln!(self.out, "{level}}}")?
+                self.write_switch(module, func_ctx, level, selector, cases)?;
             }
             Statement::RayQuery { .. } => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
-                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let name = Baked(result).to_string();
                 write!(self.out, "const uint4 {name} = ")?;
                 self.named_expressions.insert(result, name);
 
@@ -2102,7 +2243,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             } => {
                 write!(self.out, "{level}")?;
                 write!(self.out, "const ")?;
-                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let name = Baked(result).to_string();
                 match func_ctx.info[result].ty {
                     proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
                     proc::TypeResolution::Value(ref value) => {
@@ -2166,7 +2307,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             } => {
                 write!(self.out, "{level}")?;
                 write!(self.out, "const ")?;
-                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let name = Baked(result).to_string();
                 match func_ctx.info[result].ty {
                     proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
                     proc::TypeResolution::Value(ref value) => {
@@ -2778,7 +2919,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let inner = func_ctx.resolve_type(expr, &module.types);
                 let close_paren = match convert {
                     Some(dst_width) => {
-                        let scalar = crate::Scalar {
+                        let scalar = Scalar {
                             kind,
                             width: dst_width,
                         };
@@ -2922,8 +3063,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
-                    Mf::FindLsb => Function::MissingIntReturnType("firstbitlow"),
-                    Mf::FindMsb => Function::MissingIntReturnType("firstbithigh"),
+                    Mf::FirstTrailingBit => Function::MissingIntReturnType("firstbitlow"),
+                    Mf::FirstLeadingBit => Function::MissingIntReturnType("firstbithigh"),
                     Mf::ExtractBits => Function::Regular(EXTRACT_BITS_FUNCTION),
                     Mf::InsertBits => Function::Regular(INSERT_BITS_FUNCTION),
                     // Data Packing
@@ -3139,7 +3280,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntOverload(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(crate::Scalar {
+                        if let Some(Scalar {
                             kind: ScalarKind::Sint,
                             width: 4,
                         }) = scalar_kind
@@ -3157,7 +3298,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntReturnType(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(crate::Scalar {
+                        if let Some(Scalar {
                             kind: ScalarKind::Sint,
                             width: 4,
                         }) = scalar_kind

@@ -44,7 +44,9 @@ impl<'a> TypeTracer<'a> {
                     size: _,
                     stride: _,
                 }
-                | Ti::BindingArray { base, size: _ } => self.types_used.insert(base),
+                | Ti::BindingArray { base, size: _ } => {
+                    self.types_used.insert(base);
+                }
                 Ti::Struct {
                     ref members,
                     span: _,

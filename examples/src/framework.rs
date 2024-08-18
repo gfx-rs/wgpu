@@ -318,6 +318,7 @@ impl<E: Example> InitializedExample<E> {
                     label: None,
                     required_features: (optional_features & adapter_features) | required_features,
                     required_limits: needed_limits,
+                    memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),
             )
@@ -543,7 +544,6 @@ pub fn run<E: Example>(title: &'static str) {
             event_loop.run_app(&mut loop_state).unwrap();
         }
     }
-
 }
 
 #[cfg(target_arch = "wasm32")]

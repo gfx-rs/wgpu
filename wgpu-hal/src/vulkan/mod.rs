@@ -7,7 +7,6 @@ Ash expects slices, which we don't generally have available.
 We cope with this requirement by the combination of the following ways:
   - temporarily allocating `Vec` on heap, where overhead is permitted
   - growing temporary local storage
-  - using `implace_it` on iterators
 
 ## Framebuffers and Render passes
 
@@ -33,18 +32,17 @@ mod instance;
 
 use std::{
     borrow::Borrow,
+    collections::HashSet,
     ffi::{CStr, CString},
-    fmt,
+    fmt, mem,
     num::NonZeroU32,
-    sync::{
-        atomic::{AtomicIsize, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::{Mutex, RwLock};
+use wgt::InternalCounter;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -70,6 +68,7 @@ impl crate::Api for Api {
     type QuerySet = QuerySet;
     type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
+    type PipelineCache = PipelineCache;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -78,6 +77,31 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 }
+
+crate::impl_dyn_resource!(
+    Adapter,
+    AccelerationStructure,
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Device,
+    Fence,
+    Instance,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    Queue,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    SurfaceTexture,
+    Texture,
+    TextureView
+);
 
 struct DebugUtils {
     extension: ext::debug_utils::Instance,
@@ -146,6 +170,173 @@ pub struct Instance {
     shared: Arc<InstanceShared>,
 }
 
+/// The semaphores needed to use one image in a swapchain.
+#[derive(Debug)]
+struct SwapchainImageSemaphores {
+    /// A semaphore that is signaled when this image is safe for us to modify.
+    ///
+    /// When [`vkAcquireNextImageKHR`] returns the index of the next swapchain
+    /// image that we should use, that image may actually still be in use by the
+    /// presentation engine, and is not yet safe to modify. However, that
+    /// function does accept a semaphore that it will signal when the image is
+    /// indeed safe to begin messing with.
+    ///
+    /// This semaphore is:
+    ///
+    /// - waited for by the first queue submission to operate on this image
+    ///   since it was acquired, and
+    ///
+    /// - signaled by [`vkAcquireNextImageKHR`] when the acquired image is ready
+    ///   for us to use.
+    ///
+    /// [`vkAcquireNextImageKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkAcquireNextImageKHR
+    acquire: vk::Semaphore,
+
+    /// True if the next command submission operating on this image should wait
+    /// for [`acquire`].
+    ///
+    /// We must wait for `acquire` before drawing to this swapchain image, but
+    /// because `wgpu-hal` queue submissions are always strongly ordered, only
+    /// the first submission that works with a swapchain image actually needs to
+    /// wait. We set this flag when this image is acquired, and clear it the
+    /// first time it's passed to [`Queue::submit`] as a surface texture.
+    ///
+    /// [`acquire`]: SwapchainImageSemaphores::acquire
+    /// [`Queue::submit`]: crate::Queue::submit
+    should_wait_for_acquire: bool,
+
+    /// A pool of semaphores for ordering presentation after drawing.
+    ///
+    /// The first [`present_index`] semaphores in this vector are:
+    ///
+    /// - all waited on by the call to [`vkQueuePresentKHR`] that presents this
+    ///   image, and
+    ///
+    /// - each signaled by some [`vkQueueSubmit`] queue submission that draws to
+    ///   this image, when the submission finishes execution.
+    ///
+    /// This vector accumulates one semaphore per submission that writes to this
+    /// image. This is awkward, but hard to avoid: [`vkQueuePresentKHR`]
+    /// requires a semaphore to order it with respect to drawing commands, and
+    /// we can't attach new completion semaphores to a command submission after
+    /// it's been submitted. This means that, at submission time, we must create
+    /// the semaphore we might need if the caller's next action is to enqueue a
+    /// presentation of this image.
+    ///
+    /// An alternative strategy would be for presentation to enqueue an empty
+    /// submit, ordered relative to other submits in the usual way, and
+    /// signaling a single presentation semaphore. But we suspect that submits
+    /// are usually expensive enough, and semaphores usually cheap enough, that
+    /// performance-sensitive users will avoid making many submits, so that the
+    /// cost of accumulated semaphores will usually be less than the cost of an
+    /// additional submit.
+    ///
+    /// Only the first [`present_index`] semaphores in the vector are actually
+    /// going to be signalled by submitted commands, and need to be waited for
+    /// by the next present call. Any semaphores beyond that index were created
+    /// for prior presents and are simply being retained for recycling.
+    ///
+    /// [`present_index`]: SwapchainImageSemaphores::present_index
+    /// [`vkQueuePresentKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueuePresentKHR
+    /// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
+    present: Vec<vk::Semaphore>,
+
+    /// The number of semaphores in [`present`] to be signalled for this submission.
+    ///
+    /// [`present`]: SwapchainImageSemaphores::present
+    present_index: usize,
+
+    /// The fence value of the last command submission that wrote to this image.
+    ///
+    /// The next time we try to acquire this image, we'll block until
+    /// this submission finishes, proving that [`acquire`] is ready to
+    /// pass to `vkAcquireNextImageKHR` again.
+    ///
+    /// [`acquire`]: SwapchainImageSemaphores::acquire
+    previously_used_submission_index: crate::FenceValue,
+}
+
+impl SwapchainImageSemaphores {
+    fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
+        Ok(Self {
+            acquire: device.new_binary_semaphore()?,
+            should_wait_for_acquire: true,
+            present: Vec::new(),
+            present_index: 0,
+            previously_used_submission_index: 0,
+        })
+    }
+
+    fn set_used_fence_value(&mut self, value: crate::FenceValue) {
+        self.previously_used_submission_index = value;
+    }
+
+    /// Return the semaphore that commands drawing to this image should wait for, if any.
+    ///
+    /// This only returns `Some` once per acquisition; see
+    /// [`SwapchainImageSemaphores::should_wait_for_acquire`] for details.
+    fn get_acquire_wait_semaphore(&mut self) -> Option<vk::Semaphore> {
+        if self.should_wait_for_acquire {
+            self.should_wait_for_acquire = false;
+            Some(self.acquire)
+        } else {
+            None
+        }
+    }
+
+    /// Return a semaphore that a submission that writes to this image should
+    /// signal when it's done.
+    ///
+    /// See [`SwapchainImageSemaphores::present`] for details.
+    fn get_submit_signal_semaphore(
+        &mut self,
+        device: &DeviceShared,
+    ) -> Result<vk::Semaphore, crate::DeviceError> {
+        // Try to recycle a semaphore we created for a previous presentation.
+        let sem = match self.present.get(self.present_index) {
+            Some(sem) => *sem,
+            None => {
+                let sem = device.new_binary_semaphore()?;
+                self.present.push(sem);
+                sem
+            }
+        };
+
+        self.present_index += 1;
+
+        Ok(sem)
+    }
+
+    /// Return the semaphores that a presentation of this image should wait on.
+    ///
+    /// Return a slice of semaphores that the call to [`vkQueueSubmit`] that
+    /// ends this image's acquisition should wait for. See
+    /// [`SwapchainImageSemaphores::present`] for details.
+    ///
+    /// Reset `self` to be ready for the next acquisition cycle.
+    ///
+    /// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
+    fn get_present_wait_semaphores(&mut self) -> &[vk::Semaphore] {
+        let old_index = self.present_index;
+
+        // Since this marks the end of this acquire/draw/present cycle, take the
+        // opportunity to reset `self` in preparation for the next acquisition.
+        self.present_index = 0;
+        self.should_wait_for_acquire = true;
+
+        &self.present[0..old_index]
+    }
+
+    unsafe fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            device.destroy_semaphore(self.acquire, None);
+            for sem in &self.present {
+                device.destroy_semaphore(*sem, None);
+            }
+        }
+    }
+}
+
 struct Swapchain {
     raw: vk::SwapchainKHR,
     raw_flags: vk::SwapchainCreateFlagsKHR,
@@ -156,9 +347,25 @@ struct Swapchain {
     view_formats: Vec<wgt::TextureFormat>,
     /// One wait semaphore per swapchain image. This will be associated with the
     /// surface texture, and later collected during submission.
-    surface_semaphores: Vec<vk::Semaphore>,
-    /// Current semaphore index to use when acquiring a surface.
-    next_surface_index: usize,
+    ///
+    /// We need this to be `Arc<Mutex<>>` because we need to be able to pass this
+    /// data into the surface texture, so submit/present can use it.
+    surface_semaphores: Vec<Arc<Mutex<SwapchainImageSemaphores>>>,
+    /// The index of the next semaphore to use. Ideally we would use the same
+    /// index as the image index, but we need to specify the semaphore as an argument
+    /// to the acquire_next_image function which is what tells us which image to use.
+    next_semaphore_index: usize,
+}
+
+impl Swapchain {
+    fn advance_surface_semaphores(&mut self) {
+        let semaphore_count = self.surface_semaphores.len();
+        self.next_semaphore_index = (self.next_semaphore_index + 1) % semaphore_count;
+    }
+
+    fn get_surface_semaphores(&self) -> Arc<Mutex<SwapchainImageSemaphores>> {
+        self.surface_semaphores[self.next_semaphore_index].clone()
+    }
 }
 
 pub struct Surface {
@@ -172,11 +379,19 @@ pub struct Surface {
 pub struct SurfaceTexture {
     index: u32,
     texture: Texture,
-    wait_semaphore: vk::Semaphore,
+    surface_semaphores: Arc<Mutex<SwapchainImageSemaphores>>,
 }
+
+impl crate::DynSurfaceTexture for SurfaceTexture {}
 
 impl Borrow<Texture> for SurfaceTexture {
     fn borrow(&self) -> &Texture {
+        &self.texture
+    }
+}
+
+impl Borrow<dyn crate::DynTexture> for SurfaceTexture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
         &self.texture
     }
 }
@@ -338,12 +553,14 @@ struct DeviceShared {
     enabled_extensions: Vec<&'static CStr>,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
+    pipeline_cache_validation_key: [u8; 16],
     timestamp_period: f32,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     features: wgt::Features,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    memory_allocations_counter: InternalCounter,
 }
 
 pub struct Device {
@@ -355,6 +572,82 @@ pub struct Device {
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
+    counters: wgt::HalCounters,
+}
+
+/// Semaphores for forcing queue submissions to run in order.
+///
+/// The [`wgpu_hal::Queue`] trait promises that if two calls to [`submit`] are
+/// ordered, then the first submission will finish on the GPU before the second
+/// submission begins. To get this behavior on Vulkan we need to pass semaphores
+/// to [`vkQueueSubmit`] for the commands to wait on before beginning execution,
+/// and to signal when their execution is done.
+///
+/// Normally this can be done with a single semaphore, waited on and then
+/// signalled for each submission. At any given time there's exactly one
+/// submission that would signal the semaphore, and exactly one waiting on it,
+/// as Vulkan requires.
+///
+/// However, as of Oct 2021, bug [#5508] in the Mesa ANV drivers caused them to
+/// hang if we use a single semaphore. The workaround is to alternate between
+/// two semaphores. The bug has been fixed in Mesa, but we should probably keep
+/// the workaround until, say, Oct 2026.
+///
+/// [`wgpu_hal::Queue`]: crate::Queue
+/// [`submit`]: crate::Queue::submit
+/// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
+/// [#5508]: https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508
+#[derive(Clone)]
+struct RelaySemaphores {
+    /// The semaphore the next submission should wait on before beginning
+    /// execution on the GPU. This is `None` for the first submission, which
+    /// should not wait on anything at all.
+    wait: Option<vk::Semaphore>,
+
+    /// The semaphore the next submission should signal when it has finished
+    /// execution on the GPU.
+    signal: vk::Semaphore,
+}
+
+impl RelaySemaphores {
+    fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
+        Ok(Self {
+            wait: None,
+            signal: device.new_binary_semaphore()?,
+        })
+    }
+
+    /// Advances the semaphores, returning the semaphores that should be used for a submission.
+    fn advance(&mut self, device: &DeviceShared) -> Result<Self, crate::DeviceError> {
+        let old = self.clone();
+
+        // Build the state for the next submission.
+        match self.wait {
+            None => {
+                // The `old` values describe the first submission to this queue.
+                // The second submission should wait on `old.signal`, and then
+                // signal a new semaphore which we'll create now.
+                self.wait = Some(old.signal);
+                self.signal = device.new_binary_semaphore()?;
+            }
+            Some(ref mut wait) => {
+                // What this submission signals, the next should wait.
+                mem::swap(wait, &mut self.signal);
+            }
+        };
+
+        Ok(old)
+    }
+
+    /// Destroys the semaphores.
+    unsafe fn destroy(&self, device: &ash::Device) {
+        unsafe {
+            if let Some(wait) = self.wait {
+                device.destroy_semaphore(wait, None);
+            }
+            device.destroy_semaphore(self.signal, None);
+        }
+    }
 }
 
 pub struct Queue {
@@ -362,13 +655,7 @@ pub struct Queue {
     swapchain_fn: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     family_index: u32,
-    /// We use a redundant chain of semaphores to pass on the signal
-    /// from submissions to the last present, since it's required by the
-    /// specification.
-    /// It would be correct to use a single semaphore there, but
-    /// [Intel hangs in `anv_queue_finish`](https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508).
-    relay_semaphores: [vk::Semaphore; 2],
-    relay_index: AtomicIsize,
+    relay_semaphores: Mutex<RelaySemaphores>,
 }
 
 #[derive(Debug)]
@@ -377,12 +664,16 @@ pub struct Buffer {
     block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
+impl crate::DynBuffer for Buffer {}
+
 #[derive(Debug)]
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
 }
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 #[derive(Debug)]
 pub struct Texture {
@@ -395,6 +686,8 @@ pub struct Texture {
     copy_size: crate::CopyExtent,
     view_formats: Vec<wgt::TextureFormat>,
 }
+
+impl crate::DynTexture for Texture {}
 
 impl Texture {
     /// # Safety
@@ -412,6 +705,8 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl crate::DynTextureView for TextureView {}
+
 impl TextureView {
     /// # Safety
     ///
@@ -426,6 +721,8 @@ pub struct Sampler {
     raw: vk::Sampler,
 }
 
+impl crate::DynSampler for Sampler {}
+
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
@@ -435,16 +732,22 @@ pub struct BindGroupLayout {
     binding_arrays: Vec<(u32, NonZeroU32)>,
 }
 
+impl crate::DynBindGroupLayout for BindGroupLayout {}
+
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
     binding_arrays: naga::back::spv::BindingMap,
 }
 
+impl crate::DynPipelineLayout for PipelineLayout {}
+
 #[derive(Debug)]
 pub struct BindGroup {
     set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
+
+impl crate::DynBindGroup for BindGroup {}
 
 /// Miscellaneous allocation recycling pool for `CommandAllocator`.
 #[derive(Default)]
@@ -459,7 +762,6 @@ impl Temp {
         self.marker.clear();
         self.buffer_barriers.clear();
         self.image_barriers.clear();
-        //see also - https://github.com/NotIntMan/inplace_it/issues/8
     }
 
     fn make_c_str(&mut self, name: &str) -> &CStr {
@@ -529,6 +831,8 @@ pub struct CommandBuffer {
     raw: vk::CommandBuffer,
 }
 
+impl crate::DynCommandBuffer for CommandBuffer {}
+
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderModule {
@@ -539,20 +843,35 @@ pub enum ShaderModule {
     },
 }
 
+impl crate::DynShaderModule for ShaderModule {}
+
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: vk::Pipeline,
 }
+
+impl crate::DynRenderPipeline for RenderPipeline {}
 
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: vk::Pipeline,
 }
 
+impl crate::DynComputePipeline for ComputePipeline {}
+
+#[derive(Debug)]
+pub struct PipelineCache {
+    raw: vk::PipelineCache,
+}
+
+impl crate::DynPipelineCache for PipelineCache {}
+
 #[derive(Debug)]
 pub struct QuerySet {
     raw: vk::QueryPool,
 }
+
+impl crate::DynQuerySet for QuerySet {}
 
 /// The [`Api::Fence`] type for [`vulkan::Api`].
 ///
@@ -603,6 +922,8 @@ pub enum Fence {
     },
 }
 
+impl crate::DynFence for Fence {}
+
 impl Fence {
     /// Return the highest [`FenceValue`] among the signalled fences in `active`.
     ///
@@ -619,7 +940,11 @@ impl Fence {
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         for &(value, raw) in active.iter() {
             unsafe {
-                if value > last_completed && device.get_fence_status(raw)? {
+                if value > last_completed
+                    && device
+                        .get_fence_status(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?
+                {
                     last_completed = value;
                 }
             }
@@ -638,8 +963,12 @@ impl Fence {
         match *self {
             Self::TimelineSemaphore(raw) => unsafe {
                 Ok(match *extension.unwrap() {
-                    ExtensionFn::Extension(ref ext) => ext.get_semaphore_counter_value(raw)?,
-                    ExtensionFn::Promoted => device.get_semaphore_counter_value(raw)?,
+                    ExtensionFn::Extension(ref ext) => ext
+                        .get_semaphore_counter_value(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?,
+                    ExtensionFn::Promoted => device
+                        .get_semaphore_counter_value(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?,
                 })
             },
             Self::FencePool {
@@ -679,7 +1008,8 @@ impl Fence {
                 }
                 if free.len() != base_free {
                     active.retain(|&(value, _)| value > latest);
-                    unsafe { device.reset_fences(&free[base_free..]) }?
+                    unsafe { device.reset_fences(&free[base_free..]) }
+                        .map_err(map_device_oom_err)?
                 }
                 *last_completed = latest;
             }
@@ -695,58 +1025,90 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         surface_textures: &[&SurfaceTexture],
-        signal_fence: Option<(&mut Fence, crate::FenceValue)>,
+        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
 
         let mut wait_stage_masks = Vec::new();
         let mut wait_semaphores = Vec::new();
-        let mut signal_semaphores = ArrayVec::<_, 2>::new();
-        let mut signal_values = ArrayVec::<_, 2>::new();
+        let mut signal_semaphores = Vec::new();
+        let mut signal_values = Vec::new();
 
-        for &surface_texture in surface_textures {
-            wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
-            wait_semaphores.push(surface_texture.wait_semaphore);
+        // Double check that the same swapchain image isn't being given to us multiple times,
+        // as that will deadlock when we try to lock them all.
+        debug_assert!(
+            {
+                let mut check = HashSet::with_capacity(surface_textures.len());
+                // We compare the Arcs by pointer, as Eq isn't well defined for SurfaceSemaphores.
+                for st in surface_textures {
+                    check.insert(Arc::as_ptr(&st.surface_semaphores));
+                }
+                check.len() == surface_textures.len()
+            },
+            "More than one surface texture is being used from the same swapchain. This will cause a deadlock in release."
+        );
+
+        let locked_swapchain_semaphores = surface_textures
+            .iter()
+            .map(|st| {
+                st.surface_semaphores
+                    .try_lock()
+                    .expect("Failed to lock surface semaphore.")
+            })
+            .collect::<Vec<_>>();
+
+        for mut swapchain_semaphore in locked_swapchain_semaphores {
+            swapchain_semaphore.set_used_fence_value(signal_value);
+
+            // If we're the first submission to operate on this image, wait on
+            // its acquire semaphore, to make sure the presentation engine is
+            // done with it.
+            if let Some(sem) = swapchain_semaphore.get_acquire_wait_semaphore() {
+                wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
+                wait_semaphores.push(sem);
+            }
+
+            // Get a semaphore to signal when we're done writing to this surface
+            // image. Presentation of this image will wait for this.
+            let signal_semaphore = swapchain_semaphore.get_submit_signal_semaphore(&self.device)?;
+            signal_semaphores.push(signal_semaphore);
+            signal_values.push(!0);
         }
 
-        let old_index = self.relay_index.load(Ordering::Relaxed);
+        // In order for submissions to be strictly ordered, we encode a dependency between each submission
+        // using a pair of semaphores. This adds a wait if it is needed, and signals the next semaphore.
+        let semaphore_state = self.relay_semaphores.lock().advance(&self.device)?;
 
-        let sem_index = if old_index >= 0 {
+        if let Some(sem) = semaphore_state.wait {
             wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
-            wait_semaphores.push(self.relay_semaphores[old_index as usize]);
-            (old_index as usize + 1) % self.relay_semaphores.len()
-        } else {
-            0
-        };
+            wait_semaphores.push(sem);
+        }
 
-        signal_semaphores.push(self.relay_semaphores[sem_index]);
+        signal_semaphores.push(semaphore_state.signal);
+        signal_values.push(!0);
 
-        self.relay_index
-            .store(sem_index as isize, Ordering::Relaxed);
-
-        if let Some((fence, value)) = signal_fence {
-            fence.maintain(&self.device.raw)?;
-            match *fence {
-                Fence::TimelineSemaphore(raw) => {
-                    signal_semaphores.push(raw);
-                    signal_values.push(!0);
-                    signal_values.push(value);
-                }
-                Fence::FencePool {
-                    ref mut active,
-                    ref mut free,
-                    ..
-                } => {
-                    fence_raw = match free.pop() {
-                        Some(raw) => raw,
-                        None => unsafe {
-                            self.device
-                                .raw
-                                .create_fence(&vk::FenceCreateInfo::default(), None)?
-                        },
-                    };
-                    active.push((value, fence_raw));
-                }
+        // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
+        signal_fence.maintain(&self.device.raw)?;
+        match *signal_fence {
+            Fence::TimelineSemaphore(raw) => {
+                signal_semaphores.push(raw);
+                signal_values.push(signal_value);
+            }
+            Fence::FencePool {
+                ref mut active,
+                ref mut free,
+                ..
+            } => {
+                fence_raw = match free.pop() {
+                    Some(raw) => raw,
+                    None => unsafe {
+                        self.device
+                            .raw
+                            .create_fence(&vk::FenceCreateInfo::default(), None)
+                            .map_err(map_host_device_oom_err)?
+                    },
+                };
+                active.push((signal_value, fence_raw));
             }
         }
 
@@ -764,7 +1126,7 @@ impl crate::Queue for Queue {
 
         let mut vk_timeline_info;
 
-        if !signal_values.is_empty() {
+        if self.device.private_caps.timeline_semaphores {
             vk_timeline_info =
                 vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&signal_values);
             vk_info = vk_info.push_next(&mut vk_timeline_info);
@@ -774,7 +1136,8 @@ impl crate::Queue for Queue {
         unsafe {
             self.device
                 .raw
-                .queue_submit(self.raw, &[vk_info], fence_raw)?
+                .queue_submit(self.raw, &[vk_info], fence_raw)
+                .map_err(map_host_device_oom_and_lost_err)?
         };
         Ok(())
     }
@@ -786,19 +1149,14 @@ impl crate::Queue for Queue {
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swapchain.write();
         let ssc = swapchain.as_mut().unwrap();
+        let mut swapchain_semaphores = texture.surface_semaphores.lock();
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
-        let mut vk_info = vk::PresentInfoKHR::default()
+        let vk_info = vk::PresentInfoKHR::default()
             .swapchains(&swapchains)
-            .image_indices(&image_indices);
-
-        let old_index = self.relay_index.swap(-1, Ordering::Relaxed);
-        if old_index >= 0 {
-            vk_info = vk_info.wait_semaphores(
-                &self.relay_semaphores[old_index as usize..old_index as usize + 1],
-            );
-        }
+            .image_indices(&image_indices)
+            .wait_semaphores(swapchain_semaphores.get_present_wait_semaphores());
 
         let suboptimal = {
             profiling::scope!("vkQueuePresentKHR");
@@ -806,7 +1164,9 @@ impl crate::Queue for Queue {
                 match error {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => crate::SurfaceError::Outdated,
                     vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
-                    _ => crate::DeviceError::from(error).into(),
+                    // We don't use VK_EXT_full_screen_exclusive
+                    // VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
+                    _ => map_host_device_oom_and_lost_err(error).into(),
                 }
             })?
         };
@@ -826,29 +1186,116 @@ impl crate::Queue for Queue {
     }
 }
 
-impl From<vk::Result> for crate::DeviceError {
-    fn from(result: vk::Result) -> Self {
-        #![allow(unreachable_code)]
-        match result {
-            vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                #[cfg(feature = "oom_panic")]
-                panic!("Out of memory ({result:?})");
-
-                Self::OutOfMemory
-            }
-            vk::Result::ERROR_DEVICE_LOST => {
-                #[cfg(feature = "device_lost_panic")]
-                panic!("Device lost");
-
-                Self::Lost
-            }
-            _ => {
-                #[cfg(feature = "internal_error_panic")]
-                panic!("Internal error: {result:?}");
-
-                log::warn!("Unrecognized device error {result:?}");
-                Self::Lost
-            }
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+fn map_host_device_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+            get_oom_err(err)
         }
+        e => get_unexpected_err(e),
     }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_ERROR_DEVICE_LOST
+fn map_host_device_oom_and_lost_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_DEVICE_LOST => get_lost_err(),
+        other => map_host_device_oom_err(other),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+fn map_host_device_oom_and_ioca_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_KHR_buffer_device_address
+    // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+    map_host_device_oom_err(err)
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+fn map_host_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY => get_oom_err(err),
+        e => get_unexpected_err(e),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+fn map_device_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => get_oom_err(err),
+        e => get_unexpected_err(e),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+fn map_host_oom_and_ioca_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_KHR_buffer_device_address
+    // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+    map_host_oom_err(err)
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_PIPELINE_COMPILE_REQUIRED_EXT
+/// - VK_ERROR_INVALID_SHADER_NV
+fn map_pipeline_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_EXT_pipeline_creation_cache_control
+    // VK_PIPELINE_COMPILE_REQUIRED_EXT
+    // We don't use VK_NV_glsl_shader
+    // VK_ERROR_INVALID_SHADER_NV
+    map_host_device_oom_err(err)
+}
+
+/// Returns [`crate::DeviceError::Unexpected`] or panics if the `internal_error_panic`
+/// feature flag is enabled.
+fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
+    #[cfg(feature = "internal_error_panic")]
+    panic!("Unexpected Vulkan error: {_err:?}");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::Unexpected
+}
+
+/// Returns [`crate::DeviceError::OutOfMemory`] or panics if the `oom_panic`
+/// feature flag is enabled.
+fn get_oom_err(_err: vk::Result) -> crate::DeviceError {
+    #[cfg(feature = "oom_panic")]
+    panic!("Out of memory ({_err:?})");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::OutOfMemory
+}
+
+/// Returns [`crate::DeviceError::Lost`] or panics if the `device_lost_panic`
+/// feature flag is enabled.
+fn get_lost_err() -> crate::DeviceError {
+    #[cfg(feature = "device_lost_panic")]
+    panic!("Device lost");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::Lost
+}
+
+fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
+    panic!("wgpu-hal invariant was violated (usage error): {txt}")
 }

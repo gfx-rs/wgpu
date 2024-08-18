@@ -21,10 +21,10 @@ void breakIfEmptyBody(bool a)
     while(true) {
         if (!loop_init_1) {
             b = a;
-            bool _expr2 = b;
-            c = (a != _expr2);
-            bool _expr5 = c;
-            if ((a == _expr5)) {
+            bool _e2 = b;
+            c = (a != _e2);
+            bool _e5 = c;
+            if ((a == _e5)) {
                 break;
             }
         }
@@ -41,15 +41,15 @@ void breakIf(bool a_1)
     bool loop_init_2 = true;
     while(true) {
         if (!loop_init_2) {
-            bool _expr5 = e;
-            if ((a_1 == _expr5)) {
+            bool _e5 = e;
+            if ((a_1 == _e5)) {
                 break;
             }
         }
         loop_init_2 = false;
         d = a_1;
-        bool _expr2 = d;
-        e = (a_1 != _expr2);
+        bool _e2 = d;
+        e = (a_1 != _e2);
     }
     return;
 }
@@ -61,14 +61,14 @@ void breakIfSeparateVariable()
     bool loop_init_3 = true;
     while(true) {
         if (!loop_init_3) {
-            uint _expr5 = counter;
-            if ((_expr5 == 5u)) {
+            uint _e5 = counter;
+            if ((_e5 == 5u)) {
                 break;
             }
         }
         loop_init_3 = false;
-        uint _expr3 = counter;
-        counter = (_expr3 + 1u);
+        uint _e3 = counter;
+        counter = (_e3 + 1u);
     }
     return;
 }

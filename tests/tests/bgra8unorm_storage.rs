@@ -95,9 +95,10 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&pl),
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             module: &module,
+            cache: None,
         });
 
         let mut encoder =

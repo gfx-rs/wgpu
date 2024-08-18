@@ -27,6 +27,7 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
+itertools.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
 parking_lot.workspace = true
@@ -35,8 +36,9 @@ pollster.workspace = true
 profiling.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+strum = { workspace = true, features = ["derive"] }
 wgpu-macros.workspace = true
-wgpu.workspace = true
+wgpu = { workspace = true, features = ["wgsl"] }
 wgt = { workspace = true, features = ["serde"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

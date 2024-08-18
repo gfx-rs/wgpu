@@ -1,6 +1,8 @@
 use std::sync::atomic::AtomicBool;
 
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{
+    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+};
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -107,7 +109,7 @@ static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything
-    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0).await;
+    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0, false).await;
 
     let device_error = adapter
         .request_device(
@@ -147,14 +149,6 @@ async fn request_device_error_message() {
 
 // This is a test of device behavior after device.destroy. Specifically, all operations
 // should trigger errors since the device is lost.
-//
-// On DX12 this test fails with a validation error in the very artificial actions taken
-// after lose the device. The error is "ID3D12CommandAllocator::Reset: The command
-// allocator cannot be reset because a command list is currently being recorded with the
-// allocator." That may indicate that DX12 doesn't like opened command buffers staying
-// open even after they return an error. For now, this test is skipped on DX12.
-//
-// The DX12 issue may be related to https://github.com/gfx-rs/wgpu/issues/3193.
 #[gpu_test]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
@@ -298,222 +292,317 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         // the device is not valid.
 
         // Creating a command encoder should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a buffer should fail.
-        fail(&ctx.device, || {
-            ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: 256,
-                usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: 256,
+                    usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+                    mapped_at_creation: false,
+                });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a texture should fail.
-        fail(&ctx.device, || {
-            ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: 512,
-                    height: 512,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 2,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rg8Uint,
-                usage: wgpu::TextureUsages::COPY_SRC,
-                view_formats: &[],
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    size: wgpu::Extent3d {
+                        width: 512,
+                        height: 512,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 2,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rg8Uint,
+                    usage: wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
+                });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Texture clear should fail.
-        fail(&ctx.device, || {
-            encoder_for_clear.clear_texture(
-                &texture_for_write,
-                &wgpu::ImageSubresourceRange {
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: 0,
-                    mip_level_count: None,
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                },
-            );
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_clear.clear_texture(
+                    &texture_for_write,
+                    &wgpu::ImageSubresourceRange {
+                        aspect: wgpu::TextureAspect::All,
+                        base_mip_level: 0,
+                        mip_level_count: None,
+                        base_array_layer: 0,
+                        array_layer_count: None,
+                    },
+                );
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a compute pass should fail.
-        fail(&ctx.device, || {
-            encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: None,
+                    timestamp_writes: None,
+                });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a render pass should fail.
-        fail(&ctx.device, || {
-            encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations::default(),
-                    resolve_target: None,
-                    view: &target_view,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        ops: wgpu::Operations::default(),
+                        resolve_target: None,
+                        view: &target_view,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Copying a buffer to a buffer should fail.
-        fail(&ctx.device, || {
-            encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
-                &buffer_source,
-                0,
-                &buffer_dest,
-                0,
-                256,
-            );
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
+                    &buffer_source,
+                    0,
+                    &buffer_dest,
+                    0,
+                    256,
+                );
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Copying a buffer to a texture should fail.
-        fail(&ctx.device, || {
-            encoder_for_buffer_texture_copy.copy_buffer_to_texture(
-                wgpu::ImageCopyBuffer {
-                    buffer: &buffer_source,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4),
-                        rows_per_image: None,
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_buffer_texture_copy.copy_buffer_to_texture(
+                    wgpu::ImageCopyBuffer {
+                        buffer: &buffer_source,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: None,
+                        },
                     },
-                },
-                texture_for_write.as_image_copy(),
-                texture_extent,
-            );
-        });
+                    texture_for_write.as_image_copy(),
+                    texture_extent,
+                );
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Copying a texture to a buffer should fail.
-        fail(&ctx.device, || {
-            encoder_for_texture_buffer_copy.copy_texture_to_buffer(
-                texture_for_read.as_image_copy(),
-                wgpu::ImageCopyBuffer {
-                    buffer: &buffer_source,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4),
-                        rows_per_image: None,
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_texture_buffer_copy.copy_texture_to_buffer(
+                    texture_for_read.as_image_copy(),
+                    wgpu::ImageCopyBuffer {
+                        buffer: &buffer_source,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: None,
+                        },
                     },
-                },
-                texture_extent,
-            );
-        });
+                    texture_extent,
+                );
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Copying a texture to a texture should fail.
-        fail(&ctx.device, || {
-            encoder_for_texture_texture_copy.copy_texture_to_texture(
-                texture_for_read.as_image_copy(),
-                texture_for_write.as_image_copy(),
-                texture_extent,
-            );
-        });
+        fail(
+            &ctx.device,
+            || {
+                encoder_for_texture_texture_copy.copy_texture_to_texture(
+                    texture_for_read.as_image_copy(),
+                    texture_for_write.as_image_copy(),
+                    texture_extent,
+                );
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a bind group layout should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[],
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[],
+                    });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a bind group should fail.
-        fail(&ctx.device, || {
-            ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: None,
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(
-                        buffer_source.as_entire_buffer_binding(),
-                    ),
-                }],
-            });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: None,
+                    layout: &bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(
+                            buffer_source.as_entire_buffer_binding(),
+                        ),
+                    }],
+                });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a pipeline layout should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts: &[],
-                    push_constant_ranges: &[],
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: None,
+                        bind_group_layouts: &[],
+                        push_constant_ranges: &[],
+                    });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a shader module should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: None,
-                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
+                    });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a shader module spirv should fail.
-        fail(&ctx.device, || unsafe {
-            ctx.device
-                .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
-                    label: None,
-                    source: std::borrow::Cow::Borrowed(&[]),
-                });
-        });
+        fail(
+            &ctx.device,
+            || unsafe {
+                ctx.device
+                    .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
+                        label: None,
+                        source: std::borrow::Cow::Borrowed(&[]),
+                    });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a render pipeline should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: None,
-                    layout: None,
-                    vertex: wgpu::VertexState {
-                        module: &shader_module,
-                        entry_point: "",
-                        compilation_options: Default::default(),
-                        buffers: &[],
-                    },
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: None,
-                    multiview: None,
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        vertex: wgpu::VertexState {
+                            module: &shader_module,
+                            entry_point: Some(""),
+                            compilation_options: Default::default(),
+                            buffers: &[],
+                        },
+                        primitive: wgpu::PrimitiveState::default(),
+                        depth_stencil: None,
+                        multisample: wgpu::MultisampleState::default(),
+                        fragment: None,
+                        multiview: None,
+                        cache: None,
+                    });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Creating a compute pipeline should fail.
-        fail(&ctx.device, || {
-            ctx.device
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: None,
-                    layout: None,
-                    module: &shader_module,
-                    entry_point: "",
-                    compilation_options: Default::default(),
-                });
-        });
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        module: &shader_module,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                        cache: None,
+                    });
+            },
+            Some("device with '' label is invalid"),
+        );
+
+        // Creating a compute pipeline should fail.
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        module: &shader_module,
+                        entry_point: None,
+                        compilation_options: Default::default(),
+                        cache: None,
+                    });
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Buffer map should fail.
-        fail(&ctx.device, || {
-            buffer_for_map
-                .slice(..)
-                .map_async(wgpu::MapMode::Write, |_| ());
-        });
+        fail(
+            &ctx.device,
+            || {
+                buffer_for_map
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Write, |_| ());
+            },
+            Some("device with '' label is invalid"),
+        );
 
         // Buffer unmap should fail.
-        fail(&ctx.device, || {
-            buffer_for_unmap.unmap();
-        });
+        fail(
+            &ctx.device,
+            || {
+                buffer_for_unmap.unmap();
+            },
+            Some("device with '' label is invalid"),
+        );
     });
 
 #[gpu_test]
@@ -675,21 +764,22 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
         // resource type) in the wrong list of a different resource type. Let's reproduce that
         // here.
 
-        let trivial_shaders_with_some_reversed_bindings = "\
-@group(0) @binding(3) var myTexture2: texture_2d<f32>;
-@group(0) @binding(2) var myTexture1: texture_2d<f32>;
-@group(0) @binding(1) var mySampler: sampler;
-
-@fragment
-fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4f {
-  return textureSample(myTexture1, mySampler, pos.xy) + textureSample(myTexture2, mySampler, pos.xy);
-}
-
-@vertex
-fn vs_main() -> @builtin(position) vec4<f32> {
-  return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-}
-";
+        let trivial_shaders_with_some_reversed_bindings = concat!(
+            "@group(0) @binding(3) var myTexture2: texture_2d<f32>;\n",
+            "@group(0) @binding(2) var myTexture1: texture_2d<f32>;\n",
+            "@group(0) @binding(1) var mySampler: sampler;\n",
+            "\n",
+            "@fragment\n",
+            "fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4f {\n",
+            "  return textureSample(myTexture1, mySampler, pos.xy) \n",
+            "    + textureSample(myTexture2, mySampler, pos.xy);\n",
+            "}\n",
+            "\n",
+            "@vertex\n",
+            "fn vs_main() -> @builtin(position) vec4<f32> {\n",
+            "  return vec4<f32>(0.0, 0.0, 0.0, 1.0);\n",
+            "}\n",
+        );
 
         let trivial_shaders_with_some_reversed_bindings =
             ctx.device
@@ -735,7 +825,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 fragment: Some(wgpu::FragmentState {
                     module: &trivial_shaders_with_some_reversed_bindings,
-                    entry_point: "fs_main",
+                    entry_point: Some("fs_main"),
                     compilation_options: Default::default(),
                     targets: &[Some(wgt::ColorTargetState {
                         format: wgt::TextureFormat::Bgra8Unorm,
@@ -749,7 +839,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                 label: None,
                 vertex: wgpu::VertexState {
                     module: &trivial_shaders_with_some_reversed_bindings,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -757,6 +847,7 @@ fn vs_main() -> @builtin(position) vec4<f32> {
                 depth_stencil: None,
                 multisample: wgt::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
         // fail(&ctx.device, || {
@@ -818,4 +909,27 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
 
         // Poll the device, which should try to clean up its resources.
         ctx.instance.poll_all(true);
+    });
+
+#[gpu_test]
+static DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_async(|ctx| async move {
+        let TestingContext {
+            adapter,
+            device_features,
+            device_limits,
+            device,
+            queue,
+            ..
+        } = ctx;
+
+        drop(device);
+
+        let (device2, queue2) =
+            wgpu_test::initialize_device(&adapter, device_features, device_limits).await;
+
+        drop(queue);
+        drop(device2);
+        drop(queue2); // this would previously panic since we would try to use the Device ID to drop the Queue
     });

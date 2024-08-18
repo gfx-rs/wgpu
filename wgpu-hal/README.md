@@ -89,7 +89,7 @@ platform graphics APIs:
 [`ash`]: https://crates.io/crates/ash
 [MoltenVK]: https://github.com/KhronosGroup/MoltenVK
 [`metal`]: https://crates.io/crates/metal
-[`d3d12`]: ahttps://crates.io/crates/d3d12
+[`d3d12`]: https://crates.io/crates/d3d12
 
 ## Secondary backends
 

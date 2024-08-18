@@ -89,8 +89,9 @@ async fn bgl_dedupe(ctx: TestingContext) {
             label: None,
             layout: Some(&pipeline_layout),
             module: &module,
-            entry_point: "no_resources",
+            entry_point: Some("no_resources"),
             compilation_options: Default::default(),
+            cache: None,
         };
 
         let pipeline = ctx.device.create_compute_pipeline(&desc);
@@ -218,8 +219,9 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
             label: None,
             layout: Some(&pipeline_layout),
             module: &module,
-            entry_point: "no_resources",
+            entry_point: Some("no_resources"),
             compilation_options: Default::default(),
+            cache: None,
         });
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
@@ -239,11 +241,11 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
 }
 
 #[gpu_test]
-static BIND_GROUP_LAYOUT_DEDUPLICATION_DERIVED: GpuTestConfiguration = GpuTestConfiguration::new()
+static GET_DERIVED_BGL: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().test_features_limits())
-    .run_sync(bgl_dedupe_derived);
+    .run_sync(get_derived_bgl);
 
-fn bgl_dedupe_derived(ctx: TestingContext) {
+fn get_derived_bgl(ctx: TestingContext) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 4,
@@ -264,8 +266,9 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
             label: None,
             layout: None,
             module: &module,
-            entry_point: "resources",
+            entry_point: Some("resources"),
             compilation_options: Default::default(),
+            cache: None,
         });
 
     // We create two bind groups, pulling the bind_group_layout from the pipeline each time.
@@ -311,12 +314,12 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
 }
 
 #[gpu_test]
-static SEPARATE_PROGRAMS_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
+static SEPARATE_PIPELINES_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().test_features_limits())
-        .run_sync(separate_programs_have_incompatible_derived_bgls);
+        .run_sync(separate_pipelines_have_incompatible_derived_bgls);
 
-fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
+fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 4,
@@ -335,8 +338,9 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
         label: None,
         layout: None,
         module: &module,
-        entry_point: "resources",
+        entry_point: Some("resources"),
         compilation_options: Default::default(),
+        cache: None,
     };
     // Create two pipelines, creating a BG from the second.
     let pipeline1 = ctx.device.create_compute_pipeline(&desc);
@@ -364,9 +368,13 @@ fn separate_programs_have_incompatible_derived_bgls(ctx: TestingContext) {
     pass.set_bind_group(0, &bg2, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
-    fail(&ctx.device, || {
-        drop(pass);
-    });
+    fail(
+        &ctx.device,
+        || {
+            drop(pass);
+        },
+        Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
+    );
 }
 
 #[gpu_test]
@@ -397,8 +405,9 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
             label: None,
             layout: None,
             module: &module,
-            entry_point: "resources",
+            entry_point: Some("resources"),
             compilation_options: Default::default(),
+            cache: None,
         });
 
     // Create a matching BGL
@@ -431,7 +440,99 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
     pass.set_bind_group(0, &bg, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
-    fail(&ctx.device, || {
-        drop(pass);
-    })
+    fail(
+        &ctx.device,
+        || {
+            drop(pass);
+        },
+        Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
+    )
+}
+
+#[gpu_test]
+static BIND_GROUP_LAYOUT_DEDUPLICATION_DERIVED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(bgl_dedupe_derived);
+
+fn bgl_dedupe_derived(ctx: TestingContext) {
+    let src = "
+        @group(0) @binding(0) var<uniform> u1: vec4f;
+        @group(1) @binding(0) var<uniform> u2: vec4f;
+
+        @compute @workgroup_size(1, 1, 1)
+        fn main() {
+            // Just need a static use.
+            let _u1 = u1;
+            let _u2 = u2;
+        }
+    ";
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(src.into()),
+        });
+
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &module,
+            entry_point: None,
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+    let bind_group_layout_0 = pipeline.get_bind_group_layout(0);
+    let bind_group_layout_1 = pipeline.get_bind_group_layout(1);
+
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 16,
+        usage: wgpu::BufferUsages::UNIFORM,
+        mapped_at_creation: false,
+    });
+
+    let bind_group_0 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bind_group_layout_1,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: &buffer,
+                offset: 0,
+                size: None,
+            }),
+        }],
+    });
+    let bind_group_1 = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bind_group_layout_0,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: &buffer,
+                offset: 0,
+                size: None,
+            }),
+        }],
+    });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(&pipeline);
+    pass.set_bind_group(0, &bind_group_0, &[]);
+    pass.set_bind_group(1, &bind_group_1, &[]);
+    pass.dispatch_workgroups(1, 1, 1);
+
+    drop(pass);
+
+    ctx.queue.submit(Some(encoder.finish()));
 }

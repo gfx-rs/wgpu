@@ -1,12 +1,13 @@
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
-    arena::Handle,
-    back,
+    arena::{Handle, HandleSet},
+    back::{self, Baked},
     proc::index,
     proc::{self, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
-use bit_set::BitSet;
+#[cfg(test)]
+use std::ptr;
 use std::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
@@ -75,8 +76,51 @@ fn put_numeric_type(
     }
 }
 
+const fn scalar_is_int(scalar: crate::Scalar) -> bool {
+    use crate::ScalarKind::*;
+    match scalar.kind {
+        Sint | Uint | AbstractInt | Bool => true,
+        Float | AbstractFloat => false,
+    }
+}
+
 /// Prefix for cached clamped level-of-detail values for `ImageLoad` expressions.
 const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
+
+/// Wrapper for identifier names for clamped level-of-detail values
+///
+/// Values of this type implement [`std::fmt::Display`], formatting as
+/// the name of the variable used to hold the cached clamped
+/// level-of-detail value for an `ImageLoad` expression.
+struct ClampedLod(Handle<crate::Expression>);
+
+impl Display for ClampedLod {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.write_prefixed(f, CLAMPED_LOD_LOAD_PREFIX)
+    }
+}
+
+/// Wrapper for generating `struct _mslBufferSizes` member names for
+/// runtime-sized array lengths.
+///
+/// On Metal, `wgpu_hal` passes the element counts for all runtime-sized arrays
+/// as an argument to the entry point. This argument's type in the MSL is
+/// `struct _mslBufferSizes`, a Naga-synthesized struct with a `uint` member for
+/// each global variable containing a runtime-sized array.
+///
+/// If `global` is a [`Handle`] for a [`GlobalVariable`] that contains a
+/// runtime-sized array, then the value `ArraySize(global)` implements
+/// [`std::fmt::Display`], formatting as the name of the struct member carrying
+/// the number of elements in that runtime-sized array.
+///
+/// [`GlobalVariable`]: crate::GlobalVariable
+struct ArraySizeMember(Handle<crate::GlobalVariable>);
+
+impl Display for ArraySizeMember {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.write_prefixed(f, "size")
+    }
+}
 
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
@@ -85,6 +129,22 @@ struct TypeContext<'a> {
     access: crate::StorageAccess,
     binding: Option<&'a super::ResolvedBinding>,
     first_time: bool,
+}
+
+impl<'a> TypeContext<'a> {
+    fn scalar(&self) -> Option<crate::Scalar> {
+        let ty = &self.gctx.types[self.handle];
+        ty.inner.scalar()
+    }
+
+    fn vertex_input_dimension(&self) -> u32 {
+        let ty = &self.gctx.types[self.handle];
+        match ty.inner {
+            crate::TypeInner::Scalar(_) => 1,
+            crate::TypeInner::Vector { size, .. } => size as u32,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<'a> Display for TypeContext<'a> {
@@ -525,11 +585,10 @@ struct ExpressionContext<'a> {
     lang_version: (u8, u8),
     policies: index::BoundsCheckPolicies,
 
-    /// A bitset containing the `Expression` handle indexes of expressions used
-    /// as indices in `ReadZeroSkipWrite`-policy accesses. These may need to be
-    /// cached in temporary variables. See `index::find_checked_indexes` for
-    /// details.
-    guarded_indices: BitSet,
+    /// The set of expressions used as indices in `ReadZeroSkipWrite`-policy
+    /// accesses. These may need to be cached in temporary variables. See
+    /// `index::find_checked_indexes` for details.
+    guarded_indices: HandleSet<crate::Expression>,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -653,9 +712,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         match level {
             LevelOfDetail::Direct(expr) => self.put_expression(expr, context, true)?,
-            LevelOfDetail::Restricted(load) => {
-                write!(self.out, "{}{}", CLAMPED_LOD_LOAD_PREFIX, load.index())?
-            }
+            LevelOfDetail::Restricted(load) => write!(self.out, "{}", ClampedLod(load))?,
         }
         Ok(())
     }
@@ -1009,43 +1066,6 @@ impl<W: Write> Writer<W> {
         value: Handle<crate::Expression>,
         context: &StatementContext,
     ) -> BackendResult {
-        match context.expression.policies.image_store {
-            proc::BoundsCheckPolicy::Restrict => {
-                // We don't have a restricted level value, because we don't
-                // support writes to mipmapped textures.
-                debug_assert!(address.level.is_none());
-
-                write!(self.out, "{level}")?;
-                self.put_expression(image, &context.expression, false)?;
-                write!(self.out, ".write(")?;
-                self.put_expression(value, &context.expression, true)?;
-                write!(self.out, ", ")?;
-                self.put_restricted_texel_address(image, address, &context.expression)?;
-                writeln!(self.out, ");")?;
-            }
-            proc::BoundsCheckPolicy::ReadZeroSkipWrite => {
-                write!(self.out, "{level}if (")?;
-                self.put_image_access_bounds_check(image, address, &context.expression)?;
-                writeln!(self.out, ") {{")?;
-                self.put_unchecked_image_store(level.next(), image, address, value, context)?;
-                writeln!(self.out, "{level}}}")?;
-            }
-            proc::BoundsCheckPolicy::Unchecked => {
-                self.put_unchecked_image_store(level, image, address, value, context)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn put_unchecked_image_store(
-        &mut self,
-        level: back::Level,
-        image: Handle<crate::Expression>,
-        address: &TexelAddress,
-        value: Handle<crate::Expression>,
-        context: &StatementContext,
-    ) -> BackendResult {
         write!(self.out, "{level}")?;
         self.put_expression(image, &context.expression, false)?;
         write!(self.out, ".write(")?;
@@ -1122,8 +1142,8 @@ impl<W: Write> Writer<W> {
         // prevent that.
         write!(
             self.out,
-            "(_buffer_sizes.size{idx} - {offset} - {size}) / {stride}",
-            idx = handle.index(),
+            "(_buffer_sizes.{member} - {offset} - {size}) / {stride}",
+            member = ArraySizeMember(handle),
             offset = offset,
             size = size,
             stride = stride,
@@ -1180,7 +1200,7 @@ impl<W: Write> Writer<W> {
         // with different precedences from applying earlier.
         write!(self.out, "(")?;
 
-        // Cycle trough all the components of the vector
+        // Cycle through all the components of the vector
         for index in 0..size {
             let component = back::COMPONENTS[index];
             // Write the addition to the previous product
@@ -1393,9 +1413,8 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
-        #[allow(trivial_casts)]
         self.put_expression_stack_pointers
-            .insert(&expr_handle as *const _ as *const ());
+            .insert(ptr::from_ref(&expr_handle).cast());
 
         if let Some(name) = self.named_expressions.get(&expr_handle) {
             write!(self.out, "{name}")?;
@@ -1820,8 +1839,8 @@ impl<W: Write> Writer<W> {
                     Mf::ReverseBits => "reverse_bits",
                     Mf::ExtractBits => "",
                     Mf::InsertBits => "",
-                    Mf::FindLsb => "",
-                    Mf::FindMsb => "",
+                    Mf::FirstTrailingBit => "",
+                    Mf::FirstLeadingBit => "",
                     // data packing
                     Mf::Pack4x8snorm => "pack_float_to_snorm4x8",
                     Mf::Pack4x8unorm => "pack_float_to_unorm4x8",
@@ -1865,7 +1884,7 @@ impl<W: Write> Writer<W> {
                         self.put_expression(arg1.unwrap(), context, false)?;
                         write!(self.out, ")")?;
                     }
-                    Mf::FindLsb => {
+                    Mf::FirstTrailingBit => {
                         let scalar = context.resolve_type(arg).scalar().unwrap();
                         let constant = scalar.width * 8 + 1;
 
@@ -1873,7 +1892,7 @@ impl<W: Write> Writer<W> {
                         self.put_expression(arg, context, true)?;
                         write!(self.out, ") + 1) % {constant}) - 1)")?;
                     }
-                    Mf::FindMsb => {
+                    Mf::FirstLeadingBit => {
                         let inner = context.resolve_type(arg);
                         let scalar = inner.scalar().unwrap();
                         let constant = scalar.width * 8 - 1;
@@ -2647,7 +2666,7 @@ impl<W: Write> Writer<W> {
                             }
                         }
                     }
-                    crate::MathFunction::FindMsb
+                    crate::MathFunction::FirstLeadingBit
                     | crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Unpack4xI8
@@ -2754,13 +2773,7 @@ impl<W: Write> Writer<W> {
             return Ok(());
         }
 
-        write!(
-            self.out,
-            "{}uint {}{} = ",
-            indent,
-            CLAMPED_LOD_LOAD_PREFIX,
-            load.index(),
-        )?;
+        write!(self.out, "{}uint {} = ", indent, ClampedLod(load),)?;
         self.put_restricted_scalar_image_index(
             image,
             level_of_detail,
@@ -2780,9 +2793,8 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
-        #[allow(trivial_casts)]
         self.put_block_stack_pointers
-            .insert(&level as *const _ as *const ());
+            .insert(ptr::from_ref(&level).cast());
 
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
@@ -2822,15 +2834,14 @@ impl<W: Write> Writer<W> {
                             // If this expression is an index that we're going to first compare
                             // against a limit, and then actually use as an index, then we may
                             // want to cache it in a temporary, to avoid evaluating it twice.
-                            let bake =
-                                if context.expression.guarded_indices.contains(handle.index()) {
-                                    true
-                                } else {
-                                    self.need_bake_expressions.contains(&handle)
-                                };
+                            let bake = if context.expression.guarded_indices.contains(handle) {
+                                true
+                            } else {
+                                self.need_bake_expressions.contains(&handle)
+                            };
 
                             if bake {
-                                Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
+                                Some(Baked(handle).to_string())
                             } else {
                                 None
                             }
@@ -2985,7 +2996,7 @@ impl<W: Write> Writer<W> {
                 } => {
                     write!(self.out, "{level}")?;
                     if let Some(expr) = result {
-                        let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
+                        let name = Baked(expr).to_string();
                         self.start_baking_expression(expr, &context.expression, &name)?;
                         self.named_expressions.insert(expr, name);
                     }
@@ -3001,7 +3012,7 @@ impl<W: Write> Writer<W> {
                     // follow-up with any global resources used
                     let mut separate = !arguments.is_empty();
                     let fun_info = &context.expression.mod_info[function];
-                    let mut supports_array_length = false;
+                    let mut needs_buffer_sizes = false;
                     for (handle, var) in context.expression.module.global_variables.iter() {
                         if fun_info[handle].is_empty() {
                             continue;
@@ -3015,10 +3026,10 @@ impl<W: Write> Writer<W> {
                             }
                             write!(self.out, "{name}")?;
                         }
-                        supports_array_length |=
+                        needs_buffer_sizes |=
                             needs_array_length(var.ty, &context.expression.module.types);
                     }
-                    if supports_array_length {
+                    if needs_buffer_sizes {
                         if separate {
                             write!(self.out, ", ")?;
                         }
@@ -3034,11 +3045,22 @@ impl<W: Write> Writer<W> {
                     value,
                     result,
                 } => {
+                    // This backend supports `SHADER_INT64_ATOMIC_MIN_MAX` but not
+                    // `SHADER_INT64_ATOMIC_ALL_OPS`, so we can assume that if `result` is
+                    // `Some`, we are not operating on a 64-bit value, and that if we are
+                    // operating on a 64-bit value, `result` is `None`.
                     write!(self.out, "{level}")?;
-                    let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                    self.start_baking_expression(result, &context.expression, &res_name)?;
-                    self.named_expressions.insert(result, res_name);
-                    let fun_str = fun.to_msl()?;
+                    let fun_str = if let Some(result) = result {
+                        let res_name = Baked(result).to_string();
+                        self.start_baking_expression(result, &context.expression, &res_name)?;
+                        self.named_expressions.insert(result, res_name);
+                        fun.to_msl()?
+                    } else if context.expression.resolve_type(value).scalar_width() == Some(8) {
+                        fun.to_msl_64_bit()?
+                    } else {
+                        fun.to_msl()?
+                    };
+
                     self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
                     // done
                     writeln!(self.out, ";")?;
@@ -3135,7 +3157,7 @@ impl<W: Write> Writer<W> {
                         }
                         crate::RayQueryFunction::Proceed { result } => {
                             write!(self.out, "{level}")?;
-                            let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                            let name = Baked(result).to_string();
                             self.start_baking_expression(result, &context.expression, &name)?;
                             self.named_expressions.insert(result, name);
                             self.put_expression(query, &context.expression, true)?;
@@ -3409,19 +3431,34 @@ impl<W: Write> Writer<W> {
         writeln!(self.out)?;
 
         {
-            let mut indices = vec![];
-            for (handle, var) in module.global_variables.iter() {
-                if needs_array_length(var.ty, &module.types) {
-                    let idx = handle.index();
-                    indices.push(idx);
-                }
+            // Make a `Vec` of all the `GlobalVariable`s that contain
+            // runtime-sized arrays.
+            let globals: Vec<Handle<crate::GlobalVariable>> = module
+                .global_variables
+                .iter()
+                .filter(|&(_, var)| needs_array_length(var.ty, &module.types))
+                .map(|(handle, _)| handle)
+                .collect();
+
+            let mut buffer_indices = vec![];
+            for vbm in &pipeline_options.vertex_buffer_mappings {
+                buffer_indices.push(vbm.id);
             }
 
-            if !indices.is_empty() {
+            if !globals.is_empty() || !buffer_indices.is_empty() {
                 writeln!(self.out, "struct _mslBufferSizes {{")?;
 
-                for idx in indices {
-                    writeln!(self.out, "{}uint size{};", back::INDENT, idx)?;
+                for global in globals {
+                    writeln!(
+                        self.out,
+                        "{}uint {};",
+                        back::INDENT,
+                        ArraySizeMember(global)
+                    )?;
+                }
+
+                for idx in buffer_indices {
+                    writeln!(self.out, "{}uint buffer_size{};", back::INDENT, idx)?;
                 }
 
                 writeln!(self.out, "}};")?;
@@ -3764,6 +3801,680 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn write_unpacking_function(
+        &mut self,
+        format: back::msl::VertexFormat,
+    ) -> Result<(String, u32, u32), Error> {
+        use back::msl::VertexFormat::*;
+        match format {
+            Uint8x2 => {
+                let name = self.namer.call("unpackUint8x2");
+                writeln!(
+                    self.out,
+                    "metal::uint2 {name}(metal::uchar b0, \
+                                         metal::uchar b1) {{"
+                )?;
+                writeln!(self.out, "{}return metal::uint2(b0, b1);", back::INDENT)?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Uint8x4 => {
+                let name = self.namer.call("unpackUint8x4");
+                writeln!(
+                    self.out,
+                    "metal::uint4 {name}(metal::uchar b0, \
+                                         metal::uchar b1, \
+                                         metal::uchar b2, \
+                                         metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint4(b0, b1, b2, b3);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Sint8x2 => {
+                let name = self.namer.call("unpackSint8x2");
+                writeln!(
+                    self.out,
+                    "metal::int2 {name}(metal::uchar b0, \
+                                        metal::uchar b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int2(as_type<char>(b0), \
+                                          as_type<char>(b1));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Sint8x4 => {
+                let name = self.namer.call("unpackSint8x4");
+                writeln!(
+                    self.out,
+                    "metal::int4 {name}(metal::uchar b0, \
+                                        metal::uchar b1, \
+                                        metal::uchar b2, \
+                                        metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int4(as_type<char>(b0), \
+                                          as_type<char>(b1), \
+                                          as_type<char>(b2), \
+                                          as_type<char>(b3));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Unorm8x2 => {
+                let name = self.namer.call("unpackUnorm8x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::uchar b0, \
+                                          metal::uchar b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(float(b0) / 255.0f, \
+                                            float(b1) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Unorm8x4 => {
+                let name = self.namer.call("unpackUnorm8x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::uchar b0, \
+                                          metal::uchar b1, \
+                                          metal::uchar b2, \
+                                          metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(float(b0) / 255.0f, \
+                                            float(b1) / 255.0f, \
+                                            float(b2) / 255.0f, \
+                                            float(b3) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Snorm8x2 => {
+                let name = self.namer.call("unpackSnorm8x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::uchar b0, \
+                                          metal::uchar b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(metal::max(-1.0f, as_type<char>(b0) / 127.0f), \
+                                            metal::max(-1.0f, as_type<char>(b1) / 127.0f));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 2))
+            }
+            Snorm8x4 => {
+                let name = self.namer.call("unpackSnorm8x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::uchar b0, \
+                                          metal::uchar b1, \
+                                          metal::uchar b2, \
+                                          metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(metal::max(-1.0f, as_type<char>(b0) / 127.0f), \
+                                            metal::max(-1.0f, as_type<char>(b1) / 127.0f), \
+                                            metal::max(-1.0f, as_type<char>(b2) / 127.0f), \
+                                            metal::max(-1.0f, as_type<char>(b3) / 127.0f));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+            Uint16x2 => {
+                let name = self.namer.call("unpackUint16x2");
+                writeln!(
+                    self.out,
+                    "metal::uint2 {name}(metal::uint b0, \
+                                         metal::uint b1, \
+                                         metal::uint b2, \
+                                         metal::uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint2(b1 << 8 | b0, \
+                                           b3 << 8 | b2);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Uint16x4 => {
+                let name = self.namer.call("unpackUint16x4");
+                writeln!(
+                    self.out,
+                    "metal::uint4 {name}(metal::uint b0, \
+                                         metal::uint b1, \
+                                         metal::uint b2, \
+                                         metal::uint b3, \
+                                         metal::uint b4, \
+                                         metal::uint b5, \
+                                         metal::uint b6, \
+                                         metal::uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint4(b1 << 8 | b0, \
+                                           b3 << 8 | b2, \
+                                           b5 << 8 | b4, \
+                                           b7 << 8 | b6);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Sint16x2 => {
+                let name = self.namer.call("unpackSint16x2");
+                writeln!(
+                    self.out,
+                    "metal::int2 {name}(metal::ushort b0, \
+                                        metal::ushort b1, \
+                                        metal::ushort b2, \
+                                        metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int2(as_type<short>(metal::ushort(b1 << 8 | b0)), \
+                                          as_type<short>(metal::ushort(b3 << 8 | b2)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Sint16x4 => {
+                let name = self.namer.call("unpackSint16x4");
+                writeln!(
+                    self.out,
+                    "metal::int4 {name}(metal::ushort b0, \
+                                        metal::ushort b1, \
+                                        metal::ushort b2, \
+                                        metal::ushort b3, \
+                                        metal::ushort b4, \
+                                        metal::ushort b5, \
+                                        metal::ushort b6, \
+                                        metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int4(as_type<short>(metal::ushort(b1 << 8 | b0)), \
+                                          as_type<short>(metal::ushort(b3 << 8 | b2)), \
+                                          as_type<short>(metal::ushort(b5 << 8 | b4)), \
+                                          as_type<short>(metal::ushort(b7 << 8 | b6)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Unorm16x2 => {
+                let name = self.namer.call("unpackUnorm16x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(float(b1 << 8 | b0) / 65535.0f, \
+                                            float(b3 << 8 | b2) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Unorm16x4 => {
+                let name = self.namer.call("unpackUnorm16x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3, \
+                                          metal::ushort b4, \
+                                          metal::ushort b5, \
+                                          metal::ushort b6, \
+                                          metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(float(b1 << 8 | b0) / 65535.0f, \
+                                            float(b3 << 8 | b2) / 65535.0f, \
+                                            float(b5 << 8 | b4) / 65535.0f, \
+                                            float(b7 << 8 | b6) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Snorm16x2 => {
+                let name = self.namer.call("unpackSnorm16x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Snorm16x4 => {
+                let name = self.namer.call("unpackSnorm16x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3, \
+                                          metal::ushort b4, \
+                                          metal::ushort b5, \
+                                          metal::ushort b6, \
+                                          metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2), \
+                                            metal::unpack_snorm2x16_to_float(b5 << 24 | b4 << 16 | b7 << 8 | b6));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Float16x2 => {
+                let name = self.namer.call("unpackFloat16x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(metal::ushort b0, \
+                                          metal::ushort b1, \
+                                          metal::ushort b2, \
+                                          metal::ushort b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(as_type<half>(metal::ushort(b1 << 8 | b0)), \
+                                            as_type<half>(metal::ushort(b3 << 8 | b2)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 2))
+            }
+            Float16x4 => {
+                let name = self.namer.call("unpackFloat16x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::ushort b0, \
+                                        metal::ushort b1, \
+                                        metal::ushort b2, \
+                                        metal::ushort b3, \
+                                        metal::ushort b4, \
+                                        metal::ushort b5, \
+                                        metal::ushort b6, \
+                                        metal::ushort b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(as_type<half>(metal::ushort(b1 << 8 | b0)), \
+                                          as_type<half>(metal::ushort(b3 << 8 | b2)), \
+                                          as_type<half>(metal::ushort(b5 << 8 | b4)), \
+                                          as_type<half>(metal::ushort(b7 << 8 | b6)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 4))
+            }
+            Float32 => {
+                let name = self.namer.call("unpackFloat32");
+                writeln!(
+                    self.out,
+                    "float {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 1))
+            }
+            Float32x2 => {
+                let name = self.namer.call("unpackFloat32x2");
+                writeln!(
+                    self.out,
+                    "metal::float2 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3, \
+                                          uint b4, \
+                                          uint b5, \
+                                          uint b6, \
+                                          uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float2(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                            as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 2))
+            }
+            Float32x3 => {
+                let name = self.namer.call("unpackFloat32x3");
+                writeln!(
+                    self.out,
+                    "metal::float3 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3, \
+                                          uint b4, \
+                                          uint b5, \
+                                          uint b6, \
+                                          uint b7, \
+                                          uint b8, \
+                                          uint b9, \
+                                          uint b10, \
+                                          uint b11) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float3(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                            as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                            as_type<float>(b11 << 24 | b10 << 16 | b9 << 8 | b8));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 12, 3))
+            }
+            Float32x4 => {
+                let name = self.namer.call("unpackFloat32x4");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3, \
+                                          uint b4, \
+                                          uint b5, \
+                                          uint b6, \
+                                          uint b7, \
+                                          uint b8, \
+                                          uint b9, \
+                                          uint b10, \
+                                          uint b11, \
+                                          uint b12, \
+                                          uint b13, \
+                                          uint b14, \
+                                          uint b15) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                            as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                            as_type<float>(b11 << 24 | b10 << 16 | b9 << 8 | b8), \
+                                            as_type<float>(b15 << 24 | b14 << 16 | b13 << 8 | b12));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 16, 4))
+            }
+            Uint32 => {
+                let name = self.namer.call("unpackUint32");
+                writeln!(
+                    self.out,
+                    "uint {name}(uint b0, \
+                                 uint b1, \
+                                 uint b2, \
+                                 uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return (b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 1))
+            }
+            Uint32x2 => {
+                let name = self.namer.call("unpackUint32x2");
+                writeln!(
+                    self.out,
+                    "uint2 {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3, \
+                                  uint b4, \
+                                  uint b5, \
+                                  uint b6, \
+                                  uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return uint2((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                    (b7 << 24 | b6 << 16 | b5 << 8 | b4));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 2))
+            }
+            Uint32x3 => {
+                let name = self.namer.call("unpackUint32x3");
+                writeln!(
+                    self.out,
+                    "uint3 {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3, \
+                                  uint b4, \
+                                  uint b5, \
+                                  uint b6, \
+                                  uint b7, \
+                                  uint b8, \
+                                  uint b9, \
+                                  uint b10, \
+                                  uint b11) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return uint3((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                    (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                    (b11 << 24 | b10 << 16 | b9 << 8 | b8));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 12, 3))
+            }
+            Uint32x4 => {
+                let name = self.namer.call("unpackUint32x4");
+                writeln!(
+                    self.out,
+                    "uint4 {name}(uint b0, \
+                                  uint b1, \
+                                  uint b2, \
+                                  uint b3, \
+                                  uint b4, \
+                                  uint b5, \
+                                  uint b6, \
+                                  uint b7, \
+                                  uint b8, \
+                                  uint b9, \
+                                  uint b10, \
+                                  uint b11, \
+                                  uint b12, \
+                                  uint b13, \
+                                  uint b14, \
+                                  uint b15) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                    (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                    (b11 << 24 | b10 << 16 | b9 << 8 | b8), \
+                                    (b15 << 24 | b14 << 16 | b13 << 8 | b12));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 16, 4))
+            }
+            Sint32 => {
+                let name = self.namer.call("unpackSint32");
+                writeln!(
+                    self.out,
+                    "int {name}(uint b0, \
+                                uint b1, \
+                                uint b2, \
+                                uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 1))
+            }
+            Sint32x2 => {
+                let name = self.namer.call("unpackSint32x2");
+                writeln!(
+                    self.out,
+                    "metal::int2 {name}(uint b0, \
+                                        uint b1, \
+                                        uint b2, \
+                                        uint b3, \
+                                        uint b4, \
+                                        uint b5, \
+                                        uint b6, \
+                                        uint b7) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int2(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 8, 2))
+            }
+            Sint32x3 => {
+                let name = self.namer.call("unpackSint32x3");
+                writeln!(
+                    self.out,
+                    "metal::int3 {name}(uint b0, \
+                                        uint b1, \
+                                        uint b2, \
+                                        uint b3, \
+                                        uint b4, \
+                                        uint b5, \
+                                        uint b6, \
+                                        uint b7, \
+                                        uint b8, \
+                                        uint b9, \
+                                        uint b10, \
+                                        uint b11) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int3(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                          as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 12, 3))
+            }
+            Sint32x4 => {
+                let name = self.namer.call("unpackSint32x4");
+                writeln!(
+                    self.out,
+                    "metal::int4 {name}(uint b0, \
+                                        uint b1, \
+                                        uint b2, \
+                                        uint b3, \
+                                        uint b4, \
+                                        uint b5, \
+                                        uint b6, \
+                                        uint b7, \
+                                        uint b8, \
+                                        uint b9, \
+                                        uint b10, \
+                                        uint b11, \
+                                        uint b12, \
+                                        uint b13, \
+                                        uint b14, \
+                                        uint b15) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::int4(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                          as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), \
+                                          as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8), \
+                                          as_type<int>(b15 << 24 | b14 << 16 | b13 << 8 | b12));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 16, 4))
+            }
+            Unorm10_10_10_2 => {
+                let name = self.namer.call("unpackUnorm10_10_10_2");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    // The following is correct for RGBA packing, but our format seems to
+                    // match ABGR, which can be fed into the Metal builtin function
+                    // unpack_unorm10a2_to_float.
+                    /*
+                    "{}uint v = (b3 << 24 | b2 << 16 | b1 << 8 | b0); \
+                       uint r = (v & 0xFFC00000) >> 22; \
+                       uint g = (v & 0x003FF000) >> 12; \
+                       uint b = (v & 0x00000FFC) >> 2; \
+                       uint a = (v & 0x00000003); \
+                       return metal::float4(float(r) / 1023.0f, float(g) / 1023.0f, float(b) / 1023.0f, float(a) / 3.0f);",
+                    */
+                    "{}return metal::unpack_unorm10a2_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
+        }
+    }
+
     // Returns the array of mapped entry point names.
     fn write_functions(
         &mut self,
@@ -3772,6 +4483,101 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
+        use back::msl::VertexFormat;
+
+        // Define structs to hold resolved/generated data for vertex buffers and
+        // their attributes.
+        struct AttributeMappingResolved {
+            ty_name: String,
+            dimension: u32,
+            ty_is_int: bool,
+            name: String,
+        }
+        let mut am_resolved = FastHashMap::<u32, AttributeMappingResolved>::default();
+
+        struct VertexBufferMappingResolved<'a> {
+            id: u32,
+            stride: u32,
+            indexed_by_vertex: bool,
+            ty_name: String,
+            param_name: String,
+            elem_name: String,
+            attributes: &'a Vec<back::msl::AttributeMapping>,
+        }
+        let mut vbm_resolved = Vec::<VertexBufferMappingResolved>::new();
+
+        // Define a struct to hold a named reference to a byte-unpacking function.
+        struct UnpackingFunction {
+            name: String,
+            byte_count: u32,
+            dimension: u32,
+        }
+        let mut unpacking_functions = FastHashMap::<VertexFormat, UnpackingFunction>::default();
+
+        // Check if we are attempting vertex pulling. If we are, generate some
+        // names we'll need, and iterate the vertex buffer mappings to output
+        // all the conversion functions we'll need to unpack the attribute data.
+        // We can re-use these names for all entry points that need them, since
+        // those entry points also use self.namer.
+        let mut needs_vertex_id = false;
+        let v_id = self.namer.call("v_id");
+
+        let mut needs_instance_id = false;
+        let i_id = self.namer.call("i_id");
+        if pipeline_options.vertex_pulling_transform {
+            for vbm in &pipeline_options.vertex_buffer_mappings {
+                let buffer_id = vbm.id;
+                let buffer_stride = vbm.stride;
+
+                assert!(
+                    buffer_stride > 0,
+                    "Vertex pulling requires a non-zero buffer stride."
+                );
+
+                if vbm.indexed_by_vertex {
+                    needs_vertex_id = true;
+                } else {
+                    needs_instance_id = true;
+                }
+
+                let buffer_ty = self.namer.call(format!("vb_{buffer_id}_type").as_str());
+                let buffer_param = self.namer.call(format!("vb_{buffer_id}_in").as_str());
+                let buffer_elem = self.namer.call(format!("vb_{buffer_id}_elem").as_str());
+
+                vbm_resolved.push(VertexBufferMappingResolved {
+                    id: buffer_id,
+                    stride: buffer_stride,
+                    indexed_by_vertex: vbm.indexed_by_vertex,
+                    ty_name: buffer_ty,
+                    param_name: buffer_param,
+                    elem_name: buffer_elem,
+                    attributes: &vbm.attributes,
+                });
+
+                // Iterate the attributes and generate needed unpacking functions.
+                for attribute in &vbm.attributes {
+                    if unpacking_functions.contains_key(&attribute.format) {
+                        continue;
+                    }
+                    let (name, byte_count, dimension) =
+                        match self.write_unpacking_function(attribute.format) {
+                            Ok((name, byte_count, dimension)) => (name, byte_count, dimension),
+                            _ => {
+                                continue;
+                            }
+                        };
+                    unpacking_functions.insert(
+                        attribute.format,
+                        UnpackingFunction {
+                            name,
+                            byte_count,
+                            dimension,
+                        },
+                    );
+                }
+            }
+        }
+
         let mut pass_through_globals = Vec::new();
         for (fun_handle, fun) in module.functions.iter() {
             log::trace!(
@@ -3782,13 +4588,13 @@ impl<W: Write> Writer<W> {
 
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
-            let mut supports_array_length = false;
+            let mut needs_buffer_sizes = false;
             for (handle, var) in module.global_variables.iter() {
                 if !fun_info[handle].is_empty() {
                     if var.space.needs_pass_through() {
                         pass_through_globals.push(handle);
                     }
-                    supports_array_length |= needs_array_length(var.ty, &module.types);
+                    needs_buffer_sizes |= needs_array_length(var.ty, &module.types);
                 }
             }
 
@@ -3825,7 +4631,7 @@ impl<W: Write> Writer<W> {
                 let separator = separate(
                     !pass_through_globals.is_empty()
                         || index + 1 != fun.arguments.len()
-                        || supports_array_length,
+                        || needs_buffer_sizes,
                 );
                 writeln!(
                     self.out,
@@ -3846,13 +4652,13 @@ impl<W: Write> Writer<W> {
                     reference: true,
                 };
                 let separator =
-                    separate(index + 1 != pass_through_globals.len() || supports_array_length);
+                    separate(index + 1 != pass_through_globals.len() || needs_buffer_sizes);
                 write!(self.out, "{}", back::INDENT)?;
                 tyvar.try_fmt(&mut self.out)?;
                 writeln!(self.out, "{separator}")?;
             }
 
-            if supports_array_length {
+            if needs_buffer_sizes {
                 writeln!(
                     self.out,
                     "{}constant _mslBufferSizes& _buffer_sizes",
@@ -3917,18 +4723,51 @@ impl<W: Write> Writer<W> {
             let fun_info = mod_info.get_entry_point(ep_index);
             let mut ep_error = None;
 
+            // For vertex_id and instance_id arguments, presume that we'll
+            // use our generated names, but switch to the name of an
+            // existing @builtin param, if we find one.
+            let mut v_existing_id = None;
+            let mut i_existing_id = None;
+
             log::trace!(
                 "entry point {:?}, index {:?}",
                 fun.name.as_deref().unwrap_or("(anonymous)"),
                 ep_index
             );
 
+            let (em_str, in_mode, out_mode, can_vertex_pull) = match ep.stage {
+                crate::ShaderStage::Vertex => (
+                    "vertex",
+                    LocationMode::VertexInput,
+                    LocationMode::VertexOutput,
+                    true,
+                ),
+                crate::ShaderStage::Fragment { .. } => (
+                    "fragment",
+                    LocationMode::FragmentInput,
+                    LocationMode::FragmentOutput,
+                    false,
+                ),
+                crate::ShaderStage::Compute { .. } => (
+                    "kernel",
+                    LocationMode::Uniform,
+                    LocationMode::Uniform,
+                    false,
+                ),
+            };
+
+            // Should this entry point be modified to do vertex pulling?
+            let do_vertex_pulling = can_vertex_pull
+                && pipeline_options.vertex_pulling_transform
+                && !pipeline_options.vertex_buffer_mappings.is_empty();
+
             // Is any global variable used by this entry point dynamically sized?
-            let supports_array_length = module
-                .global_variables
-                .iter()
-                .filter(|&(handle, _)| !fun_info[handle].is_empty())
-                .any(|(_, var)| needs_array_length(var.ty, &module.types));
+            let needs_buffer_sizes = do_vertex_pulling
+                || module
+                    .global_variables
+                    .iter()
+                    .filter(|&(handle, _)| !fun_info[handle].is_empty())
+                    .any(|(_, var)| needs_array_length(var.ty, &module.types));
 
             // skip this entry point if any global bindings are missing,
             // or their types are incompatible.
@@ -3986,7 +4825,7 @@ impl<W: Write> Writer<W> {
                         | crate::AddressSpace::WorkGroup => {}
                     }
                 }
-                if supports_array_length {
+                if needs_buffer_sizes {
                     if let Err(err) = options.resolve_sizes_buffer(ep) {
                         ep_error = Some(err);
                     }
@@ -4001,22 +4840,6 @@ impl<W: Write> Writer<W> {
             info.entry_point_names.push(Ok(fun_name.clone()));
 
             writeln!(self.out)?;
-
-            let (em_str, in_mode, out_mode) = match ep.stage {
-                crate::ShaderStage::Vertex => (
-                    "vertex",
-                    LocationMode::VertexInput,
-                    LocationMode::VertexOutput,
-                ),
-                crate::ShaderStage::Fragment { .. } => (
-                    "fragment",
-                    LocationMode::FragmentInput,
-                    LocationMode::FragmentOutput,
-                ),
-                crate::ShaderStage::Compute { .. } => {
-                    ("kernel", LocationMode::Uniform, LocationMode::Uniform)
-                }
-            };
 
             // Since `Namer.reset` wasn't expecting struct members to be
             // suddenly injected into another namespace like this,
@@ -4045,7 +4868,11 @@ impl<W: Write> Writer<W> {
                             let name_key = NameKey::StructMember(arg.ty, member_index);
                             let name = match member.binding {
                                 Some(crate::Binding::Location { .. }) => {
-                                    varyings_namer.call(&self.names[&name_key])
+                                    if do_vertex_pulling {
+                                        self.namer.call(&self.names[&name_key])
+                                    } else {
+                                        varyings_namer.call(&self.names[&name_key])
+                                    }
                                 }
                                 _ => self.namer.call(&self.names[&name_key]),
                             };
@@ -4060,19 +4887,24 @@ impl<W: Write> Writer<W> {
                 }
             }
 
-            // Identify the varyings among the argument values, and emit a
-            // struct type named `<fun>Input` to hold them.
+            // Identify the varyings among the argument values, and maybe emit
+            // a struct type named `<fun>Input` to hold them. If we are doing
+            // vertex pulling, we instead update our attribute mapping to
+            // note the types, names, and zero values of the attributes.
             let stage_in_name = format!("{fun_name}Input");
             let varyings_member_name = self.namer.call("varyings");
             let mut has_varyings = false;
             if !flattened_arguments.is_empty() {
-                writeln!(self.out, "struct {stage_in_name} {{")?;
+                if !do_vertex_pulling {
+                    writeln!(self.out, "struct {stage_in_name} {{")?;
+                }
                 for &(ref name_key, ty, binding) in flattened_arguments.iter() {
-                    let binding = match binding {
-                        Some(ref binding @ &crate::Binding::Location { .. }) => binding,
+                    let (binding, location) = match binding {
+                        Some(ref binding @ &crate::Binding::Location { location, .. }) => {
+                            (binding, location)
+                        }
                         _ => continue,
                     };
-                    has_varyings = true;
                     let name = match *name_key {
                         NameKey::StructMember(..) => &flattened_member_names[name_key],
                         _ => &self.names[name_key],
@@ -4086,11 +4918,27 @@ impl<W: Write> Writer<W> {
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
-                    write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                    resolved.try_fmt(&mut self.out)?;
-                    writeln!(self.out, ";")?;
+                    if do_vertex_pulling {
+                        // Update our attribute mapping.
+                        am_resolved.insert(
+                            location,
+                            AttributeMappingResolved {
+                                ty_name: ty_name.to_string(),
+                                dimension: ty_name.vertex_input_dimension(),
+                                ty_is_int: ty_name.scalar().map_or(false, scalar_is_int),
+                                name: name.to_string(),
+                            },
+                        );
+                    } else {
+                        has_varyings = true;
+                        write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                        resolved.try_fmt(&mut self.out)?;
+                        writeln!(self.out, ";")?;
+                    }
                 }
-                writeln!(self.out, "}};")?;
+                if !do_vertex_pulling {
+                    writeln!(self.out, "}};")?;
+                }
             }
 
             // Define a struct type named for the return value, if any, named
@@ -4173,6 +5021,23 @@ impl<W: Write> Writer<W> {
                 None => "void",
             };
 
+            // If we're doing a vertex pulling transform, define the buffer
+            // structure types.
+            if do_vertex_pulling {
+                for vbm in &vbm_resolved {
+                    let buffer_stride = vbm.stride;
+                    let buffer_ty = &vbm.ty_name;
+
+                    // Define a structure of bytes of the appropriate size.
+                    // When we access the attributes, we'll be unpacking these
+                    // bytes at some offset.
+                    writeln!(
+                        self.out,
+                        "struct {buffer_ty} {{ metal::uchar data[{buffer_stride}]; }};"
+                    )?;
+                }
+            }
+
             // Write the entry point function's name, and begin its argument list.
             writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
             let mut is_first_argument = true;
@@ -4213,6 +5078,17 @@ impl<W: Write> Writer<W> {
                     binding: None,
                     first_time: false,
                 };
+
+                match *binding {
+                    crate::Binding::BuiltIn(crate::BuiltIn::VertexIndex) => {
+                        v_existing_id = Some(name.clone());
+                    }
+                    crate::Binding::BuiltIn(crate::BuiltIn::InstanceIndex) => {
+                        i_existing_id = Some(name.clone());
+                    }
+                    _ => {}
+                };
+
                 let resolved = options.resolve_local_binding(binding, in_mode)?;
                 let separator = if is_first_argument {
                     is_first_argument = false;
@@ -4405,16 +5281,45 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out)?;
             }
 
-            // If this entry uses any variable-length arrays, their sizes are
-            // passed as a final struct-typed argument.
-            if supports_array_length {
-                // this is checked earlier
-                let resolved = options.resolve_sizes_buffer(ep).unwrap();
-                let separator = if module.global_variables.is_empty() {
+            if do_vertex_pulling {
+                assert!(needs_vertex_id || needs_instance_id);
+
+                let mut separator = if is_first_argument {
+                    is_first_argument = false;
                     ' '
                 } else {
                     ','
                 };
+
+                if needs_vertex_id && v_existing_id.is_none() {
+                    // Write the [[vertex_id]] argument.
+                    writeln!(self.out, "{separator} uint {v_id} [[vertex_id]]")?;
+                    separator = ',';
+                }
+
+                if needs_instance_id && i_existing_id.is_none() {
+                    writeln!(self.out, "{separator} uint {i_id} [[instance_id]]")?;
+                }
+
+                // Iterate vbm_resolved, output one argument for every vertex buffer,
+                // using the names we generated earlier.
+                for vbm in &vbm_resolved {
+                    let id = &vbm.id;
+                    let ty_name = &vbm.ty_name;
+                    let param_name = &vbm.param_name;
+                    writeln!(
+                        self.out,
+                        ", const device {ty_name}* {param_name} [[buffer({id})]]"
+                    )?;
+                }
+            }
+
+            // If this entry uses any variable-length arrays, their sizes are
+            // passed as a final struct-typed argument.
+            if needs_buffer_sizes {
+                // this is checked earlier
+                let resolved = options.resolve_sizes_buffer(ep).unwrap();
+                let separator = if is_first_argument { ' ' } else { ',' };
                 write!(
                     self.out,
                     "{separator} constant _mslBufferSizes& _buffer_sizes",
@@ -4425,6 +5330,126 @@ impl<W: Write> Writer<W> {
 
             // end of the entry point argument list
             writeln!(self.out, ") {{")?;
+
+            // Starting the function body.
+            if do_vertex_pulling {
+                // Provide zero values for all the attributes, which we will overwrite with
+                // real data from the vertex attribute buffers, if the indices are in-bounds.
+                for vbm in &vbm_resolved {
+                    for attribute in vbm.attributes {
+                        let location = attribute.shader_location;
+                        let am_option = am_resolved.get(&location);
+                        if am_option.is_none() {
+                            // This bound attribute isn't used in this entry point, so
+                            // don't bother zero-initializing it.
+                            continue;
+                        }
+                        let am = am_option.unwrap();
+                        let attribute_ty_name = &am.ty_name;
+                        let attribute_name = &am.name;
+
+                        writeln!(
+                            self.out,
+                            "{}{attribute_ty_name} {attribute_name} = {{}};",
+                            back::Level(1)
+                        )?;
+                    }
+
+                    // Output a bounds check block that will set real values for the
+                    // attributes, if the bounds are satisfied.
+                    write!(self.out, "{}if (", back::Level(1))?;
+
+                    let idx = &vbm.id;
+                    let stride = &vbm.stride;
+                    let index_name = if vbm.indexed_by_vertex {
+                        if let Some(ref name) = v_existing_id {
+                            name
+                        } else {
+                            &v_id
+                        }
+                    } else if let Some(ref name) = i_existing_id {
+                        name
+                    } else {
+                        &i_id
+                    };
+                    write!(
+                        self.out,
+                        "{index_name} < (_buffer_sizes.buffer_size{idx} / {stride})"
+                    )?;
+
+                    writeln!(self.out, ") {{")?;
+
+                    // Pull the bytes out of the vertex buffer.
+                    let ty_name = &vbm.ty_name;
+                    let elem_name = &vbm.elem_name;
+                    let param_name = &vbm.param_name;
+
+                    writeln!(
+                        self.out,
+                        "{}const {ty_name} {elem_name} = {param_name}[{index_name}];",
+                        back::Level(2),
+                    )?;
+
+                    // Now set real values for each of the attributes, by unpacking the data
+                    // from the buffer elements.
+                    for attribute in vbm.attributes {
+                        let location = attribute.shader_location;
+                        let am_option = am_resolved.get(&location);
+                        if am_option.is_none() {
+                            // This bound attribute isn't used in this entry point, so
+                            // don't bother extracting the data. Too bad we emitted the
+                            // unpacking function earlier -- it might not get used.
+                            continue;
+                        }
+                        let am = am_option.unwrap();
+                        let attribute_name = &am.name;
+                        let attribute_ty_name = &am.ty_name;
+
+                        let offset = attribute.offset;
+                        let func = unpacking_functions
+                            .get(&attribute.format)
+                            .expect("Should have generated this unpacking function earlier.");
+                        let func_name = &func.name;
+
+                        write!(self.out, "{}{attribute_name} = ", back::Level(2),)?;
+
+                        // Check dimensionality of the attribute compared to the unpacking
+                        // function. If attribute dimension is < unpack dimension, then
+                        // we need to explicitly cast down the result. Otherwise, if attribute
+                        // dimension > unpack dimension, we have to pad out the unpack value
+                        // from a vec4(0, 0, 0, 1) of matching scalar type.
+
+                        let needs_truncate_or_padding = am.dimension != func.dimension;
+                        if needs_truncate_or_padding {
+                            write!(self.out, "{attribute_ty_name}(")?;
+                        }
+
+                        write!(self.out, "{func_name}({elem_name}.data[{offset}]",)?;
+                        for i in (offset + 1)..(offset + func.byte_count) {
+                            write!(self.out, ", {elem_name}.data[{i}]")?;
+                        }
+                        write!(self.out, ")")?;
+
+                        if needs_truncate_or_padding {
+                            let zero_value = if am.ty_is_int { "0" } else { "0.0" };
+                            let one_value = if am.ty_is_int { "1" } else { "1.0" };
+                            for i in func.dimension..am.dimension {
+                                write!(
+                                    self.out,
+                                    ", {}",
+                                    if i == 3 { one_value } else { zero_value }
+                                )?;
+                            }
+                            write!(self.out, ")")?;
+                        }
+
+                        writeln!(self.out, ";")?;
+                    }
+
+                    // End the bounds check / attribute setting block.
+                    writeln!(self.out, "{}}}", back::Level(1))?;
+                }
+            }
 
             if need_workgroup_variables_initialization {
                 self.write_workgroup_variables_initialization(
@@ -4518,7 +5543,9 @@ impl<W: Write> Writer<W> {
                                 write!(self.out, "{{}}, ")?;
                             }
                             if let Some(crate::Binding::Location { .. }) = member.binding {
-                                write!(self.out, "{varyings_member_name}.")?;
+                                if has_varyings {
+                                    write!(self.out, "{varyings_member_name}.")?;
+                                }
                             }
                             write!(self.out, "{name}")?;
                         }
@@ -4526,14 +5553,16 @@ impl<W: Write> Writer<W> {
                     }
                     _ => {
                         if let Some(crate::Binding::Location { .. }) = arg.binding {
-                            writeln!(
-                                self.out,
-                                "{}const auto {} = {}.{};",
-                                back::INDENT,
-                                arg_name,
-                                varyings_member_name,
-                                arg_name
-                            )?;
+                            if has_varyings {
+                                writeln!(
+                                    self.out,
+                                    "{}const auto {} = {}.{};",
+                                    back::INDENT,
+                                    arg_name,
+                                    varyings_member_name,
+                                    arg_name
+                                )?;
+                            }
                         }
                     }
                 }
@@ -4895,5 +5924,33 @@ fn test_stack_size() {
         if !(15000..=25000).contains(&stack_size) {
             panic!("`put_block` stack size {stack_size} has changed!");
         }
+    }
+}
+
+impl crate::AtomicFunction {
+    fn to_msl(self) -> Result<&'static str, Error> {
+        Ok(match self {
+            Self::Add => "fetch_add",
+            Self::Subtract => "fetch_sub",
+            Self::And => "fetch_and",
+            Self::InclusiveOr => "fetch_or",
+            Self::ExclusiveOr => "fetch_xor",
+            Self::Min => "fetch_min",
+            Self::Max => "fetch_max",
+            Self::Exchange { compare: None } => "exchange",
+            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
+                "atomic CompareExchange".to_string(),
+            ))?,
+        })
+    }
+
+    fn to_msl_64_bit(self) -> Result<&'static str, Error> {
+        Ok(match self {
+            Self::Min => "min",
+            Self::Max => "max",
+            _ => Err(Error::FeatureNotImplemented(
+                "64-bit atomic operation other than min/max".to_string(),
+            ))?,
+        })
     }
 }
