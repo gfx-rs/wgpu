@@ -501,7 +501,7 @@ impl super::Queue {
                                 v,
                             );
                         },
-                        wgt::ExternalImageSource::ImageData(ref b) => unsafe {
+                        wgt::ExternalImageSource::ImageData(ref i) => unsafe {
                             gl.tex_sub_image_3d_with_image_data(
                                 dst_target,
                                 copy.dst_base.mip_level as i32,
@@ -513,7 +513,7 @@ impl super::Queue {
                                 copy.size.depth as i32,
                                 format_desc.external,
                                 format_desc.data_type,
-                                b,
+                                i,
                             );
                         },
                         wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
@@ -576,7 +576,7 @@ impl super::Queue {
                                 v,
                             )
                         },
-                        wgt::ExternalImageSource::ImageData(ref b) => unsafe {
+                        wgt::ExternalImageSource::ImageData(ref i) => unsafe {
                             gl.tex_sub_image_2d_with_image_data_and_width_and_height(
                                 dst_target,
                                 copy.dst_base.mip_level as i32,
@@ -586,7 +586,7 @@ impl super::Queue {
                                 copy.size.height as i32,
                                 format_desc.external,
                                 format_desc.data_type,
-                                b,
+                                i,
                             );
                         },
                         wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
