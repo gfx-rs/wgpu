@@ -326,6 +326,8 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
+#[cold]
+#[inline(never)]
 fn print_err(error: &dyn Error) {
     eprint!("{error}");
 
