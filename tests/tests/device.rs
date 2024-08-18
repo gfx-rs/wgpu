@@ -295,7 +295,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             },
             Some("device with '' label is invalid"),
@@ -305,7 +306,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                let _ = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                     label: None,
                     size: 256,
                     usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
@@ -319,7 +320,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device.create_texture(&wgpu::TextureDescriptor {
+                let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
                     label: None,
                     size: wgpu::Extent3d {
                         width: 512,
@@ -458,7 +459,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: None,
                         entries: &[],
@@ -471,7 +473,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: None,
                     layout: &bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
@@ -489,7 +491,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: None,
                         bind_group_layouts: &[],
@@ -503,7 +506,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_shader_module(wgpu::ShaderModuleDescriptor {
                         label: None,
                         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
@@ -516,7 +520,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || unsafe {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
                         label: None,
                         source: std::borrow::Cow::Borrowed(&[]),
@@ -529,7 +534,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: None,
                         layout: None,
@@ -554,7 +560,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                         label: None,
                         layout: None,
@@ -571,7 +578,8 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                         label: None,
                         layout: None,
@@ -852,7 +860,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
 
         // fail(&ctx.device, || {
         // }, "");
-        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &render_pipeline.get_bind_group_layout(0),
             entries: &[

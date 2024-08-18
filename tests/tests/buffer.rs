@@ -220,7 +220,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
         wgpu_test::fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx.device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                         label: None,
                         layout: Some(&pipeline_layout),

@@ -22,7 +22,7 @@ fn try_sampler_nonfiltering_layout(
     let sampler = ctx.device.create_sampler(descriptor);
 
     let create_bind_group = || {
-        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label,
             layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
