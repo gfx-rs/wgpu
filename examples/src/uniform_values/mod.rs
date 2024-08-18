@@ -224,7 +224,7 @@ impl WgpuContext {
 
 struct LoopState {
     // See https://docs.rs/winit/latest/winit/changelog/v0_30/index.html#removed
-    // for the recommended pratcice regarding Window creation (from which everything depends)
+    // for the recommended practice regarding Window creation (from which everything depends)
     // in winit >= 0.30.0.
     // The actual state is in an Option because its initialization is now delayed to after
     // the even loop starts running.

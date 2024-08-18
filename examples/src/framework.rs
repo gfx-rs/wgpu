@@ -405,6 +405,7 @@ impl<E: Example> ApplicationHandler<StateInitEvent<E>> for LoopState<E> {
         log::info!("Initializing example...");
 
         // Configure and create the window.
+        #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes().with_title(self.title);
         #[cfg(target_arch = "wasm32")]
         {
