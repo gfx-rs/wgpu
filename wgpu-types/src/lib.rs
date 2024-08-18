@@ -54,6 +54,7 @@ macro_rules! impl_bitflags {
         impl $name {
             /// Returns true if the bitflags contains bits that are not part of
             /// the bitflags definition.
+            #[must_use]
             pub fn contains_invalid_bits(&self) -> bool {
                 let all = Self::all().bits();
                 (self.bits() | all) != all
@@ -114,6 +115,7 @@ pub enum Backend {
 
 impl Backend {
     /// Returns the string name of the backend.
+    #[must_use]
     pub const fn to_str(self) -> &'static str {
         match self {
             Backend::Empty => "empty",
@@ -957,11 +959,13 @@ impl_bitflags!(Features);
 
 impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
+    #[must_use]
     pub const fn all_webgpu_mask() -> Self {
         Self::from_bits_truncate(0xFFFFF)
     }
 
     /// Mask of all features that are only available when targeting native (not web).
+    #[must_use]
     pub const fn all_native_mask() -> Self {
         Self::from_bits_truncate(!Self::all_webgpu_mask().bits())
     }
@@ -1013,11 +1017,13 @@ impl Default for InstanceFlags {
 
 impl InstanceFlags {
     /// Enable recommended debugging and validation flags.
+    #[must_use]
     pub fn debugging() -> Self {
         InstanceFlags::DEBUG | InstanceFlags::VALIDATION
     }
 
     /// Enable advanced debugging and validation flags (potentially very slow).
+    #[must_use]
     pub fn advanced_debugging() -> Self {
         Self::debugging() | InstanceFlags::GPU_BASED_VALIDATION
     }
@@ -1025,6 +1031,7 @@ impl InstanceFlags {
     /// Infer good defaults from the build type
     ///
     /// Returns the default flags and add debugging flags if the build configuration has `debug_assertions`.
+    #[must_use]
     pub fn from_build_config() -> Self {
         if cfg!(debug_assertions) {
             return InstanceFlags::debugging();
@@ -1045,6 +1052,7 @@ impl InstanceFlags {
     /// The environment variables are named after the flags prefixed with "WGPU_". For example:
     /// - WGPU_DEBUG
     /// - WGPU_VALIDATION
+    #[must_use]
     pub fn with_env(mut self) -> Self {
         fn env(key: &str) -> Option<bool> {
             std::env::var(key).ok().map(|s| match s.as_str() {
@@ -1308,6 +1316,7 @@ impl Limits {
     ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
+    #[must_use]
     pub const fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -1364,6 +1373,7 @@ impl Limits {
     ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
+    #[must_use]
     pub const fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
@@ -1394,6 +1404,7 @@ impl Limits {
     /// This is useful because the swapchain might need to be larger than any other image in the application.
     ///
     /// If your application only needs 512x512, you might be running on a 4k display and need extremely high resolution limits.
+    #[must_use]
     pub const fn using_resolution(self, other: Self) -> Self {
         Self {
             max_texture_dimension_1d: other.max_texture_dimension_1d,
@@ -1406,6 +1417,7 @@ impl Limits {
     /// Modify the current limits to use the buffer alignment limits of the adapter.
     ///
     /// This is useful for when you'd like to dynamically use the "best" supported buffer alignments.
+    #[must_use]
     pub const fn using_alignment(self, other: Self) -> Self {
         Self {
             min_uniform_buffer_offset_alignment: other.min_uniform_buffer_offset_alignment,
@@ -1417,6 +1429,7 @@ impl Limits {
     /// Compares every limits within self is within the limits given in `allowed`.
     ///
     /// If you need detailed information on failures, look at [`Limits::check_limits_with_fail_fn`].
+    #[must_use]
     pub fn check_limits(&self, allowed: &Self) -> bool {
         let mut within = true;
         self.check_limits_with_fail_fn(allowed, true, |_, _, _| within = false);
@@ -1534,6 +1547,7 @@ impl DownlevelCapabilities {
     ///
     /// If this returns false, some parts of the API will result in validation errors where they would not normally.
     /// These parts can be determined by the values in this structure.
+    #[must_use]
     pub fn is_webgpu_compliant(&self) -> bool {
         self.flags.contains(DownlevelFlags::compliant())
             && self.limits == DownlevelLimits::default()
@@ -1707,6 +1721,7 @@ impl_bitflags!(DownlevelFlags);
 
 impl DownlevelFlags {
     /// All flags that indicate if the backend is WebGPU compliant
+    #[must_use]
     pub const fn compliant() -> Self {
         // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
 
@@ -1846,6 +1861,7 @@ pub struct DeviceDescriptor<L> {
 
 impl<L> DeviceDescriptor<L> {
     /// Takes a closure and maps the label of the device descriptor into another.
+    #[must_use]
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
@@ -1914,6 +1930,7 @@ pub enum TextureViewDimension {
 
 impl TextureViewDimension {
     /// Get the texture dimension required of this texture view dimension.
+    #[must_use]
     pub fn compatible_texture_dimension(self) -> TextureDimension {
         match self {
             Self::D1 => TextureDimension::D1,
@@ -1976,6 +1993,7 @@ impl BlendFactor {
     /// Returns `true` if the blend factor references the second blend source.
     ///
     /// Note that the usage of those blend factors require [`Features::DUAL_SOURCE_BLENDING`].
+    #[must_use]
     pub fn ref_second_blend_source(&self) -> bool {
         match self {
             BlendFactor::Src1
@@ -2046,6 +2064,7 @@ impl BlendComponent {
 
     /// Returns true if the state relies on the constant color, which is
     /// set independently on a render command encoder.
+    #[must_use]
     pub fn uses_constant(&self) -> bool {
         match (self.src_factor, self.dst_factor) {
             (BlendFactor::Constant, _)
@@ -2169,6 +2188,7 @@ pub enum PrimitiveTopology {
 
 impl PrimitiveTopology {
     /// Returns true for strip topologies.
+    #[must_use]
     pub fn is_strip(&self) -> bool {
         match *self {
             Self::PointList | Self::LineList | Self::TriangleList => false,
@@ -2336,6 +2356,7 @@ impl TextureFormatFeatureFlags {
     /// Sample count supported by a given texture format.
     ///
     /// returns `true` if `count` is a supported sample count.
+    #[must_use]
     pub fn sample_count_supported(&self, count: u32) -> bool {
         use TextureFormatFeatureFlags as tfsc;
 
@@ -2350,6 +2371,7 @@ impl TextureFormatFeatureFlags {
     }
 
     /// A `Vec` of supported sample counts.
+    #[must_use]
     pub fn supported_sample_counts(&self) -> Vec<u32> {
         let all_possible_sample_counts: [u32; 5] = [1, 2, 4, 8, 16];
         all_possible_sample_counts
@@ -3009,6 +3031,7 @@ impl Serialize for TextureFormat {
 
 impl TextureAspect {
     /// Returns the texture aspect for a given plane.
+    #[must_use]
     pub fn from_plane(plane: u32) -> Option<Self> {
         Some(match plane {
             0 => Self::Plane0,
@@ -3023,6 +3046,7 @@ impl TextureFormat {
     /// Returns the aspect-specific format of the original format
     ///
     /// see <https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureaspect>
+    #[must_use]
     pub fn aspect_specific_format(&self, aspect: TextureAspect) -> Option<Self> {
         match (*self, aspect) {
             (Self::Stencil8, TextureAspect::StencilOnly) => Some(*self),
@@ -3046,6 +3070,7 @@ impl TextureFormat {
 
     /// Returns `true` if `self` is a depth or stencil component of the given
     /// combined depth-stencil format
+    #[must_use]
     pub fn is_depth_stencil_component(&self, combined_format: Self) -> bool {
         match (combined_format, *self) {
             (Self::Depth24PlusStencil8, Self::Depth24Plus | Self::Stencil8)
@@ -3057,6 +3082,7 @@ impl TextureFormat {
     /// Returns `true` if the format is a depth and/or stencil format
     ///
     /// see <https://gpuweb.github.io/gpuweb/#depth-formats>
+    #[must_use]
     pub fn is_depth_stencil_format(&self) -> bool {
         match *self {
             Self::Stencil8
@@ -3072,6 +3098,7 @@ impl TextureFormat {
     /// Returns `true` if the format is a combined depth-stencil format
     ///
     /// see <https://gpuweb.github.io/gpuweb/#combined-depth-stencil-format>
+    #[must_use]
     pub fn is_combined_depth_stencil_format(&self) -> bool {
         match *self {
             Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
@@ -3080,11 +3107,13 @@ impl TextureFormat {
     }
 
     /// Returns `true` if the format is a multi-planar format
+    #[must_use]
     pub fn is_multi_planar_format(&self) -> bool {
         self.planes().is_some()
     }
 
     /// Returns the number of planes a multi-planar format has.
+    #[must_use]
     pub fn planes(&self) -> Option<u32> {
         match *self {
             Self::NV12 => Some(2),
@@ -3093,11 +3122,13 @@ impl TextureFormat {
     }
 
     /// Returns `true` if the format has a color aspect
+    #[must_use]
     pub fn has_color_aspect(&self) -> bool {
         !self.is_depth_stencil_format()
     }
 
     /// Returns `true` if the format has a depth aspect
+    #[must_use]
     pub fn has_depth_aspect(&self) -> bool {
         match *self {
             Self::Depth16Unorm
@@ -3110,6 +3141,7 @@ impl TextureFormat {
     }
 
     /// Returns `true` if the format has a stencil aspect
+    #[must_use]
     pub fn has_stencil_aspect(&self) -> bool {
         match *self {
             Self::Stencil8 | Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
@@ -3118,6 +3150,7 @@ impl TextureFormat {
     }
 
     /// Returns the size multiple requirement for a texture using this format.
+    #[must_use]
     pub fn size_multiple_requirement(&self) -> (u32, u32) {
         match *self {
             Self::NV12 => (2, 2),
@@ -3128,6 +3161,7 @@ impl TextureFormat {
     /// Returns the dimension of a [block](https://gpuweb.github.io/gpuweb/#texel-block) of texels.
     ///
     /// Uncompressed formats have a block dimension of `(1, 1)`.
+    #[must_use]
     pub fn block_dimensions(&self) -> (u32, u32) {
         match *self {
             Self::R8Unorm
@@ -3227,16 +3261,19 @@ impl TextureFormat {
     }
 
     /// Returns `true` for compressed formats.
+    #[must_use]
     pub fn is_compressed(&self) -> bool {
         self.block_dimensions() != (1, 1)
     }
 
     /// Returns `true` for BCn compressed formats.
+    #[must_use]
     pub fn is_bcn(&self) -> bool {
         self.required_features() == Features::TEXTURE_COMPRESSION_BC
     }
 
     /// Returns the required features (if any) in order to use the texture.
+    #[must_use]
     pub fn required_features(&self) -> Features {
         match *self {
             Self::R8Unorm
@@ -3329,6 +3366,7 @@ impl TextureFormat {
     /// Returns the format features guaranteed by the WebGPU spec.
     ///
     /// Additional features are available if `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
+    #[must_use]
     pub fn guaranteed_format_features(&self, device_features: Features) -> TextureFormatFeatures {
         // Multisampling
         let noaa = TextureFormatFeatureFlags::empty();
@@ -3464,6 +3502,7 @@ impl TextureFormat {
     ///
     /// Returns `None` only if this is a combined depth-stencil format or a multi-planar format
     /// and `TextureAspect::All` or no `aspect` was provided.
+    #[must_use]
     pub fn sample_type(
         &self,
         aspect: Option<TextureAspect>,
@@ -3586,6 +3625,7 @@ impl TextureFormat {
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
     #[deprecated(since = "0.19.0", note = "Use `block_copy_size` instead.")]
+    #[must_use]
     pub fn block_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
         self.block_copy_size(aspect)
     }
@@ -3602,6 +3642,7 @@ impl TextureFormat {
     ///  - the format is a multi-planar format and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
+    #[must_use]
     pub fn block_copy_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
         match *self {
             Self::R8Unorm | Self::R8Snorm | Self::R8Uint | Self::R8Sint => Some(1),
@@ -3689,6 +3730,7 @@ impl TextureFormat {
 
     /// The number of bytes occupied per pixel in a color attachment
     /// <https://gpuweb.github.io/gpuweb/#render-target-pixel-byte-cost>
+    #[must_use]
     pub fn target_pixel_byte_cost(&self) -> Option<u32> {
         match *self {
             Self::R8Unorm | Self::R8Snorm | Self::R8Uint | Self::R8Sint => Some(1),
@@ -3765,6 +3807,7 @@ impl TextureFormat {
     }
 
     /// See <https://gpuweb.github.io/gpuweb/#render-target-component-alignment>
+    #[must_use]
     pub fn target_component_alignment(&self) -> Option<u32> {
         match *self {
             Self::R8Unorm
@@ -3846,6 +3889,7 @@ impl TextureFormat {
     }
 
     /// Returns the number of components this format has.
+    #[must_use]
     pub fn components(&self) -> u8 {
         self.components_with_aspect(TextureAspect::All)
     }
@@ -3853,6 +3897,7 @@ impl TextureFormat {
     /// Returns the number of components this format has taking into account the `aspect`.
     ///
     /// The `aspect` is only relevant for combined depth-stencil formats and multi-planar formats.
+    #[must_use]
     pub fn components_with_aspect(&self, aspect: TextureAspect) -> u8 {
         match *self {
             Self::R8Unorm
@@ -3938,6 +3983,7 @@ impl TextureFormat {
     }
 
     /// Strips the `Srgb` suffix from the given texture format.
+    #[must_use]
     pub fn remove_srgb_suffix(&self) -> TextureFormat {
         match *self {
             Self::Rgba8UnormSrgb => Self::Rgba8Unorm,
@@ -3961,6 +4007,7 @@ impl TextureFormat {
     }
 
     /// Adds an `Srgb` suffix to the given texture format, if the format supports it.
+    #[must_use]
     pub fn add_srgb_suffix(&self) -> TextureFormat {
         match *self {
             Self::Rgba8Unorm => Self::Rgba8UnormSrgb,
@@ -3984,6 +4031,7 @@ impl TextureFormat {
     }
 
     /// Returns `true` for srgb formats.
+    #[must_use]
     pub fn is_srgb(&self) -> bool {
         *self != self.remove_srgb_suffix()
     }
@@ -4629,6 +4677,7 @@ pub enum Maintain<T> {
 
 impl<T> Maintain<T> {
     /// Construct a wait variant
+    #[must_use]
     pub fn wait() -> Self {
         // This function seems a little silly, but it is useful to allow
         // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
@@ -4637,6 +4686,7 @@ impl<T> Maintain<T> {
     }
 
     /// Construct a WaitForSubmissionIndex variant
+    #[must_use]
     pub fn wait_for(submission_index: T) -> Self {
         // This function seems a little silly, but it is useful to allow
         // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
@@ -4645,6 +4695,7 @@ impl<T> Maintain<T> {
     }
 
     /// This maintain represents a wait of some kind.
+    #[must_use]
     pub fn is_wait(&self) -> bool {
         match *self {
             Self::WaitForSubmissionIndex(..) | Self::Wait => true,
@@ -4653,6 +4704,7 @@ impl<T> Maintain<T> {
     }
 
     /// Map on the wait index type.
+    #[must_use]
     pub fn map_index<U, F>(self, func: F) -> Maintain<U>
     where
         F: FnOnce(T) -> U,
@@ -4678,6 +4730,7 @@ pub enum MaintainResult {
 
 impl MaintainResult {
     /// Returns true if the result is [`Self::SubmissionQueueEmpty`]`.
+    #[must_use]
     pub fn is_queue_empty(&self) -> bool {
         matches!(self, Self::SubmissionQueueEmpty)
     }
@@ -4710,11 +4763,13 @@ pub struct StencilState {
 
 impl StencilState {
     /// Returns true if the stencil test is enabled.
+    #[must_use]
     pub fn is_enabled(&self) -> bool {
         (self.front != StencilFaceState::IGNORE || self.back != StencilFaceState::IGNORE)
             && (self.read_mask != 0 || self.write_mask != 0)
     }
     /// Returns true if the state doesn't mutate the target values.
+    #[must_use]
     pub fn is_read_only(&self, cull_mode: Option<Face>) -> bool {
         // The rules are defined in step 7 of the "Device timeline initialization steps"
         // subsection of the "Render Pipeline Creation" section of WebGPU
@@ -4730,6 +4785,7 @@ impl StencilState {
         front_ro && back_ro
     }
     /// Returns true if the stencil state uses the reference value for testing.
+    #[must_use]
     pub fn needs_ref_value(&self) -> bool {
         self.front.needs_ref_value() || self.back.needs_ref_value()
     }
@@ -4755,6 +4811,7 @@ pub struct DepthBiasState {
 
 impl DepthBiasState {
     /// Returns true if the depth biasing is enabled.
+    #[must_use]
     pub fn is_enabled(&self) -> bool {
         self.constant != 0 || self.slope_scale != 0.0
     }
@@ -4805,21 +4862,25 @@ pub struct DepthStencilState {
 
 impl DepthStencilState {
     /// Returns true if the depth testing is enabled.
+    #[must_use]
     pub fn is_depth_enabled(&self) -> bool {
         self.depth_compare != CompareFunction::Always || self.depth_write_enabled
     }
 
     /// Returns true if the state doesn't mutate the depth buffer.
+    #[must_use]
     pub fn is_depth_read_only(&self) -> bool {
         !self.depth_write_enabled
     }
 
     /// Returns true if the state doesn't mutate the stencil.
+    #[must_use]
     pub fn is_stencil_read_only(&self, cull_mode: Option<Face>) -> bool {
         self.stencil.is_read_only(cull_mode)
     }
 
     /// Returns true if the state doesn't mutate either depth or stencil of the target.
+    #[must_use]
     pub fn is_read_only(&self, cull_mode: Option<Face>) -> bool {
         self.is_depth_read_only() && self.is_stencil_read_only(cull_mode)
     }
@@ -4903,6 +4964,7 @@ impl StencilFaceState {
     };
 
     /// Returns true if the face state uses the reference value for testing or operation.
+    #[must_use]
     pub fn needs_ref_value(&self) -> bool {
         self.compare.needs_ref_value()
             || self.fail_op == StencilOperation::Replace
@@ -4911,6 +4973,7 @@ impl StencilFaceState {
     }
 
     /// Returns true if the face state doesn't mutate the target values.
+    #[must_use]
     pub fn is_read_only(&self) -> bool {
         self.pass_op == StencilOperation::Keep
             && self.depth_fail_op == StencilOperation::Keep
@@ -4957,6 +5020,7 @@ pub enum CompareFunction {
 
 impl CompareFunction {
     /// Returns true if the comparison depends on the reference value.
+    #[must_use]
     pub fn needs_ref_value(self) -> bool {
         match self {
             Self::Never | Self::Always => false,
@@ -5140,6 +5204,7 @@ pub enum VertexFormat {
 
 impl VertexFormat {
     /// Returns the byte size of the format.
+    #[must_use]
     pub const fn size(&self) -> u64 {
         match self {
             Self::Uint8x2 | Self::Sint8x2 | Self::Unorm8x2 | Self::Snorm8x2 => 2,
@@ -5244,6 +5309,7 @@ pub struct BufferDescriptor<L> {
 
 impl<L> BufferDescriptor<L> {
     /// Takes a closure and maps the label of the buffer descriptor into another.
+    #[must_use]
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
         BufferDescriptor {
             label: fun(&self.label),
@@ -5268,6 +5334,7 @@ pub struct CommandEncoderDescriptor<L> {
 
 impl<L> CommandEncoderDescriptor<L> {
     /// Takes a closure and maps the label of the command encoder descriptor into another.
+    #[must_use]
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
@@ -5571,6 +5638,7 @@ impl PresentationTimestamp {
     pub const INVALID_TIMESTAMP: Self = Self(u128::MAX);
 
     /// Returns true if this timestamp is the invalid timestamp.
+    #[must_use]
     pub fn is_invalid(self) -> bool {
         self == Self::INVALID_TIMESTAMP
     }
@@ -5673,6 +5741,7 @@ impl Origin2d {
     pub const ZERO: Self = Self { x: 0, y: 0 };
 
     /// Adds the third dimension to this origin
+    #[must_use]
     pub fn to_3d(self, z: u32) -> Origin3d {
         Origin3d {
             x: self.x,
@@ -5710,6 +5779,7 @@ impl Origin3d {
     pub const ZERO: Self = Self { x: 0, y: 0, z: 0 };
 
     /// Removes the third dimension from this origin
+    #[must_use]
     pub fn to_2d(self) -> Origin2d {
         Origin2d {
             x: self.x,
@@ -5777,6 +5847,7 @@ impl Extent3d {
     /// This is the texture extent that you must upload at when uploading to _mipmaps_ of compressed textures.
     ///
     /// [physical size]: https://gpuweb.github.io/gpuweb/#physical-miplevel-specific-texture-extent
+    #[must_use]
     pub fn physical_size(&self, format: TextureFormat) -> Self {
         let (block_width, block_height) = format.block_dimensions();
 
@@ -5794,6 +5865,7 @@ impl Extent3d {
     ///
     /// Treats the depth as part of the mipmaps. If calculating
     /// for a 2DArray texture, which does not mipmap depth, set depth to 1.
+    #[must_use]
     pub fn max_mips(&self, dim: TextureDimension) -> u32 {
         match dim {
             TextureDimension::D1 => 1,
@@ -5812,6 +5884,7 @@ impl Extent3d {
     /// Does *not* account for memory size being a multiple of block size.
     ///
     /// <https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent>
+    #[must_use]
     pub fn mip_level_size(&self, level: u32, dim: TextureDimension) -> Self {
         Self {
             width: u32::max(1, self.width >> level),
@@ -5963,6 +6036,7 @@ pub struct TextureDescriptor<L, V> {
 
 impl<L, V> TextureDescriptor<L, V> {
     /// Takes a closure and maps the label of the texture descriptor into another.
+    #[must_use]
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V>
     where
         V: Clone,
@@ -5980,6 +6054,7 @@ impl<L, V> TextureDescriptor<L, V> {
     }
 
     /// Maps the label and view_formats of the texture descriptor into another.
+    #[must_use]
     pub fn map_label_and_view_formats<K, M>(
         &self,
         l_fun: impl FnOnce(&L) -> K,
@@ -6030,6 +6105,7 @@ impl<L, V> TextureDescriptor<L, V> {
     /// assert_eq!(desc.mip_level_size(6), Some(wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 }));
     /// assert_eq!(desc.mip_level_size(7), None);
     /// ```
+    #[must_use]
     pub fn mip_level_size(&self, level: u32) -> Option<Extent3d> {
         if level >= self.mip_level_count {
             return None;
@@ -6041,6 +6117,7 @@ impl<L, V> TextureDescriptor<L, V> {
     /// Computes the render extent of this texture.
     ///
     /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
+    #[must_use]
     pub fn compute_render_extent(&self, mip_level: u32) -> Extent3d {
         Extent3d {
             width: u32::max(1, self.size.width >> mip_level),
@@ -6052,6 +6129,7 @@ impl<L, V> TextureDescriptor<L, V> {
     /// Returns the number of array layers.
     ///
     /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-array-layer-count>
+    #[must_use]
     pub fn array_layer_count(&self) -> u32 {
         match self.dimension {
             TextureDimension::D1 | TextureDimension::D3 => 1,
@@ -6163,6 +6241,7 @@ pub struct CommandBufferDescriptor<L> {
 
 impl<L> CommandBufferDescriptor<L> {
     /// Takes a closure and maps the label of the command buffer descriptor into another.
+    #[must_use]
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandBufferDescriptor<K> {
         CommandBufferDescriptor {
             label: fun(&self.label),
@@ -6211,6 +6290,7 @@ pub struct RenderBundleDescriptor<L> {
 
 impl<L> RenderBundleDescriptor<L> {
     /// Takes a closure and maps the label of the render bundle descriptor into another.
+    #[must_use]
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> RenderBundleDescriptor<K> {
         RenderBundleDescriptor {
             label: fun(&self.label),
@@ -6642,6 +6722,7 @@ pub enum BindingType {
 
 impl BindingType {
     /// Returns true for buffer bindings with dynamic offset enabled.
+    #[must_use]
     pub fn has_dynamic_offset(&self) -> bool {
         match *self {
             Self::Buffer {
@@ -6929,6 +7010,7 @@ impl ImageSubresourceRange {
     /// };
     /// assert_eq!(range_mixed.is_full_resource(wgpu::TextureFormat::Stencil8, 5, 10), false);
     /// ```
+    #[must_use]
     pub fn is_full_resource(
         &self,
         format: TextureFormat,
@@ -6955,6 +7037,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the mip level range of a subresource range describes for a specific texture.
+    #[must_use]
     pub fn mip_range(&self, mip_level_count: u32) -> Range<u32> {
         self.base_mip_level..match self.mip_level_count {
             Some(mip_level_count) => self.base_mip_level + mip_level_count,
@@ -6963,6 +7046,7 @@ impl ImageSubresourceRange {
     }
 
     /// Returns the layer range of a subresource range describes for a specific texture.
+    #[must_use]
     pub fn layer_range(&self, array_layer_count: u32) -> Range<u32> {
         self.base_array_layer..match self.array_layer_count {
             Some(array_layer_count) => self.base_array_layer + array_layer_count,
@@ -7009,6 +7093,7 @@ pub struct QuerySetDescriptor<L> {
 
 impl<L> QuerySetDescriptor<L> {
     /// Takes a closure and maps the label of the query set descriptor into another.
+    #[must_use]
     pub fn map_label<'a, K>(&'a self, fun: impl FnOnce(&'a L) -> K) -> QuerySetDescriptor<K> {
         QuerySetDescriptor {
             label: fun(&self.label),
@@ -7103,6 +7188,7 @@ pub struct DrawIndirectArgs {
 
 impl DrawIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
@@ -7133,6 +7219,7 @@ pub struct DrawIndexedIndirectArgs {
 
 impl DrawIndexedIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
@@ -7157,6 +7244,7 @@ pub struct DispatchIndirectArgs {
 
 impl DispatchIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written into a buffer.
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
@@ -7176,6 +7264,7 @@ pub struct ShaderBoundChecks {
 
 impl ShaderBoundChecks {
     /// Creates a new configuration where the shader is bound checked.
+    #[must_use]
     pub fn new() -> Self {
         ShaderBoundChecks {
             runtime_checks: true,
@@ -7187,6 +7276,7 @@ impl ShaderBoundChecks {
     /// # Safety
     /// The caller MUST ensure that all shaders built with this configuration don't perform any
     /// out of bounds reads or writes.
+    #[must_use]
     pub unsafe fn unchecked() -> Self {
         ShaderBoundChecks {
             runtime_checks: false,
@@ -7194,6 +7284,7 @@ impl ShaderBoundChecks {
     }
 
     /// Query whether runtime bound checks are enabled in this configuration
+    #[must_use]
     pub fn runtime_checks(&self) -> bool {
         self.runtime_checks
     }

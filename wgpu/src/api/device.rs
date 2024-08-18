@@ -56,6 +56,7 @@ impl Device {
     /// The features which can be used on this device.
     ///
     /// No additional features can be used, even if the underlying adapter can support them.
+    #[must_use]
     pub fn features(&self) -> Features {
         DynContext::device_features(&*self.context, &self.id, self.data.as_ref())
     }
@@ -63,6 +64,7 @@ impl Device {
     /// The limits which can be used on this device.
     ///
     /// No better limits can be used, even if the underlying adapter can support them.
+    #[must_use]
     pub fn limits(&self) -> Limits {
         DynContext::device_limits(&*self.context, &self.id, self.data.as_ref())
     }
@@ -81,6 +83,7 @@ impl Device {
     /// input.
     ///
     /// </div>
+    #[must_use]
     pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
@@ -106,6 +109,7 @@ impl Device {
     /// operations.
     ///
     /// This has no effect on web.
+    #[must_use]
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor<'_>,
@@ -132,6 +136,7 @@ impl Device {
     /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid SPIR-V.
     ///
     /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
+    #[must_use]
     pub unsafe fn create_shader_module_spirv(
         &self,
         desc: &ShaderModuleDescriptorSpirV<'_>,
@@ -152,6 +157,7 @@ impl Device {
     }
 
     /// Creates an empty [`CommandEncoder`].
+    #[must_use]
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> CommandEncoder {
         let (id, data) = DynContext::device_create_command_encoder(
             &*self.context,
@@ -167,6 +173,7 @@ impl Device {
     }
 
     /// Creates an empty [`RenderBundleEncoder`].
+    #[must_use]
     pub fn create_render_bundle_encoder(
         &self,
         desc: &RenderBundleEncoderDescriptor<'_>,
@@ -187,6 +194,7 @@ impl Device {
     }
 
     /// Creates a new [`BindGroup`].
+    #[must_use]
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> BindGroup {
         let (id, data) = DynContext::device_create_bind_group(
             &*self.context,
@@ -202,6 +210,7 @@ impl Device {
     }
 
     /// Creates a [`BindGroupLayout`].
+    #[must_use]
     pub fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor<'_>,
@@ -220,6 +229,7 @@ impl Device {
     }
 
     /// Creates a [`PipelineLayout`].
+    #[must_use]
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> PipelineLayout {
         let (id, data) = DynContext::device_create_pipeline_layout(
             &*self.context,
@@ -235,6 +245,7 @@ impl Device {
     }
 
     /// Creates a [`RenderPipeline`].
+    #[must_use]
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> RenderPipeline {
         let (id, data) = DynContext::device_create_render_pipeline(
             &*self.context,
@@ -250,6 +261,7 @@ impl Device {
     }
 
     /// Creates a [`ComputePipeline`].
+    #[must_use]
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
         let (id, data) = DynContext::device_create_compute_pipeline(
             &*self.context,
@@ -265,6 +277,7 @@ impl Device {
     }
 
     /// Creates a [`Buffer`].
+    #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
@@ -287,6 +300,7 @@ impl Device {
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
+    #[must_use]
     pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Texture {
         let (id, data) =
             DynContext::device_create_texture(&*self.context, &self.id, self.data.as_ref(), desc);
@@ -311,6 +325,7 @@ impl Device {
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
     #[cfg(wgpu_core)]
+    #[must_use]
     pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -350,6 +365,7 @@ impl Device {
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
     #[cfg(wgpu_core)]
+    #[must_use]
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,
@@ -387,6 +403,7 @@ impl Device {
     /// Creates a new [`Sampler`].
     ///
     /// `desc` specifies the behavior of the sampler.
+    #[must_use]
     pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Sampler {
         let (id, data) =
             DynContext::device_create_sampler(&*self.context, &self.id, self.data.as_ref(), desc);
@@ -398,6 +415,7 @@ impl Device {
     }
 
     /// Creates a new [`QuerySet`].
+    #[must_use]
     pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
         let (id, data) =
             DynContext::device_create_query_set(&*self.context, &self.id, self.data.as_ref(), desc);
@@ -442,6 +460,7 @@ impl Device {
     /// The `counters` cargo feature must be enabled for any counter to be set.
     ///
     /// If a counter is not set, its contains its default value (zero).
+    #[must_use]
     pub fn get_internal_counters(&self) -> wgt::InternalCounters {
         DynContext::device_get_internal_counters(&*self.context, &self.id, self.data.as_ref())
     }
@@ -451,6 +470,7 @@ impl Device {
     /// Backends that do not support producing these reports return `None`. A backend may
     /// Support it and still return `None` if it is not using performing sub-allocation,
     /// for example as a workaround for driver issues.
+    #[must_use]
     pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         DynContext::generate_allocator_report(&*self.context, &self.id, self.data.as_ref())
     }
@@ -551,6 +571,7 @@ impl Device {
     /// version of wgpu; or was created for an incompatible adapter, or there was a GPU driver
     /// update. In some cases, the data might not be used and a real value is returned,
     /// this is left to the discretion of GPU drivers.
+    #[must_use]
     pub unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
