@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use wgpu::{Instance, Surface};
 use winit::{
+    application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{Event, KeyEvent, StartCause, WindowEvent},
-    event_loop::{EventLoop, EventLoopWindowTarget},
+    event::{KeyEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     keyboard::{Key, NamedKey},
-    window::Window,
+    window::{Window, WindowId},
 };
 
 pub trait Example: 'static + Sized {
@@ -89,36 +90,6 @@ fn init_logger() {
     }
 }
 
-struct EventLoopWrapper {
-    event_loop: EventLoop<()>,
-    window: Arc<Window>,
-}
-
-impl EventLoopWrapper {
-    pub fn new(title: &str) -> Self {
-        let event_loop = EventLoop::new().unwrap();
-        let mut builder = winit::window::WindowBuilder::new();
-        #[cfg(target_arch = "wasm32")]
-        {
-            use wasm_bindgen::JsCast;
-            use winit::platform::web::WindowBuilderExtWebSys;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id("canvas")
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .unwrap();
-            builder = builder.with_canvas(Some(canvas));
-        }
-        builder = builder.with_title(title);
-        let window = Arc::new(builder.build(&event_loop).unwrap());
-
-        Self { event_loop, window }
-    }
-}
-
 /// Wrapper type which manages the surface and surface configuration.
 ///
 /// As surface usage varies per platform, wrapping this up cleans up the event loop code.
@@ -128,44 +99,26 @@ struct SurfaceWrapper {
 }
 
 impl SurfaceWrapper {
-    /// Create a new surface wrapper with no surface or configuration.
-    fn new() -> Self {
+    /// Create a new surface wrapper with a surface.
+    ///
+    /// This should be called before the adapter is created.
+    fn new(instance: &Instance, window: Arc<Window>) -> Self {
         Self {
-            surface: None,
+            surface: Some(instance.create_surface(window).unwrap()),
             config: None,
         }
     }
 
-    /// Called after the instance is created, but before we request an adapter.
+    /// Configure the surface with the given adapter and device.
     ///
-    /// On wasm, we need to create the surface here, as the WebGL backend needs
-    /// a surface (and hence a canvas) to be present to create the adapter.
-    ///
-    /// We cannot unconditionally create a surface here, as Android requires
-    /// us to wait until we receive the `Resumed` event to do so.
-    fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
-        if cfg!(target_arch = "wasm32") {
-            self.surface = Some(instance.create_surface(window).unwrap());
-        }
-    }
-
-    /// Check if the event is the start condition for the surface.
-    fn start_condition(e: &Event<()>) -> bool {
-        match e {
-            // On all other platforms, we can create the surface immediately.
-            Event::NewEvents(StartCause::Init) => !cfg!(target_os = "android"),
-            // On android we need to wait for a resumed event to create the surface.
-            Event::Resumed => cfg!(target_os = "android"),
-            _ => false,
-        }
-    }
-
-    /// Called when an event which matches [`Self::start_condition`] is received.
-    ///
-    /// On all native platforms, this is where we create the surface.
-    ///
-    /// Additionally, we configure the surface based on the (now valid) window size.
-    fn resume(&mut self, context: &ExampleContext, window: Arc<Window>, srgb: bool) {
+    /// This should be called after the device is created.
+    fn configure(
+        &mut self,
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        window: &Window,
+        srgb: bool,
+    ) {
         // Window size is only actually valid after we enter the event loop.
         let window_size = window.inner_size();
         let width = window_size.width.max(1);
@@ -173,18 +126,11 @@ impl SurfaceWrapper {
 
         log::info!("Surface resume {window_size:?}");
 
-        // We didn't create the surface in pre_adapter, so we need to do so now.
-        if !cfg!(target_arch = "wasm32") {
-            self.surface = Some(context.instance.create_surface(window).unwrap());
-        }
-
-        // From here on, self.surface should be Some.
-
         let surface = self.surface.as_ref().unwrap();
 
         // Get the default configuration,
         let mut config = surface
-            .get_default_config(&context.adapter, width, height)
+            .get_default_config(&adapter, width, height)
             .expect("Surface isn't supported by the adapter.");
         if srgb {
             // Not all platforms (WebGPU) support sRGB swapchains, so we need to use view formats
@@ -197,23 +143,38 @@ impl SurfaceWrapper {
             config.view_formats.push(format);
         };
 
-        surface.configure(&context.device, &config);
+        surface.configure(&device, &config);
         self.config = Some(config);
     }
 
+    /// Resume event which recreates the surface, if it was dropped.
+    fn resume(
+        &mut self,
+        instance: &Instance,
+        window: &Arc<Window>,
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        srgb: bool,
+    ) {
+        if self.surface.is_none() {
+            self.surface = Some(instance.create_surface(window.clone()).unwrap());
+            self.configure(adapter, device, window, srgb);
+        }
+    }
+
     /// Resize the surface, making sure to not resize to zero.
-    fn resize(&mut self, context: &ExampleContext, size: PhysicalSize<u32>) {
+    fn resize(&mut self, device: &wgpu::Device, size: PhysicalSize<u32>) {
         log::info!("Surface resize {size:?}");
 
         let config = self.config.as_mut().unwrap();
         config.width = size.width.max(1);
         config.height = size.height.max(1);
         let surface = self.surface.as_ref().unwrap();
-        surface.configure(&context.device, config);
+        surface.configure(&device, config);
     }
 
     /// Acquire the next surface texture.
-    fn acquire(&mut self, context: &ExampleContext) -> wgpu::SurfaceTexture {
+    fn acquire(&mut self, device: &wgpu::Device) -> wgpu::SurfaceTexture {
         let surface = self.surface.as_ref().unwrap();
 
         match surface.get_current_texture() {
@@ -229,7 +190,7 @@ impl SurfaceWrapper {
                 // If OutOfMemory happens, reconfiguring may not help, but we might as well try
                 | wgpu::SurfaceError::OutOfMemory,
             ) => {
-                surface.configure(&context.device, self.config());
+                surface.configure(&device, self.config());
                 surface
                     .get_current_texture()
                     .expect("Failed to acquire next surface texture!")
@@ -241,9 +202,7 @@ impl SurfaceWrapper {
     ///
     /// A suspend event is always followed by at least one resume event.
     fn suspend(&mut self) {
-        if cfg!(target_os = "android") {
-            self.surface = None;
-        }
+        self.surface = None;
     }
 
     fn get(&self) -> Option<&Surface> {
@@ -255,16 +214,54 @@ impl SurfaceWrapper {
     }
 }
 
-/// Context containing global wgpu resources.
-struct ExampleContext {
+struct FrameCounter {
+    // Instant of the last time we printed the frame time.
+    last_printed_instant: web_time::Instant,
+    // Number of frames since the last time we printed the frame time.
+    frame_count: u32,
+}
+
+impl FrameCounter {
+    fn new() -> Self {
+        Self {
+            last_printed_instant: web_time::Instant::now(),
+            frame_count: 0,
+        }
+    }
+
+    fn update(&mut self) {
+        self.frame_count += 1;
+        let new_instant = web_time::Instant::now();
+        let elapsed_secs = (new_instant - self.last_printed_instant).as_secs_f32();
+        if elapsed_secs > 1.0 {
+            let elapsed_ms = elapsed_secs * 1000.0;
+            let frame_time = elapsed_ms / self.frame_count as f32;
+            let fps = self.frame_count as f32 / elapsed_secs;
+            log::info!("Frame time {:.2}ms ({:.1} FPS)", frame_time, fps);
+
+            self.last_printed_instant = new_instant;
+            self.frame_count = 0;
+        }
+    }
+}
+
+/// Stores all of the state of the example after initialization.
+struct InitializedExample<E: Example> {
     instance: wgpu::Instance,
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+
+    window: Arc<Window>,
+    surface: SurfaceWrapper,
+
+    frame_counter: FrameCounter,
+    example: E,
 }
-impl ExampleContext {
-    /// Initializes the example context.
-    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
+
+impl<E: Example> InitializedExample<E> {
+    /// Asynchronously initialize the all the example state.
+    async fn new(window: Arc<Window>) -> InitializedExample<E> {
         log::info!("Initializing wgpu...");
 
         let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
@@ -277,7 +274,9 @@ impl ExampleContext {
             dx12_shader_compiler,
             gles_minor_version,
         });
-        surface.pre_adapter(&instance, window);
+
+        let mut surface = SurfaceWrapper::new(&instance, window.clone());
+
         let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, surface.get())
             .await
             .expect("No suitable GPU adapters found on the system!");
@@ -326,167 +325,224 @@ impl ExampleContext {
             .await
             .expect("Unable to find a suitable GPU adapter!");
 
-        Self {
+        surface.configure(&adapter, &device, &window, E::SRGB);
+
+        let frame_counter = FrameCounter::new();
+
+        let example = E::init(surface.config(), &adapter, &device, &queue);
+
+        log::info!("Initialization complete.");
+
+        InitializedExample {
+            window,
+            frame_counter,
+            example,
+
             instance,
             adapter,
             device,
             queue,
+            surface,
         }
     }
 }
 
-struct FrameCounter {
-    // Instant of the last time we printed the frame time.
-    last_printed_instant: web_time::Instant,
-    // Number of frames since the last time we printed the frame time.
-    frame_count: u32,
+/// Event used to initialize the example state after initialization finishes.
+struct StateInitEvent<E: Example>(InitializedExample<E>);
+
+/// Initialization state for the example.
+///
+/// State should only ever move down the chain, from `Uninitialized` -> `Initializing` -> `Initialized`.
+enum InitState<E: Example> {
+    /// The example has not been initialized yet.
+    Uninitialized,
+    /// The example is being initialized asynchronously.
+    Initializing,
+    /// The example has been initialized.
+    Initialized(InitializedExample<E>),
 }
 
-impl FrameCounter {
-    fn new() -> Self {
-        Self {
-            last_printed_instant: web_time::Instant::now(),
-            frame_count: 0,
-        }
-    }
+struct LoopState<E: Example> {
+    state: InitState<E>,
+    title: &'static str,
+    event_loop_proxy: EventLoopProxy<StateInitEvent<E>>,
+}
 
-    fn update(&mut self) {
-        self.frame_count += 1;
-        let new_instant = web_time::Instant::now();
-        let elapsed_secs = (new_instant - self.last_printed_instant).as_secs_f32();
-        if elapsed_secs > 1.0 {
-            let elapsed_ms = elapsed_secs * 1000.0;
-            let frame_time = elapsed_ms / self.frame_count as f32;
-            let fps = self.frame_count as f32 / elapsed_secs;
-            log::info!("Frame time {:.2}ms ({:.1} FPS)", frame_time, fps);
-
-            self.last_printed_instant = new_instant;
-            self.frame_count = 0;
+impl<E: Example> LoopState<E> {
+    fn new(title: &'static str, event_loop: &EventLoop<StateInitEvent<E>>) -> LoopState<E> {
+        LoopState {
+            state: InitState::Uninitialized,
+            title,
+            event_loop_proxy: event_loop.create_proxy(),
         }
     }
 }
 
-async fn start<E: Example>(title: &str) {
-    init_logger();
-
-    log::debug!(
-        "Enabled backends: {:?}",
-        wgpu::Instance::enabled_backend_features()
-    );
-
-    let window_loop = EventLoopWrapper::new(title);
-    let mut surface = SurfaceWrapper::new();
-    let context = ExampleContext::init_async::<E>(&mut surface, window_loop.window.clone()).await;
-    let mut frame_counter = FrameCounter::new();
-
-    // We wait to create the example until we have a valid surface.
-    let mut example = None;
-
-    cfg_if::cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            use winit::platform::web::EventLoopExtWebSys;
-            let event_loop_function = EventLoop::spawn;
-        } else {
-            let event_loop_function = EventLoop::run;
-        }
-    }
-
-    log::info!("Entering event loop...");
-    // On native this is a result, but on wasm it's a unit type.
-    #[allow(clippy::let_unit_value)]
-    let _ = (event_loop_function)(
-        window_loop.event_loop,
-        move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
-            match event {
-                ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, window_loop.window.clone(), E::SRGB);
-
-                    // If we haven't created the example yet, do so now.
-                    if example.is_none() {
-                        example = Some(E::init(
-                            surface.config(),
-                            &context.adapter,
-                            &context.device,
-                            &context.queue,
-                        ));
-                    }
-                }
-                Event::Suspended => {
-                    surface.suspend();
-                }
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::Resized(size) => {
-                        surface.resize(&context, size);
-                        example.as_mut().unwrap().resize(
-                            surface.config(),
-                            &context.device,
-                            &context.queue,
-                        );
-
-                        window_loop.window.request_redraw();
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Named(NamedKey::Escape),
-                                ..
-                            },
-                        ..
-                    }
-                    | WindowEvent::CloseRequested => {
-                        target.exit();
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Character(s),
-                                ..
-                            },
-                        ..
-                    } if s == "r" => {
-                        println!("{:#?}", context.instance.generate_report());
-                    }
-                    WindowEvent::RedrawRequested => {
-                        // On MacOS, currently redraw requested comes in _before_ Init does.
-                        // If this happens, just drop the requested redraw on the floor.
-                        //
-                        // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
-                        if example.is_none() {
-                            return;
-                        }
-
-                        frame_counter.update();
-
-                        let frame = surface.acquire(&context);
-                        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                            format: Some(surface.config().view_formats[0]),
-                            ..wgpu::TextureViewDescriptor::default()
-                        });
-
-                        example
-                            .as_mut()
-                            .unwrap()
-                            .render(&view, &context.device, &context.queue);
-
-                        frame.present();
-
-                        window_loop.window.request_redraw();
-                    }
-                    _ => example.as_mut().unwrap().update(event),
-                },
-                _ => {}
+impl<E: Example> ApplicationHandler<StateInitEvent<E>> for LoopState<E> {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        match self.state {
+            InitState::Uninitialized => {
+                // If we're uninitialized, start initializing and
+                // continue to the main body.
+                self.state = InitState::Initializing;
             }
-        },
-    );
+            InitState::Initializing => {
+                // If we're already initializing, just ignore the resume event.
+                return;
+            }
+            InitState::Initialized(ref mut state) => {
+                // If we're already initialized, resume the surface.
+                state.surface.resume(
+                    &state.instance,
+                    &state.window,
+                    &state.adapter,
+                    &state.device,
+                    E::SRGB,
+                );
+            }
+        }
+
+        log::info!("Initializing example...");
+
+        // Configure and create the window.
+        #[allow(unused_mut)]
+        let mut window_attributes = Window::default_attributes().with_title(self.title);
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowAttributesExtWebSys;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("canvas")
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            window_attributes = window_attributes.with_canvas(Some(canvas));
+        }
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+
+        // Create the example future.
+        let future = InitializedExample::new(window);
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                // WASM we can't use block_on, so we spawn the future and send the result back to the event loop.
+
+                let event_loop_proxy = self.event_loop_proxy.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let state = future.await;
+                    event_loop_proxy.send_event(StateInitEvent(state)).unwrap_or_else(|_| {
+                        panic!("Failed to send StateInitEvent");
+                    });
+                });
+            } else {
+                // On native, we can block on the future and send the result back directly.
+                let state = pollster::block_on(future);
+                self.event_loop_proxy.send_event(StateInitEvent(state)).unwrap_or_else(|_| {
+                    panic!("Failed to send StateInitEvent");
+                });
+            }
+        };
+    }
+
+    /// Handle the event where the example has been initialized.
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: StateInitEvent<E>) {
+        log::info!("Received initialized event.");
+
+        let state = event.0;
+        state.window.request_redraw();
+
+        self.state = InitState::Initialized(state);
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        let InitState::Initialized(ref mut state) = self.state else {
+            return;
+        };
+        state.surface.suspend();
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        let InitState::Initialized(ref mut state) = self.state else {
+            return;
+        };
+
+        match event {
+            WindowEvent::Resized(size) => {
+                state.surface.resize(&state.device, size);
+                state
+                    .example
+                    .resize(state.surface.config(), &state.device, &state.queue);
+
+                state.window.request_redraw();
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: Key::Named(NamedKey::Escape),
+                        ..
+                    },
+                ..
+            }
+            | WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: Key::Character(s),
+                        ..
+                    },
+                ..
+            } if s == "r" => {
+                println!("{:#?}", state.instance.generate_report());
+            }
+            WindowEvent::RedrawRequested => {
+                state.frame_counter.update();
+
+                let frame = state.surface.acquire(&state.device);
+
+                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                    format: Some(state.surface.config().view_formats[0]),
+                    ..wgpu::TextureViewDescriptor::default()
+                });
+
+                state.example.render(&view, &state.device, &state.queue);
+
+                frame.present();
+
+                state.window.request_redraw();
+            }
+            _ => state.example.update(event),
+        }
+    }
 }
 
 pub fn run<E: Example>(title: &'static str) {
+    init_logger();
+
+    let event_loop = EventLoop::<StateInitEvent<E>>::with_user_event()
+        .build()
+        .unwrap();
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
+    let mut loop_state: LoopState<E> = LoopState::new(title, &event_loop);
+
+    log::info!("Entering event loop...");
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-            wasm_bindgen_futures::spawn_local(async move { start::<E>(title).await })
+            use winit::platform::web::EventLoopExtWebSys;
+
+            event_loop.spawn_app(loop_state);
         } else {
-            pollster::block_on(start::<E>(title));
+            event_loop.run_app(&mut loop_state).unwrap();
         }
     }
 }

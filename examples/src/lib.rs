@@ -10,6 +10,7 @@ pub mod cube;
 pub mod hello;
 pub mod hello_compute;
 pub mod hello_synchronization;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod hello_triangle;
 pub mod hello_windows;
 pub mod hello_workgroups;
@@ -24,6 +25,7 @@ pub mod stencil_triangles;
 pub mod storage_texture;
 pub mod texture_arrays;
 pub mod timestamp_queries;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod uniform_values;
 pub mod water;
 
