@@ -1,3 +1,4 @@
+use crate::auxil::RequestedValidation;
 use glow::HasContext;
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -807,6 +808,8 @@ impl crate::Instance for Instance {
         #[cfg(Emscripten)]
         let egl1_5: Option<&Arc<EglInstance>> = Some(&egl);
 
+        let requested_validation = RequestedValidation::from_flags(self.flags);
+
         let (display, display_owner, wsi_kind) =
             if let (Some(library), Some(egl)) = (wayland_library, egl1_5) {
                 log::info!("Using Wayland platform");
@@ -838,7 +841,7 @@ impl crate::Instance for Instance {
                     EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE as khronos_egl::Attrib,
                     EGL_PLATFORM_X11_KHR as khronos_egl::Attrib,
                     EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED as khronos_egl::Attrib,
-                    usize::from(desc.flags.contains(wgt::InstanceFlags::VALIDATION)),
+                    usize::from(requested_validation.is_some()),
                     khronos_egl::ATTRIB_NONE,
                 ];
                 let display = unsafe {
@@ -870,9 +873,7 @@ impl crate::Instance for Instance {
                 (display, None, WindowKind::Unknown)
             };
 
-        if desc.flags.contains(wgt::InstanceFlags::VALIDATION)
-            && client_ext_str.contains("EGL_KHR_debug")
-        {
+        if requested_validation.is_some() && client_ext_str.contains("EGL_KHR_debug") {
             log::debug!("Enabling EGL debug output");
             let function: EglDebugMessageControlFun = {
                 let addr = egl.get_proc_address("eglDebugMessageControlKHR").unwrap();
@@ -1046,7 +1047,7 @@ impl crate::Instance for Instance {
             });
         }
 
-        if self.flags.contains(wgt::InstanceFlags::VALIDATION) && gl.supports_debug() {
+        if RequestedValidation::from_flags(self.flags).is_some() && gl.supports_debug() {
             log::debug!("Enabling GLES debug output");
             unsafe { gl.enable(glow::DEBUG_OUTPUT) };
             unsafe { gl.debug_message_callback(super::gl_debug_message_callback) };
