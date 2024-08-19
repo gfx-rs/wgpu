@@ -3,6 +3,7 @@
 pub mod framework;
 pub mod utils;
 
+pub mod big_compute_buffers;
 pub mod boids;
 pub mod bunnymark;
 pub mod conservative_raster;
