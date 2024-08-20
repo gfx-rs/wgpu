@@ -9,6 +9,12 @@ struct ExampleDesc {
 
 const EXAMPLES: &[ExampleDesc] = &[
     ExampleDesc {
+        name: "big_compute_buffers",
+        function: wgpu_examples::big_compute_buffers::main,
+        webgl: false,  // Native only example
+        webgpu: false, // Native only example
+    },
+    ExampleDesc {
         name: "boids",
         function: wgpu_examples::boids::main,
         webgl: false, // No compute
