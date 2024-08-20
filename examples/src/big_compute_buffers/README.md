@@ -2,7 +2,7 @@
 
 This example assumes you're familiar with the other GP-GPU compute examples in this repository, if you're not you should go look at those first.
 
-Showcases how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contigious buffer on the GPU.
+Showcases how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contiguous buffer on the GPU.
 
 - Creates a large buffer, by default 1GB, full of `0.0`s.
 - Increments each element in said large buffer by `1.0`
@@ -15,7 +15,7 @@ const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
 const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
 ```
 
-It is reccomended you enable the logger to see the code explain what it's doing.
+It is recommended you enable the logger to see the code explain what it's doing.
 ```
  RUST_LOG=wgpu_examples::big_compute_buffers cargo run -r --bin wgpu-examples big_compute_buffers
 ```
