@@ -332,15 +332,18 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// # Safety
     ///
-    /// - visual must be a valid IDCompositionVisual to create a surface upon.
+    /// - visual must be a valid `IDCompositionVisual` to create a surface upon.  Its refcount will be incremented internally and kept live as long as the resulting [`Surface`] is live.
     #[cfg(dx12)]
     CompositionVisual(*mut std::ffi::c_void),
 
-    /// Surface from DX12 `SurfaceHandle`.
+    /// Surface from DX12 `DirectComposition` handle.
+    ///
+    /// <https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgifactorymedia-createswapchainforcompositionsurfacehandle>
     ///
     /// # Safety
     ///
-    /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
+    /// - surface_handle must be a valid `DirectComposition` handle to create a surface upon.   Its lifetime **will not** be internally managed: this handle **should not** be freed before
+    ///   the resulting [`Surface`] is destroyed.
     #[cfg(dx12)]
     SurfaceHandle(*mut std::ffi::c_void),
 
@@ -348,7 +351,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// # Safety
     ///
-    /// - visual must be a valid SwapChainPanel to create a surface upon.
+    /// - visual must be a valid SwapChainPanel to create a surface upon.  Its refcount will be incremented internally and kept live as long as the resulting [`Surface`] is live.
     #[cfg(dx12)]
     SwapChainPanel(*mut std::ffi::c_void),
 }

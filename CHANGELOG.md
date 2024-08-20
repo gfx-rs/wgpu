@@ -88,6 +88,10 @@ By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://
 
 - Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006)
 
+#### DX12
+
+- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956)
+
 ## 22.0.0 (2024-07-17)
 
 ### Overview
@@ -749,7 +753,7 @@ The easiest way to make this code safe is to use shared ownership:
 ```rust
 let window: Arc<winit::Window>;
 // ...
-let surface = instance.create_surface(my_window.clone())?;
+let surface = instance.create_surface(window.clone())?;
 ```
 
 All platform specific surface creation using points have moved into `SurfaceTargetUnsafe` as well.

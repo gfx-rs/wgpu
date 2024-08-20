@@ -1,10 +1,7 @@
 use std::{borrow::Cow, slice};
 
 use parking_lot::{lock_api::RawMutex, Mutex};
-use winapi::{
-    um::{errhandlingapi, winnt},
-    vc::excpt,
-};
+use windows::Win32::{Foundation, System::Diagnostics::Debug};
 
 // This is a mutex as opposed to an atomic as we need to completely
 // lock everyone out until we have registered or unregistered the
@@ -17,9 +14,7 @@ static EXCEPTION_HANDLER_COUNT: Mutex<usize> = Mutex::const_new(parking_lot::Raw
 pub fn register_exception_handler() {
     let mut count_guard = EXCEPTION_HANDLER_COUNT.lock();
     if *count_guard == 0 {
-        unsafe {
-            errhandlingapi::AddVectoredExceptionHandler(0, Some(output_debug_string_handler))
-        };
+        unsafe { Debug::AddVectoredExceptionHandler(0, Some(output_debug_string_handler)) };
     }
     *count_guard += 1;
 }
@@ -27,9 +22,7 @@ pub fn register_exception_handler() {
 pub fn unregister_exception_handler() {
     let mut count_guard = EXCEPTION_HANDLER_COUNT.lock();
     if *count_guard == 1 {
-        unsafe {
-            errhandlingapi::RemoveVectoredExceptionHandler(output_debug_string_handler as *mut _)
-        };
+        unsafe { Debug::RemoveVectoredExceptionHandler(output_debug_string_handler as *mut _) };
     }
     *count_guard -= 1;
 }
@@ -43,34 +36,34 @@ const MESSAGE_PREFIXES: &[(&str, log::Level)] = &[
 ];
 
 unsafe extern "system" fn output_debug_string_handler(
-    exception_info: *mut winnt::EXCEPTION_POINTERS,
+    exception_info: *mut Debug::EXCEPTION_POINTERS,
 ) -> i32 {
     // See https://stackoverflow.com/a/41480827
     let record = unsafe { &*(*exception_info).ExceptionRecord };
     if record.NumberParameters != 2 {
-        return excpt::EXCEPTION_CONTINUE_SEARCH;
+        return Debug::EXCEPTION_CONTINUE_SEARCH;
     }
     let message = match record.ExceptionCode {
-        winnt::DBG_PRINTEXCEPTION_C => String::from_utf8_lossy(unsafe {
+        Foundation::DBG_PRINTEXCEPTION_C => String::from_utf8_lossy(unsafe {
             slice::from_raw_parts(
                 record.ExceptionInformation[1] as *const u8,
                 record.ExceptionInformation[0],
             )
         }),
-        winnt::DBG_PRINTEXCEPTION_WIDE_C => Cow::Owned(String::from_utf16_lossy(unsafe {
+        Foundation::DBG_PRINTEXCEPTION_WIDE_C => Cow::Owned(String::from_utf16_lossy(unsafe {
             slice::from_raw_parts(
                 record.ExceptionInformation[1] as *const u16,
                 record.ExceptionInformation[0],
             )
         })),
-        _ => return excpt::EXCEPTION_CONTINUE_SEARCH,
+        _ => return Debug::EXCEPTION_CONTINUE_SEARCH,
     };
 
     let message = match message.strip_prefix("D3D12 ") {
         Some(msg) => msg
             .trim_end_matches("\n\0")
             .trim_end_matches("[ STATE_CREATION WARNING #0: UNKNOWN]"),
-        None => return excpt::EXCEPTION_CONTINUE_SEARCH,
+        None => return Debug::EXCEPTION_CONTINUE_SEARCH,
     };
 
     let (message, level) = match MESSAGE_PREFIXES
@@ -84,12 +77,12 @@ unsafe extern "system" fn output_debug_string_handler(
     if level == log::Level::Warn && message.contains("#82") {
         // This is are useless spammy warnings (#820, #821):
         // "The application did not pass any clear value to resource creation"
-        return excpt::EXCEPTION_CONTINUE_SEARCH;
+        return Debug::EXCEPTION_CONTINUE_SEARCH;
     }
 
     if level == log::Level::Warn && message.contains("DRAW_EMPTY_SCISSOR_RECTANGLE") {
         // This is normal, WebGPU allows passing empty scissor rectangles.
-        return excpt::EXCEPTION_CONTINUE_SEARCH;
+        return Debug::EXCEPTION_CONTINUE_SEARCH;
     }
 
     let _ = std::panic::catch_unwind(|| {
@@ -101,5 +94,5 @@ unsafe extern "system" fn output_debug_string_handler(
         crate::VALIDATION_CANARY.add(message.to_string());
     }
 
-    excpt::EXCEPTION_CONTINUE_EXECUTION
+    Debug::EXCEPTION_CONTINUE_EXECUTION
 }

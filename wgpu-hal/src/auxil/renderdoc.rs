@@ -106,7 +106,7 @@ impl Default for RenderDoc {
         unsafe { Self::new() }
     }
 }
-/// A implementation specific handle
+/// An implementation specific handle
 pub type Handle = *mut os::raw::c_void;
 
 impl RenderDoc {
