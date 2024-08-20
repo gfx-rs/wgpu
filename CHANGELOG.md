@@ -88,6 +88,10 @@ By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://
 
 - Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006)
 
+#### DX12
+
+- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956)
+
 ## 22.0.0 (2024-07-17)
 
 ### Overview
@@ -226,6 +230,7 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
     - `MemoryHints::MemoryUsage` favors memory usage over performance. This hint is typically useful for smaller applications or UI libraries.
     - `MemoryHints::Manual` allows the user to specify parameters for the underlying GPU memory allocator. These parameters are subject to change.
     - These hints may be ignored by some backends. Currently only the Vulkan and D3D12 backends take them into account.
+- Add `HTMLImageElement` and `ImageData` as external source for copying images. By @Valaphee in [#5668](https://github.com/gfx-rs/wgpu/pull/5668)
 
 #### Naga
 
@@ -749,7 +754,7 @@ The easiest way to make this code safe is to use shared ownership:
 ```rust
 let window: Arc<winit::Window>;
 // ...
-let surface = instance.create_surface(my_window.clone())?;
+let surface = instance.create_surface(window.clone())?;
 ```
 
 All platform specific surface creation using points have moved into `SurfaceTargetUnsafe` as well.

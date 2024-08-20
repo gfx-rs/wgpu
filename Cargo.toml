@@ -6,7 +6,6 @@ members = [
 
     # default members
     "benches",
-    "d3d12",
     "examples",
     "naga-cli",
     "naga",
@@ -24,7 +23,6 @@ members = [
 exclude = []
 default-members = [
     "benches",
-    "d3d12",
     "examples",
     "naga-cli",
     "naga",
@@ -76,7 +74,7 @@ arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.6"
-bytemuck = { version = "1.16", features = ["derive"] }
+bytemuck = { version = "1.17", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -96,8 +94,7 @@ indexmap = "2"
 itertools = { version = "0.10.5" }
 ktx2 = "0.3"
 libc = "0.2"
-# libloading 0.8 switches from `winapi` to `windows-sys`; permit either
-libloading = ">=0.7, <0.9"
+libloading = "0.8"
 libtest-mimic = "0.6"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
@@ -121,7 +118,7 @@ renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.124"
+serde_json = "1.0.125"
 smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
@@ -148,14 +145,10 @@ gpu-descriptor = "0.3"
 
 # DX dependencies
 bit-set = "0.8"
-gpu-allocator = { version = "0.27", default-features = false, features = [
-    "d3d12",
-    "public-winapi",
-] }
-d3d12 = { version = "22.0.0", path = "./d3d12/" }
+gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
-winapi = "0.3"
 hassle-rs = "0.11.0"
+windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
 khronos-egl = "6"
@@ -169,11 +162,11 @@ windows = { version = "0.58", default-features = false }
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"
-js-sys = "0.3.69"
+js-sys = "0.3.70"
 wasm-bindgen = "0.2.87"
-wasm-bindgen-futures = "0.4.42"
+wasm-bindgen-futures = "0.4.43"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.69"
+web-sys = "0.3.70"
 web-time = "0.2.4"
 
 # deno dependencies
@@ -183,7 +176,7 @@ deno_url = "0.143.0"
 deno_web = "0.174.0"
 deno_webidl = "0.143.0"
 deno_webgpu = { version = "0.118.0", path = "./deno_webgpu" }
-tokio = "1.39.2"
+tokio = "1.39.3"
 termcolor = "1.4.1"
 
 # android dependencies

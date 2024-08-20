@@ -471,6 +471,21 @@ impl super::Queue {
                                 b,
                             );
                         },
+                        wgt::ExternalImageSource::HTMLImageElement(ref i) => unsafe {
+                            gl.tex_sub_image_3d_with_html_image_element(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                z_offset as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                i,
+                            );
+                        },
                         wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
                             gl.tex_sub_image_3d_with_html_video_element(
                                 dst_target,
@@ -484,6 +499,21 @@ impl super::Queue {
                                 format_desc.external,
                                 format_desc.data_type,
                                 v,
+                            );
+                        },
+                        wgt::ExternalImageSource::ImageData(ref i) => unsafe {
+                            gl.tex_sub_image_3d_with_image_data(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                z_offset as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                i,
                             );
                         },
                         wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
@@ -520,6 +550,19 @@ impl super::Queue {
                                 b,
                             );
                         },
+                        wgt::ExternalImageSource::HTMLImageElement(ref i) => unsafe {
+                            gl.tex_sub_image_2d_with_html_image_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                i,
+                            )
+                        },
                         wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
                             gl.tex_sub_image_2d_with_html_video_and_width_and_height(
                                 dst_target,
@@ -532,6 +575,19 @@ impl super::Queue {
                                 format_desc.data_type,
                                 v,
                             )
+                        },
+                        wgt::ExternalImageSource::ImageData(ref i) => unsafe {
+                            gl.tex_sub_image_2d_with_image_data_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                i,
+                            );
                         },
                         wgt::ExternalImageSource::HTMLCanvasElement(ref c) => unsafe {
                             gl.tex_sub_image_2d_with_html_canvas_and_width_and_height(

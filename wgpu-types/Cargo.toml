@@ -42,6 +42,7 @@ serde = { workspace = true, features = ["derive"], optional = true }
 js-sys.workspace = true
 web-sys = { workspace = true, features = [
     "ImageBitmap",
+    "ImageData",
     "HtmlVideoElement",
     "HtmlCanvasElement",
     "OffscreenCanvas",

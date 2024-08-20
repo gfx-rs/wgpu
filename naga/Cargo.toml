@@ -77,11 +77,11 @@ indexmap.workspace = true
 log = "0.4"
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.206", features = ["derive"], optional = true }
+serde = { version = "1.0.208", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
-unicode-xid = { version = "0.2.3", optional = true }
+unicode-xid = { version = "0.2.5", optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

@@ -71,21 +71,24 @@ gles = [
 ## Has no effect if not targeting Windows.
 dx12 = [
     # DX12 is only available on Windows, therefore request HLSL output also only if we target Windows.
-    "naga/hlsl-out-if-target-windows",
-    "dep:d3d12",
     "dep:bit-set",
     "dep:libloading",
     "dep:range-alloc",
-    "winapi/std",
-    "winapi/winbase",
-    "winapi/d3d12",
-    "winapi/d3d12shader",
-    "winapi/d3d12sdklayers",
-    "winapi/dxgi1_6",
-    "winapi/errhandlingapi",
+    "dep:windows-core",
+    "gpu-allocator/d3d12",
+    "naga/hlsl-out-if-target-windows",
+    "windows/Win32_Graphics_Direct3D_Fxc",
+    "windows/Win32_Graphics_Direct3D",
+    "windows/Win32_Graphics_Direct3D12",
+    "windows/Win32_Graphics_DirectComposition",
+    "windows/Win32_Graphics_Dxgi_Common",
+    "windows/Win32_Security",
+    "windows/Win32_System_Diagnostics_Debug",
+    "windows/Win32_System_Kernel",
+    "windows/Win32_System_Performance",
+    "windows/Win32_System_Threading",
+    "windows/Win32_UI_WindowsAndMessaging",
 ]
-# TODO: This is a separate feature until Mozilla okays windows-rs, see https://github.com/gfx-rs/wgpu/issues/3207 for the tracking issue.
-windows_rs = ["dep:gpu-allocator"]
 dxc_shader_compiler = ["dep:hassle-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
@@ -154,19 +157,11 @@ bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
 gpu-allocator = { workspace = true, optional = true }
 hassle-rs = { workspace = true, optional = true }
+# For core macros. This crate is also reexported as windows::core.
+windows-core = { workspace = true, optional = true }
 
 # backend: Gles
 glutin_wgl_sys = { workspace = true, optional = true }
-
-winapi = { version = "0.3", features = [
-    "profileapi",
-    "windef",
-    "winuser",
-    "dcomp",
-] }
-d3d12 = { path = "../d3d12/", version = "22.0.0", optional = true, features = [
-    "libloading",
-] }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
