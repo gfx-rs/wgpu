@@ -1,7 +1,7 @@
 use crate::{
-    AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
-    CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
+    context::downcast_ref, AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor,
+    BindingResource, BufferBinding, BufferDescriptor, CommandEncoderDescriptor, CompilationInfo,
+    CompilationMessage, CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, ErrorSource, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineCacheDescriptor, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
     RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 use smallvec::SmallVec;
 use std::{
     any::Any,
-    borrow::Cow::{Borrowed, Owned},
+    borrow::Cow::Borrowed,
     error::Error,
     fmt,
     future::{ready, Ready},
@@ -24,10 +24,7 @@ use std::{
     sync::Arc,
 };
 use wgc::error::ContextErrorSource;
-use wgc::{
-    command::bundle_ffi::*, device::DeviceLostClosure, id::CommandEncoderId, id::TextureViewId,
-    pipeline::CreateShaderModuleError,
-};
+use wgc::{command::bundle_ffi::*, device::DeviceLostClosure, pipeline::CreateShaderModuleError};
 use wgt::WasmNotSendSync;
 
 pub struct ContextWgpuCore(wgc::global::Global);
@@ -81,21 +78,24 @@ impl ContextWgpuCore {
         R,
     >(
         &self,
-        adapter: wgc::id::AdapterId,
+        adapter: &wgc::id::AdapterId,
         hal_adapter_callback: F,
     ) -> R {
         unsafe {
             self.0
-                .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
+                .adapter_as_hal::<A, F, R>(*adapter, hal_adapter_callback)
         }
     }
 
     pub unsafe fn buffer_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
         &self,
-        id: wgc::id::BufferId,
+        buffer: &Buffer,
         hal_buffer_callback: F,
     ) -> R {
-        unsafe { self.0.buffer_as_hal::<A, F, R>(id, hal_buffer_callback) }
+        unsafe {
+            self.0
+                .buffer_as_hal::<A, F, R>(buffer.id, hal_buffer_callback)
+        }
     }
 
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
@@ -110,7 +110,7 @@ impl ContextWgpuCore {
         }
         let (device_id, queue_id, error) = unsafe {
             self.0.create_device_from_hal(
-                *adapter_data,
+                *adapter,
                 hal_device.into(),
                 &desc.map_label(|l| l.map(Borrowed)),
                 None,
@@ -164,7 +164,7 @@ impl ContextWgpuCore {
         hal_buffer: A::Buffer,
         device: &Device,
         desc: &BufferDescriptor<'_>,
-    ) -> (wgc::id::BufferId, Buffer) {
+    ) -> Buffer {
         let (id, error) = unsafe {
             self.0.create_buffer_from_hal::<A>(
                 hal_buffer,
@@ -181,12 +181,10 @@ impl ContextWgpuCore {
                 "Device::create_buffer_from_hal",
             );
         }
-        (
+        Buffer {
             id,
-            Buffer {
-                error_sink: Arc::clone(&device.error_sink),
-            },
-        )
+            error_sink: Arc::clone(&device.error_sink),
+        }
     }
 
     pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
@@ -236,12 +234,12 @@ impl ContextWgpuCore {
         R,
     >(
         &self,
-        texture_view_id: TextureViewId,
+        texture_view_data: &wgc::id::TextureViewId,
         hal_texture_view_callback: F,
     ) -> R {
         unsafe {
             self.0
-                .texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+                .texture_view_as_hal::<A, F, R>(*texture_view_data, hal_texture_view_callback)
         }
     }
 
@@ -252,12 +250,12 @@ impl ContextWgpuCore {
         R,
     >(
         &self,
-        command_encoder_id: CommandEncoderId,
+        command_encoder: &CommandEncoder,
         hal_command_encoder_callback: F,
     ) -> R {
         unsafe {
             self.0.command_encoder_as_hal_mut::<A, F, R>(
-                command_encoder_id,
+                command_encoder.id,
                 hal_command_encoder_callback,
             )
         }
@@ -371,14 +369,14 @@ impl ContextWgpuCore {
 
 fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> wgc::command::ImageCopyBuffer {
     wgc::command::ImageCopyBuffer {
-        buffer: view.buffer.id.into(),
+        buffer: downcast_buffer(view.buffer).id,
         layout: view.layout,
     }
 }
 
 fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> wgc::command::ImageCopyTexture {
     wgc::command::ImageCopyTexture {
-        texture: view.texture.id.into(),
+        texture: downcast_texture(view.texture).id,
         mip_level: view.mip_level,
         origin: view.origin,
         aspect: view.aspect,
@@ -393,7 +391,7 @@ fn map_texture_tagged_copy_view(
     view: crate::ImageCopyTextureTagged<'_>,
 ) -> wgc::command::ImageCopyTextureTagged {
     wgc::command::ImageCopyTextureTagged {
-        texture: view.texture.id.into(),
+        texture: downcast_texture(view.texture).id,
         mip_level: view.mip_level,
         origin: view.origin,
         aspect: view.aspect,
@@ -620,11 +618,15 @@ impl crate::Context for ContextWgpuCore {
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
                 force_fallback_adapter: options.force_fallback_adapter,
-                compatible_surface: options.compatible_surface.map(|surface| surface.id.into()),
+                compatible_surface: options.compatible_surface.map(|surface| {
+                    let surface: &<ContextWgpuCore as crate::Context>::SurfaceData =
+                        downcast_ref(surface.surface_data.as_ref());
+                    surface.id
+                }),
             },
             wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| None),
         );
-        ready(id.ok().map(|id| id))
+        ready(id.ok())
     }
 
     fn adapter_request_device(
@@ -656,7 +658,7 @@ impl crate::Context for ContextWgpuCore {
             id: queue_id,
             error_sink,
         };
-        ready(Ok((device_id, device, queue_id, queue)))
+        ready(Ok((device, queue)))
     }
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool {
@@ -704,11 +706,7 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
-    fn adapter_get_info(
-        &self,
-        adapter: &wgc::id::AdapterId,
-        adapter_data: &Self::AdapterData,
-    ) -> AdapterInfo {
+    fn adapter_get_info(&self, adapter_data: &Self::AdapterData) -> AdapterInfo {
         match self.0.adapter_get_info(*adapter_data) {
             Ok(info) => info,
             Err(err) => self.handle_error_fatal(err, "Adapter::get_info"),
@@ -967,8 +965,8 @@ impl crate::Context for ContextWgpuCore {
     ) -> Self::BindGroupData {
         use wgc::binding_model as bm;
 
-        let mut arrayed_texture_views = Vec::<ObjectId>::new();
-        let mut arrayed_samplers = Vec::<ObjectId>::new();
+        let mut arrayed_texture_views = Vec::new();
+        let mut arrayed_samplers = Vec::new();
         if device_data
             .features
             .contains(Features::TEXTURE_BINDING_ARRAY)
@@ -976,10 +974,11 @@ impl crate::Context for ContextWgpuCore {
             // gather all the array view IDs first
             for entry in desc.entries.iter() {
                 if let BindingResource::TextureViewArray(array) = entry.resource {
-                    arrayed_texture_views.extend(array.iter().map(|view| &view.id));
+                    arrayed_texture_views
+                        .extend(array.iter().map(|view| *downcast_texture_view(view)));
                 }
                 if let BindingResource::SamplerArray(array) = entry.resource {
-                    arrayed_samplers.extend(array.iter().map(|sampler| &sampler.id));
+                    arrayed_samplers.extend(array.iter().map(|sampler| *downcast_sampler(sampler)));
                 }
             }
         }
@@ -995,7 +994,7 @@ impl crate::Context for ContextWgpuCore {
             for entry in desc.entries.iter() {
                 if let BindingResource::BufferArray(array) = entry.resource {
                     arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
-                        buffer_id: binding.buffer.id.into(),
+                        buffer_id: downcast_buffer(binding.buffer).id,
                         offset: binding.offset,
                         size: binding.size,
                     }));
@@ -1015,7 +1014,7 @@ impl crate::Context for ContextWgpuCore {
                         offset,
                         size,
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
-                        buffer_id: buffer.id.into(),
+                        buffer_id: downcast_buffer(buffer).id,
                         offset,
                         size,
                     }),
@@ -1026,34 +1025,28 @@ impl crate::Context for ContextWgpuCore {
                         bm::BindingResource::BufferArray(Borrowed(slice))
                     }
                     BindingResource::Sampler(sampler) => {
-                        bm::BindingResource::Sampler(sampler.id.into())
+                        bm::BindingResource::Sampler(*downcast_sampler(sampler))
                     }
                     BindingResource::SamplerArray(array) => {
-                        let samplers = remaining_arrayed_samplers[..array.len()]
-                            .iter()
-                            .map(|id| <Self::SamplerId>::from(*id))
-                            .collect::<Vec<_>>();
+                        let slice = &remaining_arrayed_samplers[..array.len()];
                         remaining_arrayed_samplers = &remaining_arrayed_samplers[array.len()..];
-                        bm::BindingResource::SamplerArray(Owned(samplers))
+                        bm::BindingResource::SamplerArray(Borrowed(slice))
                     }
                     BindingResource::TextureView(texture_view) => {
-                        bm::BindingResource::TextureView(texture_view.id.into())
+                        bm::BindingResource::TextureView(*downcast_texture_view(texture_view))
                     }
                     BindingResource::TextureViewArray(array) => {
-                        let views = remaining_arrayed_texture_views[..array.len()]
-                            .iter()
-                            .map(|id| <Self::TextureViewId>::from(*id))
-                            .collect::<Vec<_>>();
+                        let slice = &remaining_arrayed_texture_views[..array.len()];
                         remaining_arrayed_texture_views =
                             &remaining_arrayed_texture_views[array.len()..];
-                        bm::BindingResource::TextureViewArray(Owned(views))
+                        bm::BindingResource::TextureViewArray(Borrowed(slice))
                     }
                 },
             })
             .collect::<Vec<_>>();
         let descriptor = bm::BindGroupDescriptor {
             label: desc.label.as_ref().map(|label| Borrowed(&label[..])),
-            layout: desc.layout.id.into(),
+            layout: *downcast_bind_group_layout(desc.layout),
             entries: Borrowed(&entries),
         };
 
@@ -1087,7 +1080,7 @@ impl crate::Context for ContextWgpuCore {
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| bgl.id.into())
+            .map(|bgl| *downcast_bind_group_layout(bgl))
             .collect::<ArrayVec<_, { wgc::MAX_BIND_GROUPS }>>();
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
@@ -1128,10 +1121,10 @@ impl crate::Context for ContextWgpuCore {
 
         let descriptor = pipe::RenderPipelineDescriptor {
             label: desc.label.map(Borrowed),
-            layout: desc.layout.map(|l| l.id.into()),
+            layout: desc.layout.map(downcast_pipeline_layout).copied(),
             vertex: pipe::VertexState {
                 stage: pipe::ProgrammableStageDescriptor {
-                    module: desc.vertex.module.data.id,
+                    module: downcast_shader_module(desc.vertex.module).id,
                     entry_point: desc.vertex.entry_point.map(Borrowed),
                     constants: Borrowed(desc.vertex.compilation_options.constants),
                     zero_initialize_workgroup_memory: desc
@@ -1146,7 +1139,7 @@ impl crate::Context for ContextWgpuCore {
             multisample: desc.multisample,
             fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
                 stage: pipe::ProgrammableStageDescriptor {
-                    module: frag.module.id.into(),
+                    module: downcast_shader_module(frag.module).id,
                     entry_point: frag.entry_point.map(Borrowed),
                     constants: Borrowed(frag.compilation_options.constants),
                     zero_initialize_workgroup_memory: frag
@@ -1156,7 +1149,7 @@ impl crate::Context for ContextWgpuCore {
                 targets: Borrowed(frag.targets),
             }),
             multiview: desc.multiview,
-            cache: desc.cache.map(|c| c.id.into()),
+            cache: desc.cache.map(downcast_pipeline_cache).copied(),
         };
 
         let (id, error) =
@@ -1185,16 +1178,16 @@ impl crate::Context for ContextWgpuCore {
 
         let descriptor = pipe::ComputePipelineDescriptor {
             label: desc.label.map(Borrowed),
-            layout: desc.layout.map(|l| l.id.into()),
+            layout: desc.layout.map(downcast_pipeline_layout).copied(),
             stage: pipe::ProgrammableStageDescriptor {
-                module: desc.module.id.into(),
+                module: downcast_shader_module(desc.module).id,
                 entry_point: desc.entry_point.map(Borrowed),
                 constants: Borrowed(desc.compilation_options.constants),
                 zero_initialize_workgroup_memory: desc
                     .compilation_options
                     .zero_initialize_workgroup_memory,
             },
-            cache: desc.cache.map(|c| c.id.into()),
+            cache: desc.cache.map(downcast_pipeline_cache).copied(),
         };
 
         let (id, error) =
@@ -1285,13 +1278,11 @@ impl crate::Context for ContextWgpuCore {
                 "Device::create_texture",
             );
         }
-        (
+
+        Texture {
             id,
-            Texture {
-                id,
-                error_sink: Arc::clone(&device_data.error_sink),
-            },
-        )
+            error_sink: Arc::clone(&device_data.error_sink),
+        }
     }
     fn device_create_sampler(
         &self,
@@ -1361,13 +1352,12 @@ impl crate::Context for ContextWgpuCore {
                 "Device::create_command_encoder",
             );
         }
-        (
+
+        CommandEncoder {
             id,
-            CommandEncoder {
-                error_sink: Arc::clone(&device_data.error_sink),
-                open: true,
-            },
-        )
+            error_sink: Arc::clone(&device_data.error_sink),
+            open: true,
+        }
     }
     fn device_create_render_bundle_encoder(
         &self,
@@ -1401,7 +1391,7 @@ impl crate::Context for ContextWgpuCore {
         }
     }
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
-    fn queue_drop(&self, device_data: &Self::QueueData) {
+    fn queue_drop(&self, queue_data: &Self::QueueData) {
         self.0.queue_drop(queue_data.id);
     }
     fn device_set_device_lost_callback(
@@ -1607,7 +1597,7 @@ impl crate::Context for ContextWgpuCore {
     }
     fn command_encoder_drop(&self, command_encoder_data: &Self::CommandEncoderData) {
         if command_encoder_data.open {
-            self.0.command_encoder_drop(*command_encoder_data.id)
+            self.0.command_encoder_drop(command_encoder_data.id)
         }
     }
 
@@ -1636,9 +1626,9 @@ impl crate::Context for ContextWgpuCore {
         pipeline_data: &Self::ComputePipelineData,
         index: u32,
     ) -> Self::BindGroupLayoutData {
-        let (id, error) = self
-            .0
-            .compute_pipeline_get_bind_group_layout(*pipeline, index, None);
+        let (id, error) =
+            self.0
+                .compute_pipeline_get_bind_group_layout(*pipeline_data, index, None);
         if let Some(err) = error {
             panic!("Error reflecting bind group {index}: {err}");
         }
@@ -1652,7 +1642,7 @@ impl crate::Context for ContextWgpuCore {
     ) -> Self::BindGroupLayoutData {
         let (id, error) = self
             .0
-            .render_pipeline_get_bind_group_layout(*pipeline, index, None);
+            .render_pipeline_get_bind_group_layout(*pipeline_data, index, None);
         if let Some(err) = error {
             panic!("Error reflecting bind group {index}: {err}");
         }
@@ -1662,17 +1652,17 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        _source_data: &Self::BufferData,
+        source_data: &Self::BufferData,
         source_offset: wgt::BufferAddress,
-        _destination_data: &Self::BufferData,
+        destination_data: &Self::BufferData,
         destination_offset: wgt::BufferAddress,
         copy_size: wgt::BufferAddress,
     ) {
         if let Err(cause) = self.0.command_encoder_copy_buffer_to_buffer(
             encoder_data.id,
-            *source,
+            source_data.id,
             source_offset,
-            *destination,
+            destination_data.id,
             destination_offset,
             copy_size,
         ) {
@@ -1756,7 +1746,7 @@ impl crate::Context for ContextWgpuCore {
             desc.timestamp_writes
                 .as_ref()
                 .map(|tw| wgc::command::PassTimestampWrites {
-                    query_set: tw.query_set.id.into(),
+                    query_set: *downcast_query_set(tw.query_set),
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
@@ -1795,8 +1785,8 @@ impl crate::Context for ContextWgpuCore {
             .map(|ca| {
                 ca.as_ref()
                     .map(|at| wgc::command::RenderPassColorAttachment {
-                        view: at.view.id.into(),
-                        resolve_target: at.resolve_target.map(|rt| rt.id.into()),
+                        view: *downcast_texture_view(at.view),
+                        resolve_target: at.resolve_target.map(downcast_texture_view).copied(),
                         channel: map_pass_channel(Some(&at.ops)),
                     })
             })
@@ -1804,7 +1794,7 @@ impl crate::Context for ContextWgpuCore {
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::RenderPassDepthStencilAttachment {
-                view: dsa.view.id.into(),
+                view: *downcast_texture_view(dsa.view),
                 depth: map_pass_channel(dsa.depth_ops.as_ref()),
                 stencil: map_pass_channel(dsa.stencil_ops.as_ref()),
             }
@@ -1814,7 +1804,7 @@ impl crate::Context for ContextWgpuCore {
             desc.timestamp_writes
                 .as_ref()
                 .map(|tw| wgc::command::PassTimestampWrites {
-                    query_set: tw.query_set.id.into(),
+                    query_set: *downcast_query_set(tw.query_set),
                     beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
@@ -1826,9 +1816,7 @@ impl crate::Context for ContextWgpuCore {
                 timestamp_writes: timestamp_writes.as_ref(),
                 color_attachments: std::borrow::Cow::Borrowed(&colors),
                 depth_stencil_attachment: depth_stencil.as_ref(),
-                occlusion_query_set: desc
-                    .occlusion_query_set
-                    .map(|query_set| query_set.id.into()),
+                occlusion_query_set: desc.occlusion_query_set.map(downcast_query_set).copied(),
             },
         );
 
@@ -1863,12 +1851,12 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_clear_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        texture: &crate::Texture,
+        texture_data: &Self::TextureData,
         subresource_range: &wgt::ImageSubresourceRange,
     ) {
         if let Err(cause) = self.0.command_encoder_clear_texture(
             encoder_data.id,
-            texture.id.into(),
+            texture_data.id,
             subresource_range,
         ) {
             self.handle_error_nolabel(
@@ -1882,13 +1870,13 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_clear_buffer(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        buffer: &crate::Buffer,
+        buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) {
         if let Err(cause) =
             self.0
-                .command_encoder_clear_buffer(encoder_data.id, buffer.id.into(), offset, size)
+                .command_encoder_clear_buffer(encoder_data.id, buffer_data.id, offset, size)
         {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
@@ -1945,12 +1933,12 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_write_timestamp(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        _query_set_data: &Self::QuerySetData,
+        query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
         if let Err(cause) =
             self.0
-                .command_encoder_write_timestamp(encoder_data.id, *query_set, query_index)
+                .command_encoder_write_timestamp(encoder_data.id, *query_set_data, query_index)
         {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
@@ -2307,12 +2295,12 @@ impl crate::Context for ContextWgpuCore {
     fn compute_pass_write_timestamp(
         &self,
         pass_data: &mut Self::ComputePassData,
-        _query_set_data: &Self::QuerySetData,
+        query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
         if let Err(cause) =
             self.0
-                .compute_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index)
+                .compute_pass_write_timestamp(&mut pass_data.pass, *query_set_data, query_index)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2326,12 +2314,12 @@ impl crate::Context for ContextWgpuCore {
     fn compute_pass_begin_pipeline_statistics_query(
         &self,
         pass_data: &mut Self::ComputePassData,
-        _query_set_data: &Self::QuerySetData,
+        query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
         if let Err(cause) = self.0.compute_pass_begin_pipeline_statistics_query(
             &mut pass_data.pass,
-            *query_set,
+            *query_set_data,
             query_index,
         ) {
             self.handle_error(
@@ -2380,12 +2368,12 @@ impl crate::Context for ContextWgpuCore {
     fn compute_pass_dispatch_workgroups_indirect(
         &self,
         pass_data: &mut Self::ComputePassData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
         if let Err(cause) = self.0.compute_pass_dispatch_workgroups_indirect(
             &mut pass_data.pass,
-            *indirect_buffer,
+            indirect_buffer_data.id,
             indirect_offset,
         ) {
             self.handle_error(
@@ -2509,19 +2497,23 @@ impl crate::Context for ContextWgpuCore {
     fn render_bundle_encoder_draw_indirect(
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_render_bundle_draw_indirect(encoder_data, *indirect_buffer, indirect_offset)
+        wgpu_render_bundle_draw_indirect(encoder_data, indirect_buffer_data.id, indirect_offset)
     }
 
     fn render_bundle_encoder_draw_indexed_indirect(
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        wgpu_render_bundle_draw_indexed_indirect(encoder_data, *indirect_buffer, indirect_offset)
+        wgpu_render_bundle_draw_indexed_indirect(
+            encoder_data,
+            indirect_buffer_data.id,
+            indirect_offset,
+        )
     }
 
     fn render_bundle_encoder_multi_draw_indirect(
@@ -2575,7 +2567,7 @@ impl crate::Context for ContextWgpuCore {
     ) {
         if let Err(cause) = self
             .0
-            .render_pass_set_pipeline(&mut pass_data.pass, *pipeline)
+            .render_pass_set_pipeline(&mut pass_data.pass, *pipeline_data)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2590,12 +2582,12 @@ impl crate::Context for ContextWgpuCore {
         &self,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        _bind_group_data: &Self::BindGroupData,
+        bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
         if let Err(cause) =
             self.0
-                .render_pass_set_bind_group(&mut pass_data.pass, index, *bind_group, offsets)
+                .render_pass_set_bind_group(&mut pass_data.pass, index, *bind_group_data, offsets)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2723,13 +2715,14 @@ impl crate::Context for ContextWgpuCore {
     fn render_pass_draw_indirect(
         &self,
         pass_data: &mut Self::RenderPassData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        if let Err(cause) =
-            self.0
-                .render_pass_draw_indirect(&mut pass_data.pass, *indirect_buffer, indirect_offset)
-        {
+        if let Err(cause) = self.0.render_pass_draw_indirect(
+            &mut pass_data.pass,
+            indirect_buffer_data.id,
+            indirect_offset,
+        ) {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2742,12 +2735,12 @@ impl crate::Context for ContextWgpuCore {
     fn render_pass_draw_indexed_indirect(
         &self,
         pass_data: &mut Self::RenderPassData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
         if let Err(cause) = self.0.render_pass_draw_indexed_indirect(
             &mut pass_data.pass,
-            *indirect_buffer,
+            indirect_buffer_data.id,
             indirect_offset,
         ) {
             self.handle_error(
@@ -2762,13 +2755,13 @@ impl crate::Context for ContextWgpuCore {
     fn render_pass_multi_draw_indirect(
         &self,
         pass_data: &mut Self::RenderPassData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
         count: u32,
     ) {
         if let Err(cause) = self.0.render_pass_multi_draw_indirect(
             &mut pass_data.pass,
-            *indirect_buffer,
+            indirect_buffer_data.id,
             indirect_offset,
             count,
         ) {
@@ -2784,13 +2777,13 @@ impl crate::Context for ContextWgpuCore {
     fn render_pass_multi_draw_indexed_indirect(
         &self,
         pass_data: &mut Self::RenderPassData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
         count: u32,
     ) {
         if let Err(cause) = self.0.render_pass_multi_draw_indexed_indirect(
             &mut pass_data.pass,
-            *indirect_buffer,
+            indirect_buffer_data.id,
             indirect_offset,
             count,
         ) {
@@ -2806,17 +2799,17 @@ impl crate::Context for ContextWgpuCore {
     fn render_pass_multi_draw_indirect_count(
         &self,
         pass_data: &mut Self::RenderPassData,
-        _indirect_buffer_data: &Self::BufferData,
+        indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
+        count_buffer_data: &Self::BufferData,
         count_buffer_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
         if let Err(cause) = self.0.render_pass_multi_draw_indirect_count(
             &mut pass_data.pass,
-            *indirect_buffer,
+            indirect_buffer_data.id,
             indirect_offset,
-            *count_buffer,
+            count_buffer_data.id,
             count_buffer_offset,
             max_count,
         ) {
@@ -2986,12 +2979,12 @@ impl crate::Context for ContextWgpuCore {
     fn render_pass_write_timestamp(
         &self,
         pass_data: &mut Self::RenderPassData,
-        _query_set_data: &Self::QuerySetData,
+        query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
         if let Err(cause) =
             self.0
-                .render_pass_write_timestamp(&mut pass_data.pass, *query_set, query_index)
+                .render_pass_write_timestamp(&mut pass_data.pass, *query_set_data, query_index)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -3034,12 +3027,12 @@ impl crate::Context for ContextWgpuCore {
     fn render_pass_begin_pipeline_statistics_query(
         &self,
         pass_data: &mut Self::RenderPassData,
-        _query_set_data: &Self::QuerySetData,
+        query_set_data: &Self::QuerySetData,
         query_index: u32,
     ) {
         if let Err(cause) = self.0.render_pass_begin_pipeline_statistics_query(
             &mut pass_data.pass,
-            *query_set,
+            *query_set_data,
             query_index,
         ) {
             self.handle_error(
@@ -3242,4 +3235,44 @@ impl Drop for BufferMappedRange {
         // Intentionally left blank so that `BufferMappedRange` still
         // implements `Drop`, to match the web backend
     }
+}
+
+fn downcast_buffer(buffer: &crate::Buffer) -> &<ContextWgpuCore as crate::Context>::BufferData {
+    downcast_ref(buffer.data.as_ref())
+}
+fn downcast_texture(texture: &crate::Texture) -> &<ContextWgpuCore as crate::Context>::TextureData {
+    downcast_ref(texture.data.as_ref())
+}
+fn downcast_texture_view(
+    texture_view: &crate::TextureView,
+) -> &<ContextWgpuCore as crate::Context>::TextureViewData {
+    downcast_ref(texture_view.data.as_ref())
+}
+fn downcast_sampler(sampler: &crate::Sampler) -> &<ContextWgpuCore as crate::Context>::SamplerData {
+    downcast_ref(sampler.data.as_ref())
+}
+fn downcast_query_set(
+    query_set: &crate::QuerySet,
+) -> &<ContextWgpuCore as crate::Context>::QuerySetData {
+    downcast_ref(query_set.data.as_ref())
+}
+fn downcast_bind_group_layout(
+    bind_group_layout: &crate::BindGroupLayout,
+) -> &<ContextWgpuCore as crate::Context>::BindGroupLayoutData {
+    downcast_ref(bind_group_layout.data.as_ref())
+}
+fn downcast_pipeline_layout(
+    pipeline_layout: &crate::PipelineLayout,
+) -> &<ContextWgpuCore as crate::Context>::PipelineLayoutData {
+    downcast_ref(pipeline_layout.data.as_ref())
+}
+fn downcast_shader_module(
+    shader_module: &crate::ShaderModule,
+) -> &<ContextWgpuCore as crate::Context>::ShaderModuleData {
+    downcast_ref(shader_module.data.as_ref())
+}
+fn downcast_pipeline_cache(
+    pipeline_cache: &crate::PipelineCache,
+) -> &<ContextWgpuCore as crate::Context>::PipelineCacheData {
+    downcast_ref(pipeline_cache.data.as_ref())
 }

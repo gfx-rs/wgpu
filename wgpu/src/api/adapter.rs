@@ -117,7 +117,12 @@ impl Adapter {
                 // Part of the safety requirements is that the device was generated from the same adapter.
                 // Therefore, unwrap is fine here since only WgpuCoreContext based adapters have the ability to create hal devices.
                 .unwrap()
-                .create_device_from_hal(&self.id.into(), hal_device, desc, trace_path)
+                .create_device_from_hal(
+                    crate::context::downcast_ref(&self.data),
+                    hal_device,
+                    desc,
+                    trace_path,
+                )
         }
         .map(|(device, queue)| {
             (
@@ -162,7 +167,12 @@ impl Adapter {
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback) }
+            unsafe {
+                ctx.adapter_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(&self.data),
+                    hal_adapter_callback,
+                )
+            }
         } else {
             hal_adapter_callback(None)
         }

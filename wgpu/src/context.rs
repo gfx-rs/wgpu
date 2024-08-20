@@ -1,22 +1,22 @@
-use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
+use std::{any::Any, fmt::Debug, future::Future, ops::Range, pin::Pin, sync::Arc};
 
 use wgt::{
-    strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
-    DeviceLostReason, DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
+    strict_assert, AdapterInfo, BufferAddress, BufferSize, Color, DeviceLostReason,
+    DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
     ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
     TextureFormatFeatures, WasmNotSend, WasmNotSendSync,
 };
 
 use crate::{
-    AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
+    AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, ComputePassDescriptor,
     ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer,
     ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineCacheDescriptor,
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, Texture, TextureDescriptor,
-    TextureViewDescriptor, UncapturedErrorHandler,
+    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
+    UncapturedErrorHandler,
 };
 /// Meta trait for an data associated with an id tracked by a context.
 ///
@@ -318,13 +318,13 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     fn command_encoder_clear_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        texture: &Texture, // TODO: Decompose?
+        texture_data: &Self::TextureData,
         subresource_range: &ImageSubresourceRange,
     );
     fn command_encoder_clear_buffer(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        buffer: &Buffer,
+        buffer_data: &Self::BufferData,
         offset: BufferAddress,
         size: Option<BufferAddress>,
     );
@@ -1042,13 +1042,13 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn command_encoder_clear_texture(
         &self,
         encoder_data: &crate::Data,
-        texture: &Texture,
+        texture_data: &crate::Data,
         subresource_range: &ImageSubresourceRange,
     );
     fn command_encoder_clear_buffer(
         &self,
         encoder_data: &crate::Data,
-        buffer: &Buffer,
+        buffer_data: &crate::Data,
         offset: BufferAddress,
         size: Option<BufferAddress>,
     );
@@ -2031,22 +2031,24 @@ where
     fn command_encoder_clear_texture(
         &self,
         encoder_data: &crate::Data,
-        texture: &Texture,
+        texture_data: &crate::Data,
         subresource_range: &ImageSubresourceRange,
     ) {
         let encoder_data = downcast_ref(encoder_data);
-        Context::command_encoder_clear_texture(self, encoder_data, texture, subresource_range)
+        let texture_data = downcast_ref(texture_data);
+        Context::command_encoder_clear_texture(self, encoder_data, texture_data, subresource_range)
     }
 
     fn command_encoder_clear_buffer(
         &self,
         encoder_data: &crate::Data,
-        buffer: &Buffer,
+        buffer_data: &crate::Data,
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) {
         let encoder_data = downcast_ref(encoder_data);
-        Context::command_encoder_clear_buffer(self, encoder_data, buffer, offset, size)
+        let buffer_data = downcast_ref(buffer_data);
+        Context::command_encoder_clear_buffer(self, encoder_data, buffer_data, offset, size)
     }
 
     fn command_encoder_insert_debug_marker(&self, encoder_data: &crate::Data, label: &str) {
@@ -2847,7 +2849,7 @@ where
         render_bundles: &mut dyn Iterator<Item = &crate::Data>,
     ) {
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let mut render_bundles = render_bundles.map(|data| downcast_ref(data));
+        let mut render_bundles = render_bundles.map(downcast_ref);
         Context::render_pass_execute_bundles(self, pass_data, &mut render_bundles)
     }
 

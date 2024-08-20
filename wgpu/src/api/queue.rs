@@ -243,7 +243,7 @@ impl Queue {
     ) -> SubmissionIndex {
         let mut command_buffers = command_buffers
             .into_iter()
-            .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap()));
+            .map(|mut comb| comb.data.take().unwrap());
 
         let data =
             DynContext::queue_submit(&*self.context, self.data.as_ref(), &mut command_buffers);

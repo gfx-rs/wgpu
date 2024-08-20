@@ -30,14 +30,17 @@ impl Texture {
         &self,
         hal_texture_callback: F,
     ) -> R {
-        let texture = self.data.as_ref().downcast_ref().unwrap();
-
         if let Some(ctx) = self
             .context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.texture_as_hal::<A, F, R>(texture, hal_texture_callback) }
+            unsafe {
+                ctx.texture_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(&self.data),
+                    hal_texture_callback,
+                )
+            }
         } else {
             hal_texture_callback(None)
         }

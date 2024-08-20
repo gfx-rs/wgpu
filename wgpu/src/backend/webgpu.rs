@@ -10,12 +10,9 @@ use std::{
     collections::HashMap,
     fmt,
     future::Future,
-    marker::PhantomData,
-    num::NonZeroU64,
     ops::Range,
     pin::Pin,
     rc::Rc,
-    sync::atomic::{AtomicU64, Ordering},
     task::{self, Poll},
 };
 use wasm_bindgen::{prelude::*, JsCast};
@@ -24,15 +21,6 @@ use crate::{
     context::{downcast_ref, QueueWriteBuffer},
     CompilationInfo, SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
-
-fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
-    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    (
-        Identified(NonZeroU64::new(id).unwrap(), PhantomData),
-        Sendable(value),
-    )
-}
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
 // implement `Send` and `Sync` to match native.
@@ -48,13 +36,6 @@ pub(crate) struct Sendable<T>(T);
 unsafe impl<T> Send for Sendable<T> {}
 #[cfg(send_sync)]
 unsafe impl<T> Sync for Sendable<T> {}
-
-#[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(std::num::NonZeroU64, PhantomData<T>);
-#[cfg(send_sync)]
-unsafe impl<T> Send for Identified<T> {}
-#[cfg(send_sync)]
-unsafe impl<T> Sync for Identified<T> {}
 
 pub(crate) struct ContextWebGpu(webgpu_sys::Gpu);
 #[cfg(send_sync)]
@@ -871,14 +852,9 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
 
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
-fn future_request_adapter(
-    result: JsFutureResult,
-) -> Option<(
-    Identified<webgpu_sys::GpuAdapter>,
-    Sendable<webgpu_sys::GpuAdapter>,
-)> {
+fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<webgpu_sys::GpuAdapter>> {
     match result.and_then(wasm_bindgen::JsCast::dyn_into) {
-        Ok(adapter) => Some(create_identified(adapter)),
+        Ok(adapter) => Some(Sendable(adapter)),
         Err(_) => None,
     }
 }
@@ -887,19 +863,17 @@ fn future_request_device(
     result: JsFutureResult,
 ) -> Result<
     (
-        Identified<webgpu_sys::GpuDevice>,
         Sendable<webgpu_sys::GpuDevice>,
-        Identified<webgpu_sys::GpuQueue>,
         Sendable<webgpu_sys::GpuQueue>,
     ),
     crate::RequestDeviceError,
 > {
     result
         .map(|js_value| {
-            let (device_id, device_data) = create_identified(webgpu_sys::GpuDevice::from(js_value));
-            let (queue_id, queue_data) = create_identified(device_data.0.queue());
+            let device_data = Sendable(webgpu_sys::GpuDevice::from(js_value));
+            let queue_data = Sendable(device_data.0.queue());
 
-            (device_id, device_data, queue_id, queue_data)
+            (device_data, queue_data)
         })
         .map_err(|error_value| crate::RequestDeviceError {
             inner: crate::RequestDeviceErrorKind::WebGpu(error_value),
@@ -1002,13 +976,7 @@ impl ContextWebGpu {
         &self,
         canvas: Canvas,
         context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
-    ) -> Result<
-        (
-            <Self as crate::Context>::SurfaceId,
-            <Self as crate::Context>::SurfaceData,
-        ),
-        crate::CreateSurfaceError,
-    > {
+    ) -> Result<<Self as crate::Context>::SurfaceData, crate::CreateSurfaceError> {
         let context: js_sys::Object = match context_result {
             Ok(Some(context)) => context,
             Ok(None) => {
@@ -1043,7 +1011,7 @@ impl ContextWebGpu {
             .dyn_into()
             .expect("canvas context is not a GPUCanvasContext");
 
-        Ok(create_identified((canvas, context)))
+        Ok(Sendable((canvas, context)))
     }
 
     /// Get mapped buffer range directly as a `js_sys::ArrayBuffer`.
@@ -1135,15 +1103,7 @@ impl crate::context::Context for ContextWebGpu {
         wasm_bindgen_futures::JsFuture,
         fn(
             JsFutureResult,
-        ) -> Result<
-            (
-                Self::DeviceId,
-                Self::DeviceData,
-                Self::QueueId,
-                Self::QueueData,
-            ),
-            crate::RequestDeviceError,
-        >,
+        ) -> Result<(Self::DeviceData, Self::QueueData), crate::RequestDeviceError>,
     >;
     type PopErrorScopeFuture =
         MakeSendFuture<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> Option<crate::Error>>;
@@ -1332,7 +1292,7 @@ impl crate::context::Context for ContextWebGpu {
         adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        format.guaranteed_format_features(self.adapter_features(adapter, adapter_data))
+        format.guaranteed_format_features(self.adapter_features(adapter_data))
     }
 
     fn adapter_get_presentation_timestamp(
@@ -1419,18 +1379,12 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         surface_data: &Self::SurfaceData,
     ) -> (
-        Option<Self::TextureId>,
         Option<Self::TextureData>,
         wgt::SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
-        let (surface_id, surface_data) = create_identified(surface_data.0 .1.get_current_texture());
-        (
-            Some(surface_id),
-            Some(surface_data),
-            wgt::SurfaceStatus::Good,
-            (),
-        )
+        let surface_data = Sendable(surface_data.0 .1.get_current_texture());
+        (Some(surface_data), wgt::SurfaceStatus::Good, ())
     }
 
     fn surface_present(&self, _detail: &Self::SurfaceOutputDetail) {
@@ -1600,7 +1554,7 @@ impl crate::context::Context for ContextWebGpu {
             module: device_data.0.create_shader_module(&descriptor),
             compilation_info,
         };
-        create_identified(shader_module)
+        Sendable(shader_module)
     }
 
     unsafe fn device_create_shader_module_spirv(
@@ -1707,7 +1661,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_bind_group_layout(&mapped_desc))
+        Sendable(device_data.0.create_bind_group_layout(&mapped_desc))
     }
 
     fn device_create_bind_group(
@@ -1766,7 +1720,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_bind_group(&mapped_desc))
+        Sendable(device_data.0.create_bind_group(&mapped_desc))
     }
 
     fn device_create_pipeline_layout(
@@ -1787,7 +1741,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_pipeline_layout(&mapped_desc))
+        Sendable(device_data.0.create_pipeline_layout(&mapped_desc))
     }
 
     fn device_create_render_pipeline(
@@ -1896,7 +1850,7 @@ impl crate::context::Context for ContextWebGpu {
         let mapped_primitive = map_primitive_state(&desc.primitive);
         mapped_desc.primitive(&mapped_primitive);
 
-        create_identified(device_data.0.create_render_pipeline(&mapped_desc))
+        Sendable(device_data.0.create_render_pipeline(&mapped_desc))
     }
 
     fn device_create_compute_pipeline(
@@ -1928,7 +1882,7 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.label(label);
         }
 
-        create_identified(device_data.0.create_compute_pipeline(&mapped_desc))
+        Sendable(device_data.0.create_compute_pipeline(&mapped_desc))
     }
 
     unsafe fn device_create_pipeline_cache(
@@ -1936,7 +1890,6 @@ impl crate::context::Context for ContextWebGpu {
         _: &Self::DeviceData,
         _: &crate::PipelineCacheDescriptor<'_>,
     ) -> Self::PipelineCacheData {
-        ()
     }
     fn pipeline_cache_drop(&self, _: &Self::PipelineCacheData) {}
 
@@ -1951,7 +1904,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(WebBuffer::new(
+        Sendable(WebBuffer::new(
             device_data.0.create_buffer(&mapped_desc),
             desc,
         ))
@@ -1979,7 +1932,7 @@ impl crate::context::Context for ContextWebGpu {
             .map(|format| JsValue::from(map_texture_format(*format)))
             .collect::<js_sys::Array>();
         mapped_desc.view_formats(&mapped_view_formats);
-        create_identified(device_data.0.create_texture(&mapped_desc))
+        Sendable(device_data.0.create_texture(&mapped_desc))
     }
 
     fn device_create_sampler(
@@ -2004,7 +1957,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_sampler_with_descriptor(&mapped_desc))
+        Sendable(device_data.0.create_sampler_with_descriptor(&mapped_desc))
     }
 
     fn device_create_query_set(
@@ -2021,7 +1974,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_query_set(&mapped_desc))
+        Sendable(device_data.0.create_query_set(&mapped_desc))
     }
 
     fn device_create_command_encoder(
@@ -2033,7 +1986,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(
+        Sendable(
             device_data
                 .0
                 .create_command_encoder_with_descriptor(&mapped_desc),
@@ -2064,7 +2017,7 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.stencil_read_only(ds.stencil_read_only);
         }
         mapped_desc.sample_count(desc.sample_count);
-        create_identified(device_data.0.create_render_bundle_encoder(&mapped_desc))
+        Sendable(device_data.0.create_render_bundle_encoder(&mapped_desc))
     }
 
     #[doc(hidden)]
@@ -2227,7 +2180,7 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(label) = desc.label {
             mapped.label(label);
         }
-        create_identified(texture_data.0.create_view_with_descriptor(&mapped))
+        Sendable(texture_data.0.create_view_with_descriptor(&mapped))
     }
 
     fn surface_drop(&self, _surface_data: &Self::SurfaceData) {
@@ -2294,11 +2247,11 @@ impl crate::context::Context for ContextWebGpu {
         // Dropped automatically
     }
 
-    fn compute_pipeline_drop(&self, pipeline_data: &Self::ComputePipelineData) {
+    fn compute_pipeline_drop(&self, _pipeline_data: &Self::ComputePipelineData) {
         // Dropped automatically
     }
 
-    fn render_pipeline_drop(&self, pipeline_data: &Self::RenderPipelineData) {
+    fn render_pipeline_drop(&self, _pipeline_data: &Self::RenderPipelineData) {
         // Dropped automatically
     }
 
@@ -2307,7 +2260,7 @@ impl crate::context::Context for ContextWebGpu {
         pipeline_data: &Self::ComputePipelineData,
         index: u32,
     ) -> Self::BindGroupLayoutData {
-        create_identified(pipeline_data.0.get_bind_group_layout(index))
+        Sendable(pipeline_data.0.get_bind_group_layout(index))
     }
 
     fn render_pipeline_get_bind_group_layout(
@@ -2315,7 +2268,7 @@ impl crate::context::Context for ContextWebGpu {
         pipeline_data: &Self::RenderPipelineData,
         index: u32,
     ) -> Self::BindGroupLayoutData {
-        create_identified(pipeline_data.0.get_bind_group_layout(index))
+        Sendable(pipeline_data.0.get_bind_group_layout(index))
     }
 
     fn command_encoder_copy_buffer_to_buffer(
@@ -2409,7 +2362,7 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.timestamp_writes(&writes);
         }
 
-        create_identified(
+        Sendable(
             encoder_data
                 .0
                 .begin_compute_pass_with_descriptor(&mapped_desc),
@@ -2510,16 +2463,15 @@ impl crate::context::Context for ContextWebGpu {
             mapped_desc.timestamp_writes(&writes);
         }
 
-        create_identified(encoder_data.0.begin_render_pass(&mapped_desc))
+        Sendable(encoder_data.0.begin_render_pass(&mapped_desc))
     }
 
     fn command_encoder_finish(
         &self,
-        _encoder: Self::CommandEncoderId,
         encoder_data: &mut Self::CommandEncoderData,
     ) -> Self::CommandBufferData {
         let label = encoder_data.0.label();
-        create_identified(if label.is_empty() {
+        Sendable(if label.is_empty() {
             encoder_data.0.finish()
         } else {
             let mut mapped_desc = webgpu_sys::GpuCommandBufferDescriptor::new();
@@ -2531,7 +2483,7 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_clear_texture(
         &self,
         _encoder_data: &Self::CommandEncoderData,
-        _texture: &crate::Texture,
+        _texture_data: &Self::TextureData,
         _subresource_range: &wgt::ImageSubresourceRange,
     ) {
         //TODO
@@ -2540,21 +2492,19 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_clear_buffer(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        buffer: &crate::Buffer,
+        buffer_data: &Self::BufferData,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) {
-        let buffer: &<ContextWebGpu as crate::Context>::BufferData =
-            downcast_ref(buffer.data.as_ref());
         match size {
             Some(size) => encoder_data.0.clear_buffer_with_f64_and_f64(
-                &buffer.0.buffer,
+                &buffer_data.0.buffer,
                 offset as f64,
                 size as f64,
             ),
             None => encoder_data
                 .0
-                .clear_buffer_with_f64(&buffer.0.buffer, offset as f64),
+                .clear_buffer_with_f64(&buffer_data.0.buffer, offset as f64),
         }
     }
 
@@ -2615,7 +2565,7 @@ impl crate::context::Context for ContextWebGpu {
         encoder_data: Self::RenderBundleEncoderData,
         desc: &crate::RenderBundleDescriptor<'_>,
     ) -> Self::RenderBundleData {
-        create_identified(match desc.label {
+        Sendable(match desc.label {
             Some(label) => {
                 let mut mapped_desc = webgpu_sys::GpuRenderBundleDescriptor::new();
                 mapped_desc.label(label);
@@ -2709,14 +2659,7 @@ impl crate::context::Context for ContextWebGpu {
             .downcast_ref::<WebQueueWriteBuffer>()
             .unwrap()
             .slice();
-        self.queue_write_buffer(
-            queue,
-            queue_data,
-            buffer,
-            buffer_data,
-            offset,
-            staging_buffer,
-        )
+        self.queue_write_buffer(queue_data, buffer_data, offset, staging_buffer)
     }
 
     fn queue_write_texture(
@@ -2776,7 +2719,7 @@ impl crate::context::Context for ContextWebGpu {
         command_buffers: I,
     ) -> Self::SubmissionIndexData {
         let temp_command_buffers = command_buffers
-            .map(|(_, data)| data.0)
+            .map(|data| data.0)
             .collect::<js_sys::Array>();
 
         queue_data.0.submit(&temp_command_buffers);
@@ -3425,7 +3368,7 @@ impl crate::context::Context for ContextWebGpu {
         render_bundles: &mut dyn Iterator<Item = &Self::RenderBundleData>,
     ) {
         let mapped = render_bundles
-            .map(|(_, bundle_data)| &bundle_data.0)
+            .map(|bundle_data| &bundle_data.0)
             .collect::<js_sys::Array>();
         pass_data.0.execute_bundles(&mapped);
     }

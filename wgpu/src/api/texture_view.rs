@@ -28,15 +28,16 @@ impl TextureView {
         &self,
         hal_texture_view_callback: F,
     ) -> R {
-        let texture_view_id = TextureViewId::from(self.id);
-
         if let Some(ctx) = self
             .context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
             unsafe {
-                ctx.texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+                ctx.texture_view_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(&self.data),
+                    hal_texture_view_callback,
+                )
             }
         } else {
             hal_texture_view_callback(None)

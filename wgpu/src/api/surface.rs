@@ -32,8 +32,6 @@ pub struct Surface<'window> {
     /// would become invalid when the window is dropped.
     pub(crate) _handle_source: Option<Box<dyn WindowHandle + 'window>>,
 
-    /// Wgpu-core surface id.
-
     /// Additional surface data returned by [`DynContext::instance_create_surface`].
     pub(crate) surface_data: Box<Data>,
 
@@ -170,7 +168,7 @@ impl Surface<'_> {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.surface_as_hal::<A, F, R>(
-                    self.surface_data.downcast_ref().unwrap(),
+                    crate::context::downcast_ref(&self.surface_data),
                     hal_surface_callback,
                 )
             })
@@ -191,7 +189,6 @@ impl<'window> fmt::Debug for Surface<'window> {
                     "None"
                 },
             )
-            .field("id", &self.id)
             .field("data", &self.surface_data)
             .field("config", &self.config)
             .finish()

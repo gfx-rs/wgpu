@@ -208,14 +208,17 @@ impl Buffer {
         &self,
         hal_buffer_callback: F,
     ) -> R {
-        let id = self.id;
-
         if let Some(ctx) = self
             .context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.buffer_as_hal::<A, F, R>(id.into(), hal_buffer_callback) }
+            unsafe {
+                ctx.buffer_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(&self.data),
+                    hal_buffer_callback,
+                )
+            }
         } else {
             hal_buffer_callback(None)
         }
@@ -334,12 +337,7 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        assert_eq!(
-            mc.initial_range,
-            0..0,
-            "Buffer {:?} is already mapped",
-            self.buffer.id
-        );
+        assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
         let end = match self.size {
             Some(s) => self.offset + s.get(),
             None => mc.total_size,

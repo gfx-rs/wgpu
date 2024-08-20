@@ -209,9 +209,9 @@ impl Instance {
             .map(|ctx| {
                 ctx.enumerate_adapters(backends)
                     .into_iter()
-                    .map(move |id| crate::Adapter {
+                    .map(move |adapter| crate::Adapter {
                         context: Arc::clone(&context),
-                        data: Box::new(()),
+                        data: Box::new(adapter),
                     })
                     .collect()
             })
@@ -245,17 +245,16 @@ impl Instance {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
         let context = Arc::clone(&self.context);
-        let id = unsafe {
+        let adapter = unsafe {
             context
                 .as_any()
                 .downcast_ref::<crate::backend::ContextWgpuCore>()
                 .unwrap()
                 .create_adapter_from_hal(hal_adapter)
-                .into()
         };
         Adapter {
             context,
-            data: Box::new(()),
+            data: Box::new(adapter),
         }
     }
 

@@ -225,7 +225,7 @@ impl CommandEncoder {
         DynContext::command_encoder_clear_texture(
             &*self.context,
             self.data.as_ref(),
-            texture,
+            texture.data.as_ref(),
             subresource_range,
         );
     }
@@ -245,7 +245,7 @@ impl CommandEncoder {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
             self.data.as_ref(),
-            buffer,
+            buffer.data.as_ref(),
             offset,
             size,
         );
@@ -310,7 +310,7 @@ impl CommandEncoder {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.command_encoder_as_hal_mut::<A, F, R>(
-                    CommandEncoderId::from(self.id.unwrap()),
+                    crate::context::downcast_ref(&self.data),
                     hal_command_encoder_callback,
                 )
             })
