@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use crate::context::{DynContext, ObjectId, QueueWriteBuffer};
+use crate::context::{DynContext, QueueWriteBuffer};
 use crate::*;
 
 /// Handle to a command queue on a device.
@@ -17,7 +17,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct Queue {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
@@ -26,7 +25,7 @@ static_assertions::assert_impl_all!(Queue: Send, Sync);
 impl Drop for Queue {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.queue_drop(&self.id, self.data.as_ref());
+            self.context.queue_drop(self.data.as_ref());
         }
     }
 }
@@ -87,9 +86,7 @@ impl<'a> Drop for QueueWriteBufferView<'a> {
     fn drop(&mut self) {
         DynContext::queue_write_staging_buffer(
             &*self.queue.context,
-            &self.queue.id,
             self.queue.data.as_ref(),
-            &self.buffer.id,
             self.buffer.data.as_ref(),
             self.offset,
             &*self.inner,
@@ -121,9 +118,7 @@ impl Queue {
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
         DynContext::queue_write_buffer(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
-            &buffer.id,
             buffer.data.as_ref(),
             offset,
             data,
@@ -168,19 +163,13 @@ impl Queue {
         profiling::scope!("Queue::write_buffer_with");
         DynContext::queue_validate_write_buffer(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
-            &buffer.id,
             buffer.data.as_ref(),
             offset,
             size,
         )?;
-        let staging_buffer = DynContext::queue_create_staging_buffer(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            size,
-        )?;
+        let staging_buffer =
+            DynContext::queue_create_staging_buffer(&*self.context, self.data.as_ref(), size)?;
         Some(QueueWriteBufferView {
             queue: self,
             buffer,
@@ -222,7 +211,6 @@ impl Queue {
     ) {
         DynContext::queue_write_texture(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             texture,
             data,
@@ -241,7 +229,6 @@ impl Queue {
     ) {
         DynContext::queue_copy_external_image_to_texture(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             source,
             dest,
@@ -258,12 +245,8 @@ impl Queue {
             .into_iter()
             .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap()));
 
-        let data = DynContext::queue_submit(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            &mut command_buffers,
-        );
+        let data =
+            DynContext::queue_submit(&*self.context, self.data.as_ref(), &mut command_buffers);
 
         SubmissionIndex(data)
     }
@@ -275,7 +258,7 @@ impl Queue {
     /// Timestamp values are represented in nanosecond values on WebGPU, see `<https://gpuweb.github.io/gpuweb/#timestamp>`
     /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required.
     pub fn get_timestamp_period(&self) -> f32 {
-        DynContext::queue_get_timestamp_period(&*self.context, &self.id, self.data.as_ref())
+        DynContext::queue_get_timestamp_period(&*self.context, self.data.as_ref())
     }
 
     /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
@@ -292,7 +275,6 @@ impl Queue {
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
         DynContext::queue_on_submitted_work_done(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             Box::new(callback),
         )

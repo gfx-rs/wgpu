@@ -1,6 +1,5 @@
 use std::{num::NonZeroU32, sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a rendering (graphics) pipeline.
@@ -12,7 +11,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct RenderPipeline {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
@@ -21,28 +19,19 @@ static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 impl Drop for RenderPipeline {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .render_pipeline_drop(&self.id, self.data.as_ref());
+            self.context.render_pipeline_drop(self.data.as_ref());
         }
     }
 }
 
 impl RenderPipeline {
-    /// Returns a globally-unique identifier for this `RenderPipeline`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-
     /// Get an object representing the bind group layout at a given index.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
         let context = Arc::clone(&self.context);
-        let (id, data) =
-            self.context
-                .render_pipeline_get_bind_group_layout(&self.id, self.data.as_ref(), index);
-        BindGroupLayout { context, id, data }
+        let data = self
+            .context
+            .render_pipeline_get_bind_group_layout(self.data.as_ref(), index);
+        BindGroupLayout { context, data }
     }
 }
 

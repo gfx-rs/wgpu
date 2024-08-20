@@ -3,7 +3,7 @@ use std::{error, fmt, sync::Arc, thread};
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// Describes a [`Surface`].
@@ -33,7 +33,6 @@ pub struct Surface<'window> {
     pub(crate) _handle_source: Option<Box<dyn WindowHandle + 'window>>,
 
     /// Wgpu-core surface id.
-    pub(crate) id: ObjectId,
 
     /// Additional surface data returned by [`DynContext::instance_create_surface`].
     pub(crate) surface_data: Box<Data>,
@@ -48,23 +47,13 @@ pub struct Surface<'window> {
 }
 
 impl Surface<'_> {
-    /// Returns a globally-unique identifier for this `Surface`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Surface<'_>> {
-        Id::new(self.id)
-    }
-
     /// Returns the capabilities of the surface when used with the given adapter.
     ///
     /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
     pub fn get_capabilities(&self, adapter: &Adapter) -> SurfaceCapabilities {
         DynContext::surface_get_capabilities(
             &*self.context,
-            &self.id,
             self.surface_data.as_ref(),
-            &adapter.id,
             adapter.data.as_ref(),
         )
     }
@@ -101,9 +90,7 @@ impl Surface<'_> {
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
         DynContext::surface_configure(
             &*self.context,
-            &self.id,
             self.surface_data.as_ref(),
-            &device.id,
             device.data.as_ref(),
             config,
         );
@@ -121,11 +108,8 @@ impl Surface<'_> {
     /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
     pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
-        let (texture_id, texture_data, status, detail) = DynContext::surface_get_current_texture(
-            &*self.context,
-            &self.id,
-            self.surface_data.as_ref(),
-        );
+        let (texture_data, status, detail) =
+            DynContext::surface_get_current_texture(&*self.context, self.surface_data.as_ref());
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
@@ -155,12 +139,10 @@ impl Surface<'_> {
             view_formats: &[],
         };
 
-        texture_id
-            .zip(texture_data)
-            .map(|(id, data)| SurfaceTexture {
+        texture_data
+            .map(|data| SurfaceTexture {
                 texture: Texture {
                     context: Arc::clone(&self.context),
-                    id,
                     data,
                     owned: false,
                     descriptor,
@@ -222,8 +204,7 @@ static_assertions::assert_impl_all!(Surface<'_>: Send, Sync);
 impl Drop for Surface<'_> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .surface_drop(&self.id, self.surface_data.as_ref())
+            self.context.surface_drop(self.surface_data.as_ref())
         }
     }
 }

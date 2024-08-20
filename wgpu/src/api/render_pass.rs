@@ -1,11 +1,10 @@
 use std::{marker::PhantomData, ops::Range, sync::Arc, thread};
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 #[derive(Debug)]
 pub(crate) struct RenderPassInner {
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
     pub(crate) context: Arc<C>,
 }
@@ -13,8 +12,7 @@ pub(crate) struct RenderPassInner {
 impl Drop for RenderPassInner {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .render_pass_end(&mut self.id, self.data.as_mut());
+            self.context.render_pass_end(self.data.as_mut());
         }
     }
 }
@@ -84,10 +82,8 @@ impl<'encoder> RenderPass<'encoder> {
     ) {
         DynContext::render_pass_set_bind_group(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             index,
-            &bind_group.id,
             bind_group.data.as_ref(),
             offsets,
         )
@@ -99,9 +95,7 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         DynContext::render_pass_set_pipeline(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &pipeline.id,
             pipeline.data.as_ref(),
         )
     }
@@ -114,7 +108,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_blend_constant(&mut self, color: Color) {
         DynContext::render_pass_set_blend_constant(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             color,
         )
@@ -127,9 +120,7 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         DynContext::render_pass_set_index_buffer(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &buffer_slice.buffer.id,
             buffer_slice.buffer.data.as_ref(),
             index_format,
             buffer_slice.offset,
@@ -150,10 +141,8 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         DynContext::render_pass_set_vertex_buffer(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             slot,
-            &buffer_slice.buffer.id,
             buffer_slice.buffer.data.as_ref(),
             buffer_slice.offset,
             buffer_slice.size,
@@ -172,7 +161,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             x,
             y,
@@ -190,7 +178,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
         DynContext::render_pass_set_viewport(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             x,
             y,
@@ -208,7 +195,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_stencil_reference(&mut self, reference: u32) {
         DynContext::render_pass_set_stencil_reference(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             reference,
         );
@@ -218,7 +204,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn insert_debug_marker(&mut self, label: &str) {
         DynContext::render_pass_insert_debug_marker(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             label,
         );
@@ -228,7 +213,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn push_debug_group(&mut self, label: &str) {
         DynContext::render_pass_push_debug_group(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             label,
         );
@@ -236,11 +220,7 @@ impl<'encoder> RenderPass<'encoder> {
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        DynContext::render_pass_pop_debug_group(
-            &*self.inner.context,
-            &mut self.inner.id,
-            self.inner.data.as_mut(),
-        );
+        DynContext::render_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut());
     }
 
     /// Draws primitives from the active vertex buffer(s).
@@ -267,7 +247,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             vertices,
             instances,
@@ -301,7 +280,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             indices,
             base_vertex,
@@ -325,9 +303,7 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
         );
@@ -354,9 +330,7 @@ impl<'encoder> RenderPass<'encoder> {
     ) {
         DynContext::render_pass_draw_indexed_indirect(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
         );
@@ -371,13 +345,10 @@ impl<'encoder> RenderPass<'encoder> {
         &mut self,
         render_bundles: I,
     ) {
-        let mut render_bundles = render_bundles
-            .into_iter()
-            .map(|rb| (&rb.id, rb.data.as_ref()));
+        let mut render_bundles = render_bundles.into_iter().map(|rb| rb.data.as_ref());
 
         DynContext::render_pass_execute_bundles(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             &mut render_bundles,
         )
@@ -404,9 +375,7 @@ impl<'encoder> RenderPass<'encoder> {
     ) {
         DynContext::render_pass_multi_draw_indirect(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
             count,
@@ -432,9 +401,7 @@ impl<'encoder> RenderPass<'encoder> {
     ) {
         DynContext::render_pass_multi_draw_indexed_indirect(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
             count,
@@ -476,12 +443,9 @@ impl<'encoder> RenderPass<'encoder> {
     ) {
         DynContext::render_pass_multi_draw_indirect_count(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
-            &count_buffer.id,
             count_buffer.data.as_ref(),
             count_offset,
             max_count,
@@ -523,12 +487,9 @@ impl<'encoder> RenderPass<'encoder> {
     ) {
         DynContext::render_pass_multi_draw_indexed_indirect_count(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
-            &count_buffer.id,
             count_buffer.data.as_ref(),
             count_offset,
             max_count,
@@ -581,7 +542,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
         DynContext::render_pass_set_push_constants(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             stages,
             offset,
@@ -602,9 +562,7 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::render_pass_write_timestamp(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_index,
         )
@@ -617,7 +575,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn begin_occlusion_query(&mut self, query_index: u32) {
         DynContext::render_pass_begin_occlusion_query(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             query_index,
         );
@@ -626,11 +583,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// End the occlusion query on this render pass. It can be started with
     /// `begin_occlusion_query`. Occlusion queries may not be nested.
     pub fn end_occlusion_query(&mut self) {
-        DynContext::render_pass_end_occlusion_query(
-            &*self.inner.context,
-            &mut self.inner.id,
-            self.inner.data.as_mut(),
-        );
+        DynContext::render_pass_end_occlusion_query(&*self.inner.context, self.inner.data.as_mut());
     }
 }
 
@@ -641,9 +594,7 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::render_pass_begin_pipeline_statistics_query(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_index,
         );
@@ -654,7 +605,6 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::render_pass_end_pipeline_statistics_query(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
         );
     }
