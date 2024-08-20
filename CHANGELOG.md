@@ -150,6 +150,8 @@ By @jamienicol in [#6929](https://github.com/gfx-rs/wgpu/pull/6929) and [#7080](
 
 - Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
 
+- Added an example that splits up large data across multiple buffers and accesses them as a single contiguous array in the shader, demonstrating the naga/wgsl only `binding_array`, and some of the, less documented `wgpu::Features`. By @alphastrata in [#6130](https://github.com/gfx-rs/wgpu/pull/6138)
+
 #### Naga
 
 - Add support for unsigned types when calling textureLoad with the level parameter. By @ygdrasil-io in [#7058](https://github.com/gfx-rs/wgpu/pull/7058).
