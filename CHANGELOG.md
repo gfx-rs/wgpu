@@ -67,6 +67,8 @@ By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://
 
 #### General
 
+- Added an example that splits up large data across multiple buffers and accesses them as a single contiguous array in the shader, demonstrating the naga/wgsl only `binding_array`, and some of the, less documented `wgpu::Features`. By @alphastrata in [#6130](https://github.com/gfx-rs/wgpu/pull/6138)
+
 - If GL context creation fails retry with GLES. By @Rapdorian in [#5996](https://github.com/gfx-rs/wgpu/pull/5996)
 - Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988)
 - As a workaround for [issue #4905](https://github.com/gfx-rs/wgpu/issues/4905), `wgpu-core` is undocumented unless `--cfg wgpu_core_doc` feature is enabled. By @kpreid in [#5987](https://github.com/gfx-rs/wgpu/pull/5987)
