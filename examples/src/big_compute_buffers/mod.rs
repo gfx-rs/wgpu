@@ -17,7 +17,7 @@ pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                required_features: 
+                required_features:
                 // We require at least these three features to achive a _single_ binding representing all of our buffers shader-side
                     Features::STORAGE_RESOURCE_BINDING_ARRAY |
                     Features::BUFFER_BINDING_ARRAY |
@@ -50,7 +50,7 @@ async fn execute_gpu_inner(
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute pass descriptor"),
-            timestamp_writes: None, 
+            timestamp_writes: None,
         });
         cpass.set_pipeline(&compute_pipeline);
         log::debug!("set_pipeline complete");
@@ -71,15 +71,14 @@ async fn execute_gpu_inner(
 
             encoder.copy_buffer_to_buffer(
                 storage_buffer, // Source buffer
-                0,             
+                0,
                 staging_buffer, // Destination buffer
-                0,        
+                0,
                 stg_size,
             );
         },
     );
     log::debug!("buffers created, submitting job to GPU");
-
 
     queue.submit(Some(encoder.finish()));
     log::debug!("Job submission complete.");
@@ -113,9 +112,9 @@ async fn execute_gpu_inner(
             })
             .collect();
 
-        staging_buffers.iter().for_each(|sb| sb.unmap()); 
+        staging_buffers.iter().for_each(|sb| sb.unmap());
 
-        Some(data) 
+        Some(data)
     } else {
         log::error!("Failed to run compute on GPU!");
         None
@@ -138,7 +137,7 @@ fn setup(
 
     // Gets the size in bytes of the input.
     let input_size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
-    log::debug!("Size of input {}b", format_large_number(&input_size));
+    log::debug!("Size of input {}b", format_large_number(input_size));
 
     let staging_buffers = create_staging_buffers(device, numbers);
     log::debug!("Created staging_buffer");
@@ -321,12 +320,12 @@ mod helpers {
     /// Make `n` % of a GB worth of floats.
     /// i.e `1.0` is `GB`, `0.25` is 250MB and so on..
     pub(crate) fn make_test_data(n: f32) -> Vec<f32> {
-        let bytes_per_gb = 1024 * 1024 * 1024; 
+        let bytes_per_gb = 1024 * 1024 * 1024;
         let bytes_per_f32 = std::mem::size_of::<f32>();
         let total_bytes = (n * bytes_per_gb as f32) as usize;
-        let elements = total_bytes / bytes_per_f32; 
+        let elements = total_bytes / bytes_per_f32;
 
-        vec![0.0; elements] 
+        vec![0.0; elements]
     }
 
     /// Delimits 3+ digit numbers with '_'s i.e 10_000 not 10000 and so on.
