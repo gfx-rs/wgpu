@@ -446,27 +446,11 @@ pub struct Surface {
     configured_device: Mutex<Option<wgc::id::DeviceId>>,
 }
 
-impl Surface {
-    // Not used on every platform
-    #[allow(dead_code)]
-    pub fn id(&self) -> wgc::id::SurfaceId {
-        self.id
-    }
-}
-
 #[derive(Debug)]
 pub struct Device {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
     features: Features,
-}
-
-impl Device {
-    // Not used on every platform
-    #[allow(dead_code)]
-    pub fn id(&self) -> wgc::id::DeviceId {
-        self.id
-    }
 }
 
 #[derive(Debug)]
@@ -487,26 +471,10 @@ pub struct Texture {
     error_sink: ErrorSink,
 }
 
-impl Texture {
-    // Not used on every platform
-    #[allow(dead_code)]
-    pub fn id(&self) -> wgc::id::TextureId {
-        self.id
-    }
-}
-
 #[derive(Debug)]
 pub struct Queue {
     id: wgc::id::QueueId,
     error_sink: ErrorSink,
-}
-
-impl Queue {
-    // Not used on every platform
-    #[allow(dead_code)]
-    pub fn id(&self) -> wgc::id::QueueId {
-        self.id
-    }
 }
 
 #[derive(Debug)]
