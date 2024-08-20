@@ -230,6 +230,7 @@ By @teoxoy in [#5901](https://github.com/gfx-rs/wgpu/pull/5901)
     - `MemoryHints::MemoryUsage` favors memory usage over performance. This hint is typically useful for smaller applications or UI libraries.
     - `MemoryHints::Manual` allows the user to specify parameters for the underlying GPU memory allocator. These parameters are subject to change.
     - These hints may be ignored by some backends. Currently only the Vulkan and D3D12 backends take them into account.
+- Add `HTMLImageElement` and `ImageData` as external source for copying images. By @Valaphee in [#5668](https://github.com/gfx-rs/wgpu/pull/5668)
 
 #### Naga
 
