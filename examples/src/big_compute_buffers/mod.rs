@@ -1,14 +1,10 @@
-// a simple main.
-
-// the lib
-
-const MAX_BUFFER_SIZE: u64 = 1 << 27; // 34_217_728
-const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
-
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 use wgpu::{util::DeviceExt, Features};
 
 use crate::big_compute_buffers::helpers::{format_large_number, make_test_data};
+
+const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
+const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
 
 pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
     let instance = wgpu::Instance::default();
@@ -21,12 +17,18 @@ pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                required_features: Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                    | Features::BUFFER_BINDING_ARRAY,
+                required_features: 
+                // We require at least these three features to achive a _single_ binding representing all of our buffers shader-side
+                    Features::STORAGE_RESOURCE_BINDING_ARRAY |
+                    Features::BUFFER_BINDING_ARRAY |
+                    //  Internal error: using NonUniformEXT requires at least one of the capabilities [ShaderNonUniform]...
+                    Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
 
                 memory_hints: wgpu::MemoryHints::Performance,
-                ..Default::default()
+                required_limits: wgpu::Limits {
+                    max_buffer_size: MAX_BUFFER_SIZE,
+                    ..Default::default()
+                },
             },
             None,
         )
@@ -43,26 +45,22 @@ async fn execute_gpu_inner(
 ) -> Option<Vec<f32>> {
     let (staging_buffers, storage_buffers, bind_group, compute_pipeline) = setup(device, numbers);
 
-    // ------------------------- ENCODE -------------------------
-    // A command encoder executes one or many pipelines.
-    // It is to WebGPU what a command buffer is to Vulkan.
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute pass descriptor"),
-            timestamp_writes: None, // We can use this with ComputePassTimestampWrites, let's find out how
+            timestamp_writes: None, 
         });
         cpass.set_pipeline(&compute_pipeline);
         log::debug!("set_pipeline complete");
         cpass.set_bind_group(0, &bind_group, &[]);
         log::debug!("set_bind_group complete");
-        cpass.insert_debug_marker("bump a gigabyte of floats of 0.0 all by 1.0");
+
         cpass.dispatch_workgroups(MAX_DISPATCH_SIZE.min(numbers.len() as u32), 1, 1);
-        // Number of cells to run, the (x,y,z) size of item being processed
     }
 
-    // Assuming `storage_buffers` and `destination_buffers` are Vec<wgpu::Buffer> and have the same length
+    // we assume buffers of different lengths, in your own work you'll probably need to pad.
     storage_buffers.iter().zip(staging_buffers.iter()).for_each(
         |(storage_buffer, staging_buffer)| {
             let sb_size = storage_buffer.size();
@@ -73,17 +71,16 @@ async fn execute_gpu_inner(
 
             encoder.copy_buffer_to_buffer(
                 storage_buffer, // Source buffer
-                0,              // Source offset
+                0,             
                 staging_buffer, // Destination buffer
-                0,              // Destination offset
+                0,        
                 stg_size,
             );
         },
     );
-
     log::debug!("buffers created, submitting job to GPU");
 
-    // Submits command encoder for processing
+
     queue.submit(Some(encoder.finish()));
     log::debug!("Job submission complete.");
 
@@ -102,13 +99,10 @@ async fn execute_gpu_inner(
         })
     });
 
-    // Poll the device in a blocking manner so that our future resolves.
     device.poll(wgpu::Maintain::wait());
 
-    // Await buffer futures to read
     if let Ok(Ok(())) = receiver.recv_async().await {
         log::debug!("Getting results...");
-        // Retrieve and process buffer data
         let data: Vec<f32> = buffer_slices
             .iter()
             .flat_map(|bs| {
@@ -119,10 +113,9 @@ async fn execute_gpu_inner(
             })
             .collect();
 
-        // Since buffer_slices was not moved, we can still access it here
-        staging_buffers.iter().for_each(|sb| sb.unmap()); // Unmaps buffer from memory
+        staging_buffers.iter().for_each(|sb| sb.unmap()); 
 
-        Some(data) // Return the collected data
+        Some(data) 
     } else {
         log::error!("Failed to run compute on GPU!");
         None
@@ -143,24 +136,16 @@ fn setup(
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
-    // Gets the size in bytes of the buffer.
+    // Gets the size in bytes of the input.
     let input_size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
     log::debug!("Size of input {}b", format_large_number(&input_size));
 
-    // ------------------------- BUFFERS -------------------------
-    // Instantiates buffer without data.
-    // `usage` of buffer specifies how it can be used:
-    //   `BufferUsages::MAP_READ` allows it to be read (outside the shader, by the CPU).
-    //   `BufferUsages::COPY_DST` allows it to be the destination of a copy.
     let staging_buffers = create_staging_buffers(device, numbers);
     log::debug!("Created staging_buffer");
 
     let storage_buffers = create_storage_buffers(device, numbers, input_size);
     log::debug!("Created storage_buffer");
 
-    // ------------------------- BIND THE BUFFERS -------------------------
-    // A bind group defines how buffers are accessed by shaders.
-    //TODO: it's quite possible for the 'work' to NOT fit into a single 4 binds available to each one of our 0..n 'groups' so, this needs a refactor
     let (bind_group_layout, bind_group) = setup_binds(&storage_buffers, device);
 
     let compute_pipeline = setup_pipeline(device, bind_group_layout, cs_module);
@@ -336,15 +321,15 @@ mod helpers {
     /// Make `n` % of a GB worth of floats.
     /// i.e `1.0` is `GB`, `0.25` is 250MB and so on..
     pub(crate) fn make_test_data(n: f32) -> Vec<f32> {
-        let bytes_per_gb = 1024 * 1024 * 1024; // 1 GB in bytes
-        let bytes_per_f32 = std::mem::size_of::<f32>(); // Size of f32 in bytes
-        let total_bytes = (n * bytes_per_gb as f32) as usize; // Total bytes for n gigabytes
-        let elements = total_bytes / bytes_per_f32; // Number of f32 elements that fit in the specified bytes
+        let bytes_per_gb = 1024 * 1024 * 1024; 
+        let bytes_per_f32 = std::mem::size_of::<f32>();
+        let total_bytes = (n * bytes_per_gb as f32) as usize;
+        let elements = total_bytes / bytes_per_f32; 
 
-        vec![0.0; elements] // Creates a vector of zeroed f32s of the calculated size
+        vec![0.0; elements] 
     }
 
-    /// delimits >3 digit numbers with ','s i.e 10,000 not 10000 and so on.
+    /// Delimits 3+ digit numbers with '_'s i.e 10_000 not 10000 and so on.
     pub(crate) fn format_large_number<N: ToString>(num: N) -> String {
         let num_str = num.to_string();
         let num_digits = num_str.len();
