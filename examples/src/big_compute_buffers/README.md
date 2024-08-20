@@ -4,8 +4,11 @@ This example assumes you're familiar with the other GP-GPU compute examples in t
 
 Showcases how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contiguous buffer on the GPU.
 
-- Creates a large buffer, by default 1GB, full of `0.0`s.
-- Increments each element in said large buffer by `1.0`
+- Creates a large set of buffers, by default 1GB, full of `0.0`s.
+- Increments each element in said large buffer by `1.0`.
+- Returns those `1.0` values as a back to the HOST.
+
+The aim of this example is to demonstrate taking a large input dataset, splitting it into chunks for the purpose of moving it onto the GPU, but then treating it as a single contiguous data structure once on the DEVICE.
 
 ## To Run
 As the maximum supported buffer size varies wildly per system, when you try to run this, then when it will likely fail, in-which-case read the error and update these `const`s accordingly:
@@ -21,49 +24,55 @@ It is recommended you enable the logger to see the code explain what it's doing.
 ```
 
 ## Example Output
-<detail>
-```
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] Size of input 1_073_741_824b
-[2024-08-20T20:44:49Z WARN  wgpu_examples::big_compute_buffers] Supplied input is too large for a single staging buffer, splitting...
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] num_chunks: 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 1 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 2 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 3 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 4 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 5 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 6 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 7 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 8 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] Created staging_buffer
-[2024-08-20T20:44:49Z WARN  wgpu_examples::big_compute_buffers] Supplied input is too large for a single storage buffer, splitting...
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 1 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 2 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 3 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 4 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 5 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 6 of 8
-[2024-08-20T20:44:49Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 7 of 8
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 8 of 8
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] Created storage_buffer
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:0 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:1 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:2 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:3 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:4 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:5 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:6 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] bind_idx:7 buffer is 134_217_728b
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] created 8 BindGroupEntries with 8 corresponding BindGroupEntryLayouts.
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] set_pipeline complete
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] set_bind_group complete
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] buffers created, submitting job to GPU
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] Job submission complete.
-[2024-08-20T20:44:50Z DEBUG wgpu_examples::big_compute_buffers] Getting results...
-[2024-08-20T20:44:57Z DEBUG wgpu_examples::big_compute_buffers] GPU RUNTIME: 2522ms
-[2024-08-20T20:44:59Z DEBUG wgpu_examples::big_compute_buffers] All numbers checked, previously 0.0 elements are now 1.0s
-```
-</detail>
 
+<details>
+  <summary>Output</summary>
+
+```sh
+
+[DEBUG wgpu_examples::big_compute_buffers] Size of input 1_073_741_824b
+[WARN  wgpu_examples::big_compute_buffers] Supplied input is too large for a single staging buffer, splitting...
+[DEBUG wgpu_examples::big_compute_buffers] num_chunks: 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 1 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 2 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 3 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 4 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 5 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 6 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 7 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating staging buffer 8 of 8
+[DEBUG wgpu_examples::big_compute_buffers] Created staging_buffer
+[WARN  wgpu_examples::big_compute_buffers] Supplied input is too large for a single storage buffer, splitting...
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 1 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 2 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 3 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 4 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 5 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 6 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 7 of 8
+[DEBUG wgpu_examples::big_compute_buffers] creating Storage Buffer 8 of 8
+[DEBUG wgpu_examples::big_compute_buffers] Created storage_buffer
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:0 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:1 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:2 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:3 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:4 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:5 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:6 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] bind_idx:7 buffer is 134_217_728b
+[DEBUG wgpu_examples::big_compute_buffers] created 8 BindGroupEntries with 8 corresponding BindGroupEntryLayouts.
+[DEBUG wgpu_examples::big_compute_buffers] set_pipeline complete
+[DEBUG wgpu_examples::big_compute_buffers] set_bind_group complete
+[DEBUG wgpu_examples::big_compute_buffers] buffers created, submitting job to GPU
+[DEBUG wgpu_examples::big_compute_buffers] Job submission complete.
+[DEBUG wgpu_examples::big_compute_buffers] Getting results...
+[DEBUG wgpu_examples::big_compute_buffers] GPU RUNTIME: 2522ms
+[DEBUG wgpu_examples::big_compute_buffers] All numbers checked, previously 0.0 elements are now 1.0s
+
+```
+
+</details>
+ w
 ## FAQ
 
 ### How do I ascertain the max_*buffer_binding_size?
