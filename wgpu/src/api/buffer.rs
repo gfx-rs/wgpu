@@ -182,6 +182,8 @@ pub struct Buffer {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
+super::impl_partialeq_eq_hash!(Buffer);
+
 impl Buffer {
     /// Return the binding view of the entire buffer.
     pub fn as_entire_binding(&self) -> BindingResource<'_> {

@@ -19,6 +19,8 @@ pub struct Sampler {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
+super::impl_partialeq_eq_hash!(Sampler);
+
 impl Drop for Sampler {
     fn drop(&mut self) {
         if !thread::panicking() {

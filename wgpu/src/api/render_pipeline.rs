@@ -16,6 +16,8 @@ pub struct RenderPipeline {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
+super::impl_partialeq_eq_hash!(RenderPipeline);
+
 impl Drop for RenderPipeline {
     fn drop(&mut self) {
         if !thread::panicking() {

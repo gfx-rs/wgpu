@@ -18,6 +18,8 @@ pub struct ShaderModule {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 
+super::impl_partialeq_eq_hash!(ShaderModule);
+
 impl Drop for ShaderModule {
     fn drop(&mut self) {
         if !thread::panicking() {

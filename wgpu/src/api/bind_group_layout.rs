@@ -21,6 +21,8 @@ pub struct BindGroupLayout {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);
 
+super::impl_partialeq_eq_hash!(BindGroupLayout);
+
 impl Drop for BindGroupLayout {
     fn drop(&mut self) {
         if !thread::panicking() {

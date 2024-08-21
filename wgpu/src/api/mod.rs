@@ -76,3 +76,35 @@ pub use texture_view::*;
 
 /// Object debugging label.
 pub type Label<'a> = Option<&'a str>;
+
+macro_rules! impl_partialeq_eq_hash {
+    ($ty:ty) => {
+        impl PartialEq for $ty {
+            fn eq(&self, other: &Self) -> bool {
+                std::ptr::addr_eq(self.data.as_ref(), other.data.as_ref())
+            }
+        }
+        impl Eq for $ty {}
+
+        impl std::hash::Hash for $ty {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                let ptr = self.data.as_ref() as *const Data as *const ();
+                ptr.hash(state);
+            }
+        }
+
+        impl PartialOrd for $ty {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+        impl Ord for $ty {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                let a = self.data.as_ref() as *const Data as *const ();
+                let b = other.data.as_ref() as *const Data as *const ();
+                a.cmp(&b)
+            }
+        }
+    };
+}
+pub(crate) use impl_partialeq_eq_hash;

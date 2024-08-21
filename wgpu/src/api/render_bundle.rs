@@ -19,6 +19,8 @@ pub struct RenderBundle {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
 
+super::impl_partialeq_eq_hash!(RenderBundle);
+
 impl Drop for RenderBundle {
     fn drop(&mut self) {
         if !thread::panicking() {

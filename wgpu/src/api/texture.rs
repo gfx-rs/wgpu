@@ -18,6 +18,8 @@ pub struct Texture {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
+super::impl_partialeq_eq_hash!(Texture);
+
 impl Texture {
     /// Returns the inner hal Texture using a callback. The hal texture will be `None` if the
     /// backend type argument does not match with this wgpu Texture

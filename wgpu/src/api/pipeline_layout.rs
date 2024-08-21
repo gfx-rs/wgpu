@@ -16,6 +16,8 @@ pub struct PipelineLayout {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
+super::impl_partialeq_eq_hash!(PipelineLayout);
+
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
         if !thread::panicking() {

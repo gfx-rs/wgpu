@@ -82,6 +82,7 @@ By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://
 - Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
 - `Rg11b10Float` is renamed to `Rg11b10UFloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
 - Removed `.global_id()` getters from wgpu objects. By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134)
+- Implement `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord` for wgpu resources. By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134)
 
 ### Dependency Updates
 

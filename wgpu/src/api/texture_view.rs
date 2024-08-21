@@ -16,6 +16,8 @@ pub struct TextureView {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
+super::impl_partialeq_eq_hash!(TextureView);
+
 impl TextureView {
     /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
     /// backend type argument does not match with this wgpu Texture

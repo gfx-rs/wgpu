@@ -16,6 +16,8 @@ pub struct QuerySet {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
+super::impl_partialeq_eq_hash!(QuerySet);
+
 impl Drop for QuerySet {
     fn drop(&mut self) {
         if !thread::panicking() {

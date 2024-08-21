@@ -16,6 +16,8 @@ pub struct ComputePipeline {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
+super::impl_partialeq_eq_hash!(ComputePipeline);
+
 impl ComputePipeline {
     /// Get an object representing the bind group layout at a given index.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {

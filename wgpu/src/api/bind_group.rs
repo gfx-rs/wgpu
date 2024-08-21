@@ -18,6 +18,8 @@ pub struct BindGroup {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
+super::impl_partialeq_eq_hash!(BindGroup);
+
 impl Drop for BindGroup {
     fn drop(&mut self) {
         if !thread::panicking() {
