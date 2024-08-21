@@ -47,43 +47,20 @@ fn should_keep_adapter(adapter: &Dxgi::IDXGIAdapter1) -> bool {
 }
 
 pub enum DxgiAdapter {
-    Adapter1(Dxgi::IDXGIAdapter1),
-    Adapter2(Dxgi::IDXGIAdapter2),
+    /// Provided by DXGI 1.4
     Adapter3(Dxgi::IDXGIAdapter3),
+    /// Provided by DXGI 1.6
     Adapter4(Dxgi::IDXGIAdapter4),
 }
 
-impl windows::core::Param<Dxgi::IDXGIAdapter> for &DxgiAdapter {
-    unsafe fn param(self) -> windows::core::ParamValue<Dxgi::IDXGIAdapter> {
-        unsafe { self.deref().param() }
-    }
-}
-
 impl Deref for DxgiAdapter {
-    type Target = Dxgi::IDXGIAdapter;
+    type Target = Dxgi::IDXGIAdapter3;
 
     fn deref(&self) -> &Self::Target {
         match self {
-            DxgiAdapter::Adapter1(a) => a,
-            DxgiAdapter::Adapter2(a) => a,
             DxgiAdapter::Adapter3(a) => a,
             DxgiAdapter::Adapter4(a) => a,
         }
-    }
-}
-
-impl DxgiAdapter {
-    pub fn as_adapter2(&self) -> Option<&Dxgi::IDXGIAdapter2> {
-        match self {
-            Self::Adapter1(_) => None,
-            Self::Adapter2(f) => Some(f),
-            Self::Adapter3(f) => Some(f),
-            Self::Adapter4(f) => Some(f),
-        }
-    }
-
-    pub fn unwrap_adapter2(&self) -> &Dxgi::IDXGIAdapter2 {
-        self.as_adapter2().unwrap()
     }
 }
 
@@ -91,31 +68,6 @@ pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
     let mut adapters = Vec::with_capacity(8);
 
     for cur_index in 0.. {
-        if let DxgiFactory::Factory6(ref factory6) = factory {
-            profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
-            // We're already at dxgi1.6, we can grab IDXGIAdapter4 directly
-            let adapter4: Dxgi::IDXGIAdapter4 = match unsafe {
-                factory6.EnumAdapterByGpuPreference(
-                    cur_index,
-                    Dxgi::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-                )
-            } {
-                Ok(a) => a,
-                Err(e) if e.code() == Dxgi::DXGI_ERROR_NOT_FOUND => break,
-                Err(e) => {
-                    log::error!("Failed enumerating adapters: {}", e);
-                    break;
-                }
-            };
-
-            if !should_keep_adapter(&adapter4) {
-                continue;
-            }
-
-            adapters.push(DxgiAdapter::Adapter4(adapter4));
-            continue;
-        }
-
         profiling::scope!("IDXGIFactory1::EnumAdapters1");
         let adapter1: Dxgi::IDXGIAdapter1 = match unsafe { factory.EnumAdapters1(cur_index) } {
             Ok(a) => a,
@@ -130,31 +82,12 @@ pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
             continue;
         }
 
-        // Do the most aggressive casts first, skipping Adapter4 as we definitely don't have dxgi1_6.
-
-        // Adapter1 -> Adapter3
-        match adapter1.cast::<Dxgi::IDXGIAdapter3>() {
-            Ok(adapter3) => {
-                adapters.push(DxgiAdapter::Adapter3(adapter3));
-                continue;
-            }
-            Err(err) => {
-                log::warn!("Failed casting Adapter1 to Adapter3: {}", err);
-            }
+        if let Ok(adapter4) = adapter1.cast::<Dxgi::IDXGIAdapter4>() {
+            adapters.push(DxgiAdapter::Adapter4(adapter4));
+        } else {
+            let adapter3 = adapter1.cast::<Dxgi::IDXGIAdapter3>().unwrap();
+            adapters.push(DxgiAdapter::Adapter3(adapter3));
         }
-
-        // Adapter1 -> Adapter2
-        match adapter1.cast::<Dxgi::IDXGIAdapter2>() {
-            Ok(adapter2) => {
-                adapters.push(DxgiAdapter::Adapter2(adapter2));
-                continue;
-            }
-            Err(err) => {
-                log::warn!("Failed casting Adapter1 to Adapter2: {}", err);
-            }
-        }
-
-        adapters.push(DxgiAdapter::Adapter1(adapter1));
     }
 
     adapters

@@ -95,7 +95,7 @@ impl super::Adapter {
 
         // We have found a possible adapter.
         // Acquire the device information.
-        let desc = unsafe { adapter.unwrap_adapter2().GetDesc2() }.unwrap();
+        let desc = unsafe { adapter.GetDesc2() }.unwrap();
 
         let device_name = auxil::dxgi::conv::map_adapter_name(desc.Description);
 
