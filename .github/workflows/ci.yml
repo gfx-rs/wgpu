@@ -33,12 +33,6 @@ env:
   #
   # In order to prevent CI regressions, we pin the nightly version.
   NIGHTLY_VERSION: "nightly-2023-12-17"
-  # Version of rust used to build the docs with.
-  #
-  # This needs to be newer to work around https://github.com/gfx-rs/wgpu/issues/4905.
-  #
-  # Once this fix hits stable Rust, we can use that instead of nightly.
-  DOCS_RUST_VERSION: "nightly-2023-12-17"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.76"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
@@ -150,12 +144,6 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      # Use special toolchain for rustdoc, see https://github.com/gfx-rs/wgpu/issues/4905
-      - name: Install Rustdoc Toolchain
-        run: |
-          rustup toolchain install ${{ env.DOCS_RUST_VERSION }} --no-self-update --profile=minimal --component rust-docs --target ${{ matrix.target }}
-          cargo +${{ env.DOCS_RUST_VERSION }} -V
-
       - name: disable debug
         shell: bash
         run: |
@@ -196,11 +184,11 @@ jobs:
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
+          cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
           # all features
           cargo clippy --target ${{ matrix.target }} --tests --all-features
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --no-deps --all-features
+          cargo doc --target ${{ matrix.target }} --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -230,7 +218,8 @@ jobs:
           cargo clippy --target ${{ matrix.target }} --tests --benches --all-features
 
           # build docs
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} --all-features --no-deps
+          cargo doc --target ${{ matrix.target }} --all-features --no-deps
+
       # wgpu-core docs are not feasible due to <https://github.com/gfx-rs/wgpu/issues/4905>
       #
       # - name: check private item docs
