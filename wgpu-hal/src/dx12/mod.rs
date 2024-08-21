@@ -225,24 +225,7 @@ impl DxgiLib {
         result__.ok_or(crate::DeviceError::Unexpected)
     }
 
-    pub fn create_factory1(&self) -> Result<Dxgi::IDXGIFactory1, crate::DeviceError> {
-        // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
-        type Fun = extern "system" fn(
-            riid: *const windows_core::GUID,
-            ppfactory: *mut *mut core::ffi::c_void,
-        ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory1") }?;
-
-        let mut result__ = None;
-
-        (func)(&Dxgi::IDXGIFactory1::IID, <*mut _>::cast(&mut result__))
-            .ok()
-            .into_device_result("create_factory1")?;
-
-        result__.ok_or(crate::DeviceError::Unexpected)
-    }
-
-    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
+    /// Will error with crate::DeviceError::Unexpected if DXGI 1.4 is not available.
     pub fn create_factory4(
         &self,
         factory_flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
@@ -1092,11 +1075,13 @@ impl crate::Surface for Surface {
                 };
                 let swap_chain1 = match self.target {
                     SurfaceTarget::Visual(_) | SurfaceTarget::SwapChainPanel(_) => {
-                        profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
+                        profiling::scope!("IDXGIFactory2::CreateSwapChainForComposition");
                         unsafe {
-                            self.factory
-                                .unwrap_factory2()
-                                .CreateSwapChainForComposition(&device.present_queue, &desc, None)
+                            self.factory.CreateSwapChainForComposition(
+                                &device.present_queue,
+                                &desc,
+                                None,
+                            )
                         }
                     }
                     SurfaceTarget::SurfaceHandle(handle) => {
@@ -1116,9 +1101,9 @@ impl crate::Surface for Surface {
                         }
                     }
                     SurfaceTarget::WndHandle(hwnd) => {
-                        profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
+                        profiling::scope!("IDXGIFactory2::CreateSwapChainForHwnd");
                         unsafe {
-                            self.factory.unwrap_factory2().CreateSwapChainForHwnd(
+                            self.factory.CreateSwapChainForHwnd(
                                 &device.present_queue,
                                 hwnd,
                                 &desc,
