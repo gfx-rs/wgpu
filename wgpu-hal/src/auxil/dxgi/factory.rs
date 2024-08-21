@@ -4,12 +4,7 @@ use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 
 use crate::dx12::DxgiLib;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DxgiFactoryType {
-    Factory2,
-    Factory4,
-    Factory6,
-}
+// We can rely on the presence of DXGI 1.4 since D3D12 requires WDDM 2.0, Windows 10 (1507), and so does DXGI 1.4.
 
 fn should_keep_adapter(adapter: &Dxgi::IDXGIAdapter1) -> bool {
     let desc = unsafe { adapter.GetDesc1() }.unwrap();
@@ -167,52 +162,37 @@ pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
 
 #[derive(Clone, Debug)]
 pub enum DxgiFactory {
-    Factory1(Dxgi::IDXGIFactory1),
-    Factory2(Dxgi::IDXGIFactory2),
+    /// Provided by DXGI 1.4
     Factory4(Dxgi::IDXGIFactory4),
+    /// Provided by DXGI 1.5
+    Factory5(Dxgi::IDXGIFactory5),
+    /// Provided by DXGI 1.6
     Factory6(Dxgi::IDXGIFactory6),
 }
 
 impl Deref for DxgiFactory {
-    type Target = Dxgi::IDXGIFactory1;
+    type Target = Dxgi::IDXGIFactory4;
 
     fn deref(&self) -> &Self::Target {
         match self {
-            DxgiFactory::Factory1(f) => f,
-            DxgiFactory::Factory2(f) => f,
             DxgiFactory::Factory4(f) => f,
+            DxgiFactory::Factory5(f) => f,
             DxgiFactory::Factory6(f) => f,
         }
     }
 }
 
 impl DxgiFactory {
-    pub fn as_factory2(&self) -> Option<&Dxgi::IDXGIFactory2> {
-        match self {
-            Self::Factory1(_) => None,
-            Self::Factory2(f) => Some(f),
-            Self::Factory4(f) => Some(f),
-            Self::Factory6(f) => Some(f),
-        }
-    }
-
-    pub fn unwrap_factory2(&self) -> &Dxgi::IDXGIFactory2 {
-        self.as_factory2().unwrap()
-    }
-
     pub fn as_factory5(&self) -> Option<&Dxgi::IDXGIFactory5> {
         match self {
-            Self::Factory1(_) | Self::Factory2(_) | Self::Factory4(_) => None,
+            Self::Factory4(_) => None,
+            Self::Factory5(f) => Some(f),
             Self::Factory6(f) => Some(f),
         }
     }
 }
 
-/// Tries to create a [`Dxgi::IDXGIFactory6`], then a [`Dxgi::IDXGIFactory4`], then a [`Dxgi::IDXGIFactory2`], then a [`Dxgi::IDXGIFactory1`],
-/// returning the one that succeeds, or if the required_factory_type fails to be
-/// created.
 pub fn create_factory(
-    required_factory_type: DxgiFactoryType,
     instance_flags: wgt::InstanceFlags,
 ) -> Result<(DxgiLib, DxgiFactory), crate::InstanceError> {
     let lib_dxgi = DxgiLib::new().map_err(|e| {
@@ -233,75 +213,23 @@ pub fn create_factory(
         super::exception::register_exception_handler();
     }
 
-    // Try to create IDXGIFactory4
     let factory4 = match lib_dxgi.create_factory4(factory_flags) {
-        Ok(factory) => Some(factory),
-        // If we require factory4, hard error.
-        Err(err) if required_factory_type == DxgiFactoryType::Factory4 => {
+        Ok(factory) => factory,
+        Err(err) => {
             return Err(crate::InstanceError::with_source(
                 String::from("IDXGIFactory4 creation failed"),
                 err,
             ));
         }
-        // If we don't print it to warn as all win7 will hit this case.
-        Err(err) => {
-            log::warn!("IDXGIFactory4 creation function not found: {err:?}");
-            None
-        }
     };
 
-    if let Some(factory4) = factory4 {
-        //  Try to cast the IDXGIFactory4 into IDXGIFactory6
-        let factory6 = factory4.cast::<Dxgi::IDXGIFactory6>();
-        match factory6 {
-            Ok(factory6) => {
-                return Ok((lib_dxgi, DxgiFactory::Factory6(factory6)));
-            }
-            // If we require factory6, hard error.
-            Err(err) if required_factory_type == DxgiFactoryType::Factory6 => {
-                // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}"
-                )));
-            }
-            // If we don't print it to warn.
-            Err(err) => {
-                log::warn!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
-                return Ok((lib_dxgi, DxgiFactory::Factory4(factory4)));
-            }
-        }
+    if let Ok(factory6) = factory4.cast::<Dxgi::IDXGIFactory6>() {
+        return Ok((lib_dxgi, DxgiFactory::Factory6(factory6)));
     }
 
-    // Try to create IDXGIFactory1
-    let factory1 = match lib_dxgi.create_factory1() {
-        Ok(factory) => factory,
-        Err(err) => {
-            return Err(crate::InstanceError::with_source(
-                String::from("IDXGIFactory1 creation failed"),
-                err,
-            ));
-        }
-    };
-
-    // Try to cast the IDXGIFactory1 into IDXGIFactory2
-    let factory2 = factory1.cast::<Dxgi::IDXGIFactory2>();
-    match factory2 {
-        Ok(factory2) => {
-            return Ok((lib_dxgi, DxgiFactory::Factory2(factory2)));
-        }
-        // If we require factory2, hard error.
-        Err(err) if required_factory_type == DxgiFactoryType::Factory2 => {
-            // err is a Cow<str>, not an Error implementor
-            return Err(crate::InstanceError::new(format!(
-                "failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}"
-            )));
-        }
-        // If we don't print it to warn.
-        Err(err) => {
-            log::warn!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
-        }
+    if let Ok(factory5) = factory4.cast::<Dxgi::IDXGIFactory5>() {
+        return Ok((lib_dxgi, DxgiFactory::Factory5(factory5)));
     }
 
-    // We tried to create 4 and 2, but only succeeded with 1.
-    Ok((lib_dxgi, DxgiFactory::Factory1(factory1)))
+    Ok((lib_dxgi, DxgiFactory::Factory4(factory4)))
 }

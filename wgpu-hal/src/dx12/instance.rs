@@ -52,11 +52,7 @@ impl crate::Instance for super::Instance {
             }
         }
 
-        // Create DXGIFactory4
-        let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(
-            auxil::dxgi::factory::DxgiFactoryType::Factory4,
-            desc.flags,
-        )?;
+        let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(desc.flags)?;
 
         // Create IDXGIFactoryMedia
         let factory_media = lib_dxgi.create_factory_media().ok();
