@@ -970,14 +970,14 @@ impl crate::Device for super::Device {
                 .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
             Ok(crate::BufferMapping { ptr, is_coherent })
         } else {
-            super::hal_usage_error("tried to map external buffer")
+            crate::hal_usage_error("tried to map external buffer")
         }
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         if let Some(ref block) = buffer.block {
             unsafe { block.lock().unmap(&*self.shared) };
         } else {
-            super::hal_usage_error("tried to unmap external buffer")
+            crate::hal_usage_error("tried to unmap external buffer")
         }
     }
 
@@ -2520,7 +2520,7 @@ impl super::DeviceShared {
                             }
                         }
                         None => {
-                            super::hal_usage_error(format!(
+                            crate::hal_usage_error(format!(
                                 "no signals reached value {}",
                                 wait_value
                             ));
@@ -2537,7 +2537,7 @@ impl From<gpu_alloc::AllocationError> for crate::DeviceError {
         use gpu_alloc::AllocationError as Ae;
         match error {
             Ae::OutOfDeviceMemory | Ae::OutOfHostMemory | Ae::TooManyObjects => Self::OutOfMemory,
-            Ae::NoCompatibleMemoryTypes => super::hal_usage_error(error),
+            Ae::NoCompatibleMemoryTypes => crate::hal_usage_error(error),
         }
     }
 }
@@ -2546,7 +2546,7 @@ impl From<gpu_alloc::MapError> for crate::DeviceError {
         use gpu_alloc::MapError as Me;
         match error {
             Me::OutOfDeviceMemory | Me::OutOfHostMemory | Me::MapFailed => Self::OutOfMemory,
-            Me::NonHostVisible | Me::AlreadyMapped => super::hal_usage_error(error),
+            Me::NonHostVisible | Me::AlreadyMapped => crate::hal_usage_error(error),
         }
     }
 }

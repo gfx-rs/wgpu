@@ -345,6 +345,12 @@ pub enum DeviceError {
     Unexpected,
 }
 
+#[allow(dead_code)] // may be unused on some platforms
+#[cold]
+fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
+    panic!("wgpu-hal invariant was violated (usage error): {txt}")
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum ShaderError {
     #[error("Compilation failed: {0:?}")]
