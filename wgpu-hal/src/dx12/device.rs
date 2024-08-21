@@ -388,7 +388,6 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let mut resource = None;
         let mut size = desc.size;
         if desc.usage.contains(crate::BufferUses::UNIFORM) {
             let align_mask = Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
@@ -411,10 +410,8 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let allocation =
-            super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
-
-        let resource = resource.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+        let (resource, allocation) =
+            super::suballocation::create_buffer_resource(self, desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -471,10 +468,6 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        use super::suballocation::create_texture_resource;
-
-        let mut resource = None;
-
         let raw_desc = Direct3D12::D3D12_RESOURCE_DESC {
             Dimension: conv::map_texture_dimension(desc.dimension),
             Alignment: 0,
@@ -496,9 +489,9 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let allocation = create_texture_resource(self, desc, raw_desc, &mut resource)?;
+        let (resource, allocation) =
+            super::suballocation::create_texture_resource(self, desc, raw_desc)?;
 
-        let resource = resource.ok_or(crate::DeviceError::ResourceCreationFailed)?;
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
                 .into_device_result("SetName")?;
