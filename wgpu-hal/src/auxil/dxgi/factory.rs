@@ -225,18 +225,8 @@ pub fn create_factory(
         // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.
-        match lib_dxgi.debug_interface1() {
-            Ok(pair) => match pair {
-                Ok(_debug_controller) => {
-                    factory_flags |= Dxgi::DXGI_CREATE_FACTORY_DEBUG;
-                }
-                Err(err) => {
-                    log::warn!("Unable to enable DXGI debug interface: {}", err);
-                }
-            },
-            Err(err) => {
-                log::warn!("Debug interface function for DXGI not found: {:?}", err);
-            }
+        if lib_dxgi.debug_interface1().is_ok() {
+            factory_flags |= Dxgi::DXGI_CREATE_FACTORY_DEBUG;
         }
 
         // Intercept `OutputDebugString` calls
@@ -244,27 +234,18 @@ pub fn create_factory(
     }
 
     // Try to create IDXGIFactory4
-    let factory4 = match lib_dxgi.create_factory2(factory_flags) {
-        Ok(pair) => match pair {
-            Ok(factory) => Some(factory),
-            // We hard error here as we _should have_ been able to make a factory4 but couldn't.
-            Err(err) => {
-                // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to create IDXGIFactory4: {err:?}"
-                )));
-            }
-        },
+    let factory4 = match lib_dxgi.create_factory4(factory_flags) {
+        Ok(factory) => Some(factory),
         // If we require factory4, hard error.
         Err(err) if required_factory_type == DxgiFactoryType::Factory4 => {
             return Err(crate::InstanceError::with_source(
-                String::from("IDXGIFactory1 creation function not found"),
+                String::from("IDXGIFactory4 creation failed"),
                 err,
             ));
         }
         // If we don't print it to warn as all win7 will hit this case.
         Err(err) => {
-            log::warn!("IDXGIFactory1 creation function not found: {err:?}");
+            log::warn!("IDXGIFactory4 creation function not found: {err:?}");
             None
         }
     };
@@ -293,19 +274,10 @@ pub fn create_factory(
 
     // Try to create IDXGIFactory1
     let factory1 = match lib_dxgi.create_factory1() {
-        Ok(pair) => match pair {
-            Ok(factory) => factory,
-            Err(err) => {
-                // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to create IDXGIFactory1: {err:?}"
-                )));
-            }
-        },
-        // We always require at least factory1, so hard error
+        Ok(factory) => factory,
         Err(err) => {
             return Err(crate::InstanceError::with_source(
-                String::from("IDXGIFactory1 creation function not found"),
+                String::from("IDXGIFactory1 creation failed"),
                 err,
             ));
         }

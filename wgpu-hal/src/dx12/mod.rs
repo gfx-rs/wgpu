@@ -66,20 +66,46 @@ use crate::auxil::{
 };
 
 #[derive(Debug)]
+struct DynLib {
+    inner: libloading::Library,
+}
+
+impl DynLib {
+    unsafe fn new(filename: &'static str) -> Result<Self, libloading::Error> {
+        unsafe { libloading::Library::new(filename) }.map(|inner| Self { inner })
+    }
+
+    unsafe fn get<T>(
+        &self,
+        symbol: &[u8],
+    ) -> Result<libloading::Symbol<'_, T>, crate::DeviceError> {
+        unsafe { self.inner.get(symbol) }.map_err(|e| match e {
+            libloading::Error::GetProcAddress { .. } | libloading::Error::GetProcAddressUnknown => {
+                crate::DeviceError::Unexpected
+            }
+            libloading::Error::IncompatibleSize
+            | libloading::Error::CreateCString { .. }
+            | libloading::Error::CreateCStringWithTrailing { .. } => crate::hal_internal_error(e),
+            _ => crate::DeviceError::Unexpected, // could be unreachable!() but we prefer to be more robust
+        })
+    }
+}
+
+#[derive(Debug)]
 struct D3D12Lib {
-    lib: libloading::Library,
+    lib: DynLib,
 }
 
 impl D3D12Lib {
     fn new() -> Result<Self, libloading::Error> {
-        unsafe { libloading::Library::new("d3d12.dll").map(|lib| D3D12Lib { lib }) }
+        unsafe { DynLib::new("d3d12.dll").map(|lib| Self { lib }) }
     }
 
     fn create_device(
         &self,
         adapter: &DxgiAdapter,
         feature_level: Direct3D::D3D_FEATURE_LEVEL,
-    ) -> Result<windows_core::Result<Direct3D12::ID3D12Device>, libloading::Error> {
+    ) -> Result<Direct3D12::ID3D12Device, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll
         type Fun = extern "system" fn(
             padapter: *mut core::ffi::c_void,
@@ -90,14 +116,18 @@ impl D3D12Lib {
         let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12CreateDevice") }?;
 
         let mut result__ = None;
-        Ok((func)(
+
+        (func)(
             unsafe { adapter.param().abi() },
             feature_level,
             // TODO: Generic?
             &Direct3D12::ID3D12Device::IID,
             <*mut _>::cast(&mut result__),
         )
-        .map(|| result__.expect("D3D12CreateDevice succeeded but result is NULL?")))
+        .ok()
+        .into_device_result("Device creation")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected)
     }
 
     fn serialize_root_signature(
@@ -114,11 +144,8 @@ impl D3D12Lib {
             ppblob: *mut *mut core::ffi::c_void,
             pperrorblob: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12SerializeRootSignature") }
-            .map_err(|e| {
-                log::error!("Unable to find serialization function: {:?}", e);
-                crate::DeviceError::Lost
-            })?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(b"D3D12SerializeRootSignature") }?;
 
         let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
@@ -137,8 +164,6 @@ impl D3D12Lib {
             <*mut _>::cast(&mut error),
         )
         .ok()
-        // TODO: If there's a HRESULT, error may still be non-null and
-        // contain info.
         .into_device_result("Root signature serialization")?;
 
         if let Some(error) = error {
@@ -147,17 +172,13 @@ impl D3D12Lib {
                 "Root signature serialization error: {:?}",
                 unsafe { error.as_c_str() }.unwrap().to_str().unwrap()
             );
-            return Err(crate::DeviceError::Lost);
+            return Err(crate::DeviceError::Unexpected); // could be hal_usage_error or hal_internal_error
         }
 
-        Ok(D3DBlob(blob.expect(
-            "D3D12SerializeRootSignature succeeded but result is NULL?",
-        )))
+        blob.ok_or(crate::DeviceError::Unexpected)
     }
 
-    fn debug_interface(
-        &self,
-    ) -> Result<windows::core::Result<Direct3D12::ID3D12Debug>, libloading::Error> {
+    fn debug_interface(&self) -> Result<Direct3D12::ID3D12Debug, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface on d3d12.dll
         type Fun = extern "system" fn(
             riid: *const windows_core::GUID,
@@ -165,25 +186,28 @@ impl D3D12Lib {
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12GetDebugInterface") }?;
 
-        let mut result__ = core::ptr::null_mut();
-        Ok((func)(&Direct3D12::ID3D12Debug::IID, &mut result__)
-            .and_then(|| unsafe { windows_core::Type::from_abi(result__) }))
+        let mut result__ = None;
+
+        (func)(&Direct3D12::ID3D12Debug::IID, <*mut _>::cast(&mut result__))
+            .ok()
+            .into_device_result("GetDebugInterface")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected)
     }
 }
 
 #[derive(Debug)]
 pub(super) struct DxgiLib {
-    lib: libloading::Library,
+    lib: DynLib,
 }
 
 impl DxgiLib {
     pub fn new() -> Result<Self, libloading::Error> {
-        unsafe { libloading::Library::new("dxgi.dll").map(|lib| DxgiLib { lib }) }
+        unsafe { DynLib::new("dxgi.dll").map(|lib| Self { lib }) }
     }
 
-    pub fn debug_interface1(
-        &self,
-    ) -> Result<windows::core::Result<Dxgi::IDXGIInfoQueue>, libloading::Error> {
+    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
+    pub fn debug_interface1(&self) -> Result<Dxgi::IDXGIInfoQueue, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Dxgi::DXGIGetDebugInterface1 on dxgi.dll
         type Fun = extern "system" fn(
             flags: u32,
@@ -192,14 +216,16 @@ impl DxgiLib {
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"DXGIGetDebugInterface1") }?;
 
-        let mut result__ = core::ptr::null_mut();
-        Ok((func)(0, &Dxgi::IDXGIInfoQueue::IID, &mut result__)
-            .and_then(|| unsafe { windows_core::Type::from_abi(result__) }))
+        let mut result__ = None;
+
+        (func)(0, &Dxgi::IDXGIInfoQueue::IID, <*mut _>::cast(&mut result__))
+            .ok()
+            .into_device_result("debug_interface1")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected)
     }
 
-    pub fn create_factory1(
-        &self,
-    ) -> Result<windows::core::Result<Dxgi::IDXGIFactory1>, libloading::Error> {
+    pub fn create_factory1(&self) -> Result<Dxgi::IDXGIFactory1, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
         type Fun = extern "system" fn(
             riid: *const windows_core::GUID,
@@ -207,15 +233,20 @@ impl DxgiLib {
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory1") }?;
 
-        let mut result__ = core::ptr::null_mut();
-        Ok((func)(&Dxgi::IDXGIFactory1::IID, &mut result__)
-            .and_then(|| unsafe { windows_core::Type::from_abi(result__) }))
+        let mut result__ = None;
+
+        (func)(&Dxgi::IDXGIFactory1::IID, <*mut _>::cast(&mut result__))
+            .ok()
+            .into_device_result("create_factory1")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected)
     }
 
-    pub fn create_factory2(
+    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
+    pub fn create_factory4(
         &self,
         factory_flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
-    ) -> Result<windows::core::Result<Dxgi::IDXGIFactory4>, libloading::Error> {
+    ) -> Result<Dxgi::IDXGIFactory4, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory2 on dxgi.dll
         type Fun = extern "system" fn(
             flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
@@ -224,16 +255,21 @@ impl DxgiLib {
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory2") }?;
 
-        let mut result__ = core::ptr::null_mut();
-        Ok(
-            (func)(factory_flags, &Dxgi::IDXGIFactory4::IID, &mut result__)
-                .and_then(|| unsafe { windows_core::Type::from_abi(result__) }),
+        let mut result__ = None;
+
+        (func)(
+            factory_flags,
+            &Dxgi::IDXGIFactory4::IID,
+            <*mut _>::cast(&mut result__),
         )
+        .ok()
+        .into_device_result("create_factory4")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected)
     }
 
-    pub fn create_factory_media(
-        &self,
-    ) -> Result<windows::core::Result<Dxgi::IDXGIFactoryMedia>, libloading::Error> {
+    /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
+    pub fn create_factory_media(&self) -> Result<Dxgi::IDXGIFactoryMedia, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
         type Fun = extern "system" fn(
             riid: *const windows_core::GUID,
@@ -241,10 +277,14 @@ impl DxgiLib {
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory1") }?;
 
-        let mut result__ = core::ptr::null_mut();
+        let mut result__ = None;
+
         // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nn-dxgi1_3-idxgifactorymedia
-        Ok((func)(&Dxgi::IDXGIFactoryMedia::IID, &mut result__)
-            .and_then(|| unsafe { windows_core::Type::from_abi(result__) }))
+        (func)(&Dxgi::IDXGIFactoryMedia::IID, <*mut _>::cast(&mut result__))
+            .ok()
+            .into_device_result("create_factory_media")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected)
     }
 }
 

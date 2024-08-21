@@ -64,19 +64,9 @@ impl super::Adapter {
         // Create the device so that we can get the capabilities.
         let device = {
             profiling::scope!("ID3D12Device::create_device");
-            match library.create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0) {
-                Ok(pair) => match pair {
-                    Ok(device) => device,
-                    Err(err) => {
-                        log::warn!("Device creation failed: {}", err);
-                        return None;
-                    }
-                },
-                Err(err) => {
-                    log::warn!("Device creation function is not found: {:?}", err);
-                    return None;
-                }
-            }
+            library
+                .create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
+                .ok()?
         };
 
         profiling::scope!("feature queries");
