@@ -94,7 +94,7 @@ pub(crate) fn create_buffer_resource(
     }
     .into_device_result("Placed buffer creation")?;
 
-    let resource = resource.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+    let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
 
     device
         .counters
@@ -141,7 +141,7 @@ pub(crate) fn create_texture_resource(
     }
     .into_device_result("Placed texture creation")?;
 
-    let resource = resource.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+    let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
 
     device
         .counters
@@ -265,7 +265,7 @@ pub(crate) fn create_committed_buffer_resource(
     }
     .into_device_result("Committed buffer creation")?;
 
-    resource.ok_or(crate::DeviceError::ResourceCreationFailed)
+    resource.ok_or(crate::DeviceError::Unexpected)
 }
 
 pub(crate) fn create_committed_texture_resource(
@@ -302,5 +302,5 @@ pub(crate) fn create_committed_texture_resource(
     }
     .into_device_result("Committed texture creation")?;
 
-    resource.ok_or(crate::DeviceError::ResourceCreationFailed)
+    resource.ok_or(crate::DeviceError::Unexpected)
 }

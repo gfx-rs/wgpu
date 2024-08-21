@@ -85,7 +85,7 @@ impl super::Device {
         }
         .into_device_result("Zero buffer creation")?;
 
-        let zero_buffer = zero_buffer.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+        let zero_buffer = zero_buffer.ok_or(crate::DeviceError::Unexpected)?;
 
         // Note: without `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`
         // this resource is zeroed by default.
@@ -114,7 +114,7 @@ impl super::Device {
                 )
             }
             .into_device_result("Command signature creation")?;
-            signature.ok_or(crate::DeviceError::ResourceCreationFailed)
+            signature.ok_or(crate::DeviceError::Unexpected)
         }
 
         let shared = super::DeviceShared {
@@ -1637,7 +1637,7 @@ impl crate::Device for super::Device {
         }
         .into_device_result("Query heap creation")?;
 
-        let raw = raw.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+        let raw = raw.ok_or(crate::DeviceError::Unexpected)?;
 
         if let Some(label) = desc.label {
             unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
