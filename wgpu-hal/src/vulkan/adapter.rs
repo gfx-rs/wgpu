@@ -2010,7 +2010,7 @@ impl crate::Adapter for super::Adapter {
                 vk::Result::ERROR_TOO_MANY_OBJECTS => crate::DeviceError::OutOfMemory,
                 vk::Result::ERROR_INITIALIZATION_FAILED => crate::DeviceError::Lost,
                 vk::Result::ERROR_EXTENSION_NOT_PRESENT | vk::Result::ERROR_FEATURE_NOT_PRESENT => {
-                    super::hal_usage_error(err)
+                    crate::hal_usage_error(err)
                 }
                 other => super::map_host_device_oom_and_lost_err(other),
             }
