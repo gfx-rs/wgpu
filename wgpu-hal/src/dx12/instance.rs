@@ -34,31 +34,20 @@ impl crate::Instance for super::Instance {
             .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION)
         {
             // Enable debug layer
-            match lib_main.debug_interface() {
-                Ok(pair) => match pair {
-                    Ok(debug_controller) => {
-                        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
-                            unsafe { debug_controller.EnableDebugLayer() }
-                        }
-                        if desc
-                            .flags
-                            .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
-                        {
-                            #[allow(clippy::collapsible_if)]
-                            if let Ok(debug1) = debug_controller.cast::<Direct3D12::ID3D12Debug1>()
-                            {
-                                unsafe { debug1.SetEnableGPUBasedValidation(true) }
-                            } else {
-                                log::warn!("Failed to enable GPU-based validation");
-                            }
-                        }
+            if let Ok(debug_controller) = lib_main.debug_interface() {
+                if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
+                    unsafe { debug_controller.EnableDebugLayer() }
+                }
+                if desc
+                    .flags
+                    .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
+                {
+                    #[allow(clippy::collapsible_if)]
+                    if let Ok(debug1) = debug_controller.cast::<Direct3D12::ID3D12Debug1>() {
+                        unsafe { debug1.SetEnableGPUBasedValidation(true) }
+                    } else {
+                        log::warn!("Failed to enable GPU-based validation");
                     }
-                    Err(err) => {
-                        log::warn!("Unable to enable D3D12 debug interface: {}", err);
-                    }
-                },
-                Err(err) => {
-                    log::warn!("Debug interface function for D3D12 not found: {:?}", err);
                 }
             }
         }
@@ -70,19 +59,7 @@ impl crate::Instance for super::Instance {
         )?;
 
         // Create IDXGIFactoryMedia
-        let factory_media = match lib_dxgi.create_factory_media() {
-            Ok(pair) => match pair {
-                Ok(factory_media) => Some(factory_media),
-                Err(err) => {
-                    log::error!("Failed to create IDXGIFactoryMedia: {}", err);
-                    None
-                }
-            },
-            Err(err) => {
-                log::warn!("IDXGIFactory1 creation function not found: {:?}", err);
-                None
-            }
-        };
+        let factory_media = lib_dxgi.create_factory_media().ok();
 
         let mut supports_allow_tearing = false;
         if let Some(factory5) = factory.as_factory5() {
