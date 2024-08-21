@@ -49,7 +49,7 @@ use std::{ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc};
 use arrayvec::ArrayVec;
 use parking_lot::{Mutex, RwLock};
 use windows::{
-    core::{Free, Interface, Param as _},
+    core::{Free, Interface},
     Win32::{
         Foundation,
         Graphics::{Direct3D, Direct3D12, DirectComposition, Dxgi},
@@ -118,7 +118,7 @@ impl D3D12Lib {
         let mut result__ = None;
 
         (func)(
-            unsafe { adapter.param().abi() },
+            adapter.as_raw(),
             feature_level,
             // TODO: Generic?
             &Direct3D12::ID3D12Device::IID,
