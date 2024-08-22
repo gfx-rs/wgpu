@@ -1255,7 +1255,7 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_image(texture.raw, None) };
         }
         if let Some(memory) = texture.external_memory {
-            self.shared.raw.free_memory(memory, None);
+            unsafe { self.shared.raw.free_memory(memory, None) };
         }
         if let Some(block) = texture.block {
             self.counters.texture_memory.sub(block.size() as isize);
