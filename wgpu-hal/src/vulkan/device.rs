@@ -697,16 +697,17 @@ impl super::Device {
     }
 
     #[cfg(windows)]
-    unsafe fn find_memory_type_index(
+    fn find_memory_type_index(
         &self,
         type_bits: u32,
         flags: vk::MemoryPropertyFlags,
     ) -> Option<usize> {
-        let mem_properties = self
-            .shared
-            .instance
-            .raw
-            .get_physical_device_memory_properties(self.shared.physical_device);
+        let mem_properties = unsafe {
+            self.shared
+                .instance
+                .raw
+                .get_physical_device_memory_properties(self.shared.physical_device)
+        };
 
         for (i, mem_ty) in mem_properties
             .memory_types_as_slice()
