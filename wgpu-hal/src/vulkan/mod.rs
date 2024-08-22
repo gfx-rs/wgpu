@@ -760,6 +760,7 @@ impl crate::DynAccelerationStructure for AccelerationStructure {}
 pub struct Texture {
     raw: vk::Image,
     drop_guard: Option<crate::DropGuard>,
+    external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
     format: wgt::TextureFormat,
