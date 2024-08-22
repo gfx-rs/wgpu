@@ -110,22 +110,21 @@ impl super::Device {
     ///
     /// - `name` must be created respecting `desc`
     /// - `name` must be a texture
-    /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the texture. If `drop_guard` is
-    ///   [`Some`], the texture must be valid until the drop implementation
-    ///   of the drop guard is called.
+    /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of the texture. If
+    ///   `drop_callback` is [`Some`], the texture must be valid until the callback is called.
     #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
-        drop_guard: Option<crate::DropGuard>,
+        drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
         super::Texture {
             inner: super::TextureInner::Texture {
                 raw: glow::NativeTexture(name),
                 target: super::Texture::get_info_from_desc(desc),
             },
-            drop_guard,
+            drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
             format: desc.format,
@@ -138,21 +137,20 @@ impl super::Device {
     ///
     /// - `name` must be created respecting `desc`
     /// - `name` must be a renderbuffer
-    /// - If `drop_guard` is [`None`], wgpu-hal will take ownership of the renderbuffer. If `drop_guard` is
-    ///   [`Some`], the renderbuffer must be valid until the drop implementation
-    ///   of the drop guard is called.
+    /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of the renderbuffer. If
+    ///   `drop_callback` is [`Some`], the renderbuffer must be valid until the callback is called.
     #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
         name: std::num::NonZeroU32,
         desc: &crate::TextureDescriptor,
-        drop_guard: Option<crate::DropGuard>,
+        drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
         super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: glow::NativeRenderbuffer(name),
             },
-            drop_guard,
+            drop_guard: crate::DropGuard::from_option(drop_callback),
             mip_level_count: desc.mip_level_count,
             array_layer_count: desc.array_layer_count(),
             format: desc.format,

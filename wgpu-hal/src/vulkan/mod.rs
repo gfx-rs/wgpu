@@ -595,7 +595,7 @@ struct DeviceShared {
     family_index: u32,
     queue_index: u32,
     raw_queue: vk::Queue,
-    handle_is_owned: bool,
+    drop_guard: Option<crate::DropGuard>,
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
