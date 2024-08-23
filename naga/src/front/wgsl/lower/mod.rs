@@ -397,7 +397,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let mut eval = self.as_const_evaluator();
         eval.try_eval_and_append(expr, span)
-            .map_err(|e| Error::ConstantEvaluatorError(e, span))
+            .map_err(|e| Error::ConstantEvaluatorError(e.into(), span))
     }
 
     fn const_access(&self, handle: Handle<crate::Expression>) -> Option<u32> {
@@ -945,15 +945,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         let converted = ectx
                             .try_automatic_conversions(lowered, &ty_res, v.name.span)
                             .map_err(|error| match error {
-                                Error::AutoConversion {
-                                    dest_span: _,
-                                    dest_type,
-                                    source_span: _,
-                                    source_type,
-                                } => Error::InitializationTypeMismatch {
+                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
                                     name: v.name.span,
-                                    expected: dest_type,
-                                    got: source_type,
+                                    expected: e.dest_type,
+                                    got: e.source_type,
                                 },
                                 other => other,
                             })?;
@@ -997,15 +992,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         init = ectx
                             .try_automatic_conversions(init, &explicit_ty_res, c.name.span)
                             .map_err(|error| match error {
-                                Error::AutoConversion {
-                                    dest_span: _,
-                                    dest_type,
-                                    source_span: _,
-                                    source_type,
-                                } => Error::InitializationTypeMismatch {
+                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
                                     name: c.name.span,
-                                    expected: dest_type,
-                                    got: source_type,
+                                    expected: e.dest_type,
+                                    got: e.source_type,
                                 },
                                 other => other,
                             })?;
@@ -1061,8 +1051,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 let gctx = ctx.module.to_ctx();
                                 return Err(Error::InitializationTypeMismatch {
                                     name: o.name.span,
-                                    expected: explicit_ty.to_wgsl(&gctx),
-                                    got: inferred_type.to_wgsl(&gctx),
+                                    expected: explicit_ty.to_wgsl(&gctx).into(),
+                                    got: inferred_type.to_wgsl(&gctx).into(),
                                 });
                             }
                         }
@@ -1271,8 +1261,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let gctx = &ctx.module.to_ctx();
                             return Err(Error::InitializationTypeMismatch {
                                 name: l.name.span,
-                                expected: ty.to_wgsl(gctx),
-                                got: init_ty.to_wgsl(gctx),
+                                expected: ty.to_wgsl(gctx).into(),
+                                got: init_ty.to_wgsl(gctx).into(),
                             });
                         }
                     }
@@ -1302,15 +1292,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let init = ectx
                                 .try_automatic_conversions(init, &ty_res, v.name.span)
                                 .map_err(|error| match error {
-                                Error::AutoConversion {
-                                    dest_span: _,
-                                    dest_type,
-                                    source_span: _,
-                                    source_type,
-                                } => Error::InitializationTypeMismatch {
+                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
                                     name: v.name.span,
-                                    expected: dest_type,
-                                    got: source_type,
+                                    expected: e.dest_type,
+                                    got: e.source_type,
                                 },
                                 other => other,
                             })?;
@@ -1854,9 +1839,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         let ty = resolve!(ctx, expr);
                         let gctx = &ctx.module.to_ctx();
                         return Err(Error::BadTypeCast {
-                            from_type: ty.to_wgsl(gctx),
+                            from_type: ty.to_wgsl(gctx).into(),
                             span: ty_span,
-                            to_type: to_resolved.to_wgsl(gctx),
+                            to_type: to_resolved.to_wgsl(gctx).into(),
                         });
                     }
                 };
