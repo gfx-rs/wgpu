@@ -375,6 +375,16 @@ pub struct Surface {
     swapchain: RwLock<Option<Swapchain>>,
 }
 
+impl Surface {
+    /// Get the raw Vulkan swapchain associated with this surface.
+    ///
+    /// Returns `None` if the surface is not configured.
+    pub fn raw_swapchain(&self) -> Option<vk::SwapchainKHR> {
+        let read = self.swapchain.read();
+        read.as_ref().map(|it| it.raw)
+    }
+}
+
 #[derive(Debug)]
 pub struct SurfaceTexture {
     index: u32,
