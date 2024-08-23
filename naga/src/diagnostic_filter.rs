@@ -1,9 +1,18 @@
 use crate::{Handle, Span};
 
+#[cfg(feature = "arbitrary")]
+use arbitrary::Arbitrary;
 use indexmap::IndexMap;
+#[cfg(feature = "deserialize")]
+use serde::Deserialize;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
 
 // TODO: docs
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum Severity {
     Off,
@@ -26,6 +35,9 @@ impl Severity {
 
 // TODO: docs
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum DiagnosticTriggeringRule {
     DerivativeUniformity,
@@ -33,6 +45,9 @@ pub enum DiagnosticTriggeringRule {
 
 // TODO: docs
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct DiagnosticFilter {
     pub new_severity: Severity,
     pub triggering_rule: DiagnosticTriggeringRule,
@@ -76,6 +91,19 @@ impl DiagnosticFilterMap {
         }
     }
 }
+
+#[cfg(feature = "wgsl-in")]
+impl IntoIterator for DiagnosticFilterMap {
+    type Item = (DiagnosticTriggeringRule, (Severity, Span));
+
+    type IntoIter = indexmap::map::IntoIter<DiagnosticTriggeringRule, (Severity, Span)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Self(this) = self;
+        this.into_iter()
+    }
+}
+
 #[cfg(feature = "wgsl-in")]
 #[derive(Clone, Debug)]
 pub(crate) struct ConflictingDiagnosticRuleError {
@@ -85,6 +113,9 @@ pub(crate) struct ConflictingDiagnosticRuleError {
 
 // TODO: docs
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct DiagnosticFilterNode {
     pub inner: DiagnosticFilter,
     pub parent: Option<Handle<DiagnosticFilterNode>>,

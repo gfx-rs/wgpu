@@ -1,5 +1,5 @@
 use crate::diagnostic_filter::{
-    DiagnosticFilter, DiagnosticFilterMap, DiagnosticTriggeringRule, Severity,
+    DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, DiagnosticTriggeringRule, Severity,
 };
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::DirectiveKind;
@@ -2510,6 +2510,9 @@ impl Parser {
             }
         }
 
+        tu.diagnostic_filter_head =
+            Self::write_diagnostic_filters(&mut tu.diagnostic_filters, diagnostic_filters, None);
+
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
                 Err(error) => return Err(error),
@@ -2604,5 +2607,26 @@ impl Parser {
 
         // TODO: tests
         Ok(filter)
+    }
+
+    pub(crate) fn write_diagnostic_filters(
+        arena: &mut Arena<DiagnosticFilterNode>,
+        filters: DiagnosticFilterMap,
+        parent: Option<Handle<DiagnosticFilterNode>>,
+    ) -> Option<Handle<DiagnosticFilterNode>> {
+        filters
+            .into_iter()
+            .fold(parent, |acc, (triggering_rule, (new_severity, span))| {
+                Some(arena.append(
+                    DiagnosticFilterNode {
+                        inner: DiagnosticFilter {
+                            new_severity,
+                            triggering_rule,
+                        },
+                        parent: acc,
+                    },
+                    span,
+                ))
+            })
     }
 }
