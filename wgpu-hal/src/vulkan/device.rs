@@ -709,11 +709,7 @@ impl super::Device {
                 .get_physical_device_memory_properties(self.shared.physical_device)
         };
 
-        for (i, mem_ty) in mem_properties
-            .memory_types_as_slice()
-            .into_iter()
-            .enumerate()
-        {
+        for (i, mem_ty) in mem_properties.memory_types_as_slice().iter().enumerate() {
             if type_bits & (1 << i) != 0 && mem_ty.property_flags & flags == flags {
                 return Some(i);
             }
@@ -722,14 +718,20 @@ impl super::Device {
         None
     }
 
-    /// # Safety
-    /// The `d3d11_shared_handle` must be valid and respecting `desc`.
-    #[cfg(windows)]
-    pub unsafe fn texture_from_d3d11_shared_handle(
+    fn create_image_without_memory(
         &self,
-        d3d11_shared_handle: *mut std::ffi::c_void,
         desc: &crate::TextureDescriptor,
-    ) -> ash::prelude::VkResult<super::Texture> {
+        external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
+    ) -> Result<
+        (
+            vk::Image,
+            vk::MemoryRequirements,
+            crate::CopyExtent,
+            Vec<wgt::TextureFormat>,
+            vk::ImageCreateFlags,
+        ),
+        crate::DeviceError,
+    > {
         let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
@@ -777,12 +779,39 @@ impl super::Device {
             vk_info = vk_info.push_next(&mut format_list_info);
         }
 
+        if let Some(ext_info) = external_memory_image_create_info {
+            vk_info = vk_info.push_next(ext_info);
+        }
+
+        let raw = unsafe {
+            self.shared
+                .raw
+                .create_image(&vk_info, None)
+                .map_err(map_err)?
+        };
+        fn map_err(err: vk::Result) -> crate::DeviceError {
+            // We don't use VK_EXT_image_compression_control
+            // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
+            super::map_host_device_oom_and_ioca_err(err)
+        }
+        let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+
+        Ok((raw, req, copy_size, wgt_view_formats, raw_flags))
+    }
+
+    /// # Safety
+    /// The `d3d11_shared_handle` must be valid and respecting `desc`.
+    #[cfg(windows)]
+    pub unsafe fn texture_from_d3d11_shared_handle(
+        &self,
+        d3d11_shared_handle: *mut std::ffi::c_void,
+        desc: &crate::TextureDescriptor,
+    ) -> Result<super::Texture, crate::DeviceError> {
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
             .handle_types(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT);
-        vk_info = vk_info.push_next(&mut external_memory_image_info);
 
-        let raw = unsafe { self.shared.raw.create_image(&vk_info, None)? };
-        let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+        let (raw, req, copy_size, wgt_view_formats, raw_flags) =
+            self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
 
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT)
@@ -791,7 +820,7 @@ impl super::Device {
         let Some(mem_type_index) = self
             .find_memory_type_index(req.memory_type_bits, vk::MemoryPropertyFlags::DEVICE_LOCAL)
         else {
-            return Err(vk::Result::ERROR_UNKNOWN);
+            return Err(crate::DeviceError::ResourceCreationFailed);
         };
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
@@ -801,9 +830,22 @@ impl super::Device {
         let memory = unsafe {
             self.shared
                 .raw
-                .allocate_memory(&memory_allocate_info, None)?
+                .allocate_memory(&memory_allocate_info, None)
+                .map_err(super::map_host_device_oom_err)?
         };
-        unsafe { self.shared.raw.bind_image_memory(raw, memory, 0)? };
+
+        unsafe {
+            self.shared
+                .raw
+                .bind_image_memory(raw, memory, 0)
+                .map_err(super::map_host_device_oom_err)?
+        };
+
+        if let Some(label) = desc.label {
+            unsafe { self.shared.set_object_name(raw, label) };
+        }
+
+        self.counters.textures.add(1);
 
         Ok(super::Texture {
             raw,
@@ -1151,65 +1193,8 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let copy_size = desc.copy_extent();
-
-        let mut raw_flags = vk::ImageCreateFlags::empty();
-        if desc.is_cube_compatible() {
-            raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
-        }
-
-        let original_format = self.shared.private_caps.map_texture_format(desc.format);
-        let mut vk_view_formats = vec![];
-        let mut wgt_view_formats = vec![];
-        if !desc.view_formats.is_empty() {
-            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
-            wgt_view_formats.clone_from(&desc.view_formats);
-            wgt_view_formats.push(desc.format);
-
-            if self.shared.private_caps.image_format_list {
-                vk_view_formats = desc
-                    .view_formats
-                    .iter()
-                    .map(|f| self.shared.private_caps.map_texture_format(*f))
-                    .collect();
-                vk_view_formats.push(original_format)
-            }
-        }
-        if desc.format.is_multi_planar_format() {
-            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
-        }
-
-        let mut vk_info = vk::ImageCreateInfo::default()
-            .flags(raw_flags)
-            .image_type(conv::map_texture_dimension(desc.dimension))
-            .format(original_format)
-            .extent(conv::map_copy_extent(&copy_size))
-            .mip_levels(desc.mip_level_count)
-            .array_layers(desc.array_layer_count())
-            .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(conv::map_texture_usage(desc.usage))
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .initial_layout(vk::ImageLayout::UNDEFINED);
-
-        let mut format_list_info = vk::ImageFormatListCreateInfo::default();
-        if !vk_view_formats.is_empty() {
-            format_list_info = format_list_info.view_formats(&vk_view_formats);
-            vk_info = vk_info.push_next(&mut format_list_info);
-        }
-
-        let raw = unsafe {
-            self.shared
-                .raw
-                .create_image(&vk_info, None)
-                .map_err(map_err)?
-        };
-        fn map_err(err: vk::Result) -> crate::DeviceError {
-            // We don't use VK_EXT_image_compression_control
-            // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
-            super::map_host_device_oom_and_ioca_err(err)
-        }
-        let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+        let (raw, req, copy_size, wgt_view_formats, raw_flags) =
+            self.create_image_without_memory(desc, None)?;
 
         let block = unsafe {
             self.mem_allocator.lock().alloc(
