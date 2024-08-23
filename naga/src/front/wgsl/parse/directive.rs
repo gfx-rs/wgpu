@@ -8,6 +8,8 @@ pub(crate) mod language_extension;
 /// A parsed sentinel word indicating the type of directive to be parsed next.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub(crate) enum DirectiveKind {
+    /// A [`crate::diagnostic_filter`].
+    Diagnostic,
     /// An [`enable_extension`].
     Enable,
     /// A [`language_extension`].
@@ -23,7 +25,7 @@ impl DirectiveKind {
     /// Convert from a sentinel word in WGSL into its associated [`DirectiveKind`], if possible.
     pub fn from_ident(s: &str) -> Option<Self> {
         Some(match s {
-            Self::DIAGNOSTIC => Self::Unimplemented(UnimplementedDirectiveKind::Diagnostic),
+            Self::DIAGNOSTIC => Self::Diagnostic,
             Self::ENABLE => Self::Enable,
             Self::REQUIRES => Self::Requires,
             _ => return None,
@@ -33,11 +35,10 @@ impl DirectiveKind {
     /// Maps this [`DirectiveKind`] into the sentinel word associated with it in WGSL.
     pub const fn to_ident(self) -> &'static str {
         match self {
+            Self::Diagnostic => Self::DIAGNOSTIC,
             Self::Enable => Self::ENABLE,
             Self::Requires => Self::REQUIRES,
-            Self::Unimplemented(kind) => match kind {
-                UnimplementedDirectiveKind::Diagnostic => Self::DIAGNOSTIC,
-            },
+            Self::Unimplemented(kind) => match kind {},
         }
     }
 
@@ -45,7 +46,7 @@ impl DirectiveKind {
     fn iter() -> impl Iterator<Item = Self> {
         use strum::IntoEnumIterator;
 
-        [Self::Enable, Self::Requires]
+        [Self::Diagnostic, Self::Enable, Self::Requires]
             .into_iter()
             .chain(UnimplementedDirectiveKind::iter().map(Self::Unimplemented))
     }
@@ -54,15 +55,25 @@ impl DirectiveKind {
 /// A [`DirectiveKind`] that is not yet implemented. See [`DirectiveKind::Unimplemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(test, derive(strum::EnumIter))]
-pub(crate) enum UnimplementedDirectiveKind {
-    Diagnostic,
-}
+pub(crate) enum UnimplementedDirectiveKind {}
 
 impl UnimplementedDirectiveKind {
     pub const fn tracking_issue_num(self) -> u16 {
-        match self {
-            Self::Diagnostic => 5320,
-        }
+        match self {}
+    }
+}
+
+impl crate::diagnostic_filter::Severity {
+    #[cfg(feature = "wgsl-in")]
+    pub(crate) fn report_wgsl_parse_diag<'a>(
+        self,
+        err: crate::front::wgsl::error::Error<'a>,
+        source: &str,
+    ) -> Result<(), crate::front::wgsl::error::Error<'a>> {
+        self.report_diag(err, |e, level| {
+            let e = e.as_parse_error(source);
+            log::log!(level, "{}", e.emit_to_string(source));
+        })
     }
 }
 
@@ -75,25 +86,12 @@ mod test {
     use super::{DirectiveKind, UnimplementedDirectiveKind};
 
     #[test]
+    #[allow(clippy::never_loop, unreachable_code, unused_variables)]
     fn unimplemented_directives() {
         for unsupported_shader in UnimplementedDirectiveKind::iter() {
             let shader;
             let expected_msg;
-            match unsupported_shader {
-                UnimplementedDirectiveKind::Diagnostic => {
-                    shader = "diagnostic(off,derivative_uniformity);";
-                    expected_msg = "\
-error: the `diagnostic` directive is not yet implemented
-  ┌─ wgsl:1:1
-  │
-1 │ diagnostic(off,derivative_uniformity);
-  │ ^^^^^^^^^^ this global directive is standard, but not yet implemented
-  │
-  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5320>, so they can prioritize it!
-
-";
-                }
-            };
+            match unsupported_shader {};
 
             assert_parse_err(shader, expected_msg);
         }
@@ -105,7 +103,7 @@ error: the `diagnostic` directive is not yet implemented
             let directive;
             let expected_msg;
             match unsupported_shader {
-                DirectiveKind::Unimplemented(UnimplementedDirectiveKind::Diagnostic) => {
+                DirectiveKind::Diagnostic => {
                     directive = "diagnostic(off,derivative_uniformity)";
                     expected_msg = "\
 error: expected global declaration, but found a global directive
@@ -144,6 +142,7 @@ error: expected global declaration, but found a global directive
 
 ";
                 }
+                DirectiveKind::Unimplemented(kind) => match kind {},
             }
 
             let shader = format!(

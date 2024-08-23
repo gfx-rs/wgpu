@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+## New Features
+
+### Naga
+
+- Parse `diagnostic(…)` directives, but don't implement any triggering rules yet. By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456).
+
 ## 23.0.0 (2024-10-25)
 
 ### Themes of this release
