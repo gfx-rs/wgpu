@@ -105,6 +105,11 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
+# Enable the VK_GOOGLE_display_timing Vulkan extension if supported.
+# This API has no stability guarantees.
+# https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
+unstable_vulkan_google_display_timing = []
+
 [[example]]
 name = "halmark"
 
@@ -204,8 +209,8 @@ features = ["wgsl-in"]
 [dev-dependencies]
 cfg-if.workspace = true
 env_logger.workspace = true
-glam.workspace = true # for ray-traced-triangle example
-winit.workspace = true # for "halmark" example
+glam.workspace = true       # for ray-traced-triangle example
+winit.workspace = true      # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 glutin.workspace = true # for "gles" example

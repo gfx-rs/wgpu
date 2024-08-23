@@ -40,7 +40,10 @@ use std::{
 };
 
 use arrayvec::ArrayVec;
-use ash::{ext, khr, vk};
+use ash::{
+    ext, khr,
+    vk::{self, PresentTimeGOOGLE},
+};
 use parking_lot::{Mutex, RwLock};
 use wgt::InternalCounter;
 
@@ -355,6 +358,8 @@ struct Swapchain {
     /// index as the image index, but we need to specify the semaphore as an argument
     /// to the acquire_next_image function which is what tells us which image to use.
     next_semaphore_index: usize,
+    #[cfg(feature = "unstable_vulkan_google_display_timing")]
+    next_present_times: Option<PresentTimeGOOGLE>,
 }
 
 impl Swapchain {
@@ -382,6 +387,27 @@ impl Surface {
     pub fn raw_swapchain(&self) -> Option<vk::SwapchainKHR> {
         let read = self.swapchain.read();
         read.as_ref().map(|it| it.raw)
+    }
+
+    /// Set the present timing information which will be used for the next presentation.
+    ///
+    /// Warns if the device doesn't [support present timing](Device::supports_google_display_timing).
+    ///
+    /// # Panics
+    ///
+    /// If the surface hasn't been configured.
+    #[cfg(feature = "unstable_vulkan_google_display_timing")]
+    #[track_caller]
+    pub fn set_next_present_times(&self, present_timing: PresentTimeGOOGLE) {
+        let mut swapchain = self.swapchain.write();
+        let swapchain = swapchain
+            .as_mut()
+            .expect("Surface should have been configured");
+        if swapchain.device.has_google_display_timing_extension {
+            swapchain.next_present_times = Some(present_timing);
+        } else {
+            log::warn!("Tried to call set_next_present_times on a device which doesn't support.");
+        }
     }
 }
 
@@ -561,6 +587,8 @@ struct DeviceShared {
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
+    #[cfg(feature = "unstable_vulkan_google_display_timing")]
+    has_google_display_timing_extension: bool,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     pipeline_cache_validation_key: [u8; 16],
@@ -583,6 +611,16 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     counters: wgt::HalCounters,
+}
+
+impl Device {
+    /// Returns true if this device supports [VK_GOOGLE_display_timing].
+    ///
+    /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
+    #[cfg(feature = "unstable_vulkan_google_display_timing")]
+    pub fn supports_google_display_timing(&self) -> bool {
+        self.shared.has_google_display_timing_extension
+    }
 }
 
 /// Semaphores for forcing queue submissions to run in order.
@@ -1167,7 +1205,21 @@ impl crate::Queue for Queue {
             .swapchains(&swapchains)
             .image_indices(&image_indices)
             .wait_semaphores(swapchain_semaphores.get_present_wait_semaphores());
-
+        #[cfg(feature = "unstable_vulkan_google_display_timing")]
+        let mut display_timing;
+        #[cfg(feature = "unstable_vulkan_google_display_timing")]
+        let present_times;
+        #[cfg(feature = "unstable_vulkan_google_display_timing")]
+        let vk_info = if let Some(present_time) = ssc.next_present_times.take() {
+            assert!(ssc.device.has_google_display_timing_extension);
+            display_timing = vk::PresentTimesInfoGOOGLE::default();
+            present_times = [present_time];
+            display_timing = display_timing.times(&present_times);
+            // Safety: We know that the display_timing extension is present.
+            vk_info.push_next(&mut display_timing)
+        } else {
+            vk_info
+        };
         let suboptimal = {
             profiling::scope!("vkQueuePresentKHR");
             unsafe { self.swapchain_fn.queue_present(self.raw, &vk_info) }.map_err(|error| {
