@@ -498,7 +498,7 @@ impl Global {
 
             let id = self
                 .surfaces
-                .prepare(wgt::Backend::Empty, id_in) // No specific backend for Surface, since it's not specific.
+                .prepare(Backend::Empty, id_in) // No specific backend for Surface, since it's not specific.
                 .assign(Arc::new(surface));
             Ok(id)
         }
