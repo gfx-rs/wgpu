@@ -270,6 +270,8 @@ pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 pub use crate::span::{SourceLocation, Span, SpanContext, WithSpan};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
+#[cfg(feature = "wgsl-in")]
+use diagnostic_filter::DiagnosticFilterNode;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -2272,4 +2274,12 @@ pub struct Module {
     pub functions: Arena<Function>,
     /// Entry points.
     pub entry_points: Vec<EntryPoint>,
+    /// Arena for all diagnostic filter rules parsed in this module, including those in functions.
+    #[cfg(feature = "wgsl-in")]
+    pub diagnostic_filters: Arena<DiagnosticFilterNode>,
+    /// The head of a linked list of `diagnostic(…)` directives parsed in this module.
+    ///
+    /// TODO: doc more
+    #[cfg(feature = "wgsl-in")]
+    pub diagnostic_filter_head: Option<Handle<DiagnosticFilterNode>>,
 }
