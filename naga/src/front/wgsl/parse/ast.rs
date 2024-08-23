@@ -129,6 +129,7 @@ pub struct Function<'a> {
     pub arguments: Vec<FunctionArgument<'a>>,
     pub result: Option<FunctionResult<'a>>,
     pub body: Block<'a>,
+    pub diagnostic_filter_head: Option<Handle<DiagnosticFilterNode>>,
 }
 
 #[derive(Debug)]

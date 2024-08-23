@@ -2191,6 +2191,7 @@ impl Parser {
     fn function_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
+        diagnostic_filter_head: Option<Handle<DiagnosticFilterNode>>,
         out: &mut ast::TranslationUnit<'a>,
         dependencies: &mut FastIndexSet<ast::Dependency<'a>>,
     ) -> Result<ast::Function<'a>, Error<'a>> {
@@ -2263,6 +2264,7 @@ impl Parser {
             arguments,
             result,
             body,
+            diagnostic_filter_head,
         };
 
         // done
@@ -2323,6 +2325,7 @@ impl Parser {
             types: &mut out.types,
             unresolved: &mut dependencies,
         };
+        let mut diagnostic_filters = DiagnosticFilterMap::new();
 
         self.push_rule_span(Rule::Attribute, lexer);
         while lexer.skip(Token::Attribute) {
@@ -2331,6 +2334,13 @@ impl Parser {
                     lexer.expect(Token::Paren('('))?;
                     bind_index.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
+                }
+                ("diagnostic", _name_span) => {
+                    if let Some(filter) = self.diagnostic_filter(lexer)? {
+                        let span = self.peek_rule_span(lexer);
+                        diagnostic_filters.add(filter, span)?;
+                        // TODO: ensure that it makes sense to apply this attribute
+                    }
                 }
                 ("group", name_span) => {
                     lexer.expect(Token::Paren('('))?;
@@ -2465,7 +2475,13 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Var(var))
             }
             (Token::Word("fn"), _) => {
-                let function = self.function_decl(lexer, out, &mut dependencies)?;
+                let diagnostic_filter_head = Self::write_diagnostic_filters(
+                    &mut out.diagnostic_filters,
+                    diagnostic_filters,
+                    out.diagnostic_filter_head,
+                );
+                let function =
+                    self.function_decl(lexer, diagnostic_filter_head, out, &mut dependencies)?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
