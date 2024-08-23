@@ -1,0 +1,89 @@
+use crate::{Handle, Span};
+
+use indexmap::IndexMap;
+
+// TODO: docs
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Severity {
+    Off,
+    Info,
+    Warning,
+    Error,
+}
+
+impl Severity {
+    pub fn from_ident(s: &str) -> Option<Self> {
+        Some(match s {
+            "error" => Self::Error,
+            "warning" => Self::Warning,
+            "info" => Self::Info,
+            "off" => Self::Off,
+            _ => return None,
+        })
+    }
+}
+
+// TODO: docs
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum DiagnosticTriggeringRule {
+    DerivativeUniformity,
+}
+
+// TODO: docs
+#[derive(Clone, Debug)]
+pub struct DiagnosticFilter {
+    pub new_severity: Severity,
+    pub triggering_rule: DiagnosticTriggeringRule,
+}
+
+// TODO: docs
+#[derive(Clone, Debug, Default)]
+// TODO: `FastIndexMap` mebbe?
+pub(crate) struct DiagnosticFilterMap(IndexMap<DiagnosticTriggeringRule, (Severity, Span)>);
+
+#[cfg(feature = "wgsl-in")]
+impl DiagnosticFilterMap {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn add(
+        &mut self,
+        diagnostic_filter: DiagnosticFilter,
+        span: Span,
+    ) -> Result<(), ConflictingDiagnosticRuleError> {
+        use indexmap::map::Entry;
+
+        let &mut Self(ref mut diagnostic_filters) = self;
+        let DiagnosticFilter {
+            new_severity,
+            triggering_rule,
+        } = diagnostic_filter;
+
+        match diagnostic_filters.entry(triggering_rule) {
+            Entry::Vacant(entry) => {
+                entry.insert((new_severity, span));
+                Ok(())
+            }
+            Entry::Occupied(entry) => {
+                return Err(ConflictingDiagnosticRuleError {
+                    triggering_rule,
+                    triggering_rule_spans: [entry.get().1, span],
+                })
+            }
+        }
+    }
+}
+#[cfg(feature = "wgsl-in")]
+#[derive(Clone, Debug)]
+pub(crate) struct ConflictingDiagnosticRuleError {
+    pub triggering_rule: DiagnosticTriggeringRule,
+    pub triggering_rule_spans: [Span; 2],
+}
+
+// TODO: docs
+#[derive(Clone, Debug)]
+pub struct DiagnosticFilterNode {
+    pub inner: DiagnosticFilter,
+    pub parent: Option<Handle<DiagnosticFilterNode>>,
+}

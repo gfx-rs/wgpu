@@ -1,15 +1,13 @@
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum DirectiveKind {
     Unimplemented(UnimplementedDirectiveKind),
+    Diagnostic,
 }
 
 impl DirectiveKind {
     pub fn from_ident(s: &str) -> Option<(Self, &'static str)> {
         Some(match s {
-            "diagnostic" => (
-                Self::Unimplemented(UnimplementedDirectiveKind::Diagnostic),
-                "diagnostic",
-            ),
+            "diagnostic" => (Self::Diagnostic, "diagnostic"),
             "enable" => (
                 Self::Unimplemented(UnimplementedDirectiveKind::Enable),
                 "enable",
@@ -33,7 +31,6 @@ impl DirectiveKind {
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum UnimplementedDirectiveKind {
-    Diagnostic,
     Enable,
     Requires,
 }
@@ -41,7 +38,6 @@ pub enum UnimplementedDirectiveKind {
 impl UnimplementedDirectiveKind {
     pub const fn tracking_issue_num(self) -> u16 {
         match self {
-            Self::Diagnostic => 5320,
             Self::Requires => 6350,
             Self::Enable => 5476,
         }
@@ -62,19 +58,6 @@ mod test {
             let shader;
             let expected_msg;
             match unsupported_shader {
-                UnimplementedDirectiveKind::Diagnostic => {
-                    shader = "diagnostic(off,derivative_uniformity);";
-                    expected_msg = "\
-error: `diagnostic` is not yet implemented
-  ┌─ wgsl:1:1
-  │
-1 │ diagnostic(off,derivative_uniformity);
-  │ ^^^^^^^^^^ this global directive is standard, but not yet implemented
-  │
-  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5320>, so they can prioritize it!
-
-";
-                }
                 UnimplementedDirectiveKind::Enable => {
                     shader = "enable f16;";
                     expected_msg = "\
@@ -113,7 +96,7 @@ error: `requires` is not yet implemented
             let directive;
             let expected_msg;
             match unsupported_shader {
-                DirectiveKind::Unimplemented(UnimplementedDirectiveKind::Diagnostic) => {
+                DirectiveKind::Diagnostic => {
                     directive = "diagnostic(off,derivative_uniformity)";
                     expected_msg = "\
 error: expected global declaration, but found a global directive
