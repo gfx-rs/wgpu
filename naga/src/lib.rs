@@ -2121,6 +2121,14 @@ pub struct Function {
     pub named_expressions: NamedExpressions,
     /// Block of instructions comprising the body of the function.
     pub body: Block,
+    /// The leaf of all diagnostic filter rules tree (stored in [`Module::diagnostic_filters`])
+    /// parsed on this function.
+    ///
+    /// In WGSL, this corresponds to `@diagnostic(…)` attributes.
+    ///
+    /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
+    /// validation.
+    pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
 }
 
 /// The main function for a pipeline stage.

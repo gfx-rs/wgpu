@@ -1284,6 +1284,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             expressions,
             named_expressions: crate::NamedExpressions::default(),
             body: crate::Block::default(),
+            diagnostic_filter_leaf: f.diagnostic_filter_leaf,
         };
 
         let mut typifier = Typifier::default();

@@ -486,6 +486,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -606,6 +607,7 @@
                         value: Some(14),
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],

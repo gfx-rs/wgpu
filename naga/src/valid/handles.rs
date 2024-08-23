@@ -122,6 +122,7 @@ impl super::Validator {
                 ref expressions,
                 ref named_expressions,
                 ref body,
+                ref diagnostic_filter_leaf,
             } = function;
 
             for arg in arguments.iter() {
@@ -164,6 +165,10 @@ impl super::Validator {
             }
 
             Self::validate_block_handles(body, expressions, functions)?;
+
+            if let Some(handle) = *diagnostic_filter_leaf {
+                handle.check_valid_for(diagnostic_filters)?;
+            }
 
             Ok(())
         };

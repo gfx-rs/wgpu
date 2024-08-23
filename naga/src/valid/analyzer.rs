@@ -1150,7 +1150,7 @@ impl ModuleInfo {
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
             sampling: crate::FastHashSet::default(),
             dual_source_blending: false,
-            diagnostic_filter_leaf: module.diagnostic_filter_leaf,
+            diagnostic_filter_leaf: fun.diagnostic_filter_leaf,
         };
         let resolve_context =
             ResolveContext::with_locals(module, &fun.local_variables, &fun.arguments);

@@ -127,6 +127,7 @@
                     value: Some(2),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("index_let_array"),
@@ -214,6 +215,7 @@
                     value: Some(10),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("index_let_matrix"),
@@ -289,6 +291,7 @@
                     value: Some(10),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -366,6 +369,7 @@
                         value: Some(9),
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],
