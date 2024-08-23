@@ -681,30 +681,31 @@ pub enum ErrorFilter {
 }
 static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
+/// Lower level source of the error.
+///
+/// `Send + Sync` varies depending on configuration.
+#[cfg(send_sync)]
+#[cfg_attr(docsrs, doc(cfg(all())))]
+pub type ErrorSource = Box<dyn error::Error + Send + Sync + 'static>;
+/// Lower level source of the error.
+///
+/// `Send + Sync` varies depending on configuration.
+#[cfg(not(send_sync))]
+#[cfg_attr(docsrs, doc(cfg(all())))]
+pub type ErrorSource = Box<dyn error::Error + 'static>;
+
 /// Error type
 #[derive(Debug)]
 pub enum Error {
     /// Out of memory error
     OutOfMemory {
         /// Lower level source of the error.
-        #[cfg(send_sync)]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + Sync + 'static>,
-        /// Lower level source of the error.
-        #[cfg(not(send_sync))]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + 'static>,
+        source: ErrorSource,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
         /// Lower level source of the error.
-        #[cfg(send_sync)]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + Sync + 'static>,
-        /// Lower level source of the error.
-        #[cfg(not(send_sync))]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + 'static>,
+        source: ErrorSource,
         /// Description of the validation error.
         description: String,
     },
@@ -713,13 +714,7 @@ pub enum Error {
     /// These could be due to internal implementation or system limits being reached.
     Internal {
         /// Lower level source of the error.
-        #[cfg(send_sync)]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + Sync + 'static>,
-        /// Lower level source of the error.
-        #[cfg(not(send_sync))]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + 'static>,
+        source: ErrorSource,
         /// Description of the internal GPU error.
         description: String,
     },
