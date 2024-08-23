@@ -800,13 +800,19 @@ impl super::Device {
     }
 
     /// # Safety
-    /// The `d3d11_shared_handle` must be valid and respecting `desc`.
+    ///
+    /// - Vulkan 1.1+ (or VK_KHR_external_memory)
+    /// - The `d3d11_shared_handle` must be valid and respecting `desc`
     #[cfg(windows)]
     pub unsafe fn texture_from_d3d11_shared_handle(
         &self,
         d3d11_shared_handle: *mut std::ffi::c_void,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
+        if !self.shared.private_caps.external_memory_win32 {
+            return Err(crate::DeviceError::ResourceCreationFailed);
+        }
+
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
             .handle_types(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT);
 
