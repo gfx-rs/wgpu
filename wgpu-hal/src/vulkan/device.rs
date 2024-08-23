@@ -723,11 +723,11 @@ impl super::Device {
     }
 
     /// # Safety
-    ///
+    /// The `d3d11_shared_handle` must be valid and respecting `desc`.
     #[cfg(windows)]
     pub unsafe fn texture_from_d3d11_shared_handle(
         &self,
-        d3d11_shared_handle: vk::HANDLE,
+        d3d11_shared_handle: *mut std::ffi::c_void,
         desc: &crate::TextureDescriptor,
     ) -> ash::prelude::VkResult<super::Texture> {
         let copy_size = desc.copy_extent();
@@ -786,7 +786,7 @@ impl super::Device {
 
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT)
-            .handle(d3d11_shared_handle);
+            .handle(d3d11_shared_handle as _);
 
         let Some(mem_type_index) = self
             .find_memory_type_index(req.memory_type_bits, vk::MemoryPropertyFlags::DEVICE_LOCAL)
