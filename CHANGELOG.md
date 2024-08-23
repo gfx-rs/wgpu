@@ -61,6 +61,10 @@ By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://
 
 * Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
 
+#### Vulkan
+
+- Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149)
+
 ### Bug Fixes
 
 - Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
