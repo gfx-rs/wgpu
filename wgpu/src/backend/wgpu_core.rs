@@ -269,6 +269,7 @@ impl ContextWgpuCore {
     }
 
     #[cold]
+    #[track_caller]
     #[inline(never)]
     fn handle_error_inner(
         &self,
@@ -306,6 +307,7 @@ impl ContextWgpuCore {
     }
 
     #[inline]
+    #[track_caller]
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
@@ -317,6 +319,7 @@ impl ContextWgpuCore {
     }
 
     #[inline]
+    #[track_caller]
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
@@ -1502,7 +1505,7 @@ impl crate::Context for ContextWgpuCore {
         handler: Box<dyn UncapturedErrorHandler>,
     ) {
         let mut error_sink = device_data.error_sink.lock();
-        error_sink.uncaptured_handler = handler;
+        error_sink.uncaptured_handler = Some(handler);
     }
     fn device_push_error_scope(
         &self,
@@ -3390,17 +3393,18 @@ struct ErrorScope {
 
 struct ErrorSinkRaw {
     scopes: Vec<ErrorScope>,
-    uncaptured_handler: Box<dyn crate::UncapturedErrorHandler>,
+    uncaptured_handler: Option<Box<dyn crate::UncapturedErrorHandler>>,
 }
 
 impl ErrorSinkRaw {
     fn new() -> ErrorSinkRaw {
         ErrorSinkRaw {
             scopes: Vec::new(),
-            uncaptured_handler: Box::from(default_error_handler),
+            uncaptured_handler: None,
         }
     }
 
+    #[track_caller]
     fn handle_error(&mut self, err: crate::Error) {
         let filter = match err {
             crate::Error::OutOfMemory { .. } => crate::ErrorFilter::OutOfMemory,
@@ -3419,7 +3423,12 @@ impl ErrorSinkRaw {
                 }
             }
             None => {
-                (self.uncaptured_handler)(err);
+                if let Some(custom_handler) = self.uncaptured_handler.as_ref() {
+                    (custom_handler)(err);
+                } else {
+                    // direct call preserves #[track_caller] where dyn can't
+                    default_error_handler(err);
+                }
             }
         }
     }
@@ -3431,6 +3440,7 @@ impl fmt::Debug for ErrorSinkRaw {
     }
 }
 
+#[track_caller]
 fn default_error_handler(err: crate::Error) {
     log::error!("Handling wgpu errors as fatal by default");
     panic!("wgpu error: {err}\n");
