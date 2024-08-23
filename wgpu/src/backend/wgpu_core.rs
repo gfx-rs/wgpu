@@ -3,7 +3,7 @@ use crate::{
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
+    DownlevelCapabilities, ErrorSource, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineCacheDescriptor, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor,
     RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, ShaderSource, StoreOp, SurfaceStatus, SurfaceTargetUnsafe,
@@ -277,29 +277,32 @@ impl ContextWgpuCore {
         label: Label<'_>,
         fn_ident: &'static str,
     ) {
-        let error = wgc::error::ContextError {
+        let source_error: ErrorSource = Box::new(wgc::error::ContextError {
             fn_ident,
             source,
             label: label.unwrap_or_default().to_string(),
-        };
-        let mut sink = sink_mutex.lock();
-        let mut source_opt: Option<&(dyn Error + 'static)> = Some(&error);
-        while let Some(source) = source_opt {
-            if let Some(wgc::device::DeviceError::OutOfMemory) =
-                source.downcast_ref::<wgc::device::DeviceError>()
-            {
-                return sink.handle_error(crate::Error::OutOfMemory {
-                    source: Box::new(error),
-                });
-            }
-            source_opt = source.source();
-        }
-
-        // Otherwise, it is a validation error
-        sink.handle_error(crate::Error::Validation {
-            description: self.format_error(&error),
-            source: Box::new(error),
         });
+        let mut sink = sink_mutex.lock();
+        let mut source_opt: Option<&(dyn Error + 'static)> = Some(&*source_error);
+        let error = loop {
+            if let Some(source) = source_opt {
+                if let Some(wgc::device::DeviceError::OutOfMemory) =
+                    source.downcast_ref::<wgc::device::DeviceError>()
+                {
+                    break crate::Error::OutOfMemory {
+                        source: source_error,
+                    };
+                }
+                source_opt = source.source();
+            } else {
+                // Otherwise, it is a validation error
+                break crate::Error::Validation {
+                    description: self.format_error(&*source_error),
+                    source: source_error,
+                };
+            }
+        };
+        sink.handle_error(error);
     }
 
     #[inline]
@@ -334,7 +337,7 @@ impl ContextWgpuCore {
     }
 
     #[inline(never)]
-    fn format_error(&self, err: &(impl Error + 'static)) -> String {
+    fn format_error(&self, err: &(dyn Error + 'static)) -> String {
         let mut output = String::new();
         let mut level = 1;
 
