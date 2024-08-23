@@ -51,4 +51,6 @@
         ),
     ],
     entry_points: [],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
 )
