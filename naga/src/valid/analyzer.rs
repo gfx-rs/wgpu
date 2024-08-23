@@ -6,7 +6,7 @@
 //! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
-use crate::diagnostic_filter::DiagnosticFilterNode;
+use crate::diagnostic_filter::{DiagnosticFilterNode, FilterableTriggeringRule};
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
@@ -16,10 +16,6 @@ use std::ops;
 
 pub type NonUniformResult = Option<Handle<crate::Expression>>;
 
-// Remove this once we update our uniformity analysis and
-// add support for the `derivative_uniformity` diagnostic
-const DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE: bool = true;
-
 bitflags::bitflags! {
     /// Kinds of expressions that require uniform control flow.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -27,8 +23,8 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct UniformityRequirements: u8 {
         const WORK_GROUP_BARRIER = 0x1;
-        const DERIVATIVE = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x2 };
-        const IMPLICIT_LEVEL = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x4 };
+        const DERIVATIVE = 0x2;
+        const IMPLICIT_LEVEL = 0x4;
     }
 }
 
@@ -828,7 +824,6 @@ impl FunctionInfo {
     /// Returns a `NonUniformControlFlow` error if any of the expressions in the block
     /// require uniformity, but the current flow is non-uniform.
     #[allow(clippy::or_fun_call)]
-    #[allow(clippy::only_used_in_recursion)]
     fn process_block(
         &mut self,
         statements: &crate::Block,
@@ -852,8 +847,21 @@ impl FunctionInfo {
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
-                                return Err(FunctionError::NonUniformControlFlow(req, expr, cause)
-                                    .with_span_handle(expr, expression_arena));
+                                let severity = DiagnosticFilterNode::search(
+                                    self.diagnostic_filter_leaf,
+                                    diagnostic_filter_arena,
+                                    FilterableTriggeringRule::DerivativeUniformity,
+                                );
+                                severity.report_diag(
+                                    FunctionError::NonUniformControlFlow(req, expr, cause)
+                                        .with_span_handle(expr, expression_arena),
+                                    // TODO: Yes, this isn't contextualized with source, because
+                                    // the user is supposed to render what would normally be an
+                                    // error here. Once we actually support warning-level
+                                    // diagnostic items, then we won't need this non-compliant hack:
+                                    // <https://github.com/gfx-rs/wgpu/issues/6458>
+                                    |e, level| log::log!(level, "{e}"),
+                                )?;
                             }
                         }
                         requirements |= req;
@@ -1336,26 +1344,58 @@ fn uniform_control_flow() {
     };
     {
         let block_info = info.process_block(
-            &vec![stmt_emit2, stmt_if_non_uniform].into(),
+            &vec![stmt_emit2.clone(), stmt_if_non_uniform.clone()].into(),
             &[],
             None,
             &expressions,
             &Arena::new(),
         );
-        if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE {
-            assert_eq!(info[derivative_expr].ref_count, 2);
-        } else {
-            assert_eq!(
-                block_info,
-                Err(FunctionError::NonUniformControlFlow(
-                    UniformityRequirements::DERIVATIVE,
-                    derivative_expr,
-                    UniformityDisruptor::Expression(non_uniform_global_expr)
-                )
-                .with_span()),
-            );
-            assert_eq!(info[derivative_expr].ref_count, 1);
-        }
+        assert_eq!(
+            block_info,
+            Err(FunctionError::NonUniformControlFlow(
+                UniformityRequirements::DERIVATIVE,
+                derivative_expr,
+                UniformityDisruptor::Expression(non_uniform_global_expr)
+            )
+            .with_span()),
+        );
+        assert_eq!(info[derivative_expr].ref_count, 1);
+
+        // Test that the same thing passes when we disable the `derivative_uniformity`
+        let mut diagnostic_filters = Arena::new();
+        let diagnostic_filter_leaf = diagnostic_filters.append(
+            DiagnosticFilterNode {
+                inner: crate::diagnostic_filter::DiagnosticFilter {
+                    new_severity: crate::diagnostic_filter::Severity::Off,
+                    triggering_rule: FilterableTriggeringRule::DerivativeUniformity,
+                },
+                parent: None,
+            },
+            crate::Span::default(),
+        );
+        let mut info = FunctionInfo {
+            diagnostic_filter_leaf: Some(diagnostic_filter_leaf),
+            ..info.clone()
+        };
+
+        let block_info = info.process_block(
+            &vec![stmt_emit2, stmt_if_non_uniform].into(),
+            &[],
+            None,
+            &expressions,
+            &diagnostic_filters,
+        );
+        assert_eq!(
+            block_info,
+            Ok(FunctionUniformity {
+                result: Uniformity {
+                    non_uniform_result: None,
+                    requirements: UniformityRequirements::DERIVATIVE,
+                },
+                exit: ExitFlags::empty()
+            }),
+        );
+        assert_eq!(info[derivative_expr].ref_count, 2);
     }
     assert_eq!(info[non_uniform_global], GlobalUse::READ);
 

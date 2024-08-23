@@ -48,7 +48,6 @@ impl Severity {
     /// Naga does not yet support diagnostic items at lesser severities than
     /// [`Severity::Error`]. When this is implemented, this method should be deleted, and the
     /// severity should be used directly for reporting diagnostics.
-    #[cfg(feature = "wgsl-in")]
     pub(crate) fn report_diag<E>(
         self,
         err: E,
@@ -101,7 +100,6 @@ impl FilterableTriggeringRule {
     ///
     /// See <https://www.w3.org/TR/WGSL/#filterable-triggering-rules> for a table of default
     /// severities.
-    #[allow(dead_code)]
     pub(crate) const fn default_severity(self) -> Severity {
         match self {
             FilterableTriggeringRule::DerivativeUniformity => Severity::Error,
@@ -227,7 +225,6 @@ impl DiagnosticFilterNode {
     /// is found, return the value of [`FilterableTriggeringRule::default_severity`].
     ///
     /// When `triggering_rule` is not applicable to this node, its parent is consulted recursively.
-    #[allow(dead_code)]
     pub(crate) fn search(
         node: Option<Handle<Self>>,
         arena: &Arena<Self>,
