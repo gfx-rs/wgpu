@@ -1,0 +1,24 @@
+(
+    types: [],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [],
+    global_expressions: [],
+    functions: [],
+    entry_points: [],
+    diagnostic_filters: [
+        (
+            inner: (
+                new_severity: Off,
+                triggering_rule: DerivativeUniformity,
+            ),
+            parent: None,
+        ),
+    ],
+    diagnostic_filter_leaf: Some(0),
+)

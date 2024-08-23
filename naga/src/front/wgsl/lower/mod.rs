@@ -1013,7 +1013,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         tu: &'temp ast::TranslationUnit<'source>,
     ) -> Result<crate::Module, Error<'source>> {
-        let mut module = crate::Module::default();
+        let mut module = crate::Module {
+            diagnostic_filters: tu.diagnostic_filters.clone(),
+            diagnostic_filter_leaf: tu.diagnostic_filter_leaf,
+            ..Default::default()
+        };
 
         let mut ctx = GlobalContext {
             ast_expressions: &tu.expressions,

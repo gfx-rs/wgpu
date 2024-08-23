@@ -1,15 +1,24 @@
 //! [`DiagnosticFilter`]s and supporting functionality.
 
-use crate::Handle;
 #[cfg(feature = "wgsl-in")]
 use crate::Span;
+use crate::{Arena, Handle};
+#[cfg(feature = "arbitrary")]
+use arbitrary::Arbitrary;
 #[cfg(feature = "wgsl-in")]
 use indexmap::IndexMap;
+#[cfg(feature = "deserialize")]
+use serde::Deserialize;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
 
 /// A severity set on a [`DiagnosticFilter`].
 ///
 /// <https://www.w3.org/TR/WGSL/#diagnostic-severity>
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Severity {
     Off,
     Info,
@@ -63,6 +72,9 @@ impl Severity {
 ///
 /// <https://www.w3.org/TR/WGSL/#filterable-triggering-rules>
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum FilterableTriggeringRule {
     DerivativeUniformity,
 }
@@ -84,12 +96,26 @@ impl FilterableTriggeringRule {
             Self::DerivativeUniformity => Self::DERIVATIVE_UNIFORMITY,
         }
     }
+
+    /// The default severity associated with this triggering rule.
+    ///
+    /// See <https://www.w3.org/TR/WGSL/#filterable-triggering-rules> for a table of default
+    /// severities.
+    #[allow(dead_code)]
+    pub(crate) const fn default_severity(self) -> Severity {
+        match self {
+            FilterableTriggeringRule::DerivativeUniformity => Severity::Error,
+        }
+    }
 }
 
 /// A filter that modifies how diagnostics are emitted for shaders.
 ///
 /// <https://www.w3.org/TR/WGSL/#diagnostic-filter>
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct DiagnosticFilter {
     pub new_severity: Severity,
     pub triggering_rule: FilterableTriggeringRule,
@@ -140,6 +166,18 @@ impl DiagnosticFilterMap {
     }
 }
 
+#[cfg(feature = "wgsl-in")]
+impl IntoIterator for DiagnosticFilterMap {
+    type Item = (FilterableTriggeringRule, (Severity, Span));
+
+    type IntoIter = indexmap::map::IntoIter<FilterableTriggeringRule, (Severity, Span)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Self(this) = self;
+        this.into_iter()
+    }
+}
+
 /// An error returned by [`DiagnosticFilterMap::add`] when it encounters conflicting rules.
 #[cfg(feature = "wgsl-in")]
 #[derive(Clone, Debug)]
@@ -175,7 +213,41 @@ pub(crate) struct ConflictingDiagnosticRuleError {
 /// - `d` is the first leaf consulted by validation in `c_and_d_func`.
 /// - `e` is the first leaf consulted by validation in `e_func`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct DiagnosticFilterNode {
     pub inner: DiagnosticFilter,
     pub parent: Option<Handle<DiagnosticFilterNode>>,
+}
+
+impl DiagnosticFilterNode {
+    /// Finds the most specific filter rule applicable to `triggering_rule` from the chain of
+    /// diagnostic filter rules in `arena`, starting with `node`, and returns its severity. If none
+    /// is found, return the value of [`FilterableTriggeringRule::default_severity`].
+    ///
+    /// When `triggering_rule` is not applicable to this node, its parent is consulted recursively.
+    #[allow(dead_code)]
+    pub(crate) fn search(
+        node: Option<Handle<Self>>,
+        arena: &Arena<Self>,
+        triggering_rule: FilterableTriggeringRule,
+    ) -> Severity {
+        let mut next = node;
+        while let Some(handle) = next {
+            let node = &arena[handle];
+            let &Self { ref inner, parent } = node;
+            let &DiagnosticFilter {
+                triggering_rule: rule,
+                new_severity,
+            } = inner;
+
+            if rule == triggering_rule {
+                return new_severity;
+            }
+
+            next = parent;
+        }
+        triggering_rule.default_severity()
+    }
 }
