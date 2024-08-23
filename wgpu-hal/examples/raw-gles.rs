@@ -12,11 +12,11 @@ extern crate wgpu_hal as hal;
 
 #[cfg(not(any(windows, target_arch = "wasm32", target_os = "ios")))]
 fn main() {
-    use std::ffi::CString;
+    use std::{ffi::CString, num::NonZeroU32};
 
     use glutin::{
         config::GlConfig as _,
-        context::{NotCurrentGlContext as _, Version},
+        context::{NotCurrentGlContext as _, PossiblyCurrentGlContext as _},
         display::{GetGlDisplay as _, GlDisplay as _},
         surface::GlSurface as _,
     };
@@ -74,58 +74,16 @@ fn main() {
         .with_context_api(glutin::context::ContextApi::Gles(Some(Version::new(3, 0))))
         .build(raw_window_handle);
 
-    // TODO: Wrap in Option
-    let mut not_current_gl_context = unsafe {
+    let mut not_current_gl_context = Some(unsafe {
         gl_display
             .create_context(&gl_config, &context_attributes)
             .expect("failed to create context")
-    };
-
-    // TODO: For Android support this should happen inside Event::Resumed, and the inverse inside ::Suspended.
-    let window = window.take().unwrap_or_else(|| {
-        let window_builder = winit::window::WindowBuilder::new()
-            .with_title("WGPU raw GLES example (press Escape to exit)");
-        glutin_winit::finalize_window(&event_loop, window_builder, &gl_config).unwrap()
     });
 
-    let attrs = window.build_surface_attributes(Default::default());
-    let gl_surface = unsafe {
-        gl_config
-            .display()
-            .create_window_surface(&gl_config, &attrs)
-            .expect("Cannot create GL WindowSurface")
-    };
+    let mut state = None;
 
-    // Make it current.
-    // let gl_context = not_current_gl_context
-    //     .take()
-    //     .unwrap()
-    //     .make_current(&gl_surface)
-    //     .unwrap();
-    let gl_context = not_current_gl_context
-        .make_current(&gl_surface)
-        .expect("GL context cannot be made current with WindowSurface");
-
-    println!("Hooking up to wgpu-hal");
-    let exposed = unsafe {
-        <hal::api::Gles as hal::Api>::Adapter::new_external(|name| {
-            // XXX: On WGL this should only be called after the context was made current
-            gl_config
-                .display()
-                .get_proc_address(&CString::new(name).expect(name))
-        })
-    }
-    .expect("GL adapter can't be initialized");
-
-    let inner_size = window.inner_size();
-
-    fill_screen(&exposed, inner_size.width, inner_size.height);
-
-    // TODO: Swap in RedrawRequested
-    println!("Showing the window");
-    gl_surface
-        .swap_buffers(&gl_context)
-        .expect("Failed to swap buffers");
+    // Only needs to be loaded once
+    let mut exposed = None;
 
     event_loop
         .run(move |event, window_target| {
@@ -151,6 +109,95 @@ fn main() {
                             ..
                         },
                 } => window_target.exit(),
+                Event::Resumed => {
+                    let window = window.take().unwrap_or_else(|| {
+                        let window_builder = winit::window::WindowBuilder::new()
+                            .with_title("WGPU raw GLES example (press Escape to exit)");
+                        glutin_winit::finalize_window(window_target, window_builder, &gl_config)
+                            .unwrap()
+                    });
+
+                    let attrs = window.build_surface_attributes(Default::default());
+                    let gl_surface = unsafe {
+                        gl_config
+                            .display()
+                            .create_window_surface(&gl_config, &attrs)
+                            .expect("Cannot create GL WindowSurface")
+                    };
+
+                    // Make it current.
+                    let gl_context = not_current_gl_context
+                        .take()
+                        .unwrap()
+                        .make_current(&gl_surface)
+                        .expect("GL context cannot be made current with WindowSurface");
+
+                    // The context needs to be current for the Renderer to set up shaders and
+                    // buffers. It also performs function loading, which needs a current context on
+                    // WGL.
+                    println!("Hooking up to wgpu-hal");
+                    exposed.get_or_insert_with(|| {
+                        unsafe {
+                            <hal::api::Gles as hal::Api>::Adapter::new_external(|name| {
+                                // XXX: On WGL this should only be called after the context was made current
+                                gl_config
+                                    .display()
+                                    .get_proc_address(&CString::new(name).expect(name))
+                            })
+                        }
+                        .expect("GL adapter can't be initialized")
+                    });
+
+                    assert!(state.replace((gl_context, gl_surface, window)).is_none());
+                }
+                Event::Suspended => {
+                    // This event is only raised on Android, where the backing NativeWindow for a GL
+                    // Surface can appear and disappear at any moment.
+                    println!("Android window removed");
+
+                    // Destroy the GL Surface and un-current the GL Context before ndk-glue releases
+                    // the window back to the system.
+                    let (gl_context, ..) = state.take().unwrap();
+                    assert!(not_current_gl_context
+                        .replace(gl_context.make_not_current().unwrap())
+                        .is_none());
+                }
+                Event::WindowEvent {
+                    window_id: _,
+                    event: WindowEvent::Resized(size),
+                } => {
+                    if size.width != 0 && size.height != 0 {
+                        // Some platforms like EGL require resizing GL surface to update the size
+                        // Notable platforms here are Wayland and macOS, other don't require it
+                        // and the function is no-op, but it's wise to resize it for portability
+                        // reasons.
+                        if let Some((gl_context, gl_surface, _)) = &state {
+                            gl_surface.resize(
+                                gl_context,
+                                NonZeroU32::new(size.width).unwrap(),
+                                NonZeroU32::new(size.height).unwrap(),
+                            );
+                            // XXX: If there's a state for fill_screen(), this would need to be updated too.
+                        }
+                    }
+                }
+                Event::WindowEvent {
+                    window_id: _,
+                    event: WindowEvent::RedrawRequested,
+                } => {
+                    if let (Some(exposed), Some((gl_context, gl_surface, window))) =
+                        (&exposed, &state)
+                    {
+                        let inner_size = window.inner_size();
+
+                        fill_screen(exposed, inner_size.width, inner_size.height);
+
+                        println!("Showing the window");
+                        gl_surface
+                            .swap_buffers(gl_context)
+                            .expect("Failed to swap buffers");
+                    }
+                }
                 _ => (),
             }
         })
