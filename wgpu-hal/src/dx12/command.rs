@@ -53,7 +53,6 @@ impl crate::BufferTextureCopy {
 
 impl super::Temp {
     fn prepare_marker(&mut self, marker: &str) -> (&[u16], u32) {
-        // TODO: Store in HSTRING
         self.marker.clear();
         self.marker.extend(marker.encode_utf16());
         self.marker.push(0);
@@ -153,7 +152,7 @@ impl super::CommandEncoder {
         self.update_root_elements();
     }
 
-    //Note: we have to call this lazily before draw calls. Otherwise, D3D complains
+    // Note: we have to call this lazily before draw calls. Otherwise, D3D complains
     // about the root parameters being incompatible with root signature.
     fn update_root_elements(&mut self) {
         use super::{BufferViewKind as Bvk, PassKind as Pk};
@@ -265,7 +264,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let list = loop {
             if let Some(list) = self.free_lists.pop() {
-                let reset_result = unsafe { list.Reset(&self.allocator, None) }.into_result();
+                // TODO: Is an error expected here and should we print it?
+                let reset_result = unsafe { list.Reset(&self.allocator, None) };
                 if reset_result.is_ok() {
                     break Some(list);
                 }
@@ -314,7 +314,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for cmd_buf in command_buffers {
             self.free_lists.push(cmd_buf.raw);
         }
-        let _todo_handle_error = unsafe { self.allocator.Reset() };
+        if let Err(e) = unsafe { self.allocator.Reset() } {
+            log::error!("ID3D12CommandAllocator::Reset() failed with {e}");
+        }
     }
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
@@ -724,8 +726,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         cat.clear_value.b as f32,
                         cat.clear_value.a as f32,
                     ];
-                    // TODO: Empty slice vs None?
-                    unsafe { list.ClearRenderTargetView(*rtv, &value, Some(&[])) };
+                    unsafe { list.ClearRenderTargetView(*rtv, &value, None) };
                 }
                 if let Some(ref target) = cat.resolve_target {
                     self.pass.resolves.push(super::PassResolve {
@@ -754,12 +755,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
             if let Some(ds_view) = ds_view {
                 if flags != Direct3D12::D3D12_CLEAR_FLAGS::default() {
                     unsafe {
-                        list.ClearDepthStencilView(
+                        // list.ClearDepthStencilView(
+                        //     ds_view,
+                        //     flags,
+                        //     ds.clear_value.0,
+                        //     ds.clear_value.1 as u8,
+                        //     None,
+                        // )
+                        // TODO: Replace with the above in the next breaking windows-rs release,
+                        // when https://github.com/microsoft/win32metadata/pull/1971 is in.
+                        (windows_core::Interface::vtable(list).ClearDepthStencilView)(
+                            windows_core::Interface::as_raw(list),
                             ds_view,
                             flags,
                             ds.clear_value.0,
                             ds.clear_value.1 as u8,
-                            &[],
+                            0,
+                            std::ptr::null(),
                         )
                     }
                 }
@@ -796,7 +808,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                     Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
-                        //Note: this assumes `D3D12_RESOURCE_STATE_RENDER_TARGET`.
+                        // Note: this assumes `D3D12_RESOURCE_STATE_RENDER_TARGET`.
                         // If it's not the case, we can include the `TextureUses` in `PassResove`.
                         Transition: mem::ManuallyDrop::new(
                             Direct3D12::D3D12_RESOURCE_TRANSITION_BARRIER {
@@ -813,7 +825,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                     Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
-                        //Note: this assumes `D3D12_RESOURCE_STATE_RENDER_TARGET`.
+                        // Note: this assumes `D3D12_RESOURCE_STATE_RENDER_TARGET`.
                         // If it's not the case, we can include the `TextureUses` in `PassResolve`.
                         Transition: mem::ManuallyDrop::new(
                             Direct3D12::D3D12_RESOURCE_TRANSITION_BARRIER {
