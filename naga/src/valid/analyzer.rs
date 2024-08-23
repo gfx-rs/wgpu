@@ -6,7 +6,7 @@
 //! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
-use crate::diagnostic_filter::DiagnosticFilterNode;
+use crate::diagnostic_filter::{DiagnosticFilterNode, FilterableTriggeringRule};
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
@@ -828,7 +828,6 @@ impl FunctionInfo {
     /// Returns a `NonUniformControlFlow` error if any of the expressions in the block
     /// require uniformity, but the current flow is non-uniform.
     #[allow(clippy::or_fun_call)]
-    #[allow(clippy::only_used_in_recursion)]
     fn process_block(
         &mut self,
         statements: &crate::Block,
@@ -852,8 +851,21 @@ impl FunctionInfo {
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
-                                return Err(FunctionError::NonUniformControlFlow(req, expr, cause)
-                                    .with_span_handle(expr, expression_arena));
+                                let severity = DiagnosticFilterNode::search(
+                                    self.diagnostic_filter_leaf,
+                                    diagnostic_filter_arena,
+                                    FilterableTriggeringRule::DerivativeUniformity,
+                                );
+                                severity.report_diag(
+                                    FunctionError::NonUniformControlFlow(req, expr, cause)
+                                        .with_span_handle(expr, expression_arena),
+                                    // TODO: Yes, this isn't contextualized with source, because
+                                    // the user is supposed to render what would normally be an
+                                    // error here. Once we actually support warning-level
+                                    // diagnostic items, then we won't need this non-compliant hack:
+                                    // <https://github.com/gfx-rs/wgpu/issues/6458>
+                                    |e, level| log::log!(level, "{e}"),
+                                )?;
                             }
                         }
                         requirements |= req;
