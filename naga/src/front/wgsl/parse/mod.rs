@@ -1,5 +1,5 @@
 use crate::diagnostic_filter::{
-    DiagnosticFilter, DiagnosticFilterMap, DiagnosticTriggeringRule, Severity,
+    DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, DiagnosticTriggeringRule, Severity,
 };
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
@@ -2583,6 +2583,8 @@ impl Parser {
 
         lexer.enable_extensions = enable_extensions.clone();
         tu.enable_extensions = enable_extensions;
+        tu.diagnostic_filter_head =
+            Self::write_diagnostic_filters(&mut tu.diagnostic_filters, diagnostic_filters, None);
 
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
@@ -2665,5 +2667,26 @@ impl Parser {
         lexer.expect(Token::Paren(')'))?;
 
         Ok(filter)
+    }
+
+    pub(crate) fn write_diagnostic_filters(
+        arena: &mut Arena<DiagnosticFilterNode>,
+        filters: DiagnosticFilterMap,
+        parent: Option<Handle<DiagnosticFilterNode>>,
+    ) -> Option<Handle<DiagnosticFilterNode>> {
+        filters
+            .into_iter()
+            .fold(parent, |parent, (triggering_rule, (new_severity, span))| {
+                Some(arena.append(
+                    DiagnosticFilterNode {
+                        inner: DiagnosticFilter {
+                            new_severity,
+                            triggering_rule,
+                        },
+                        parent,
+                    },
+                    span,
+                ))
+            })
     }
 }

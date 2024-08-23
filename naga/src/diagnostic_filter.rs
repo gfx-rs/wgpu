@@ -2,10 +2,19 @@
 
 use crate::{Handle, Span};
 
+#[cfg(feature = "arbitrary")]
+use arbitrary::Arbitrary;
 use indexmap::IndexMap;
+#[cfg(feature = "deserialize")]
+use serde::Deserialize;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
 
 /// A severity set on a [`DiagnosticFilter`].
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Severity {
     Off,
     Info,
@@ -33,6 +42,9 @@ impl Severity {
 
 /// The rule being configured in a [`DiagnosticFilter`].
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum DiagnosticTriggeringRule {
     DerivativeUniformity,
 }
@@ -60,6 +72,9 @@ impl DiagnosticTriggeringRule {
 ///
 /// <https://www.w3.org/TR/WGSL/#diagnostic-filter>
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct DiagnosticFilter {
     pub new_severity: Severity,
     pub triggering_rule: DiagnosticTriggeringRule,
@@ -108,6 +123,18 @@ impl DiagnosticFilterMap {
 
 /// An error yielded by [`DiagnosticFilterMap::add`].
 #[cfg(feature = "wgsl-in")]
+impl IntoIterator for DiagnosticFilterMap {
+    type Item = (DiagnosticTriggeringRule, (Severity, Span));
+
+    type IntoIter = indexmap::map::IntoIter<DiagnosticTriggeringRule, (Severity, Span)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Self(this) = self;
+        this.into_iter()
+    }
+}
+
+#[cfg(feature = "wgsl-in")]
 #[derive(Clone, Debug)]
 pub(crate) struct ConflictingDiagnosticRuleError {
     pub triggering_rule: DiagnosticTriggeringRule,
@@ -117,6 +144,9 @@ pub(crate) struct ConflictingDiagnosticRuleError {
 /// Represents a single link in a linked list of [`DiagnosticFilter`]s backed by a
 /// [`crate::Arena`].
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct DiagnosticFilterNode {
     pub inner: DiagnosticFilter,
     pub parent: Option<Handle<DiagnosticFilterNode>>,
