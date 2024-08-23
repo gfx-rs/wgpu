@@ -1,6 +1,6 @@
 use super::conv;
 
-use ash::{amd, ext, google, khr, vk};
+use ash::{amd, ext, khr, vk};
 use parking_lot::Mutex;
 
 use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
@@ -1006,8 +1006,8 @@ impl PhysicalDeviceProperties {
 
         #[cfg(feature = "unstable_vulkan_google_display_timing")]
         // Support VK_GOOGLE_display_timing if it is requested *and* available.
-        if self.supports_extension(google::display_timing::NAME) {
-            extensions.push(google::display_timing::NAME);
+        if self.supports_extension(ash::google::display_timing::NAME) {
+            extensions.push(ash::google::display_timing::NAME);
         }
 
         extensions
@@ -1819,7 +1819,7 @@ impl super::Adapter {
         ];
 
         #[cfg(feature = "unstable_vulkan_google_display_timing")]
-        let has_display_timing = enabled_extensions.contains(&google::display_timing::NAME);
+        let has_display_timing = enabled_extensions.contains(&ash::google::display_timing::NAME);
 
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,

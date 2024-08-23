@@ -40,10 +40,7 @@ use std::{
 };
 
 use arrayvec::ArrayVec;
-use ash::{
-    ext, khr,
-    vk::{self, PresentTimeGOOGLE},
-};
+use ash::{ext, khr, vk};
 use parking_lot::{Mutex, RwLock};
 use wgt::InternalCounter;
 
@@ -359,7 +356,7 @@ struct Swapchain {
     /// to the acquire_next_image function which is what tells us which image to use.
     next_semaphore_index: usize,
     #[cfg(feature = "unstable_vulkan_google_display_timing")]
-    next_present_times: Option<PresentTimeGOOGLE>,
+    next_present_times: Option<vk::PresentTimeGOOGLE>,
 }
 
 impl Swapchain {
@@ -398,7 +395,7 @@ impl Surface {
     /// If the surface hasn't been configured.
     #[cfg(feature = "unstable_vulkan_google_display_timing")]
     #[track_caller]
-    pub fn set_next_present_times(&self, present_timing: PresentTimeGOOGLE) {
+    pub fn set_next_present_times(&self, present_timing: vk::PresentTimeGOOGLE) {
         let mut swapchain = self.swapchain.write();
         let swapchain = swapchain
             .as_mut()
