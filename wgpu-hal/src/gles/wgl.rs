@@ -1,11 +1,3 @@
-use glow::HasContext;
-use glutin_wgl_sys::wgl_extra::{
-    Wgl, CONTEXT_CORE_PROFILE_BIT_ARB, CONTEXT_DEBUG_BIT_ARB, CONTEXT_FLAGS_ARB,
-    CONTEXT_PROFILE_MASK_ARB,
-};
-use once_cell::sync::Lazy;
-use parking_lot::{Mutex, MutexGuard, RwLock};
-use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use std::{
     collections::HashSet,
     ffi::{c_void, CStr, CString},
@@ -19,6 +11,15 @@ use std::{
     thread,
     time::Duration,
 };
+
+use glow::HasContext;
+use glutin_wgl_sys::wgl_extra::{
+    Wgl, CONTEXT_CORE_PROFILE_BIT_ARB, CONTEXT_DEBUG_BIT_ARB, CONTEXT_FLAGS_ARB,
+    CONTEXT_PROFILE_MASK_ARB,
+};
+use once_cell::sync::Lazy;
+use parking_lot::{Mutex, MutexGuard, RwLock};
+use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use wgt::InstanceFlags;
 use windows::{
     core::{Error, PCSTR},
@@ -48,7 +49,10 @@ impl AdapterContext {
     }
 
     pub fn raw_context(&self) -> *mut c_void {
-        self.inner.lock().context.context.0
+        match self.inner.lock().context {
+            Some(ref wgl) => wgl.context.0,
+            None => ptr::null_mut(),
+        }
     }
 
     /// Obtain a lock to the WGL context and get handle to the [`glow::Context`] that can be used to
@@ -62,7 +66,9 @@ impl AdapterContext {
             .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
             .expect("Could not lock adapter context. This is most-likely a deadlock.");
 
-        inner.context.make_current(inner.device.dc).unwrap();
+        if let Some(wgl) = &inner.context {
+            wgl.make_current(inner.device.dc).unwrap()
+        };
 
         AdapterContextLock { inner }
     }
@@ -79,14 +85,15 @@ impl AdapterContext {
             .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
             .expect("Could not lock adapter context. This is most-likely a deadlock.");
 
-        inner
-            .context
-            .make_current(device)
-            .map(|()| AdapterContextLock { inner })
+        if let Some(wgl) = &inner.context {
+            wgl.make_current(device)?;
+        }
+
+        Ok(AdapterContextLock { inner })
     }
 }
 
-/// A guard containing a lock to an [`AdapterContext`]
+/// A guard containing a lock to an [`AdapterContext`], while the GL context is kept current.
 pub struct AdapterContextLock<'a> {
     inner: MutexGuard<'a, Inner>,
 }
@@ -101,7 +108,9 @@ impl<'a> std::ops::Deref for AdapterContextLock<'a> {
 
 impl<'a> Drop for AdapterContextLock<'a> {
     fn drop(&mut self) {
-        self.inner.context.unmake_current().unwrap();
+        if let Some(wgl) = &self.inner.context {
+            wgl.unmake_current().unwrap()
+        }
     }
 }
 
@@ -136,7 +145,7 @@ unsafe impl Sync for WglContext {}
 struct Inner {
     gl: ManuallyDrop<glow::Context>,
     device: InstanceDevice,
-    context: WglContext,
+    context: Option<WglContext>,
 }
 
 impl Drop for Inner {
@@ -150,8 +159,14 @@ impl Drop for Inner {
 
         // Context must be current when dropped. See safety docs on
         // `glow::HasContext`.
-        self.context.make_current(self.device.dc).unwrap();
-        let _guard = CurrentGuard(&self.context);
+        //
+        // NOTE: This is only set to `None` by `Adapter::new_external` which
+        // requires the context to be current when anything that may be holding
+        // the `Arc<AdapterShared>` is dropped.
+        let _guard = self.context.as_ref().map(|wgl| {
+            wgl.make_current(self.device.dc).unwrap();
+            CurrentGuard(wgl)
+        });
         // SAFETY: Field not used after this.
         unsafe { ManuallyDrop::drop(&mut self.gl) };
     }
@@ -510,7 +525,9 @@ impl crate::Instance for Instance {
             unsafe { gl.debug_message_callback(super::gl_debug_message_callback) };
         }
 
-        // Avoid accidental drop when the context is not current.
+        // Wrap in ManuallyDrop to make it easier to "current" the GL context before dropping this
+        // GLOW context, which could also happen if a panic occurs after we uncurrent the context
+        // below but before Inner is constructed.
         let gl = ManuallyDrop::new(gl);
         context.unmake_current().map_err(|e| {
             crate::InstanceError::with_source(
@@ -523,7 +540,7 @@ impl crate::Instance for Instance {
             inner: Arc::new(Mutex::new(Inner {
                 device,
                 gl,
-                context,
+                context: Some(context),
             })),
             srgb_capable,
         })
@@ -562,6 +579,43 @@ impl crate::Instance for Instance {
         }
         .into_iter()
         .collect()
+    }
+}
+
+impl super::Adapter {
+    /// Creates a new external adapter using the specified loader function.
+    ///
+    /// # Safety
+    ///
+    /// - The underlying OpenGL ES context must be current.
+    /// - The underlying OpenGL ES context must be current when interfacing with any objects returned by
+    ///   wgpu-hal from this adapter.
+    /// - The underlying OpenGL ES context must be current when dropping this adapter and when
+    ///   dropping any objects returned from this adapter.
+    pub unsafe fn new_external(
+        fun: impl FnMut(&str) -> *const c_void,
+    ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let context = unsafe { glow::Context::from_loader_function(fun) };
+        unsafe {
+            Self::expose(AdapterContext {
+                inner: Arc::new(Mutex::new(Inner {
+                    gl: ManuallyDrop::new(context),
+                    device: create_instance_device().ok()?,
+                    context: None,
+                })),
+            })
+        }
+    }
+
+    pub fn adapter_context(&self) -> &AdapterContext {
+        &self.shared.context
+    }
+}
+
+impl super::Device {
+    /// Returns the underlying WGL context.
+    pub fn context(&self) -> &AdapterContext {
+        &self.shared.context
     }
 }
 
