@@ -818,6 +818,7 @@ fn convert_wgsl() {
             "use-gl-ext-over-grad-workaround-if-instructed",
             Targets::GLSL,
         ),
+        ("local-const", Targets::IR | Targets::WGSL),
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
