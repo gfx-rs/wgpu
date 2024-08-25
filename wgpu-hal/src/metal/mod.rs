@@ -77,10 +77,35 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
-    type PipelineCache = ();
+    type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
 }
+
+crate::impl_dyn_resource!(
+    Adapter,
+    AccelerationStructure,
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Device,
+    Fence,
+    Instance,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    Queue,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    SurfaceTexture,
+    Texture,
+    TextureView
+);
 
 pub struct Instance {
     managed_metal_layer_delegate: surface::HalManagedMetalLayerDelegate,
@@ -128,11 +153,10 @@ impl crate::Instance for Instance {
         }
     }
 
-    unsafe fn destroy_surface(&self, surface: Surface) {
-        unsafe { surface.dispose() };
-    }
-
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&Surface>,
+    ) -> Vec<crate::ExposedAdapter<Api>> {
         let devices = unsafe { Retained::from_raw(MTLCopyAllDevices().as_ptr()).unwrap() };
         let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
             .into_iter()
@@ -353,6 +377,7 @@ impl Queue {
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
+    counters: wgt::HalCounters,
 }
 
 pub struct Surface {
@@ -376,8 +401,16 @@ pub struct SurfaceTexture {
     present_with_transaction: bool,
 }
 
+impl crate::DynSurfaceTexture for SurfaceTexture {}
+
 impl std::borrow::Borrow<Texture> for SurfaceTexture {
     fn borrow(&self) -> &Texture {
+        &self.texture
+    }
+}
+
+impl std::borrow::Borrow<dyn crate::DynTexture> for SurfaceTexture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
         &self.texture
     }
 }
@@ -472,13 +505,15 @@ pub struct Buffer {
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
+impl crate::DynBuffer for Buffer {}
+
 impl Buffer {
     fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLBuffer>> {
         unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
     }
 }
 
-impl crate::BufferBinding<'_, Api> {
+impl crate::BufferBinding<'_, Buffer> {
     fn resolve_size(&self) -> wgt::BufferAddress {
         match self.size {
             Some(size) => size.get(),
@@ -497,6 +532,8 @@ pub struct Texture {
     copy_size: crate::CopyExtent,
 }
 
+impl crate::DynTexture for Texture {}
+
 unsafe impl Send for Texture {}
 unsafe impl Sync for Texture {}
 
@@ -505,6 +542,8 @@ pub struct TextureView {
     raw: Retained<ProtocolObject<dyn MTLTexture>>,
     aspects: crate::FormatAspects,
 }
+
+impl crate::DynTextureView for TextureView {}
 
 unsafe impl Send for TextureView {}
 unsafe impl Sync for TextureView {}
@@ -520,6 +559,8 @@ pub struct Sampler {
     raw: Retained<ProtocolObject<dyn MTLSamplerState>>,
 }
 
+impl crate::DynSampler for Sampler {}
+
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
@@ -534,6 +575,8 @@ pub struct BindGroupLayout {
     /// Sorted list of BGL entries.
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
+
+impl crate::DynBindGroupLayout for BindGroupLayout {}
 
 #[derive(Clone, Debug, Default)]
 struct ResourceData<T> {
@@ -616,6 +659,8 @@ pub struct PipelineLayout {
     per_stage_map: MultiStageResources,
 }
 
+impl crate::DynPipelineLayout for PipelineLayout {}
+
 #[derive(Debug)]
 struct BufferResource {
     ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
@@ -643,6 +688,8 @@ pub struct BindGroup {
     textures: Vec<NonNull<ProtocolObject<dyn MTLTexture>>>,
 }
 
+impl crate::DynBindGroup for BindGroup {}
+
 unsafe impl Send for BindGroup {}
 unsafe impl Sync for BindGroup {}
 
@@ -651,6 +698,8 @@ pub struct ShaderModule {
     naga: crate::NagaShader,
     runtime_checks: bool,
 }
+
+impl crate::DynShaderModule for ShaderModule {}
 
 #[derive(Debug, Default)]
 struct PipelineStageInfo {
@@ -712,6 +761,8 @@ pub struct RenderPipeline {
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
+impl crate::DynRenderPipeline for RenderPipeline {}
+
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: Retained<ProtocolObject<dyn MTLComputePipelineState>>,
@@ -725,6 +776,8 @@ pub struct ComputePipeline {
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
+impl crate::DynComputePipeline for ComputePipeline {}
+
 #[derive(Debug, Clone)]
 pub struct QuerySet {
     raw_buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
@@ -732,6 +785,8 @@ pub struct QuerySet {
     counter_sample_buffer: Option<Retained<ProtocolObject<dyn MTLCounterSampleBuffer>>>,
     ty: wgt::QueryType,
 }
+
+impl crate::DynQuerySet for QuerySet {}
 
 unsafe impl Send for QuerySet {}
 unsafe impl Sync for QuerySet {}
@@ -745,6 +800,8 @@ pub struct Fence {
         Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     )>,
 }
+
+impl crate::DynFence for Fence {}
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
@@ -843,8 +900,17 @@ pub struct CommandBuffer {
     raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
 }
 
+impl crate::DynCommandBuffer for CommandBuffer {}
+
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
 #[derive(Debug)]
+pub struct PipelineCache;
+
+impl crate::DynPipelineCache for PipelineCache {}
+
+#[derive(Debug)]
 pub struct AccelerationStructure;
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}

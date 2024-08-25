@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
-use std::{mem, os::raw::c_void, ptr::NonNull, sync::Once, thread};
+use std::{os::raw::c_void, ptr::NonNull, sync::Once, thread};
 
 use objc2::{
     class,
@@ -45,10 +45,9 @@ impl HalManagedMetalLayerDelegate {
             let mut decl = ClassBuilder::new(&class_name, class!(NSObject)).unwrap();
             #[allow(trivial_casts)] // false positive
             unsafe {
-                decl.add_class_method(
+                decl.add_class_method::<extern "C" fn(_, _, _, _, _) -> _>(
                     sel!(layer:shouldInheritContentsScale:fromWindow:),
-                    layer_should_inherit_contents_scale_from_window
-                        as extern "C" fn(_, _, _, _, _) -> _,
+                    layer_should_inherit_contents_scale_from_window,
                 );
             }
             decl.register();
@@ -69,22 +68,25 @@ impl super::Surface {
         }
     }
 
-    pub unsafe fn dispose(self) {
-        if let Some(view) = self.view {
-            let () = msg_send![view.as_ptr(), release];
-        }
-    }
-
     /// If not called on the main thread, this will panic.
     #[allow(clippy::transmute_ptr_to_ref)]
     pub unsafe fn from_view(
         view: *mut c_void,
         delegate: Option<&HalManagedMetalLayerDelegate>,
     ) -> Self {
-        let view = view as *mut AnyObject;
+        let view = view.cast::<AnyObject>();
         let render_layer = {
             let layer = unsafe { Self::get_metal_layer(view, delegate) };
-            unsafe { mem::transmute::<_, &CAMetalLayer>(layer) }
+            let layer = layer.cast::<CAMetalLayer>();
+            // SAFETY: This pointer…
+            //
+            // - …is properly aligned.
+            // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+            //   field.
+            // - …points to an _initialized_ `MetalLayerRef`.
+            // - …is only ever aliased via an immutable reference that lives within this
+            //   lexical scope.
+            unsafe { &*layer }
         }
         .retain();
         let _: *mut AnyObject = msg_send![view, retain];
@@ -166,6 +168,16 @@ impl super::Surface {
             width: (size.width * scale) as u32,
             height: (size.height * scale) as u32,
             depth_or_array_layers: 1,
+        }
+    }
+}
+
+impl Drop for super::Surface {
+    fn drop(&mut self) {
+        if let Some(view) = self.view {
+            unsafe {
+                let () = msg_send![view.as_ptr(), release];
+            }
         }
     }
 }

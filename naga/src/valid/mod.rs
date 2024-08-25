@@ -11,7 +11,7 @@ mod interface;
 mod r#type;
 
 use crate::{
-    arena::Handle,
+    arena::{Handle, HandleSet},
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
@@ -259,7 +259,7 @@ pub struct Validator {
     #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
-    valid_expression_set: BitSet,
+    valid_expression_set: HandleSet<crate::Expression>,
     override_ids: FastHashSet<u16>,
     allow_overrides: bool,
 
@@ -281,7 +281,7 @@ pub struct Validator {
     /// [`Atomic`]: crate::Statement::Atomic
     /// [`Expression`]: crate::Expression
     /// [`Statement`]: crate::Statement
-    needs_visit: BitSet,
+    needs_visit: HandleSet<crate::Expression>,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -448,10 +448,10 @@ impl Validator {
             ep_resource_bindings: FastHashSet::default(),
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
-            valid_expression_set: BitSet::new(),
+            valid_expression_set: HandleSet::new(),
             override_ids: FastHashSet::default(),
             allow_overrides: true,
-            needs_visit: BitSet::new(),
+            needs_visit: HandleSet::new(),
         }
     }
 
@@ -533,14 +533,13 @@ impl Validator {
 
         let decl_ty = &gctx.types[o.ty].inner;
         match decl_ty {
-            &crate::TypeInner::Scalar(scalar) => match scalar {
+            &crate::TypeInner::Scalar(
                 crate::Scalar::BOOL
                 | crate::Scalar::I32
                 | crate::Scalar::U32
                 | crate::Scalar::F32
-                | crate::Scalar::F64 => {}
-                _ => return Err(OverrideError::TypeNotScalar),
-            },
+                | crate::Scalar::F64,
+            ) => {}
             _ => return Err(OverrideError::TypeNotScalar),
         }
 

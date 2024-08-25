@@ -2,28 +2,28 @@
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
-    command::{clear_texture, CommandBuffer, CommandEncoderError},
+    command::{clear_texture, CommandEncoderError},
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags},
-    error::{ErrorFormatter, PrettyError},
     global::Global,
-    hal_api::HalApi,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
-    resource::{DestroyedResourceError, ParentDevice, Texture, TextureErrorDimension},
+    resource::{
+        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
+        Texture, TextureErrorDimension,
+    },
     snatch::SnatchGuard,
     track::{TextureSelector, Tracker},
 };
 
 use arrayvec::ArrayVec;
-use hal::CommandEncoder as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
 
-use std::{iter, sync::Arc};
+use std::sync::Arc;
 
 use super::{memory_init::CommandBufferTextureMemoryActions, ClearError, CommandEncoder};
 
@@ -47,10 +47,10 @@ pub enum TransferError {
     InvalidTextureId(TextureId),
     #[error("Source and destination cannot be the same buffer")]
     SameSourceDestinationBuffer,
-    #[error("Source buffer/texture is missing the `COPY_SRC` usage flag")]
-    MissingCopySrcUsageFlag,
-    #[error("Destination buffer/texture is missing the `COPY_DST` usage flag")]
-    MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error(transparent)]
+    MissingTextureUsage(#[from] MissingTextureUsageError),
     #[error("Destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
     MissingRenderAttachmentUsageFlag(TextureId),
     #[error("Copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
@@ -140,19 +140,6 @@ pub enum TransferError {
     InvalidMipLevel { requested: u32, count: u32 },
 }
 
-impl PrettyError for TransferError {
-    fn fmt_pretty(&self, fmt: &mut ErrorFormatter) {
-        fmt.error(self);
-        if let Self::MissingCopyDstUsageFlag(buf_opt, tex_opt) = *self {
-            if let Some(buf) = buf_opt {
-                fmt.buffer_label_with_key(&buf, "destination");
-            }
-            if let Some(tex) = tex_opt {
-                fmt.texture_label_with_key(&tex, "destination");
-            }
-        }
-    }
-}
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -171,10 +158,10 @@ impl From<DeviceError> for CopyError {
     }
 }
 
-pub(crate) fn extract_texture_selector<A: HalApi>(
+pub(crate) fn extract_texture_selector(
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Texture<A>,
+    texture: &Texture,
 ) -> Result<(TextureSelector, hal::TextureCopyBase), TransferError> {
     let format = texture.desc.format;
     let copy_aspect = hal::FormatAspects::new(format, copy_texture.aspect);
@@ -236,7 +223,7 @@ pub(crate) fn validate_linear_texture_data(
     // the copy size before calling this function (for example via `validate_texture_copy_range`).
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
-    let copy_depth = copy_size.depth_or_array_layers as BufferAddress;
+    let depth_or_array_layers = copy_size.depth_or_array_layers as BufferAddress;
 
     let offset = layout.offset;
 
@@ -264,19 +251,19 @@ pub(crate) fn validate_linear_texture_data(
         }
         bytes_per_row
     } else {
-        if copy_depth > 1 || height_in_blocks > 1 {
+        if depth_or_array_layers > 1 || height_in_blocks > 1 {
             return Err(TransferError::UnspecifiedBytesPerRow);
         }
         0
     };
-    let block_rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
+    let rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
         let rows_per_image = rows_per_image as BufferAddress;
         if rows_per_image < height_in_blocks {
             return Err(TransferError::InvalidRowsPerImage);
         }
         rows_per_image
     } else {
-        if copy_depth > 1 {
+        if depth_or_array_layers > 1 {
             return Err(TransferError::UnspecifiedRowsPerImage);
         }
         0
@@ -298,12 +285,12 @@ pub(crate) fn validate_linear_texture_data(
         }
     }
 
-    let bytes_per_image = bytes_per_row * block_rows_per_image;
+    let bytes_per_image = bytes_per_row * rows_per_image;
 
-    let required_bytes_in_copy = if copy_depth == 0 {
+    let required_bytes_in_copy = if depth_or_array_layers == 0 {
         0
     } else {
-        let mut required_bytes_in_copy = bytes_per_image * (copy_depth - 1);
+        let mut required_bytes_in_copy = bytes_per_image * (depth_or_array_layers - 1);
         if height_in_blocks > 0 {
             required_bytes_in_copy += bytes_per_row * (height_in_blocks - 1) + bytes_in_last_row;
         }
@@ -419,15 +406,15 @@ pub(crate) fn validate_texture_copy_range(
     Ok((copy_extent, array_layer_count))
 }
 
-fn handle_texture_init<A: HalApi>(
+fn handle_texture_init(
     init_kind: MemoryInitKind,
-    encoder: &mut CommandEncoder<A>,
-    trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
-    device: &Device<A>,
+    encoder: &mut CommandEncoder,
+    trackers: &mut Tracker,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    device: &Device,
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Arc<Texture<A>>,
+    texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
     let init_action = TextureInitTrackerAction {
@@ -456,7 +443,7 @@ fn handle_texture_init<A: HalApi>(
                 cmd_buf_raw,
                 &mut trackers.textures,
                 &device.alignments,
-                device.zero_buffer.as_ref().unwrap(),
+                device.zero_buffer.as_ref(),
                 snatch_guard,
             )?;
         }
@@ -469,14 +456,14 @@ fn handle_texture_init<A: HalApi>(
 ///
 /// Ensure the source texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
-fn handle_src_texture_init<A: HalApi>(
-    encoder: &mut CommandEncoder<A>,
-    trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
-    device: &Device<A>,
+fn handle_src_texture_init(
+    encoder: &mut CommandEncoder,
+    trackers: &mut Tracker,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    device: &Device,
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Arc<Texture<A>>,
+    texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     handle_texture_init(
@@ -497,14 +484,14 @@ fn handle_src_texture_init<A: HalApi>(
 ///
 /// Ensure the destination texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
-fn handle_dst_texture_init<A: HalApi>(
-    encoder: &mut CommandEncoder<A>,
-    trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
-    device: &Device<A>,
+fn handle_dst_texture_init(
+    encoder: &mut CommandEncoder,
+    trackers: &mut Tracker,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    device: &Device,
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
-    texture: &Arc<Texture<A>>,
+    texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     // Attention: If we don't write full texture subresources, we need to a full
@@ -536,7 +523,7 @@ fn handle_dst_texture_init<A: HalApi>(
 }
 
 impl Global {
-    pub fn command_encoder_copy_buffer_to_buffer<A: HalApi>(
+    pub fn command_encoder_copy_buffer_to_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
         source: BufferId,
@@ -553,9 +540,17 @@ impl Global {
         if source == destination {
             return Err(TransferError::SameSourceDestinationBuffer.into());
         }
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -588,9 +583,9 @@ impl Global {
             .set_single(&src_buffer, hal::BufferUses::COPY_SRC);
 
         let src_raw = src_buffer.try_raw(&snatch_guard)?;
-        if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_buffer
+            .check_usage(BufferUsages::COPY_SRC)
+            .map_err(TransferError::MissingBufferUsage)?;
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
@@ -607,9 +602,9 @@ impl Global {
             .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
 
         let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
-        if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
-            return Err(TransferError::MissingCopyDstUsageFlag(Some(destination), None).into());
-        }
+        dst_buffer
+            .check_usage(BufferUsages::COPY_DST)
+            .map_err(TransferError::MissingBufferUsage)?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -690,14 +685,18 @@ impl Global {
             size: wgt::BufferSize::new(size).unwrap(),
         };
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let barriers = src_barrier
+            .into_iter()
+            .chain(dst_barrier)
+            .collect::<Vec<_>>();
         unsafe {
-            cmd_buf_raw.transition_buffers(src_barrier.into_iter().chain(dst_barrier));
-            cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, iter::once(region));
+            cmd_buf_raw.transition_buffers(&barriers);
+            cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
         }
         Ok(())
     }
 
-    pub fn command_encoder_copy_buffer_to_texture<A: HalApi>(
+    pub fn command_encoder_copy_buffer_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyBuffer,
@@ -711,9 +710,17 @@ impl Global {
             destination.texture
         );
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let device = &cmd_buf.device;
         device.check_is_valid()?;
 
@@ -783,9 +790,9 @@ impl Global {
             .set_single(&src_buffer, hal::BufferUses::COPY_SRC);
 
         let src_raw = src_buffer.try_raw(&snatch_guard)?;
-        if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_buffer
+            .check_usage(BufferUsages::COPY_SRC)
+            .map_err(TransferError::MissingBufferUsage)?;
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
         let dst_pending =
@@ -793,12 +800,12 @@ impl Global {
                 .textures
                 .set_single(&dst_texture, dst_range, hal::TextureUses::COPY_DST);
         let dst_raw = dst_texture.try_raw(&snatch_guard)?;
-        if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
-        }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_raw));
+        dst_texture
+            .check_usage(TextureUsages::COPY_DST)
+            .map_err(TransferError::MissingTextureUsage)?;
+        let dst_barrier = dst_pending
+            .map(|pending| pending.into_hal(dst_raw))
+            .collect::<Vec<_>>();
 
         if !dst_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
@@ -834,28 +841,30 @@ impl Global {
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
-            let mut texture_base = dst_base.clone();
-            texture_base.array_layer += rel_array_layer;
-            let mut buffer_layout = source.layout;
-            buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
-            hal::BufferTextureCopy {
-                buffer_layout,
-                texture_base,
-                size: hal_copy_size,
-            }
-        });
+        let regions = (0..array_layer_count)
+            .map(|rel_array_layer| {
+                let mut texture_base = dst_base.clone();
+                texture_base.array_layer += rel_array_layer;
+                let mut buffer_layout = source.layout;
+                buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
+                hal::BufferTextureCopy {
+                    buffer_layout,
+                    texture_base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect::<Vec<_>>();
 
         let cmd_buf_raw = encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_textures(dst_barrier.into_iter());
-            cmd_buf_raw.transition_buffers(src_barrier.into_iter());
-            cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, regions);
+            cmd_buf_raw.transition_textures(&dst_barrier);
+            cmd_buf_raw.transition_buffers(src_barrier.as_slice());
+            cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, &regions);
         }
         Ok(())
     }
 
-    pub fn command_encoder_copy_texture_to_buffer<A: HalApi>(
+    pub fn command_encoder_copy_texture_to_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyTexture,
@@ -869,9 +878,17 @@ impl Global {
             destination.buffer
         );
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let device = &cmd_buf.device;
         device.check_is_valid()?;
 
@@ -929,9 +946,9 @@ impl Global {
                 .textures
                 .set_single(&src_texture, src_range, hal::TextureUses::COPY_SRC);
         let src_raw = src_texture.try_raw(&snatch_guard)?;
-        if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_texture
+            .check_usage(TextureUsages::COPY_SRC)
+            .map_err(TransferError::MissingTextureUsage)?;
         if src_texture.desc.sample_count != 1 {
             return Err(TransferError::InvalidSampleCount {
                 sample_count: src_texture.desc.sample_count,
@@ -945,7 +962,9 @@ impl Global {
             }
             .into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_raw));
+        let src_barrier = src_pending
+            .map(|pending| pending.into_hal(src_raw))
+            .collect::<Vec<_>>();
 
         let dst_buffer = hub
             .buffers
@@ -959,11 +978,9 @@ impl Global {
             .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
 
         let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
-        if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(Some(destination.buffer), None).into(),
-            );
-        }
+        dst_buffer
+            .check_usage(BufferUsages::COPY_DST)
+            .map_err(TransferError::MissingBufferUsage)?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
         if !src_base.aspect.is_one() {
@@ -1000,32 +1017,34 @@ impl Global {
             MemoryInitKind::ImplicitlyInitialized,
         ));
 
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
-            let mut texture_base = src_base.clone();
-            texture_base.array_layer += rel_array_layer;
-            let mut buffer_layout = destination.layout;
-            buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
-            hal::BufferTextureCopy {
-                buffer_layout,
-                texture_base,
-                size: hal_copy_size,
-            }
-        });
+        let regions = (0..array_layer_count)
+            .map(|rel_array_layer| {
+                let mut texture_base = src_base.clone();
+                texture_base.array_layer += rel_array_layer;
+                let mut buffer_layout = destination.layout;
+                buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
+                hal::BufferTextureCopy {
+                    buffer_layout,
+                    texture_base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect::<Vec<_>>();
         let cmd_buf_raw = encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
-            cmd_buf_raw.transition_textures(src_barrier.into_iter());
+            cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
+            cmd_buf_raw.transition_textures(&src_barrier);
             cmd_buf_raw.copy_texture_to_buffer(
                 src_raw,
                 hal::TextureUses::COPY_SRC,
                 dst_raw,
-                regions,
+                &regions,
             );
         }
         Ok(())
     }
 
-    pub fn command_encoder_copy_texture_to_texture<A: HalApi>(
+    pub fn command_encoder_copy_texture_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
         source: &ImageCopyTexture,
@@ -1039,9 +1058,17 @@ impl Global {
             destination.texture
         );
 
-        let hub = A::hub(self);
+        let hub = &self.hub;
 
-        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let cmd_buf = match hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id())
+        {
+            Ok(cmd_buf) => cmd_buf,
+            Err(_) => return Err(CommandEncoderError::Invalid.into()),
+        };
+        cmd_buf.check_recording()?;
+
         let device = &cmd_buf.device;
         device.check_is_valid()?;
 
@@ -1142,9 +1169,9 @@ impl Global {
             hal::TextureUses::COPY_SRC,
         );
         let src_raw = src_texture.try_raw(&snatch_guard)?;
-        if !src_texture.desc.usage.contains(TextureUsages::COPY_SRC) {
-            return Err(TransferError::MissingCopySrcUsageFlag.into());
-        }
+        src_texture
+            .check_usage(TextureUsages::COPY_SRC)
+            .map_err(TransferError::MissingTextureUsage)?;
 
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
@@ -1158,11 +1185,9 @@ impl Global {
             hal::TextureUses::COPY_DST,
         );
         let dst_raw = dst_texture.try_raw(&snatch_guard)?;
-        if !dst_texture.desc.usage.contains(TextureUsages::COPY_DST) {
-            return Err(
-                TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
-            );
-        }
+        dst_texture
+            .check_usage(TextureUsages::COPY_DST)
+            .map_err(TransferError::MissingTextureUsage)?;
 
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_raw)));
 
@@ -1171,25 +1196,27 @@ impl Global {
             height: src_copy_size.height.min(dst_copy_size.height),
             depth: src_copy_size.depth.min(dst_copy_size.depth),
         };
-        let regions = (0..array_layer_count).map(|rel_array_layer| {
-            let mut src_base = src_tex_base.clone();
-            let mut dst_base = dst_tex_base.clone();
-            src_base.array_layer += rel_array_layer;
-            dst_base.array_layer += rel_array_layer;
-            hal::TextureCopy {
-                src_base,
-                dst_base,
-                size: hal_copy_size,
-            }
-        });
+        let regions = (0..array_layer_count)
+            .map(|rel_array_layer| {
+                let mut src_base = src_tex_base.clone();
+                let mut dst_base = dst_tex_base.clone();
+                src_base.array_layer += rel_array_layer;
+                dst_base.array_layer += rel_array_layer;
+                hal::TextureCopy {
+                    src_base,
+                    dst_base,
+                    size: hal_copy_size,
+                }
+            })
+            .collect::<Vec<_>>();
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
-            cmd_buf_raw.transition_textures(barriers.into_iter());
+            cmd_buf_raw.transition_textures(&barriers);
             cmd_buf_raw.copy_texture_to_texture(
                 src_raw,
                 hal::TextureUses::COPY_SRC,
                 dst_raw,
-                regions,
+                &regions,
             );
         }
 

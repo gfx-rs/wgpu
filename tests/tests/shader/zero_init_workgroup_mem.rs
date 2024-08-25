@@ -1,28 +1,21 @@
 use std::num::NonZeroU64;
 
 use wgpu::{
-    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferBinding, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
     ComputePipelineDescriptor, DownlevelFlags, Limits, Maintain, MapMode, PipelineLayoutDescriptor,
     ShaderStages,
 };
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults())
-            // remove once we get to https://github.com/gfx-rs/wgpu/issues/3193
-            .skip(FailureCase {
-                backends: Some(Backends::DX12),
-                vendor: Some(5140),
-                adapter: Some("Microsoft Basic Render Driver"),
-                ..FailureCase::default()
-            }),
+            .limits(Limits::downlevel_defaults()),
     )
     .run_async(|ctx| async move {
         let bgl = ctx
@@ -86,7 +79,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: Some("pipeline read"),
                 layout: Some(&pll),
                 module: &sm,
-                entry_point: "read",
+                entry_point: Some("read"),
                 compilation_options: Default::default(),
                 cache: None,
             });
@@ -97,7 +90,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 label: Some("pipeline write"),
                 layout: None,
                 module: &sm,
-                entry_point: "write",
+                entry_point: Some("write"),
                 compilation_options: Default::default(),
                 cache: None,
             });

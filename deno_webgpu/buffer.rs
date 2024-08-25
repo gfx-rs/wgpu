@@ -9,6 +9,7 @@ use deno_core::Resource;
 use deno_core::ResourceId;
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::time::Duration;
 use wgpu_core::resource::BufferAccessResult;
@@ -26,11 +27,11 @@ impl Resource for WebGpuBuffer {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.buffer_drop(self.1, true));
+        self.0.buffer_drop(self.1);
     }
 }
 
-struct WebGpuBufferMapped(*mut u8, usize);
+struct WebGpuBufferMapped(NonNull<u8>, usize);
 impl Resource for WebGpuBufferMapped {
     fn name(&self) -> Cow<str> {
         "webGPUBufferMapped".into()
@@ -61,7 +62,7 @@ pub fn op_webgpu_create_buffer(
         mapped_at_creation,
     };
 
-    gfx_put!(device => instance.device_create_buffer(
+    gfx_put!(instance.device_create_buffer(
     device,
     &descriptor,
     None
@@ -96,20 +97,21 @@ pub async fn op_webgpu_buffer_get_map_async(
         });
 
         // TODO(lucacasonato): error handling
-        let maybe_err = gfx_select!(buffer => instance.buffer_map_async(
-            buffer,
-            offset,
-            Some(size),
-            wgpu_core::resource::BufferMapOperation {
-                host: match mode {
-                    1 => wgpu_core::device::HostMap::Read,
-                    2 => wgpu_core::device::HostMap::Write,
-                    _ => unreachable!(),
+        let maybe_err = instance
+            .buffer_map_async(
+                buffer,
+                offset,
+                Some(size),
+                wgpu_core::resource::BufferMapOperation {
+                    host: match mode {
+                        1 => wgpu_core::device::HostMap::Read,
+                        2 => wgpu_core::device::HostMap::Write,
+                        _ => unreachable!(),
+                    },
+                    callback: Some(wgpu_core::resource::BufferMapCallback::from_rust(callback)),
                 },
-                callback: Some(wgpu_core::resource::BufferMapCallback::from_rust(callback)),
-            }
-        ))
-        .err();
+            )
+            .err();
 
         if maybe_err.is_some() {
             return Ok(WebGpuResult::maybe_err(maybe_err));
@@ -123,7 +125,8 @@ pub async fn op_webgpu_buffer_get_map_async(
             {
                 let state = state.borrow();
                 let instance = state.borrow::<super::Instance>();
-                gfx_select!(device => instance.device_poll(device, wgpu_types::Maintain::wait()))
+                instance
+                    .device_poll(device, wgpu_types::Maintain::wait())
                     .unwrap();
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -156,15 +159,13 @@ pub fn op_webgpu_buffer_get_mapped_range(
     let buffer_resource = state.resource_table.get::<WebGpuBuffer>(buffer_rid)?;
     let buffer = buffer_resource.1;
 
-    let (slice_pointer, range_size) = gfx_select!(buffer => instance.buffer_get_mapped_range(
-      buffer,
-      offset,
-      size
-    ))
-    .map_err(|e| DomExceptionOperationError::new(&e.to_string()))?;
+    let (slice_pointer, range_size) = instance
+        .buffer_get_mapped_range(buffer, offset, size)
+        .map_err(|e| DomExceptionOperationError::new(&e.to_string()))?;
 
     // SAFETY: guarantee to be safe from wgpu
-    let slice = unsafe { std::slice::from_raw_parts_mut(slice_pointer, range_size as usize) };
+    let slice =
+        unsafe { std::slice::from_raw_parts_mut(slice_pointer.as_ptr(), range_size as usize) };
     buf.copy_from_slice(slice);
 
     let rid = state
@@ -191,9 +192,11 @@ pub fn op_webgpu_buffer_unmap(
 
     if let Some(buf) = buf {
         // SAFETY: guarantee to be safe from wgpu
-        let slice = unsafe { std::slice::from_raw_parts_mut(mapped_resource.0, mapped_resource.1) };
+        let slice = unsafe {
+            std::slice::from_raw_parts_mut(mapped_resource.0.as_ptr(), mapped_resource.1)
+        };
         slice.copy_from_slice(buf);
     }
 
-    gfx_ok!(buffer => instance.buffer_unmap(buffer))
+    gfx_ok!(instance.buffer_unmap(buffer))
 }

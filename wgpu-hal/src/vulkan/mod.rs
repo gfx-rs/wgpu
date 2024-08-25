@@ -7,7 +7,6 @@ Ash expects slices, which we don't generally have available.
 We cope with this requirement by the combination of the following ways:
   - temporarily allocating `Vec` on heap, where overhead is permitted
   - growing temporary local storage
-  - using `implace_it` on iterators
 
 ## Framebuffers and Render passes
 
@@ -43,6 +42,7 @@ use std::{
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::{Mutex, RwLock};
+use wgt::InternalCounter;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -77,6 +77,31 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 }
+
+crate::impl_dyn_resource!(
+    Adapter,
+    AccelerationStructure,
+    BindGroup,
+    BindGroupLayout,
+    Buffer,
+    CommandBuffer,
+    CommandEncoder,
+    ComputePipeline,
+    Device,
+    Fence,
+    Instance,
+    PipelineCache,
+    PipelineLayout,
+    QuerySet,
+    Queue,
+    RenderPipeline,
+    Sampler,
+    ShaderModule,
+    Surface,
+    SurfaceTexture,
+    Texture,
+    TextureView
+);
 
 struct DebugUtils {
     extension: ext::debug_utils::Instance,
@@ -357,8 +382,16 @@ pub struct SurfaceTexture {
     surface_semaphores: Arc<Mutex<SwapchainImageSemaphores>>,
 }
 
+impl crate::DynSurfaceTexture for SurfaceTexture {}
+
 impl Borrow<Texture> for SurfaceTexture {
     fn borrow(&self) -> &Texture {
+        &self.texture
+    }
+}
+
+impl Borrow<dyn crate::DynTexture> for SurfaceTexture {
+    fn borrow(&self) -> &dyn crate::DynTexture {
         &self.texture
     }
 }
@@ -527,6 +560,7 @@ struct DeviceShared {
     features: wgt::Features,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    memory_allocations_counter: InternalCounter,
 }
 
 pub struct Device {
@@ -538,6 +572,7 @@ pub struct Device {
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
+    counters: wgt::HalCounters,
 }
 
 /// Semaphores for forcing queue submissions to run in order.
@@ -629,12 +664,16 @@ pub struct Buffer {
     block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
+impl crate::DynBuffer for Buffer {}
+
 #[derive(Debug)]
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
 }
+
+impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 #[derive(Debug)]
 pub struct Texture {
@@ -647,6 +686,8 @@ pub struct Texture {
     copy_size: crate::CopyExtent,
     view_formats: Vec<wgt::TextureFormat>,
 }
+
+impl crate::DynTexture for Texture {}
 
 impl Texture {
     /// # Safety
@@ -664,6 +705,8 @@ pub struct TextureView {
     attachment: FramebufferAttachment,
 }
 
+impl crate::DynTextureView for TextureView {}
+
 impl TextureView {
     /// # Safety
     ///
@@ -678,6 +721,8 @@ pub struct Sampler {
     raw: vk::Sampler,
 }
 
+impl crate::DynSampler for Sampler {}
+
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
@@ -687,16 +732,22 @@ pub struct BindGroupLayout {
     binding_arrays: Vec<(u32, NonZeroU32)>,
 }
 
+impl crate::DynBindGroupLayout for BindGroupLayout {}
+
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
     binding_arrays: naga::back::spv::BindingMap,
 }
 
+impl crate::DynPipelineLayout for PipelineLayout {}
+
 #[derive(Debug)]
 pub struct BindGroup {
     set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
 }
+
+impl crate::DynBindGroup for BindGroup {}
 
 /// Miscellaneous allocation recycling pool for `CommandAllocator`.
 #[derive(Default)]
@@ -711,7 +762,6 @@ impl Temp {
         self.marker.clear();
         self.buffer_barriers.clear();
         self.image_barriers.clear();
-        //see also - https://github.com/NotIntMan/inplace_it/issues/8
     }
 
     fn make_c_str(&mut self, name: &str) -> &CStr {
@@ -781,6 +831,8 @@ pub struct CommandBuffer {
     raw: vk::CommandBuffer,
 }
 
+impl crate::DynCommandBuffer for CommandBuffer {}
+
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderModule {
@@ -791,25 +843,35 @@ pub enum ShaderModule {
     },
 }
 
+impl crate::DynShaderModule for ShaderModule {}
+
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: vk::Pipeline,
 }
+
+impl crate::DynRenderPipeline for RenderPipeline {}
 
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: vk::Pipeline,
 }
 
+impl crate::DynComputePipeline for ComputePipeline {}
+
 #[derive(Debug)]
 pub struct PipelineCache {
     raw: vk::PipelineCache,
 }
 
+impl crate::DynPipelineCache for PipelineCache {}
+
 #[derive(Debug)]
 pub struct QuerySet {
     raw: vk::QueryPool,
 }
+
+impl crate::DynQuerySet for QuerySet {}
 
 /// The [`Api::Fence`] type for [`vulkan::Api`].
 ///
@@ -860,6 +922,8 @@ pub enum Fence {
     },
 }
 
+impl crate::DynFence for Fence {}
+
 impl Fence {
     /// Return the highest [`FenceValue`] among the signalled fences in `active`.
     ///
@@ -876,7 +940,11 @@ impl Fence {
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         for &(value, raw) in active.iter() {
             unsafe {
-                if value > last_completed && device.get_fence_status(raw)? {
+                if value > last_completed
+                    && device
+                        .get_fence_status(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?
+                {
                     last_completed = value;
                 }
             }
@@ -895,8 +963,12 @@ impl Fence {
         match *self {
             Self::TimelineSemaphore(raw) => unsafe {
                 Ok(match *extension.unwrap() {
-                    ExtensionFn::Extension(ref ext) => ext.get_semaphore_counter_value(raw)?,
-                    ExtensionFn::Promoted => device.get_semaphore_counter_value(raw)?,
+                    ExtensionFn::Extension(ref ext) => ext
+                        .get_semaphore_counter_value(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?,
+                    ExtensionFn::Promoted => device
+                        .get_semaphore_counter_value(raw)
+                        .map_err(map_host_device_oom_and_lost_err)?,
                 })
             },
             Self::FencePool {
@@ -936,7 +1008,8 @@ impl Fence {
                 }
                 if free.len() != base_free {
                     active.retain(|&(value, _)| value > latest);
-                    unsafe { device.reset_fences(&free[base_free..]) }?
+                    unsafe { device.reset_fences(&free[base_free..]) }
+                        .map_err(map_device_oom_err)?
                 }
                 *last_completed = latest;
             }
@@ -1031,7 +1104,8 @@ impl crate::Queue for Queue {
                     None => unsafe {
                         self.device
                             .raw
-                            .create_fence(&vk::FenceCreateInfo::default(), None)?
+                            .create_fence(&vk::FenceCreateInfo::default(), None)
+                            .map_err(map_host_device_oom_err)?
                     },
                 };
                 active.push((signal_value, fence_raw));
@@ -1062,7 +1136,8 @@ impl crate::Queue for Queue {
         unsafe {
             self.device
                 .raw
-                .queue_submit(self.raw, &[vk_info], fence_raw)?
+                .queue_submit(self.raw, &[vk_info], fence_raw)
+                .map_err(map_host_device_oom_and_lost_err)?
         };
         Ok(())
     }
@@ -1089,7 +1164,9 @@ impl crate::Queue for Queue {
                 match error {
                     vk::Result::ERROR_OUT_OF_DATE_KHR => crate::SurfaceError::Outdated,
                     vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
-                    _ => crate::DeviceError::from(error).into(),
+                    // We don't use VK_EXT_full_screen_exclusive
+                    // VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
+                    _ => map_host_device_oom_and_lost_err(error).into(),
                 }
             })?
         };
@@ -1109,29 +1186,117 @@ impl crate::Queue for Queue {
     }
 }
 
-impl From<vk::Result> for crate::DeviceError {
-    fn from(result: vk::Result) -> Self {
-        #![allow(unreachable_code)]
-        match result {
-            vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                #[cfg(feature = "oom_panic")]
-                panic!("Out of memory ({result:?})");
-
-                Self::OutOfMemory
-            }
-            vk::Result::ERROR_DEVICE_LOST => {
-                #[cfg(feature = "device_lost_panic")]
-                panic!("Device lost");
-
-                Self::Lost
-            }
-            _ => {
-                #[cfg(feature = "internal_error_panic")]
-                panic!("Internal error: {result:?}");
-
-                log::warn!("Unrecognized device error {result:?}");
-                Self::Lost
-            }
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+fn map_host_device_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+            get_oom_err(err)
         }
+        e => get_unexpected_err(e),
     }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_ERROR_DEVICE_LOST
+fn map_host_device_oom_and_lost_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_DEVICE_LOST => get_lost_err(),
+        other => map_host_device_oom_err(other),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+fn map_host_device_oom_and_ioca_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_KHR_buffer_device_address
+    // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+    map_host_device_oom_err(err)
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+fn map_host_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_HOST_MEMORY => get_oom_err(err),
+        e => get_unexpected_err(e),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+fn map_device_oom_err(err: vk::Result) -> crate::DeviceError {
+    match err {
+        vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => get_oom_err(err),
+        e => get_unexpected_err(e),
+    }
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+fn map_host_oom_and_ioca_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_KHR_buffer_device_address
+    // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
+    map_host_oom_err(err)
+}
+
+/// Maps
+///
+/// - VK_ERROR_OUT_OF_HOST_MEMORY
+/// - VK_ERROR_OUT_OF_DEVICE_MEMORY
+/// - VK_PIPELINE_COMPILE_REQUIRED_EXT
+/// - VK_ERROR_INVALID_SHADER_NV
+fn map_pipeline_err(err: vk::Result) -> crate::DeviceError {
+    // We don't use VK_EXT_pipeline_creation_cache_control
+    // VK_PIPELINE_COMPILE_REQUIRED_EXT
+    // We don't use VK_NV_glsl_shader
+    // VK_ERROR_INVALID_SHADER_NV
+    map_host_device_oom_err(err)
+}
+
+/// Returns [`crate::DeviceError::Unexpected`] or panics if the `internal_error_panic`
+/// feature flag is enabled.
+fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
+    #[cfg(feature = "internal_error_panic")]
+    panic!("Unexpected Vulkan error: {_err:?}");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::Unexpected
+}
+
+/// Returns [`crate::DeviceError::OutOfMemory`] or panics if the `oom_panic`
+/// feature flag is enabled.
+fn get_oom_err(_err: vk::Result) -> crate::DeviceError {
+    #[cfg(feature = "oom_panic")]
+    panic!("Out of memory ({_err:?})");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::OutOfMemory
+}
+
+/// Returns [`crate::DeviceError::Lost`] or panics if the `device_lost_panic`
+/// feature flag is enabled.
+fn get_lost_err() -> crate::DeviceError {
+    #[cfg(feature = "device_lost_panic")]
+    panic!("Device lost");
+
+    #[allow(unreachable_code)]
+    crate::DeviceError::Lost
+}
+
+#[cold]
+fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
+    panic!("wgpu-hal invariant was violated (usage error): {txt}")
 }

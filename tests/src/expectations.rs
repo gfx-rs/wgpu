@@ -53,7 +53,7 @@ pub struct FailureCase {
     /// [`AdapterInfo::device`]: wgt::AdapterInfo::device
     pub vendor: Option<u32>,
 
-    /// Name of adaper expected to fail, or `None` for any adapter name.
+    /// Name of adapter expected to fail, or `None` for any adapter name.
     ///
     /// If this is `Some(s)` and `s` is a substring of
     /// [`AdapterInfo::name`], then this `FailureCase` applies. If

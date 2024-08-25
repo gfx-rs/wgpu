@@ -278,6 +278,8 @@ pub enum Error<'a> {
 }
 
 impl<'a> Error<'a> {
+    #[cold]
+    #[inline(never)]
     pub(crate) fn as_parse_error(&self, source: &'a str) -> ParseError {
         match *self {
             Error::Unexpected(unexpected_span, expected) => {

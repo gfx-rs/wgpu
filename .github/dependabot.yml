@@ -7,7 +7,7 @@ updates:
       interval: weekly
     # This allows dependabot to update _all_ lockfile packages.
     #
-    # These will be grouped into the existing group update PRs, so shoudn't generate additional jobs.
+    # These will be grouped into the existing group update PRs, so shouldn't generate additional jobs.
     allow:
       # Allow both direct and indirect updates for all packages
       - dependency-type: "all"

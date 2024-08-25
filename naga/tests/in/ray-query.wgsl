@@ -1,6 +1,3 @@
-@group(0) @binding(0)
-var acc_struct: acceleration_structure;
-
 /*
 let RAY_FLAG_NONE = 0x00u;
 let RAY_FLAG_OPAQUE = 0x01u;
@@ -43,6 +40,18 @@ struct RayIntersection {
 }
 */
 
+fn query_loop(pos: vec3<f32>, dir: vec3<f32>, acs: acceleration_structure) -> RayIntersection {
+    var rq: ray_query;
+    rayQueryInitialize(&rq, acs, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, pos, dir));
+
+    while (rayQueryProceed(&rq)) {}
+
+    return rayQueryGetCommittedIntersection(&rq);
+}
+
+@group(0) @binding(0)
+var acc_struct: acceleration_structure;
+
 struct Output {
     visible: u32,
     normal: vec3<f32>,
@@ -58,16 +67,14 @@ fn get_torus_normal(world_point: vec3<f32>, intersection: RayIntersection) -> ve
     return normalize(world_point - world_point_on_guiding_line);
 }
 
+
+
 @compute @workgroup_size(1)
 fn main() {
-    var rq: ray_query;
-
+    let pos = vec3<f32>(0.0);
     let dir = vec3<f32>(0.0, 1.0, 0.0);
-    rayQueryInitialize(&rq, acc_struct, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, vec3<f32>(0.0), dir));
+    let intersection = query_loop(pos, dir, acc_struct);
 
-    while (rayQueryProceed(&rq)) {}
-
-    let intersection = rayQueryGetCommittedIntersection(&rq);
     output.visible = u32(intersection.kind == RAY_QUERY_INTERSECTION_NONE);
     output.normal = get_torus_normal(dir * intersection.t, intersection);
 }

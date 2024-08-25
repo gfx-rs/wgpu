@@ -1,6 +1,7 @@
 use criterion::criterion_main;
 use pollster::block_on;
 
+mod computepass;
 mod renderpass;
 mod resource_creation;
 mod shader;
@@ -44,7 +45,8 @@ impl DeviceState {
             &wgpu::DeviceDescriptor {
                 required_features: adapter.features(),
                 required_limits: adapter.limits(),
-                label: Some("RenderPass Device"),
+                memory_hints: wgpu::MemoryHints::Performance,
+                label: Some("Compute/RenderPass Device"),
             },
             None,
         ))
@@ -60,6 +62,7 @@ impl DeviceState {
 
 criterion_main!(
     renderpass::renderpass,
+    computepass::computepass,
     resource_creation::resource_creation,
     shader::shader
 );

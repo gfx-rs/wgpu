@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::convert::From;
 use std::error::Error;
 use std::fmt;
+use std::fmt::Write;
 use wgpu_core::binding_model::CreateBindGroupError;
 use wgpu_core::binding_model::CreateBindGroupLayoutError;
 use wgpu_core::binding_model::CreatePipelineLayoutError;
@@ -34,12 +35,28 @@ use wgpu_core::resource::CreateTextureViewError;
 
 fn fmt_err(err: &(dyn Error + 'static)) -> String {
     let mut output = err.to_string();
+    let mut level = 0;
 
-    let mut e = err.source();
-    while let Some(source) = e {
-        output.push_str(&format!(": {source}"));
-        e = source.source();
+    fn print_tree(output: &mut String, level: &mut usize, e: &(dyn Error + 'static)) {
+        let mut print = |e: &(dyn Error + 'static)| {
+            writeln!(output, "{}{}", " ".repeat(*level * 2), e).unwrap();
+
+            if let Some(e) = e.source() {
+                *level += 1;
+                print_tree(output, level, e);
+                *level -= 1;
+            }
+        };
+        if let Some(multi) = e.downcast_ref::<wgpu_core::error::MultiError>() {
+            for e in multi.errors() {
+                print(e);
+            }
+        } else {
+            print(e);
+        }
     }
+
+    print_tree(&mut output, &mut level, err);
 
     output
 }
@@ -51,6 +68,7 @@ pub struct WebGpuResult {
 }
 
 impl WebGpuResult {
+    #[must_use]
     pub fn rid(rid: ResourceId) -> Self {
         Self {
             rid: Some(rid),
@@ -58,6 +76,7 @@ impl WebGpuResult {
         }
     }
 
+    #[must_use]
     pub fn rid_err<T: Into<WebGpuError>>(rid: ResourceId, err: Option<T>) -> Self {
         Self {
             rid: Some(rid),
@@ -65,6 +84,7 @@ impl WebGpuResult {
         }
     }
 
+    #[must_use]
     pub fn maybe_err<T: Into<WebGpuError>>(err: Option<T>) -> Self {
         Self {
             rid: None,
@@ -72,6 +92,7 @@ impl WebGpuResult {
         }
     }
 
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             rid: None,
@@ -290,6 +311,7 @@ pub struct DomExceptionOperationError {
 }
 
 impl DomExceptionOperationError {
+    #[must_use]
     pub fn new(msg: &str) -> Self {
         DomExceptionOperationError {
             msg: msg.to_string(),
@@ -305,6 +327,7 @@ impl fmt::Display for DomExceptionOperationError {
 
 impl std::error::Error for DomExceptionOperationError {}
 
+#[must_use]
 pub fn get_error_class_name(e: &AnyError) -> Option<&'static str> {
     e.downcast_ref::<DomExceptionOperationError>()
         .map(|_| "DOMExceptionOperationError")

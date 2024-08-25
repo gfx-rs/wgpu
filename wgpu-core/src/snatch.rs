@@ -33,13 +33,8 @@ impl<T> Snatchable<T> {
     }
 
     /// Get read access to the value. Requires a the snatchable lock's read guard.
-    pub fn get(&self, _guard: &SnatchGuard) -> Option<&T> {
+    pub fn get<'a>(&'a self, _guard: &'a SnatchGuard) -> Option<&'a T> {
         unsafe { (*self.value.get()).as_ref() }
-    }
-
-    /// Get write access to the value. Requires a the snatchable lock's write guard.
-    pub fn get_mut(&self, _guard: &mut ExclusiveSnatchGuard) -> Option<&mut T> {
-        unsafe { (*self.value.get()).as_mut() }
     }
 
     /// Take the value. Requires a the snatchable lock's write guard.

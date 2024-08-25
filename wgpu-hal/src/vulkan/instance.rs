@@ -23,7 +23,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     let cd = unsafe { &*callback_data_ptr };
-    let user_data = unsafe { &*(user_data as *mut super::DebugUtilsMessengerUserData) };
+    let user_data = unsafe { &*user_data.cast::<super::DebugUtilsMessengerUserData>() };
 
     const VUID_VKCMDENDDEBUGUTILSLABELEXT_COMMANDBUFFER_01912: i32 = 0x56146426;
     if cd.message_id_number == VUID_VKCMDENDDEBUGUTILSLABELEXT_COMMANDBUFFER_01912 {
@@ -161,7 +161,11 @@ impl super::Swapchain {
             profiling::scope!("vkDeviceWaitIdle");
             // We need to also wait until all presentation work is done. Because there is no way to portably wait until
             // the presentation work is done, we are forced to wait until the device is idle.
-            let _ = unsafe { device.device_wait_idle() };
+            let _ = unsafe {
+                device
+                    .device_wait_idle()
+                    .map_err(super::map_host_device_oom_and_lost_err)
+            };
         };
 
         // We cannot take this by value, as the function returns `self`.
@@ -515,7 +519,7 @@ impl super::Instance {
         }
 
         let layer = unsafe {
-            crate::metal::Surface::get_metal_layer(view as *mut objc2::runtime::AnyObject, None)
+            crate::metal::Surface::get_metal_layer(view.cast::<objc2::runtime::AnyObject>(), None)
         };
 
         let surface = {
@@ -523,7 +527,7 @@ impl super::Instance {
                 ext::metal_surface::Instance::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::default()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
-                .layer(layer as *mut _);
+                .layer(layer.cast());
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
@@ -880,11 +884,10 @@ impl crate::Instance for super::Instance {
         }
     }
 
-    unsafe fn destroy_surface(&self, surface: super::Surface) {
-        unsafe { surface.functor.destroy_surface(surface.raw, None) };
-    }
-
-    unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
+    unsafe fn enumerate_adapters(
+        &self,
+        _surface_hint: Option<&super::Surface>,
+    ) -> Vec<crate::ExposedAdapter<super::Api>> {
         use crate::auxil::db;
 
         let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
@@ -939,6 +942,12 @@ impl crate::Instance for super::Instance {
     }
 }
 
+impl Drop for super::Surface {
+    fn drop(&mut self) {
+        unsafe { self.functor.destroy_surface(self.raw, None) };
+    }
+}
+
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
@@ -947,7 +956,7 @@ impl crate::Surface for super::Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        // Safety: `configure`'s contract guarantees there are no resources derived from the swapchain in use.
+        // SAFETY: `configure`'s contract guarantees there are no resources derived from the swapchain in use.
         let mut swap_chain = self.swapchain.write();
         let old = swap_chain
             .take()
@@ -961,7 +970,7 @@ impl crate::Surface for super::Surface {
 
     unsafe fn unconfigure(&self, device: &super::Device) {
         if let Some(sc) = self.swapchain.write().take() {
-            // Safety: `unconfigure`'s contract guarantees there are no resources derived from the swapchain in use.
+            // SAFETY: `unconfigure`'s contract guarantees there are no resources derived from the swapchain in use.
             let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
             unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
         }
@@ -1041,8 +1050,10 @@ impl crate::Surface for super::Surface {
                         Err(crate::SurfaceError::Outdated)
                     }
                     vk::Result::ERROR_SURFACE_LOST_KHR => Err(crate::SurfaceError::Lost),
-                    other => Err(crate::DeviceError::from(other).into()),
-                }
+                    // We don't use VK_EXT_full_screen_exclusive
+                    // VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
+                    other => Err(super::map_host_device_oom_and_lost_err(other).into()),
+                };
             }
         };
 

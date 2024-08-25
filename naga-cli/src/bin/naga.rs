@@ -38,13 +38,6 @@ struct Args {
     #[argh(option)]
     image_load_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
-    /// what policy to use for texture stores bounds checking.
-    ///
-    /// Possible values are the same as for `index-bounds-check-policy`. If
-    /// omitted, defaults to the index bounds check policy.
-    #[argh(option)]
-    image_store_bounds_check_policy: Option<BoundsCheckPolicyArg>,
-
     /// directory to dump the SPIR-V block context dump to
     #[argh(option)]
     block_ctx_dir: Option<String>,
@@ -333,6 +326,8 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
+#[cold]
+#[inline(never)]
 fn print_err(error: &dyn Error) {
     eprint!("{error}");
 
@@ -406,10 +401,6 @@ fn run() -> anyhow::Result<()> {
         None => params.bounds_check_policies.index,
     };
     params.bounds_check_policies.image_load = match args.image_load_bounds_check_policy {
-        Some(arg) => arg.0,
-        None => params.bounds_check_policies.index,
-    };
-    params.bounds_check_policies.image_store = match args.image_store_bounds_check_policy {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
@@ -811,7 +802,7 @@ fn write_output(
 
             let mut buffer = String::new();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-            writer.write(&module, &info).unwrap_pretty();
+            writer.write(&module, &info, None).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {

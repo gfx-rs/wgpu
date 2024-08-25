@@ -181,27 +181,6 @@ function assertDevice(self, prefix, context) {
 }
 
 /**
- * @param {InnerGPUDevice} self
- * @param {any} resource
- * @param {{prefix: string, resourceContext: string, selfContext: string}} opts
- * @returns {InnerGPUDevice & {rid: number}}
- */
-function assertDeviceMatch(
-  self,
-  resource,
-  { prefix, resourceContext, selfContext },
-) {
-  const resourceDevice = assertDevice(resource, prefix, resourceContext);
-  if (resourceDevice.rid !== self.rid) {
-    throw new DOMException(
-      `${prefix}: ${resourceContext} belongs to a different device than ${selfContext}.`,
-      "OperationError",
-    );
-  }
-  return { ...resourceDevice, rid: resourceDevice.rid };
-}
-
-/**
  * @param {any} self
  * @param {string} prefix
  * @param {string} context
@@ -1262,11 +1241,6 @@ class GPUDevice extends EventTarget {
       (layout, i) => {
         const context = `bind group layout ${i + 1}`;
         const rid = assertResource(layout, prefix, context);
-        assertDeviceMatch(device, layout, {
-          prefix,
-          selfContext: "this",
-          resourceContext: context,
-        });
         return rid;
       },
     );
@@ -1301,11 +1275,6 @@ class GPUDevice extends EventTarget {
     );
     const device = assertDevice(this, prefix, "this");
     const layout = assertResource(descriptor.layout, prefix, "layout");
-    assertDeviceMatch(device, descriptor.layout, {
-      prefix,
-      resourceContext: "layout",
-      selfContext: "this",
-    });
     const entries = ArrayPrototypeMap(descriptor.entries, (entry, i) => {
       const context = `entry ${i + 1}`;
       const resource = entry.resource;
@@ -1403,22 +1372,12 @@ class GPUDevice extends EventTarget {
     if (typeof descriptor.layout !== "string") {
       const context = "layout";
       layout = assertResource(descriptor.layout, prefix, context);
-      assertDeviceMatch(device, descriptor.layout, {
-        prefix,
-        resourceContext: context,
-        selfContext: "this",
-      });
     }
     const module = assertResource(
       descriptor.compute.module,
       prefix,
       "compute shader module",
     );
-    assertDeviceMatch(device, descriptor.compute.module, {
-      prefix,
-      resourceContext: "compute shader module",
-      selfContext: "this",
-    });
 
     const { rid, err } = op_webgpu_create_compute_pipeline(
       device.rid,
@@ -1459,22 +1418,12 @@ class GPUDevice extends EventTarget {
     if (typeof descriptor.layout !== "string") {
       const context = "layout";
       layout = assertResource(descriptor.layout, prefix, context);
-      assertDeviceMatch(device, descriptor.layout, {
-        prefix,
-        resourceContext: context,
-        selfContext: "this",
-      });
     }
     const module = assertResource(
       descriptor.vertex.module,
       prefix,
       "vertex shader module",
     );
-    assertDeviceMatch(device, descriptor.vertex.module, {
-      prefix,
-      resourceContext: "vertex shader module",
-      selfContext: "this",
-    });
     let fragment = undefined;
     if (descriptor.fragment) {
       const module = assertResource(
@@ -1482,11 +1431,6 @@ class GPUDevice extends EventTarget {
         prefix,
         "fragment shader module",
       );
-      assertDeviceMatch(device, descriptor.fragment.module, {
-        prefix,
-        resourceContext: "fragment shader module",
-        selfContext: "this",
-      });
       fragment = {
         module,
         entryPoint: descriptor.fragment.entryPoint,
@@ -1536,22 +1480,12 @@ class GPUDevice extends EventTarget {
     if (typeof descriptor.layout !== "string") {
       const context = "layout";
       layout = assertResource(descriptor.layout, prefix, context);
-      assertDeviceMatch(device, descriptor.layout, {
-        prefix,
-        resourceContext: context,
-        selfContext: "this",
-      });
     }
     const module = assertResource(
       descriptor.compute.module,
       prefix,
       "compute shader module",
     );
-    assertDeviceMatch(device, descriptor.compute.module, {
-      prefix,
-      resourceContext: "compute shader module",
-      selfContext: "this",
-    });
 
     const { rid, err } = op_webgpu_create_compute_pipeline(
       device.rid,
@@ -1607,22 +1541,12 @@ class GPUDevice extends EventTarget {
     if (typeof descriptor.layout !== "string") {
       const context = "layout";
       layout = assertResource(descriptor.layout, prefix, context);
-      assertDeviceMatch(device, descriptor.layout, {
-        prefix,
-        resourceContext: context,
-        selfContext: "this",
-      });
     }
     const module = assertResource(
       descriptor.vertex.module,
       prefix,
       "vertex shader module",
     );
-    assertDeviceMatch(device, descriptor.vertex.module, {
-      prefix,
-      resourceContext: "vertex shader module",
-      selfContext: "this",
-    });
     let fragment = undefined;
     if (descriptor.fragment) {
       const module = assertResource(
@@ -1630,11 +1554,6 @@ class GPUDevice extends EventTarget {
         prefix,
         "fragment shader module",
       );
-      assertDeviceMatch(device, descriptor.fragment.module, {
-        prefix,
-        resourceContext: "fragment shader module",
-        selfContext: "this",
-      });
       fragment = {
         module,
         entryPoint: descriptor.fragment.entryPoint,
@@ -1916,11 +1835,6 @@ class GPUQueue {
       (buffer, i) => {
         const context = `command buffer ${i + 1}`;
         const rid = assertResource(buffer, prefix, context);
-        assertDeviceMatch(device, buffer, {
-          prefix,
-          selfContext: "this",
-          resourceContext: context,
-        });
         return rid;
       },
     );
@@ -1964,11 +1878,6 @@ class GPUQueue {
       : webidl.converters.GPUSize64(size, prefix, "Argument 5");
     const device = assertDevice(this, prefix, "this");
     const bufferRid = assertResource(buffer, prefix, "Argument 1");
-    assertDeviceMatch(device, buffer, {
-      prefix,
-      selfContext: "this",
-      resourceContext: "Argument 1",
-    });
     /** @type {ArrayBufferLike} */
     let abLike = data;
     if (isTypedArray(data)) {
@@ -2014,11 +1923,6 @@ class GPUQueue {
     size = webidl.converters.GPUExtent3D(size, prefix, "Argument 4");
     const device = assertDevice(this, prefix, "this");
     const textureRid = assertResource(destination.texture, prefix, "texture");
-    assertDeviceMatch(device, destination.texture, {
-      prefix,
-      selfContext: "this",
-      resourceContext: "texture",
-    });
 
     /** @type {ArrayBufferLike} */
     let abLike = data;
@@ -3189,15 +3093,6 @@ class GPUCommandEncoder {
         prefix,
         "texture view for depth stencil attachment",
       );
-      assertDeviceMatch(
-        device,
-        descriptor.depthStencilAttachment.view[_texture],
-        {
-          prefix,
-          resourceContext: "texture view for depth stencil attachment",
-          selfContext: "this",
-        },
-      );
 
       depthStencilAttachment = {
         ...descriptor.depthStencilAttachment,
@@ -3218,15 +3113,6 @@ class GPUCommandEncoder {
           prefix,
           `texture backing texture view for ${context}`,
         );
-        assertDeviceMatch(
-          device,
-          colorAttachment.view[_texture],
-          {
-            prefix,
-            resourceContext: `texture view for ${context}`,
-            selfContext: "this",
-          },
-        );
         let resolveTarget;
         if (colorAttachment.resolveTarget) {
           resolveTarget = assertResource(
@@ -3238,15 +3124,6 @@ class GPUCommandEncoder {
             colorAttachment.resolveTarget[_texture],
             prefix,
             `texture backing resolve target texture view for ${context}`,
-          );
-          assertDeviceMatch(
-            device,
-            colorAttachment.resolveTarget[_texture],
-            {
-              prefix,
-              resourceContext: `resolve target texture view for ${context}`,
-              selfContext: "this",
-            },
           );
         }
         return {
@@ -3388,17 +3265,7 @@ class GPUCommandEncoder {
     const device = assertDevice(this, prefix, "this");
     const commandEncoderRid = assertResource(this, prefix, "this");
     const sourceRid = assertResource(source, prefix, "Argument 1");
-    assertDeviceMatch(device, source, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     const destinationRid = assertResource(destination, prefix, "Argument 3");
-    assertDeviceMatch(device, destination, {
-      prefix,
-      resourceContext: "Argument 3",
-      selfContext: "this",
-    });
 
     const { err } = op_webgpu_command_encoder_copy_buffer_to_buffer(
       commandEncoderRid,
@@ -3436,22 +3303,11 @@ class GPUCommandEncoder {
       prefix,
       "source in Argument 1",
     );
-    // deno-lint-ignore prefer-primordials
-    assertDeviceMatch(device, source.buffer, {
-      prefix,
-      resourceContext: "source in Argument 1",
-      selfContext: "this",
-    });
     const destinationTextureRid = assertResource(
       destination.texture,
       prefix,
       "texture in Argument 2",
     );
-    assertDeviceMatch(device, destination.texture, {
-      prefix,
-      resourceContext: "texture in Argument 2",
-      selfContext: "this",
-    });
 
     const { err } = op_webgpu_command_encoder_copy_buffer_to_texture(
       commandEncoderRid,
@@ -3500,23 +3356,12 @@ class GPUCommandEncoder {
       prefix,
       "texture in Argument 1",
     );
-    assertDeviceMatch(device, source.texture, {
-      prefix,
-      resourceContext: "texture in Argument 1",
-      selfContext: "this",
-    });
     const destinationBufferRid = assertResource(
       // deno-lint-ignore prefer-primordials
       destination.buffer,
       prefix,
       "buffer in Argument 2",
     );
-    // deno-lint-ignore prefer-primordials
-    assertDeviceMatch(device, destination.buffer, {
-      prefix,
-      resourceContext: "buffer in Argument 2",
-      selfContext: "this",
-    });
     const { err } = op_webgpu_command_encoder_copy_texture_to_buffer(
       commandEncoderRid,
       {
@@ -3562,21 +3407,11 @@ class GPUCommandEncoder {
       prefix,
       "texture in Argument 1",
     );
-    assertDeviceMatch(device, source.texture, {
-      prefix,
-      resourceContext: "texture in Argument 1",
-      selfContext: "this",
-    });
     const destinationTextureRid = assertResource(
       destination.texture,
       prefix,
       "texture in Argument 2",
     );
-    assertDeviceMatch(device, destination.texture, {
-      prefix,
-      resourceContext: "texture in Argument 2",
-      selfContext: "this",
-    });
     const { err } = op_webgpu_command_encoder_copy_texture_to_texture(
       commandEncoderRid,
       {
@@ -3685,11 +3520,6 @@ class GPUCommandEncoder {
     const device = assertDevice(this, prefix, "this");
     const commandEncoderRid = assertResource(this, prefix, "this");
     const querySetRid = assertResource(querySet, prefix, "Argument 1");
-    assertDeviceMatch(device, querySet, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     const { err } = op_webgpu_command_encoder_write_timestamp(
       commandEncoderRid,
       querySetRid,
@@ -3731,17 +3561,7 @@ class GPUCommandEncoder {
     const device = assertDevice(this, prefix, "this");
     const commandEncoderRid = assertResource(this, prefix, "this");
     const querySetRid = assertResource(querySet, prefix, "Argument 1");
-    assertDeviceMatch(device, querySet, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     const destinationRid = assertResource(destination, prefix, "Argument 3");
-    assertDeviceMatch(device, destination, {
-      prefix,
-      resourceContext: "Argument 3",
-      selfContext: "this",
-    });
     const { err } = op_webgpu_command_encoder_resolve_query_set(
       commandEncoderRid,
       querySetRid,
@@ -3991,11 +3811,6 @@ class GPURenderPassEncoder {
     const bundleRids = ArrayPrototypeMap(bundles, (bundle, i) => {
       const context = `bundle ${i + 1}`;
       const rid = assertResource(bundle, prefix, context);
-      assertDeviceMatch(device, bundle, {
-        prefix,
-        resourceContext: context,
-        selfContext: "this",
-      });
       return rid;
     });
     op_webgpu_render_pass_execute_bundles(renderPassRid, bundleRids);
@@ -4041,11 +3856,6 @@ class GPURenderPassEncoder {
     assertResource(this[_encoder], prefix, "encoder referenced by this");
     const renderPassRid = assertResource(this, prefix, "this");
     const bindGroupRid = assertResource(bindGroup, prefix, "Argument 2");
-    assertDeviceMatch(device, bindGroup, {
-      prefix,
-      resourceContext: "Argument 2",
-      selfContext: "this",
-    });
     if (
       TypedArrayPrototypeGetSymbolToStringTag(dynamicOffsetsData) !==
       "Uint32Array"
@@ -4128,11 +3938,6 @@ class GPURenderPassEncoder {
     assertResource(this[_encoder], prefix, "encoder referenced by this");
     const renderPassRid = assertResource(this, prefix, "this");
     const pipelineRid = assertResource(pipeline, prefix, "Argument 1");
-    assertDeviceMatch(device, pipeline, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_render_pass_set_pipeline(renderPassRid, pipelineRid);
   }
 
@@ -4165,11 +3970,6 @@ class GPURenderPassEncoder {
     assertResource(this[_encoder], prefix, "encoder referenced by this");
     const renderPassRid = assertResource(this, prefix, "this");
     const bufferRid = assertResource(buffer, prefix, "Argument 1");
-    assertDeviceMatch(device, buffer, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_render_pass_set_index_buffer(
       renderPassRid,
       bufferRid,
@@ -4204,11 +4004,6 @@ class GPURenderPassEncoder {
     assertResource(this[_encoder], prefix, "encoder referenced by this");
     const renderPassRid = assertResource(this, prefix, "this");
     const bufferRid = assertResource(buffer, prefix, "Argument 2");
-    assertDeviceMatch(device, buffer, {
-      prefix,
-      resourceContext: "Argument 2",
-      selfContext: "this",
-    });
     op_webgpu_render_pass_set_vertex_buffer(
       renderPassRid,
       slot,
@@ -4337,11 +4132,6 @@ class GPURenderPassEncoder {
       prefix,
       "Argument 1",
     );
-    assertDeviceMatch(device, indirectBuffer, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_render_pass_draw_indirect(
       renderPassRid,
       indirectBufferRid,
@@ -4380,11 +4170,6 @@ class GPURenderPassEncoder {
       prefix,
       "Argument 1",
     );
-    assertDeviceMatch(device, indirectBuffer, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_render_pass_draw_indexed_indirect(
       renderPassRid,
       indirectBufferRid,
@@ -4466,11 +4251,6 @@ class GPUComputePassEncoder {
     assertResource(this[_encoder], prefix, "encoder referenced by this");
     const computePassRid = assertResource(this, prefix, "this");
     const pipelineRid = assertResource(pipeline, prefix, "Argument 1");
-    assertDeviceMatch(device, pipeline, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_compute_pass_set_pipeline(computePassRid, pipelineRid);
   }
 
@@ -4545,11 +4325,6 @@ class GPUComputePassEncoder {
       prefix,
       "Argument 1",
     );
-    assertDeviceMatch(device, indirectBuffer, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_compute_pass_dispatch_workgroups_indirect(
       computePassRid,
       indirectBufferRid,
@@ -4598,11 +4373,6 @@ class GPUComputePassEncoder {
     assertResource(this[_encoder], prefix, "encoder referenced by this");
     const computePassRid = assertResource(this, prefix, "this");
     const bindGroupRid = assertResource(bindGroup, prefix, "Argument 2");
-    assertDeviceMatch(device, bindGroup, {
-      prefix,
-      resourceContext: "Argument 2",
-      selfContext: "this",
-    });
     if (
       TypedArrayPrototypeGetSymbolToStringTag(dynamicOffsetsData) !==
       "Uint32Array"
@@ -4814,11 +4584,6 @@ class GPURenderBundleEncoder {
     const device = assertDevice(this, prefix, "this");
     const renderBundleEncoderRid = assertResource(this, prefix, "this");
     const bindGroupRid = assertResource(bindGroup, prefix, "Argument 2");
-    assertDeviceMatch(device, bindGroup, {
-      prefix,
-      resourceContext: "Argument 2",
-      selfContext: "this",
-    });
     if (
       TypedArrayPrototypeGetSymbolToStringTag(dynamicOffsetsData) !==
       "Uint32Array"
@@ -4902,11 +4667,6 @@ class GPURenderBundleEncoder {
     const device = assertDevice(this, prefix, "this");
     const renderBundleEncoderRid = assertResource(this, prefix, "this");
     const pipelineRid = assertResource(pipeline, prefix, "Argument 1");
-    assertDeviceMatch(device, pipeline, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_render_bundle_encoder_set_pipeline(
       renderBundleEncoderRid,
       pipelineRid,
@@ -4935,11 +4695,6 @@ class GPURenderBundleEncoder {
     const device = assertDevice(this, prefix, "this");
     const renderBundleEncoderRid = assertResource(this, prefix, "this");
     const bufferRid = assertResource(buffer, prefix, "Argument 1");
-    assertDeviceMatch(device, buffer, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_render_bundle_encoder_set_index_buffer(
       renderBundleEncoderRid,
       bufferRid,
@@ -4969,11 +4724,6 @@ class GPURenderBundleEncoder {
     const device = assertDevice(this, prefix, "this");
     const renderBundleEncoderRid = assertResource(this, prefix, "this");
     const bufferRid = assertResource(buffer, prefix, "Argument 2");
-    assertDeviceMatch(device, buffer, {
-      prefix,
-      resourceContext: "Argument 2",
-      selfContext: "this",
-    });
     op_webgpu_render_bundle_encoder_set_vertex_buffer(
       renderBundleEncoderRid,
       slot,
@@ -5097,11 +4847,6 @@ class GPURenderBundleEncoder {
       prefix,
       "Argument 1",
     );
-    assertDeviceMatch(device, indirectBuffer, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
     op_webgpu_render_bundle_encoder_draw_indirect(
       renderBundleEncoderRid,
       indirectBufferRid,
@@ -5326,6 +5071,7 @@ webidl.converters["GPUFeatureName"] = webidl.createEnumConverter(
     // texture formats
     "depth32float-stencil8",
     "texture-compression-bc",
+    "texture-compression-bc-sliced-3d",
     "texture-compression-etc2",
     "texture-compression-astc",
     "rg11b10ufloat-renderable",

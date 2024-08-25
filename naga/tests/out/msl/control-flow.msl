@@ -44,6 +44,114 @@ void loop_switch_continue(
     return;
 }
 
+void loop_switch_continue_nesting(
+    int x_1,
+    int y,
+    int z
+) {
+    while(true) {
+        switch(x_1) {
+            case 1: {
+                continue;
+            }
+            case 2: {
+                switch(y) {
+                    case 1: {
+                        continue;
+                    }
+                    default: {
+                        while(true) {
+                            switch(z) {
+                                case 1: {
+                                    continue;
+                                }
+                                default: {
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        switch(y) {
+            default: {
+                continue;
+            }
+        }
+    }
+    while(true) {
+        switch(y) {
+            case 1:
+            default: {
+                switch(z) {
+                    default: {
+                        continue;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    return;
+}
+
+void loop_switch_omit_continue_variable_checks(
+    int x_2,
+    int y_1,
+    int z_1,
+    int w
+) {
+    int pos_1 = 0;
+    while(true) {
+        switch(x_2) {
+            case 1: {
+                pos_1 = 1;
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+    while(true) {
+        switch(x_2) {
+            case 1: {
+                break;
+            }
+            case 2: {
+                switch(y_1) {
+                    case 1: {
+                        continue;
+                    }
+                    default: {
+                        switch(z_1) {
+                            case 1: {
+                                pos_1 = 2;
+                                break;
+                            }
+                            default: {
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+    return;
+}
+
 struct main_Input {
 };
 kernel void main_(

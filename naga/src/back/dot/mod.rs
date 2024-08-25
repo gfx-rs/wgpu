@@ -377,12 +377,8 @@ impl StatementGraph {
     }
 }
 
-#[allow(clippy::manual_unwrap_or)]
 fn name(option: &Option<String>) -> &str {
-    match *option {
-        Some(ref name) => name,
-        None => "",
-    }
+    option.as_deref().unwrap_or_default()
 }
 
 /// set39 color scheme from <https://graphviz.org/doc/info/colors.html>

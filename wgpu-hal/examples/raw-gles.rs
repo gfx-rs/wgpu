@@ -49,18 +49,19 @@ fn main() {
 
         match event {
             Event::LoopDestroyed => (),
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                _ => (),
-            },
+            Event::WindowEvent {
+                event:
+                    WindowEvent::CloseRequested
+                    | WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => *control_flow = ControlFlow::Exit,
             _ => (),
         }
     });
@@ -124,9 +125,11 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
     use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
 
     let od = unsafe {
-        exposed
-            .adapter
-            .open(wgt::Features::empty(), &wgt::Limits::downlevel_defaults())
+        exposed.adapter.open(
+            wgt::Features::empty(),
+            &wgt::Limits::downlevel_defaults(),
+            &wgt::MemoryHints::default(),
+        )
     }
     .unwrap();
 

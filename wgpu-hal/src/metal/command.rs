@@ -10,7 +10,7 @@ use objc2_metal::{
 
 use super::{conv, TimestampQuerySupport};
 use crate::CommandEncoder as _;
-use std::{borrow::Cow, mem, ops::Range, os::raw::c_void, ptr::NonNull};
+use std::{borrow::Cow, mem::size_of, ops::Range, ptr::NonNull};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -259,13 +259,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_buffers<'a, T>(&mut self, _barriers: T)
     where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>,
     {
     }
 
     unsafe fn transition_textures<'a, T>(&mut self, _barriers: T)
     where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
     }
 
@@ -531,7 +531,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
+    ) {
         self.begin_pass();
         self.state.index = None;
 
@@ -705,7 +708,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     &mut self.temp.binding_sizes,
                 ) {
                     encoder.setVertexBytes_length_atIndex(
-                        NonNull::new(sizes.as_ptr() as *mut c_void).unwrap(),
+                        NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                         sizes.len() * WORD_SIZE,
                         index as _,
                     );
@@ -739,7 +742,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     &mut self.temp.binding_sizes,
                 ) {
                     encoder.setFragmentBytes_length_atIndex(
-                        NonNull::new(sizes.as_ptr() as *mut c_void).unwrap(),
+                        NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                         sizes.len() * WORD_SIZE,
                         index as _,
                     );
@@ -811,7 +814,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     &mut self.temp.binding_sizes,
                 ) {
                     encoder.setBytes_length_atIndex(
-                        NonNull::new(sizes.as_ptr() as *mut c_void).unwrap(),
+                        NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                         sizes.len() * WORD_SIZE,
                         index as _,
                     );
@@ -851,7 +854,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let offset_words = offset_bytes as usize / WORD_SIZE;
         state_pc[offset_words..offset_words + data.len()].copy_from_slice(data);
 
-        let bytes = NonNull::new(state_pc.as_ptr() as *mut c_void).unwrap();
+        let bytes = NonNull::new(state_pc.as_ptr().cast_mut().cast()).unwrap();
         if stages.contains(wgt::ShaderStages::COMPUTE) {
             self.state
                 .compute
@@ -938,7 +941,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
             {
                 encoder.setVertexBytes_length_atIndex(
-                    NonNull::new(sizes.as_ptr() as *mut c_void).unwrap(),
+                    NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                     sizes.len() * WORD_SIZE,
                     index as _,
                 );
@@ -950,7 +953,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
             {
                 encoder.setFragmentBytes_length_atIndex(
-                    NonNull::new(sizes.as_ptr() as *mut c_void).unwrap(),
+                    NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                     sizes.len() * WORD_SIZE,
                     index as _,
                 );
@@ -960,7 +963,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Api>,
+        binding: crate::BufferBinding<'a, super::Buffer>,
         format: wgt::IndexFormat,
     ) {
         let (stride, raw_type) = match format {
@@ -978,7 +981,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Api>,
+        binding: crate::BufferBinding<'a, super::Buffer>,
     ) {
         let buffer_index = self.shared.private_caps.max_vertex_buffers as u64 - 1 - index as u64;
         let encoder = self.state.render.as_ref().unwrap();
@@ -1003,7 +1006,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
         {
             encoder.setVertexBytes_length_atIndex(
-                NonNull::new(sizes.as_ptr() as *mut c_void).unwrap(),
+                NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                 sizes.len() * WORD_SIZE,
                 index as _,
             );
@@ -1133,7 +1136,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 &buffer.raw,
                 offset as usize,
             );
-            offset += mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+            offset += size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
         }
     }
 
@@ -1155,7 +1158,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     &buffer.raw,
                     offset as usize,
                 );
-            offset += mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+            offset += size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
         }
     }
 
@@ -1182,7 +1185,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::QuerySet>) {
         self.begin_pass();
 
         debug_assert!(self.state.blit.is_none());
@@ -1265,7 +1268,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .make_sizes_buffer_update(naga::ShaderStage::Compute, &mut self.temp.binding_sizes)
         {
             encoder.setBytes_length_atIndex(
-                NonNull::new(sizes.as_ptr() as *mut c_void).unwrap(),
+                NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                 sizes.len() * WORD_SIZE,
                 index as _,
             );
@@ -1316,7 +1319,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _descriptors: T,
     ) where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+        T: IntoIterator<
+            Item = crate::BuildAccelerationStructureDescriptor<
+                'a,
+                super::Buffer,
+                super::AccelerationStructure,
+            >,
+        >,
     {
         unimplemented!()
     }

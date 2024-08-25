@@ -29,6 +29,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         features: wgt::Features,
         _limits: &wgt::Limits,
+        _memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = self
             .shared
@@ -74,6 +75,7 @@ impl crate::Adapter for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 features,
+                counters: Default::default(),
             },
             queue: super::Queue {
                 raw: Arc::new(Mutex::new(queue)),
@@ -194,7 +196,7 @@ impl crate::Adapter for super::Adapter {
                 flags.set(Tfc::STORAGE, pc.format_rgb10a2_unorm_all);
                 flags
             }
-            Tf::Rg11b10Float => {
+            Tf::Rg11b10UFloat => {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
                 flags
@@ -888,6 +890,7 @@ impl super::PrivateCapabilities {
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
+        features.set(F::TEXTURE_COMPRESSION_BC_SLICED_3D, self.format_bc); // BC guarantees Sliced 3D
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
 
         features.set(F::DEPTH_CLIP_CONTROL, self.supports_depth_clip_control);
@@ -928,7 +931,6 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
-        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
@@ -1049,7 +1051,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba8Sint => MTL::RGBA8Sint,
             Tf::Rgb10a2Uint => MTL::RGB10A2Uint,
             Tf::Rgb10a2Unorm => MTL::RGB10A2Unorm,
-            Tf::Rg11b10Float => MTL::RG11B10Float,
+            Tf::Rg11b10UFloat => MTL::RG11B10Float,
             Tf::Rg32Uint => MTL::RG32Uint,
             Tf::Rg32Sint => MTL::RG32Sint,
             Tf::Rg32Float => MTL::RG32Float,

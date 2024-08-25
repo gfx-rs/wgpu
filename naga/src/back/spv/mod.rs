@@ -537,32 +537,32 @@ struct FunctionArgument {
 /// - OpConstantComposite
 /// - OpConstantNull
 struct ExpressionConstnessTracker {
-    inner: bit_set::BitSet,
+    inner: crate::arena::HandleSet<crate::Expression>,
 }
 
 impl ExpressionConstnessTracker {
     fn from_arena(arena: &crate::Arena<crate::Expression>) -> Self {
-        let mut inner = bit_set::BitSet::new();
+        let mut inner = crate::arena::HandleSet::for_arena(arena);
         for (handle, expr) in arena.iter() {
             let insert = match *expr {
                 crate::Expression::Literal(_)
                 | crate::Expression::ZeroValue(_)
                 | crate::Expression::Constant(_) => true,
                 crate::Expression::Compose { ref components, .. } => {
-                    components.iter().all(|h| inner.contains(h.index()))
+                    components.iter().all(|&h| inner.contains(h))
                 }
-                crate::Expression::Splat { value, .. } => inner.contains(value.index()),
+                crate::Expression::Splat { value, .. } => inner.contains(value),
                 _ => false,
             };
             if insert {
-                inner.insert(handle.index());
+                inner.insert(handle);
             }
         }
         Self { inner }
     }
 
     fn is_const(&self, value: Handle<crate::Expression>) -> bool {
-        self.inner.contains(value.index())
+        self.inner.contains(value)
     }
 }
 

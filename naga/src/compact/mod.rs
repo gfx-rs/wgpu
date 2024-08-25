@@ -4,8 +4,9 @@ mod handle_set_map;
 mod statements;
 mod types;
 
+use crate::arena::HandleSet;
 use crate::{arena, compact::functions::FunctionTracer};
-use handle_set_map::{HandleMap, HandleSet};
+use handle_set_map::HandleMap;
 
 /// Remove unused types, expressions, and constants from `module`.
 ///
@@ -252,7 +253,6 @@ impl<'module> ModuleTracer<'module> {
         expressions::ExpressionTracer {
             expressions: &self.module.global_expressions,
             constants: &self.module.constants,
-            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             expressions_used: &mut self.global_expressions_used,
@@ -267,7 +267,6 @@ impl<'module> ModuleTracer<'module> {
         FunctionTracer {
             function,
             constants: &self.module.constants,
-            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             global_expressions_used: &mut self.global_expressions_used,

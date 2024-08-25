@@ -1,4 +1,4 @@
-use std::{panic::AssertUnwindSafe, sync::Arc};
+use std::panic::AssertUnwindSafe;
 
 use futures_lite::FutureExt;
 use wgpu::{Adapter, Device, Instance, Queue};
@@ -18,7 +18,7 @@ pub struct TestingContext {
     pub adapter: Adapter,
     pub adapter_info: wgpu::AdapterInfo,
     pub adapter_downlevel_capabilities: wgpu::DownlevelCapabilities,
-    pub device: Arc<Device>,
+    pub device: Device,
     pub device_features: wgpu::Features,
     pub device_limits: wgpu::Limits,
     pub queue: Queue,
@@ -42,7 +42,8 @@ pub async fn execute_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (instance, adapter, _surface_guard) = initialize_adapter(adapter_index).await;
+    let (instance, adapter, _surface_guard) =
+        initialize_adapter(adapter_index, config.params.force_fxc).await;
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -72,7 +73,7 @@ pub async fn execute_test(
         adapter,
         adapter_info,
         adapter_downlevel_capabilities,
-        device: Arc::new(device),
+        device,
         device_features: config.params.required_features,
         device_limits: config.params.required_limits.clone(),
         queue,

@@ -3026,8 +3026,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Glo::UnpackHalf2x16 => Mf::Unpack2x16float,
                         Glo::UnpackUnorm2x16 => Mf::Unpack2x16unorm,
                         Glo::UnpackSnorm2x16 => Mf::Unpack2x16snorm,
-                        Glo::FindILsb => Mf::FindLsb,
-                        Glo::FindUMsb | Glo::FindSMsb => Mf::FindMsb,
+                        Glo::FindILsb => Mf::FirstTrailingBit,
+                        Glo::FindUMsb | Glo::FindSMsb => Mf::FirstLeadingBit,
                         // TODO: https://github.com/gfx-rs/naga/issues/2526
                         Glo::Modf | Glo::Frexp => return Err(Error::UnsupportedExtInst(inst_id)),
                         Glo::IMix
@@ -3460,7 +3460,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             .insert(target, (case_body_idx, vec![literal as i32]));
                     }
 
-                    // Loop trough the collected target blocks creating a new case for each
+                    // Loop through the collected target blocks creating a new case for each
                     // literal pointing to it, only one case will have the true body and all the
                     // others will be empty fallthrough so that they all execute the same body
                     // without duplicating code.
@@ -4335,7 +4335,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         if !self.upgrade_atomics.is_empty() {
             log::info!("Upgrading atomic pointers...");
-            module.upgrade_atomics(std::mem::take(&mut self.upgrade_atomics))?;
+            module.upgrade_atomics(mem::take(&mut self.upgrade_atomics))?;
         }
 
         // Do entry point specific processing after all functions are parsed so that we can
@@ -5710,7 +5710,7 @@ mod test {
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
     }
 
-    #[cfg(all(feature = "wgsl-in", feature = "wgsl-out"))]
+    #[cfg(all(feature = "wgsl-in", wgsl_out))]
     #[test]
     fn atomic_i_inc() {
         let _ = env_logger::builder().is_test(true).try_init();

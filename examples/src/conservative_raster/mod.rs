@@ -96,13 +96,13 @@ impl crate::framework::Example for Example {
                 layout: Some(&pipeline_layout_empty),
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
-                    entry_point: "fs_main_red",
+                    entry_point: Some("fs_main_red"),
                     compilation_options: Default::default(),
                     targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
@@ -122,13 +122,13 @@ impl crate::framework::Example for Example {
                 layout: Some(&pipeline_layout_empty),
                 vertex: wgpu::VertexState {
                     module: &shader_triangle_and_lines,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_triangle_and_lines,
-                    entry_point: "fs_main_blue",
+                    entry_point: Some("fs_main_blue"),
                     compilation_options: Default::default(),
                     targets: &[Some(RENDER_TARGET_FORMAT.into())],
                 }),
@@ -149,13 +149,13 @@ impl crate::framework::Example for Example {
                     layout: Some(&pipeline_layout_empty),
                     vertex: wgpu::VertexState {
                         module: &shader_triangle_and_lines,
-                        entry_point: "vs_main",
+                        entry_point: Some("vs_main"),
                         compilation_options: Default::default(),
                         buffers: &[],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader_triangle_and_lines,
-                        entry_point: "fs_main_white",
+                        entry_point: Some("fs_main_white"),
                         compilation_options: Default::default(),
                         targets: &[Some(config.view_formats[0].into())],
                     }),
@@ -213,13 +213,13 @@ impl crate::framework::Example for Example {
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &shader,
-                        entry_point: "vs_main",
+                        entry_point: Some("vs_main"),
                         compilation_options: Default::default(),
                         buffers: &[],
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
-                        entry_point: "fs_main",
+                        entry_point: Some("fs_main"),
                         compilation_options: Default::default(),
                         targets: &[Some(config.view_formats[0].into())],
                     }),
