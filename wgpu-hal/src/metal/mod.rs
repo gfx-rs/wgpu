@@ -367,7 +367,6 @@ pub struct Device {
 }
 
 pub struct Surface {
-    view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<metal::MetalLayer>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,

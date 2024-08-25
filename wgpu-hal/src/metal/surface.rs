@@ -63,9 +63,8 @@ impl HalManagedMetalLayerDelegate {
 }
 
 impl super::Surface {
-    fn new(view: Option<NonNull<Object>>, layer: metal::MetalLayer) -> Self {
+    fn new(layer: metal::MetalLayer) -> Self {
         Self {
-            view,
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
@@ -85,16 +84,14 @@ impl super::Surface {
         // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
         // we transfer the retain count to `MetalLayer` using `ManuallyDrop`.
         let layer = unsafe { metal::MetalLayer::from_ptr(layer.cast()) };
-        let view: *mut Object = msg_send![view.as_ptr(), retain];
-        let view = NonNull::new(view).expect("retain should return the same object");
-        Self::new(Some(view), layer)
+        Self::new(layer)
     }
 
     pub unsafe fn from_layer(layer: &metal::MetalLayerRef) -> Self {
         let class = class!(CAMetalLayer);
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
-        Self::new(None, layer.to_owned())
+        Self::new(layer.to_owned())
     }
 
     /// Get or create a new `CAMetalLayer` associated with the given `NSView`
@@ -278,16 +275,6 @@ impl super::Surface {
     }
 }
 
-impl Drop for super::Surface {
-    fn drop(&mut self) {
-        if let Some(view) = self.view {
-            unsafe {
-                let () = msg_send![view.as_ptr(), release];
-            }
-        }
-    }
-}
-
 impl crate::Surface for super::Surface {
     type A = super::Api;
 
@@ -319,7 +306,7 @@ impl crate::Surface for super::Surface {
 
         // AppKit / UIKit automatically sets the correct scale factor for
         // layers attached to a view. Our layer, however, may not be directly
-        // attached to the view; in those cases, we need to set the scale
+        // attached to a view; in those cases, we need to set the scale
         // factor ourselves.
         //
         // For AppKit, we do so by adding a delegate on the layer with the
@@ -327,13 +314,15 @@ impl crate::Surface for super::Surface {
         // `true` - this tells the system to automatically update the scale
         // factor when it changes.
         //
-        // For UIKit, we manually update the scale factor here.
+        // For UIKit, we manually update the scale factor from the super layer
+        // here, if there is one.
         //
         // TODO: Is there a way that we could listen to such changes instead?
         #[cfg(not(target_os = "macos"))]
         {
-            if let Some(view) = self.view {
-                let scale_factor: CGFloat = msg_send![view.as_ptr(), contentScaleFactor];
+            let superlayer: *mut Object = msg_send![render_layer.as_ptr(), superlayer];
+            if !superlayer.is_null() {
+                let scale_factor: CGFloat = msg_send![superlayer, contentsScale];
                 let () = msg_send![render_layer.as_ptr(), setContentsScale: scale_factor];
             }
         }
