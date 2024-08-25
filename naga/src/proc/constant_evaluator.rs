@@ -347,6 +347,8 @@ struct FunctionLocalData<'a> {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum ExpressionKind {
+    /// If const is also implemented as const
+    ImplConst,
     Const,
     Override,
     Runtime,
@@ -372,14 +374,23 @@ impl ExpressionKindTracker {
     pub fn insert(&mut self, value: Handle<Expression>, expr_type: ExpressionKind) {
         self.inner.insert(value, expr_type);
     }
+
     pub fn is_const(&self, h: Handle<Expression>) -> bool {
-        matches!(self.type_of(h), ExpressionKind::Const)
+        matches!(
+            self.type_of(h),
+            ExpressionKind::Const | ExpressionKind::ImplConst
+        )
+    }
+
+    /// Returns `true` if naga can also evaluate expression as const
+    pub fn is_impl_const(&self, h: Handle<Expression>) -> bool {
+        matches!(self.type_of(h), ExpressionKind::ImplConst)
     }
 
     pub fn is_const_or_override(&self, h: Handle<Expression>) -> bool {
         matches!(
             self.type_of(h),
-            ExpressionKind::Const | ExpressionKind::Override
+            ExpressionKind::Const | ExpressionKind::Override | ExpressionKind::ImplConst
         )
     }
 
@@ -400,13 +411,14 @@ impl ExpressionKindTracker {
     }
 
     fn type_of_with_expr(&self, expr: &Expression) -> ExpressionKind {
+        use crate::MathFunction as Mf;
         match *expr {
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
-                ExpressionKind::Const
+                ExpressionKind::ImplConst
             }
             Expression::Override(_) => ExpressionKind::Override,
             Expression::Compose { ref components, .. } => {
-                let mut expr_type = ExpressionKind::Const;
+                let mut expr_type = ExpressionKind::ImplConst;
                 for component in components {
                     expr_type = expr_type.max(self.type_of(*component))
                 }
@@ -417,13 +429,16 @@ impl ExpressionKindTracker {
             Expression::Access { base, index } => self.type_of(base).max(self.type_of(index)),
             Expression::Swizzle { vector, .. } => self.type_of(vector),
             Expression::Unary { expr, .. } => self.type_of(expr),
-            Expression::Binary { left, right, .. } => self.type_of(left).max(self.type_of(right)),
+            Expression::Binary { left, right, .. } => self
+                .type_of(left)
+                .max(self.type_of(right))
+                .max(ExpressionKind::Const),
             Expression::Math {
+                fun,
                 arg,
                 arg1,
                 arg2,
                 arg3,
-                ..
             } => self
                 .type_of(arg)
                 .max(
@@ -437,8 +452,34 @@ impl ExpressionKindTracker {
                 .max(
                     arg3.map(|arg| self.type_of(arg))
                         .unwrap_or(ExpressionKind::Const),
+                )
+                .max(
+                    if matches!(
+                        fun,
+                        Mf::Dot
+                            | Mf::Outer
+                            | Mf::Cross
+                            | Mf::Distance
+                            | Mf::Length
+                            | Mf::Normalize
+                            | Mf::FaceForward
+                            | Mf::Reflect
+                            | Mf::Refract
+                            | Mf::Ldexp
+                            | Mf::Modf
+                            | Mf::Mix
+                            | Mf::Frexp
+                    ) {
+                        ExpressionKind::Const
+                    } else {
+                        ExpressionKind::ImplConst
+                    },
                 ),
-            Expression::As { expr, .. } => self.type_of(expr),
+            Expression::As { convert, expr, .. } => self.type_of(expr).max(if convert.is_some() {
+                ExpressionKind::ImplConst
+            } else {
+                ExpressionKind::Const
+            }),
             Expression::Select {
                 condition,
                 accept,
@@ -446,7 +487,8 @@ impl ExpressionKindTracker {
             } => self
                 .type_of(condition)
                 .max(self.type_of(accept))
-                .max(self.type_of(reject)),
+                .max(self.type_of(reject))
+                .max(ExpressionKind::Const),
             Expression::Relational { argument, .. } => self.type_of(argument),
             Expression::ArrayLength(expr) => self.type_of(expr),
             _ => ExpressionKind::Runtime,
@@ -724,6 +766,7 @@ impl<'a> ConstantEvaluator<'a> {
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         match self.expression_kind_tracker.type_of_with_expr(&expr) {
+            ExpressionKind::ImplConst => self.try_eval_and_append_impl(&expr, span),
             ExpressionKind::Const => {
                 let eval_result = self.try_eval_and_append_impl(&expr, span);
                 // We should be able to evaluate `Const` expressions at this

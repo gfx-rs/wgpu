@@ -1117,7 +1117,8 @@ impl<W: Write> Writer<W> {
         func_ctx: &back::FunctionCtx,
         name: &str,
     ) -> BackendResult {
-        let quantifier = if func_ctx.expr_kind_tracker.is_const(handle) {
+        // Some functions are marked as const, but are not yet implemented as constant expression
+        let quantifier = if func_ctx.expr_kind_tracker.is_impl_const(handle) {
             "const"
         } else {
             "let"
