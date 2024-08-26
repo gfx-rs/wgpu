@@ -532,6 +532,7 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
+    #[cfg(windows)]
     external_memory_win32: bool,
 }
 
