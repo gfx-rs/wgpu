@@ -783,12 +783,7 @@ impl super::Device {
             vk_info = vk_info.push_next(ext_info);
         }
 
-        let raw = unsafe {
-            self.shared
-                .raw
-                .create_image(&vk_info, None)
-                .map_err(map_err)?
-        };
+        let raw = unsafe { self.shared.raw.create_image(&vk_info, None) }.map_err(map_err)?;
         fn map_err(err: vk::Result) -> crate::DeviceError {
             // We don't use VK_EXT_image_compression_control
             // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
@@ -803,6 +798,7 @@ impl super::Device {
     ///
     /// - Vulkan 1.1+ (or VK_KHR_external_memory)
     /// - The `d3d11_shared_handle` must be valid and respecting `desc`
+    /// - `VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT` flag is used because we need to hold a reference to the handle
     #[cfg(windows)]
     pub unsafe fn texture_from_d3d11_shared_handle(
         &self,
@@ -814,38 +810,28 @@ impl super::Device {
         }
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
-            .handle_types(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT);
+            .handle_types(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE);
 
         let (raw, req, copy_size, wgt_view_formats, raw_flags) =
             self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
 
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
-            .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT)
+            .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE)
             .handle(d3d11_shared_handle as _);
 
-        let Some(mem_type_index) = self
+        let mem_type_index = self
             .find_memory_type_index(req.memory_type_bits, vk::MemoryPropertyFlags::DEVICE_LOCAL)
-        else {
-            return Err(crate::DeviceError::ResourceCreationFailed);
-        };
+            .ok_or(crate::DeviceError::ResourceCreationFailed)?;
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
             .allocation_size(req.size)
             .memory_type_index(mem_type_index as _)
             .push_next(&mut import_memory_info);
-        let memory = unsafe {
-            self.shared
-                .raw
-                .allocate_memory(&memory_allocate_info, None)
-                .map_err(super::map_host_device_oom_err)?
-        };
+        let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
+            .map_err(super::map_host_device_oom_err)?;
 
-        unsafe {
-            self.shared
-                .raw
-                .bind_image_memory(raw, memory, 0)
-                .map_err(super::map_host_device_oom_err)?
-        };
+        unsafe { self.shared.raw.bind_image_memory(raw, memory, 0) }
+            .map_err(super::map_host_device_oom_err)?;
 
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
