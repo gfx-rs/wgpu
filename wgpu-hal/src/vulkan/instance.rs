@@ -310,6 +310,8 @@ impl super::Instance {
     /// - `extensions` must be a superset of `desired_extensions()` and must be created from the
     ///   same entry, `instance_api_version`` and flags.
     /// - `android_sdk_version` is ignored and can be `0` for all platforms besides Android
+    /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `raw_instance`. If
+    ///   `drop_callback` is [`Some`], `raw_instance` must be valid until the callback is called.
     ///
     /// If `debug_utils_user_data` is `Some`, then the validation layer is
     /// available, so create a [`vk::DebugUtilsMessengerEXT`].
@@ -323,7 +325,7 @@ impl super::Instance {
         extensions: Vec<&'static CStr>,
         flags: wgt::InstanceFlags,
         has_nv_optimus: bool,
-        drop_guard: Option<crate::DropGuard>,
+        drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
         log::debug!("Instance version: 0x{:x}", instance_api_version);
 
@@ -363,6 +365,8 @@ impl super::Instance {
             } else {
                 None
             };
+
+        let drop_guard = crate::DropGuard::from_option(drop_callback);
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
@@ -555,7 +559,7 @@ impl Drop for super::InstanceShared {
                     .destroy_debug_utils_messenger(du.messenger, None);
                 du
             });
-            if let Some(_drop_guard) = self.drop_guard.take() {
+            if self.drop_guard.is_none() {
                 self.raw.destroy_instance(None);
             }
         }
@@ -829,7 +833,7 @@ impl crate::Instance for super::Instance {
                 extensions,
                 desc.flags,
                 has_nv_optimus,
-                Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
+                None,
             )
         }
     }
