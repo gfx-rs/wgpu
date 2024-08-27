@@ -153,7 +153,8 @@ windows-core = { version = "0.58", default-features = false }
 # Gles dependencies
 khronos-egl = "6"
 glow = "0.14.0"
-glutin = "0.29.1"
+glutin = { version = "0.31", default-features = false }
+glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"
 
 # DX and GLES dependencies

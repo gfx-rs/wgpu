@@ -5,7 +5,7 @@
 //! * passing `wgpu::RenderPassTimestampWrites`/`wgpu::ComputePassTimestampWrites` during render/compute pass creation.
 //!     This writes timestamps for the beginning and end of a given pass.
 //!     (enabled with wgpu::Features::TIMESTAMP_QUERY)
-//! * `wgpu::CommandEncoder::write_timestamp` writes a between any commands recorded on an encoder.
+//! * `wgpu::CommandEncoder::write_timestamp` writes a timestamp between any commands recorded on an encoder.
 //!     (enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
 //! * `wgpu::RenderPass/ComputePass::write_timestamp` writes a timestamp within commands of a render pass.
 //!     Note that some GPU architectures do not support this.
