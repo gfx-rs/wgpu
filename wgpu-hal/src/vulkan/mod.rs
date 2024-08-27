@@ -361,7 +361,7 @@ struct Swapchain {
     ///
     /// This must only be set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
     /// so the VK_GOOGLE_display_timing extension is present.
-    next_present_times: Option<vk::PresentTimeGOOGLE>,
+    next_present_time: Option<vk::PresentTimeGOOGLE>,
 }
 
 impl Swapchain {
@@ -415,7 +415,7 @@ impl Surface {
             .expect("Surface should have been configured");
         let features = wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING;
         if swapchain.device.features.contains(features) {
-            swapchain.next_present_times = Some(present_timing);
+            swapchain.next_present_time = Some(present_timing);
         } else {
             // Ideally we'd use something like `device.required_features` here, but that's in `wgpu-core`, which we are a dependency of
             panic!("Tried to set display timing properties without the corresponding feature ({features:?}) enabled.");
@@ -1208,7 +1208,7 @@ impl crate::Queue for Queue {
 
         let mut display_timing;
         let present_times;
-        let vk_info = if let Some(present_time) = ssc.next_present_times.take() {
+        let vk_info = if let Some(present_time) = ssc.next_present_time.take() {
             debug_assert!(
                 ssc.device
                     .features
