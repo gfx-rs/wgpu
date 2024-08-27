@@ -355,9 +355,9 @@ struct Swapchain {
     /// index as the image index, but we need to specify the semaphore as an argument
     /// to the acquire_next_image function which is what tells us which image to use.
     next_semaphore_index: usize,
-    /// The present timing information which will be set in the next call to [`present`](crate::Queue::present).
+    /// The present timing information which will be set in the next call to [`present()`](crate::Queue::present()).
     ///
-    /// # SAFETY
+    /// # Safety
     ///
     /// This must only be set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
     /// so the VK_GOOGLE_display_timing extension is present.
@@ -1215,9 +1215,8 @@ impl crate::Queue for Queue {
                     .contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING),
                 "`next_present_times` should only be set if `VULKAN_GOOGLE_DISPLAY_TIMING` is enabled"
             );
-            display_timing = vk::PresentTimesInfoGOOGLE::default();
             present_times = [present_time];
-            display_timing = display_timing.times(&present_times);
+            display_timing = vk::PresentTimesInfoGOOGLE::default().times(&present_times);
             // SAFETY: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_times`.
             vk_info.push_next(&mut display_timing)
         } else {
