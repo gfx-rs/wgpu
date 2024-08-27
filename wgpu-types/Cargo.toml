@@ -46,6 +46,7 @@ web-sys = { workspace = true, features = [
     "HtmlVideoElement",
     "HtmlCanvasElement",
     "OffscreenCanvas",
+    "VideoFrame",
 ] }
 
 [dev-dependencies]

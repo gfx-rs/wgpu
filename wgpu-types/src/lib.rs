@@ -6855,6 +6855,8 @@ pub enum ExternalImageSource {
     ///
     /// Requires [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`]
     OffscreenCanvas(web_sys::OffscreenCanvas),
+    /// Copy from a video frame.
+    VideoFrame(web_sys::VideoFrame),
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -6868,6 +6870,7 @@ impl ExternalImageSource {
             ExternalImageSource::ImageData(i) => i.width(),
             ExternalImageSource::HTMLCanvasElement(c) => c.width(),
             ExternalImageSource::OffscreenCanvas(c) => c.width(),
+            ExternalImageSource::VideoFrame(v) => v.display_width(),
         }
     }
 
@@ -6880,6 +6883,7 @@ impl ExternalImageSource {
             ExternalImageSource::ImageData(i) => i.height(),
             ExternalImageSource::HTMLCanvasElement(c) => c.height(),
             ExternalImageSource::OffscreenCanvas(c) => c.height(),
+            ExternalImageSource::VideoFrame(v) => v.display_height(),
         }
     }
 }
@@ -6896,6 +6900,7 @@ impl std::ops::Deref for ExternalImageSource {
             Self::ImageData(i) => i,
             Self::HTMLCanvasElement(c) => c,
             Self::OffscreenCanvas(c) => c,
+            Self::VideoFrame(v) => v,
         }
     }
 }
