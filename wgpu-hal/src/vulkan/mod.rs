@@ -391,11 +391,11 @@ impl Surface {
         read.as_ref().map(|it| it.raw)
     }
 
-    /// Set the present timing information which will be used for the next [presentation](crate::Queue::present) of this surface,
+    /// Set the present timing information which will be used for the next [presentation](crate::Queue::present()) of this surface,
     /// using [VK_GOOGLE_display_timing].
     ///
-    /// This can be used to give an id to presentations, for future use of `VkPastPresentationTimingGOOGLE`.
-    /// Note that `wgpu-hal` does *not* provide a way to use that API - you should manually access this through `ash`.
+    /// This can be used to give an id to presentations, for future use of [`vk::PastPresentationTimingGOOGLE`].
+    /// Note that `wgpu-hal` does *not* provide a way to use that API - you should manually access this through [`ash`].
     ///
     /// This can also be used to add a "not before" timestamp to the presentation.
     ///
@@ -1213,11 +1213,11 @@ impl crate::Queue for Queue {
                 ssc.device
                     .features
                     .contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING),
-                "`next_present_times` should only be set if `VULKAN_GOOGLE_DISPLAY_TIMING` is enabled"
+                "`next_present_time` should only be set if `VULKAN_GOOGLE_DISPLAY_TIMING` is enabled"
             );
             present_times = [present_time];
             display_timing = vk::PresentTimesInfoGOOGLE::default().times(&present_times);
-            // SAFETY: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_times`.
+            // SAFETY: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_time`.
             vk_info.push_next(&mut display_timing)
         } else {
             vk_info

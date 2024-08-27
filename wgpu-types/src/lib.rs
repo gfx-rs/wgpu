@@ -958,7 +958,7 @@ bitflags::bitflags! {
         ///
         /// This feature does not have a `wgpu`-level API, and so users of wgpu wishing
         /// to use this functionality must access it using various `as_hal` functions,
-        /// primarily [`Surface::as_hal`], to then use.
+        /// primarily [`Surface::as_hal()`], to then use.
         ///
         /// Supported platforms:
         /// - Vulkan (with [VK_GOOGLE_display_timing])
@@ -966,7 +966,7 @@ bitflags::bitflags! {
         /// This is a native only feature.
         ///
         /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
-        /// [`Surface::as_hal`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
+        /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
         const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 62;
     }
 }
