@@ -55,6 +55,16 @@ which we're hoping to build performance improvements upon in the future.
 
 By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://github.com/gfx-rs/wgpu/pull/6099), [#6100](https://github.com/gfx-rs/wgpu/pull/6100).
 
+#### `wgpu`'s resources no longer have `.global_id()` getters
+
+`wgpu-core`'s internals no longer use nor need IDs and we are moving towards removing IDs
+completely. This is a step in that direction.
+
+Current users of `.global_id()` are encouraged to make use of the `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord`
+traits that have now been implemented for `wgpu` resources.
+
+By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
+
 ### New Features
 
 #### Naga
