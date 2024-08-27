@@ -1,6 +1,6 @@
 use super::conv;
 
-use ash::{amd, ext, khr, vk};
+use ash::{amd, ext, google, khr, vk};
 use parking_lot::Mutex;
 
 use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
@@ -771,6 +771,11 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        features.set(
+            F::VULKAN_GOOGLE_DISPLAY_TIMING,
+            caps.supports_extension(google::display_timing::NAME),
+        );
+
         (features, dl_flags)
     }
 
@@ -1002,6 +1007,11 @@ impl PhysicalDeviceProperties {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
         ) {
             extensions.push(khr::shader_atomic_int64::NAME);
+        }
+
+        // Require VK_GOOGLE_display_timing if the associated feature was requested
+        if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
+            extensions.push(google::display_timing::NAME);
         }
 
         extensions
