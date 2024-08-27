@@ -312,7 +312,7 @@ pub struct DropGuard {
     callback: DropCallback,
 }
 
-#[cfg(any(gles, vulkan))]
+#[cfg(all(any(gles, vulkan), any(native, Emscripten)))]
 impl DropGuard {
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
         callback.map(|callback| Self { callback })
