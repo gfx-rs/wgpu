@@ -79,6 +79,10 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 - Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
 
+#### Naga
+
+- Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
+
 #### General
 
 - If GL context creation fails retry with GLES. By @Rapdorian in [#5996](https://github.com/gfx-rs/wgpu/pull/5996)

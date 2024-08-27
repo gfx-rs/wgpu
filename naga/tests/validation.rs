@@ -260,3 +260,54 @@ fn emit_workgroup_uniform_load_result() {
     variant(true).expect("module should validate");
     assert!(variant(false).is_err());
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn bad_cross_builtin_args() {
+    let cases = [
+        (
+            "vec2(0., 1.)",
+            "\
+error: Entry point main at Compute is invalid
+  ┌─ wgsl:3:13
+  │
+3 │     let a = cross(vec2(0., 1.), vec2(0., 1.));
+  │             ^^^^^ naga::Expression [6]
+  │
+  = Expression [6] is invalid
+  = Argument [0] to Cross as expression [2] has an invalid type.
+
+",
+        ),
+        (
+            "vec4(0., 1., 2., 3.)",
+            "\
+error: Entry point main at Compute is invalid
+  ┌─ wgsl:3:13
+  │
+3 │     let a = cross(vec4(0., 1., 2., 3.), vec4(0., 1., 2., 3.));
+  │             ^^^^^ naga::Expression [10]
+  │
+  = Expression [10] is invalid
+  = Argument [0] to Cross as expression [4] has an invalid type.
+
+",
+        ),
+    ];
+
+    for (invalid_arg, expected_err) in cases {
+        let source = format!(
+            "\
+@compute @workgroup_size(1)
+fn main() {{
+    let a = cross({invalid_arg}, {invalid_arg});
+}}
+"
+        );
+        let module = naga::front::wgsl::parse_str(&source).unwrap();
+        let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+            .validate_no_overrides(&module)
+            .expect_err("module should be invalid");
+        assert_eq!(err.emit_to_string(&source), expected_err);
+    }
+}
