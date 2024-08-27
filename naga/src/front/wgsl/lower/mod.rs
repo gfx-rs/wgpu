@@ -1470,15 +1470,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         init = ectx
                             .try_automatic_conversions(init, &explicit_ty_res, c.name.span)
                             .map_err(|error| match error {
-                                Error::AutoConversion {
-                                    dest_span: _,
-                                    dest_type,
-                                    source_span: _,
-                                    source_type,
-                                } => Error::InitializationTypeMismatch {
+                                Error::AutoConversion(error) => Error::InitializationTypeMismatch {
                                     name: c.name.span,
-                                    expected: dest_type,
-                                    got: source_type,
+                                    expected: error.dest_type,
+                                    got: error.source_type,
                                 },
                                 other => other,
                             })?;
