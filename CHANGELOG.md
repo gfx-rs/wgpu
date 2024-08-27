@@ -63,7 +63,7 @@ By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://
 
 #### Vulkan
 
-- Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149)
+- Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely with the `VULKAN_GOOGLE_DISPLAY_TIMING` feature. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149)
 
 ### Bug Fixes
 
