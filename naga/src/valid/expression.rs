@@ -1172,8 +1172,8 @@ impl super::Validator {
                                     Sc {
                                         kind: Sk::Float, ..
                                     },
-                                ..
-                            } => {}
+                                size: vector_size,
+                            } if fun != Mf::Cross || vector_size == crate::VectorSize::Tri => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                         if arg1_ty != arg_ty {
