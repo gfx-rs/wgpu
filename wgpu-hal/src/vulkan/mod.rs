@@ -357,7 +357,7 @@ struct Swapchain {
     next_semaphore_index: usize,
     /// The times which will be set in the next present times.
     ///
-    /// SAFETY: This is only set if [wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING] is enabled, and
+    /// SAFETY: This is only set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
     /// so the `VK_GOOGLE_display_timing` extension is present.
     next_present_times: Option<vk::PresentTimeGOOGLE>,
 }
@@ -383,7 +383,7 @@ pub struct Surface {
 impl Surface {
     /// Get the raw Vulkan swapchain associated with this surface.
     ///
-    /// Returns `None` if the surface is not configured.
+    /// Returns [`None`] if the surface is not configured.
     pub fn raw_swapchain(&self) -> Option<vk::SwapchainKHR> {
         let read = self.swapchain.read();
         read.as_ref().map(|it| it.raw)
@@ -1206,7 +1206,7 @@ impl crate::Queue for Queue {
             display_timing = vk::PresentTimesInfoGOOGLE::default();
             present_times = [present_time];
             display_timing = display_timing.times(&present_times);
-            // Safety: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_times`.
+            // SAFETY: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_times`.
             vk_info.push_next(&mut display_timing)
         } else {
             vk_info
