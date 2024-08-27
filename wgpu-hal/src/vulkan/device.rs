@@ -642,7 +642,6 @@ impl super::Device {
             view_formats: wgt_view_formats,
             surface_semaphores,
             next_semaphore_index: 0,
-            #[cfg(feature = "unstable_vulkan_google_display_timing")]
             next_present_times: None,
         })
     }

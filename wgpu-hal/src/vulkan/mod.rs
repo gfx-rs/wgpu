@@ -355,7 +355,10 @@ struct Swapchain {
     /// index as the image index, but we need to specify the semaphore as an argument
     /// to the acquire_next_image function which is what tells us which image to use.
     next_semaphore_index: usize,
-    #[cfg(feature = "unstable_vulkan_google_display_timing")]
+    /// The times which will be set in the next present times.
+    ///
+    /// SAFETY: This is only set if [wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING] is enabled, and
+    /// so `VK_GOOGLE_display_timing` is set.
     next_present_times: Option<vk::PresentTimeGOOGLE>,
 }
 
@@ -386,24 +389,24 @@ impl Surface {
         read.as_ref().map(|it| it.raw)
     }
 
-    /// Set the present timing information which will be used for the next presentation.
-    ///
-    /// Warns if the device doesn't [support present timing](Device::supports_google_display_timing).
+    /// Set the present timing information which will be used for the next presentation using `VK_GOOGLE_display_timing`.
     ///
     /// # Panics
     ///
-    /// If the surface hasn't been configured.
-    #[cfg(feature = "unstable_vulkan_google_display_timing")]
+    /// - If the surface hasn't been configured.
+    /// - If the device doesn't [support present timing](wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING).
     #[track_caller]
     pub fn set_next_present_times(&self, present_timing: vk::PresentTimeGOOGLE) {
         let mut swapchain = self.swapchain.write();
         let swapchain = swapchain
             .as_mut()
             .expect("Surface should have been configured");
-        if swapchain.device.has_google_display_timing_extension {
+        let features = wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING;
+        if swapchain.device.features.contains(features) {
             swapchain.next_present_times = Some(present_timing);
         } else {
-            log::warn!("Tried to call set_next_present_times on a device which doesn't support.");
+            // Ideally we'd use something like `device.required_features` here, but that's in `wgpu-core`, which we are a dependency of
+            panic!("Tried to set display timing properties without the corresponding feature ({features:?}) enabled.");
         }
     }
 }
@@ -584,8 +587,6 @@ struct DeviceShared {
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
-    #[cfg(feature = "unstable_vulkan_google_display_timing")]
-    has_google_display_timing_extension: bool,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     pipeline_cache_validation_key: [u8; 16],
@@ -608,16 +609,6 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     counters: wgt::HalCounters,
-}
-
-impl Device {
-    /// Returns true if this device supports [VK_GOOGLE_display_timing].
-    ///
-    /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
-    #[cfg(feature = "unstable_vulkan_google_display_timing")]
-    pub fn supports_google_display_timing(&self) -> bool {
-        self.shared.has_google_display_timing_extension
-    }
 }
 
 /// Semaphores for forcing queue submissions to run in order.
@@ -1202,17 +1193,19 @@ impl crate::Queue for Queue {
             .swapchains(&swapchains)
             .image_indices(&image_indices)
             .wait_semaphores(swapchain_semaphores.get_present_wait_semaphores());
-        #[cfg(feature = "unstable_vulkan_google_display_timing")]
         let mut display_timing;
-        #[cfg(feature = "unstable_vulkan_google_display_timing")]
         let present_times;
-        #[cfg(feature = "unstable_vulkan_google_display_timing")]
         let vk_info = if let Some(present_time) = ssc.next_present_times.take() {
-            assert!(ssc.device.has_google_display_timing_extension);
+            debug_assert!(
+                ssc.device
+                    .features
+                    .contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING),
+                "`next_present_times` should only be set if `VULKAN_GOOGLE_DISPLAY_TIMING` is enabled"
+            );
             display_timing = vk::PresentTimesInfoGOOGLE::default();
             present_times = [present_time];
             display_timing = display_timing.times(&present_times);
-            // Safety: We know that the display_timing extension is present.
+            // Safety: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_times`.
             vk_info.push_next(&mut display_timing)
         } else {
             vk_info
