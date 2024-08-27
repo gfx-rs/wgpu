@@ -355,7 +355,7 @@ struct Swapchain {
     /// index as the image index, but we need to specify the semaphore as an argument
     /// to the acquire_next_image function which is what tells us which image to use.
     next_semaphore_index: usize,
-    /// The times which will be set in the next present times.
+    /// The present timing information which will be set in the next call to [`present`](crate::Queue::present).
     ///
     /// # SAFETY
     ///
