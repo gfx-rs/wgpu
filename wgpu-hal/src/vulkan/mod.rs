@@ -357,8 +357,10 @@ struct Swapchain {
     next_semaphore_index: usize,
     /// The times which will be set in the next present times.
     ///
-    /// SAFETY: This is only set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
-    /// so the `VK_GOOGLE_display_timing` extension is present.
+    /// # SAFETY
+    ///
+    /// This must only be set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
+    /// so the VK_GOOGLE_display_timing extension is present.
     next_present_times: Option<vk::PresentTimeGOOGLE>,
 }
 
@@ -389,12 +391,14 @@ impl Surface {
         read.as_ref().map(|it| it.raw)
     }
 
-    /// Set the present timing information which will be used for the next presentation using `VK_GOOGLE_display_timing`.
+    /// Set the present timing information which will be used for the next presentation using [VK_GOOGLE_display_timing].
     ///
     /// # Panics
     ///
     /// - If the surface hasn't been configured.
     /// - If the device doesn't [support present timing](wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING).
+    ///
+    /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
     #[track_caller]
     pub fn set_next_present_times(&self, present_timing: vk::PresentTimeGOOGLE) {
         let mut swapchain = self.swapchain.write();
