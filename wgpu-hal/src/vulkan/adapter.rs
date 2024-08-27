@@ -1011,7 +1011,7 @@ impl PhysicalDeviceProperties {
 
         // Require `VK_GOOGLE_display_timing` if the associated feature was requested
         if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
-            extensions.push(ash::google::display_timing::NAME);
+            extensions.push(google::display_timing::NAME);
         }
 
         extensions
