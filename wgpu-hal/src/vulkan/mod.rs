@@ -391,7 +391,15 @@ impl Surface {
         read.as_ref().map(|it| it.raw)
     }
 
-    /// Set the present timing information which will be used for the next presentation using [VK_GOOGLE_display_timing].
+    /// Set the present timing information which will be used for the next [presentation](crate::Queue::present) of this surface,
+    /// using [VK_GOOGLE_display_timing].
+    ///
+    /// This can be used to give an id to presentations, for future use of `VkPastPresentationTimingGOOGLE`.
+    /// Note that `wgpu-hal` does *not* provide a way to use that API - you should manually access this through `ash`.
+    ///
+    /// This can also be used to add a "not before" timestamp to the presentation.
+    ///
+    /// The exact semantics of the fields are also documented in the [specification](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPresentTimeGOOGLE.html) for the extension.
     ///
     /// # Panics
     ///
@@ -400,7 +408,7 @@ impl Surface {
     ///
     /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
     #[track_caller]
-    pub fn set_next_present_times(&self, present_timing: vk::PresentTimeGOOGLE) {
+    pub fn set_next_present_time(&self, present_timing: vk::PresentTimeGOOGLE) {
         let mut swapchain = self.swapchain.write();
         let swapchain = swapchain
             .as_mut()
