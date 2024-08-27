@@ -358,7 +358,7 @@ struct Swapchain {
     /// The times which will be set in the next present times.
     ///
     /// SAFETY: This is only set if [wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING] is enabled, and
-    /// so `VK_GOOGLE_display_timing` is set.
+    /// so the `VK_GOOGLE_display_timing` extension is present.
     next_present_times: Option<vk::PresentTimeGOOGLE>,
 }
 
@@ -1193,6 +1193,7 @@ impl crate::Queue for Queue {
             .swapchains(&swapchains)
             .image_indices(&image_indices)
             .wait_semaphores(swapchain_semaphores.get_present_wait_semaphores());
+
         let mut display_timing;
         let present_times;
         let vk_info = if let Some(present_time) = ssc.next_present_times.take() {
@@ -1210,6 +1211,7 @@ impl crate::Queue for Queue {
         } else {
             vk_info
         };
+
         let suboptimal = {
             profiling::scope!("vkQueuePresentKHR");
             unsafe { self.swapchain_fn.queue_present(self.raw, &vk_info) }.map_err(|error| {

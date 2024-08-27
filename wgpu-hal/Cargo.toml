@@ -105,7 +105,6 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
-
 [[example]]
 name = "halmark"
 
@@ -205,8 +204,8 @@ features = ["wgsl-in"]
 [dev-dependencies]
 cfg-if.workspace = true
 env_logger.workspace = true
-glam.workspace = true # for ray-traced-triangle example
-winit.workspace = true # for "halmark" example
+glam.workspace = true       # for ray-traced-triangle example
+winit.workspace = true      # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 glutin.workspace = true # for "gles" example
