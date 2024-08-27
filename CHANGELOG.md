@@ -55,6 +55,16 @@ which we're hoping to build performance improvements upon in the future.
 
 By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://github.com/gfx-rs/wgpu/pull/6099), [#6100](https://github.com/gfx-rs/wgpu/pull/6100).
 
+#### `wgpu`'s resources no longer have `.global_id()` getters
+
+`wgpu-core`'s internals no longer use nor need IDs and we are moving towards removing IDs
+completely. This is a step in that direction.
+
+Current users of `.global_id()` are encouraged to make use of the `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord`
+traits that have now been implemented for `wgpu` resources.
+
+By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
+
 ### New Features
 
 #### Naga
@@ -81,8 +91,6 @@ By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://
 
 - Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
 - `Rg11b10Float` is renamed to `Rg11b10UFloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
-- Removed `.global_id()` getters from wgpu objects. By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134)
-- Implement `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord` for wgpu resources. By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134)
 
 ### Dependency Updates
 
