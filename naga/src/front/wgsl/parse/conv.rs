@@ -58,6 +58,8 @@ pub fn map_sampling(word: &str, span: Span) -> Result<crate::Sampling, Error<'_>
         "center" => Ok(crate::Sampling::Center),
         "centroid" => Ok(crate::Sampling::Centroid),
         "sample" => Ok(crate::Sampling::Sample),
+        "first" => Ok(crate::Sampling::First),
+        "either" => Ok(crate::Sampling::Either),
         _ => Err(Error::UnknownAttribute(span)),
     }
 }

@@ -2,7 +2,6 @@
 struct FragmentInput {
     vec4 position;
     uint _flat;
-    uint flat_first;
     uint flat_either;
     float _linear;
     vec2 linear_centroid;
@@ -12,7 +11,6 @@ struct FragmentInput {
     float perspective_sample;
 };
 flat in uint _vs2fs_location0;
-flat in uint _vs2fs_location1;
 flat in uint _vs2fs_location2;
 noperspective in float _vs2fs_location3;
 noperspective centroid in vec2 _vs2fs_location4;
@@ -22,7 +20,7 @@ smooth centroid in float _vs2fs_location8;
 smooth sample in float _vs2fs_location9;
 
 void main() {
-    FragmentInput val = FragmentInput(gl_FragCoord, _vs2fs_location0, _vs2fs_location1, _vs2fs_location2, _vs2fs_location3, _vs2fs_location4, _vs2fs_location6, _vs2fs_location7, _vs2fs_location8, _vs2fs_location9);
+    FragmentInput val = FragmentInput(gl_FragCoord, _vs2fs_location0, _vs2fs_location2, _vs2fs_location3, _vs2fs_location4, _vs2fs_location6, _vs2fs_location7, _vs2fs_location8, _vs2fs_location9);
     return;
 }
 

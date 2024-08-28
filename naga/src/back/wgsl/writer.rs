@@ -2061,6 +2061,8 @@ const fn sampling_str(sampling: crate::Sampling) -> &'static str {
         S::Center => "",
         S::Centroid => "centroid",
         S::Sample => "sample",
+        S::First => "first",
+        S::Either => "either",
     }
 }
 

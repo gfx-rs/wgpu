@@ -202,7 +202,7 @@ impl crate::Sampling {
     /// Return the HLSL auxiliary qualifier for the given sampling value.
     pub(super) const fn to_hlsl_str(self) -> Option<&'static str> {
         match self {
-            Self::Center => None,
+            Self::Center | Self::First | Self::Either => None,
             Self::Centroid => Some("centroid"),
             Self::Sample => Some("sample"),
         }
