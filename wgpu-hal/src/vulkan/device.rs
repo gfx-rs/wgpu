@@ -709,6 +709,7 @@ impl super::Device {
                 .get_physical_device_memory_properties(self.shared.physical_device)
         };
 
+        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceMemoryProperties.html
         for (i, mem_ty) in mem_properties.memory_types_as_slice().iter().enumerate() {
             if type_bits & (1 << i) != 0 && mem_ty.property_flags & flags == flags {
                 return Some(i);
@@ -722,16 +723,7 @@ impl super::Device {
         &self,
         desc: &crate::TextureDescriptor,
         external_memory_image_create_info: Option<&mut vk::ExternalMemoryImageCreateInfo>,
-    ) -> Result<
-        (
-            vk::Image,
-            vk::MemoryRequirements,
-            crate::CopyExtent,
-            Vec<wgt::TextureFormat>,
-            vk::ImageCreateFlags,
-        ),
-        crate::DeviceError,
-    > {
+    ) -> Result<ImageWithoutMemory, crate::DeviceError> {
         let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
@@ -791,7 +783,13 @@ impl super::Device {
         }
         let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
 
-        Ok((raw, req, copy_size, wgt_view_formats, raw_flags))
+        Ok(ImageWithoutMemory {
+            raw,
+            requirements: req,
+            copy_size,
+            view_formats: wgt_view_formats,
+            raw_flags,
+        })
     }
 
     /// # Safety
@@ -802,29 +800,38 @@ impl super::Device {
     #[cfg(windows)]
     pub unsafe fn texture_from_d3d11_shared_handle(
         &self,
-        d3d11_shared_handle: *mut std::ffi::c_void,
+        d3d11_shared_handle: windows::Win32::Foundation::HANDLE,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
         if !self.shared.private_caps.external_memory_win32 {
+            log::error!("VK_KHR_external_memory extension is required");
             return Err(crate::DeviceError::ResourceCreationFailed);
         }
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
             .handle_types(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE);
 
-        let (raw, req, copy_size, wgt_view_formats, raw_flags) =
-            self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
+        let ImageWithoutMemory {
+            raw,
+            requirements,
+            copy_size,
+            view_formats,
+            raw_flags,
+        } = self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
 
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE)
-            .handle(d3d11_shared_handle as _);
+            .handle(d3d11_shared_handle.0 as _);
 
         let mem_type_index = self
-            .find_memory_type_index(req.memory_type_bits, vk::MemoryPropertyFlags::DEVICE_LOCAL)
+            .find_memory_type_index(
+                requirements.memory_type_bits,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            )
             .ok_or(crate::DeviceError::ResourceCreationFailed)?;
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
-            .allocation_size(req.size)
+            .allocation_size(requirements.size)
             .memory_type_index(mem_type_index as _)
             .push_next(&mut import_memory_info);
         let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
@@ -848,7 +855,7 @@ impl super::Device {
             format: desc.format,
             raw_flags,
             copy_size,
-            view_formats: wgt_view_formats,
+            view_formats,
         })
     }
 
@@ -1185,17 +1192,22 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let (raw, req, copy_size, wgt_view_formats, raw_flags) =
-            self.create_image_without_memory(desc, None)?;
+        let ImageWithoutMemory {
+            raw,
+            requirements,
+            copy_size,
+            view_formats,
+            raw_flags,
+        } = self.create_image_without_memory(desc, None)?;
 
         let block = unsafe {
             self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
-                    size: req.size,
-                    align_mask: req.alignment - 1,
+                    size: requirements.size,
+                    align_mask: requirements.alignment - 1,
                     usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                    memory_types: req.memory_type_bits & self.valid_ash_memory_types,
+                    memory_types: requirements.memory_type_bits & self.valid_ash_memory_types,
                 },
             )?
         };
@@ -1224,7 +1236,7 @@ impl crate::Device for super::Device {
             format: desc.format,
             raw_flags,
             copy_size,
-            view_formats: wgt_view_formats,
+            view_formats,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -2687,4 +2699,12 @@ impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
 /// error variant. In those cases we use this function.
 fn handle_unexpected(err: vk::Result) -> ! {
     panic!("Unexpected Vulkan error: `{err}`")
+}
+
+struct ImageWithoutMemory {
+    raw: vk::Image,
+    requirements: vk::MemoryRequirements,
+    copy_size: crate::CopyExtent,
+    view_formats: Vec<wgt::TextureFormat>,
+    raw_flags: vk::ImageCreateFlags,
 }
