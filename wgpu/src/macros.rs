@@ -32,12 +32,14 @@ macro_rules! vertex_attr_array {
 
 #[test]
 fn test_vertex_attr_array() {
+    use std::mem::size_of;
+
     let attrs = vertex_attr_array![0 => Float32x2, 3 => Uint16x4];
     // VertexAttribute does not support PartialEq, so we cannot test directly
     assert_eq!(attrs.len(), 2);
     assert_eq!(attrs[0].offset, 0);
     assert_eq!(attrs[0].shader_location, 0);
-    assert_eq!(attrs[1].offset, std::mem::size_of::<(f32, f32)>() as u64);
+    assert_eq!(attrs[1].offset, size_of::<(f32, f32)>() as u64);
     assert_eq!(attrs[1].shader_location, 3);
 }
 

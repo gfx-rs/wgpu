@@ -1,4 +1,4 @@
-use std::{borrow::Cow, str::FromStr};
+use std::{borrow::Cow, mem::size_of_val, str::FromStr};
 use wgpu::util::DeviceExt;
 
 // Indicates a u32 overflow in an intermediate Collatz value
@@ -72,7 +72,7 @@ async fn execute_gpu_inner(
     });
 
     // Gets the size in bytes of the buffer.
-    let size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
+    let size = size_of_val(numbers) as wgpu::BufferAddress;
 
     // Instantiates buffer without data.
     // `usage` of buffer specifies how it can be used:

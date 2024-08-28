@@ -14,6 +14,8 @@
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
 
+use std::mem::size_of_val;
+
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::output_image_native;
 #[cfg(target_arch = "wasm32")]
@@ -64,7 +66,7 @@ async fn run(_path: Option<String>) {
     let storage_texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: std::mem::size_of_val(&texture_data[..]) as u64,
+        size: size_of_val(&texture_data[..]) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });

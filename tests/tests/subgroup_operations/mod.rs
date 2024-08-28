@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU64};
+use std::{borrow::Cow, mem::size_of, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
@@ -35,7 +35,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: THREAD_COUNT * std::mem::size_of::<u32>() as u64,
+            size: THREAD_COUNT * size_of::<u32>() as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -50,9 +50,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(
-                        THREAD_COUNT * std::mem::size_of::<u32>() as u64,
-                    ),
+                    min_binding_size: NonZeroU64::new(THREAD_COUNT * size_of::<u32>() as u64),
                 },
                 count: None,
             }],

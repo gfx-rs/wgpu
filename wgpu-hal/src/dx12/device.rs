@@ -1,5 +1,6 @@
 use std::{
-    ffi, mem,
+    ffi,
+    mem::{self, size_of},
     num::NonZeroU32,
     ptr,
     sync::Arc,
@@ -121,7 +122,7 @@ impl super::Device {
             cmd_signatures: super::CommandSignatures {
                 draw: create_command_signature(
                     &raw,
-                    mem::size_of::<wgt::DrawIndirectArgs>(),
+                    size_of::<wgt::DrawIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
                         ..Default::default()
@@ -130,7 +131,7 @@ impl super::Device {
                 )?,
                 draw_indexed: create_command_signature(
                     &raw,
-                    mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
+                    size_of::<wgt::DrawIndexedIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
                         ..Default::default()
@@ -139,7 +140,7 @@ impl super::Device {
                 )?,
                 dispatch: create_command_signature(
                     &raw,
-                    mem::size_of::<wgt::DispatchIndirectArgs>(),
+                    size_of::<wgt::DispatchIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
                         ..Default::default()

@@ -3,7 +3,7 @@
 //! We need tests for these as the backends use various schemes to work around the lack
 //! of support for things like `gl_BaseInstance` in shaders.
 
-use std::{num::NonZeroU64, ops::Range};
+use std::{mem::size_of_val, num::NonZeroU64, ops::Range};
 
 use itertools::Itertools;
 use strum::IntoEnumIterator;
@@ -341,7 +341,7 @@ async fn vertex_index_common(ctx: TestingContext) {
 
         let expected = test.expectation(&ctx);
 
-        let buffer_size = (std::mem::size_of_val(&expected[0]) * expected.len()) as u64;
+        let buffer_size = (size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size,

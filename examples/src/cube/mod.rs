@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem};
+use std::{borrow::Cow, f32::consts, mem::size_of};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -114,7 +114,7 @@ impl crate::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
 
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

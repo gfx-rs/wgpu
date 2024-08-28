@@ -1,5 +1,8 @@
 use bytemuck::{Pod, Zeroable};
-use std::num::{NonZeroU32, NonZeroU64};
+use std::{
+    mem::size_of,
+    num::{NonZeroU32, NonZeroU64},
+};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -124,7 +127,7 @@ impl crate::framework::Example for Example {
 
         println!("Using fragment entry point '{fragment_entry_point}'");
 
-        let vertex_size = std::mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let vertex_data = create_vertices();
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
