@@ -367,7 +367,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
+    pub unsafe fn create_surface_from_visual(&self, visual: *mut ffi::c_void) -> Surface {
         let visual = unsafe { DirectComposition::IDCompositionVisual::from_raw_borrowed(&visual) }
             .expect("COM pointer should not be NULL");
         Surface {
@@ -381,7 +381,7 @@ impl Instance {
 
     pub unsafe fn create_surface_from_surface_handle(
         &self,
-        surface_handle: *mut std::ffi::c_void,
+        surface_handle: *mut ffi::c_void,
     ) -> Surface {
         // TODO: We're not given ownership, so we shouldn't call HANDLE::free(). This puts an extra burden on the caller to keep it alive.
         // https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-duplicatehandle could help us, even though DirectComposition is not in the list?
@@ -398,7 +398,7 @@ impl Instance {
 
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
-        swap_chain_panel: *mut std::ffi::c_void,
+        swap_chain_panel: *mut ffi::c_void,
     ) -> Surface {
         let swap_chain_panel =
             unsafe { types::ISwapChainPanelNative::from_raw_borrowed(&swap_chain_panel) }

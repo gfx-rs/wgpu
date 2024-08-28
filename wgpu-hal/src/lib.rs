@@ -327,7 +327,7 @@ impl Drop for DropGuard {
 }
 
 #[cfg(any(gles, vulkan))]
-impl std::fmt::Debug for DropGuard {
+impl fmt::Debug for DropGuard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DropGuard").finish()
     }
