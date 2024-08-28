@@ -1366,6 +1366,8 @@ dependencies = [
  "objc2",
  "once_cell",
  "raw-window-handle 0.5.2",
+ "wayland-sys",
+ "x11-dl",
 ]
 
 [[package]]

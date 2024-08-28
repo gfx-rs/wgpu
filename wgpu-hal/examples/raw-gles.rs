@@ -16,7 +16,7 @@ fn main() {
 
     use glutin::{
         config::GlConfig as _,
-        context::{NotCurrentGlContext as _, PossiblyCurrentGlContext as _},
+        context::{NotCurrentGlContext as _, PossiblyCurrentGlContext as _, Version},
         display::{GetGlDisplay as _, GlDisplay as _},
         surface::GlSurface as _,
     };
