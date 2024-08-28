@@ -621,7 +621,7 @@ struct PassState {
 
 #[test]
 fn test_dirty_mask() {
-    assert_eq!(MAX_ROOT_ELEMENTS, mem::size_of::<u64>() * 8);
+    assert_eq!(MAX_ROOT_ELEMENTS, u64::BITS as usize);
 }
 
 impl PassState {
