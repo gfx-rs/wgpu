@@ -37,7 +37,7 @@ impl TextureView {
         {
             unsafe {
                 ctx.texture_view_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_texture_view_callback,
                 )
             }

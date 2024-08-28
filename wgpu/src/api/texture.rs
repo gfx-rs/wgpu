@@ -39,7 +39,7 @@ impl Texture {
         {
             unsafe {
                 ctx.texture_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_texture_callback,
                 )
             }

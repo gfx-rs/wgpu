@@ -168,7 +168,7 @@ impl Surface<'_> {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.surface_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(&self.surface_data),
+                    crate::context::downcast_ref(self.surface_data.as_ref()),
                     hal_surface_callback,
                 )
             })
