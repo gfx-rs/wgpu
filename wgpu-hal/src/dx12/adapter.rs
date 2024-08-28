@@ -1,4 +1,9 @@
-use std::{mem, ptr, sync::Arc, thread};
+use std::{
+    mem::{size_of, size_of_val},
+    ptr,
+    sync::Arc,
+    thread,
+};
 
 use parking_lot::Mutex;
 use windows::{
@@ -92,7 +97,7 @@ impl super::Adapter {
             device.CheckFeatureSupport(
                 Direct3D12::D3D12_FEATURE_FEATURE_LEVELS,
                 <*mut _>::cast(&mut device_levels),
-                mem::size_of_val(&device_levels) as u32,
+                size_of_val(&device_levels) as u32,
             )
         }
         .unwrap();
@@ -110,7 +115,7 @@ impl super::Adapter {
             device.CheckFeatureSupport(
                 Direct3D12::D3D12_FEATURE_ARCHITECTURE,
                 <*mut _>::cast(&mut features_architecture),
-                mem::size_of_val(&features_architecture) as u32,
+                size_of_val(&features_architecture) as u32,
             )
         }
         .unwrap();
@@ -154,7 +159,7 @@ impl super::Adapter {
             device.CheckFeatureSupport(
                 Direct3D12::D3D12_FEATURE_D3D12_OPTIONS,
                 <*mut _>::cast(&mut options),
-                mem::size_of_val(&options) as u32,
+                size_of_val(&options) as u32,
             )
         }
         .unwrap();
@@ -165,7 +170,7 @@ impl super::Adapter {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS2,
                     <*mut _>::cast(&mut features2),
-                    mem::size_of_val(&features2) as u32,
+                    size_of_val(&features2) as u32,
                 )
             }
             .is_ok()
@@ -178,7 +183,7 @@ impl super::Adapter {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS3,
                     <*mut _>::cast(&mut features3),
-                    mem::size_of_val(&features3) as u32,
+                    size_of_val(&features3) as u32,
                 )
             }
             .is_ok()
@@ -194,7 +199,7 @@ impl super::Adapter {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS7,
                     <*mut _>::cast(&mut features7),
-                    mem::size_of_val(&features7) as u32,
+                    size_of_val(&features7) as u32,
                 )
             }
             .is_ok()
@@ -224,7 +229,7 @@ impl super::Adapter {
                         device.CheckFeatureSupport(
                             Direct3D12::D3D12_FEATURE_SHADER_MODEL,
                             <*mut _>::cast(&mut sm),
-                            mem::size_of_val(&sm) as u32,
+                            size_of_val(&sm) as u32,
                         )
                     }
                     .is_ok()
@@ -354,7 +359,7 @@ impl super::Adapter {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_FORMAT_SUPPORT,
                     <*mut _>::cast(&mut bgra8unorm_info),
-                    mem::size_of_val(&bgra8unorm_info) as u32,
+                    size_of_val(&bgra8unorm_info) as u32,
                 )
             };
             hr.is_ok()
@@ -372,7 +377,7 @@ impl super::Adapter {
             device.CheckFeatureSupport(
                 Direct3D12::D3D12_FEATURE_D3D12_OPTIONS1,
                 <*mut _>::cast(&mut features1),
-                mem::size_of_val(&features1) as u32,
+                size_of_val(&features1) as u32,
             )
         };
 
@@ -396,7 +401,7 @@ impl super::Adapter {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS9,
                     <*mut _>::cast(&mut features9),
-                    mem::size_of_val(&features9) as u32,
+                    size_of_val(&features9) as u32,
                 )
             }
             .is_ok()
@@ -604,7 +609,7 @@ impl crate::Adapter for super::Adapter {
             self.device.CheckFeatureSupport(
                 Direct3D12::D3D12_FEATURE_FORMAT_SUPPORT,
                 <*mut _>::cast(&mut data),
-                mem::size_of_val(&data) as u32,
+                size_of_val(&data) as u32,
             )
         }
         .unwrap();
@@ -622,7 +627,7 @@ impl crate::Adapter for super::Adapter {
                 self.device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_FORMAT_SUPPORT,
                     ptr::addr_of_mut!(data_srv_uav).cast(),
-                    mem::size_of::<Direct3D12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as u32,
+                    size_of::<Direct3D12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as u32,
                 )
             }
             .unwrap();
@@ -718,7 +723,7 @@ impl crate::Adapter for super::Adapter {
                 self.device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
                     <*mut _>::cast(&mut ms_levels),
-                    mem::size_of_val(&ms_levels) as u32,
+                    size_of_val(&ms_levels) as u32,
                 )
             }
             .is_ok()

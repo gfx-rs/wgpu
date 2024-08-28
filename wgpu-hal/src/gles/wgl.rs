@@ -9,7 +9,7 @@ use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use std::{
     collections::HashSet,
     ffi::{c_void, CStr, CString},
-    mem::{self, ManuallyDrop},
+    mem::{self, size_of, size_of_val, ManuallyDrop},
     os::raw::c_int,
     ptr,
     sync::{
@@ -196,7 +196,7 @@ unsafe fn setup_pixel_format(dc: Gdi::HDC) -> Result<(), crate::InstanceError> {
     {
         let format = OpenGL::PIXELFORMATDESCRIPTOR {
             nVersion: 1,
-            nSize: mem::size_of::<OpenGL::PIXELFORMATDESCRIPTOR>() as u16,
+            nSize: size_of::<OpenGL::PIXELFORMATDESCRIPTOR>() as u16,
             dwFlags: OpenGL::PFD_DRAW_TO_WINDOW
                 | OpenGL::PFD_SUPPORT_OPENGL
                 | OpenGL::PFD_DOUBLEBUFFER,
@@ -232,12 +232,7 @@ unsafe fn setup_pixel_format(dc: Gdi::HDC) -> Result<(), crate::InstanceError> {
         }
         let mut format = Default::default();
         if unsafe {
-            OpenGL::DescribePixelFormat(
-                dc,
-                index,
-                mem::size_of_val(&format) as u32,
-                Some(&mut format),
-            )
+            OpenGL::DescribePixelFormat(dc, index, size_of_val(&format) as u32, Some(&mut format))
         } == 0
         {
             return Err(crate::InstanceError::with_source(
@@ -280,7 +275,7 @@ fn create_global_window_class() -> Result<CString, crate::InstanceError> {
     }
 
     let window_class = WindowsAndMessaging::WNDCLASSEXA {
-        cbSize: mem::size_of::<WindowsAndMessaging::WNDCLASSEXA>() as u32,
+        cbSize: size_of::<WindowsAndMessaging::WNDCLASSEXA>() as u32,
         style: WindowsAndMessaging::CS_OWNDC,
         lpfnWndProc: Some(wnd_proc),
         cbClsExtra: 0,

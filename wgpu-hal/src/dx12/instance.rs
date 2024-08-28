@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{mem::size_of_val, sync::Arc};
 
 use parking_lot::RwLock;
 use windows::{
@@ -91,7 +91,7 @@ impl crate::Instance for super::Instance {
                 factory5.CheckFeatureSupport(
                     Dxgi::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
                     <*mut _>::cast(&mut allow_tearing),
-                    std::mem::size_of_val(&allow_tearing) as u32,
+                    size_of_val(&allow_tearing) as u32,
                 )
             };
 
