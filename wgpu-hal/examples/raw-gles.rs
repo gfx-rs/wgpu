@@ -71,7 +71,9 @@ fn main() {
     // Glutin tries to create an OpenGL context by default.  Force it to use any version of GLES.
     let context_attributes = glutin::context::ContextAttributesBuilder::new()
         // WGPU expects GLES 3.0+.
-        .with_context_api(glutin::context::ContextApi::Gles(Some(Version::new(3, 0))))
+        .with_context_api(glutin::context::ContextApi::Gles(Some(
+            glutin::context::Version::new(3, 0),
+        )))
         .build(raw_window_handle);
 
     let mut not_current_gl_context = Some(unsafe {
