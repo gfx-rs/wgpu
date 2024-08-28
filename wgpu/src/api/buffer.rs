@@ -217,7 +217,7 @@ impl Buffer {
         {
             unsafe {
                 ctx.buffer_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_buffer_callback,
                 )
             }

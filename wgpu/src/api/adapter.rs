@@ -118,7 +118,7 @@ impl Adapter {
                 // Therefore, unwrap is fine here since only WgpuCoreContext based adapters have the ability to create hal devices.
                 .unwrap()
                 .create_device_from_hal(
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_device,
                     desc,
                     trace_path,
@@ -169,7 +169,7 @@ impl Adapter {
         {
             unsafe {
                 ctx.adapter_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_adapter_callback,
                 )
             }

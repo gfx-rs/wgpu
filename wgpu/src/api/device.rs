@@ -284,7 +284,7 @@ impl Device {
                 .unwrap()
                 .create_texture_from_hal::<A>(
                     hal_texture,
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     desc,
                 )
         };
@@ -328,7 +328,7 @@ impl Device {
                 .unwrap()
                 .create_buffer_from_hal::<A>(
                     hal_buffer,
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     desc,
                 )
         };
@@ -441,7 +441,7 @@ impl Device {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.device_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_device_callback,
                 )
             })

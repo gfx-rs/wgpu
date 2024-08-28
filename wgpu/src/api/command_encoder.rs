@@ -310,7 +310,7 @@ impl CommandEncoder {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.command_encoder_as_hal_mut::<A, F, R>(
-                    crate::context::downcast_ref(&self.data),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_command_encoder_callback,
                 )
             })
