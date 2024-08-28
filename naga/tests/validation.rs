@@ -264,6 +264,7 @@ fn emit_workgroup_uniform_load_result() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn bad_cross_builtin_args() {
+    // NOTE: Things we expect to actually compile are in the `cross` snapshot test.
     let cases = [
         (
             "vec2(0., 1.)",
