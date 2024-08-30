@@ -75,11 +75,8 @@ impl super::Surface {
 
     /// If not called on the main thread, this will panic.
     #[allow(clippy::transmute_ptr_to_ref)]
-    pub unsafe fn from_view(
-        view: NonNull<Object>,
-        delegate: Option<&HalManagedMetalLayerDelegate>,
-    ) -> Self {
-        let layer = unsafe { Self::get_metal_layer(view, delegate) };
+    pub unsafe fn from_view(view: NonNull<Object>) -> Self {
+        let layer = unsafe { Self::get_metal_layer(view) };
         let layer = ManuallyDrop::new(layer);
         // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
         // we transfer the retain count to `MetalLayer` using `ManuallyDrop`.
@@ -104,10 +101,7 @@ impl super::Surface {
     /// # Safety
     ///
     /// The `view` must be a valid instance of `NSView` or `UIView`.
-    pub(crate) unsafe fn get_metal_layer(
-        view: NonNull<Object>,
-        delegate: Option<&HalManagedMetalLayerDelegate>,
-    ) -> StrongPtr {
+    pub(crate) unsafe fn get_metal_layer(view: NonNull<Object>) -> StrongPtr {
         let is_main_thread: BOOL = msg_send![class!(NSThread), isMainThread];
         if is_main_thread == NO {
             panic!("get_metal_layer cannot be called in non-ui thread.");
@@ -251,9 +245,9 @@ impl super::Surface {
             let scale_factor: CGFloat = msg_send![root_layer, contentsScale];
             let () = msg_send![new_layer, setContentsScale: scale_factor];
 
-            if let Some(delegate) = delegate {
-                let () = msg_send![new_layer, setDelegate: delegate.0];
-            }
+            let delegate = HalManagedMetalLayerDelegate::new();
+            let () = msg_send![new_layer, setDelegate: delegate.0];
+
             unsafe { StrongPtr::new(new_layer) }
         }
     }
