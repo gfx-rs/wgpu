@@ -805,7 +805,7 @@ impl<T: Copy + PartialEq> Default for StateChange<T> {
 
 #[derive(Debug)]
 struct BindGroupStateChange {
-    last_states: [StateChange<id::BindGroupId>; hal::MAX_BIND_GROUPS],
+    last_states: [StateChange<Option<id::BindGroupId>>; hal::MAX_BIND_GROUPS],
 }
 
 impl BindGroupStateChange {
@@ -817,7 +817,7 @@ impl BindGroupStateChange {
 
     fn set_and_check_redundant(
         &mut self,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
         index: u32,
         dynamic_offsets: &mut Vec<u32>,
         offsets: &[wgt::DynamicOffset],

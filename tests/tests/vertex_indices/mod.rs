@@ -409,7 +409,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             render_encoder.set_vertex_buffer(1, identity_buffer.slice(..));
             render_encoder.set_index_buffer(identity_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_encoder.set_pipeline(pipeline);
-            render_encoder.set_bind_group(0, &bg, &[]);
+            render_encoder.set_bind_group(0, Some(&bg), &[]);
 
             let draws = test.case.draws();
 

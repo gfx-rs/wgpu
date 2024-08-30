@@ -441,7 +441,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         pass_data: &mut Self::ComputePassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[DynamicOffset],
     );
     fn compute_pass_set_push_constants(
@@ -494,7 +494,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -591,7 +591,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -1147,7 +1147,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     );
     fn compute_pass_set_push_constants(
@@ -1190,7 +1190,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         encoder_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -1283,7 +1283,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -2239,12 +2239,12 @@ where
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     ) {
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
-        let bind_group_data = downcast_ref(bind_group_data);
-        Context::compute_pass_set_bind_group(self, pass_data, index, bind_group_data, offsets)
+        let bg = bind_group_data.map(downcast_ref);
+        Context::compute_pass_set_bind_group(self, pass_data, index, bg, offsets)
     }
 
     fn compute_pass_set_push_constants(
@@ -2350,18 +2350,12 @@ where
         &self,
         encoder_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     ) {
         let encoder_data = downcast_mut::<T::RenderBundleEncoderData>(encoder_data);
-        let bind_group_data = downcast_ref(bind_group_data);
-        Context::render_bundle_encoder_set_bind_group(
-            self,
-            encoder_data,
-            index,
-            bind_group_data,
-            offsets,
-        )
+        let bg = bind_group_data.map(downcast_ref);
+        Context::render_bundle_encoder_set_bind_group(self, encoder_data, index, bg, offsets)
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -2566,12 +2560,12 @@ where
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     ) {
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let bind_group_data = downcast_ref(bind_group_data);
-        Context::render_pass_set_bind_group(self, pass_data, index, bind_group_data, offsets)
+        let bg = bind_group_data.map(downcast_ref);
+        Context::render_pass_set_bind_group(self, pass_data, index, bg, offsets)
     }
 
     fn render_pass_set_index_buffer(

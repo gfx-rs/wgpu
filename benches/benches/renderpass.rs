@@ -367,7 +367,7 @@ impl RenderpassState {
         let end_idx = start_idx + draws_per_pass;
         for draw_idx in start_idx..end_idx {
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.bind_groups[draw_idx], &[]);
+            render_pass.set_bind_group(0, Some(&self.bind_groups[draw_idx]), &[]);
             for i in 0..VERTEX_BUFFERS_PER_DRAW {
                 render_pass.set_vertex_buffer(
                     i as u32,
@@ -410,7 +410,7 @@ impl RenderpassState {
         });
 
         render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
-        render_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]);
+        render_pass.set_bind_group(0, Some(self.bindless_bind_group.as_ref().unwrap()), &[]);
         for i in 0..VERTEX_BUFFERS_PER_DRAW {
             render_pass.set_vertex_buffer(i as u32, self.vertex_buffers[0].slice(..));
         }
