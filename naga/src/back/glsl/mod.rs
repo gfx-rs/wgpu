@@ -47,7 +47,7 @@ pub use features::Features;
 
 use crate::{
     back::{self, Baked},
-    proc::{self, NameKey},
+    proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
@@ -1584,6 +1584,7 @@ impl<'a, W: Write> Writer<'a, W> {
             info,
             expressions: &func.expressions,
             named_expressions: &func.named_expressions,
+            expr_kind_tracker: ExpressionKindTracker::from_arena(&func.expressions),
         };
 
         self.named_expressions.clear();

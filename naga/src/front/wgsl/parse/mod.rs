@@ -1688,6 +1688,28 @@ impl Parser {
                             handle,
                         }))
                     }
+                    "const" => {
+                        let _ = lexer.next();
+                        let name = lexer.next_ident()?;
+
+                        let given_ty = if lexer.skip(Token::Separator(':')) {
+                            let ty = self.type_decl(lexer, ctx)?;
+                            Some(ty)
+                        } else {
+                            None
+                        };
+                        lexer.expect(Token::Operation('='))?;
+                        let expr_id = self.general_expression(lexer, ctx)?;
+                        lexer.expect(Token::Separator(';'))?;
+
+                        let handle = ctx.declare_local(name)?;
+                        ast::StatementKind::LocalDecl(ast::LocalDecl::Const(ast::LocalConst {
+                            name,
+                            ty: given_ty,
+                            init: expr_id,
+                            handle,
+                        }))
+                    }
                     "var" => {
                         let _ = lexer.next();
 

@@ -1,0 +1,139 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Sint,
+                    width: 4,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: Some("ga"),
+            ty: 0,
+            init: 0,
+        ),
+        (
+            name: Some("gb"),
+            ty: 0,
+            init: 1,
+        ),
+        (
+            name: Some("gc"),
+            ty: 1,
+            init: 2,
+        ),
+        (
+            name: Some("gd"),
+            ty: 2,
+            init: 3,
+        ),
+        (
+            name: Some("ge"),
+            ty: 3,
+            init: 4,
+        ),
+        (
+            name: Some("gf"),
+            ty: 2,
+            init: 5,
+        ),
+    ],
+    overrides: [],
+    global_variables: [],
+    global_expressions: [
+        Literal(I32(4)),
+        Literal(I32(4)),
+        Literal(U32(4)),
+        Literal(F32(4.0)),
+        Compose(
+            ty: 3,
+            components: [
+                0,
+                0,
+                0,
+            ],
+        ),
+        Literal(F32(2.0)),
+    ],
+    functions: [
+        (
+            name: Some("const_in_fn"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [
+                Literal(I32(4)),
+                Literal(I32(4)),
+                Literal(U32(4)),
+                Literal(F32(4.0)),
+                Compose(
+                    ty: 3,
+                    components: [
+                        0,
+                        0,
+                        0,
+                    ],
+                ),
+                Literal(F32(2.0)),
+                Constant(0),
+                Constant(1),
+                Constant(2),
+                Constant(3),
+                Constant(4),
+                Constant(5),
+            ],
+            named_expressions: {
+                0: "a",
+                1: "b",
+                2: "c",
+                3: "d",
+                4: "e",
+                5: "f",
+                6: "ag",
+                7: "bg",
+                8: "cg",
+                9: "dg",
+                10: "eg",
+                11: "fg",
+            },
+            body: [
+                Emit((
+                    start: 4,
+                    end: 5,
+                )),
+            ],
+        ),
+    ],
+    entry_points: [],
+)
