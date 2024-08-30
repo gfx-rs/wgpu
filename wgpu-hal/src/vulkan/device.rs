@@ -699,8 +699,8 @@ impl super::Device {
     #[cfg(windows)]
     fn find_memory_type_index(
         &self,
-        type_bits: u32,
-        flags: vk::MemoryPropertyFlags,
+        type_bits_req: u32,
+        flags_req: vk::MemoryPropertyFlags,
     ) -> Option<usize> {
         let mem_properties = unsafe {
             self.shared
@@ -711,7 +711,10 @@ impl super::Device {
 
         // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceMemoryProperties.html
         for (i, mem_ty) in mem_properties.memory_types_as_slice().iter().enumerate() {
-            if type_bits & (1 << i) != 0 && mem_ty.property_flags & flags == flags {
+            let types_bits = 1 << i;
+            let is_required_memory_type = type_bits_req & types_bits != 0;
+            let has_required_properties = mem_ty.property_flags & flags_req == flags_req;
+            if is_required_memory_type && has_required_properties {
                 return Some(i);
             }
         }
