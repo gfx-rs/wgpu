@@ -10,10 +10,7 @@ use windows::{
 };
 
 use super::SurfaceTarget;
-use crate::{
-    auxil::{self, dxgi::result::HResult as _},
-    dx12::D3D12Lib,
-};
+use crate::{auxil, dx12::D3D12Lib};
 
 impl Drop for super::Instance {
     fn drop(&mut self) {
@@ -98,8 +95,8 @@ impl crate::Instance for super::Instance {
                 )
             };
 
-            match hr.into_result() {
-                Err(err) => log::warn!("Unable to check for tearing support: {}", err),
+            match hr {
+                Err(err) => log::warn!("Unable to check for tearing support: {err}"),
                 Ok(()) => supports_allow_tearing = true,
             }
         }

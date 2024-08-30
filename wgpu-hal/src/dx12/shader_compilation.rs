@@ -4,8 +4,6 @@ use std::ptr;
 pub(super) use dxc::{compile_dxc, get_dxc_container, DxcContainer};
 use windows::Win32::Graphics::Direct3D;
 
-use crate::auxil::dxgi::result::HResult;
-
 // This exists so that users who don't want to use dxc can disable the dxc_shader_compiler feature
 // and not have to compile hassle_rs.
 // Currently this will use Dxc if it is chosen as the dx12 compiler at `Instance` creation time, and will
@@ -57,7 +55,7 @@ pub(super) fn compile_fxc(
         )
     };
 
-    match hr.into_result() {
+    match hr {
         Ok(()) => {
             let shader_data = shader_data.unwrap();
             (

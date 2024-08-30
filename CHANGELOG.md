@@ -119,7 +119,7 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 #### DX12
 
-- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956)
+- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956) and [#6173](https://github.com/gfx-rs/wgpu/pull/6173)
 
 ## 22.0.0 (2024-07-17)
 
