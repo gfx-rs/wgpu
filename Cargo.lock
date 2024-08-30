@@ -1917,6 +1917,7 @@ dependencies = [
  "hexf-parse",
  "hlsl-snapshots",
  "indexmap",
+ "itertools",
  "log",
  "petgraph",
  "pp-rs",

@@ -745,6 +745,10 @@ fn convert_wgsl() {
         ("functions-webgl", Targets::GLSL),
         (
             "interpolate",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "interpolate_compat",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (

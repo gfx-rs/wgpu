@@ -1,7 +1,6 @@
 struct FragmentInput {
     float4 position : SV_Position;
     nointerpolation uint _flat : LOC0;
-    nointerpolation uint flat_first : LOC1;
     nointerpolation uint flat_either : LOC2;
     noperspective float _linear : LOC3;
     noperspective centroid float2 linear_centroid : LOC4;
@@ -13,7 +12,6 @@ struct FragmentInput {
 
 struct VertexOutput_vert_main {
     nointerpolation uint _flat : LOC0;
-    nointerpolation uint flat_first : LOC1;
     nointerpolation uint flat_either : LOC2;
     noperspective float _linear : LOC3;
     noperspective centroid float2 linear_centroid : LOC4;
@@ -26,7 +24,6 @@ struct VertexOutput_vert_main {
 
 struct FragmentInput_frag_main {
     nointerpolation uint _flat_1 : LOC0;
-    nointerpolation uint flat_first_1 : LOC1;
     nointerpolation uint flat_either_1 : LOC2;
     noperspective float _linear_1 : LOC3;
     noperspective centroid float2 linear_centroid_1 : LOC4;
@@ -43,7 +40,6 @@ VertexOutput_vert_main vert_main()
 
     out_.position = float4(2.0, 4.0, 5.0, 6.0);
     out_._flat = 8u;
-    out_.flat_first = 9u;
     out_.flat_either = 10u;
     out_._linear = 27.0;
     out_.linear_centroid = float2(64.0, 125.0);
@@ -51,14 +47,14 @@ VertexOutput_vert_main vert_main()
     out_.perspective = float4(729.0, 1000.0, 1331.0, 1728.0);
     out_.perspective_centroid = 2197.0;
     out_.perspective_sample = 2744.0;
-    FragmentInput _e34 = out_;
-    const FragmentInput fragmentinput = _e34;
-    const VertexOutput_vert_main fragmentinput_1 = { fragmentinput._flat, fragmentinput.flat_first, fragmentinput.flat_either, fragmentinput._linear, fragmentinput.linear_centroid, fragmentinput.linear_sample, fragmentinput.perspective, fragmentinput.perspective_centroid, fragmentinput.perspective_sample, fragmentinput.position };
+    FragmentInput _e32 = out_;
+    const FragmentInput fragmentinput = _e32;
+    const VertexOutput_vert_main fragmentinput_1 = { fragmentinput._flat, fragmentinput.flat_either, fragmentinput._linear, fragmentinput.linear_centroid, fragmentinput.linear_sample, fragmentinput.perspective, fragmentinput.perspective_centroid, fragmentinput.perspective_sample, fragmentinput.position };
     return fragmentinput_1;
 }
 
 void frag_main(FragmentInput_frag_main fragmentinput_frag_main)
 {
-    FragmentInput val = { fragmentinput_frag_main.position_1, fragmentinput_frag_main._flat_1, fragmentinput_frag_main.flat_first_1, fragmentinput_frag_main.flat_either_1, fragmentinput_frag_main._linear_1, fragmentinput_frag_main.linear_centroid_1, fragmentinput_frag_main.linear_sample_1, fragmentinput_frag_main.perspective_1, fragmentinput_frag_main.perspective_centroid_1, fragmentinput_frag_main.perspective_sample_1 };
+    FragmentInput val = { fragmentinput_frag_main.position_1, fragmentinput_frag_main._flat_1, fragmentinput_frag_main.flat_either_1, fragmentinput_frag_main._linear_1, fragmentinput_frag_main.linear_centroid_1, fragmentinput_frag_main.linear_sample_1, fragmentinput_frag_main.perspective_1, fragmentinput_frag_main.perspective_centroid_1, fragmentinput_frag_main.perspective_sample_1 };
     return;
 }
