@@ -870,6 +870,43 @@ enum Components {
     },
 }
 
+#[derive(Copy, Clone)]
+enum SwizzleComponentType {
+    /// xyzw
+    Dimension,
+    /// rgba
+    Color,
+    /// Nothing was read yet or invalid
+    Any,
+}
+
+impl SwizzleComponentType {
+    const fn from_letter(letter: char) -> Self {
+        use SwizzleComponentType::*;
+        match letter {
+            'x' | 'y' | 'z' | 'w' => Dimension,
+            'r' | 'g' | 'b' | 'a' => Color,
+            _ => Any,
+        }
+    }
+
+    fn is_expected_type(&mut self, read: Self) -> bool {
+        use SwizzleComponentType::*;
+        match (*self, read) {
+            (Any, Dimension) => {
+                *self = Dimension;
+                true
+            }
+            (Any, Color) => {
+                *self = Color;
+                true
+            }
+            (Color, Color) | (Dimension, Dimension) => true,
+            _ => false,
+        }
+    }
+}
+
 impl Components {
     const fn letter_component(letter: char) -> Option<crate::SwizzleComponent> {
         use crate::SwizzleComponent as Sc;
@@ -903,8 +940,12 @@ impl Components {
         };
 
         let mut pattern = [crate::SwizzleComponent::X; 4];
+        let mut expected_swizzle_type = SwizzleComponentType::Any;
         for (comp, ch) in pattern.iter_mut().zip(name.chars()) {
             *comp = Self::letter_component(ch).ok_or(Error::BadAccessor(name_span))?;
+            if !expected_swizzle_type.is_expected_type(SwizzleComponentType::from_letter(ch)) {
+                return Err(Error::BadAccessor(name_span));
+            }
         }
 
         Ok(Components::Swizzle { size, pattern })
