@@ -907,7 +907,13 @@ impl Components {
             *comp = Self::letter_component(ch).ok_or(Error::BadAccessor(name_span))?;
         }
 
-        Ok(Components::Swizzle { size, pattern })
+        if name.chars().all(|c| matches!(c, 'x' | 'y' | 'z' | 'w'))
+            || name.chars().all(|c| matches!(c, 'r' | 'g' | 'b' | 'a'))
+        {
+            Ok(Components::Swizzle { size, pattern })
+        } else {
+            Err(Error::BadAccessor(name_span))
+        }
     }
 }
 
