@@ -2,7 +2,7 @@ use std::{error, fmt, future::Future, sync::Arc, thread};
 
 use parking_lot::Mutex;
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// Open connection to a graphics and/or compute device.
@@ -16,7 +16,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct Device {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
@@ -32,14 +31,6 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
-    /// Returns a globally-unique identifier for this `Device`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-
     /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
@@ -50,21 +41,23 @@ impl Device {
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, maintain: Maintain) -> MaintainResult {
-        DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
+        DynContext::device_poll(&*self.context, self.data.as_ref(), maintain)
     }
 
     /// The features which can be used on this device.
     ///
     /// No additional features can be used, even if the underlying adapter can support them.
+    #[must_use]
     pub fn features(&self) -> Features {
-        DynContext::device_features(&*self.context, &self.id, self.data.as_ref())
+        DynContext::device_features(&*self.context, self.data.as_ref())
     }
 
     /// The limits which can be used on this device.
     ///
     /// No better limits can be used, even if the underlying adapter can support them.
+    #[must_use]
     pub fn limits(&self) -> Limits {
-        DynContext::device_limits(&*self.context, &self.id, self.data.as_ref())
+        DynContext::device_limits(&*self.context, self.data.as_ref())
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
@@ -81,17 +74,16 @@ impl Device {
     /// input.
     ///
     /// </div>
+    #[must_use]
     pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
-        let (id, data) = DynContext::device_create_shader_module(
+        let data = DynContext::device_create_shader_module(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             desc,
             wgt::ShaderBoundChecks::new(),
         );
         ShaderModule {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
@@ -106,20 +98,19 @@ impl Device {
     /// operations.
     ///
     /// This has no effect on web.
+    #[must_use]
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor<'_>,
     ) -> ShaderModule {
-        let (id, data) = DynContext::device_create_shader_module(
+        let data = DynContext::device_create_shader_module(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             desc,
             unsafe { wgt::ShaderBoundChecks::unchecked() },
         );
         ShaderModule {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
@@ -132,54 +123,44 @@ impl Device {
     /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid SPIR-V.
     ///
     /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
+    #[must_use]
     pub unsafe fn create_shader_module_spirv(
         &self,
         desc: &ShaderModuleDescriptorSpirV<'_>,
     ) -> ShaderModule {
-        let (id, data) = unsafe {
-            DynContext::device_create_shader_module_spirv(
-                &*self.context,
-                &self.id,
-                self.data.as_ref(),
-                desc,
-            )
+        let data = unsafe {
+            DynContext::device_create_shader_module_spirv(&*self.context, self.data.as_ref(), desc)
         };
         ShaderModule {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Creates an empty [`CommandEncoder`].
+    #[must_use]
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> CommandEncoder {
-        let (id, data) = DynContext::device_create_command_encoder(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data =
+            DynContext::device_create_command_encoder(&*self.context, self.data.as_ref(), desc);
         CommandEncoder {
             context: Arc::clone(&self.context),
-            id: Some(id),
             data,
         }
     }
 
     /// Creates an empty [`RenderBundleEncoder`].
+    #[must_use]
     pub fn create_render_bundle_encoder(
         &self,
         desc: &RenderBundleEncoderDescriptor<'_>,
     ) -> RenderBundleEncoder<'_> {
-        let (id, data) = DynContext::device_create_render_bundle_encoder(
+        let data = DynContext::device_create_render_bundle_encoder(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             desc,
         );
         RenderBundleEncoder {
             context: Arc::clone(&self.context),
-            id,
             data,
             parent: self,
             _p: Default::default(),
@@ -187,96 +168,74 @@ impl Device {
     }
 
     /// Creates a new [`BindGroup`].
+    #[must_use]
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> BindGroup {
-        let (id, data) = DynContext::device_create_bind_group(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data = DynContext::device_create_bind_group(&*self.context, self.data.as_ref(), desc);
         BindGroup {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Creates a [`BindGroupLayout`].
+    #[must_use]
     pub fn create_bind_group_layout(
         &self,
         desc: &BindGroupLayoutDescriptor<'_>,
     ) -> BindGroupLayout {
-        let (id, data) = DynContext::device_create_bind_group_layout(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data =
+            DynContext::device_create_bind_group_layout(&*self.context, self.data.as_ref(), desc);
         BindGroupLayout {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Creates a [`PipelineLayout`].
+    #[must_use]
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> PipelineLayout {
-        let (id, data) = DynContext::device_create_pipeline_layout(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data =
+            DynContext::device_create_pipeline_layout(&*self.context, self.data.as_ref(), desc);
         PipelineLayout {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Creates a [`RenderPipeline`].
+    #[must_use]
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> RenderPipeline {
-        let (id, data) = DynContext::device_create_render_pipeline(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data =
+            DynContext::device_create_render_pipeline(&*self.context, self.data.as_ref(), desc);
         RenderPipeline {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Creates a [`ComputePipeline`].
+    #[must_use]
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
-        let (id, data) = DynContext::device_create_compute_pipeline(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data =
+            DynContext::device_create_compute_pipeline(&*self.context, self.data.as_ref(), desc);
         ComputePipeline {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Creates a [`Buffer`].
+    #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
 
-        let (id, data) =
-            DynContext::device_create_buffer(&*self.context, &self.id, self.data.as_ref(), desc);
+        let data = DynContext::device_create_buffer(&*self.context, self.data.as_ref(), desc);
 
         Buffer {
             context: Arc::clone(&self.context),
-            id,
             data,
             map_context: Mutex::new(map_context),
             size: desc.size,
@@ -287,12 +246,11 @@ impl Device {
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
+    #[must_use]
     pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Texture {
-        let (id, data) =
-            DynContext::device_create_texture(&*self.context, &self.id, self.data.as_ref(), desc);
+        let data = DynContext::device_create_texture(&*self.context, self.data.as_ref(), desc);
         Texture {
             context: Arc::clone(&self.context),
-            id,
             data,
             owned: true,
             descriptor: TextureDescriptor {
@@ -311,6 +269,7 @@ impl Device {
     /// - `hal_texture` must be created respecting `desc`
     /// - `hal_texture` must be initialized
     #[cfg(wgpu_core)]
+    #[must_use]
     pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
@@ -325,13 +284,12 @@ impl Device {
                 .unwrap()
                 .create_texture_from_hal::<A>(
                     hal_texture,
-                    self.data.as_ref().downcast_ref().unwrap(),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     desc,
                 )
         };
         Texture {
             context: Arc::clone(&self.context),
-            id: ObjectId::from(texture.id()),
             data: Box::new(texture),
             owned: true,
             descriptor: TextureDescriptor {
@@ -350,6 +308,7 @@ impl Device {
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
     #[cfg(wgpu_core)]
+    #[must_use]
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,
@@ -360,7 +319,7 @@ impl Device {
             map_context.initial_range = 0..desc.size;
         }
 
-        let (id, buffer) = unsafe {
+        let buffer = unsafe {
             self.context
                 .as_any()
                 .downcast_ref::<crate::backend::ContextWgpuCore>()
@@ -369,14 +328,13 @@ impl Device {
                 .unwrap()
                 .create_buffer_from_hal::<A>(
                     hal_buffer,
-                    self.data.as_ref().downcast_ref().unwrap(),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     desc,
                 )
         };
 
         Buffer {
             context: Arc::clone(&self.context),
-            id: ObjectId::from(id),
             data: Box::new(buffer),
             map_context: Mutex::new(map_context),
             size: desc.size,
@@ -387,23 +345,21 @@ impl Device {
     /// Creates a new [`Sampler`].
     ///
     /// `desc` specifies the behavior of the sampler.
+    #[must_use]
     pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Sampler {
-        let (id, data) =
-            DynContext::device_create_sampler(&*self.context, &self.id, self.data.as_ref(), desc);
+        let data = DynContext::device_create_sampler(&*self.context, self.data.as_ref(), desc);
         Sampler {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Creates a new [`QuerySet`].
+    #[must_use]
     pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
-        let (id, data) =
-            DynContext::device_create_query_set(&*self.context, &self.id, self.data.as_ref(), desc);
+        let data = DynContext::device_create_query_set(&*self.context, self.data.as_ref(), desc);
         QuerySet {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
@@ -411,29 +367,28 @@ impl Device {
     /// Set a callback for errors that are not handled in error scopes.
     pub fn on_uncaptured_error(&self, handler: Box<dyn UncapturedErrorHandler>) {
         self.context
-            .device_on_uncaptured_error(&self.id, self.data.as_ref(), handler);
+            .device_on_uncaptured_error(self.data.as_ref(), handler);
     }
 
     /// Push an error scope.
     pub fn push_error_scope(&self, filter: ErrorFilter) {
         self.context
-            .device_push_error_scope(&self.id, self.data.as_ref(), filter);
+            .device_push_error_scope(self.data.as_ref(), filter);
     }
 
     /// Pop an error scope.
     pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
-        self.context
-            .device_pop_error_scope(&self.id, self.data.as_ref())
+        self.context.device_pop_error_scope(self.data.as_ref())
     }
 
     /// Starts frame capture.
     pub fn start_capture(&self) {
-        DynContext::device_start_capture(&*self.context, &self.id, self.data.as_ref())
+        DynContext::device_start_capture(&*self.context, self.data.as_ref())
     }
 
     /// Stops frame capture.
     pub fn stop_capture(&self) {
-        DynContext::device_stop_capture(&*self.context, &self.id, self.data.as_ref())
+        DynContext::device_stop_capture(&*self.context, self.data.as_ref())
     }
 
     /// Query internal counters from the native backend for debugging purposes.
@@ -442,8 +397,9 @@ impl Device {
     /// The `counters` cargo feature must be enabled for any counter to be set.
     ///
     /// If a counter is not set, its contains its default value (zero).
+    #[must_use]
     pub fn get_internal_counters(&self) -> wgt::InternalCounters {
-        DynContext::device_get_internal_counters(&*self.context, &self.id, self.data.as_ref())
+        DynContext::device_get_internal_counters(&*self.context, self.data.as_ref())
     }
 
     /// Generate an GPU memory allocation report if the underlying backend supports it.
@@ -451,8 +407,9 @@ impl Device {
     /// Backends that do not support producing these reports return `None`. A backend may
     /// Support it and still return `None` if it is not using performing sub-allocation,
     /// for example as a workaround for driver issues.
+    #[must_use]
     pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        DynContext::generate_allocator_report(&*self.context, &self.id, self.data.as_ref())
+        DynContext::generate_allocator_report(&*self.context, self.data.as_ref())
     }
 
     /// Apply a callback to this `Device`'s underlying backend device.
@@ -484,7 +441,7 @@ impl Device {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.device_as_hal::<A, F, R>(
-                    self.data.as_ref().downcast_ref().unwrap(),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_device_callback,
                 )
             })
@@ -492,7 +449,7 @@ impl Device {
 
     /// Destroy this device.
     pub fn destroy(&self) {
-        DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
+        DynContext::device_destroy(&*self.context, self.data.as_ref())
     }
 
     /// Set a DeviceLostCallback on this device.
@@ -502,7 +459,6 @@ impl Device {
     ) {
         DynContext::device_set_device_lost_callback(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             Box::new(callback),
         )
@@ -511,7 +467,7 @@ impl Device {
     /// Test-only function to make this device invalid.
     #[doc(hidden)]
     pub fn make_invalid(&self) {
-        DynContext::device_make_invalid(&*self.context, &self.id, self.data.as_ref())
+        DynContext::device_make_invalid(&*self.context, self.data.as_ref())
     }
 
     /// Create a [`PipelineCache`] with initial data
@@ -551,21 +507,16 @@ impl Device {
     /// version of wgpu; or was created for an incompatible adapter, or there was a GPU driver
     /// update. In some cases, the data might not be used and a real value is returned,
     /// this is left to the discretion of GPU drivers.
+    #[must_use]
     pub unsafe fn create_pipeline_cache(
         &self,
         desc: &PipelineCacheDescriptor<'_>,
     ) -> PipelineCache {
-        let (id, data) = unsafe {
-            DynContext::device_create_pipeline_cache(
-                &*self.context,
-                &self.id,
-                self.data.as_ref(),
-                desc,
-            )
+        let data = unsafe {
+            DynContext::device_create_pipeline_cache(&*self.context, self.data.as_ref(), desc)
         };
         PipelineCache {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
@@ -574,7 +525,7 @@ impl Device {
 impl Drop for Device {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.device_drop(&self.id, self.data.as_ref());
+            self.context.device_drop(self.data.as_ref());
         }
     }
 }
@@ -660,30 +611,31 @@ pub enum ErrorFilter {
 }
 static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
+/// Lower level source of the error.
+///
+/// `Send + Sync` varies depending on configuration.
+#[cfg(send_sync)]
+#[cfg_attr(docsrs, doc(cfg(all())))]
+pub type ErrorSource = Box<dyn error::Error + Send + Sync + 'static>;
+/// Lower level source of the error.
+///
+/// `Send + Sync` varies depending on configuration.
+#[cfg(not(send_sync))]
+#[cfg_attr(docsrs, doc(cfg(all())))]
+pub type ErrorSource = Box<dyn error::Error + 'static>;
+
 /// Error type
 #[derive(Debug)]
 pub enum Error {
     /// Out of memory error
     OutOfMemory {
         /// Lower level source of the error.
-        #[cfg(send_sync)]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + Sync + 'static>,
-        /// Lower level source of the error.
-        #[cfg(not(send_sync))]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + 'static>,
+        source: ErrorSource,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
         /// Lower level source of the error.
-        #[cfg(send_sync)]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + Sync + 'static>,
-        /// Lower level source of the error.
-        #[cfg(not(send_sync))]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + 'static>,
+        source: ErrorSource,
         /// Description of the validation error.
         description: String,
     },
@@ -692,13 +644,7 @@ pub enum Error {
     /// These could be due to internal implementation or system limits being reached.
     Internal {
         /// Lower level source of the error.
-        #[cfg(send_sync)]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + Send + Sync + 'static>,
-        /// Lower level source of the error.
-        #[cfg(not(send_sync))]
-        #[cfg_attr(docsrs, doc(cfg(all())))]
-        source: Box<dyn error::Error + 'static>,
+        source: ErrorSource,
         /// Description of the internal GPU error.
         description: String,
     },

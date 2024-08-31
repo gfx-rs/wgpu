@@ -342,6 +342,7 @@ impl Adapter {
             hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
             hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
             hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
+            hal::DeviceError::Unexpected => RequestDeviceError::DeviceLost,
         })?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
@@ -497,7 +498,7 @@ impl Global {
 
             let id = self
                 .surfaces
-                .prepare(wgt::Backend::Empty, id_in) // No specific backend for Surface, since it's not specific.
+                .prepare(Backend::Empty, id_in) // No specific backend for Surface, since it's not specific.
                 .assign(Arc::new(surface));
             Ok(id)
         }
@@ -584,7 +585,7 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_visual");
         self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_visual(visual.cast())
+            inst.create_surface_from_visual(visual)
         })
     }
 
@@ -614,7 +615,7 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
         self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_swap_chain_panel(swap_chain_panel.cast())
+            inst.create_surface_from_swap_chain_panel(swap_chain_panel)
         })
     }
 

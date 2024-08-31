@@ -2277,3 +2277,97 @@ fn too_many_unclosed_loops() {
         .join()
         .unwrap()
 }
+
+#[test]
+fn local_const_wrong_type() {
+    check(
+        "
+        fn f() {
+            const c: i32 = 5u;
+        }
+        ",
+        r###"error: the type of `c` is expected to be `i32`, but got `u32`
+  ┌─ wgsl:3:19
+  │
+3 │             const c: i32 = 5u;
+  │                   ^ definition of `c`
+
+"###,
+    );
+}
+
+#[test]
+fn local_const_from_let() {
+    check(
+        "
+        fn f() {
+            let a = 5;
+            const c = a;
+        }
+        ",
+        r###"error: this operation is not supported in a const context
+  ┌─ wgsl:4:23
+  │
+4 │             const c = a;
+  │                       ^ operation not supported here
+
+"###,
+    );
+}
+
+#[test]
+fn local_const_from_var() {
+    check(
+        "
+        fn f() {
+            var a = 5;
+            const c = a;
+        }
+        ",
+        r###"error: this operation is not supported in a const context
+  ┌─ wgsl:4:23
+  │
+4 │             const c = a;
+  │                       ^ operation not supported here
+
+"###,
+    );
+}
+
+#[test]
+fn local_const_from_override() {
+    check(
+        "
+        override o: i32;
+        fn f() {
+            const c = o;
+        }
+        ",
+        r###"error: Unexpected override-expression
+  ┌─ wgsl:4:23
+  │
+4 │             const c = o;
+  │                       ^ see msg
+
+"###,
+    );
+}
+
+#[test]
+fn local_const_from_global_var() {
+    check(
+        "
+        var v: i32;
+        fn f() {
+            const c = v;
+        }
+        ",
+        r###"error: Unexpected runtime-expression
+  ┌─ wgsl:4:23
+  │
+4 │             const c = v;
+  │                       ^ see msg
+
+"###,
+    );
+}

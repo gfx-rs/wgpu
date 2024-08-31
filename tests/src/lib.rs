@@ -54,10 +54,16 @@ pub fn fail<T>(
 }
 
 /// Run some code in an error scope and assert that validation succeeds.
+#[track_caller]
 pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();
-    assert!(pollster::block_on(device.pop_error_scope()).is_none());
+    if let Some(error) = pollster::block_on(device.pop_error_scope()) {
+        panic!(
+            "`valid` block at {} encountered wgpu error:\n{error}",
+            std::panic::Location::caller()
+        );
+    }
 
     result
 }

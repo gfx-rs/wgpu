@@ -109,7 +109,7 @@ pub struct EntryPoint<'a> {
 }
 
 #[cfg(doc)]
-use crate::front::wgsl::lower::{RuntimeExpressionContext, StatementContext};
+use crate::front::wgsl::lower::{LocalExpressionContext, StatementContext};
 
 #[derive(Debug)]
 pub struct Function<'a> {
@@ -461,9 +461,18 @@ pub struct Let<'a> {
 }
 
 #[derive(Debug)]
+pub struct LocalConst<'a> {
+    pub name: Ident<'a>,
+    pub ty: Option<Handle<Type<'a>>>,
+    pub init: Handle<Expression<'a>>,
+    pub handle: Handle<Local>,
+}
+
+#[derive(Debug)]
 pub enum LocalDecl<'a> {
     Var(LocalVariable<'a>),
     Let(Let<'a>),
+    Const(LocalConst<'a>),
 }
 
 #[derive(Debug)]

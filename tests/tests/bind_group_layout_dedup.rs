@@ -31,129 +31,77 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
     .run_async(bgl_dedupe);
 
 async fn bgl_dedupe(ctx: TestingContext) {
-    let entries_1 = &[];
+    let entries = &[];
 
-    let entries_2 = &[ENTRY];
-
-    // Block so we can force all resource to die.
-    {
-        let bgl_1a = ctx
-            .device
-            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: entries_1,
-            });
-
-        let bgl_2 = ctx
-            .device
-            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: entries_2,
-            });
-
-        let bgl_1b = ctx
-            .device
-            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: entries_1,
-            });
-
-        let bg_1a = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let bgl_1a = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
-            layout: &bgl_1a,
-            entries: &[],
+            entries,
         });
 
-        let bg_1b = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let bgl_1b = ctx
+        .device
+        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
-            layout: &bgl_1b,
-            entries: &[],
+            entries,
         });
 
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&bgl_1b],
-                push_constant_ranges: &[],
-            });
+    let bg_1a = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bgl_1a,
+        entries: &[],
+    });
 
-        let module = ctx
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
-            });
+    let bg_1b = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &bgl_1b,
+        entries: &[],
+    });
 
-        let desc = wgpu::ComputePipelineDescriptor {
+    let pipeline_layout = ctx
+        .device
+        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            layout: Some(&pipeline_layout),
-            module: &module,
-            entry_point: Some("no_resources"),
-            compilation_options: Default::default(),
-            cache: None,
-        };
-
-        let pipeline = ctx.device.create_compute_pipeline(&desc);
-
-        let mut encoder = ctx.device.create_command_encoder(&Default::default());
-
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
+            bind_group_layouts: &[&bgl_1b],
+            push_constant_ranges: &[],
         });
 
-        pass.set_bind_group(0, &bg_1b, &[]);
-        pass.set_pipeline(&pipeline);
-        pass.dispatch_workgroups(1, 1, 1);
+    let module = ctx
+        .device
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+        });
 
-        pass.set_bind_group(0, &bg_1a, &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+    let desc = wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        module: &module,
+        entry_point: Some("no_resources"),
+        compilation_options: Default::default(),
+        cache: None,
+    };
 
-        drop(pass);
+    let pipeline = ctx.device.create_compute_pipeline(&desc);
 
-        ctx.queue.submit(Some(encoder.finish()));
+    let mut encoder = ctx.device.create_command_encoder(&Default::default());
 
-        // Abuse the fact that global_id is really just the bitpacked ids when targeting wgpu-core.
-        if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
-            let bgl_1a_idx = bgl_1a.global_id().inner() & 0xFFFF_FFFF;
-            assert_eq!(bgl_1a_idx, 0);
-            let bgl_2_idx = bgl_2.global_id().inner() & 0xFFFF_FFFF;
-            assert_eq!(bgl_2_idx, 1);
-            let bgl_1b_idx = bgl_1b.global_id().inner() & 0xFFFF_FFFF;
-            assert_eq!(bgl_1b_idx, 2);
-        }
-    }
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: None,
+        timestamp_writes: None,
+    });
 
-    ctx.async_poll(wgpu::Maintain::wait())
-        .await
-        .panic_on_timeout();
+    pass.set_bind_group(0, &bg_1b, &[]);
+    pass.set_pipeline(&pipeline);
+    pass.dispatch_workgroups(1, 1, 1);
 
-    if ctx.adapter_info.backend != wgt::Backend::BrowserWebGpu {
-        // Indices are made reusable as soon as the handle is dropped so we keep them around
-        // for the duration of the loop.
-        let mut bgls = Vec::new();
-        let mut indices = Vec::new();
-        // Now all of the BGL ids should be dead, so we should get the same ids again.
-        for _ in 0..=2 {
-            let test_bgl = ctx
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: entries_1,
-                });
+    pass.set_bind_group(0, &bg_1a, &[]);
+    pass.dispatch_workgroups(1, 1, 1);
 
-            let test_bgl_idx = test_bgl.global_id().inner() & 0xFFFF_FFFF;
-            bgls.push(test_bgl);
-            indices.push(test_bgl_idx);
-        }
-        // We don't guarantee that the IDs will appear in the same order. Sort them
-        // and check that they all appear exactly once.
-        indices.sort();
-        for (i, index) in indices.iter().enumerate() {
-            assert_eq!(*index, i as u64);
-        }
-    }
+    drop(pass);
+
+    ctx.queue.submit(Some(encoder.finish()));
 }
 
 #[gpu_test]
@@ -373,7 +321,7 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
         || {
             drop(pass);
         },
-        None,
+        Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
     );
 }
 
@@ -445,7 +393,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
         || {
             drop(pass);
         },
-        None,
+        Some("label at index 0 is not compatible with the corresponding bindgrouplayout"),
     )
 }
 

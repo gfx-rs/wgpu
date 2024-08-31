@@ -6,6 +6,8 @@ use crate::{
     proc::{self, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
+#[cfg(test)]
+use std::ptr;
 use std::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
@@ -1411,9 +1413,8 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
-        #[allow(trivial_casts)]
         self.put_expression_stack_pointers
-            .insert(&expr_handle as *const _ as *const ());
+            .insert(ptr::from_ref(&expr_handle).cast());
 
         if let Some(name) = self.named_expressions.get(&expr_handle) {
             write!(self.out, "{name}")?;
@@ -2792,9 +2793,8 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
-        #[allow(trivial_casts)]
         self.put_block_stack_pointers
-            .insert(&level as *const _ as *const ());
+            .insert(ptr::from_ref(&level).cast());
 
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);

@@ -1,22 +1,20 @@
 #![allow(dead_code)] // IPresentationManager is unused currently
 
-use std::mem;
-
-use winapi::um::{
-    profileapi::{QueryPerformanceCounter, QueryPerformanceFrequency},
-    winnt::LARGE_INTEGER,
-};
+use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 
 pub enum PresentationTimer {
-    /// DXGI uses QueryPerformanceCounter
+    /// DXGI uses [`QueryPerformanceCounter()`]
     Dxgi {
         /// How many ticks of QPC per second
         frequency: u64,
     },
-    /// IPresentationManager uses QueryInterruptTimePrecise
+    /// [`IPresentationManager`] uses [`QueryInterruptTimePrecise()`]
+    ///
+    /// [`IPresentationManager`]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/Graphics/CompositionSwapchain/struct.IPresentationManager.html
+    /// [`QueryInterruptTimePrecise()`]: https://microsoft.github.io/windows-docs-rs/doc/windows/Win32/System/WindowsProgramming/fn.QueryInterruptTimePrecise.html
     #[allow(non_snake_case)]
     IPresentationManager {
-        fnQueryInterruptTimePrecise: unsafe extern "system" fn(*mut winapi::ctypes::c_ulonglong),
+        fnQueryInterruptTimePrecise: unsafe extern "system" fn(*mut u64),
     },
 }
 
@@ -43,12 +41,13 @@ impl std::fmt::Debug for PresentationTimer {
 impl PresentationTimer {
     /// Create a presentation timer using QueryPerformanceFrequency (what DXGI uses for presentation times)
     pub fn new_dxgi() -> Self {
-        let mut frequency: LARGE_INTEGER = unsafe { mem::zeroed() };
-        let success = unsafe { QueryPerformanceFrequency(&mut frequency) };
-        assert_ne!(success, 0);
+        let mut frequency = 0;
+        unsafe { QueryPerformanceFrequency(&mut frequency) }.unwrap();
 
         Self::Dxgi {
-            frequency: unsafe { *frequency.QuadPart() } as u64,
+            frequency: frequency
+                .try_into()
+                .expect("Frequency should not be negative"),
         }
     }
 
@@ -59,6 +58,7 @@ impl PresentationTimer {
         // We need to load this explicitly, as QueryInterruptTimePrecise is only available on Windows 10+
         //
         // Docs say it's in kernel32.dll, but it's actually in kernelbase.dll.
+        // api-ms-win-core-realtime-l1-1-1.dll
         let kernelbase =
             libloading::os::windows::Library::open_already_loaded("kernelbase.dll").unwrap();
         // No concerns about lifetimes here as kernelbase is always there.
@@ -73,12 +73,11 @@ impl PresentationTimer {
         // Always do u128 math _after_ hitting the timing function.
         match *self {
             PresentationTimer::Dxgi { frequency } => {
-                let mut counter: LARGE_INTEGER = unsafe { mem::zeroed() };
-                let success = unsafe { QueryPerformanceCounter(&mut counter) };
-                assert_ne!(success, 0);
+                let mut counter = 0;
+                unsafe { QueryPerformanceCounter(&mut counter) }.unwrap();
 
                 // counter * (1_000_000_000 / freq) but re-ordered to make more precise
-                (unsafe { *counter.QuadPart() } as u128 * 1_000_000_000) / frequency as u128
+                (counter as u128 * 1_000_000_000) / frequency as u128
             }
             PresentationTimer::IPresentationManager {
                 fnQueryInterruptTimePrecise,

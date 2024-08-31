@@ -202,8 +202,6 @@ impl Instance {
     /// - `backends` - Backends from which to enumerate adapters.
     #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
-        use crate::context::ObjectId;
-
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
@@ -211,10 +209,9 @@ impl Instance {
             .map(|ctx| {
                 ctx.enumerate_adapters(backends)
                     .into_iter()
-                    .map(move |id| crate::Adapter {
+                    .map(move |adapter| crate::Adapter {
                         context: Arc::clone(&context),
-                        id: ObjectId::from(id),
-                        data: Box::new(()),
+                        data: Box::new(adapter),
                     })
                     .collect()
             })
@@ -234,11 +231,7 @@ impl Instance {
     ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
-        async move {
-            adapter
-                .await
-                .map(|(id, data)| Adapter { context, id, data })
-        }
+        async move { adapter.await.map(|data| Adapter { context, data }) }
     }
 
     /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
@@ -252,18 +245,16 @@ impl Instance {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
         let context = Arc::clone(&self.context);
-        let id = unsafe {
+        let adapter = unsafe {
             context
                 .as_any()
                 .downcast_ref::<crate::backend::ContextWgpuCore>()
                 .unwrap()
                 .create_adapter_from_hal(hal_adapter)
-                .into()
         };
         Adapter {
             context,
-            id,
-            data: Box::new(()),
+            data: Box::new(adapter),
         }
     }
 
@@ -355,12 +346,11 @@ impl Instance {
         &self,
         target: SurfaceTargetUnsafe,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
-        let (id, data) = unsafe { self.context.instance_create_surface(target) }?;
+        let data = unsafe { self.context.instance_create_surface(target) }?;
 
         Ok(Surface {
             context: Arc::clone(&self.context),
             _handle_source: None,
-            id,
             surface_data: data,
             config: Mutex::new(None),
         })

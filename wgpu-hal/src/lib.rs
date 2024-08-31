@@ -87,7 +87,7 @@
 //! [`ash`]: https://crates.io/crates/ash
 //! [MoltenVK]: https://github.com/KhronosGroup/MoltenVK
 //! [`metal`]: https://crates.io/crates/metal
-//! [`d3d12`]: ahttps://crates.io/crates/d3d12
+//! [`d3d12`]: https://crates.io/crates/d3d12
 //!
 //! ## Secondary backends
 //!
@@ -303,8 +303,35 @@ pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
 pub type AtomicFenceValue = std::sync::atomic::AtomicU64;
 
-/// Drop guard to signal wgpu-hal is no longer using an externally created object.
-pub type DropGuard = Box<dyn std::any::Any + Send + Sync>;
+/// A callback to signal that wgpu is no longer using a resource.
+#[cfg(any(gles, vulkan))]
+pub type DropCallback = Box<dyn FnMut() + Send + Sync + 'static>;
+
+#[cfg(any(gles, vulkan))]
+pub struct DropGuard {
+    callback: DropCallback,
+}
+
+#[cfg(all(any(gles, vulkan), any(native, Emscripten)))]
+impl DropGuard {
+    fn from_option(callback: Option<DropCallback>) -> Option<Self> {
+        callback.map(|callback| Self { callback })
+    }
+}
+
+#[cfg(any(gles, vulkan))]
+impl Drop for DropGuard {
+    fn drop(&mut self) {
+        (self.callback)();
+    }
+}
+
+#[cfg(any(gles, vulkan))]
+impl std::fmt::Debug for DropGuard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DropGuard").finish()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum DeviceError {
@@ -314,6 +341,8 @@ pub enum DeviceError {
     Lost,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
+    #[error("Unexpected error variant (driver implementation is at fault)")]
+    Unexpected,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]

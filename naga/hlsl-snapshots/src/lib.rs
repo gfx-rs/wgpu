@@ -53,6 +53,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             vertex: Default::default(),
@@ -78,6 +79,7 @@ impl Config {
         fs::write(path, &s).map_err(|e| anyhow!("failed to write to {}: {e}", path.display()))
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         let Self {
             vertex,

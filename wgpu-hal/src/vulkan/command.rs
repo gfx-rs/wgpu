@@ -3,7 +3,11 @@ use super::conv;
 use arrayvec::ArrayVec;
 use ash::vk;
 
-use std::{mem, ops::Range, slice};
+use std::{
+    mem::{self, size_of},
+    ops::Range,
+    slice,
+};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -62,7 +66,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let vk_info = vk::CommandBufferAllocateInfo::default()
                 .command_pool(self.raw)
                 .command_buffer_count(ALLOCATION_GRANULARITY);
-            let cmd_buf_vec = unsafe { self.device.raw.allocate_command_buffers(&vk_info)? };
+            let cmd_buf_vec = unsafe {
+                self.device
+                    .raw
+                    .allocate_command_buffers(&vk_info)
+                    .map_err(super::map_host_device_oom_err)?
+            };
             self.free.extend(cmd_buf_vec);
         }
         let raw = self.free.pop().unwrap();
@@ -76,7 +85,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         let vk_info = vk::CommandBufferBeginInfo::default()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-        unsafe { self.device.raw.begin_command_buffer(raw, &vk_info) }?;
+        unsafe { self.device.raw.begin_command_buffer(raw, &vk_info) }
+            .map_err(super::map_host_device_oom_err)?;
         self.active = raw;
 
         Ok(())
@@ -85,7 +95,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         let raw = self.active;
         self.active = vk::CommandBuffer::null();
-        unsafe { self.device.raw.end_command_buffer(raw) }?;
+        unsafe { self.device.raw.end_command_buffer(raw) }.map_err(map_err)?;
+        fn map_err(err: vk::Result) -> crate::DeviceError {
+            // We don't use VK_KHR_video_encode_queue
+            // VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR
+            super::map_host_device_oom_err(err)
+        }
         Ok(super::CommandBuffer { raw })
     }
 
@@ -1001,7 +1016,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 buffer.raw,
                 offset,
                 draw_count,
-                mem::size_of::<wgt::DrawIndirectArgs>() as u32,
+                size_of::<wgt::DrawIndirectArgs>() as u32,
             )
         };
     }
@@ -1017,7 +1032,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 buffer.raw,
                 offset,
                 draw_count,
-                mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
             )
         };
     }
@@ -1029,7 +1044,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        let stride = mem::size_of::<wgt::DrawIndirectArgs>() as u32;
+        let stride = size_of::<wgt::DrawIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
             Some(ref t) => {
                 unsafe {
@@ -1055,7 +1070,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        let stride = mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32;
+        let stride = size_of::<wgt::DrawIndexedIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
             Some(ref t) => {
                 unsafe {

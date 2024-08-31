@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a command buffer on the GPU.
@@ -13,7 +12,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct CommandBuffer {
     pub(crate) context: Arc<C>,
-    pub(crate) id: Option<ObjectId>,
     pub(crate) data: Option<Box<Data>>,
 }
 #[cfg(send_sync)]
@@ -22,9 +20,8 @@ static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
         if !thread::panicking() {
-            if let Some(id) = self.id.take() {
-                self.context
-                    .command_buffer_drop(&id, self.data.take().unwrap().as_ref());
+            if let Some(data) = self.data.take() {
+                self.context.command_buffer_drop(data.as_ref());
             }
         }
     }

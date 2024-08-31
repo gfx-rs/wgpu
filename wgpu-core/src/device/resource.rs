@@ -344,6 +344,7 @@ impl Device {
         assert!(self.queue_to_drop.set(queue).is_ok());
     }
 
+    #[track_caller]
     pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
         self.life_tracker.lock()
     }

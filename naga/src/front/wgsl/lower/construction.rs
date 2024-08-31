@@ -530,11 +530,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
             // Bad conversion (type cast)
             (Components::One { span, ty_inner, .. }, constructor) => {
-                let from_type = ty_inner.to_wgsl(&ctx.module.to_ctx());
+                let from_type = ty_inner.to_wgsl(&ctx.module.to_ctx()).into();
                 return Err(Error::BadTypeCast {
                     span,
                     from_type,
-                    to_type: constructor.to_error_string(ctx),
+                    to_type: constructor.to_error_string(ctx).into(),
                 });
             }
 

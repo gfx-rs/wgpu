@@ -1,6 +1,6 @@
 use std::{sync::Arc, thread};
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// Handle to a texture on the GPU.
@@ -11,7 +11,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct Texture {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
     pub(crate) owned: bool,
     pub(crate) descriptor: TextureDescriptor<'static>,
@@ -19,15 +18,9 @@ pub struct Texture {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
-impl Texture {
-    /// Returns a globally-unique identifier for this `Texture`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
+super::impl_partialeq_eq_hash!(Texture);
 
+impl Texture {
     /// Returns the inner hal Texture using a callback. The hal texture will be `None` if the
     /// backend type argument does not match with this wgpu Texture
     ///
@@ -39,14 +32,17 @@ impl Texture {
         &self,
         hal_texture_callback: F,
     ) -> R {
-        let texture = self.data.as_ref().downcast_ref().unwrap();
-
         if let Some(ctx) = self
             .context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.texture_as_hal::<A, F, R>(texture, hal_texture_callback) }
+            unsafe {
+                ctx.texture_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(self.data.as_ref()),
+                    hal_texture_callback,
+                )
+            }
         } else {
             hal_texture_callback(None)
         }
@@ -54,18 +50,16 @@ impl Texture {
 
     /// Creates a view of this texture.
     pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
-        let (id, data) =
-            DynContext::texture_create_view(&*self.context, &self.id, self.data.as_ref(), desc);
+        let data = DynContext::texture_create_view(&*self.context, self.data.as_ref(), desc);
         TextureView {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
 
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::texture_destroy(&*self.context, &self.id, self.data.as_ref());
+        DynContext::texture_destroy(&*self.context, self.data.as_ref());
     }
 
     /// Make an `ImageCopyTexture` representing the whole texture.
@@ -145,7 +139,7 @@ impl Texture {
 impl Drop for Texture {
     fn drop(&mut self) {
         if self.owned && !thread::panicking() {
-            self.context.texture_drop(&self.id, self.data.as_ref());
+            self.context.texture_drop(self.data.as_ref());
         }
     }
 }

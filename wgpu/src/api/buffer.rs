@@ -7,7 +7,7 @@ use std::{
 
 use parking_lot::Mutex;
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// Handle to a GPU-accessible buffer.
@@ -173,7 +173,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct Buffer {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
     pub(crate) map_context: Mutex<MapContext>,
     pub(crate) size: wgt::BufferAddress,
@@ -183,15 +182,9 @@ pub struct Buffer {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
-impl Buffer {
-    /// Returns a globally-unique identifier for this `Buffer`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
+super::impl_partialeq_eq_hash!(Buffer);
 
+impl Buffer {
     /// Return the binding view of the entire buffer.
     pub fn as_entire_binding(&self) -> BindingResource<'_> {
         BindingResource::Buffer(self.as_entire_buffer_binding())
@@ -217,14 +210,17 @@ impl Buffer {
         &self,
         hal_buffer_callback: F,
     ) -> R {
-        let id = self.id;
-
         if let Some(ctx) = self
             .context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.buffer_as_hal::<A, F, R>(id.into(), hal_buffer_callback) }
+            unsafe {
+                ctx.buffer_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(self.data.as_ref()),
+                    hal_buffer_callback,
+                )
+            }
         } else {
             hal_buffer_callback(None)
         }
@@ -256,12 +252,12 @@ impl Buffer {
     /// Flushes any pending write operations and unmaps the buffer from host memory.
     pub fn unmap(&self) {
         self.map_context.lock().reset();
-        DynContext::buffer_unmap(&*self.context, &self.id, self.data.as_ref());
+        DynContext::buffer_unmap(&*self.context, self.data.as_ref());
     }
 
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::buffer_destroy(&*self.context, &self.id, self.data.as_ref());
+        DynContext::buffer_destroy(&*self.context, self.data.as_ref());
     }
 
     /// Returns the length of the buffer allocation in bytes.
@@ -343,12 +339,7 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        assert_eq!(
-            mc.initial_range,
-            0..0,
-            "Buffer {:?} is already mapped",
-            self.buffer.id
-        );
+        assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
         let end = match self.size {
             Some(s) => self.offset + s.get(),
             None => mc.total_size,
@@ -357,7 +348,6 @@ impl<'a> BufferSlice<'a> {
 
         DynContext::buffer_map_async(
             &*self.buffer.context,
-            &self.buffer.id,
             self.buffer.data.as_ref(),
             mode,
             self.offset..end,
@@ -383,7 +373,6 @@ impl<'a> BufferSlice<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = DynContext::buffer_get_mapped_range(
             &*self.buffer.context,
-            &self.buffer.id,
             self.buffer.data.as_ref(),
             self.offset..end,
         );
@@ -429,7 +418,6 @@ impl<'a> BufferSlice<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = DynContext::buffer_get_mapped_range(
             &*self.buffer.context,
-            &self.buffer.id,
             self.buffer.data.as_ref(),
             self.offset..end,
         );
@@ -680,7 +668,7 @@ impl Drop for BufferViewMut<'_> {
 impl Drop for Buffer {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.buffer_drop(&self.id, self.data.as_ref());
+            self.context.buffer_drop(self.data.as_ref());
         }
     }
 }

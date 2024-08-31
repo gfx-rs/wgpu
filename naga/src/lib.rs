@@ -530,6 +530,13 @@ pub enum Sampling {
     /// Interpolate the value at each sample location. In multisampling, invoke
     /// the fragment shader once per sample.
     Sample,
+
+    /// Use the value provided by the first vertex of the current primitive.
+    First,
+
+    /// Use the value provided by the first or last vertex of the current primitive. The exact
+    /// choice is implementation-dependent.
+    Either,
 }
 
 /// Member of a user-defined structure.

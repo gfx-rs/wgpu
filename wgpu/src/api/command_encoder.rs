@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, ops::Range, sync::Arc, thread};
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// Encodes a series of GPU operations.
@@ -15,7 +15,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct CommandEncoder {
     pub(crate) context: Arc<C>,
-    pub(crate) id: Option<ObjectId>,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
@@ -24,9 +23,7 @@ static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
 impl Drop for CommandEncoder {
     fn drop(&mut self) {
         if !thread::panicking() {
-            if let Some(id) = self.id.take() {
-                self.context.command_encoder_drop(&id, self.data.as_ref());
-            }
+            self.context.command_encoder_drop(self.data.as_ref());
         }
     }
 }
@@ -71,14 +68,9 @@ static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
     pub fn finish(mut self) -> CommandBuffer {
-        let (id, data) = DynContext::command_encoder_finish(
-            &*self.context,
-            self.id.take().unwrap(),
-            self.data.as_mut(),
-        );
+        let data = DynContext::command_encoder_finish(&*self.context, self.data.as_mut());
         CommandBuffer {
             context: Arc::clone(&self.context),
-            id: Some(id),
             data: Some(data),
         }
     }
@@ -97,16 +89,10 @@ impl CommandEncoder {
         &'encoder mut self,
         desc: &RenderPassDescriptor<'_>,
     ) -> RenderPass<'encoder> {
-        let id = self.id.as_ref().unwrap();
-        let (id, data) = DynContext::command_encoder_begin_render_pass(
-            &*self.context,
-            id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data =
+            DynContext::command_encoder_begin_render_pass(&*self.context, self.data.as_ref(), desc);
         RenderPass {
             inner: RenderPassInner {
-                id,
                 data,
                 context: self.context.clone(),
             },
@@ -128,16 +114,13 @@ impl CommandEncoder {
         &'encoder mut self,
         desc: &ComputePassDescriptor<'_>,
     ) -> ComputePass<'encoder> {
-        let id = self.id.as_ref().unwrap();
-        let (id, data) = DynContext::command_encoder_begin_compute_pass(
+        let data = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
-            id,
             self.data.as_ref(),
             desc,
         );
         ComputePass {
             inner: ComputePassInner {
-                id,
                 data,
                 context: self.context.clone(),
             },
@@ -162,12 +145,9 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_buffer_to_buffer(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            &source.id,
             source.data.as_ref(),
             source_offset,
-            &destination.id,
             destination.data.as_ref(),
             destination_offset,
             copy_size,
@@ -183,7 +163,6 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_buffer_to_texture(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
             source,
             destination,
@@ -200,7 +179,6 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_texture_to_buffer(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
             source,
             destination,
@@ -223,7 +201,6 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_texture_to_texture(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
             source,
             destination,
@@ -247,9 +224,8 @@ impl CommandEncoder {
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
         DynContext::command_encoder_clear_texture(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            texture,
+            texture.data.as_ref(),
             subresource_range,
         );
     }
@@ -268,9 +244,8 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            buffer,
+            buffer.data.as_ref(),
             offset,
             size,
         );
@@ -278,25 +253,17 @@ impl CommandEncoder {
 
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
-        let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_insert_debug_marker(
-            &*self.context,
-            id,
-            self.data.as_ref(),
-            label,
-        );
+        DynContext::command_encoder_insert_debug_marker(&*self.context, self.data.as_ref(), label);
     }
 
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
-        let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_push_debug_group(&*self.context, id, self.data.as_ref(), label);
+        DynContext::command_encoder_push_debug_group(&*self.context, self.data.as_ref(), label);
     }
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
+        DynContext::command_encoder_pop_debug_group(&*self.context, self.data.as_ref());
     }
 
     /// Resolves a query set, writing the results into the supplied destination buffer.
@@ -312,13 +279,10 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_resolve_query_set(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_range.start,
             query_range.end - query_range.start,
-            &destination.id,
             destination.data.as_ref(),
             destination_offset,
         )
@@ -341,14 +305,12 @@ impl CommandEncoder {
         &mut self,
         hal_command_encoder_callback: F,
     ) -> Option<R> {
-        use wgc::id::CommandEncoderId;
-
         self.context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.command_encoder_as_hal_mut::<A, F, R>(
-                    CommandEncoderId::from(self.id.unwrap()),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_command_encoder_callback,
                 )
             })
@@ -372,9 +334,7 @@ impl CommandEncoder {
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::command_encoder_write_timestamp(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_mut(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_index,
         )

@@ -31,7 +31,7 @@ use wgt::{BufferAddress, DynamicOffset};
 use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 use crate::ray_tracing::TlasAction;
 use std::sync::Arc;
-use std::{fmt, mem, str};
+use std::{fmt, mem::size_of, str};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -867,7 +867,7 @@ fn dispatch_indirect(
         .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
-    let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
+    let end_offset = offset + size_of::<wgt::DispatchIndirectArgs>() as u64;
     if end_offset > buffer.size {
         return Err(ComputePassErrorInner::IndirectBufferOverrun {
             offset,

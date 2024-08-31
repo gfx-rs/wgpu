@@ -1,14 +1,18 @@
 //TODO: merge with "interface"?
 
+// NOTE: invalid combinations are tested in the
+// `validation::incompatible_interpolation_and_sampling_types` test.
 struct FragmentInput {
   @builtin(position) position: vec4<f32>,
   @location(0) @interpolate(flat) _flat : u32,
-  @location(1) @interpolate(linear) _linear : f32,
-  @location(2) @interpolate(linear, centroid) linear_centroid : vec2<f32>,
-  @location(3) @interpolate(linear, sample) linear_sample : vec3<f32>,
-  @location(4) @interpolate(perspective) perspective : vec4<f32>,
-  @location(5) @interpolate(perspective, centroid) perspective_centroid : f32,
-  @location(6) @interpolate(perspective, sample) perspective_sample : f32,
+  @location(1) @interpolate(flat, first) flat_first : u32,
+  @location(2) @interpolate(flat, either) flat_either : u32,
+  @location(3) @interpolate(linear) _linear : f32,
+  @location(4) @interpolate(linear, centroid) linear_centroid : vec2<f32>,
+  @location(6) @interpolate(linear, sample) linear_sample : vec3<f32>,
+  @location(7) @interpolate(perspective) perspective : vec4<f32>,
+  @location(8) @interpolate(perspective, centroid) perspective_centroid : f32,
+  @location(9) @interpolate(perspective, sample) perspective_sample : f32,
 }
 
 @vertex
@@ -17,6 +21,8 @@ fn vert_main() -> FragmentInput {
 
    out.position = vec4<f32>(2.0, 4.0, 5.0, 6.0);
    out._flat = 8u;
+   out.flat_first = 9u;
+   out.flat_either = 10u;
    out._linear = 27.0;
    out.linear_centroid = vec2<f32>(64.0, 125.0);
    out.linear_sample = vec3<f32>(216.0, 343.0, 512.0);

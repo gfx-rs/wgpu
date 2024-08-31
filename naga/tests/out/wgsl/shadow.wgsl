@@ -40,7 +40,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
     if (homogeneous_coords.w <= 0f) {
         return 1f;
     }
-    let flip_correction = vec2<f32>(0.5f, -0.5f);
+    const flip_correction = vec2<f32>(0.5f, -0.5f);
     let proj_correction = (1f / homogeneous_coords.w);
     let light_local = (((homogeneous_coords.xy * flip_correction) * proj_correction) + vec2<f32>(0.5f, 0.5f));
     let _e24 = textureSampleCompareLevel(t_shadow, sampler_shadow, light_local, i32(light_id), (homogeneous_coords.z * proj_correction));
