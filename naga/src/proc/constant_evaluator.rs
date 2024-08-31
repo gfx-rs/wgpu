@@ -1831,9 +1831,13 @@ impl<'a> ConstantEvaluator<'a> {
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::I32(a), Literal::U32(b)) => Literal::I32(match op {
-                            BinaryOperator::ShiftLeft => a
-                                .checked_shl(b)
-                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                            BinaryOperator::ShiftLeft => {
+                                if (if a.is_negative() { !a } else { a }).leading_zeros() <= b {
+                                    return Err(ConstantEvaluatorError::Overflow("<<".to_string()));
+                                }
+                                a.checked_shl(b)
+                                    .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?
+                            }
                             BinaryOperator::ShiftRight => a
                                 .checked_shr(b)
                                 .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
@@ -1859,8 +1863,11 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
                             BinaryOperator::ShiftLeft => a
-                                .checked_shl(b)
-                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                                .checked_mul(
+                                    1u32.checked_shl(b)
+                                        .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                                )
+                                .ok_or(ConstantEvaluatorError::Overflow("<<".to_string()))?,
                             BinaryOperator::ShiftRight => a
                                 .checked_shr(b)
                                 .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
