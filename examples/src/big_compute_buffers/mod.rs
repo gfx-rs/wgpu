@@ -18,7 +18,7 @@ pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
             &wgpu::DeviceDescriptor {
                 label: None,
                 required_features:
-                // We require at least these three features to achive a _single_ binding representing all of our buffers shader-side
+                // We require at least these three features to achieve a _single_ binding representing all of our buffers shader-side
                     Features::STORAGE_RESOURCE_BINDING_ARRAY |
                     Features::BUFFER_BINDING_ARRAY |
                     //  Internal error: using NonUniformEXT requires at least one of the capabilities [ShaderNonUniform]...
@@ -298,8 +298,11 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
 }
 
 pub fn main() {
-    env_logger::init();
-    pollster::block_on(run());
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_logger::init();
+        pollster::block_on(run());
+    }
 }
 
 pub async fn run() {
