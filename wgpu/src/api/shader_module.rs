@@ -1,6 +1,5 @@
 use std::{borrow::Cow, future::Future, marker::PhantomData, sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a compiled shader module.
@@ -14,34 +13,25 @@ use crate::*;
 #[derive(Debug)]
 pub struct ShaderModule {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 
+super::impl_partialeq_eq_hash!(ShaderModule);
+
 impl Drop for ShaderModule {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .shader_module_drop(&self.id, self.data.as_ref());
+            self.context.shader_module_drop(self.data.as_ref());
         }
     }
 }
 
 impl ShaderModule {
-    /// Returns a globally-unique identifier for this `ShaderModule`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-
     /// Get the compilation info for the shader module.
     pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
-        self.context
-            .shader_get_compilation_info(&self.id, self.data.as_ref())
+        self.context.shader_get_compilation_info(self.data.as_ref())
     }
 }
 

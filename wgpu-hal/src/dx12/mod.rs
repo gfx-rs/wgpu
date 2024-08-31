@@ -49,14 +49,13 @@ use std::{ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc};
 use arrayvec::ArrayVec;
 use parking_lot::{Mutex, RwLock};
 use windows::{
-    core::{Interface, Param as _},
+    core::{Free, Interface, Param as _},
     Win32::{
         Foundation,
         Graphics::{Direct3D, Direct3D12, DirectComposition, Dxgi},
         System::Threading,
     },
 };
-use windows_core::Free;
 
 use crate::auxil::{
     self,
@@ -1026,8 +1025,8 @@ impl crate::Surface for Surface {
                         flags,
                     )
                 };
-                if let Err(err) = result.into_result() {
-                    log::error!("ResizeBuffers failed: {}", err);
+                if let Err(err) = result {
+                    log::error!("ResizeBuffers failed: {err}");
                     return Err(crate::SurfaceError::Other("window is in use"));
                 }
                 raw
@@ -1092,24 +1091,22 @@ impl crate::Surface for Surface {
 
                 let swap_chain1 = swap_chain1.map_err(|err| {
                     log::error!("SwapChain creation error: {}", err);
-                    crate::SurfaceError::Other("swap chain creation")
+                    crate::SurfaceError::Other("swapchain creation")
                 })?;
 
                 match &self.target {
                     SurfaceTarget::WndHandle(_) | SurfaceTarget::SurfaceHandle(_) => {}
                     SurfaceTarget::Visual(visual) => {
-                        if let Err(err) = unsafe { visual.SetContent(&swap_chain1) }.into_result() {
-                            log::error!("Unable to SetContent: {}", err);
+                        if let Err(err) = unsafe { visual.SetContent(&swap_chain1) } {
+                            log::error!("Unable to SetContent: {err}");
                             return Err(crate::SurfaceError::Other(
                                 "IDCompositionVisual::SetContent",
                             ));
                         }
                     }
                     SurfaceTarget::SwapChainPanel(swap_chain_panel) => {
-                        if let Err(err) =
-                            unsafe { swap_chain_panel.SetSwapChain(&swap_chain1) }.into_result()
-                        {
-                            log::error!("Unable to SetSwapChain: {}", err);
+                        if let Err(err) = unsafe { swap_chain_panel.SetSwapChain(&swap_chain1) } {
+                            log::error!("Unable to SetSwapChain: {err}");
                             return Err(crate::SurfaceError::Other(
                                 "ISwapChainPanelNative::SetSwapChain",
                             ));
@@ -1117,13 +1114,10 @@ impl crate::Surface for Surface {
                     }
                 }
 
-                match swap_chain1.cast::<Dxgi::IDXGISwapChain3>() {
-                    Ok(swap_chain3) => swap_chain3,
-                    Err(err) => {
-                        log::error!("Unable to cast swap chain: {}", err);
-                        return Err(crate::SurfaceError::Other("swap chain cast to 3"));
-                    }
-                }
+                swap_chain1.cast::<Dxgi::IDXGISwapChain3>().map_err(|err| {
+                    log::error!("Unable to cast swapchain: {err}");
+                    crate::SurfaceError::Other("swapchain cast to version 3")
+                })?
             }
         };
 

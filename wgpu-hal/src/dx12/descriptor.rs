@@ -56,16 +56,18 @@ impl GeneralHeap {
                 .into_device_result("Descriptor heap creation")?
         };
 
+        let start = DualHandle {
+            cpu: unsafe { raw.GetCPUDescriptorHandleForHeapStart() },
+            gpu: unsafe { raw.GetGPUDescriptorHandleForHeapStart() },
+            count: 0,
+        };
+
         Ok(Self {
-            raw: raw.clone(),
+            raw,
             ty,
             handle_size: unsafe { device.GetDescriptorHandleIncrementSize(ty) } as u64,
             total_handles,
-            start: DualHandle {
-                cpu: unsafe { raw.GetCPUDescriptorHandleForHeapStart() },
-                gpu: unsafe { raw.GetGPUDescriptorHandleForHeapStart() },
-                count: 0,
-            },
+            start,
             ranges: Mutex::new(RangeAllocator::new(0..total_handles)),
         })
     }
@@ -268,12 +270,14 @@ impl CpuHeap {
         let raw = unsafe { device.CreateDescriptorHeap::<Direct3D12::ID3D12DescriptorHeap>(&desc) }
             .into_device_result("CPU descriptor heap creation")?;
 
+        let start = unsafe { raw.GetCPUDescriptorHandleForHeapStart() };
+
         Ok(Self {
             inner: Mutex::new(CpuHeapInner {
-                _raw: raw.clone(),
+                _raw: raw,
                 stage: Vec::new(),
             }),
-            start: unsafe { raw.GetCPUDescriptorHandleForHeapStart() },
+            start,
             handle_size,
             total,
         })
@@ -297,7 +301,7 @@ impl fmt::Debug for CpuHeap {
 }
 
 pub(super) unsafe fn upload(
-    device: Direct3D12::ID3D12Device,
+    device: &Direct3D12::ID3D12Device,
     src: &CpuHeapInner,
     dst: &GeneralHeap,
     dummy_copy_counts: &[u32],

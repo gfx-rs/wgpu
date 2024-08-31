@@ -2,7 +2,8 @@ use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use std::{
-    mem, slice,
+    mem::size_of,
+    slice,
     sync::{atomic::Ordering, Arc},
 };
 
@@ -501,6 +502,22 @@ impl super::Queue {
                                 v,
                             );
                         },
+                        #[cfg(web_sys_unstable_apis)]
+                        wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
+                            gl.tex_sub_image_3d_with_video_frame(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                z_offset as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                v,
+                            )
+                        },
                         wgt::ExternalImageSource::ImageData(ref i) => unsafe {
                             gl.tex_sub_image_3d_with_image_data(
                                 dst_target,
@@ -565,6 +582,20 @@ impl super::Queue {
                         },
                         wgt::ExternalImageSource::HTMLVideoElement(ref v) => unsafe {
                             gl.tex_sub_image_2d_with_html_video_and_width_and_height(
+                                dst_target,
+                                copy.dst_base.mip_level as i32,
+                                copy.dst_base.origin.x as i32,
+                                copy.dst_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                v,
+                            )
+                        },
+                        #[cfg(web_sys_unstable_apis)]
+                        wgt::ExternalImageSource::VideoFrame(ref v) => unsafe {
+                            gl.tex_sub_image_2d_with_video_frame_and_width_and_height(
                                 dst_target,
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
@@ -1012,7 +1043,7 @@ impl super::Queue {
                     let query_data = unsafe {
                         slice::from_raw_parts(
                             temp_query_results.as_ptr().cast::<u8>(),
-                            temp_query_results.len() * mem::size_of::<u64>(),
+                            temp_query_results.len() * size_of::<u64>(),
                         )
                     };
                     match dst.raw {
@@ -1576,7 +1607,7 @@ impl super::Queue {
                 //
                 // This function is absolutely sketchy and we really should be using bytemuck.
                 unsafe fn get_data<T, const COUNT: usize>(data: &[u8], offset: u32) -> &[T; COUNT] {
-                    let data_required = mem::size_of::<T>() * COUNT;
+                    let data_required = size_of::<T>() * COUNT;
 
                     let raw = &data[(offset as usize)..][..data_required];
 

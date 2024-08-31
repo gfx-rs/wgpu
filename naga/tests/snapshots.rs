@@ -745,6 +745,10 @@ fn convert_wgsl() {
         ("functions-webgl", Targets::GLSL),
         (
             "interpolate",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "interpolate_compat",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
@@ -818,6 +822,7 @@ fn convert_wgsl() {
             "use-gl-ext-over-grad-workaround-if-instructed",
             Targets::GLSL,
         ),
+        ("local-const", Targets::IR | Targets::WGSL),
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -910,6 +915,10 @@ fn convert_wgsl() {
             Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
         ("vertex-pulling-transform", Targets::METAL),
+        (
+            "cross",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

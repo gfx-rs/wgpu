@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{mem::size_of, sync::Arc};
 
 use crate::{
     id::Id,
@@ -101,9 +101,11 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
         self.read().get_owned(id)
     }
+    #[track_caller]
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
         self.storage.read()
     }
+    #[track_caller]
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
@@ -125,7 +127,7 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn generate_report(&self) -> RegistryReport {
         let storage = self.storage.read();
         let mut report = RegistryReport {
-            element_size: std::mem::size_of::<T>(),
+            element_size: size_of::<T>(),
             ..Default::default()
         };
         report.num_allocated = self.identity.values.lock().count();

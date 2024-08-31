@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a pipeline layout.
@@ -12,27 +11,17 @@ use crate::*;
 #[derive(Debug)]
 pub struct PipelineLayout {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
-impl PipelineLayout {
-    /// Returns a globally-unique identifier for this `PipelineLayout`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-}
+super::impl_partialeq_eq_hash!(PipelineLayout);
 
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .pipeline_layout_drop(&self.id, self.data.as_ref());
+            self.context.pipeline_layout_drop(self.data.as_ref());
         }
     }
 }

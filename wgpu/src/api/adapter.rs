@@ -1,6 +1,6 @@
 use std::{future::Future, sync::Arc, thread};
 
-use crate::context::{DeviceRequest, DynContext, ObjectId};
+use crate::context::{DeviceRequest, DynContext};
 use crate::*;
 
 /// Handle to a physical graphics and/or compute device.
@@ -14,7 +14,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct Adapter {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
@@ -23,7 +22,7 @@ static_assertions::assert_impl_all!(Adapter: Send, Sync);
 impl Drop for Adapter {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.adapter_drop(&self.id, self.data.as_ref())
+            self.context.adapter_drop(self.data.as_ref())
         }
     }
 }
@@ -40,14 +39,6 @@ pub type RequestAdapterOptions<'a, 'b> = RequestAdapterOptionsBase<&'a Surface<'
 static_assertions::assert_impl_all!(RequestAdapterOptions<'_, '_>: Send, Sync);
 
 impl Adapter {
-    /// Returns a globally-unique identifier for this `Adapter`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-
     /// Requests a connection to a physical device, creating a logical device.
     ///
     /// Returns the [`Device`] together with a [`Queue`] that executes command buffers.
@@ -80,7 +71,6 @@ impl Adapter {
         let context = Arc::clone(&self.context);
         let device = DynContext::adapter_request_device(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             desc,
             trace_path,
@@ -88,20 +78,16 @@ impl Adapter {
         async move {
             device.await.map(
                 |DeviceRequest {
-                     device_id,
                      device_data,
-                     queue_id,
                      queue_data,
                  }| {
                     (
                         Device {
                             context: Arc::clone(&context),
-                            id: device_id,
                             data: device_data,
                         },
                         Queue {
                             context,
-                            id: queue_id,
                             data: queue_data,
                         },
                     )
@@ -131,18 +117,21 @@ impl Adapter {
                 // Part of the safety requirements is that the device was generated from the same adapter.
                 // Therefore, unwrap is fine here since only WgpuCoreContext based adapters have the ability to create hal devices.
                 .unwrap()
-                .create_device_from_hal(&self.id.into(), hal_device, desc, trace_path)
+                .create_device_from_hal(
+                    crate::context::downcast_ref(self.data.as_ref()),
+                    hal_device,
+                    desc,
+                    trace_path,
+                )
         }
         .map(|(device, queue)| {
             (
                 Device {
                     context: Arc::clone(&context),
-                    id: device.id().into(),
                     data: Box::new(device),
                 },
                 Queue {
                     context,
-                    id: queue.id().into(),
                     data: Box::new(queue),
                 },
             )
@@ -178,7 +167,12 @@ impl Adapter {
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
-            unsafe { ctx.adapter_as_hal::<A, F, R>(self.id.into(), hal_adapter_callback) }
+            unsafe {
+                ctx.adapter_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(self.data.as_ref()),
+                    hal_adapter_callback,
+                )
+            }
         } else {
             hal_adapter_callback(None)
         }
@@ -188,31 +182,29 @@ impl Adapter {
     pub fn is_surface_supported(&self, surface: &Surface<'_>) -> bool {
         DynContext::adapter_is_surface_supported(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
-            &surface.id,
             surface.surface_data.as_ref(),
         )
     }
 
     /// The features which can be used to create devices on this adapter.
     pub fn features(&self) -> Features {
-        DynContext::adapter_features(&*self.context, &self.id, self.data.as_ref())
+        DynContext::adapter_features(&*self.context, self.data.as_ref())
     }
 
     /// The best limits which can be used to create devices on this adapter.
     pub fn limits(&self) -> Limits {
-        DynContext::adapter_limits(&*self.context, &self.id, self.data.as_ref())
+        DynContext::adapter_limits(&*self.context, self.data.as_ref())
     }
 
     /// Get info about the adapter itself.
     pub fn get_info(&self) -> AdapterInfo {
-        DynContext::adapter_get_info(&*self.context, &self.id, self.data.as_ref())
+        DynContext::adapter_get_info(&*self.context, self.data.as_ref())
     }
 
     /// Get info about the adapter itself.
     pub fn get_downlevel_capabilities(&self) -> DownlevelCapabilities {
-        DynContext::adapter_downlevel_capabilities(&*self.context, &self.id, self.data.as_ref())
+        DynContext::adapter_downlevel_capabilities(&*self.context, self.data.as_ref())
     }
 
     /// Returns the features supported for a given texture format by this adapter.
@@ -220,12 +212,7 @@ impl Adapter {
     /// Note that the WebGPU spec further restricts the available usages/features.
     /// To disable these restrictions on a device, request the [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] feature.
     pub fn get_texture_format_features(&self, format: TextureFormat) -> TextureFormatFeatures {
-        DynContext::adapter_get_texture_format_features(
-            &*self.context,
-            &self.id,
-            self.data.as_ref(),
-            format,
-        )
+        DynContext::adapter_get_texture_format_features(&*self.context, self.data.as_ref(), format)
     }
 
     /// Generates a timestamp using the clock used by the presentation engine.
@@ -250,6 +237,6 @@ impl Adapter {
     //
     /// [Instant]: std::time::Instant
     pub fn get_presentation_timestamp(&self) -> PresentationTimestamp {
-        DynContext::adapter_get_presentation_timestamp(&*self.context, &self.id, self.data.as_ref())
+        DynContext::adapter_get_presentation_timestamp(&*self.context, self.data.as_ref())
     }
 }

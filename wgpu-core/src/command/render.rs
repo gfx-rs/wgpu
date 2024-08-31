@@ -45,7 +45,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use std::sync::Arc;
-use std::{borrow::Cow, fmt, iter, mem, num::NonZeroU32, ops::Range, str};
+use std::{borrow::Cow, fmt, iter, mem::size_of, num::NonZeroU32, ops::Range, str};
 
 use super::render_command::ArcRenderCommand;
 use super::{
@@ -2442,8 +2442,8 @@ fn multi_draw_indirect(
     state.is_ready(indexed)?;
 
     let stride = match indexed {
-        false => mem::size_of::<wgt::DrawIndirectArgs>(),
-        true => mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
+        false => size_of::<wgt::DrawIndirectArgs>(),
+        true => size_of::<wgt::DrawIndexedIndirectArgs>(),
     };
 
     if count.is_some() {
@@ -2520,8 +2520,8 @@ fn multi_draw_indirect_count(
     state.is_ready(indexed)?;
 
     let stride = match indexed {
-        false => mem::size_of::<wgt::DrawIndirectArgs>(),
-        true => mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
+        false => size_of::<wgt::DrawIndirectArgs>(),
+        true => size_of::<wgt::DrawIndexedIndirectArgs>(),
     } as u64;
 
     state

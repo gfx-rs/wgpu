@@ -34,8 +34,8 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
 
     let uniform_index = uni.index;
     let non_uniform_index = fragment_in.index;
-    let uv = vec2(0f);
-    let pix = vec2(0i);
+    const uv = vec2(0f);
+    const pix = vec2(0i);
     let _e21 = textureDimensions(texture_array_unbounded[0]);
     let _e22 = u2_;
     u2_ = (_e22 + _e21);

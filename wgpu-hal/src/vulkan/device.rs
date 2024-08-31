@@ -290,7 +290,7 @@ impl super::DeviceShared {
         for &raw in self.framebuffers.lock().values() {
             unsafe { self.raw.destroy_framebuffer(raw, None) };
         }
-        if self.handle_is_owned {
+        if self.drop_guard.is_none() {
             unsafe { self.raw.destroy_device(None) };
         }
     }
@@ -642,19 +642,20 @@ impl super::Device {
             view_formats: wgt_view_formats,
             surface_semaphores,
             next_semaphore_index: 0,
+            next_present_time: None,
         })
     }
 
     /// # Safety
     ///
     /// - `vk_image` must be created respecting `desc`
-    /// - If `drop_guard` is `Some`, the application must manually destroy the image handle. This
-    ///   can be done inside the `Drop` impl of `drop_guard`.
+    /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `vk_image`. If
+    ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
     pub unsafe fn texture_from_raw(
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
-        drop_guard: Option<crate::DropGuard>,
+        drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
         let mut raw_flags = vk::ImageCreateFlags::empty();
         let mut view_formats = vec![];
@@ -672,6 +673,8 @@ impl super::Device {
         if desc.format.is_multi_planar_format() {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
         }
+
+        let drop_guard = crate::DropGuard::from_option(drop_callback);
 
         super::Texture {
             raw: vk_image,

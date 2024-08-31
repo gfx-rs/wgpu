@@ -57,6 +57,9 @@ serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 ## Enable API tracing.
 trace = ["dep:ron", "serde", "naga/serialize"]
 
+## Enable lock order observation.
+observe_locks = ["dep:ron", "serde/serde_derive"]
+
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
 

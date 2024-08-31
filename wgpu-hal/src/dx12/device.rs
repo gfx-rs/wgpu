@@ -1295,7 +1295,7 @@ impl crate::Device for super::Device {
             Some(inner) => {
                 let dual = unsafe {
                     descriptor::upload(
-                        self.raw.clone(),
+                        &self.raw,
                         &inner,
                         &self.shared.heap_views,
                         &desc.layout.copy_counts,
@@ -1309,7 +1309,7 @@ impl crate::Device for super::Device {
             Some(inner) => {
                 let dual = unsafe {
                     descriptor::upload(
-                        self.raw.clone(),
+                        &self.raw,
                         &inner,
                         &self.shared.heap_samplers,
                         &desc.layout.copy_counts,

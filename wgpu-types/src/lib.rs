@@ -952,6 +952,22 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 61;
+        /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
+        ///
+        /// This is used for frame pacing to reduce latency, and is generally only available on Android.
+        ///
+        /// This feature does not have a `wgpu`-level API, and so users of wgpu wishing
+        /// to use this functionality must access it using various `as_hal` functions,
+        /// primarily [`Surface::as_hal()`], to then use.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_GOOGLE_display_timing])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
+        /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
+        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 62;
     }
 }
 
@@ -6855,6 +6871,9 @@ pub enum ExternalImageSource {
     ///
     /// Requires [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`]
     OffscreenCanvas(web_sys::OffscreenCanvas),
+    /// Copy from a video frame.
+    #[cfg(web_sys_unstable_apis)]
+    VideoFrame(web_sys::VideoFrame),
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -6868,6 +6887,8 @@ impl ExternalImageSource {
             ExternalImageSource::ImageData(i) => i.width(),
             ExternalImageSource::HTMLCanvasElement(c) => c.width(),
             ExternalImageSource::OffscreenCanvas(c) => c.width(),
+            #[cfg(web_sys_unstable_apis)]
+            ExternalImageSource::VideoFrame(v) => v.display_width(),
         }
     }
 
@@ -6880,6 +6901,8 @@ impl ExternalImageSource {
             ExternalImageSource::ImageData(i) => i.height(),
             ExternalImageSource::HTMLCanvasElement(c) => c.height(),
             ExternalImageSource::OffscreenCanvas(c) => c.height(),
+            #[cfg(web_sys_unstable_apis)]
+            ExternalImageSource::VideoFrame(v) => v.display_height(),
         }
     }
 }
@@ -6896,6 +6919,8 @@ impl std::ops::Deref for ExternalImageSource {
             Self::ImageData(i) => i,
             Self::HTMLCanvasElement(c) => c,
             Self::OffscreenCanvas(c) => c,
+            #[cfg(web_sys_unstable_apis)]
+            Self::VideoFrame(v) => v,
         }
     }
 }

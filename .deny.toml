@@ -4,10 +4,10 @@ skip-tree = [
 	# We never enable loom in any of our dependencies but it causes dupes
 	{ name = "loom", version = "0.7.2" },
 	{ name = "windows-sys", version = "0.45" },
-	{ name = "winit", version = "0.27" },
 	{ name = "winit", version = "0.29" },
 	{ name = "rustc_version", version = "0.2.3" },
 	{ name = "sourcemap", version = "7.1.1" },
+	{ name = "miniz_oxide", version = "0.7.4" },
 ]
 skip = [
 	{ name = "hlsl-snapshots", version = "0.1.0" },
