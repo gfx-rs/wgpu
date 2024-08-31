@@ -2371,3 +2371,21 @@ fn local_const_from_global_var() {
 "###,
     );
 }
+
+#[test]
+fn only_one_swizzle_type() {
+    check(
+        "
+        const ok1 = vec2(0.0, 0.0).xy;
+        const ok2 = vec2(0.0, 0.0).rg;
+        const err = vec2(0.0, 0.0).xg;
+        ",
+        r###"error: invalid field accessor `xg`
+  ┌─ wgsl:4:36
+  │
+4 │         const err = vec2(0.0, 0.0).xg;
+  │                                    ^^ invalid accessor
+
+"###,
+    );
+}
