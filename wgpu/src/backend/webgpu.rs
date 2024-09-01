@@ -1091,9 +1091,7 @@ impl crate::context::Context for ContextWebGpu {
     type RenderBundleData = Sendable<webgpu_sys::GpuRenderBundle>;
     type SurfaceData = Sendable<(Canvas, webgpu_sys::GpuCanvasContext)>;
     type BlasData = ();
-    type BlasId = ObjectId;
     type TlasData = ();
-    type TlasId = ObjectId;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
     type SubmissionIndexData = ();

@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Range, sync::Arc, thread};
 use wgt::WasmNotSendSync;
 
 use crate::{
-    context::{Context, DynContext, ObjectId},
+    context::{Context, DynContext},
     BindingResource, Buffer, CommandEncoder, Data, Device, Label, C,
 };
 
@@ -79,7 +79,6 @@ static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 /// Used to represent a collection of geometries for ray tracing inside a top level acceleration structure.
 pub struct Blas {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
     pub(crate) handle: Option<u64>,
 }
@@ -92,14 +91,14 @@ impl Blas {
     }
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::blas_destroy(&*self.context, &self.id, self.data.as_ref());
+        DynContext::blas_destroy(&*self.context, self.data.as_ref());
     }
 }
 
 impl Drop for Blas {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.blas_drop(&self.id, self.data.as_ref());
+            self.context.blas_drop(self.data.as_ref());
         }
     }
 }
@@ -109,7 +108,6 @@ impl Drop for Blas {
 /// Used to represent a collection of bottom level acceleration structure instances for ray tracing.
 pub struct Tlas {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
@@ -117,14 +115,14 @@ static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 impl Tlas {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::tlas_destroy(&*self.context, &self.id, self.data.as_ref());
+        DynContext::tlas_destroy(&*self.context, self.data.as_ref());
     }
 }
 
 impl Drop for Tlas {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.tlas_drop(&self.id, self.data.as_ref());
+            self.context.tlas_drop(self.data.as_ref());
         }
     }
 }
@@ -175,7 +173,7 @@ impl TlasInstance {
 }
 
 pub(crate) struct DynContextTlasInstance<'a> {
-    pub(crate) blas: ObjectId,
+    pub(crate) blas: &'a Data,
     pub(crate) transform: &'a [f32; 12],
     pub(crate) custom_index: u32,
     pub(crate) mask: u8,
@@ -184,7 +182,7 @@ pub(crate) struct DynContextTlasInstance<'a> {
 /// [Context version] see `TlasInstance`.
 #[allow(dead_code)]
 pub struct ContextTlasInstance<'a, T: Context> {
-    pub(crate) blas_id: T::BlasId,
+    pub(crate) blas_data: &'a T::BlasData,
     pub(crate) transform: &'a [f32; 12],
     pub(crate) custom_index: u32,
     pub(crate) mask: u8,
@@ -261,9 +259,9 @@ impl TlasPackage {
 
 pub(crate) struct DynContextBlasTriangleGeometry<'a> {
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
-    pub(crate) vertex_buffer: ObjectId,
-    pub(crate) index_buffer: Option<ObjectId>,
-    pub(crate) transform_buffer: Option<ObjectId>,
+    pub(crate) vertex_buffer: &'a Data,
+    pub(crate) index_buffer: Option<&'a Data>,
+    pub(crate) transform_buffer: Option<&'a Data>,
     pub(crate) first_vertex: u32,
     pub(crate) vertex_stride: wgt::BufferAddress,
     pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
@@ -275,18 +273,18 @@ pub(crate) enum DynContextBlasGeometries<'a> {
 }
 
 pub(crate) struct DynContextBlasBuildEntry<'a> {
-    pub(crate) blas_id: ObjectId,
+    pub(crate) blas_data: &'a Data,
     pub(crate) geometries: DynContextBlasGeometries<'a>,
 }
 
-pub(crate) struct DynContextTlasBuildEntry {
-    pub(crate) tlas_id: ObjectId,
-    pub(crate) instance_buffer_id: ObjectId,
+pub(crate) struct DynContextTlasBuildEntry<'a> {
+    pub(crate) tlas_data: &'a Data,
+    pub(crate) instance_buffer_data: &'a Data,
     pub(crate) instance_count: u32,
 }
 
 pub(crate) struct DynContextTlasPackage<'a> {
-    pub(crate) tlas_id: ObjectId,
+    pub(crate) tlas_data: &'a Data,
     pub(crate) instances: Box<dyn Iterator<Item = Option<DynContextTlasInstance<'a>>> + 'a>,
     pub(crate) lowest_unmodified: u32,
 }
@@ -295,9 +293,9 @@ pub(crate) struct DynContextTlasPackage<'a> {
 #[allow(dead_code)]
 pub struct ContextBlasTriangleGeometry<'a, T: Context> {
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
-    pub(crate) vertex_buffer: T::BufferId,
-    pub(crate) index_buffer: Option<T::BufferId>,
-    pub(crate) transform_buffer: Option<T::BufferId>,
+    pub(crate) vertex_buffer: &'a T::BufferData,
+    pub(crate) index_buffer: Option<&'a T::BufferData>,
+    pub(crate) transform_buffer: Option<&'a T::BufferData>,
     pub(crate) first_vertex: u32,
     pub(crate) vertex_stride: wgt::BufferAddress,
     pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
@@ -313,22 +311,22 @@ pub enum ContextBlasGeometries<'a, T: Context> {
 /// [Context version] see `BlasBuildEntry`.
 #[allow(dead_code)]
 pub struct ContextBlasBuildEntry<'a, T: Context> {
-    pub(crate) blas_id: T::BlasId,
+    pub(crate) blas_data: &'a T::BlasData,
     pub(crate) geometries: ContextBlasGeometries<'a, T>,
 }
 
 /// [Context version] see `TlasBuildEntry`.
 #[allow(dead_code)]
-pub struct ContextTlasBuildEntry<T: Context> {
-    pub(crate) tlas_id: T::TlasId,
-    pub(crate) instance_buffer_id: T::BufferId,
+pub struct ContextTlasBuildEntry<'a, T: Context> {
+    pub(crate) tlas_data: &'a T::TlasData,
+    pub(crate) instance_buffer_data: &'a T::BufferData,
     pub(crate) instance_count: u32,
 }
 
 /// [Context version] see `TlasPackage`.
 #[allow(dead_code)]
 pub struct ContextTlasPackage<'a, T: Context> {
-    pub(crate) tlas_id: T::TlasId,
+    pub(crate) tlas_data: &'a T::TlasData,
     pub(crate) instances: Box<dyn Iterator<Item = Option<ContextTlasInstance<'a, T>>> + 'a>,
     pub(crate) lowest_unmodified: u32,
 }
@@ -360,9 +358,8 @@ impl DeviceRayTracing for Device {
         desc: &CreateBlasDescriptor<'_>,
         sizes: BlasGeometrySizeDescriptors,
     ) -> Blas {
-        let (id, handle, data) = DynContext::device_create_blas(
+        let (handle, data) = DynContext::device_create_blas(
             &*self.context,
-            &self.id,
             self.data.as_ref(),
             desc,
             sizes,
@@ -370,19 +367,17 @@ impl DeviceRayTracing for Device {
 
         Blas {
             context: Arc::clone(&self.context),
-            id,
             data,
             handle,
         }
     }
 
     fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
-        let (id, data) =
-            DynContext::device_create_tlas(&*self.context, &self.id, self.data.as_ref(), desc);
+        let data =
+            DynContext::device_create_tlas(&*self.context, self.data.as_ref(), desc);
 
         Tlas {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
@@ -437,8 +432,6 @@ impl CommandEncoderRayTracing for CommandEncoder {
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
         tlas: impl IntoIterator<Item = &'a TlasPackage>,
     ) {
-        let id = self.id.as_ref().unwrap();
-
         let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
             let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
@@ -447,13 +440,13 @@ impl CommandEncoderRayTracing for CommandEncoder {
                         .map(
                             |tg: &BlasTriangleGeometry<'_>| DynContextBlasTriangleGeometry {
                                 size: tg.size,
-                                vertex_buffer: tg.vertex_buffer.id,
+                                vertex_buffer: tg.vertex_buffer.data.as_ref(),
 
-                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.id),
+                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.data.as_ref()),
 
                                 transform_buffer: tg
                                     .transform_buffer
-                                    .map(|transform_buffer| transform_buffer.id),
+                                    .map(|transform_buffer| transform_buffer.data.as_ref()),
 
                                 first_vertex: tg.first_vertex,
                                 vertex_stride: tg.vertex_stride,
@@ -465,7 +458,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
                 }
             };
             DynContextBlasBuildEntry {
-                blas_id: e.blas.id,
+                blas_data: e.blas.data.as_ref(),
                 geometries,
             }
         });
@@ -480,7 +473,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
                 })
             });
             DynContextTlasPackage {
-                tlas_id: e.tlas.id,
+                tlas_data: e.tlas.data.as_ref(),
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }
@@ -488,7 +481,6 @@ impl CommandEncoderRayTracing for CommandEncoder {
 
         DynContext::command_encoder_build_acceleration_structures(
             &*self.context,
-            id,
             self.data.as_ref(),
             &mut blas,
             &mut tlas,
@@ -500,8 +492,6 @@ impl CommandEncoderRayTracing for CommandEncoder {
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
         tlas: impl IntoIterator<Item = &'a TlasBuildEntry<'a>>,
     ) {
-        let id = self.id.as_ref().unwrap();
-
         let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
             let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
@@ -510,13 +500,13 @@ impl CommandEncoderRayTracing for CommandEncoder {
                         .map(
                             |tg: &BlasTriangleGeometry<'_>| DynContextBlasTriangleGeometry {
                                 size: tg.size,
-                                vertex_buffer: tg.vertex_buffer.id,
+                                vertex_buffer: tg.vertex_buffer.data.as_ref(),
 
-                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.id),
+                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.data.as_ref()),
 
                                 transform_buffer: tg
                                     .transform_buffer
-                                    .map(|transform_buffer| transform_buffer.id),
+                                    .map(|transform_buffer| transform_buffer.data.as_ref()),
 
                                 first_vertex: tg.first_vertex,
                                 vertex_stride: tg.vertex_stride,
@@ -528,7 +518,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
                 }
             };
             DynContextBlasBuildEntry {
-                blas_id: e.blas.id,
+                blas_data: e.blas.data.as_ref(),
                 geometries,
             }
         });
@@ -536,14 +526,13 @@ impl CommandEncoderRayTracing for CommandEncoder {
         let mut tlas = tlas
             .into_iter()
             .map(|e: &TlasBuildEntry<'_>| DynContextTlasBuildEntry {
-                tlas_id: e.tlas.id,
-                instance_buffer_id: e.instance_buffer.id,
+                tlas_data: e.tlas.data.as_ref(),
+                instance_buffer_data: e.instance_buffer.data.as_ref(),
                 instance_count: e.instance_count,
             });
 
         DynContext::command_encoder_build_acceleration_structures_unsafe_tlas(
             &*self.context,
-            id,
             self.data.as_ref(),
             &mut blas,
             &mut tlas,

@@ -498,11 +498,13 @@ pub struct CommandEncoder {
 
 #[derive(Debug)]
 pub struct Blas {
+    id: wgc::id::BlasId,
     // error_sink: ErrorSink,
 }
 
 #[derive(Debug)]
 pub struct Tlas {
+    id: wgc::id::TlasId,
     // error_sink: ErrorSink,
 }
 
@@ -534,10 +536,7 @@ impl crate::Context for ContextWgpuCore {
     type SubmissionIndexData = wgc::SubmissionIndex;
 
     type RequestAdapterFuture = Ready<Option<Self::AdapterData>>;
-
-    type BlasId = wgc::id::BlasId;
     type BlasData = Blas;
-    type TlasId = wgc::id::TlasId;
     type TlasData = Tlas;
 
     #[allow(clippy::type_complexity)]
@@ -1025,7 +1024,7 @@ impl crate::Context for ContextWgpuCore {
                         bm::BindingResource::TextureViewArray(Borrowed(slice))
                     }
                     BindingResource::AccelerationStructure(acceleration_structure) => {
-                        bm::BindingResource::AccelerationStructure(acceleration_structure.id.into())
+                        bm::BindingResource::AccelerationStructure(downcast_tlas(acceleration_structure).id)
                     }
                 },
             })
@@ -3076,14 +3075,13 @@ impl crate::Context for ContextWgpuCore {
 
     fn device_create_blas(
         &self,
-        device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
         sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
+    ) -> (Option<u64>, Self::BlasData) {
         let global = &self.0;
         let (id, handle, error) =
-            global.device_create_blas(*device, &desc.map_label(|l| l.map(Borrowed)), sizes, None);
+            global.device_create_blas(device_data.id, &desc.map_label(|l| l.map(Borrowed)), sizes, None);
         if let Some(cause) = error {
             self.handle_error(
                 &device_data.error_sink,
@@ -3093,9 +3091,9 @@ impl crate::Context for ContextWgpuCore {
             );
         }
         (
-            id,
             handle,
             Blas {
+                id,
                 // error_sink: Arc::clone(&device_data.error_sink),
             },
         )
@@ -3103,13 +3101,12 @@ impl crate::Context for ContextWgpuCore {
 
     fn device_create_tlas(
         &self,
-        device: &Self::DeviceId,
         device_data: &Self::DeviceData,
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
-    ) -> (Self::TlasId, Self::TlasData) {
+    ) -> Self::TlasData {
         let global = &self.0;
         let (id, error) =
-            global.device_create_tlas(*device, &desc.map_label(|l| l.map(Borrowed)), None);
+            global.device_create_tlas(device_data.id, &desc.map_label(|l| l.map(Borrowed)), None);
         if let Some(cause) = error {
             self.handle_error(
                 &device_data.error_sink,
@@ -3118,20 +3115,17 @@ impl crate::Context for ContextWgpuCore {
                 "Device::create_blas",
             );
         }
-        (
+        Tlas {
             id,
-            Tlas {
-                // error_sink: Arc::clone(&device_data.error_sink),
-            },
-        )
+            // error_sink: Arc::clone(&device_data.error_sink),
+        }
     }
 
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &'a self,
-        encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<Self>>,
+        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<'a, Self>>,
     ) {
         let global = &self.0;
 
@@ -3142,9 +3136,9 @@ impl crate::Context for ContextWgpuCore {
                 ) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         wgc::ray_tracing::BlasTriangleGeometry {
-                            vertex_buffer: tg.vertex_buffer,
-                            index_buffer: tg.index_buffer,
-                            transform_buffer: tg.transform_buffer,
+                            vertex_buffer: tg.vertex_buffer.id,
+                            index_buffer: tg.index_buffer.map(|buf| buf.id),
+                            transform_buffer: tg.transform_buffer.map(|buf| buf.id),
                             size: tg.size,
                             transform_buffer_offset: tg.transform_buffer_offset,
                             first_vertex: tg.first_vertex,
@@ -3156,23 +3150,23 @@ impl crate::Context for ContextWgpuCore {
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas_id,
+                blas_id: e.blas_data.id,
                 geometries,
             }
         });
 
         let tlas = tlas.into_iter().map(
-            |e: crate::ray_tracing::ContextTlasBuildEntry<ContextWgpuCore>| {
+            |e: crate::ray_tracing::ContextTlasBuildEntry<'a, ContextWgpuCore>| {
                 wgc::ray_tracing::TlasBuildEntry {
-                    tlas_id: e.tlas_id,
-                    instance_buffer_id: e.instance_buffer_id,
+                    tlas_id: e.tlas_data.id,
+                    instance_buffer_id: e.instance_buffer_data.id,
                     instance_count: e.instance_count,
                 }
             },
         );
 
         if let Err(cause) =
-            global.command_encoder_build_acceleration_structures_unsafe_tlas(*encoder, blas, tlas)
+            global.command_encoder_build_acceleration_structures_unsafe_tlas(encoder_data.id, blas, tlas)
         {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
@@ -3184,7 +3178,6 @@ impl crate::Context for ContextWgpuCore {
 
     fn command_encoder_build_acceleration_structures<'a>(
         &'a self,
-        encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
         blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
         tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
@@ -3198,9 +3191,9 @@ impl crate::Context for ContextWgpuCore {
                 ) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         wgc::ray_tracing::BlasTriangleGeometry {
-                            vertex_buffer: tg.vertex_buffer,
-                            index_buffer: tg.index_buffer,
-                            transform_buffer: tg.transform_buffer,
+                            vertex_buffer: tg.vertex_buffer.id,
+                            index_buffer: tg.index_buffer.map(|buf| buf.id),
+                            transform_buffer: tg.transform_buffer.map(|buf| buf.id),
                             size: tg.size,
                             transform_buffer_offset: tg.transform_buffer_offset,
                             first_vertex: tg.first_vertex,
@@ -3212,7 +3205,7 @@ impl crate::Context for ContextWgpuCore {
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas_id,
+                blas_id: e.blas_data.id,
                 geometries,
             }
         });
@@ -3221,7 +3214,7 @@ impl crate::Context for ContextWgpuCore {
             let instances = e.instances.map(
                 |instance: Option<crate::ray_tracing::ContextTlasInstance<'_, _>>| {
                     instance.map(|instance| wgc::ray_tracing::TlasInstance {
-                        blas_id: instance.blas_id,
+                        blas_id: instance.blas_data.id,
                         transform: instance.transform,
                         custom_index: instance.custom_index,
                         mask: instance.mask,
@@ -3229,14 +3222,14 @@ impl crate::Context for ContextWgpuCore {
                 },
             );
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.tlas_id,
+                tlas_id: e.tlas_data.id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }
         });
 
         if let Err(cause) =
-            global.command_encoder_build_acceleration_structures(*encoder, blas, tlas)
+            global.command_encoder_build_acceleration_structures(encoder_data.id, blas, tlas)
         {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
@@ -3246,24 +3239,24 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
-    fn blas_destroy(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
+    fn blas_destroy(&self, blas_data: &Self::BlasData) {
         let global = &self.0;
-        let _ = global.blas_destroy(*blas);
+        let _ = global.blas_destroy(blas_data.id);
     }
 
-    fn blas_drop(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
+    fn blas_drop(&self, blas_data: &Self::BlasData) {
         let global = &self.0;
-        global.blas_drop(*blas)
+        global.blas_drop(blas_data.id)
     }
 
-    fn tlas_destroy(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
+    fn tlas_destroy(&self, tlas_data: &Self::TlasData) {
         let global = &self.0;
-        let _ = global.tlas_destroy(*tlas);
+        let _ = global.tlas_destroy(tlas_data.id);
     }
 
-    fn tlas_drop(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
+    fn tlas_drop(&self, tlas_data: &Self::TlasData) {
         let global = &self.0;
-        global.tlas_drop(*tlas)
+        global.tlas_drop(tlas_data.id)
     }
 }
 
@@ -3425,6 +3418,11 @@ fn downcast_texture_view(
     texture_view: &crate::TextureView,
 ) -> &<ContextWgpuCore as crate::Context>::TextureViewData {
     downcast_ref(texture_view.data.as_ref())
+}
+fn downcast_tlas(
+    tlas: &crate::ray_tracing::Tlas,
+) -> &<ContextWgpuCore as crate::Context>::TlasData {
+    downcast_ref(tlas.data.as_ref())
 }
 fn downcast_sampler(sampler: &crate::Sampler) -> &<ContextWgpuCore as crate::Context>::SamplerData {
     downcast_ref(sampler.data.as_ref())
