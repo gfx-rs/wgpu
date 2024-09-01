@@ -1360,11 +1360,6 @@ fn missing_bindings2() {
 fn invalid_access() {
     check_validation! {
         "
-        fn array_by_value(a: array<i32, 5>, i: i32) -> i32 {
-            return a[i];
-        }
-        ",
-        "
         fn matrix_by_value(m: mat4x4<f32>, i: i32) -> vec4<f32> {
             return m[i];
         }
