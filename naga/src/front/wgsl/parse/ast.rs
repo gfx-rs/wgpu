@@ -204,7 +204,8 @@ pub enum Type<'a> {
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Atomic(Scalar),
     Pointer {
@@ -347,7 +348,8 @@ pub enum ConstructorType<'a> {
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// An array whose component type and size are inferred from the arguments:

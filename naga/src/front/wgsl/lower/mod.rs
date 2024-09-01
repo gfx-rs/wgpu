@@ -2976,12 +2976,23 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::Type::Matrix {
                 rows,
                 columns,
-                width,
-            } => crate::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar: crate::Scalar::float(width),
-            },
+                ty,
+                ty_span,
+            } => {
+                let ty = self.resolve_ast_type(ty, ctx)?;
+                let scalar = match ctx.module.types[ty].inner {
+                    crate::TypeInner::Scalar(sc) => sc,
+                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                };
+                match scalar.kind {
+                    crate::ScalarKind::Float => crate::TypeInner::Matrix {
+                        columns,
+                        rows,
+                        scalar,
+                    },
+                    _ => return Err(Error::BadMatrixScalarKind(ty_span, scalar)),
+                }
+            }
             ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),
             ast::Type::Pointer { base, space } => {
                 let base = self.resolve_ast_type(base, ctx)?;

@@ -833,13 +833,13 @@ fn matrix_with_bad_type() {
     check(
         r#"
             fn main() {
-                let m: mat3x3<i32>;
+                var m: mat3x3<i32>;
             }
         "#,
         r#"error: matrix scalar type must be floating-point, but found `i32`
   ┌─ wgsl:3:31
   │
-3 │                 let m: mat3x3<i32>;
+3 │                 var m: mat3x3<i32>;
   │                               ^^^ must be floating-point (e.g. `f32`)
 
 "#,
