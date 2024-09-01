@@ -39,44 +39,44 @@ OpDecorate %17 Binding 1
 OpDecorate %18 Block
 OpMemberDecorate %18 0 Offset 0
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 3
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 3
 %5 = OpTypeAccelerationStructureNV
 %6 = OpTypeInt 32 0
-%7 = OpTypeVector %4 2
+%7 = OpTypeVector %3 2
 %8 = OpTypeBool
-%9 = OpTypeMatrix %3 4
-%10 = OpTypeStruct %6 %4 %6 %6 %6 %6 %6 %7 %8 %9 %9
+%9 = OpTypeMatrix %4 4
+%10 = OpTypeStruct %6 %3 %6 %6 %6 %6 %6 %7 %8 %9 %9
 %11 = OpTypeRayQueryKHR
-%12 = OpTypeStruct %6 %6 %4 %4 %3 %3
-%13 = OpTypeStruct %6 %3
-%14 = OpTypeVector %4 4
+%12 = OpTypeStruct %6 %6 %3 %3 %4 %4
+%13 = OpTypeStruct %6 %4
+%14 = OpTypeVector %3 4
 %16 = OpTypePointer UniformConstant %5
 %15 = OpVariable  %16  UniformConstant
 %18 = OpTypeStruct %13
 %19 = OpTypePointer StorageBuffer %18
 %17 = OpVariable  %19  StorageBuffer
-%26 = OpTypeFunction %10 %3 %3 %16
+%26 = OpTypeFunction %10 %4 %4 %16
 %27 = OpConstant  %6  4
 %28 = OpConstant  %6  255
-%29 = OpConstant  %4  0.1
-%30 = OpConstant  %4  100.0
+%29 = OpConstant  %3  0.1
+%30 = OpConstant  %3  100.0
 %32 = OpTypePointer Function %11
 %50 = OpConstant  %6  1
-%67 = OpTypeFunction %3 %3 %10
-%68 = OpConstant  %4  1.0
-%69 = OpConstant  %4  2.4
-%70 = OpConstant  %4  0.0
+%67 = OpTypeFunction %4 %4 %10
+%68 = OpConstant  %3  1.0
+%69 = OpConstant  %3  2.4
+%70 = OpConstant  %3  0.0
 %85 = OpTypeFunction %2
 %87 = OpTypePointer StorageBuffer %13
 %88 = OpConstant  %6  0
-%90 = OpConstantComposite  %3  %70 %70 %70
-%91 = OpConstantComposite  %3  %70 %68 %70
+%90 = OpConstantComposite  %4  %70 %70 %70
+%91 = OpConstantComposite  %4  %70 %68 %70
 %94 = OpTypePointer StorageBuffer %6
-%99 = OpTypePointer StorageBuffer %3
+%99 = OpTypePointer StorageBuffer %4
 %25 = OpFunction  %10  None %26
-%21 = OpFunctionParameter  %3
-%22 = OpFunctionParameter  %3
+%21 = OpFunctionParameter  %4
+%22 = OpFunctionParameter  %4
 %23 = OpFunctionParameter  %16
 %20 = OpLabel
 %31 = OpVariable  %32  Function
@@ -86,10 +86,10 @@ OpBranch %33
 %34 = OpCompositeConstruct  %12  %27 %28 %29 %30 %21 %22
 %35 = OpCompositeExtract  %6  %34 0
 %36 = OpCompositeExtract  %6  %34 1
-%37 = OpCompositeExtract  %4  %34 2
-%38 = OpCompositeExtract  %4  %34 3
-%39 = OpCompositeExtract  %3  %34 4
-%40 = OpCompositeExtract  %3  %34 5
+%37 = OpCompositeExtract  %3  %34 2
+%38 = OpCompositeExtract  %3  %34 3
+%39 = OpCompositeExtract  %4  %34 4
+%40 = OpCompositeExtract  %4  %34 5
 OpRayQueryInitializeKHR %31 %24 %35 %36 %39 %37 %40 %38
 OpBranch %41
 %41 = OpLabel
@@ -116,7 +116,7 @@ OpBranch %41
 %54 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %6  %31 %50
 %55 = OpRayQueryGetIntersectionGeometryIndexKHR  %6  %31 %50
 %56 = OpRayQueryGetIntersectionPrimitiveIndexKHR  %6  %31 %50
-%57 = OpRayQueryGetIntersectionTKHR  %4  %31 %50
+%57 = OpRayQueryGetIntersectionTKHR  %3  %31 %50
 %58 = OpRayQueryGetIntersectionBarycentricsKHR  %7  %31 %50
 %59 = OpRayQueryGetIntersectionFrontFaceKHR  %8  %31 %50
 %60 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %31 %50
@@ -124,23 +124,23 @@ OpBranch %41
 %62 = OpCompositeConstruct  %10  %51 %57 %52 %53 %54 %55 %56 %58 %59 %60 %61
 OpReturnValue %62
 OpFunctionEnd
-%66 = OpFunction  %3  None %67
-%64 = OpFunctionParameter  %3
+%66 = OpFunction  %4  None %67
+%64 = OpFunctionParameter  %4
 %65 = OpFunctionParameter  %10
 %63 = OpLabel
 OpBranch %71
 %71 = OpLabel
 %72 = OpCompositeExtract  %9  %65 10
 %73 = OpCompositeConstruct  %14  %64 %68
-%74 = OpMatrixTimesVector  %3  %72 %73
+%74 = OpMatrixTimesVector  %4  %72 %73
 %75 = OpVectorShuffle  %7  %74 %74 0 1
 %76 = OpExtInst  %7  %1 Normalize %75
 %77 = OpVectorTimesScalar  %7  %76 %69
 %78 = OpCompositeExtract  %9  %65 9
 %79 = OpCompositeConstruct  %14  %77 %70 %68
-%80 = OpMatrixTimesVector  %3  %78 %79
-%81 = OpFSub  %3  %64 %80
-%82 = OpExtInst  %3  %1 Normalize %81
+%80 = OpMatrixTimesVector  %4  %78 %79
+%81 = OpFSub  %4  %64 %80
+%82 = OpExtInst  %4  %1 Normalize %81
 OpReturnValue %82
 OpFunctionEnd
 %84 = OpFunction  %2  None %85
@@ -155,9 +155,9 @@ OpBranch %92
 %97 = OpSelect  %6  %96 %50 %88
 %98 = OpAccessChain  %94  %89 %88
 OpStore %98 %97
-%100 = OpCompositeExtract  %4  %93 1
-%101 = OpVectorTimesScalar  %3  %91 %100
-%102 = OpFunctionCall  %3  %66 %101 %93
+%100 = OpCompositeExtract  %3  %93 1
+%101 = OpVectorTimesScalar  %4  %91 %100
+%102 = OpFunctionCall  %4  %66 %101 %93
 %103 = OpAccessChain  %99  %89 %50
 OpStore %103 %102
 OpReturn

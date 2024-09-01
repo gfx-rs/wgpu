@@ -26,8 +26,8 @@ struct Light {
     metal::float4 pos;
     metal::float4 color;
 };
-typedef Light type_6[1];
-struct type_7 {
+typedef Light type_8[1];
+struct type_9 {
     Light inner[10];
 };
 constant metal::float3 c_ambient = metal::float3(0.05, 0.05, 0.05);
@@ -91,7 +91,7 @@ fragment fs_mainOutput fs_main(
 , metal::float4 proj_position [[position]]
 , constant Globals& u_globals [[user(fake0)]]
 , constant Entity& u_entity [[user(fake0)]]
-, device type_6 const& s_lights [[user(fake0)]]
+, device type_8 const& s_lights [[user(fake0)]]
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
@@ -142,7 +142,7 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
 , metal::float4 proj_position_1 [[position]]
 , constant Globals& u_globals [[user(fake0)]]
 , constant Entity& u_entity [[user(fake0)]]
-, constant type_7& u_lights [[user(fake0)]]
+, constant type_9& u_lights [[user(fake0)]]
 , metal::depth2d_array<float, metal::access::sample> t_shadow [[user(fake0)]]
 , metal::sampler sampler_shadow [[user(fake0)]]
 ) {
