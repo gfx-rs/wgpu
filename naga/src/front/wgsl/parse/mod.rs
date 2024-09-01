@@ -111,6 +111,11 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             Ok(handle)
         }
     }
+
+    fn new_scalar(&mut self, scalar: Scalar) -> Handle<ast::Type<'a>> {
+        self.types
+            .append(ast::Type::Scalar(scalar), Span::UNDEFINED)
+    }
 }
 
 /// Which grammar rule we are in the midst of parsing.
@@ -310,25 +315,19 @@ impl Parser {
             "vec2i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                    },
+                    ty: ctx.new_scalar(Scalar::I32),
                 }))
             }
             "vec2u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Uint,
-                        width: 4,
-                    },
+                    ty: ctx.new_scalar(Scalar::U32),
                 }))
             }
             "vec2f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar: Scalar::F32,
+                    ty: ctx.new_scalar(Scalar::F32),
                 }))
             }
             "vec3" => ast::ConstructorType::PartialVector {
@@ -337,19 +336,19 @@ impl Parser {
             "vec3i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar::I32,
+                    ty: ctx.new_scalar(Scalar::I32),
                 }))
             }
             "vec3u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar::U32,
+                    ty: ctx.new_scalar(Scalar::U32),
                 }))
             }
             "vec3f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar::F32,
+                    ty: ctx.new_scalar(Scalar::F32),
                 }))
             }
             "vec4" => ast::ConstructorType::PartialVector {
@@ -358,19 +357,19 @@ impl Parser {
             "vec4i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar::I32,
+                    ty: ctx.new_scalar(Scalar::I32),
                 }))
             }
             "vec4u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar::U32,
+                    ty: ctx.new_scalar(Scalar::U32),
                 }))
             }
             "vec4f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar::F32,
+                    ty: ctx.new_scalar(Scalar::F32),
                 }))
             }
             "mat2x2" => ast::ConstructorType::PartialMatrix {
@@ -502,8 +501,10 @@ impl Parser {
         // parse component type if present
         match (lexer.peek().0, partial) {
             (Token::Paren('<'), ast::ConstructorType::PartialVector { size }) => {
-                let scalar = lexer.next_scalar_generic()?;
-                Ok(Some(ast::ConstructorType::Vector { size, scalar }))
+                lexer.expect_generic_paren('<')?;
+                let ty = self.type_decl(lexer, ctx)?;
+                lexer.expect_generic_paren('>')?;
+                Ok(Some(ast::ConstructorType::Vector { size, ty }))
             }
             (Token::Paren('<'), ast::ConstructorType::PartialMatrix { columns, rows }) => {
                 let (scalar, span) = lexer.next_scalar_generic_with_span()?;
@@ -1058,6 +1059,17 @@ impl Parser {
         Ok(members)
     }
 
+    fn next_scalar_generic<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<ast::Type<'a>>, Error<'a>> {
+        lexer.expect_generic_paren('<')?;
+        let ty = self.type_decl(lexer, ctx)?;
+        lexer.expect_generic_paren('>')?;
+        Ok(ty)
+    }
+
     fn matrix_scalar_type<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1087,79 +1099,61 @@ impl Parser {
 
         Ok(Some(match word {
             "vec2" => {
-                let scalar = lexer.next_scalar_generic()?;
+                let ty = self.next_scalar_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar,
+                    ty,
                 }
             }
             "vec2i" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Sint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::I32),
             },
             "vec2u" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::U32),
             },
             "vec2f" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
-                scalar: Scalar::F32,
+                ty: ctx.new_scalar(Scalar::F32),
             },
             "vec3" => {
-                let scalar = lexer.next_scalar_generic()?;
+                let ty = self.next_scalar_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar,
+                    ty,
                 }
             }
             "vec3i" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Sint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::I32),
             },
             "vec3u" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::U32),
             },
             "vec3f" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
-                scalar: Scalar::F32,
+                ty: ctx.new_scalar(Scalar::F32),
             },
             "vec4" => {
-                let scalar = lexer.next_scalar_generic()?;
+                let ty = self.next_scalar_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar,
+                    ty,
                 }
             }
             "vec4i" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Sint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::I32),
             },
             "vec4u" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::U32),
             },
             "vec4f" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
-                scalar: Scalar::F32,
+                ty: ctx.new_scalar(Scalar::F32),
             },
             "mat2x2" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Bi)?

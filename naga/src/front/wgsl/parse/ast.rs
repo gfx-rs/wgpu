@@ -198,7 +198,7 @@ pub enum Type<'a> {
     Scalar(Scalar),
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
     },
     Matrix {
         columns: crate::VectorSize,
@@ -330,7 +330,7 @@ pub enum ConstructorType<'a> {
     /// `vec3<f32>(1.0)`.
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
     },
 
     /// A matrix construction whose component type is inferred from the
