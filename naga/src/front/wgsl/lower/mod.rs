@@ -2965,11 +2965,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
             ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
-            ast::Type::Vector { size, ty } => {
+            ast::Type::Vector { size, ty, ty_span } => {
                 let ty = self.resolve_ast_type(ty, ctx)?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Error::Internal("scalar")),
+                    _ => return Err(Error::UnknownScalarType(ty_span)),
                 };
                 crate::TypeInner::Vector { size, scalar }
             }

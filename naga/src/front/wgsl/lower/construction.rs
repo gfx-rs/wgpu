@@ -578,11 +578,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Constructor::Type(ty)
             }
             ast::ConstructorType::PartialVector { size } => Constructor::PartialVector { size },
-            ast::ConstructorType::Vector { size, ty } => {
+            ast::ConstructorType::Vector { size, ty, ty_span } => {
                 let ty = self.resolve_ast_type(ty, &mut ctx.as_global())?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Error::Internal("scalar")),
+                    _ => return Err(Error::UnknownScalarType(ty_span)),
                 };
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Vector { size, scalar });
                 Constructor::Type(ty)

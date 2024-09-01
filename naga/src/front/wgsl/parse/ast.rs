@@ -199,6 +199,7 @@ pub enum Type<'a> {
     Vector {
         size: crate::VectorSize,
         ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Matrix {
         columns: crate::VectorSize,
@@ -331,6 +332,7 @@ pub enum ConstructorType<'a> {
     Vector {
         size: crate::VectorSize,
         ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// A matrix construction whose component type is inferred from the

@@ -316,18 +316,21 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
                     ty: ctx.new_scalar(Scalar::I32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec2u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
                     ty: ctx.new_scalar(Scalar::U32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec2f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec3" => ast::ConstructorType::PartialVector {
@@ -337,18 +340,21 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
                     ty: ctx.new_scalar(Scalar::I32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec3u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
                     ty: ctx.new_scalar(Scalar::U32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec3f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec4" => ast::ConstructorType::PartialVector {
@@ -358,18 +364,21 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
                     ty: ctx.new_scalar(Scalar::I32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec4u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
                     ty: ctx.new_scalar(Scalar::U32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec4f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat2x2" => ast::ConstructorType::PartialMatrix {
@@ -501,10 +510,8 @@ impl Parser {
         // parse component type if present
         match (lexer.peek().0, partial) {
             (Token::Paren('<'), ast::ConstructorType::PartialVector { size }) => {
-                lexer.expect_generic_paren('<')?;
-                let ty = self.type_decl(lexer, ctx)?;
-                lexer.expect_generic_paren('>')?;
-                Ok(Some(ast::ConstructorType::Vector { size, ty }))
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
+                Ok(Some(ast::ConstructorType::Vector { size, ty, ty_span }))
             }
             (Token::Paren('<'), ast::ConstructorType::PartialMatrix { columns, rows }) => {
                 let (scalar, span) = lexer.next_scalar_generic_with_span()?;
@@ -571,11 +578,7 @@ impl Parser {
         let expr = match name {
             // bitcast looks like a function call, but it's an operator and must be handled differently.
             "bitcast" => {
-                lexer.expect_generic_paren('<')?;
-                let start = lexer.start_byte_offset();
-                let to = self.type_decl(lexer, ctx)?;
-                let span = lexer.span_from(start);
-                lexer.expect_generic_paren('>')?;
+                let (to, span) = self.singular_generic(lexer, ctx)?;
 
                 lexer.open_arguments()?;
                 let expr = self.general_expression(lexer, ctx)?;
@@ -1059,15 +1062,18 @@ impl Parser {
         Ok(members)
     }
 
-    fn next_scalar_generic<'a>(
+    /// Parses `<T>`, returning T and span of T
+    fn singular_generic<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Type<'a>>, Error<'a>> {
+    ) -> Result<(Handle<ast::Type<'a>>, Span), Error<'a>> {
         lexer.expect_generic_paren('<')?;
+        let start = lexer.start_byte_offset();
         let ty = self.type_decl(lexer, ctx)?;
+        let span = lexer.span_from(start);
         lexer.expect_generic_paren('>')?;
-        Ok(ty)
+        Ok((ty, span))
     }
 
     fn matrix_scalar_type<'a>(
@@ -1099,61 +1105,73 @@ impl Parser {
 
         Ok(Some(match word {
             "vec2" => {
-                let ty = self.next_scalar_generic(lexer, ctx)?;
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Bi,
                     ty,
+                    ty_span,
                 }
             }
             "vec2i" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
                 ty: ctx.new_scalar(Scalar::I32),
+                ty_span: Span::UNDEFINED,
             },
             "vec2u" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
                 ty: ctx.new_scalar(Scalar::U32),
+                ty_span: Span::UNDEFINED,
             },
             "vec2f" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "vec3" => {
-                let ty = self.next_scalar_generic(lexer, ctx)?;
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Tri,
                     ty,
+                    ty_span,
                 }
             }
             "vec3i" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
                 ty: ctx.new_scalar(Scalar::I32),
+                ty_span: Span::UNDEFINED,
             },
             "vec3u" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
                 ty: ctx.new_scalar(Scalar::U32),
+                ty_span: Span::UNDEFINED,
             },
             "vec3f" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "vec4" => {
-                let ty = self.next_scalar_generic(lexer, ctx)?;
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Quad,
                     ty,
+                    ty_span,
                 }
             }
             "vec4i" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
                 ty: ctx.new_scalar(Scalar::I32),
+                ty_span: Span::UNDEFINED,
             },
             "vec4u" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
                 ty: ctx.new_scalar(Scalar::U32),
+                ty_span: Span::UNDEFINED,
             },
             "vec4f" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat2x2" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Bi)?
