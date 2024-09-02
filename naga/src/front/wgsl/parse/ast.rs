@@ -282,6 +282,7 @@ pub enum StatementKind<'a> {
     Increment(Handle<Expression<'a>>),
     Decrement(Handle<Expression<'a>>),
     Ignore(Handle<Expression<'a>>),
+    ConstAssert(Handle<Expression<'a>>),
 }
 
 #[derive(Debug)]

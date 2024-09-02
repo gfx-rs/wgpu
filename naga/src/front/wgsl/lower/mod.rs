@@ -1727,6 +1727,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     value,
                 }
             }
+            ast::StatementKind::ConstAssert(condition) => {
+                let mut emitter = Emitter::default();
+                emitter.start(&ctx.function.expressions);
+
+                let condition =
+                    self.expression(condition, &mut ctx.as_const(block, &mut emitter))?;
+
+                let span = ctx.function.expressions.get_span(condition);
+                match ctx
+                    .module
+                    .to_ctx()
+                    .eval_expr_to_bool_from(condition, &ctx.function.expressions)
+                {
+                    Some(true) => Ok(()),
+                    Some(false) => Err(Error::ConstAssertFailed(span)),
+                    _ => Err(Error::NotBool(span)),
+                }?;
+
+                block.extend(emitter.finish(&ctx.function.expressions));
+
+                return Ok(());
+            }
             ast::StatementKind::Ignore(expr) => {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);

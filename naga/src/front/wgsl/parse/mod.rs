@@ -1985,6 +1985,20 @@ impl Parser {
                         lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Kill
                     }
+                    // https://www.w3.org/TR/WGSL/#const-assert-statement
+                    "const_assert" => {
+                        let _ = lexer.next();
+                        // parentheses are optional
+                        let paren = lexer.skip(Token::Paren('('));
+
+                        let condition = self.general_expression(lexer, ctx)?;
+
+                        if paren {
+                            lexer.expect(Token::Paren(')'))?;
+                        }
+                        lexer.expect(Token::Separator(';'))?;
+                        ast::StatementKind::ConstAssert(condition)
+                    }
                     // assignment or a function call
                     _ => {
                         self.function_call_or_assignment_statement(lexer, ctx, block)?;
