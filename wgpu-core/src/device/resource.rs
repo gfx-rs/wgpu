@@ -1629,7 +1629,7 @@ impl Device {
 
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
-    pub(crate) fn make_late_sized_buffer_groups(
+    fn make_late_sized_buffer_groups(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         layout: &binding_model::PipelineLayout,
     ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
@@ -1881,7 +1881,7 @@ impl Device {
         Ok(bgl)
     }
 
-    pub(crate) fn create_buffer_binding<'a>(
+    fn create_buffer_binding<'a>(
         &self,
         bb: &'a binding_model::ResolvedBufferBinding,
         binding: u32,
@@ -2068,7 +2068,7 @@ impl Device {
         Ok(sampler.raw())
     }
 
-    pub(crate) fn create_texture_binding<'a>(
+    fn create_texture_binding<'a>(
         &self,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -2325,7 +2325,7 @@ impl Device {
         Ok(bind_group)
     }
 
-    pub(crate) fn check_array_binding(
+    fn check_array_binding(
         features: wgt::Features,
         count: Option<NonZeroU32>,
         num_bindings: usize,
@@ -2358,7 +2358,7 @@ impl Device {
         Ok(())
     }
 
-    pub(crate) fn texture_use_parameters(
+    fn texture_use_parameters(
         &self,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -3449,7 +3449,7 @@ impl Device {
         Ok(cache)
     }
 
-    pub(crate) fn get_texture_format_features(
+    fn get_texture_format_features(
         &self,
         format: TextureFormat,
     ) -> wgt::TextureFormatFeatures {
@@ -3466,7 +3466,7 @@ impl Device {
         format_features
     }
 
-    pub(crate) fn describe_format_features(
+    fn describe_format_features(
         &self,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
