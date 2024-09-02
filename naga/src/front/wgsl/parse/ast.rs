@@ -198,12 +198,14 @@ pub enum Type<'a> {
     Scalar(Scalar),
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Atomic(Scalar),
     Pointer {
@@ -330,7 +332,8 @@ pub enum ConstructorType<'a> {
     /// `vec3<f32>(1.0)`.
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// A matrix construction whose component type is inferred from the
@@ -345,7 +348,8 @@ pub enum ConstructorType<'a> {
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// An array whose component type and size are inferred from the arguments:

@@ -111,6 +111,11 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             Ok(handle)
         }
     }
+
+    fn new_scalar(&mut self, scalar: Scalar) -> Handle<ast::Type<'a>> {
+        self.types
+            .append(ast::Type::Scalar(scalar), Span::UNDEFINED)
+    }
 }
 
 /// Which grammar rule we are in the midst of parsing.
@@ -310,25 +315,22 @@ impl Parser {
             "vec2i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                    },
+                    ty: ctx.new_scalar(Scalar::I32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec2u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Uint,
-                        width: 4,
-                    },
+                    ty: ctx.new_scalar(Scalar::U32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec2f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar: Scalar::F32,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec3" => ast::ConstructorType::PartialVector {
@@ -337,19 +339,22 @@ impl Parser {
             "vec3i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar::I32,
+                    ty: ctx.new_scalar(Scalar::I32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec3u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar::U32,
+                    ty: ctx.new_scalar(Scalar::U32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec3f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar::F32,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec4" => ast::ConstructorType::PartialVector {
@@ -358,19 +363,22 @@ impl Parser {
             "vec4i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar::I32,
+                    ty: ctx.new_scalar(Scalar::I32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec4u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar::U32,
+                    ty: ctx.new_scalar(Scalar::U32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "vec4f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar::F32,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat2x2" => ast::ConstructorType::PartialMatrix {
@@ -381,7 +389,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Bi,
                     rows: crate::VectorSize::Bi,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat2x3" => ast::ConstructorType::PartialMatrix {
@@ -392,7 +401,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Bi,
                     rows: crate::VectorSize::Tri,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat2x4" => ast::ConstructorType::PartialMatrix {
@@ -403,7 +413,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Bi,
                     rows: crate::VectorSize::Quad,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat3x2" => ast::ConstructorType::PartialMatrix {
@@ -414,7 +425,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Tri,
                     rows: crate::VectorSize::Bi,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat3x3" => ast::ConstructorType::PartialMatrix {
@@ -425,7 +437,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Tri,
                     rows: crate::VectorSize::Tri,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat3x4" => ast::ConstructorType::PartialMatrix {
@@ -436,7 +449,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Tri,
                     rows: crate::VectorSize::Quad,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat4x2" => ast::ConstructorType::PartialMatrix {
@@ -447,7 +461,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Bi,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat4x3" => ast::ConstructorType::PartialMatrix {
@@ -458,7 +473,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Tri,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "mat4x4" => ast::ConstructorType::PartialMatrix {
@@ -469,7 +485,8 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Matrix {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Quad,
-                    width: 4,
+                    ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
                 }))
             }
             "array" => ast::ConstructorType::PartialArray,
@@ -502,19 +519,17 @@ impl Parser {
         // parse component type if present
         match (lexer.peek().0, partial) {
             (Token::Paren('<'), ast::ConstructorType::PartialVector { size }) => {
-                let scalar = lexer.next_scalar_generic()?;
-                Ok(Some(ast::ConstructorType::Vector { size, scalar }))
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
+                Ok(Some(ast::ConstructorType::Vector { size, ty, ty_span }))
             }
             (Token::Paren('<'), ast::ConstructorType::PartialMatrix { columns, rows }) => {
-                let (scalar, span) = lexer.next_scalar_generic_with_span()?;
-                match scalar.kind {
-                    crate::ScalarKind::Float => Ok(Some(ast::ConstructorType::Matrix {
-                        columns,
-                        rows,
-                        width: scalar.width,
-                    })),
-                    _ => Err(Error::BadMatrixScalarKind(span, scalar)),
-                }
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
+                Ok(Some(ast::ConstructorType::Matrix {
+                    columns,
+                    rows,
+                    ty,
+                    ty_span,
+                }))
             }
             (Token::Paren('<'), ast::ConstructorType::PartialArray) => {
                 lexer.expect_generic_paren('<')?;
@@ -570,11 +585,7 @@ impl Parser {
         let expr = match name {
             // bitcast looks like a function call, but it's an operator and must be handled differently.
             "bitcast" => {
-                lexer.expect_generic_paren('<')?;
-                let start = lexer.start_byte_offset();
-                let to = self.type_decl(lexer, ctx)?;
-                let span = lexer.span_from(start);
-                lexer.expect_generic_paren('>')?;
+                let (to, span) = self.singular_generic(lexer, ctx)?;
 
                 lexer.open_arguments()?;
                 let expr = self.general_expression(lexer, ctx)?;
@@ -1058,21 +1069,34 @@ impl Parser {
         Ok(members)
     }
 
-    fn matrix_scalar_type<'a>(
+    /// Parses `<T>`, returning T and span of T
+    fn singular_generic<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<(Handle<ast::Type<'a>>, Span), Error<'a>> {
+        lexer.expect_generic_paren('<')?;
+        let start = lexer.start_byte_offset();
+        let ty = self.type_decl(lexer, ctx)?;
+        let span = lexer.span_from(start);
+        lexer.expect_generic_paren('>')?;
+        Ok((ty, span))
+    }
+
+    fn matrix_with_type<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
         columns: crate::VectorSize,
         rows: crate::VectorSize,
     ) -> Result<ast::Type<'a>, Error<'a>> {
-        let (scalar, span) = lexer.next_scalar_generic_with_span()?;
-        match scalar.kind {
-            crate::ScalarKind::Float => Ok(ast::Type::Matrix {
-                columns,
-                rows,
-                width: scalar.width,
-            }),
-            _ => Err(Error::BadMatrixScalarKind(span, scalar)),
-        }
+        let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
+        Ok(ast::Type::Matrix {
+            columns,
+            rows,
+            ty,
+            ty_span,
+        })
     }
 
     fn type_decl_impl<'a>(
@@ -1087,151 +1111,154 @@ impl Parser {
 
         Ok(Some(match word {
             "vec2" => {
-                let scalar = lexer.next_scalar_generic()?;
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar,
+                    ty,
+                    ty_span,
                 }
             }
             "vec2i" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Sint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::I32),
+                ty_span: Span::UNDEFINED,
             },
             "vec2u" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::U32),
+                ty_span: Span::UNDEFINED,
             },
             "vec2f" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
-                scalar: Scalar::F32,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "vec3" => {
-                let scalar = lexer.next_scalar_generic()?;
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar,
+                    ty,
+                    ty_span,
                 }
             }
             "vec3i" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Sint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::I32),
+                ty_span: Span::UNDEFINED,
             },
             "vec3u" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::U32),
+                ty_span: Span::UNDEFINED,
             },
             "vec3f" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
-                scalar: Scalar::F32,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "vec4" => {
-                let scalar = lexer.next_scalar_generic()?;
+                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 ast::Type::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar,
+                    ty,
+                    ty_span,
                 }
             }
             "vec4i" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Sint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::I32),
+                ty_span: Span::UNDEFINED,
             },
             "vec4u" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                },
+                ty: ctx.new_scalar(Scalar::U32),
+                ty_span: Span::UNDEFINED,
             },
             "vec4f" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
-                scalar: Scalar::F32,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat2x2" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Bi)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Bi, crate::VectorSize::Bi)?
             }
             "mat2x2f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Bi,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat2x3" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Tri)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Bi, crate::VectorSize::Tri)?
             }
             "mat2x3f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Tri,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat2x4" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Quad)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Bi, crate::VectorSize::Quad)?
             }
             "mat2x4f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Quad,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat3x2" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Tri, crate::VectorSize::Bi)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Tri, crate::VectorSize::Bi)?
             }
             "mat3x2f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Bi,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat3x3" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Tri, crate::VectorSize::Tri)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Tri, crate::VectorSize::Tri)?
             }
             "mat3x3f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Tri,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat3x4" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Tri, crate::VectorSize::Quad)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Tri, crate::VectorSize::Quad)?
             }
             "mat3x4f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Quad,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat4x2" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Quad, crate::VectorSize::Bi)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Quad, crate::VectorSize::Bi)?
             }
             "mat4x2f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Bi,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat4x3" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Quad, crate::VectorSize::Tri)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Quad, crate::VectorSize::Tri)?
             }
             "mat4x3f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Tri,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "mat4x4" => {
-                self.matrix_scalar_type(lexer, crate::VectorSize::Quad, crate::VectorSize::Quad)?
+                self.matrix_with_type(lexer, ctx, crate::VectorSize::Quad, crate::VectorSize::Quad)?
             }
             "mat4x4f" => ast::Type::Matrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Quad,
-                width: 4,
+                ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
             },
             "atomic" => {
                 let scalar = lexer.next_scalar_generic()?;

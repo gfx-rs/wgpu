@@ -363,13 +363,13 @@ fn unknown_ident() {
 fn unknown_scalar_type() {
     check(
         r#"
-            const a: vec2<something>;
+            const a = vec2<vec2f>();
         "#,
-        r#"error: unknown scalar type: 'something'
-  ┌─ wgsl:2:27
+        r#"error: unknown scalar type: 'vec2f'
+  ┌─ wgsl:2:28
   │
-2 │             const a: vec2<something>;
-  │                           ^^^^^^^^^ unknown scalar type
+2 │             const a = vec2<vec2f>();
+  │                            ^^^^^ unknown scalar type
   │
   = note: Valid scalar types are f32, f64, i32, u32, bool
 
@@ -833,13 +833,13 @@ fn matrix_with_bad_type() {
     check(
         r#"
             fn main() {
-                let m: mat3x3<i32>;
+                var m: mat3x3<i32>;
             }
         "#,
         r#"error: matrix scalar type must be floating-point, but found `i32`
   ┌─ wgsl:3:31
   │
-3 │                 let m: mat3x3<i32>;
+3 │                 var m: mat3x3<i32>;
   │                               ^^^ must be floating-point (e.g. `f32`)
 
 "#,

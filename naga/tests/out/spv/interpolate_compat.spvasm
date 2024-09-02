@@ -87,18 +87,18 @@ OpDecorate %111 Centroid
 OpDecorate %113 Location 9
 OpDecorate %113 Sample
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 4
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 4
 %5 = OpTypeInt 32 0
-%6 = OpTypeVector %4 2
-%7 = OpTypeVector %4 3
-%8 = OpTypeStruct %3 %5 %5 %4 %6 %7 %3 %4 %4
-%11 = OpTypePointer Output %3
+%6 = OpTypeVector %3 2
+%7 = OpTypeVector %3 3
+%8 = OpTypeStruct %4 %5 %5 %3 %6 %7 %4 %3 %3
+%11 = OpTypePointer Output %4
 %10 = OpVariable  %11  Output
 %13 = OpTypePointer Output %5
 %12 = OpVariable  %13  Output
 %14 = OpVariable  %13  Output
-%16 = OpTypePointer Output %4
+%16 = OpTypePointer Output %3
 %15 = OpVariable  %16  Output
 %18 = OpTypePointer Output %6
 %17 = OpVariable  %18  Output
@@ -107,40 +107,40 @@ OpDecorate %113 Sample
 %21 = OpVariable  %11  Output
 %22 = OpVariable  %16  Output
 %23 = OpVariable  %16  Output
-%25 = OpTypePointer Output %4
+%25 = OpTypePointer Output %3
 %24 = OpVariable  %25  Output
-%26 = OpConstant  %4  1.0
+%26 = OpConstant  %3  1.0
 %28 = OpTypeFunction %2
-%29 = OpConstant  %4  2.0
-%30 = OpConstant  %4  4.0
-%31 = OpConstant  %4  5.0
-%32 = OpConstant  %4  6.0
-%33 = OpConstantComposite  %3  %29 %30 %31 %32
+%29 = OpConstant  %3  2.0
+%30 = OpConstant  %3  4.0
+%31 = OpConstant  %3  5.0
+%32 = OpConstant  %3  6.0
+%33 = OpConstantComposite  %4  %29 %30 %31 %32
 %34 = OpConstant  %5  8
 %35 = OpConstant  %5  10
-%36 = OpConstant  %4  27.0
-%37 = OpConstant  %4  64.0
-%38 = OpConstant  %4  125.0
+%36 = OpConstant  %3  27.0
+%37 = OpConstant  %3  64.0
+%38 = OpConstant  %3  125.0
 %39 = OpConstantComposite  %6  %37 %38
-%40 = OpConstant  %4  216.0
-%41 = OpConstant  %4  343.0
-%42 = OpConstant  %4  512.0
+%40 = OpConstant  %3  216.0
+%41 = OpConstant  %3  343.0
+%42 = OpConstant  %3  512.0
 %43 = OpConstantComposite  %7  %40 %41 %42
-%44 = OpConstant  %4  729.0
-%45 = OpConstant  %4  1000.0
-%46 = OpConstant  %4  1331.0
-%47 = OpConstant  %4  1728.0
-%48 = OpConstantComposite  %3  %44 %45 %46 %47
-%49 = OpConstant  %4  2197.0
-%50 = OpConstant  %4  2744.0
+%44 = OpConstant  %3  729.0
+%45 = OpConstant  %3  1000.0
+%46 = OpConstant  %3  1331.0
+%47 = OpConstant  %3  1728.0
+%48 = OpConstantComposite  %4  %44 %45 %46 %47
+%49 = OpConstant  %3  2197.0
+%50 = OpConstant  %3  2744.0
 %52 = OpTypePointer Function %8
 %53 = OpConstantNull  %8
-%55 = OpTypePointer Function %3
+%55 = OpTypePointer Function %4
 %56 = OpConstant  %5  0
 %58 = OpTypePointer Function %5
 %59 = OpConstant  %5  1
 %61 = OpConstant  %5  2
-%63 = OpTypePointer Function %4
+%63 = OpTypePointer Function %3
 %64 = OpConstant  %5  3
 %66 = OpTypePointer Function %6
 %67 = OpConstant  %5  4
@@ -148,12 +148,12 @@ OpDecorate %113 Sample
 %70 = OpConstant  %5  5
 %72 = OpConstant  %5  6
 %74 = OpConstant  %5  7
-%93 = OpTypePointer Input %3
+%93 = OpTypePointer Input %4
 %92 = OpVariable  %93  Input
 %96 = OpTypePointer Input %5
 %95 = OpVariable  %96  Input
 %98 = OpVariable  %96  Input
-%101 = OpTypePointer Input %4
+%101 = OpTypePointer Input %3
 %100 = OpVariable  %101  Input
 %104 = OpTypePointer Input %6
 %103 = OpVariable  %104  Input
@@ -187,41 +187,41 @@ OpStore %75 %49
 %76 = OpAccessChain  %63  %51 %34
 OpStore %76 %50
 %77 = OpLoad  %8  %51
-%78 = OpCompositeExtract  %3  %77 0
+%78 = OpCompositeExtract  %4  %77 0
 OpStore %10 %78
 %79 = OpAccessChain  %25  %10 %59
-%80 = OpLoad  %4  %79
-%81 = OpFNegate  %4  %80
+%80 = OpLoad  %3  %79
+%81 = OpFNegate  %3  %80
 OpStore %79 %81
 %82 = OpCompositeExtract  %5  %77 1
 OpStore %12 %82
 %83 = OpCompositeExtract  %5  %77 2
 OpStore %14 %83
-%84 = OpCompositeExtract  %4  %77 3
+%84 = OpCompositeExtract  %3  %77 3
 OpStore %15 %84
 %85 = OpCompositeExtract  %6  %77 4
 OpStore %17 %85
 %86 = OpCompositeExtract  %7  %77 5
 OpStore %19 %86
-%87 = OpCompositeExtract  %3  %77 6
+%87 = OpCompositeExtract  %4  %77 6
 OpStore %21 %87
-%88 = OpCompositeExtract  %4  %77 7
+%88 = OpCompositeExtract  %3  %77 7
 OpStore %22 %88
-%89 = OpCompositeExtract  %4  %77 8
+%89 = OpCompositeExtract  %3  %77 8
 OpStore %23 %89
 OpReturn
 OpFunctionEnd
 %115 = OpFunction  %2  None %28
 %90 = OpLabel
-%94 = OpLoad  %3  %92
+%94 = OpLoad  %4  %92
 %97 = OpLoad  %5  %95
 %99 = OpLoad  %5  %98
-%102 = OpLoad  %4  %100
+%102 = OpLoad  %3  %100
 %105 = OpLoad  %6  %103
 %108 = OpLoad  %7  %106
-%110 = OpLoad  %3  %109
-%112 = OpLoad  %4  %111
-%114 = OpLoad  %4  %113
+%110 = OpLoad  %4  %109
+%112 = OpLoad  %3  %111
+%114 = OpLoad  %3  %113
 %91 = OpCompositeConstruct  %8  %94 %97 %99 %102 %105 %108 %110 %112 %114
 OpBranch %116
 %116 = OpLabel
