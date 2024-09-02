@@ -2402,6 +2402,18 @@ impl Parser {
                     ..function
                 }))
             }
+            (Token::Word("const_assert"), _) => {
+                // parentheses are optional
+                let paren = lexer.skip(Token::Paren('('));
+
+                let condition = self.general_expression(lexer, &mut ctx)?;
+
+                if paren {
+                    lexer.expect(Token::Paren(')'))?;
+                }
+                lexer.expect(Token::Separator(';'))?;
+                Some(ast::GlobalDeclKind::ConstAssert(condition))
+            }
             (Token::End, _) => return Ok(()),
             other => return Err(Error::Unexpected(other.1, ExpectedToken::GlobalItem)),
         };

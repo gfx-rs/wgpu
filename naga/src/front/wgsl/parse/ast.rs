@@ -85,6 +85,7 @@ pub enum GlobalDeclKind<'a> {
     Override(Override<'a>),
     Struct(Struct<'a>),
     Type(TypeAlias<'a>),
+    ConstAssert(Handle<Expression<'a>>),
 }
 
 #[derive(Debug)]
