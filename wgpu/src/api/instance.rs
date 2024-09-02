@@ -95,7 +95,7 @@ impl Instance {
     ///   [`Backends::BROWSER_WEBGPU`] takes a special role:
     ///   If it is set and WebGPU support is detected, this instance will *only* be able to create
     ///   WebGPU adapters. If you instead want to force use of WebGL, either
-    ///   disable the `webgpu` compile-time feature or do add the [`Backends::BROWSER_WEBGPU`]
+    ///   disable the `webgpu` compile-time feature or don't add the [`Backends::BROWSER_WEBGPU`]
     ///   flag to the the `instance_desc`'s `backends` field.
     ///   If it is set and WebGPU support is *not* detected, the instance will use wgpu-core
     ///   to create adapters. Meaning that if the `webgl` feature is enabled, it is able to create
