@@ -37,7 +37,11 @@ unsafe impl<T> Send for Sendable<T> {}
 #[cfg(send_sync)]
 unsafe impl<T> Sync for Sendable<T> {}
 
-pub(crate) struct ContextWebGpu(webgpu_sys::Gpu);
+pub(crate) struct ContextWebGpu {
+    // Invariant: `Some(gpu)` implies that `gpu`` is not `undefined` (i.e., the
+    // browser advertises support for WebGPU).
+    gpu: Option<webgpu_sys::Gpu>,
+}
 #[cfg(send_sync)]
 unsafe impl Send for ContextWebGpu {}
 #[cfg(send_sync)]
@@ -187,6 +191,36 @@ impl<F, M> MakeSendFuture<F, M> {
 
 #[cfg(send_sync)]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
+
+/// Wraps a future that returns `Option<T>` and adds the ability to immediately
+/// return None.
+pub(crate) struct OptionFuture<F>(Option<F>);
+
+impl<F: Future<Output = Option<T>>, T> Future for OptionFuture<F> {
+    type Output = Option<T>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        // This is safe because we have no Drop implementation to violate the Pin requirements and
+        // do not provide any means of moving the inner future.
+        unsafe {
+            let this = self.get_unchecked_mut();
+            match &mut this.0 {
+                Some(future) => Pin::new_unchecked(future).poll(cx),
+                None => task::Poll::Ready(None),
+            }
+        }
+    }
+}
+
+impl<F> OptionFuture<F> {
+    fn some(future: F) -> Self {
+        Self(Some(future))
+    }
+
+    fn none() -> Self {
+        Self(None)
+    }
+}
 
 fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuTextureFormat {
     use webgpu_sys::GpuTextureFormat as tf;
@@ -1095,9 +1129,11 @@ impl crate::context::Context for ContextWebGpu {
     type SubmissionIndexData = ();
     type PipelineCacheData = ();
 
-    type RequestAdapterFuture = MakeSendFuture<
-        wasm_bindgen_futures::JsFuture,
-        fn(JsFutureResult) -> Option<Self::AdapterData>,
+    type RequestAdapterFuture = OptionFuture<
+        MakeSendFuture<
+            wasm_bindgen_futures::JsFuture,
+            fn(JsFutureResult) -> Option<Self::AdapterData>,
+        >,
     >;
     type RequestDeviceFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -1119,7 +1155,9 @@ impl crate::context::Context for ContextWebGpu {
                 "Accessing the GPU is only supported on the main thread or from a dedicated worker"
             );
         };
-        ContextWebGpu(gpu)
+
+        let gpu = if !gpu.is_undefined() { Some(gpu) } else { None };
+        ContextWebGpu { gpu }
     }
 
     unsafe fn instance_create_surface(
@@ -1189,12 +1227,15 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(mapped_pref) = mapped_power_preference {
             mapped_options.power_preference(mapped_pref);
         }
-        let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
-
-        MakeSendFuture::new(
-            wasm_bindgen_futures::JsFuture::from(adapter_promise),
-            future_request_adapter,
-        )
+        if let Some(gpu) = &self.gpu {
+            let adapter_promise = gpu.request_adapter_with_options(&mapped_options);
+            OptionFuture::some(MakeSendFuture::new(
+                wasm_bindgen_futures::JsFuture::from(adapter_promise),
+                future_request_adapter,
+            ))
+        } else {
+            OptionFuture::none()
+        }
     }
 
     fn adapter_request_device(
@@ -1315,9 +1356,11 @@ impl crate::context::Context for ContextWebGpu {
         let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
-        let preferred_format = self.0.get_preferred_canvas_format();
-        if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
-            formats.swap(0, index);
+        if let Some(gpu) = &self.gpu {
+            let preferred_format = gpu.get_preferred_canvas_format();
+            if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
+                formats.swap(0, index);
+            }
         }
 
         wgt::SurfaceCapabilities {
