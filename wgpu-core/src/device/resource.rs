@@ -1882,7 +1882,7 @@ impl Device {
     }
 
     pub(crate) fn create_buffer_binding<'a>(
-        self: &Arc<Self>,
+        &self,
         bb: &'a binding_model::ResolvedBufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -2020,7 +2020,7 @@ impl Device {
     }
 
     fn create_sampler_binding<'a>(
-        self: &Arc<Self>,
+        &self,
         used: &mut BindGroupStates,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -2069,7 +2069,7 @@ impl Device {
     }
 
     pub(crate) fn create_texture_binding<'a>(
-        self: &Arc<Self>,
+        &self,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         view: &'a Arc<TextureView>,
@@ -2359,7 +2359,7 @@ impl Device {
     }
 
     pub(crate) fn texture_use_parameters(
-        self: &Arc<Self>,
+        &self,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         view: &TextureView,

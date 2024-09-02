@@ -106,8 +106,8 @@ pub(crate) trait ParentDevice: Labeled {
         }
     }
 
-    fn same_device(&self, device: &Arc<Device>) -> Result<(), DeviceError> {
-        if Arc::ptr_eq(self.device(), device) {
+    fn same_device(&self, device: &Device) -> Result<(), DeviceError> {
+        if std::ptr::eq(&**self.device(), device) {
             Ok(())
         } else {
             Err(DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
