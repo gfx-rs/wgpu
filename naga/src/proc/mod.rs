@@ -674,6 +674,19 @@ impl GlobalCtx<'_> {
         }
     }
 
+    /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `bool`.
+    #[allow(dead_code)]
+    pub(super) fn eval_expr_to_bool_from(
+        &self,
+        handle: crate::Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
+    ) -> Option<bool> {
+        match self.eval_expr_to_literal_from(handle, arena) {
+            Some(crate::Literal::Bool(value)) => Some(value),
+            _ => None,
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn eval_expr_to_literal(
         &self,

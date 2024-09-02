@@ -2389,3 +2389,54 @@ fn only_one_swizzle_type() {
 "###,
     );
 }
+
+#[test]
+fn const_assert_must_be_const() {
+    check(
+        "
+        fn foo() {
+            let a = 5;
+            const_assert a != 0;
+        }
+        ",
+        r###"error: this operation is not supported in a const context
+  ┌─ wgsl:4:26
+  │
+4 │             const_assert a != 0;
+  │                          ^ operation not supported here
+
+"###,
+    );
+}
+
+#[test]
+fn const_assert_must_be_bool() {
+    check(
+        "
+            const_assert(5); // 5 is not bool
+        ",
+        r###"error: must be a const-expression that resolves to a bool
+  ┌─ wgsl:2:26
+  │
+2 │             const_assert(5); // 5 is not bool
+  │                          ^ must resolve to bool
+
+"###,
+    );
+}
+
+#[test]
+fn const_assert_failed() {
+    check(
+        "
+            const_assert(false);
+        ",
+        r###"error: const_assert failure
+  ┌─ wgsl:2:26
+  │
+2 │             const_assert(false);
+  │                          ^^^^^ evaluates to false
+
+"###,
+    );
+}
