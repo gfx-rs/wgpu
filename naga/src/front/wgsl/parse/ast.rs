@@ -142,7 +142,7 @@ pub struct GlobalVariable<'a> {
     pub name: Ident<'a>,
     pub space: crate::AddressSpace,
     pub binding: Option<ResourceBinding<'a>>,
-    pub ty: Handle<Type<'a>>,
+    pub ty: Option<Handle<Type<'a>>>,
     pub init: Option<Handle<Expression<'a>>>,
 }
 

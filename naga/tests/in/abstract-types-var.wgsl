@@ -43,6 +43,20 @@ var<private> xafpaiaf: array<f32, 2> = array(1,   2.0);
 var<private> xafpafai: array<f32, 2> = array(1.0, 2);
 var<private> xafpafaf: array<f32, 2> = array(1.0, 2.0);
 
+var<private> ivispai = vec2(1);
+var<private> ivfspaf = vec2(1.0);
+var<private> ivis_ai = vec2<i32>(1);
+var<private> ivus_ai = vec2<u32>(1);
+var<private> ivfs_ai = vec2<f32>(1);
+var<private> ivfs_af = vec2<f32>(1.0);
+
+var<private> iafafaf = array<f32, 2>(1.0, 2.0);
+var<private> iafaiai = array<f32, 2>(1, 2);
+
+var<private> iafpafaf = array(1.0, 2.0);
+var<private> iafpaiaf = array(1, 2.0);
+var<private> iafpafai = array(1.0, 2);
+
 fn all_constant_arguments() {
     var xvipaiai: vec2<i32> = vec2(42, 43);
     var xvupaiai: vec2<u32> = vec2(44, 45);
