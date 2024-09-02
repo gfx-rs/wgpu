@@ -288,7 +288,7 @@ impl super::Device {
         };
 
         let full_stage = format!(
-            "{}_{}\0",
+            "{}_{}",
             naga_stage.to_hlsl_str(),
             naga_options.shader_model.to_str()
         );
@@ -306,26 +306,31 @@ impl super::Device {
         let source_name = stage.module.raw_name.as_deref();
 
         // Compile with DXC if available, otherwise fall back to FXC
-        let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
+        let result = if let Some(ref dxc_container) = self.dxc_container {
             shader_compilation::compile_dxc(
                 self,
                 &source,
                 source_name,
                 raw_ep,
                 stage_bit,
-                full_stage,
+                &full_stage,
                 dxc_container,
             )
         } else {
-            let full_stage = ffi::CStr::from_bytes_with_nul(full_stage.as_bytes()).unwrap();
             shader_compilation::compile_fxc(
                 self,
                 &source,
                 source_name,
-                &ffi::CString::new(raw_ep.as_str()).unwrap(),
+                raw_ep,
                 stage_bit,
-                full_stage,
+                &full_stage,
             )
+        };
+
+        let log_level = if result.is_ok() {
+            log::Level::Info
+        } else {
+            log::Level::Error
         };
 
         log::log!(

@@ -7334,10 +7334,6 @@ impl Default for ShaderBoundChecks {
 
 /// Selects which DX12 shader compiler to use.
 ///
-/// If the `wgpu-hal/dx12-shader-compiler` feature isn't enabled then this will fall back
-/// to the Fxc compiler at runtime and log an error.
-/// This feature is always enabled when using `wgpu`.
-///
 /// If the `Dxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
 /// then this will fall back to the Fxc compiler at runtime and log an error.
 ///
@@ -7354,6 +7350,10 @@ pub enum Dx12Compiler {
     ///
     /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
     /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
+    ///
+    /// Minimum supported version: [v1.5.2010](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.5.2010)
+    ///
+    /// It also requires WDDM 2.1 (Windows 10 version 1607).
     Dxc {
         /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
