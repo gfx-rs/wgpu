@@ -3162,7 +3162,7 @@ impl Global {
             .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
             .map_pass_err(scope)?;
         let count_buffer = buffers
-            .get_owned(buffer_id)
+            .get_owned(count_buffer_id)
             .map_err(|_| RenderPassErrorInner::InvalidBuffer(count_buffer_id))
             .map_pass_err(scope)?;
 
@@ -3203,7 +3203,7 @@ impl Global {
             .map_pass_err(scope)?;
 
         let count_buffer = buffers
-            .get_owned(buffer_id)
+            .get_owned(count_buffer_id)
             .map_err(|_| RenderPassErrorInner::InvalidBuffer(count_buffer_id))
             .map_pass_err(scope)?;
 
