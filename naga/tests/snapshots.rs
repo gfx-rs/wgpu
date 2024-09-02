@@ -868,6 +868,7 @@ fn convert_wgsl() {
             "const-exprs",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        ("const_assert", Targets::WGSL | Targets::IR),
         ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
         (
             "struct-layout",
