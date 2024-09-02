@@ -1635,9 +1635,27 @@ pub struct InstanceDescriptor<'a> {
 pub struct Alignments {
     /// The alignment of the start of the buffer used as a GPU copy source.
     pub buffer_copy_offset: wgt::BufferSize,
+
     /// The alignment of the row pitch of the texture data stored in a buffer that is
     /// used in a GPU copy operation.
     pub buffer_copy_pitch: wgt::BufferSize,
+
+    /// The finest alignment of bound range checking for uniform buffers.
+    ///
+    /// When `wgpu_hal` restricts shader references to the [accessible
+    /// region][ar] of a [`Uniform`] buffer, the size of the accessible region
+    /// is the bind group binding's stated [size], rounded up to the next
+    /// multiple of this value.
+    ///
+    /// We don't need an analogous field for storage buffer bindings, because
+    /// all our backends promise to enforce the size at least to a four-byte
+    /// alignment, and `wgpu_hal` requires bound range lengths to be a multiple
+    /// of four anyway.
+    ///
+    /// [ar]: struct.BufferBinding.html#accessible-region
+    /// [`Uniform`]: wgt::BufferBindingType::Uniform
+    /// [size]: BufferBinding::size
+    pub uniform_bounds_check_alignment: wgt::BufferSize,
 }
 
 #[derive(Clone, Debug)]
@@ -1807,6 +1825,40 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub push_constant_ranges: &'a [wgt::PushConstantRange],
 }
 
+/// A region of a buffer made visible to shaders via a [`BindGroup`].
+///
+/// [`BindGroup`]: Api::BindGroup
+///
+/// ## Accessible region
+///
+/// `wgpu_hal` guarantees that shaders compiled with
+/// [`ShaderModuleDescriptor::runtime_checks`] set to `true` cannot read or
+/// write data via this binding outside the *accessible region* of [`buffer`]:
+///
+/// - The accessible region starts at [`offset`].
+///
+/// - For [`Storage`] bindings, the size of the accessible region is [`size`],
+///   which must be a multiple of 4.
+///
+/// - For [`Uniform`] bindings, the size of the accessible region is [`size`]
+///   rounded up to the next multiple of
+///   [`Alignments::uniform_bounds_check_alignment`].
+///
+/// Note that this guarantee is stricter than WGSL's requirements for
+/// [out-of-bounds accesses][woob], as WGSL allows them to return values from
+/// elsewhere in the buffer. But this guarantee is necessary anyway, to permit
+/// `wgpu-core` to avoid clearing uninitialized regions of buffers that will
+/// never be read by the application before they are overwritten. This
+/// optimization consults bind group buffer binding regions to determine which
+/// parts of which buffers shaders might observe. This optimization is only
+/// sound if shader access is bounds-checked.
+///
+/// [`buffer`]: BufferBinding::buffer
+/// [`offset`]: BufferBinding::offset
+/// [`size`]: BufferBinding::size
+/// [`Storage`]: wgt::BufferBindingType::Storage
+/// [`Uniform`]: wgt::BufferBindingType::Uniform
+/// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
 pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     /// The buffer being bound.
@@ -1925,6 +1977,26 @@ pub enum ShaderInput<'a> {
 
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
+
+    /// Enforce bounds checks in shaders, even if the underlying driver doesn't
+    /// support doing so natively.
+    ///
+    /// When this is `true`, `wgpu_hal` promises that shaders can only read or
+    /// write the [accessible region][ar] of a bindgroup's buffer bindings. If
+    /// the underlying graphics platform cannot implement these bounds checks
+    /// itself, `wgpu_hal` will inject bounds checks before presenting the
+    /// shader to the platform.
+    ///
+    /// When this is `false`, `wgpu_hal` only enforces such bounds checks if the
+    /// underlying platform provides a way to do so itself. `wgpu_hal` does not
+    /// itself add any bounds checks to generated shader code.
+    ///
+    /// Note that `wgpu_hal` users may try to initialize only those portions of
+    /// buffers that they anticipate might be read from. Passing `false` here
+    /// may allow shaders to see wider regions of the buffers than expected,
+    /// making such deferred initialization visible to the application.
+    ///
+    /// [ar]: struct.BufferBinding.html#accessible-region
     pub runtime_checks: bool,
 }
 

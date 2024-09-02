@@ -7309,8 +7309,15 @@ impl ShaderBoundChecks {
     /// Creates a new configuration where the shader isn't bound checked.
     ///
     /// # Safety
-    /// The caller MUST ensure that all shaders built with this configuration don't perform any
-    /// out of bounds reads or writes.
+    ///
+    /// The caller MUST ensure that all shaders built with this configuration
+    /// don't perform any out of bounds reads or writes.
+    ///
+    /// Note that `wgpu_core`, in particular, initializes only those portions of
+    /// buffers that it expects might be read, and it does not expect contents
+    /// outside the ranges bound in bindgroups to be accessible, so using this
+    /// configuration with ill-behaved shaders could expose uninitialized GPU
+    /// memory contents to the application.
     #[must_use]
     pub unsafe fn unchecked() -> Self {
         ShaderBoundChecks {
