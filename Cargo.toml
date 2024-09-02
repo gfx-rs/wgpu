@@ -149,7 +149,6 @@ gpu-descriptor = "0.3"
 bit-set = "0.8"
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
-hassle-rs = "0.11.0"
 windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies

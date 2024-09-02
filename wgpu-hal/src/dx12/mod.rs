@@ -71,7 +71,10 @@ struct DynLib {
 }
 
 impl DynLib {
-    unsafe fn new(filename: &'static str) -> Result<Self, libloading::Error> {
+    unsafe fn new<P>(filename: P) -> Result<Self, libloading::Error>
+    where
+        P: AsRef<ffi::OsStr>,
+    {
         unsafe { libloading::Library::new(filename) }.map(|inner| Self { inner })
     }
 
@@ -919,8 +922,7 @@ pub struct ShaderModule {
 impl crate::DynShaderModule for ShaderModule {}
 
 pub(super) enum CompiledShader {
-    #[allow(unused)]
-    Dxc(Vec<u8>),
+    Dxc(Direct3D::Dxc::IDxcBlob),
     Fxc(Direct3D::ID3DBlob),
 }
 
@@ -928,8 +930,8 @@ impl CompiledShader {
     fn create_native_shader(&self) -> Direct3D12::D3D12_SHADER_BYTECODE {
         match self {
             CompiledShader::Dxc(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
-                pShaderBytecode: shader.as_ptr().cast(),
-                BytecodeLength: shader.len(),
+                pShaderBytecode: unsafe { shader.GetBufferPointer() },
+                BytecodeLength: unsafe { shader.GetBufferSize() },
             },
             CompiledShader::Fxc(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
                 pShaderBytecode: unsafe { shader.GetBufferPointer() },
