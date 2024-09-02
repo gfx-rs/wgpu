@@ -96,6 +96,7 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 - Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
 - Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
 - Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170)
+- Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201)
 
 #### GLES / OpenGL
 

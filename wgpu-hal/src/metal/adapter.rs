@@ -997,6 +997,10 @@ impl super::PrivateCapabilities {
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),
                 buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),
+                // This backend has Naga incorporate bounds checks into the
+                // Metal Shading Language it generates, so from `wgpu_hal`'s
+                // users' point of view, references are tightly checked.
+                uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
             },
             downlevel,
         }

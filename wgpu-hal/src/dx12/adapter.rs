@@ -519,6 +519,9 @@ impl super::Adapter {
                         Direct3D12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u64,
                     )
                     .unwrap(),
+                    // Direct3D correctly bounds-checks all array accesses:
+                    // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
+                    uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
                 },
                 downlevel,
             },
