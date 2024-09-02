@@ -991,8 +991,12 @@ impl Parser {
             lexer.expect(Token::Paren('>'))?;
         }
         let name = lexer.next_ident()?;
-        lexer.expect(Token::Separator(':'))?;
-        let ty = self.type_decl(lexer, ctx)?;
+
+        let ty = if lexer.skip(Token::Separator(':')) {
+            Some(self.type_decl(lexer, ctx)?)
+        } else {
+            None
+        };
 
         let init = if lexer.skip(Token::Operation('=')) {
             let handle = self.general_expression(lexer, ctx)?;

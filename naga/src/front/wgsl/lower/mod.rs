@@ -1034,16 +1034,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.globals.insert(f.name.name, lowered_decl);
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
-                    let ty = self.resolve_ast_type(v.ty, &mut ctx)?;
+                    let explicit_ty =
+                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx))
+                            .transpose()?;
 
-                    let init;
-                    if let Some(init_ast) = v.init {
-                        let mut ectx = ctx.as_override();
-                        let lowered = self.expression_for_abstract(init_ast, &mut ectx)?;
-                        let ty_res = crate::proc::TypeResolution::Handle(ty);
-                        let converted = ectx
-                            .try_automatic_conversions(lowered, &ty_res, v.name.span)
-                            .map_err(|error| match error {
+                    let mut ectx = ctx.as_override();
+
+                    let ty;
+                    let initializer;
+                    match (v.init, explicit_ty) {
+                        (Some(init), Some(explicit_ty)) => {
+                            let init = self.expression_for_abstract(init, &mut ectx)?;
+                            let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
+                            let init = ectx
+                                .try_automatic_conversions(init, &ty_res, v.name.span)
+                                .map_err(|error| match error {
                                 Error::AutoConversion(e) => Error::InitializationTypeMismatch {
                                     name: v.name.span,
                                     expected: e.dest_type,
@@ -1051,9 +1056,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 },
                                 other => other,
                             })?;
-                        init = Some(converted);
-                    } else {
-                        init = None;
+                            ty = explicit_ty;
+                            initializer = Some(init);
+                        }
+                        (Some(init), None) => {
+                            let concretized = self.expression(init, &mut ectx)?;
+                            ty = ectx.register_type(concretized)?;
+                            initializer = Some(concretized);
+                        }
+                        (None, Some(explicit_ty)) => {
+                            ty = explicit_ty;
+                            initializer = None;
+                        }
+                        (None, None) => return Err(Error::DeclMissingTypeAndInit(v.name.span)),
                     }
 
                     let binding = if let Some(ref binding) = v.binding {
@@ -1071,7 +1086,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             space: v.space,
                             binding,
                             ty,
-                            init,
+                            init: initializer,
                         },
                         span,
                     );
