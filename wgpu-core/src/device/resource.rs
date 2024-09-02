@@ -1890,7 +1890,6 @@ impl Device {
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates,
-        limits: &wgt::Limits,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, binding_model::CreateBindGroupError>
     {
@@ -1915,7 +1914,7 @@ impl Device {
             wgt::BufferBindingType::Uniform => (
                 wgt::BufferUsages::UNIFORM,
                 hal::BufferUses::UNIFORM,
-                limits.max_uniform_buffer_binding_size,
+                self.limits.max_uniform_buffer_binding_size,
             ),
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsages::STORAGE,
@@ -1924,12 +1923,12 @@ impl Device {
                 } else {
                     hal::BufferUses::STORAGE_READ_WRITE
                 },
-                limits.max_storage_buffer_binding_size,
+                self.limits.max_storage_buffer_binding_size,
             ),
         };
 
         let (align, align_limit_name) =
-            binding_model::buffer_binding_type_alignment(limits, binding_ty);
+            binding_model::buffer_binding_type_alignment(&self.limits, binding_ty);
         if bb.offset % align as u64 != 0 {
             return Err(Error::UnalignedBufferOffset(
                 bb.offset,
@@ -2167,7 +2166,6 @@ impl Device {
                         &mut dynamic_binding_info,
                         &mut late_buffer_binding_sizes,
                         &mut used,
-                        &self.limits,
                         &snatch_guard,
                     )?;
 
@@ -2189,7 +2187,6 @@ impl Device {
                             &mut dynamic_binding_info,
                             &mut late_buffer_binding_sizes,
                             &mut used,
-                            &self.limits,
                             &snatch_guard,
                         )?;
                         hal_buffers.push(bb);
@@ -3449,10 +3446,7 @@ impl Device {
         Ok(cache)
     }
 
-    fn get_texture_format_features(
-        &self,
-        format: TextureFormat,
-    ) -> wgt::TextureFormatFeatures {
+    fn get_texture_format_features(&self, format: TextureFormat) -> wgt::TextureFormatFeatures {
         // Variant of adapter.get_texture_format_features that takes device features into account
         use wgt::TextureFormatFeatureFlags as tfsc;
         let mut format_features = self.adapter.get_texture_format_features(format);
