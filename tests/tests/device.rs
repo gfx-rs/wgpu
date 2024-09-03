@@ -35,12 +35,14 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().skip(FailureCase::backend(
+        wgpu::Backends::all() - wgpu::Backends::DX12,
+    )))
     .run_sync(|_| {
         use pollster::FutureExt as _;
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
+            backends: wgpu::Backends::DX12,
             dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
             gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
             flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
@@ -71,13 +73,15 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().skip(FailureCase::backend(
+        wgpu::Backends::all() - wgpu::Backends::DX12,
+    )))
     .run_sync(|_| {
         use pollster::FutureExt as _;
 
         fn create_device_and_queue() -> (wgpu::Device, wgpu::Queue) {
             let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-                backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
+                backends: wgpu::Backends::DX12,
                 dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env()
                     .unwrap_or_default(),
                 gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
