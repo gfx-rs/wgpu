@@ -1123,9 +1123,7 @@ impl crate::Device for super::Device {
         }
         .into_device_result("Root signature creation")?;
 
-        let special_constants_cmd_signatures = if let Some(root_index) =
-            special_constants_root_index
-        {
+        let special_constants = if let Some(root_index) = special_constants_root_index {
             let constant_indirect_argument_desc = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                 Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
                 Anonymous: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0 {
@@ -1153,7 +1151,7 @@ impl crate::Device for super::Device {
                 };
                 size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
             };
-            Some(super::CommandSignatures {
+            let cmd_signatures = super::CommandSignatures {
                 draw: Self::create_command_signature(
                     &self.raw,
                     Some(&raw),
@@ -1193,6 +1191,11 @@ impl crate::Device for super::Device {
                     ],
                     0,
                 )?,
+            };
+
+            Some(super::PipelineLayoutSpecialConstants {
+                root_index,
+                cmd_signatures,
             })
         } else {
             None
@@ -1209,8 +1212,7 @@ impl crate::Device for super::Device {
             shared: super::PipelineLayoutShared {
                 signature: Some(raw),
                 total_root_elements: parameters.len() as super::RootIndex,
-                special_constants_root_index,
-                special_constants_cmd_signatures,
+                special_constants,
                 root_constant_info,
             },
             bind_group_infos,
