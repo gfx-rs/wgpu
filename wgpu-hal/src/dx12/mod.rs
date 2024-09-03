@@ -685,8 +685,7 @@ impl PassState {
             layout: PipelineLayoutShared {
                 signature: None,
                 total_root_elements: 0,
-                special_constants_root_index: None,
-                special_constants_cmd_signatures: None,
+                special_constants: None,
                 root_constant_info: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
@@ -923,13 +922,21 @@ struct RootConstantInfo {
 struct PipelineLayoutShared {
     signature: Option<Direct3D12::ID3D12RootSignature>,
     total_root_elements: RootIndex,
-    special_constants_root_index: Option<RootIndex>,
-    special_constants_cmd_signatures: Option<CommandSignatures>,
+    special_constants: Option<PipelineLayoutSpecialConstants>,
     root_constant_info: Option<RootConstantInfo>,
 }
 
 unsafe impl Send for PipelineLayoutShared {}
 unsafe impl Sync for PipelineLayoutShared {}
+
+#[derive(Debug, Clone)]
+struct PipelineLayoutSpecialConstants {
+    root_index: RootIndex,
+    cmd_signatures: CommandSignatures,
+}
+
+unsafe impl Send for PipelineLayoutSpecialConstants {}
+unsafe impl Sync for PipelineLayoutSpecialConstants {}
 
 #[derive(Debug)]
 pub struct PipelineLayout {
