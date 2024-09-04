@@ -44,6 +44,7 @@ metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
     "naga/msl-out-if-target-apple",
     "dep:block",
+    "dep:raw-window-metal",
 ]
 vulkan = [
     "naga/spv-out",
@@ -53,6 +54,7 @@ vulkan = [
     "dep:libloading",
     "dep:smallvec",
     "dep:android_system_properties",
+    "dep:raw-window-metal",
 ]
 gles = [
     "naga/glsl-out",
@@ -165,6 +167,9 @@ glutin_wgl_sys = { workspace = true, optional = true }
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
 block = { workspace = true, optional = true }
+
+# backend: Metal + Vulkan
+raw-window-metal = { workspace = true, optional = true }
 
 metal.workspace = true
 objc.workspace = true
