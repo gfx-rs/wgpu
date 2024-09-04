@@ -336,19 +336,41 @@ fn map_buffer(
 
     let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
-    for uninitialized in buffer
-        .initialization_status
-        .write()
-        .drain(offset..(size + offset))
+    // We can't call flush_mapped_ranges in this case, so we can't drain the uninitialized ranges either
+    if !mapping.is_coherent
+        && kind == HostMap::Read
+        && !buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
     {
-        // The mapping's pointer is already offset, however we track the
-        // uninitialized range relative to the buffer's start.
-        let fill_range =
-            (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
-        mapped[fill_range].fill(0);
+        for uninitialized in buffer
+            .initialization_status
+            .write()
+            .uninitialized(offset..(size + offset))
+        {
+            // The mapping's pointer is already offset, however we track the
+            // uninitialized range relative to the buffer's start.
+            let fill_range =
+                (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+            mapped[fill_range].fill(0);
+        }
+    } else {
+        for uninitialized in buffer
+            .initialization_status
+            .write()
+            .drain(offset..(size + offset))
+        {
+            // The mapping's pointer is already offset, however we track the
+            // uninitialized range relative to the buffer's start.
+            let fill_range =
+                (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+            mapped[fill_range].fill(0);
 
-        if !mapping.is_coherent && kind == HostMap::Read {
-            unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
+            // NOTE: This is only possible when MAPPABLE_PRIMARY_BUFFERS is enabled.
+            if !mapping.is_coherent
+                && kind == HostMap::Read
+                && buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
+            {
+                unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
+            }
         }
     }
 
