@@ -230,6 +230,9 @@ impl super::Surface {
             let frame: CGRect = msg_send![root_layer, bounds];
             let () = msg_send![new_layer, setFrame: frame];
 
+            // The gravity to use when the layer's `drawableSize` isn't the
+            // same as the bounds rectangle.
+            //
             // The desired content gravity is `kCAGravityResize`, because it
             // masks / alleviates issues with resizing when
             // `present_with_transaction` is disabled, and behaves better when
