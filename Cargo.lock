@@ -1330,12 +1330,14 @@ dependencies = [
  "core-foundation",
  "dispatch",
  "glutin_egl_sys",
+ "glutin_wgl_sys 0.5.0",
  "icrate",
  "libloading",
  "objc2",
  "once_cell",
  "raw-window-handle 0.5.2",
  "wayland-sys",
+ "windows-sys 0.48.0",
  "x11-dl",
 ]
 
@@ -1359,6 +1361,15 @@ checksum = "77cc5623f5309ef433c3dd4ca1223195347fe62c413da8e2fdd0eb76db2d9bcd"
 dependencies = [
  "gl_generator",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "glutin_wgl_sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c8098adac955faa2d31079b65dc48841251f69efd3ac25477903fc424362ead"
+dependencies = [
+ "gl_generator",
 ]
 
 [[package]]
@@ -3669,7 +3680,7 @@ dependencies = [
  "glow",
  "glutin",
  "glutin-winit",
- "glutin_wgl_sys",
+ "glutin_wgl_sys 0.6.0",
  "gpu-alloc",
  "gpu-allocator",
  "gpu-descriptor",
