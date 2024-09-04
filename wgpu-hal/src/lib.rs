@@ -51,8 +51,8 @@
 //!   must use [`CommandEncoder::transition_buffers`] between those two
 //!   operations.
 //!
-//! - Pipeline layouts are *explicitly specified* when setting bind
-//!   group. Incompatible layouts disturb groups bound at higher indices.
+//! - Pipeline layouts are *explicitly specified* when setting bind groups.
+//!   Incompatible layouts disturb groups bound at higher indices.
 //!
 //! - The API *accepts collections as iterators*, to avoid forcing the user to
 //!   store data in particular containers. The implementation doesn't guarantee
@@ -1242,8 +1242,40 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     // pass common
 
-    /// Sets the bind group at `index` to `group`, assuming the layout
-    /// of all the preceding groups to be taken from `layout`.
+    /// Sets the bind group at `index` to `group`.
+    ///
+    /// If this is not the first call to `set_bind_group` within the current
+    /// render or compute pass:
+    ///
+    /// - If `layout` contains `n` bind group layouts, then any previously set
+    ///   bind groups at indices `n` or higher are cleared.
+    ///
+    /// - If the first `m` bind group layouts of `layout` are equal to those of
+    ///   the previously passed layout, but no more, then any previously set
+    ///   bind groups at indices `m` or higher are cleared.
+    ///
+    /// It follows from the above that passing the same layout as before doesn't
+    /// clear any bind groups.
+    ///
+    /// # Safety
+    ///
+    /// - This [`CommandEncoder`] must be within a render or compute pass.
+    ///
+    /// - `index` must be the valid index of some bind group layout in `layout`.
+    ///   Call this the "relevant bind group layout".
+    ///
+    /// - The layout of `group` must be equal to the relevant bind group layout.
+    ///
+    /// - The length of `dynamic_offsets` must match the number of buffer
+    ///   bindings [with dynamic offsets][hdo] in the relevant bind group
+    ///   layout.
+    ///
+    /// - If those buffer bindings are ordered by increasing [`binding` number]
+    ///   and paired with elements from `dynamic_offsets`, then each offset must
+    ///   be a valid offset for the binding's corresponding buffer in `group`.
+    ///
+    /// [hdo]: wgt::BindingType::Buffer::has_dynamic_offset
+    /// [`binding` number]: wgt::BindGroupLayoutEntry::binding
     unsafe fn set_bind_group(
         &mut self,
         layout: &<Self::A as Api>::PipelineLayout,
@@ -1295,11 +1327,43 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     // render passes
 
-    // Begins a render pass, clears all active bindings.
+    /// Begin a new render pass, clearing all active bindings.
+    ///
+    /// This clears any bindings established by the following calls:
+    ///
+    /// - [`set_bind_group`](CommandEncoder::set_bind_group)
+    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`begin_query`](CommandEncoder::begin_query)
+    /// - [`set_render_pipeline`](CommandEncoder::set_render_pipeline)
+    /// - [`set_index_buffer`](CommandEncoder::set_index_buffer)
+    /// - [`set_vertex_buffer`](CommandEncoder::set_vertex_buffer)
+    ///
+    /// # Safety
+    ///
+    /// - All prior calls to [`begin_render_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_render_pass`].
+    ///
+    /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_compute_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
     );
+
+    /// End the current render pass.
+    ///
+    /// # Safety
+    ///
+    /// - There must have been a prior call to [`begin_render_pass`] on this [`CommandEncoder`]
+    ///   that has not been followed by a call to [`end_render_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
     unsafe fn end_render_pass(&mut self);
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &<Self::A as Api>::RenderPipeline);
@@ -1365,11 +1429,41 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     // compute passes
 
-    // Begins a compute pass, clears all active bindings.
+    /// Begin a new compute pass, clearing all active bindings.
+    ///
+    /// This clears any bindings established by the following calls:
+    ///
+    /// - [`set_bind_group`](CommandEncoder::set_bind_group)
+    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`begin_query`](CommandEncoder::begin_query)
+    /// - [`set_compute_pipeline`](CommandEncoder::set_compute_pipeline)
+    ///
+    /// # Safety
+    ///
+    /// - All prior calls to [`begin_render_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_render_pass`].
+    ///
+    /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_compute_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
     unsafe fn begin_compute_pass(
         &mut self,
         desc: &ComputePassDescriptor<<Self::A as Api>::QuerySet>,
     );
+
+    /// End the current compute pass.
+    ///
+    /// # Safety
+    ///
+    /// - There must have been a prior call to [`begin_compute_pass`] on this [`CommandEncoder`]
+    ///   that has not been followed by a call to [`end_compute_pass`].
+    ///
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
     unsafe fn end_compute_pass(&mut self);
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &<Self::A as Api>::ComputePipeline);
