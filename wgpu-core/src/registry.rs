@@ -68,7 +68,7 @@ impl<T: StorageItem> FutureId<'_, T> {
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry.
-    pub fn assign(self, value: Arc<T>) -> Id<T::Marker> {
+    pub fn assign(self, value: T) -> Id<T::Marker> {
         let mut data = self.data.write();
         data.insert(self.id, value);
         self.id
@@ -98,9 +98,6 @@ impl<T: StorageItem> Registry<T> {
         }
     }
 
-    pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
-        self.read().get_owned(id)
-    }
     #[track_caller]
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
         self.storage.read()
@@ -114,7 +111,7 @@ impl<T: StorageItem> Registry<T> {
         storage.remove(id);
         storage.insert_error(id);
     }
-    pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
+    pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<T> {
         let value = self.storage.write().remove(id);
         // This needs to happen *after* removing it from the storage, to maintain the
         // invariant that `self.identity` only contains ids which are actually available
@@ -139,6 +136,12 @@ impl<T: StorageItem> Registry<T> {
             }
         }
         report
+    }
+}
+
+impl<T: StorageItem + Clone> Registry<T> {
+    pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<T, InvalidId> {
+        self.read().get_owned(id)
     }
 }
 
