@@ -179,7 +179,7 @@ impl Global {
                 let clear_view_desc = hal::TextureViewDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) clear surface texture view"),
-                        self.instance.flags,
+                        device.instance_flags,
                     ),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,

@@ -503,7 +503,7 @@ impl Global {
             };
 
         let hal_desc = hal::ComputePassDescriptor {
-            label: hal_label(base.label.as_deref(), self.instance.flags),
+            label: hal_label(base.label.as_deref(), device.instance_flags),
             timestamp_writes,
         };
 
