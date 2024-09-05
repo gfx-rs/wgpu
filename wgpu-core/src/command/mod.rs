@@ -82,8 +82,8 @@ pub(crate) enum CommandEncoderStatus {
     ///
     /// When a `CommandEncoder` is left in this state, we have also
     /// returned an error result from the function that encountered
-    /// the problem. Future attempts to use the encoder (that is,
-    /// calls to [`CommandBuffer::get_encoder`]) will also return
+    /// the problem. Future attempts to use the encoder (for example,
+    /// calls to [`CommandBuffer::check_recording`]) will also return
     /// errors.
     ///
     /// Calling [`Global::command_encoder_finish`] in this state
