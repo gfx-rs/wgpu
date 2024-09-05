@@ -322,14 +322,8 @@ impl PendingWrites {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("Queue is invalid")]
-pub struct InvalidQueue;
-
-#[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueWriteError {
-    #[error("QueueId is invalid")]
-    InvalidQueueId,
     #[error(transparent)]
     Queue(#[from] DeviceError),
     #[error(transparent)]
@@ -343,8 +337,6 @@ pub enum QueueWriteError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueSubmitError {
-    #[error("QueueId is invalid")]
-    InvalidQueueId,
     #[error(transparent)]
     Queue(#[from] DeviceError),
     #[error(transparent)]
@@ -381,10 +373,7 @@ impl Global {
             .get(buffer_id)
             .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
 
-        let queue = hub
-            .queues
-            .get(queue_id)
-            .map_err(|_| QueueWriteError::InvalidQueueId)?;
+        let queue = hub.queues.strict_get(queue_id);
 
         let device = &queue.device;
 
@@ -444,10 +433,7 @@ impl Global {
         profiling::scope!("Queue::create_staging_buffer");
         let hub = &self.hub;
 
-        let queue = hub
-            .queues
-            .get(queue_id)
-            .map_err(|_| QueueWriteError::InvalidQueueId)?;
+        let queue = hub.queues.strict_get(queue_id);
 
         let device = &queue.device;
 
@@ -471,10 +457,7 @@ impl Global {
         profiling::scope!("Queue::write_staging_buffer");
         let hub = &self.hub;
 
-        let queue = hub
-            .queues
-            .get(queue_id)
-            .map_err(|_| QueueWriteError::InvalidQueueId)?;
+        let queue = hub.queues.strict_get(queue_id);
 
         let device = &queue.device;
 
@@ -621,10 +604,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let queue = hub
-            .queues
-            .get(queue_id)
-            .map_err(|_| QueueWriteError::InvalidQueueId)?;
+        let queue = hub.queues.strict_get(queue_id);
 
         let device = &queue.device;
 
@@ -862,10 +842,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let queue = hub
-            .queues
-            .get(queue_id)
-            .map_err(|_| QueueWriteError::InvalidQueueId)?;
+        let queue = hub.queues.strict_get(queue_id);
 
         let device = &queue.device;
 
@@ -1072,10 +1049,7 @@ impl Global {
         let (submit_index, callbacks) = {
             let hub = &self.hub;
 
-            let queue = hub
-                .queues
-                .get(queue_id)
-                .map_err(|_| QueueSubmitError::InvalidQueueId)?;
+            let queue = hub.queues.strict_get(queue_id);
 
             let device = &queue.device;
 
@@ -1369,27 +1343,20 @@ impl Global {
         Ok(submit_index)
     }
 
-    pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> Result<f32, InvalidQueue> {
-        let hub = &self.hub;
-        match hub.queues.get(queue_id) {
-            Ok(queue) => Ok(unsafe { queue.raw().get_timestamp_period() }),
-            Err(_) => Err(InvalidQueue),
-        }
+    pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
+        let queue = self.hub.queues.strict_get(queue_id);
+        unsafe { queue.raw().get_timestamp_period() }
     }
 
     pub fn queue_on_submitted_work_done(
         &self,
         queue_id: QueueId,
         closure: SubmittedWorkDoneClosure,
-    ) -> Result<(), InvalidQueue> {
+    ) {
         api_log!("Queue::on_submitted_work_done {queue_id:?}");
 
         //TODO: flush pending writes
-        let hub = &self.hub;
-        match hub.queues.get(queue_id) {
-            Ok(queue) => queue.device.lock_life().add_work_done_closure(closure),
-            Err(_) => return Err(InvalidQueue),
-        }
-        Ok(())
+        let queue = self.hub.queues.strict_get(queue_id);
+        queue.device.lock_life().add_work_done_closure(closure);
     }
 }
