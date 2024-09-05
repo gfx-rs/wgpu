@@ -110,7 +110,7 @@ use crate::{
     resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
     storage::{Element, Storage},
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct HubReport {
@@ -162,24 +162,24 @@ impl HubReport {
 ///
 /// [`A::hub(global)`]: HalApi::hub
 pub struct Hub {
-    pub(crate) adapters: Registry<Adapter>,
-    pub(crate) devices: Registry<Device>,
-    pub(crate) queues: Registry<Queue>,
-    pub(crate) pipeline_layouts: Registry<PipelineLayout>,
-    pub(crate) shader_modules: Registry<ShaderModule>,
-    pub(crate) bind_group_layouts: Registry<BindGroupLayout>,
-    pub(crate) bind_groups: Registry<BindGroup>,
-    pub(crate) command_buffers: Registry<CommandBuffer>,
-    pub(crate) render_bundles: Registry<RenderBundle>,
-    pub(crate) render_pipelines: Registry<RenderPipeline>,
-    pub(crate) compute_pipelines: Registry<ComputePipeline>,
-    pub(crate) pipeline_caches: Registry<PipelineCache>,
-    pub(crate) query_sets: Registry<QuerySet>,
-    pub(crate) buffers: Registry<Buffer>,
-    pub(crate) staging_buffers: Registry<StagingBuffer>,
-    pub(crate) textures: Registry<Texture>,
-    pub(crate) texture_views: Registry<TextureView>,
-    pub(crate) samplers: Registry<Sampler>,
+    pub(crate) adapters: Registry<Arc<Adapter>>,
+    pub(crate) devices: Registry<Arc<Device>>,
+    pub(crate) queues: Registry<Arc<Queue>>,
+    pub(crate) pipeline_layouts: Registry<Arc<PipelineLayout>>,
+    pub(crate) shader_modules: Registry<Arc<ShaderModule>>,
+    pub(crate) bind_group_layouts: Registry<Arc<BindGroupLayout>>,
+    pub(crate) bind_groups: Registry<Arc<BindGroup>>,
+    pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,
+    pub(crate) render_bundles: Registry<Arc<RenderBundle>>,
+    pub(crate) render_pipelines: Registry<Arc<RenderPipeline>>,
+    pub(crate) compute_pipelines: Registry<Arc<ComputePipeline>>,
+    pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
+    pub(crate) query_sets: Registry<Arc<QuerySet>>,
+    pub(crate) buffers: Registry<Arc<Buffer>>,
+    pub(crate) staging_buffers: Registry<Arc<StagingBuffer>>,
+    pub(crate) textures: Registry<Arc<Texture>>,
+    pub(crate) texture_views: Registry<Arc<TextureView>>,
+    pub(crate) samplers: Registry<Arc<Sampler>>,
 }
 
 impl Hub {
@@ -206,7 +206,7 @@ impl Hub {
         }
     }
 
-    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>) {
+    pub(crate) fn clear(&self, surface_guard: &Storage<Arc<Surface>>) {
         let mut devices = self.devices.write();
         for element in devices.map.iter() {
             if let Element::Occupied(ref device, _) = *element {

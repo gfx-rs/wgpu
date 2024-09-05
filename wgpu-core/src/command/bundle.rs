@@ -578,7 +578,7 @@ impl RenderBundleEncoder {
 
 fn set_bind_group(
     state: &mut State,
-    bind_group_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<BindGroup>>,
+    bind_group_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<BindGroup>>>,
     dynamic_offsets: &[u32],
     index: u32,
     num_dynamic_offsets: usize,
@@ -630,7 +630,7 @@ fn set_bind_group(
 
 fn set_pipeline(
     state: &mut State,
-    pipeline_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<RenderPipeline>>,
+    pipeline_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<RenderPipeline>>>,
     context: &RenderPassContext,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
@@ -673,7 +673,7 @@ fn set_pipeline(
 
 fn set_index_buffer(
     state: &mut State,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
+    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<Buffer>>>,
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
@@ -708,7 +708,7 @@ fn set_index_buffer(
 
 fn set_vertex_buffer(
     state: &mut State,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
+    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<Buffer>>>,
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
@@ -852,7 +852,7 @@ fn draw_indexed(
 fn multi_draw_indirect(
     state: &mut State,
     dynamic_offsets: &[u32],
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
+    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<Buffer>>>,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
     indexed: bool,

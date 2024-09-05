@@ -8,13 +8,16 @@ use crate::{Epoch, Index};
 
 /// An entry in a `Storage::map` table.
 #[derive(Debug)]
-pub(crate) enum Element<T> {
+pub(crate) enum Element<T>
+where
+    T: StorageItem,
+{
     /// There are no live ids with this index.
     Vacant,
 
     /// There is one live id with this index, allocated at the given
     /// epoch.
-    Occupied(Arc<T>, Epoch),
+    Occupied(T, Epoch),
 
     /// Like `Occupied`, but an error occurred when creating the
     /// resource.
@@ -26,6 +29,14 @@ pub(crate) struct InvalidId;
 
 pub(crate) trait StorageItem: ResourceType {
     type Marker: Marker;
+}
+
+impl<T: ResourceType> ResourceType for Arc<T> {
+    const TYPE: &'static str = T::TYPE;
+}
+
+impl<T: StorageItem> StorageItem for Arc<T> {
+    type Marker = T::Marker;
 }
 
 #[macro_export]
@@ -72,7 +83,7 @@ where
 {
     /// Get a reference to an item behind a potentially invalid ID.
     /// Panics if there is an epoch mismatch, or the entry is empty.
-    pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<&Arc<T>, InvalidId> {
+    pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<&T, InvalidId> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
@@ -85,12 +96,6 @@ where
             self.kind, id
         );
         result
-    }
-
-    /// Get an owned reference to an item behind a potentially invalid ID.
-    /// Panics if there is an epoch mismatch, or the entry is empty.
-    pub(crate) fn get_owned(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
-        Ok(Arc::clone(self.get(id)?))
     }
 
     fn insert_impl(&mut self, index: usize, epoch: Epoch, element: Element<T>) {
@@ -118,7 +123,7 @@ where
         }
     }
 
-    pub(crate) fn insert(&mut self, id: Id<T::Marker>, value: Arc<T>) {
+    pub(crate) fn insert(&mut self, id: Id<T::Marker>, value: T) {
         let (index, epoch, _backend) = id.unzip();
         self.insert_impl(index as usize, epoch, Element::Occupied(value, epoch))
     }
@@ -128,7 +133,7 @@ where
         self.insert_impl(index as usize, epoch, Element::Error(epoch))
     }
 
-    pub(crate) fn replace_with_error(&mut self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
+    pub(crate) fn replace_with_error(&mut self, id: Id<T::Marker>) -> Result<T, InvalidId> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Error(epoch)) {
             Element::Vacant => panic!("Cannot access vacant resource"),
@@ -140,7 +145,7 @@ where
         }
     }
 
-    pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> Option<Arc<T>> {
+    pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> Option<T> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {
@@ -152,7 +157,7 @@ where
         }
     }
 
-    pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (Id<T::Marker>, &Arc<T>)> {
+    pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (Id<T::Marker>, &T)> {
         self.map
             .iter()
             .enumerate()
@@ -166,5 +171,16 @@ where
 
     pub(crate) fn len(&self) -> usize {
         self.map.len()
+    }
+}
+
+impl<T> Storage<T>
+where
+    T: StorageItem + Clone,
+{
+    /// Get an owned reference to an item behind a potentially invalid ID.
+    /// Panics if there is an epoch mismatch, or the entry is empty.
+    pub(crate) fn get_owned(&self, id: Id<T::Marker>) -> Result<T, InvalidId> {
+        Ok(self.get(id)?.clone())
     }
 }

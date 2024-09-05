@@ -26,7 +26,11 @@ use crate::{
 
 use wgt::{BufferAddress, TextureFormat};
 
-use std::{borrow::Cow, ptr::NonNull, sync::atomic::Ordering};
+use std::{
+    borrow::Cow,
+    ptr::NonNull,
+    sync::{atomic::Ordering, Arc},
+};
 
 use super::{ImplicitPipelineIds, UserClosures};
 
@@ -803,9 +807,9 @@ impl Global {
 
             fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
-                buffer_storage: &Storage<resource::Buffer>,
-                sampler_storage: &Storage<resource::Sampler>,
-                texture_view_storage: &Storage<resource::TextureView>,
+                buffer_storage: &Storage<Arc<resource::Buffer>>,
+                sampler_storage: &Storage<Arc<resource::Sampler>>,
+                texture_view_storage: &Storage<Arc<resource::TextureView>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
