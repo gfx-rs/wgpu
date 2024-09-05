@@ -227,7 +227,7 @@ jobs:
           set -e
 
           # wgpu_core package
-          cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} \
+          cargo doc --target ${{ matrix.target }} \
                 --package wgpu-core \
                 --package wgpu-hal \
                 --package naga \
