@@ -82,14 +82,14 @@ fn main() {
             log::info!("Picked '{}'", info.name);
             let device_id = wgc::id::Id::zip(1, 0, backend);
             let queue_id = wgc::id::Id::zip(1, 0, backend);
-            let (_, _, error) = global.adapter_request_device(
+            let res = global.adapter_request_device(
                 adapter,
                 &desc,
                 None,
                 Some(device_id),
                 Some(queue_id),
             );
-            if let Some(e) = error {
+            if let Err(e) = res {
                 panic!("{:?}", e);
             }
             (device_id, queue_id)

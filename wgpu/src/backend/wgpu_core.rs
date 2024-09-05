@@ -108,7 +108,7 @@ impl ContextWgpuCore {
         if trace_dir.is_some() {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
-        let (device_id, queue_id, error) = unsafe {
+        let (device_id, queue_id) = unsafe {
             self.0.create_device_from_hal(
                 *adapter,
                 hal_device.into(),
@@ -117,10 +117,7 @@ impl ContextWgpuCore {
                 None,
                 None,
             )
-        };
-        if let Some(err) = error {
-            self.handle_error_fatal(err, "Adapter::create_device_from_hal");
-        }
+        }?;
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
@@ -606,16 +603,19 @@ impl crate::Context for ContextWgpuCore {
         if trace_dir.is_some() {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
-        let (device_id, queue_id, error) = self.0.adapter_request_device(
+        let res = self.0.adapter_request_device(
             *adapter_data,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
             None,
             None,
         );
-        if let Some(err) = error {
-            return ready(Err(err.into()));
-        }
+        let (device_id, queue_id) = match res {
+            Ok(ids) => ids,
+            Err(err) => {
+                return ready(Err(err.into()));
+            }
+        };
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,

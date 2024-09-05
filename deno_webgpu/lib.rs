@@ -649,7 +649,7 @@ pub fn op_webgpu_request_device(
         memory_hints: wgpu_types::MemoryHints::default(),
     };
 
-    let (device, queue, maybe_err) = instance.adapter_request_device(
+    let res = instance.adapter_request_device(
         adapter,
         &descriptor,
         std::env::var("DENO_WEBGPU_TRACE")
@@ -660,9 +660,8 @@ pub fn op_webgpu_request_device(
         None,
     );
     adapter_resource.close();
-    if let Some(err) = maybe_err {
-        return Err(DomExceptionOperationError::new(&err.to_string()).into());
-    }
+
+    let (device, queue) = res.map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
 
     let device_features = instance.device_features(device)?;
     let features = deserialize_features(&device_features);
