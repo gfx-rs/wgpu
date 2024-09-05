@@ -2304,10 +2304,7 @@ impl Global {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {queue_id:?}");
 
-        let hub = &self.hub;
-        if let Some(queue) = hub.queues.unregister(queue_id) {
-            drop(queue);
-        }
+        self.hub.queues.strict_unregister(queue_id);
     }
 
     pub fn buffer_map_async(

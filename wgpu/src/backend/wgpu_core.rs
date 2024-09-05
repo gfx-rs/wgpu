@@ -2069,13 +2069,7 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn queue_get_timestamp_period(&self, queue_data: &Self::QueueData) -> f32 {
-        let res = self.0.queue_get_timestamp_period(queue_data.id);
-        match res {
-            Ok(v) => v,
-            Err(cause) => {
-                self.handle_error_fatal(cause, "Queue::get_timestamp_period");
-            }
-        }
+        self.0.queue_get_timestamp_period(queue_data.id)
     }
 
     fn queue_on_submitted_work_done(
@@ -2084,11 +2078,7 @@ impl crate::Context for ContextWgpuCore {
         callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
-
-        let res = self.0.queue_on_submitted_work_done(queue_data.id, closure);
-        if let Err(cause) = res {
-            self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
-        }
+        self.0.queue_on_submitted_work_done(queue_data.id, closure);
     }
 
     fn device_start_capture(&self, device_data: &Self::DeviceData) {
