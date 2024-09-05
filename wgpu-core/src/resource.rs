@@ -1272,11 +1272,8 @@ impl Global {
         profiling::scope!("Adapter::as_hal");
 
         let hub = &self.hub;
-        let adapter = hub.adapters.get(id).ok();
-        let hal_adapter = adapter
-            .as_ref()
-            .map(|adapter| &adapter.raw.adapter)
-            .and_then(|adapter| adapter.as_any().downcast_ref());
+        let adapter = hub.adapters.strict_get(id);
+        let hal_adapter = adapter.raw.adapter.as_any().downcast_ref();
 
         hal_adapter_callback(hal_adapter)
     }

@@ -43,10 +43,7 @@ impl Global {
         let hub = &self.hub;
 
         let surface_guard = self.surfaces.read();
-        let adapter_guard = hub.adapters.read();
-        let adapter = adapter_guard
-            .get(adapter_id)
-            .map_err(|_| instance::IsSurfaceSupportedError::InvalidAdapter)?;
+        let adapter = hub.adapters.strict_get(adapter_id);
         let surface = surface_guard
             .get(surface_id)
             .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
@@ -87,15 +84,13 @@ impl Global {
         let hub = &self.hub;
 
         let surface_guard = self.surfaces.read();
-        let adapter_guard = hub.adapters.read();
-        let adapter = adapter_guard
-            .get(adapter_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
+        let adapter = hub.adapters.strict_get(adapter_id);
+
         let surface = surface_guard
             .get(surface_id)
             .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
 
-        get_supported_callback(adapter, surface)
+        get_supported_callback(&adapter, surface)
     }
 
     pub fn device_features(&self, device_id: DeviceId) -> Result<wgt::Features, DeviceError> {

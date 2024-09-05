@@ -414,9 +414,9 @@ pub fn op_webgpu_request_adapter(
             })
         }
     };
-    let adapter_features = instance.adapter_features(adapter)?;
+    let adapter_features = instance.adapter_features(adapter);
     let features = deserialize_features(&adapter_features);
-    let adapter_limits = instance.adapter_limits(adapter)?;
+    let adapter_limits = instance.adapter_limits(adapter);
 
     let instance = instance.clone();
 
@@ -705,7 +705,7 @@ pub fn op_webgpu_request_adapter_info(
     let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
-    let info = instance.adapter_get_info(adapter)?;
+    let info = instance.adapter_get_info(adapter);
     adapter_resource.close();
 
     Ok(GPUAdapterInfo {

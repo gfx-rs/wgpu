@@ -651,34 +651,22 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn adapter_features(&self, adapter_data: &Self::AdapterData) -> Features {
-        match self.0.adapter_features(*adapter_data) {
-            Ok(features) => features,
-            Err(err) => self.handle_error_fatal(err, "Adapter::features"),
-        }
+        self.0.adapter_features(*adapter_data)
     }
 
     fn adapter_limits(&self, adapter_data: &Self::AdapterData) -> Limits {
-        match self.0.adapter_limits(*adapter_data) {
-            Ok(limits) => limits,
-            Err(err) => self.handle_error_fatal(err, "Adapter::limits"),
-        }
+        self.0.adapter_limits(*adapter_data)
     }
 
     fn adapter_downlevel_capabilities(
         &self,
         adapter_data: &Self::AdapterData,
     ) -> DownlevelCapabilities {
-        match self.0.adapter_downlevel_capabilities(*adapter_data) {
-            Ok(downlevel) => downlevel,
-            Err(err) => self.handle_error_fatal(err, "Adapter::downlevel_properties"),
-        }
+        self.0.adapter_downlevel_capabilities(*adapter_data)
     }
 
     fn adapter_get_info(&self, adapter_data: &Self::AdapterData) -> AdapterInfo {
-        match self.0.adapter_get_info(*adapter_data) {
-            Ok(info) => info,
-            Err(err) => self.handle_error_fatal(err, "Adapter::get_info"),
-        }
+        self.0.adapter_get_info(*adapter_data)
     }
 
     fn adapter_get_texture_format_features(
@@ -686,23 +674,15 @@ impl crate::Context for ContextWgpuCore {
         adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        match self
-            .0
+        self.0
             .adapter_get_texture_format_features(*adapter_data, format)
-        {
-            Ok(info) => info,
-            Err(err) => self.handle_error_fatal(err, "Adapter::get_texture_format_features"),
-        }
     }
 
     fn adapter_get_presentation_timestamp(
         &self,
         adapter_data: &Self::AdapterData,
     ) -> wgt::PresentationTimestamp {
-        match self.0.adapter_get_presentation_timestamp(*adapter_data) {
-            Ok(timestamp) => timestamp,
-            Err(err) => self.handle_error_fatal(err, "Adapter::correlate_presentation_timestamp"),
-        }
+        self.0.adapter_get_presentation_timestamp(*adapter_data)
     }
 
     fn surface_get_capabilities(

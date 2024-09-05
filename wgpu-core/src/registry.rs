@@ -120,6 +120,15 @@ impl<T: StorageItem> Registry<T> {
         //Returning None is legal if it's an error ID
         value
     }
+    pub(crate) fn strict_unregister(&self, id: Id<T::Marker>) -> T {
+        let value = self.storage.write().strict_remove(id);
+        // This needs to happen *after* removing it from the storage, to maintain the
+        // invariant that `self.identity` only contains ids which are actually available
+        // See https://github.com/gfx-rs/wgpu/issues/5372
+        self.identity.free(id);
+        //Returning None is legal if it's an error ID
+        value
+    }
 
     pub(crate) fn generate_report(&self) -> RegistryReport {
         let storage = self.storage.read();
@@ -142,6 +151,10 @@ impl<T: StorageItem> Registry<T> {
 impl<T: StorageItem + Clone> Registry<T> {
     pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<T, InvalidId> {
         self.read().get_owned(id)
+    }
+
+    pub(crate) fn strict_get(&self, id: Id<T::Marker>) -> T {
+        self.read().strict_get(id)
     }
 }
 
