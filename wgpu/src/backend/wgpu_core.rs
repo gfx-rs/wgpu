@@ -641,13 +641,8 @@ impl crate::Context for ContextWgpuCore {
         adapter_data: &Self::AdapterData,
         surface_data: &Self::SurfaceData,
     ) -> bool {
-        match self
-            .0
+        self.0
             .adapter_is_surface_supported(*adapter_data, surface_data.id)
-        {
-            Ok(result) => result,
-            Err(err) => self.handle_error_fatal(err, "Adapter::is_surface_supported"),
-        }
     }
 
     fn adapter_features(&self, adapter_data: &Self::AdapterData) -> Features {
