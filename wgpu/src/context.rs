@@ -21,6 +21,7 @@ use crate::{
 /// Meta trait for an data associated with an id tracked by a context.
 ///
 /// There is no need to manually implement this trait since there is a blanket implementation for this trait.
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 pub trait ContextData: Debug + WasmNotSendSync + 'static {}
 impl<T: Debug + WasmNotSendSync + 'static> ContextData for T {}
 
@@ -59,6 +60,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     type CompilationInfoFuture: Future<Output = CompilationInfo> + WasmNotSend + 'static;
 
+    #[cfg(not(target_os = "emscripten"))]
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     unsafe fn instance_create_surface(
         &self,
@@ -752,6 +754,7 @@ pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
 pub(crate) trait DynContext: Debug + WasmNotSendSync {
+    #[cfg(not(target_os = "emscripten"))]
     fn as_any(&self) -> &dyn Any;
 
     unsafe fn instance_create_surface(
@@ -1350,6 +1353,7 @@ impl<T> DynContext for T
 where
     T: Context + 'static,
 {
+    #[cfg(not(target_os = "emscripten"))]
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -2700,6 +2704,7 @@ pub trait QueueWriteBuffer: WasmNotSendSync + Debug {
 
     fn slice_mut(&mut self) -> &mut [u8];
 
+    #[cfg(not(target_os = "emscripten"))]
     fn as_any(&self) -> &dyn Any;
 }
 
