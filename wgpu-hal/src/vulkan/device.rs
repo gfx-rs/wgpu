@@ -956,6 +956,10 @@ impl crate::Device for super::Device {
         self.counters.buffers.sub(1);
     }
 
+    unsafe fn add_raw_buffer(&self, _buffer: &super::Buffer) {
+        self.counters.buffers.add(1);
+    }
+
     unsafe fn map_buffer(
         &self,
         buffer: &super::Buffer,
@@ -1125,6 +1129,10 @@ impl crate::Device for super::Device {
         }
 
         self.counters.textures.sub(1);
+    }
+
+    unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
+        self.counters.textures.add(1);
     }
 
     unsafe fn create_texture_view(

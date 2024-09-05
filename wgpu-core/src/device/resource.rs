@@ -664,6 +664,8 @@ impl Device {
             .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
+        unsafe { self.raw().add_raw_texture(&*hal_texture) };
+
         let texture = Texture::new(
             self,
             resource::TextureInner::Native { raw: hal_texture },
@@ -689,6 +691,8 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> Arc<Buffer> {
+        unsafe { self.raw().add_raw_buffer(&*hal_buffer) };
+
         let buffer = Buffer {
             raw: Snatchable::new(hal_buffer),
             device: self.clone(),
