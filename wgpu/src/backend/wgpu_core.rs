@@ -755,17 +755,11 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn device_features(&self, device_data: &Self::DeviceData) -> Features {
-        match self.0.device_features(device_data.id) {
-            Ok(features) => features,
-            Err(err) => self.handle_error_fatal(err, "Device::features"),
-        }
+        self.0.device_features(device_data.id)
     }
 
     fn device_limits(&self, device_data: &Self::DeviceData) -> Limits {
-        match self.0.device_limits(device_data.id) {
-            Ok(limits) => limits,
-            Err(err) => self.handle_error_fatal(err, "Device::limits"),
-        }
+        self.0.device_limits(device_data.id)
     }
 
     #[cfg_attr(
@@ -1311,10 +1305,6 @@ impl crate::Context for ContextWgpuCore {
             Ok(encoder) => encoder,
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
-    }
-    #[doc(hidden)]
-    fn device_make_invalid(&self, device_data: &Self::DeviceData) {
-        self.0.device_make_invalid(device_data.id);
     }
     #[cfg_attr(not(any(native, Emscripten)), allow(unused))]
     fn device_drop(&self, device_data: &Self::DeviceData) {

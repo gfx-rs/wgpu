@@ -2012,11 +2012,6 @@ impl crate::context::Context for ContextWebGpu {
         Sendable(device_data.0.create_render_bundle_encoder(&mapped_desc))
     }
 
-    #[doc(hidden)]
-    fn device_make_invalid(&self, _device_data: &Self::DeviceData) {
-        // Unimplemented
-    }
-
     fn device_drop(&self, _device_data: &Self::DeviceData) {
         // Device is dropped automatically
     }
