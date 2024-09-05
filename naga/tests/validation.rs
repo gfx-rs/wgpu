@@ -316,6 +316,8 @@ fn main() {{
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn incompatible_interpolation_and_sampling_types() {
+    use dummy_interpolation_shader::DummyInterpolationShader;
+
     // NOTE: Things we expect to actually compile are in the `interpolate` snapshot test.
     use itertools::Itertools;
 
@@ -396,6 +398,8 @@ fn incompatible_interpolation_and_sampling_types() {
 #[cfg(all(feature = "wgsl-in", feature = "glsl-out"))]
 #[test]
 fn no_flat_first_in_glsl() {
+    use dummy_interpolation_shader::DummyInterpolationShader;
+
     let DummyInterpolationShader {
         source: _,
         module,
@@ -432,44 +436,46 @@ fn no_flat_first_in_glsl() {
     ));
 }
 
-struct DummyInterpolationShader {
-    source: String,
-    module: naga::Module,
-    interpolate_attr: String,
-    entry_point: &'static str,
-}
+#[cfg(all(test, feature = "wgsl-in"))]
+mod dummy_interpolation_shader {
+    pub struct DummyInterpolationShader {
+        pub source: String,
+        pub module: naga::Module,
+        pub interpolate_attr: String,
+        pub entry_point: &'static str,
+    }
 
-impl DummyInterpolationShader {
-    fn new(interpolation: naga::Interpolation, sampling: Option<naga::Sampling>) -> Self {
-        // NOTE: If you have to add variants below, make sure to add them to the
-        // `cartesian_product`'d combinations in tests around here!
-        let interpolation_str = match interpolation {
-            naga::Interpolation::Flat => "flat",
-            naga::Interpolation::Linear => "linear",
-            naga::Interpolation::Perspective => "perspective",
-        };
-        let sampling_str = match sampling {
-            None => String::new(),
-            Some(sampling) => format!(
-                ", {}",
-                match sampling {
-                    naga::Sampling::First => "first",
-                    naga::Sampling::Either => "either",
-                    naga::Sampling::Center => "center",
-                    naga::Sampling::Centroid => "centroid",
-                    naga::Sampling::Sample => "sample",
-                }
-            ),
-        };
-        let member_type = match interpolation {
-            naga::Interpolation::Perspective | naga::Interpolation::Linear => "f32",
-            naga::Interpolation::Flat => "u32",
-        };
+    impl DummyInterpolationShader {
+        pub fn new(interpolation: naga::Interpolation, sampling: Option<naga::Sampling>) -> Self {
+            // NOTE: If you have to add variants below, make sure to add them to the
+            // `cartesian_product`'d combinations in tests around here!
+            let interpolation_str = match interpolation {
+                naga::Interpolation::Flat => "flat",
+                naga::Interpolation::Linear => "linear",
+                naga::Interpolation::Perspective => "perspective",
+            };
+            let sampling_str = match sampling {
+                None => String::new(),
+                Some(sampling) => format!(
+                    ", {}",
+                    match sampling {
+                        naga::Sampling::First => "first",
+                        naga::Sampling::Either => "either",
+                        naga::Sampling::Center => "center",
+                        naga::Sampling::Centroid => "centroid",
+                        naga::Sampling::Sample => "sample",
+                    }
+                ),
+            };
+            let member_type = match interpolation {
+                naga::Interpolation::Perspective | naga::Interpolation::Linear => "f32",
+                naga::Interpolation::Flat => "u32",
+            };
 
-        let interpolate_attr = format!("@interpolate({interpolation_str}{sampling_str})");
-        let source = format!(
-            "\
-struct VertexOutput {{
+            let interpolate_attr = format!("@interpolate({interpolation_str}{sampling_str})");
+            let source = format!(
+                "\
+                struct VertexOutput {{
     @location(0) {interpolate_attr} member: {member_type},
 }}
 
@@ -478,14 +484,15 @@ fn main(input: VertexOutput) {{
     // ...
 }}
 "
-        );
-        let module = naga::front::wgsl::parse_str(&source).unwrap();
+            );
+            let module = naga::front::wgsl::parse_str(&source).unwrap();
 
-        Self {
-            source,
-            module,
-            interpolate_attr,
-            entry_point: "main",
+            Self {
+                source,
+                module,
+                interpolate_attr,
+                entry_point: "main",
+            }
         }
     }
 }
