@@ -484,5 +484,5 @@ pub enum LocalDecl<'a> {
 #[derive(Debug)]
 /// A placeholder for a local variable declaration.
 ///
-/// See [`Function::locals`] for more information.
+/// See [`super::ExpressionContext::locals`] for more information.
 pub struct Local;
