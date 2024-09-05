@@ -899,7 +899,7 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
-    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
+    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
@@ -907,26 +907,17 @@ impl Global {
         let device_fid = self.hub.devices.prepare(backend, device_id_in);
         let queue_fid = self.hub.queues.prepare(backend, queue_id_in);
 
-        let error = 'error: {
-            let adapter = self.hub.adapters.strict_get(adapter_id);
-            let (device, queue) =
-                match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
-                    Ok((device, queue)) => (device, queue),
-                    Err(e) => break 'error e,
-                };
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let (device, queue) =
+            adapter.create_device_and_queue(desc, self.instance.flags, trace_path)?;
 
-            let device_id = device_fid.assign(device);
-            resource_log!("Created Device {:?}", device_id);
+        let device_id = device_fid.assign(device);
+        resource_log!("Created Device {:?}", device_id);
 
-            let queue_id = queue_fid.assign(queue);
-            resource_log!("Created Queue {:?}", queue_id);
+        let queue_id = queue_fid.assign(queue);
+        resource_log!("Created Queue {:?}", queue_id);
 
-            return (device_id, queue_id, None);
-        };
-
-        let device_id = device_fid.assign_error();
-        let queue_id = queue_fid.assign_error();
-        (device_id, queue_id, Some(error))
+        Ok((device_id, queue_id))
     }
 
     /// # Safety
@@ -941,37 +932,28 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
-    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
+    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Global::create_device_from_hal");
 
         let backend = adapter_id.backend();
         let devices_fid = self.hub.devices.prepare(backend, device_id_in);
         let queues_fid = self.hub.queues.prepare(backend, queue_id_in);
 
-        let error = 'error: {
-            let adapter = self.hub.adapters.strict_get(adapter_id);
-            let (device, queue) = match adapter.create_device_and_queue_from_hal(
-                hal_device,
-                desc,
-                self.instance.flags,
-                trace_path,
-            ) {
-                Ok(device) => device,
-                Err(e) => break 'error e,
-            };
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let (device, queue) = adapter.create_device_and_queue_from_hal(
+            hal_device,
+            desc,
+            self.instance.flags,
+            trace_path,
+        )?;
 
-            let device_id = devices_fid.assign(device);
-            resource_log!("Created Device {:?}", device_id);
+        let device_id = devices_fid.assign(device);
+        resource_log!("Created Device {:?}", device_id);
 
-            let queue_id = queues_fid.assign(queue);
-            resource_log!("Created Queue {:?}", queue_id);
+        let queue_id = queues_fid.assign(queue);
+        resource_log!("Created Queue {:?}", queue_id);
 
-            return (device_id, queue_id, None);
-        };
-
-        let device_id = devices_fid.assign_error();
-        let queue_id = queues_fid.assign_error();
-        (device_id, queue_id, Some(error))
+        Ok((device_id, queue_id))
     }
 }
 

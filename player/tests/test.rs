@@ -108,7 +108,7 @@ impl Test<'_> {
         let backend = adapter.backend();
         let device_id = wgc::id::Id::zip(test_num, 0, backend);
         let queue_id = wgc::id::Id::zip(test_num, 0, backend);
-        let (_, _, error) = global.adapter_request_device(
+        let res = global.adapter_request_device(
             adapter,
             &wgt::DeviceDescriptor {
                 label: None,
@@ -120,7 +120,7 @@ impl Test<'_> {
             Some(device_id),
             Some(queue_id),
         );
-        if let Some(e) = error {
+        if let Err(e) = res {
             panic!("{:?}", e);
         }
 
