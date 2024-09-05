@@ -39,15 +39,10 @@ impl Global {
         &self,
         adapter_id: AdapterId,
         surface_id: SurfaceId,
-    ) -> Result<bool, instance::IsSurfaceSupportedError> {
-        let hub = &self.hub;
-
-        let surface_guard = self.surfaces.read();
-        let adapter = hub.adapters.strict_get(adapter_id);
-        let surface = surface_guard
-            .get(surface_id)
-            .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
-        Ok(adapter.is_surface_supported(surface))
+    ) -> bool {
+        let surface = self.surfaces.strict_get(surface_id);
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        adapter.is_surface_supported(&surface)
     }
 
     pub fn surface_get_capabilities(
@@ -72,25 +67,15 @@ impl Global {
         })
     }
 
-    fn fetch_adapter_and_surface<
-        F: FnOnce(&Adapter, &Surface) -> Result<B, instance::GetSurfaceSupportError>,
-        B,
-    >(
+    fn fetch_adapter_and_surface<F: FnOnce(&Adapter, &Surface) -> B, B>(
         &self,
         surface_id: SurfaceId,
         adapter_id: AdapterId,
         get_supported_callback: F,
-    ) -> Result<B, instance::GetSurfaceSupportError> {
-        let hub = &self.hub;
-
-        let surface_guard = self.surfaces.read();
-        let adapter = hub.adapters.strict_get(adapter_id);
-
-        let surface = surface_guard
-            .get(surface_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
-
-        get_supported_callback(&adapter, surface)
+    ) -> B {
+        let surface = self.surfaces.strict_get(surface_id);
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        get_supported_callback(&adapter, &surface)
     }
 
     pub fn device_features(&self, device_id: DeviceId) -> Result<wgt::Features, DeviceError> {
@@ -1901,7 +1886,6 @@ impl Global {
             let user_callbacks;
             {
                 let hub = &self.hub;
-                let surface_guard = self.surfaces.read();
 
                 let device = match hub.devices.get(device_id) {
                     Ok(device) => device,
@@ -1917,10 +1901,7 @@ impl Global {
                     break 'error e.into();
                 }
 
-                let surface = match surface_guard.get(surface_id) {
-                    Ok(surface) => surface,
-                    Err(_) => break 'error E::InvalidSurface,
-                };
+                let surface = self.surfaces.strict_get(surface_id);
 
                 let caps = match surface.get_capabilities(&device.adapter) {
                     Ok(caps) => caps,

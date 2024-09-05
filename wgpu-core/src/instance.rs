@@ -348,16 +348,7 @@ crate::impl_storage_item!(Adapter);
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
-pub enum IsSurfaceSupportedError {
-    #[error("Invalid surface")]
-    InvalidSurface,
-}
-
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
 pub enum GetSurfaceSupportError {
-    #[error("Invalid surface")]
-    InvalidSurface,
     #[error("Surface is not supported by the adapter")]
     Unsupported,
 }
@@ -403,8 +394,6 @@ impl<M: Marker> AdapterInputs<'_, M> {
 pub enum RequestAdapterError {
     #[error("No suitable adapter found")]
     NotFound,
-    #[error("Surface {0:?} is invalid")]
-    InvalidSurface(SurfaceId),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -604,9 +593,9 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        let surface = self.surfaces.unregister(id);
-        let surface = Arc::into_inner(surface.unwrap())
-            .expect("Surface cannot be destroyed because is still in use");
+        let surface = self.surfaces.strict_unregister(id);
+        let surface =
+            Arc::into_inner(surface).expect("Surface cannot be destroyed because is still in use");
 
         if let Some(present) = surface.presentation.lock().take() {
             for (&backend, surface) in &surface.surface_per_backend {
@@ -723,12 +712,7 @@ impl Global {
 
         let compatible_surface = desc
             .compatible_surface
-            .map(|id| {
-                self.surfaces
-                    .get(id)
-                    .map_err(|_| RequestAdapterError::InvalidSurface(id))
-            })
-            .transpose()?;
+            .map(|id| self.surfaces.strict_get(id));
         let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
         let mut device_types = Vec::new();
 
