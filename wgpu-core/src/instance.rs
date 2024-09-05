@@ -349,8 +349,6 @@ crate::impl_storage_item!(Adapter);
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum IsSurfaceSupportedError {
-    #[error("Invalid adapter")]
-    InvalidAdapter,
     #[error("Invalid surface")]
     InvalidSurface,
 }
@@ -358,8 +356,6 @@ pub enum IsSurfaceSupportedError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum GetSurfaceSupportError {
-    #[error("Invalid adapter")]
-    InvalidAdapter,
     #[error("Invalid surface")]
     InvalidSurface,
     #[error("Surface is not supported by the adapter")]
@@ -373,8 +369,6 @@ pub enum GetSurfaceSupportError {
 pub enum RequestDeviceError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Parent adapter is invalid")]
-    InvalidAdapter,
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
     #[error("Device has no queue supporting graphics")]
@@ -402,10 +396,6 @@ impl<M: Marker> AdapterInputs<'_, M> {
         }
     }
 }
-
-#[derive(Clone, Debug, Error)]
-#[error("Adapter is invalid")]
-pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -869,73 +859,51 @@ impl Global {
         id
     }
 
-    pub fn adapter_get_info(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.info.clone())
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        adapter.raw.info.clone()
     }
 
     pub fn adapter_get_texture_format_features(
         &self,
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
-    ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.get_texture_format_features(format))
-            .map_err(|_| InvalidAdapter)
+    ) -> wgt::TextureFormatFeatures {
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        adapter.get_texture_format_features(format)
     }
 
-    pub fn adapter_features(&self, adapter_id: AdapterId) -> Result<wgt::Features, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.features)
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_features(&self, adapter_id: AdapterId) -> wgt::Features {
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        adapter.raw.features
     }
 
-    pub fn adapter_limits(&self, adapter_id: AdapterId) -> Result<wgt::Limits, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.limits.clone())
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_limits(&self, adapter_id: AdapterId) -> wgt::Limits {
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        adapter.raw.capabilities.limits.clone()
     }
 
     pub fn adapter_downlevel_capabilities(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<wgt::DownlevelCapabilities, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.downlevel.clone())
-            .map_err(|_| InvalidAdapter)
+    ) -> wgt::DownlevelCapabilities {
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        adapter.raw.capabilities.downlevel.clone()
     }
 
     pub fn adapter_get_presentation_timestamp(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<wgt::PresentationTimestamp, InvalidAdapter> {
-        let hub = &self.hub;
-
-        let adapter = hub.adapters.get(adapter_id).map_err(|_| InvalidAdapter)?;
-
-        Ok(unsafe { adapter.raw.adapter.get_presentation_timestamp() })
+    ) -> wgt::PresentationTimestamp {
+        let adapter = self.hub.adapters.strict_get(adapter_id);
+        unsafe { adapter.raw.adapter.get_presentation_timestamp() }
     }
 
     pub fn adapter_drop(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
         api_log!("Adapter::drop {adapter_id:?}");
 
-        let hub = &self.hub;
-        hub.adapters.unregister(adapter_id);
+        self.hub.adapters.strict_unregister(adapter_id);
     }
 }
 
@@ -956,10 +924,7 @@ impl Global {
         let queue_fid = self.hub.queues.prepare(backend, queue_id_in);
 
         let error = 'error: {
-            let adapter = match self.hub.adapters.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
-            };
+            let adapter = self.hub.adapters.strict_get(adapter_id);
             let (device, queue) =
                 match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
                     Ok((device, queue)) => (device, queue),
@@ -1000,10 +965,7 @@ impl Global {
         let queues_fid = self.hub.queues.prepare(backend, queue_id_in);
 
         let error = 'error: {
-            let adapter = match self.hub.adapters.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
-            };
+            let adapter = self.hub.adapters.strict_get(adapter_id);
             let (device, queue) = match adapter.create_device_and_queue_from_hal(
                 hal_device,
                 desc,

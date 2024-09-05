@@ -157,6 +157,18 @@ where
         }
     }
 
+    pub(crate) fn strict_remove(&mut self, id: Id<T::Marker>) -> T {
+        let (index, epoch, _) = id.unzip();
+        match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
+            Element::Occupied(value, storage_epoch) => {
+                assert_eq!(epoch, storage_epoch);
+                value
+            }
+            Element::Error(_) => unreachable!(),
+            Element::Vacant => panic!("Cannot remove a vacant resource"),
+        }
+    }
+
     pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (Id<T::Marker>, &T)> {
         self.map
             .iter()
@@ -182,5 +194,22 @@ where
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get_owned(&self, id: Id<T::Marker>) -> Result<T, InvalidId> {
         Ok(self.get(id)?.clone())
+    }
+
+    /// Get an owned reference to an item.
+    /// Panics if there is an epoch mismatch, the entry is empty or in error.
+    pub(crate) fn strict_get(&self, id: Id<T::Marker>) -> T {
+        let (index, epoch, _) = id.unzip();
+        let (result, storage_epoch) = match self.map.get(index as usize) {
+            Some(&Element::Occupied(ref v, epoch)) => (v.clone(), epoch),
+            None | Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
+            Some(&Element::Error(_)) => unreachable!(),
+        };
+        assert_eq!(
+            epoch, storage_epoch,
+            "{}[{:?}] is no longer alive",
+            self.kind, id
+        );
+        result
     }
 }

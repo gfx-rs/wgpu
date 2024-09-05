@@ -244,8 +244,8 @@ impl Corpus {
                 };
 
                 println!("\tBackend {:?}", backend);
-                let supported_features = global.adapter_features(adapter).unwrap();
-                let downlevel_caps = global.adapter_downlevel_capabilities(adapter).unwrap();
+                let supported_features = global.adapter_features(adapter);
+                let downlevel_caps = global.adapter_downlevel_capabilities(adapter);
 
                 let test = Test::load(dir.join(test_path), adapter.backend());
                 if !supported_features.contains(test.features) {
