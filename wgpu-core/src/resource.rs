@@ -1288,12 +1288,8 @@ impl Global {
     ) -> R {
         profiling::scope!("Device::as_hal");
 
-        let hub = &self.hub;
-        let device = hub.devices.get(id).ok();
-        let hal_device = device
-            .as_ref()
-            .map(|device| device.raw())
-            .and_then(|device| device.as_any().downcast_ref());
+        let device = self.hub.devices.strict_get(id);
+        let hal_device = device.raw().as_any().downcast_ref();
 
         hal_device_callback(hal_device)
     }
@@ -1308,14 +1304,9 @@ impl Global {
     ) -> R {
         profiling::scope!("Device::fence_as_hal");
 
-        let hub = &self.hub;
-
-        if let Ok(device) = hub.devices.get(id) {
-            let fence = device.fence.read();
-            hal_fence_callback(fence.as_any().downcast_ref())
-        } else {
-            hal_fence_callback(None)
-        }
+        let device = self.hub.devices.strict_get(id);
+        let fence = device.fence.read();
+        hal_fence_callback(fence.as_any().downcast_ref())
     }
 
     /// # Safety

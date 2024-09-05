@@ -78,40 +78,19 @@ impl Global {
         get_supported_callback(&adapter, &surface)
     }
 
-    pub fn device_features(&self, device_id: DeviceId) -> Result<wgt::Features, DeviceError> {
-        let hub = &self.hub;
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        Ok(device.features)
+    pub fn device_features(&self, device_id: DeviceId) -> wgt::Features {
+        let device = self.hub.devices.strict_get(device_id);
+        device.features
     }
 
-    pub fn device_limits(&self, device_id: DeviceId) -> Result<wgt::Limits, DeviceError> {
-        let hub = &self.hub;
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        Ok(device.limits.clone())
+    pub fn device_limits(&self, device_id: DeviceId) -> wgt::Limits {
+        let device = self.hub.devices.strict_get(device_id);
+        device.limits.clone()
     }
 
-    pub fn device_downlevel_properties(
-        &self,
-        device_id: DeviceId,
-    ) -> Result<wgt::DownlevelCapabilities, DeviceError> {
-        let hub = &self.hub;
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        Ok(device.downlevel.clone())
+    pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
+        let device = self.hub.devices.strict_get(device_id);
+        device.downlevel.clone()
     }
 
     pub fn device_create_buffer(
@@ -126,12 +105,7 @@ impl Global {
         let fid = hub.buffers.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => {
-                    break 'error DeviceError::InvalidDeviceId.into();
-                }
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -339,10 +313,7 @@ impl Global {
         let fid = hub.textures.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -385,10 +356,7 @@ impl Global {
         let fid = hub.textures.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -431,31 +399,21 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.buffers.prepare(A::VARIANT, id_in);
 
-        let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+        let device = self.hub.devices.strict_get(device_id);
 
-            // NB: Any change done through the raw buffer handle will not be
-            // recorded in the replay
-            #[cfg(feature = "trace")]
-            if let Some(trace) = device.trace.lock().as_mut() {
-                trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
-            }
+        // NB: Any change done through the raw buffer handle will not be
+        // recorded in the replay
+        #[cfg(feature = "trace")]
+        if let Some(trace) = device.trace.lock().as_mut() {
+            trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
+        }
 
-            let buffer = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
+        let buffer = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
 
-            let id = fid.assign(buffer);
-            api_log!("Device::create_buffer -> {id:?}");
+        let id = fid.assign(buffer);
+        api_log!("Device::create_buffer -> {id:?}");
 
-            return (id, None);
-        };
-
-        log::error!("Device::create_buffer error: {error}");
-
-        let id = fid.assign_error();
-        (id, Some(error))
+        (id, None)
     }
 
     pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
@@ -568,10 +526,7 @@ impl Global {
         let fid = hub.samplers.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -622,10 +577,7 @@ impl Global {
         let fid = hub.bind_group_layouts.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -696,10 +648,7 @@ impl Global {
         let fid = hub.pipeline_layouts.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -770,10 +719,7 @@ impl Global {
         let fid = hub.bind_groups.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -932,10 +878,7 @@ impl Global {
         let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1007,10 +950,7 @@ impl Global {
         let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1069,10 +1009,7 @@ impl Global {
         );
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId,
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             let command_buffer = match device.create_command_encoder(&desc.label) {
                 Ok(command_buffer) => command_buffer,
@@ -1140,14 +1077,7 @@ impl Global {
             .prepare(bundle_encoder.parent().backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(bundle_encoder.parent()) {
-                Ok(device) => device,
-                Err(_) => {
-                    break 'error command::RenderBundleError::from_device_error(
-                        DeviceError::InvalidDeviceId,
-                    );
-                }
-            };
+            let device = self.hub.devices.strict_get(bundle_encoder.parent());
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1204,10 +1134,7 @@ impl Global {
         let fid = hub.query_sets.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1272,10 +1199,7 @@ impl Global {
                 break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
             }
 
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1519,10 +1443,7 @@ impl Global {
                 break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
             }
 
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1713,11 +1634,7 @@ impl Global {
 
         let fid = hub.pipeline_caches.prepare(device_id.backend(), id_in);
         let error: pipeline::CreatePipelineCacheError = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                // TODO: Handle error properly
-                Err(crate::storage::InvalidId) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.strict_get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1885,12 +1802,7 @@ impl Global {
             // User callbacks must not be called while we are holding locks.
             let user_callbacks;
             {
-                let hub = &self.hub;
-
-                let device = match hub.devices.get(device_id) {
-                    Ok(device) => device,
-                    Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-                };
+                let device = self.hub.devices.strict_get(device_id);
 
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
@@ -2028,11 +1940,7 @@ impl Global {
     ) -> Result<bool, WaitIdleError> {
         api_log!("Device::poll {maintain:?}");
 
-        let hub = &self.hub;
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
+        let device = self.hub.devices.strict_get(device_id);
 
         let DevicePoll {
             closures,
@@ -2139,38 +2047,26 @@ impl Global {
         Ok(all_queue_empty)
     }
 
-    pub fn device_start_capture(&self, id: DeviceId) {
+    pub fn device_start_capture(&self, device_id: DeviceId) {
         api_log!("Device::start_capture");
 
-        let hub = &self.hub;
+        let device = self.hub.devices.strict_get(device_id);
 
-        if let Ok(device) = hub.devices.get(id) {
-            if !device.is_valid() {
-                return;
-            }
-            unsafe { device.raw().start_capture() };
+        if !device.is_valid() {
+            return;
         }
+        unsafe { device.raw().start_capture() };
     }
 
-    pub fn device_stop_capture(&self, id: DeviceId) {
+    pub fn device_stop_capture(&self, device_id: DeviceId) {
         api_log!("Device::stop_capture");
 
-        let hub = &self.hub;
+        let device = self.hub.devices.strict_get(device_id);
 
-        if let Ok(device) = hub.devices.get(id) {
-            if !device.is_valid() {
-                return;
-            }
-            unsafe { device.raw().stop_capture() };
+        if !device.is_valid() {
+            return;
         }
-    }
-
-    // This is a test-only function to force the device into an
-    // invalid state by inserting an error value in its place in
-    // the registry.
-    pub fn device_make_invalid(&self, device_id: DeviceId) {
-        let hub = &self.hub;
-        hub.devices.force_replace_with_error(device_id);
+        unsafe { device.raw().stop_capture() };
     }
 
     pub fn pipeline_cache_get_data(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
@@ -2206,22 +2102,20 @@ impl Global {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {device_id:?}");
 
-        let hub = &self.hub;
-        if let Some(device) = hub.devices.unregister(device_id) {
-            let device_lost_closure = device.lock_life().device_lost_closure.take();
-            if let Some(closure) = device_lost_closure {
-                closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
-            }
-
-            // The things `Device::prepare_to_die` takes care are mostly
-            // unnecessary here. We know our queue is empty, so we don't
-            // need to wait for submissions or triage them. We know we were
-            // just polled, so `life_tracker.free_resources` is empty.
-            debug_assert!(device.lock_life().queue_empty());
-            device.pending_writes.lock().deactivate();
-
-            drop(device);
+        let device = self.hub.devices.strict_unregister(device_id);
+        let device_lost_closure = device.lock_life().device_lost_closure.take();
+        if let Some(closure) = device_lost_closure {
+            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
         }
+
+        // The things `Device::prepare_to_die` takes care are mostly
+        // unnecessary here. We know our queue is empty, so we don't
+        // need to wait for submissions or triage them. We know we were
+        // just polled, so `life_tracker.free_resources` is empty.
+        debug_assert!(device.lock_life().queue_empty());
+        device.pending_writes.lock().deactivate();
+
+        drop(device);
     }
 
     // This closure will be called exactly once during "lose the device",
@@ -2231,61 +2125,47 @@ impl Global {
         device_id: DeviceId,
         device_lost_closure: DeviceLostClosure,
     ) {
-        let hub = &self.hub;
+        let device = self.hub.devices.strict_get(device_id);
 
-        if let Ok(device) = hub.devices.get(device_id) {
-            let mut life_tracker = device.lock_life();
-            if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
-                // It's important to not hold the lock while calling the closure.
-                drop(life_tracker);
-                existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-                life_tracker = device.lock_life();
-            }
-            life_tracker.device_lost_closure = Some(device_lost_closure);
-        } else {
-            // No device? Okay. Just like we have to call any existing closure
-            // before we drop it, we need to call this closure before we exit
-            // this function, because there's no device that is ever going to
-            // call it.
-            device_lost_closure.call(DeviceLostReason::DeviceInvalid, "".to_string());
+        let mut life_tracker = device.lock_life();
+        if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
+            // It's important to not hold the lock while calling the closure.
+            drop(life_tracker);
+            existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
+            life_tracker = device.lock_life();
         }
+        life_tracker.device_lost_closure = Some(device_lost_closure);
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {
         api_log!("Device::destroy {device_id:?}");
 
-        let hub = &self.hub;
+        let device = self.hub.devices.strict_get(device_id);
 
-        if let Ok(device) = hub.devices.get(device_id) {
-            // Follow the steps at
-            // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
-            // It's legal to call destroy multiple times, but if the device
-            // is already invalid, there's nothing more to do. There's also
-            // no need to return an error.
-            if !device.is_valid() {
-                return;
-            }
-
-            // The last part of destroy is to lose the device. The spec says
-            // delay that until all "currently-enqueued operations on any
-            // queue on this device are completed." This is accomplished by
-            // setting valid to false, and then relying upon maintain to
-            // check for empty queues and a DeviceLostClosure. At that time,
-            // the DeviceLostClosure will be called with "destroyed" as the
-            // reason.
-            device.valid.store(false, Ordering::Release);
+        // Follow the steps at
+        // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
+        // It's legal to call destroy multiple times, but if the device
+        // is already invalid, there's nothing more to do. There's also
+        // no need to return an error.
+        if !device.is_valid() {
+            return;
         }
+
+        // The last part of destroy is to lose the device. The spec says
+        // delay that until all "currently-enqueued operations on any
+        // queue on this device are completed." This is accomplished by
+        // setting valid to false, and then relying upon maintain to
+        // check for empty queues and a DeviceLostClosure. At that time,
+        // the DeviceLostClosure will be called with "destroyed" as the
+        // reason.
+        device.valid.store(false, Ordering::Release);
     }
 
     pub fn device_get_internal_counters(&self, device_id: DeviceId) -> wgt::InternalCounters {
-        let hub = &self.hub;
-        if let Ok(device) = hub.devices.get(device_id) {
-            wgt::InternalCounters {
-                hal: device.get_hal_counters(),
-                core: wgt::CoreCounters {},
-            }
-        } else {
-            Default::default()
+        let device = self.hub.devices.strict_get(device_id);
+        wgt::InternalCounters {
+            hal: device.get_hal_counters(),
+            core: wgt::CoreCounters {},
         }
     }
 
@@ -2293,11 +2173,8 @@ impl Global {
         &self,
         device_id: DeviceId,
     ) -> Option<wgt::AllocatorReport> {
-        let hub = &self.hub;
-        hub.devices
-            .get(device_id)
-            .ok()
-            .and_then(|device| device.generate_allocator_report())
+        let device = self.hub.devices.strict_get(device_id);
+        device.generate_allocator_report()
     }
 
     pub fn queue_drop(&self, queue_id: QueueId) {

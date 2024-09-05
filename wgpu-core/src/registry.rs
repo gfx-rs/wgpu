@@ -106,11 +106,6 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>) {
-        let mut storage = self.storage.write();
-        storage.remove(id);
-        storage.insert_error(id);
-    }
     pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<T> {
         let value = self.storage.write().remove(id);
         // This needs to happen *after* removing it from the storage, to maintain the

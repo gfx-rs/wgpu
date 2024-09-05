@@ -663,9 +663,9 @@ pub fn op_webgpu_request_device(
 
     let (device, queue) = res.map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
 
-    let device_features = instance.device_features(device)?;
+    let device_features = instance.device_features(device);
     let features = deserialize_features(&device_features);
-    let limits = instance.device_limits(device)?;
+    let limits = instance.device_limits(device);
 
     let instance = instance.clone();
     let instance2 = instance.clone();
