@@ -220,20 +220,18 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} --all-features --no-deps
 
-      # wgpu-core docs are not feasible due to <https://github.com/gfx-rs/wgpu/issues/4905>
-      #
-      # - name: check private item docs
-      #   if: matrix.kind == 'native'
-      #   shell: bash
-      #   run: |
-      #     set -e
-      #
-      #     # wgpu_core package
-      #     cargo +${{ env.DOCS_RUST_VERSION }} doc --target ${{ matrix.target }} \
-      #           --package wgpu-core \
-      #           --package wgpu-hal \
-      #           --package naga \
-      #           --all-features --no-deps --document-private-items
+      - name: check private item docs
+        if: matrix.kind == 'native'
+        shell: bash
+        run: |
+          set -e
+
+          # wgpu_core package
+          cargo doc --target ${{ matrix.target }} \
+                --package wgpu-core \
+                --package wgpu-hal \
+                --package naga \
+                --all-features --no-deps --document-private-items
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.
