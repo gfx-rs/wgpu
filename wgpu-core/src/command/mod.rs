@@ -678,9 +678,9 @@ impl Global {
         }
 
         let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
-        if !self
-            .instance
-            .flags
+        if !cmd_buf
+            .device
+            .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
         {
             unsafe {
@@ -714,9 +714,9 @@ impl Global {
             list.push(TraceCommand::InsertDebugMarker(label.to_string()));
         }
 
-        if !self
-            .instance
-            .flags
+        if !cmd_buf
+            .device
+            .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
         {
             let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
@@ -751,9 +751,9 @@ impl Global {
         }
 
         let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
-        if !self
-            .instance
-            .flags
+        if !cmd_buf
+            .device
+            .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
         {
             unsafe {

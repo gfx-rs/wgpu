@@ -1567,10 +1567,10 @@ impl Global {
         };
         cmd_buf.unlock_encoder().map_pass_err(pass_scope)?;
 
-        let hal_label = hal_label(base.label.as_deref(), self.instance.flags);
-
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
+
+        let hal_label = hal_label(base.label.as_deref(), device.instance_flags);
 
         let (scope, pending_discard_init_fixups) = {
             let mut cmd_buf_data = cmd_buf.data.lock();
