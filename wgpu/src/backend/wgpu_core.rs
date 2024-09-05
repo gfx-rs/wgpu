@@ -1372,7 +1372,7 @@ impl crate::Context for ContextWgpuCore {
         device_data: &Self::DeviceData,
         maintain: crate::Maintain,
     ) -> wgt::MaintainResult {
-        let maintain_inner = maintain.map_index(|i| *i.0.as_ref().downcast_ref().unwrap());
+        let maintain_inner = maintain.map_index(|i| *i.data.as_ref().downcast_ref().unwrap());
         match self.0.device_poll(device_data.id, maintain_inner) {
             Ok(done) => match done {
                 true => wgt::MaintainResult::SubmissionQueueEmpty,
