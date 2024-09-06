@@ -226,7 +226,7 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn add_raw_texture(&self, texture: &dyn DynTexture) {
         let texture = texture.expect_downcast_ref();
-        unsafe { D::add_raw_buffer(self, texture) };
+        unsafe { D::add_raw_texture(self, texture) };
     }
 
     unsafe fn create_texture_view(
