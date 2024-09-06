@@ -537,13 +537,13 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(sampler);
+            let id = fid.assign(Fallible::Valid(sampler));
             api_log!("Device::create_sampler -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -553,9 +553,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_sampler) = hub.samplers.unregister(sampler_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _sampler.device.trace.lock().as_mut() {
+        let _sampler = hub.samplers.strict_unregister(sampler_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(sampler) = _sampler.get() {
+            if let Some(t) = sampler.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroySampler(sampler_id));
             }
         }
@@ -733,7 +735,7 @@ impl Global {
             fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
-                sampler_storage: &Storage<Arc<resource::Sampler>>,
+                sampler_storage: &Storage<Fallible<resource::Sampler>>,
                 texture_view_storage: &Storage<Fallible<resource::TextureView>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
@@ -750,8 +752,9 @@ impl Global {
                 };
                 let resolve_sampler = |id: &id::SamplerId| {
                     sampler_storage
-                        .get_owned(*id)
-                        .map_err(|_| binding_model::CreateBindGroupError::InvalidSamplerId(*id))
+                        .strict_get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
                 };
                 let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
