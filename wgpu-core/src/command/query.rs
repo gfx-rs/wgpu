@@ -103,8 +103,6 @@ pub enum QueryError {
     Resolve(#[from] ResolveError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("QuerySetId {0:?} is invalid or destroyed")]
-    InvalidQuerySetId(id::QuerySetId),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
@@ -349,10 +347,7 @@ impl Global {
 
         let raw_encoder = encoder.open(&cmd_buf.device)?;
 
-        let query_set = hub
-            .query_sets
-            .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
+        let query_set = hub.query_sets.strict_get(query_set_id).get()?;
 
         let query_set = tracker.query_sets.insert_single(query_set);
 
@@ -404,10 +399,7 @@ impl Global {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
-        let query_set = hub
-            .query_sets
-            .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
+        let query_set = hub.query_sets.strict_get(query_set_id).get()?;
 
         let query_set = tracker.query_sets.insert_single(query_set);
 

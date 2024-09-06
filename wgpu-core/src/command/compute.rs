@@ -138,8 +138,6 @@ pub enum ComputePassErrorInner {
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("ComputePipelineId {0:?} is invalid")]
     InvalidPipelineId(id::ComputePipelineId),
-    #[error("QuerySet {0:?} is invalid")]
-    InvalidQuerySet(id::QuerySetId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
@@ -309,11 +307,9 @@ impl Global {
         };
 
         arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-            let Ok(query_set) = hub.query_sets.get(tw.query_set) else {
-                return make_err(
-                    CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set),
-                    arc_desc,
-                );
+            let query_set = match hub.query_sets.strict_get(tw.query_set).get() {
+                Ok(query_set) => query_set,
+                Err(e) => return make_err(e.into(), arc_desc),
             };
 
             Some(ArcPassTimestampWrites {
@@ -389,8 +385,8 @@ impl Global {
             Some(ArcPassTimestampWrites {
                 query_set: hub
                     .query_sets
-                    .get(tw.query_set)
-                    .map_err(|_| ComputePassErrorInner::InvalidQuerySet(tw.query_set))
+                    .strict_get(tw.query_set)
+                    .get()
                     .map_pass_err(scope)?,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
@@ -1167,8 +1163,8 @@ impl Global {
         let hub = &self.hub;
         let query_set = hub
             .query_sets
-            .get(query_set_id)
-            .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+            .strict_get(query_set_id)
+            .get()
             .map_pass_err(scope)?;
 
         base.commands.push(ArcComputeCommand::WriteTimestamp {
@@ -1191,8 +1187,8 @@ impl Global {
         let hub = &self.hub;
         let query_set = hub
             .query_sets
-            .get(query_set_id)
-            .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
+            .strict_get(query_set_id)
+            .get()
             .map_pass_err(scope)?;
 
         base.commands

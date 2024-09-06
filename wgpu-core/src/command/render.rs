@@ -585,8 +585,6 @@ pub enum RenderPassErrorInner {
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("Render pipeline {0:?} is invalid")]
     InvalidPipeline(id::RenderPipelineId),
-    #[error("QuerySet {0:?} is invalid")]
-    InvalidQuerySet(id::QuerySetId),
     #[error("Render bundle {0:?} is invalid")]
     InvalidRenderBundle(id::RenderBundleId),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
@@ -1401,9 +1399,7 @@ impl Global {
                 };
 
             arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                let query_set = query_sets.get_owned(tw.query_set).map_err(|_| {
-                    CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set)
-                })?;
+                let query_set = query_sets.strict_get(tw.query_set).get()?;
 
                 Some(ArcPassTimestampWrites {
                     query_set,
@@ -1416,9 +1412,7 @@ impl Global {
 
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {
-                    let query_set = query_sets.get_owned(occlusion_query_set).map_err(|_| {
-                        CommandEncoderError::InvalidOcclusionQuerySetId(occlusion_query_set)
-                    })?;
+                    let query_set = query_sets.strict_get(occlusion_query_set).get()?;
 
                     Some(query_set)
                 } else {
@@ -2784,8 +2778,8 @@ impl Global {
         let hub = &self.hub;
         let query_set = hub
             .query_sets
-            .get(query_set_id)
-            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
+            .strict_get(query_set_id)
+            .get()
             .map_pass_err(scope)?;
 
         Ok(query_set)

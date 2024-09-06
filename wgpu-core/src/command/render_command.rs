@@ -206,12 +206,13 @@ impl RenderCommand {
                         query_set_id,
                         query_index,
                     } => ArcRenderCommand::WriteTimestamp {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
-                            RenderPassError {
+                        query_set: query_set_guard
+                            .strict_get(query_set_id)
+                            .get()
+                            .map_err(|e| RenderPassError {
                                 scope: PassErrorScope::WriteTimestamp,
-                                inner: RenderPassErrorInner::InvalidQuerySet(query_set_id),
-                            }
-                        })?,
+                                inner: e.into(),
+                            })?,
                         query_index,
                     },
 
@@ -219,12 +220,13 @@ impl RenderCommand {
                         query_set_id,
                         query_index,
                     } => ArcRenderCommand::BeginPipelineStatisticsQuery {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
-                            RenderPassError {
+                        query_set: query_set_guard
+                            .strict_get(query_set_id)
+                            .get()
+                            .map_err(|e| RenderPassError {
                                 scope: PassErrorScope::BeginPipelineStatisticsQuery,
-                                inner: RenderPassErrorInner::InvalidQuerySet(query_set_id),
-                            }
-                        })?,
+                                inner: e.into(),
+                            })?,
                         query_index,
                     },
 

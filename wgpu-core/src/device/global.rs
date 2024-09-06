@@ -1151,13 +1151,13 @@ impl Global {
                 Err(err) => break 'error err,
             };
 
-            let id = fid.assign(query_set);
+            let id = fid.assign(Fallible::Valid(query_set));
             api_log!("Device::create_query_set -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -1167,9 +1167,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_query_set) = hub.query_sets.unregister(query_set_id) {
-            #[cfg(feature = "trace")]
-            if let Some(trace) = _query_set.device.trace.lock().as_mut() {
+        let _query_set = hub.query_sets.strict_unregister(query_set_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(query_set) = _query_set.get() {
+            if let Some(trace) = query_set.device.trace.lock().as_mut() {
                 trace.add(trace::Action::DestroyQuerySet(query_set_id));
             }
         }
