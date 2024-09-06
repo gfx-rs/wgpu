@@ -683,12 +683,12 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(layout);
+            let id = fid.assign(Fallible::Valid(layout));
             api_log!("Device::create_pipeline_layout -> {id:?}");
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -697,9 +697,12 @@ impl Global {
         api_log!("PipelineLayout::drop {pipeline_layout_id:?}");
 
         let hub = &self.hub;
-        if let Some(_layout) = hub.pipeline_layouts.unregister(pipeline_layout_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _layout.device.trace.lock().as_mut() {
+
+        let _layout = hub.pipeline_layouts.strict_unregister(pipeline_layout_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(layout) = _layout.get() {
+            if let Some(t) = layout.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyPipelineLayout(pipeline_layout_id));
             }
         }
@@ -1215,15 +1218,11 @@ impl Global {
 
             let layout = desc
                 .layout
-                .map(|layout| {
-                    hub.pipeline_layouts
-                        .get(layout)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)
-                })
+                .map(|layout| hub.pipeline_layouts.strict_get(layout).get())
                 .transpose();
             let layout = match layout {
                 Ok(layout) => layout,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let cache = desc
@@ -1326,7 +1325,7 @@ impl Global {
 
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
-                pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
+                pipeline_layout_guard.insert(ids.root_id, Fallible::Valid(pipeline.layout.clone()));
                 let mut group_ids = ids.group_ids.iter();
                 // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
                 // the first iterator before realizing that the second iterator has finished.
@@ -1358,7 +1357,7 @@ impl Global {
         if let Some(ids) = implicit_context {
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id);
+            pipeline_layout_guard.insert(ids.root_id, Fallible::Invalid(Arc::new(String::new())));
             for bgl_id in ids.group_ids {
                 bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
             }
@@ -1457,15 +1456,11 @@ impl Global {
 
             let layout = desc
                 .layout
-                .map(|layout| {
-                    hub.pipeline_layouts
-                        .get(layout)
-                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)
-                })
+                .map(|layout| hub.pipeline_layouts.strict_get(layout).get())
                 .transpose();
             let layout = match layout {
                 Ok(layout) => layout,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let cache = desc
@@ -1523,7 +1518,7 @@ impl Global {
 
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
-                pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
+                pipeline_layout_guard.insert(ids.root_id, Fallible::Valid(pipeline.layout.clone()));
                 let mut group_ids = ids.group_ids.iter();
                 // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
                 // the first iterator before realizing that the second iterator has finished.
@@ -1555,7 +1550,7 @@ impl Global {
         if let Some(ids) = implicit_context {
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id);
+            pipeline_layout_guard.insert(ids.root_id, Fallible::Invalid(Arc::new(String::new())));
             for bgl_id in ids.group_ids {
                 bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
             }
