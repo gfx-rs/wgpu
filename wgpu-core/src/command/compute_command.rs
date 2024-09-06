@@ -74,7 +74,7 @@ impl ComputeCommand {
         hub: &crate::hub::Hub,
         commands: &[ComputeCommand],
     ) -> Result<Vec<ArcComputeCommand>, super::ComputePassError> {
-        use super::{ComputePassError, ComputePassErrorInner, PassErrorScope};
+        use super::{ComputePassError, PassErrorScope};
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -114,12 +114,12 @@ impl ComputeCommand {
                         }
                     }
                     ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
-                        pipelines_guard
-                            .get_owned(pipeline_id)
-                            .map_err(|_| ComputePassError {
+                        pipelines_guard.strict_get(pipeline_id).get().map_err(|e| {
+                            ComputePassError {
                                 scope: PassErrorScope::SetPipelineCompute,
-                                inner: ComputePassErrorInner::InvalidPipelineId(pipeline_id),
-                            })?,
+                                inner: e.into(),
+                            }
+                        })?,
                     ),
 
                     ComputeCommand::SetPushConstant {

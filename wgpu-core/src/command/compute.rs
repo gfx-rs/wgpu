@@ -134,8 +134,6 @@ pub enum ComputePassErrorInner {
     InvalidParentEncoder,
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
-    #[error("ComputePipelineId {0:?} is invalid")]
-    InvalidPipelineId(id::ComputePipelineId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
@@ -1016,8 +1014,8 @@ impl Global {
         let hub = &self.hub;
         let pipeline = hub
             .compute_pipelines
-            .get(pipeline_id)
-            .map_err(|_| ComputePassErrorInner::InvalidPipelineId(pipeline_id))
+            .strict_get(pipeline_id)
+            .get()
             .map_pass_err(scope)?;
 
         base.commands.push(ArcComputeCommand::SetPipeline(pipeline));
