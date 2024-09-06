@@ -81,8 +81,6 @@ pub enum CreateBindGroupError {
     Device(#[from] DeviceError),
     #[error("Bind group layout is invalid")]
     InvalidLayout,
-    #[error("TextureViewId {0:?} is invalid")]
-    InvalidTextureViewId(TextureViewId),
     #[error("SamplerId {0:?} is invalid")]
     InvalidSamplerId(SamplerId),
     #[error(transparent)]

@@ -178,7 +178,7 @@ pub struct Hub {
     pub(crate) buffers: Registry<Fallible<Buffer>>,
     pub(crate) staging_buffers: Registry<Arc<StagingBuffer>>,
     pub(crate) textures: Registry<Fallible<Texture>>,
-    pub(crate) texture_views: Registry<Arc<TextureView>>,
+    pub(crate) texture_views: Registry<Fallible<TextureView>>,
     pub(crate) samplers: Registry<Arc<Sampler>>,
 }
 

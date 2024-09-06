@@ -1290,7 +1290,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Ok(texture_view) = hub.texture_views.get(id) {
+        if let Ok(texture_view) = hub.texture_views.strict_get(id).get() {
             let snatch_guard = texture_view.device.snatchable_lock.read();
             let hal_texture_view = texture_view.raw(&snatch_guard);
             let hal_texture_view = hal_texture_view

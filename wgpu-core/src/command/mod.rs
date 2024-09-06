@@ -31,7 +31,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::resource::Labeled;
+use crate::resource::{InvalidResourceError, Labeled};
 use crate::track::{DeviceTracker, Tracker, UsageScope};
 use crate::LabelHelpers;
 use crate::{api_log, global::Global, id, resource_log, Label};
@@ -599,16 +599,12 @@ pub enum CommandEncoderError {
 
     #[error("QuerySet {0:?} for pass timestamp writes is invalid.")]
     InvalidTimestampWritesQuerySetId(id::QuerySetId),
-    #[error("Attachment TextureViewId {0:?} is invalid")]
-    InvalidAttachmentId(id::TextureViewId),
     #[error(transparent)]
     InvalidColorAttachment(#[from] ColorAttachmentError),
-    #[error("Resolve attachment TextureViewId {0:?} is invalid")]
-    InvalidResolveTargetId(id::TextureViewId),
-    #[error("Depth stencil attachment TextureViewId {0:?} is invalid")]
-    InvalidDepthStencilAttachmentId(id::TextureViewId),
     #[error("Occlusion QuerySetId {0:?} is invalid")]
     InvalidOcclusionQuerySetId(id::QuerySetId),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl Global {

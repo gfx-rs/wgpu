@@ -481,7 +481,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(view);
+            let id = fid.assign(Fallible::Valid(view));
 
             api_log!("Texture::create_view({texture_id:?}) -> {id:?}");
 
@@ -489,7 +489,7 @@ impl Global {
         };
 
         log::error!("Texture::create_view({texture_id:?}) error: {error}");
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -502,9 +502,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_view) = hub.texture_views.unregister(texture_view_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _view.device.trace.lock().as_mut() {
+        let _view = hub.texture_views.strict_unregister(texture_view_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(view) = _view.get() {
+            if let Some(t) = view.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTextureView(texture_view_id));
             }
         }
@@ -732,7 +734,7 @@ impl Global {
                 e: &BindGroupEntry<'a>,
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
                 sampler_storage: &Storage<Arc<resource::Sampler>>,
-                texture_view_storage: &Storage<Arc<resource::TextureView>>,
+                texture_view_storage: &Storage<Fallible<resource::TextureView>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
@@ -753,8 +755,9 @@ impl Global {
                 };
                 let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
-                        .get_owned(*id)
-                        .map_err(|_| binding_model::CreateBindGroupError::InvalidTextureViewId(*id))
+                        .strict_get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
                 };
                 let resource = match e.resource {
                     BindingResource::Buffer(ref buffer) => {
