@@ -1228,15 +1228,11 @@ impl Global {
 
             let cache = desc
                 .cache
-                .map(|cache| {
-                    hub.pipeline_caches
-                        .get(cache)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::InvalidCache)
-                })
+                .map(|cache| hub.pipeline_caches.strict_get(cache).get())
                 .transpose();
             let cache = match cache {
                 Ok(cache) => cache,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let vertex = {
@@ -1469,15 +1465,11 @@ impl Global {
 
             let cache = desc
                 .cache
-                .map(|cache| {
-                    hub.pipeline_caches
-                        .get(cache)
-                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidCache)
-                })
+                .map(|cache| hub.pipeline_caches.strict_get(cache).get())
                 .transpose();
             let cache = match cache {
                 Ok(cache) => cache,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let module = hub.shader_modules.strict_get(desc.stage.module).get();
@@ -1642,7 +1634,7 @@ impl Global {
             let cache = unsafe { device.create_pipeline_cache(desc) };
             match cache {
                 Ok(cache) => {
-                    let id = fid.assign(cache);
+                    let id = fid.assign(Fallible::Valid(cache));
                     api_log!("Device::create_pipeline_cache -> {id:?}");
                     return (id, None);
                 }
@@ -1650,7 +1642,7 @@ impl Global {
             }
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
 
         (id, Some(error))
     }
@@ -1661,12 +1653,13 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(cache) = hub.pipeline_caches.unregister(pipeline_cache_id) {
-            #[cfg(feature = "trace")]
+        let _cache = hub.pipeline_caches.strict_unregister(pipeline_cache_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(cache) = _cache.get() {
             if let Some(t) = cache.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyPipelineCache(pipeline_cache_id));
             }
-            drop(cache)
         }
     }
 
@@ -2069,7 +2062,7 @@ impl Global {
         api_log!("PipelineCache::get_data");
         let hub = &self.hub;
 
-        if let Ok(cache) = hub.pipeline_caches.get(id) {
+        if let Ok(cache) = hub.pipeline_caches.strict_get(id).get() {
             // TODO: Is this check needed?
             if !cache.device.is_valid() {
                 return None;
