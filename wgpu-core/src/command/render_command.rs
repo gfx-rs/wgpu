@@ -17,7 +17,7 @@ pub enum RenderCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
     },
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
@@ -147,16 +147,29 @@ impl RenderCommand {
                         index,
                         num_dynamic_offsets,
                         bind_group_id,
-                    } => ArcRenderCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group: bind_group_guard.get_owned(bind_group_id).map_err(|_| {
+                    } => {
+                        if bind_group_id.is_none() {
+                            return Ok(ArcRenderCommand::SetBindGroup {
+                                index,
+                                num_dynamic_offsets,
+                                bind_group: None,
+                            });
+                        }
+
+                        let bind_group_id = bind_group_id.unwrap();
+                        let bg = bind_group_guard.get_owned(bind_group_id).map_err(|_| {
                             RenderPassError {
                                 scope: PassErrorScope::SetBindGroup,
-                                inner: RenderPassErrorInner::InvalidBindGroup(index),
+                                inner: RenderPassErrorInner::InvalidBindGroupId(bind_group_id),
                             }
-                        })?,
-                    },
+                        })?;
+
+                        ArcRenderCommand::SetBindGroup {
+                            index,
+                            num_dynamic_offsets,
+                            bind_group: Some(bg),
+                        }
+                    }
 
                     RenderCommand::SetPipeline(pipeline_id) => ArcRenderCommand::SetPipeline(
                         pipelines_guard
@@ -384,7 +397,7 @@ pub enum ArcRenderCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group: Arc<BindGroup>,
+        bind_group: Option<Arc<BindGroup>>,
     },
     SetPipeline(Arc<RenderPipeline>),
     SetIndexBuffer {

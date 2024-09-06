@@ -150,7 +150,7 @@
                         SetBindGroup(
                             index: 0,
                             num_dynamic_offsets: 0,
-                            bind_group_id: Id(0, 1, Empty),
+                            bind_group_id: Some(Id(0, 1, Empty)),
                         ),
                         Dispatch((4, 1, 1)),
                     ],

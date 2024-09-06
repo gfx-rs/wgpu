@@ -65,6 +65,15 @@ traits that have now been implemented for `wgpu` resources.
 
 By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
+#### `set_bind_group` now takes an `Option` for the bind group argument.
+
+https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup
+is nullable. This change is the start of implementing this part of the spec. Callers that
+specify a `Some()` value should have unchanged behavior. Handling of `None` values still
+needs to be implemented by backends.
+
+By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
+
 ### New Features
 
 #### Naga

@@ -32,7 +32,7 @@ fn shader() -> String {
         r#"
         @group(0) @binding(0)
         var<storage, read_write> output: array<u32>;
-    
+
         @compute @workgroup_size(1)
         fn main() {{
         {body}
@@ -167,7 +167,7 @@ async fn validate_pipeline(
             timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, bind_group, &[]);
+        cpass.set_bind_group(0, Some(bind_group), &[]);
 
         cpass.dispatch_workgroups(1, 1, 1);
     }

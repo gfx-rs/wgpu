@@ -2168,15 +2168,14 @@ impl crate::Context for ContextWgpuCore {
         &self,
         pass_data: &mut Self::ComputePassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
-        if let Err(cause) = self.0.compute_pass_set_bind_group(
-            &mut pass_data.pass,
-            index,
-            *bind_group_data,
-            offsets,
-        ) {
+        let bg = bind_group_data.cloned();
+        if let Err(cause) =
+            self.0
+                .compute_pass_set_bind_group(&mut pass_data.pass, index, bg, offsets)
+        {
             self.handle_error(
                 &pass_data.error_sink,
                 cause,
@@ -2364,14 +2363,15 @@ impl crate::Context for ContextWgpuCore {
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        let bg = bind_group_data.cloned();
         unsafe {
             wgpu_render_bundle_set_bind_group(
                 encoder_data,
                 index,
-                *bind_group_data,
+                bg,
                 offsets.as_ptr(),
                 offsets.len(),
             )
@@ -2494,12 +2494,13 @@ impl crate::Context for ContextWgpuCore {
         &self,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        let bg = bind_group_data.cloned();
         if let Err(cause) =
             self.0
-                .render_pass_set_bind_group(&mut pass_data.pass, index, *bind_group_data, offsets)
+                .render_pass_set_bind_group(&mut pass_data.pass, index, bg, offsets)
         {
             self.handle_error(
                 &pass_data.error_sink,

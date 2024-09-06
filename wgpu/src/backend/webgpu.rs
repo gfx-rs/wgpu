@@ -2757,9 +2757,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         pass_data: &mut Self::ComputePassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
@@ -2869,9 +2874,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             encoder_data
                 .0
@@ -3021,9 +3031,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
