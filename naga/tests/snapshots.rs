@@ -14,8 +14,12 @@ const BASE_DIR_OUT: &str = "tests/out";
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
     struct Targets: u32 {
+        /// A serialization of the `naga::Module`, in RON format.
         const IR = 1;
+
+        /// A serialization of the `naga::valid::ModuleInfo`, in RON format.
         const ANALYSIS = 1 << 1;
+
         const SPIRV = 1 << 2;
         const METAL = 1 << 3;
         const GLSL = 1 << 4;
