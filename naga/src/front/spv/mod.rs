@@ -5963,7 +5963,10 @@ mod test {
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
     }
+}
 
+#[cfg(all(test, feature = "wgsl-in", wgsl_out))]
+mod test_atomic {
     fn atomic_test(bytes: &[u8]) {
         let _ = env_logger::builder().is_test(true).try_init();
         let m = crate::front::spv::parse_u8_slice(bytes, &Default::default()).unwrap();
