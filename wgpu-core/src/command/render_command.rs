@@ -129,9 +129,7 @@ impl RenderCommand {
         hub: &crate::hub::Hub,
         commands: &[RenderCommand],
     ) -> Result<Vec<ArcRenderCommand>, super::RenderPassError> {
-        use super::{
-            DrawKind, PassErrorScope, RenderCommandError, RenderPassError, RenderPassErrorInner,
-        };
+        use super::{DrawKind, PassErrorScope, RenderCommandError, RenderPassError};
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -157,12 +155,13 @@ impl RenderCommand {
                         }
 
                         let bind_group_id = bind_group_id.unwrap();
-                        let bg = bind_group_guard.get_owned(bind_group_id).map_err(|_| {
-                            RenderPassError {
+                        let bg = bind_group_guard
+                            .strict_get(bind_group_id)
+                            .get()
+                            .map_err(|e| RenderPassError {
                                 scope: PassErrorScope::SetBindGroup,
-                                inner: RenderPassErrorInner::InvalidBindGroupId(bind_group_id),
-                            }
-                        })?;
+                                inner: e.into(),
+                            })?;
 
                         ArcRenderCommand::SetBindGroup {
                             index,

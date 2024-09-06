@@ -168,7 +168,7 @@ pub struct Hub {
     pub(crate) pipeline_layouts: Registry<Arc<PipelineLayout>>,
     pub(crate) shader_modules: Registry<Arc<ShaderModule>>,
     pub(crate) bind_group_layouts: Registry<Arc<BindGroupLayout>>,
-    pub(crate) bind_groups: Registry<Arc<BindGroup>>,
+    pub(crate) bind_groups: Registry<Fallible<BindGroup>>,
     pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,
     pub(crate) render_bundles: Registry<Arc<RenderBundle>>,
     pub(crate) render_pipelines: Registry<Arc<RenderPipeline>>,
