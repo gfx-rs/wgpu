@@ -1348,13 +1348,13 @@ impl Global {
                 }
             }
 
-            let id = fid.assign(pipeline);
+            let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_render_pipeline -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
 
         // We also need to assign errors to the implicit pipeline layout and the
         // implicit bind group layouts.
@@ -1386,9 +1386,9 @@ impl Global {
         let hub = &self.hub;
 
         let error = 'error: {
-            let pipeline = match hub.render_pipelines.get(pipeline_id) {
+            let pipeline = match hub.render_pipelines.strict_get(pipeline_id).get() {
                 Ok(pipeline) => pipeline,
-                Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                Err(e) => break 'error e.into(),
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
                 Some(bg) => hub
@@ -1415,9 +1415,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_pipeline) = hub.render_pipelines.unregister(render_pipeline_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _pipeline.device.trace.lock().as_mut() {
+        let _pipeline = hub.render_pipelines.strict_unregister(render_pipeline_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(pipeline) = _pipeline.get() {
+            if let Some(t) = pipeline.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyRenderPipeline(render_pipeline_id));
             }
         }
