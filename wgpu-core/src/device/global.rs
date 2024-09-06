@@ -186,11 +186,10 @@ impl Global {
         &self,
         backend: wgt::Backend,
         id_in: Option<id::RenderBundleId>,
+        desc: &command::RenderBundleDescriptor,
     ) {
-        let hub = &self.hub;
-        let fid = hub.render_bundles.prepare(backend, id_in);
-
-        fid.assign_error();
+        let fid = self.hub.render_bundles.prepare(backend, id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -1103,13 +1102,13 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(render_bundle);
+            let id = fid.assign(Fallible::Valid(render_bundle));
             api_log!("RenderBundleEncoder::finish -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -1119,9 +1118,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_bundle) = hub.render_bundles.unregister(render_bundle_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _bundle.device.trace.lock().as_mut() {
+        let _bundle = hub.render_bundles.strict_unregister(render_bundle_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(bundle) = _bundle.get() {
+            if let Some(t) = bundle.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyRenderBundle(render_bundle_id));
             }
         }

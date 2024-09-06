@@ -583,8 +583,6 @@ pub enum RenderPassErrorInner {
     InvalidParentEncoder,
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
-    #[error("Render bundle {0:?} is invalid")]
-    InvalidRenderBundle(id::RenderBundleId),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
     UnsupportedResolveTargetFormat {
         location: AttachmentErrorLocation,
@@ -3333,10 +3331,7 @@ impl Global {
         let bundles = hub.render_bundles.read();
 
         for &bundle_id in render_bundle_ids {
-            let bundle = bundles
-                .get_owned(bundle_id)
-                .map_err(|_| RenderPassErrorInner::InvalidRenderBundle(bundle_id))
-                .map_pass_err(scope)?;
+            let bundle = bundles.strict_get(bundle_id).get().map_pass_err(scope)?;
 
             base.commands.push(ArcRenderCommand::ExecuteBundle(bundle));
         }

@@ -129,7 +129,7 @@ impl RenderCommand {
         hub: &crate::hub::Hub,
         commands: &[RenderCommand],
     ) -> Result<Vec<ArcRenderCommand>, super::RenderPassError> {
-        use super::{DrawKind, PassErrorScope, RenderCommandError, RenderPassError};
+        use super::{DrawKind, PassErrorScope, RenderPassError};
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -376,12 +376,12 @@ impl RenderCommand {
                     RenderCommand::EndOcclusionQuery => ArcRenderCommand::EndOcclusionQuery,
 
                     RenderCommand::ExecuteBundle(bundle) => ArcRenderCommand::ExecuteBundle(
-                        render_bundles_guard
-                            .get_owned(bundle)
-                            .map_err(|_| RenderPassError {
+                        render_bundles_guard.strict_get(bundle).get().map_err(|e| {
+                            RenderPassError {
                                 scope: PassErrorScope::ExecuteBundle,
-                                inner: RenderCommandError::InvalidRenderBundle(bundle).into(),
-                            })?,
+                                inner: e.into(),
+                            }
+                        })?,
                     ),
                 })
             })
