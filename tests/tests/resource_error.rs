@@ -17,21 +17,16 @@ static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
         Some("`map` usage can only be combined with the opposite `copy`"),
     );
 
-    let error = match ctx.adapter_info.backend.to_str() {
-        "vulkan" | "vk" => "bufferid id(0,1,vk) is invalid",
-        "dx12" | "d3d12" => "bufferid id(0,1,d3d12) is invalid",
-        "metal" | "mtl" => "bufferid id(0,1,mtl) is invalid",
-        "opengl" | "gles" | "gl" => "bufferid id(0,1,gl) is invalid",
-        "webgpu" => "bufferid id(0,1,webgpu) is invalid",
-        b => b,
-    };
-
     fail(
         &ctx.device,
         || buffer.slice(..).map_async(wgpu::MapMode::Write, |_| {}),
-        Some(error),
+        Some("Buffer with '' label is invalid"),
     );
-    fail(&ctx.device, || buffer.unmap(), Some(error));
+    fail(
+        &ctx.device,
+        || buffer.unmap(),
+        Some("Buffer with '' label is invalid"),
+    );
     valid(&ctx.device, || buffer.destroy());
     valid(&ctx.device, || buffer.destroy());
 });

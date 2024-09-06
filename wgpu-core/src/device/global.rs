@@ -19,9 +19,10 @@ use crate::{
     present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
+        Fallible,
     },
     storage::Storage,
-    Label,
+    Label, LabelHelpers,
 };
 
 use wgt::{BufferAddress, TextureFormat};
@@ -124,7 +125,7 @@ impl Global {
                 }
             };
 
-            let id = fid.assign(buffer);
+            let id = fid.assign(Fallible::Valid(buffer));
 
             api_log!(
                 "Device::create_buffer({:?}{}) -> {id:?}",
@@ -139,7 +140,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -171,11 +172,14 @@ impl Global {
     /// [`device_create_buffer`]: Global::device_create_buffer
     /// [`usage`]: https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-usage
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
-    pub fn create_buffer_error(&self, backend: wgt::Backend, id_in: Option<id::BufferId>) {
-        let hub = &self.hub;
-        let fid = hub.buffers.prepare(backend, id_in);
-
-        fid.assign_error();
+    pub fn create_buffer_error(
+        &self,
+        backend: wgt::Backend,
+        id_in: Option<id::BufferId>,
+        desc: &resource::BufferDescriptor,
+    ) {
+        let fid = self.hub.buffers.prepare(backend, id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
     pub fn create_render_bundle_error(
@@ -208,10 +212,7 @@ impl Global {
     ) -> BufferAccessResult {
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.strict_get(buffer_id).get()?;
 
         let device = &buffer.device;
 
@@ -258,10 +259,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+        let buffer = hub.buffers.strict_get(buffer_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
@@ -282,9 +280,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = match hub.buffers.unregister(buffer_id) {
-            Some(buffer) => buffer,
-            None => {
+        let buffer = match hub.buffers.strict_unregister(buffer_id).get() {
+            Ok(buffer) => buffer,
+            Err(_) => {
                 return;
             }
         };
@@ -425,7 +423,7 @@ impl Global {
         let texture = hub
             .textures
             .get(texture_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+            .map_err(|_| resource::DestroyError::InvalidTextureId(texture_id))?;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
@@ -733,22 +731,21 @@ impl Global {
 
             fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
-                buffer_storage: &Storage<Arc<resource::Buffer>>,
+                buffer_storage: &Storage<Fallible<resource::Buffer>>,
                 sampler_storage: &Storage<Arc<resource::Sampler>>,
                 texture_view_storage: &Storage<Arc<resource::TextureView>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
                     buffer_storage
-                        .get_owned(bb.buffer_id)
+                        .strict_get(bb.buffer_id)
+                        .get()
                         .map(|buffer| ResolvedBufferBinding {
                             buffer,
                             offset: bb.offset,
                             size: bb.size,
                         })
-                        .map_err(|_| {
-                            binding_model::CreateBindGroupError::InvalidBufferId(bb.buffer_id)
-                        })
+                        .map_err(binding_model::CreateBindGroupError::from)
                 };
                 let resolve_sampler = |id: &id::SamplerId| {
                     sampler_storage
@@ -2197,9 +2194,9 @@ impl Global {
         let hub = &self.hub;
 
         let op_and_err = 'error: {
-            let buffer = match hub.buffers.get(buffer_id) {
+            let buffer = match hub.buffers.strict_get(buffer_id).get() {
                 Ok(buffer) => buffer,
-                Err(_) => break 'error Some((op, BufferAccessError::InvalidBufferId(buffer_id))),
+                Err(e) => break 'error Some((op, e.into())),
             };
 
             buffer.map_async(offset, size, op).err()
@@ -2230,10 +2227,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.strict_get(buffer_id).get()?;
 
         {
             let snatch_guard = buffer.device.snatchable_lock.read();
@@ -2306,10 +2300,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.strict_get(buffer_id).get()?;
 
         let snatch_guard = buffer.device.snatchable_lock.read();
         buffer.check_destroyed(&snatch_guard)?;

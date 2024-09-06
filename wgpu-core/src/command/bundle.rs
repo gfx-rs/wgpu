@@ -92,7 +92,10 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, TrackingData},
+    resource::{
+        Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
+        TrackingData,
+    },
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
@@ -578,7 +581,7 @@ impl RenderBundleEncoder {
 
 fn set_bind_group(
     state: &mut State,
-    bind_group_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<BindGroup>>>,
+    bind_group_guard: &crate::storage::Storage<Arc<BindGroup>>,
     dynamic_offsets: &[u32],
     index: u32,
     num_dynamic_offsets: usize,
@@ -630,7 +633,7 @@ fn set_bind_group(
 
 fn set_pipeline(
     state: &mut State,
-    pipeline_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<RenderPipeline>>>,
+    pipeline_guard: &crate::storage::Storage<Arc<RenderPipeline>>,
     context: &RenderPassContext,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
@@ -673,15 +676,13 @@ fn set_pipeline(
 
 fn set_index_buffer(
     state: &mut State,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<Buffer>>>,
+    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
     size: Option<std::num::NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let buffer = buffer_guard
-        .get_owned(buffer_id)
-        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
+    let buffer = buffer_guard.strict_get(buffer_id).get()?;
 
     state
         .trackers
@@ -708,7 +709,7 @@ fn set_index_buffer(
 
 fn set_vertex_buffer(
     state: &mut State,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<Buffer>>>,
+    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
@@ -723,9 +724,7 @@ fn set_vertex_buffer(
         .into());
     }
 
-    let buffer = buffer_guard
-        .get_owned(buffer_id)
-        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
+    let buffer = buffer_guard.strict_get(buffer_id).get()?;
 
     state
         .trackers
@@ -852,7 +851,7 @@ fn draw_indexed(
 fn multi_draw_indirect(
     state: &mut State,
     dynamic_offsets: &[u32],
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Arc<Buffer>>>,
+    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
     indexed: bool,
@@ -864,9 +863,7 @@ fn multi_draw_indirect(
     let pipeline = state.pipeline()?;
     let used_bind_groups = pipeline.used_bind_groups;
 
-    let buffer = buffer_guard
-        .get_owned(buffer_id)
-        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
+    let buffer = buffer_guard.strict_get(buffer_id).get()?;
 
     state
         .trackers
@@ -1538,6 +1535,8 @@ pub(super) enum RenderBundleErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
     Bind(#[from] BindError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl<T> From<T> for RenderBundleErrorInner
