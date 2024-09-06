@@ -163,7 +163,7 @@ impl Global {
 
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
@@ -249,7 +249,7 @@ impl Global {
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
-        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
+        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker(&cmd_buf.device)?;
 
         let snatch_guard = device.snatchable_lock.read();
         clear_texture(

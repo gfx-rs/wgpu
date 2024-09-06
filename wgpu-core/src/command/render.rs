@@ -1588,10 +1588,12 @@ impl Global {
             // We automatically keep extending command buffers over time, and because
             // we want to insert a command buffer _before_ what we're about to record,
             // we need to make sure to close the previous one.
-            encoder.close().map_pass_err(pass_scope)?;
+            encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
             // We will reset this to `Recording` if we succeed, acts as a fail-safe.
             *status = CommandEncoderStatus::Error;
-            encoder.open_pass(hal_label).map_pass_err(pass_scope)?;
+            encoder
+                .open_pass(hal_label, &cmd_buf.device)
+                .map_pass_err(pass_scope)?;
 
             let info = RenderPassInfo::start(
                 device,
@@ -1894,7 +1896,7 @@ impl Global {
                 .finish(state.raw_encoder, state.snatch_guard)
                 .map_pass_err(pass_scope)?;
 
-            encoder.close().map_pass_err(pass_scope)?;
+            encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
             (trackers, pending_discard_init_fixups)
         };
 
@@ -1906,7 +1908,7 @@ impl Global {
         let tracker = &mut cmd_buf_data.trackers;
 
         {
-            let transit = encoder.open().map_pass_err(pass_scope)?;
+            let transit = encoder.open(&cmd_buf.device).map_pass_err(pass_scope)?;
 
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
@@ -1922,7 +1924,9 @@ impl Global {
         }
 
         *status = CommandEncoderStatus::Recording;
-        encoder.close_and_swap().map_pass_err(pass_scope)?;
+        encoder
+            .close_and_swap(&cmd_buf.device)
+            .map_pass_err(pass_scope)?;
 
         Ok(())
     }

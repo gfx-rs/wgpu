@@ -346,7 +346,7 @@ impl Global {
         let encoder = &mut cmd_buf_data.encoder;
         let tracker = &mut cmd_buf_data.trackers;
 
-        let raw_encoder = encoder.open()?;
+        let raw_encoder = encoder.open(&cmd_buf.device)?;
 
         let query_set = hub
             .query_sets
@@ -397,7 +397,7 @@ impl Global {
         let encoder = &mut cmd_buf_data.encoder;
         let tracker = &mut cmd_buf_data.trackers;
         let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
-        let raw_encoder = encoder.open()?;
+        let raw_encoder = encoder.open(&cmd_buf.device)?;
 
         if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));

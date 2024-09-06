@@ -4,7 +4,7 @@ use std::{borrow::Cow, collections::HashMap};
 use crate::hub::Hub;
 use crate::{
     api_log,
-    device::{queue::Queue, resource::Device, DeviceDescriptor},
+    device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
     hal_api::HalApi,
     id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
@@ -272,20 +272,19 @@ impl Adapter {
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        if let Ok(device) = Device::new(
+        let device = Device::new(
             hal_device.device,
             hal_device.queue.as_ref(),
             self,
             desc,
             trace_path,
             instance_flags,
-        ) {
-            let device = Arc::new(device);
-            let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
-            device.set_queue(&queue);
-            return Ok((device, queue));
-        }
-        Err(RequestDeviceError::OutOfMemory)
+        )?;
+
+        let device = Arc::new(device);
+        let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
+        device.set_queue(&queue);
+        Ok((device, queue))
     }
 
     #[allow(clippy::type_complexity)]
@@ -338,12 +337,7 @@ impl Adapter {
                 &desc.memory_hints,
             )
         }
-        .map_err(|err| match err {
-            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
-            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
-            hal::DeviceError::Unexpected => RequestDeviceError::DeviceLost,
-        })?;
+        .map_err(DeviceError::from_hal)?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
     }
@@ -377,18 +371,14 @@ pub enum GetSurfaceSupportError {
 /// Error when requesting a device from the adaptor
 #[non_exhaustive]
 pub enum RequestDeviceError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error("Parent adapter is invalid")]
     InvalidAdapter,
-    #[error("Connection to device was lost during initialization")]
-    DeviceLost,
-    #[error("Device initialization failed due to implementation specific errors")]
-    Internal,
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
     #[error("Device has no queue supporting graphics")]
     NoGraphicsQueue,
-    #[error("Not enough memory left to request device")]
-    OutOfMemory,
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }

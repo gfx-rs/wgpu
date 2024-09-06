@@ -270,20 +270,26 @@ impl Global {
 
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = buffer.try_raw(&snatch_guard)?;
-        unsafe {
-            let mapping = device
+
+        let mapping = unsafe {
+            device
                 .raw()
                 .map_buffer(raw_buf, offset..offset + data.len() as u64)
-                .map_err(DeviceError::from)?;
-            std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
-            if !mapping.is_coherent {
-                #[allow(clippy::single_range_in_vec_init)]
+        }
+        .map_err(|e| device.handle_hal_error(e))?;
+
+        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
+
+        if !mapping.is_coherent {
+            #[allow(clippy::single_range_in_vec_init)]
+            unsafe {
                 device
                     .raw()
-                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64]);
-            }
-            device.raw().unmap_buffer(raw_buf);
+                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64])
+            };
         }
+
+        unsafe { device.raw().unmap_buffer(raw_buf) };
 
         Ok(())
     }
@@ -2006,7 +2012,9 @@ impl Global {
                             hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
                                 E::InvalidSurface
                             }
-                            hal::SurfaceError::Device(error) => E::Device(error.into()),
+                            hal::SurfaceError::Device(error) => {
+                                E::Device(device.handle_hal_error(error))
+                            }
                             hal::SurfaceError::Other(message) => {
                                 log::error!("surface configuration failed: {}", message);
                                 E::InvalidSurface
@@ -2286,16 +2294,6 @@ impl Global {
             // the DeviceLostClosure will be called with "destroyed" as the
             // reason.
             device.valid.store(false, Ordering::Relaxed);
-        }
-    }
-
-    pub fn device_mark_lost(&self, device_id: DeviceId, message: &str) {
-        api_log!("Device::mark_lost {device_id:?}");
-
-        let hub = &self.hub;
-
-        if let Ok(device) = hub.devices.get(device_id) {
-            device.lose(message);
         }
     }
 

@@ -308,7 +308,7 @@ fn map_buffer(
     let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
-            .map_err(DeviceError::from)?
+            .map_err(|e| buffer.device.handle_hal_error(e))?
     };
 
     if !mapping.is_coherent && kind == HostMap::Read {
@@ -420,13 +420,16 @@ pub enum DeviceError {
     DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
 
-impl From<hal::DeviceError> for DeviceError {
-    fn from(error: hal::DeviceError) -> Self {
+impl DeviceError {
+    /// Only use this function in contexts where there is no `Device`.
+    ///
+    /// Use [`Device::handle_hal_error`] otherwise.
+    pub fn from_hal(error: hal::DeviceError) -> Self {
         match error {
-            hal::DeviceError::Lost => DeviceError::Lost,
-            hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
-            hal::DeviceError::Unexpected => DeviceError::Lost,
+            hal::DeviceError::Lost => Self::Lost,
+            hal::DeviceError::OutOfMemory => Self::OutOfMemory,
+            hal::DeviceError::ResourceCreationFailed => Self::ResourceCreationFailed,
+            hal::DeviceError::Unexpected => Self::Lost,
         }
     }
 }

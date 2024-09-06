@@ -286,16 +286,6 @@ pub enum CreatePipelineCacheError {
     Internal(String),
 }
 
-impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
-    fn from(value: hal::PipelineCacheError) -> Self {
-        match value {
-            hal::PipelineCacheError::Device(device) => {
-                CreatePipelineCacheError::Device(device.into())
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct PipelineCache {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynPipelineCache>>,
