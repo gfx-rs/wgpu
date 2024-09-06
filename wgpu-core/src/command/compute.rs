@@ -17,8 +17,8 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice,
-        Trackable,
+        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
+        MissingBufferUsageError, ParentDevice, Trackable,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
@@ -148,8 +148,6 @@ pub enum ComputePassErrorInner {
         end_offset: u64,
         buffer_size: u64,
     },
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(id::BufferId),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
@@ -176,6 +174,8 @@ pub enum ComputePassErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("The compute pass has already been ended and no further commands can be recorded")]
     PassEnded,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 /// Error encountered when performing a compute pass.
@@ -1096,8 +1096,8 @@ impl Global {
 
         let buffer = hub
             .buffers
-            .get(buffer_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBufferId(buffer_id))
+            .strict_get(buffer_id)
+            .get()
             .map_pass_err(scope)?;
 
         base.commands

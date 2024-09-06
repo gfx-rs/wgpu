@@ -305,7 +305,7 @@ impl BufferMapCallback {
                 let status = match result {
                     Ok(()) => BufferMapAsyncStatus::Success,
                     Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
-                    Err(BufferAccessError::InvalidBufferId(_))
+                    Err(BufferAccessError::InvalidResource(_))
                     | Err(BufferAccessError::DestroyedResource(_)) => BufferMapAsyncStatus::Invalid,
                     Err(BufferAccessError::AlreadyMapped) => BufferMapAsyncStatus::AlreadyMapped,
                     Err(BufferAccessError::MapAlreadyPending) => {
@@ -324,7 +324,9 @@ impl BufferMapCallback {
                     | Err(BufferAccessError::NegativeRange { .. }) => {
                         BufferMapAsyncStatus::InvalidRange
                     }
-                    Err(_) => BufferMapAsyncStatus::Error,
+                    Err(BufferAccessError::Failed)
+                    | Err(BufferAccessError::NotMapped)
+                    | Err(BufferAccessError::MapAborted) => BufferMapAsyncStatus::Error,
                 };
 
                 (inner.callback)(status, inner.user_data);
@@ -347,8 +349,6 @@ pub enum BufferAccessError {
     Device(#[from] DeviceError),
     #[error("Buffer map failed")]
     Failed,
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(BufferId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("Buffer is already mapped")]
@@ -386,6 +386,8 @@ pub enum BufferAccessError {
     },
     #[error("Buffer map aborted")]
     MapAborted,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -409,6 +411,45 @@ pub struct MissingTextureUsageError {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[error("{0} has been destroyed")]
 pub struct DestroyedResourceError(pub ResourceErrorIdent);
+
+#[derive(Clone, Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[error("{0} is invalid")]
+pub struct InvalidResourceError(pub ResourceErrorIdent);
+
+pub(crate) enum Fallible<T: ParentDevice> {
+    Valid(Arc<T>),
+    Invalid(Arc<String>),
+}
+
+impl<T: ParentDevice> Fallible<T> {
+    pub fn get(self) -> Result<Arc<T>, InvalidResourceError> {
+        match self {
+            Fallible::Valid(v) => Ok(v),
+            Fallible::Invalid(label) => Err(InvalidResourceError(ResourceErrorIdent {
+                r#type: Cow::Borrowed(T::TYPE),
+                label: (*label).clone(),
+            })),
+        }
+    }
+}
+
+impl<T: ParentDevice> Clone for Fallible<T> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Valid(v) => Self::Valid(v.clone()),
+            Self::Invalid(l) => Self::Invalid(l.clone()),
+        }
+    }
+}
+
+impl<T: ParentDevice> ResourceType for Fallible<T> {
+    const TYPE: &'static str = T::TYPE;
+}
+
+impl<T: ParentDevice + crate::storage::StorageItem> crate::storage::StorageItem for Fallible<T> {
+    type Marker = T::Marker;
+}
 
 pub type BufferAccessResult = Result<(), BufferAccessError>;
 
@@ -1202,7 +1243,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Ok(buffer) = hub.buffers.get(id) {
+        if let Ok(buffer) = hub.buffers.strict_get(id).get() {
             let snatch_guard = buffer.device.snatchable_lock.read();
             let hal_buffer = buffer
                 .raw(&snatch_guard)
@@ -1821,8 +1862,10 @@ impl QuerySet {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DestroyError {
-    #[error("Resource is invalid")]
-    Invalid,
+    #[error("TextureId {0:?} is invalid")]
+    InvalidTextureId(TextureId),
     #[error("Resource is already destroyed")]
     AlreadyDestroyed,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }

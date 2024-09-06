@@ -136,10 +136,10 @@ impl ComputeCommand {
 
                     ComputeCommand::DispatchIndirect { buffer_id, offset } => {
                         ArcComputeCommand::DispatchIndirect {
-                            buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                            buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
                                 ComputePassError {
                                     scope: PassErrorScope::Dispatch { indirect: true },
-                                    inner: ComputePassErrorInner::InvalidBufferId(buffer_id),
+                                    inner: e.into(),
                                 }
                             })?,
                             offset,

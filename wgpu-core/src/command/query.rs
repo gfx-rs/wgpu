@@ -7,7 +7,8 @@ use crate::{
     id,
     init_tracker::MemoryInitKind,
     resource::{
-        DestroyedResourceError, MissingBufferUsageError, ParentDevice, QuerySet, Trackable,
+        DestroyedResourceError, InvalidResourceError, MissingBufferUsageError, ParentDevice,
+        QuerySet, Trackable,
     },
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
@@ -100,12 +101,12 @@ pub enum QueryError {
     Use(#[from] QueryUseError),
     #[error("Error encountered while trying to resolve a query")]
     Resolve(#[from] ResolveError),
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(id::BufferId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("QuerySetId {0:?} is invalid or destroyed")]
     InvalidQuerySetId(id::QuerySetId),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 /// Error encountered while trying to use queries
@@ -412,10 +413,7 @@ impl Global {
 
         query_set.same_device_as(cmd_buf.as_ref())?;
 
-        let dst_buffer = hub
-            .buffers
-            .get(destination)
-            .map_err(|_| QueryError::InvalidBufferId(destination))?;
+        let dst_buffer = hub.buffers.strict_get(destination).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 

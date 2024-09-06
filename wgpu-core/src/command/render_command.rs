@@ -238,10 +238,10 @@ impl RenderCommand {
                         offset,
                         size,
                     } => ArcRenderCommand::SetIndexBuffer {
-                        buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                        buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
                             RenderPassError {
                                 scope: PassErrorScope::SetIndexBuffer,
-                                inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
+                                inner: e.into(),
                             }
                         })?,
                         index_format,
@@ -256,10 +256,10 @@ impl RenderCommand {
                         size,
                     } => ArcRenderCommand::SetVertexBuffer {
                         slot,
-                        buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                        buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
                             RenderPassError {
                                 scope: PassErrorScope::SetVertexBuffer,
-                                inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
+                                inner: e.into(),
                             }
                         })?,
                         offset,
@@ -318,7 +318,7 @@ impl RenderCommand {
                         count,
                         indexed,
                     } => ArcRenderCommand::MultiDrawIndirect {
-                        buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                        buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
                             RenderPassError {
                                 scope: PassErrorScope::Draw {
                                     kind: if count.is_some() {
@@ -328,7 +328,7 @@ impl RenderCommand {
                                     },
                                     indexed,
                                 },
-                                inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
+                                inner: e.into(),
                             }
                         })?,
                         offset,
@@ -349,18 +349,17 @@ impl RenderCommand {
                             indexed,
                         };
                         ArcRenderCommand::MultiDrawIndirectCount {
-                            buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                            buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
                                 RenderPassError {
                                     scope,
-                                    inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
+                                    inner: e.into(),
                                 }
                             })?,
                             offset,
-                            count_buffer: buffers_guard.get_owned(count_buffer_id).map_err(
-                                |_| RenderPassError {
+                            count_buffer: buffers_guard.strict_get(count_buffer_id).get().map_err(
+                                |e| RenderPassError {
                                     scope,
-                                    inner: RenderCommandError::InvalidBufferId(count_buffer_id)
-                                        .into(),
+                                    inner: e.into(),
                                 },
                             )?,
                             count_buffer_offset,

@@ -68,8 +68,6 @@ pub enum DrawError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum RenderCommandError {
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(id::BufferId),
     #[error("BindGroupId {0:?} is invalid")]
     InvalidBindGroupId(id::BindGroupId),
     #[error("Render bundle {0:?} is invalid")]

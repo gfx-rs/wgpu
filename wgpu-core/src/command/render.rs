@@ -4,6 +4,7 @@ use crate::command::{
 };
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::RenderPipeline;
+use crate::resource::InvalidResourceError;
 use crate::snatch::SnatchGuard;
 use crate::{
     api_log,
@@ -582,8 +583,6 @@ pub enum RenderPassErrorInner {
     InvalidParentEncoder,
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(id::BufferId),
     #[error("Render pipeline {0:?} is invalid")]
     InvalidPipeline(id::RenderPipelineId),
     #[error("QuerySet {0:?} is invalid")]
@@ -705,6 +704,8 @@ pub enum RenderPassErrorInner {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("The compute pass has already been ended and no further commands can be recorded")]
     PassEnded,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
@@ -2776,8 +2777,8 @@ impl Global {
         let hub = &self.hub;
         let buffer = hub
             .buffers
-            .get(buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
+            .strict_get(buffer_id)
+            .get()
             .map_pass_err(scope)?;
 
         Ok(buffer)
@@ -3174,23 +3175,11 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        // Don't use resolve_render_pass_buffer_id here, because we don't want to take the read-lock twice.
-        let hub = &self.hub;
-        let buffers = hub.buffers.read();
-        let buffer = buffers
-            .get_owned(buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
-            .map_pass_err(scope)?;
-        let count_buffer = buffers
-            .get_owned(count_buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(count_buffer_id))
-            .map_pass_err(scope)?;
-
         base.commands
             .push(ArcRenderCommand::MultiDrawIndirectCount {
-                buffer,
+                buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
                 offset,
-                count_buffer,
+                count_buffer: self.resolve_render_pass_buffer_id(scope, count_buffer_id)?,
                 count_buffer_offset,
                 max_count,
                 indexed: false,
@@ -3214,24 +3203,11 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        // Don't use resolve_render_pass_buffer_id here, because we don't want to take the read-lock twice.
-        let hub = &self.hub;
-        let buffers = hub.buffers.read();
-        let buffer = buffers
-            .get_owned(buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
-            .map_pass_err(scope)?;
-
-        let count_buffer = buffers
-            .get_owned(count_buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(count_buffer_id))
-            .map_pass_err(scope)?;
-
         base.commands
             .push(ArcRenderCommand::MultiDrawIndirectCount {
-                buffer,
+                buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
                 offset,
-                count_buffer,
+                count_buffer: self.resolve_render_pass_buffer_id(scope, count_buffer_id)?,
                 count_buffer_offset,
                 max_count,
                 indexed: true,

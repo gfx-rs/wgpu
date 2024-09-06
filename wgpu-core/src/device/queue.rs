@@ -16,8 +16,8 @@ use crate::{
     lock::RwLockWriteGuard,
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, FlushedStagingBuffer, Labeled, ParentDevice, ResourceErrorIdent,
-        StagingBuffer, Texture, TextureInner, Trackable,
+        DestroyedTexture, FlushedStagingBuffer, InvalidResourceError, Labeled, ParentDevice,
+        ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
     },
     resource_log,
     track::{self, Tracker, TrackerIndex},
@@ -332,6 +332,10 @@ pub enum QueueWriteError {
     MemoryInitFailure(#[from] ClearError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error("StagingBufferId {0:?} is invalid")]
+    InvalidStagingBufferId(id::StagingBufferId),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -368,10 +372,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.strict_get(buffer_id).get()?;
 
         let queue = hub.queues.strict_get(queue_id);
 
@@ -465,7 +466,7 @@ impl Global {
             .staging_buffers
             .unregister(staging_buffer_id)
             .and_then(Arc::into_inner)
-            .ok_or_else(|| QueueWriteError::Transfer(TransferError::InvalidBufferId(buffer_id)))?;
+            .ok_or_else(|| QueueWriteError::InvalidStagingBufferId(staging_buffer_id))?;
 
         let mut pending_writes = device.pending_writes.lock();
 
@@ -498,10 +499,7 @@ impl Global {
         profiling::scope!("Queue::validate_write_buffer");
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.strict_get(buffer_id).get()?;
 
         self.queue_validate_write_buffer_impl(&buffer, buffer_offset, buffer_size)?;
 
@@ -544,10 +542,7 @@ impl Global {
     ) -> Result<(), QueueWriteError> {
         let hub = &self.hub;
 
-        let dst = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| TransferError::InvalidBufferId(buffer_id))?;
+        let dst = hub.buffers.strict_get(buffer_id).get()?;
 
         let transition = {
             let mut trackers = device.trackers.lock();

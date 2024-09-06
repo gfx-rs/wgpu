@@ -12,8 +12,8 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{
-        DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError, ParentDevice,
-        Texture, TextureErrorDimension,
+        DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
+        MissingTextureUsageError, ParentDevice, Texture, TextureErrorDimension,
     },
     snatch::SnatchGuard,
     track::{TextureSelector, Tracker},
@@ -41,8 +41,6 @@ pub enum CopySide {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TransferError {
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(BufferId),
     #[error("TextureId {0:?} is invalid")]
     InvalidTextureId(TextureId),
     #[error("Source and destination cannot be the same buffer")]
@@ -150,6 +148,8 @@ pub enum CopyError {
     Transfer(#[from] TransferError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl From<DeviceError> for CopyError {
@@ -570,10 +570,7 @@ impl Global {
 
         let snatch_guard = device.snatchable_lock.read();
 
-        let src_buffer = hub
-            .buffers
-            .get(source)
-            .map_err(|_| TransferError::InvalidBufferId(source))?;
+        let src_buffer = hub.buffers.strict_get(source).get()?;
 
         src_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -589,10 +586,7 @@ impl Global {
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
-        let dst_buffer = hub
-            .buffers
-            .get(destination)
-            .map_err(|_| TransferError::InvalidBufferId(destination))?;
+        let dst_buffer = hub.buffers.strict_get(destination).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -778,10 +772,7 @@ impl Global {
             &snatch_guard,
         )?;
 
-        let src_buffer = hub
-            .buffers
-            .get(source.buffer)
-            .map_err(|_| TransferError::InvalidBufferId(source.buffer))?;
+        let src_buffer = hub.buffers.strict_get(source.buffer).get()?;
 
         src_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -966,10 +957,7 @@ impl Global {
             .map(|pending| pending.into_hal(src_raw))
             .collect::<Vec<_>>();
 
-        let dst_buffer = hub
-            .buffers
-            .get(destination.buffer)
-            .map_err(|_| TransferError::InvalidBufferId(destination.buffer))?;
+        let dst_buffer = hub.buffers.strict_get(destination.buffer).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
