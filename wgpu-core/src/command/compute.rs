@@ -132,8 +132,6 @@ pub enum ComputePassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
-    #[error("BindGroupId {0:?} is invalid")]
-    InvalidBindGroupId(id::BindGroupId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("ComputePipelineId {0:?} is invalid")]
@@ -985,8 +983,8 @@ impl Global {
             let hub = &self.hub;
             let bg = hub
                 .bind_groups
-                .get(bind_group_id)
-                .map_err(|_| ComputePassErrorInner::InvalidBindGroupId(bind_group_id))
+                .strict_get(bind_group_id)
+                .get()
                 .map_pass_err(scope)?;
             bind_group = Some(bg);
         }

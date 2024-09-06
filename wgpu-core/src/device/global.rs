@@ -825,14 +825,14 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(bind_group);
+            let id = fid.assign(Fallible::Valid(bind_group));
 
             api_log!("Device::create_bind_group -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -842,8 +842,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_bind_group) = hub.bind_groups.unregister(bind_group_id) {
-            #[cfg(feature = "trace")]
+        let _bind_group = hub.bind_groups.strict_unregister(bind_group_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(_bind_group) = _bind_group.get() {
             if let Some(t) = _bind_group.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyBindGroup(bind_group_id));
             }

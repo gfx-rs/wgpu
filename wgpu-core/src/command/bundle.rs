@@ -581,7 +581,7 @@ impl RenderBundleEncoder {
 
 fn set_bind_group(
     state: &mut State,
-    bind_group_guard: &crate::storage::Storage<Arc<BindGroup>>,
+    bind_group_guard: &crate::storage::Storage<Fallible<BindGroup>>,
     dynamic_offsets: &[u32],
     index: u32,
     num_dynamic_offsets: usize,
@@ -594,9 +594,7 @@ fn set_bind_group(
 
     let bind_group_id = bind_group_id.unwrap();
 
-    let bind_group = bind_group_guard
-        .get_owned(bind_group_id)
-        .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))?;
+    let bind_group = bind_group_guard.strict_get(bind_group_id).get()?;
 
     bind_group.same_device(&state.device)?;
 

@@ -632,8 +632,6 @@ pub enum RenderPassErrorInner {
     SurfaceTextureDropped,
     #[error("Not enough memory left for render pass")]
     OutOfMemory,
-    #[error("BindGroupId {0:?} is invalid")]
-    InvalidBindGroupId(id::BindGroupId),
     #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,
     #[error("Unable to clear non-present/read-only stencil")]
@@ -2816,8 +2814,8 @@ impl Global {
             let hub = &self.hub;
             let bg = hub
                 .bind_groups
-                .get(bind_group_id)
-                .map_err(|_| RenderPassErrorInner::InvalidBindGroupId(bind_group_id))
+                .strict_get(bind_group_id)
+                .get()
                 .map_pass_err(scope)?;
             bind_group = Some(bg);
         }
