@@ -79,8 +79,6 @@ pub enum CreateBindGroupLayoutError {
 pub enum CreateBindGroupError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Bind group layout is invalid")]
-    InvalidLayout,
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(
@@ -541,8 +539,6 @@ impl BindGroupLayout {
 pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("BindGroupLayoutId {0:?} is invalid")]
-    InvalidBindGroupLayoutId(BindGroupLayoutId),
     #[error(
         "Push constant at index {index} has range bound {bound} not aligned to {}",
         wgt::PUSH_CONSTANT_ALIGNMENT
@@ -566,6 +562,8 @@ pub enum CreatePipelineLayoutError {
     TooManyBindings(BindingTypeMaxCountError),
     #[error("Bind group layout count {actual} exceeds device bind group limit {max}")]
     TooManyGroups { actual: usize, max: usize },
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Clone, Debug, Error)]

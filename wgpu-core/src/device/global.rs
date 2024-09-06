@@ -609,14 +609,13 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(layout.clone());
+            let id = fid.assign(Fallible::Valid(layout.clone()));
 
             api_log!("Device::create_bind_group_layout -> {id:?}");
             return (id, None);
         };
 
-        let fid = hub.bind_group_layouts.prepare(device_id.backend(), id_in);
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -626,9 +625,13 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_layout) = hub.bind_group_layouts.unregister(bind_group_layout_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _layout.device.trace.lock().as_mut() {
+        let _layout = hub
+            .bind_group_layouts
+            .strict_unregister(bind_group_layout_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(layout) = _layout.get() {
+            if let Some(t) = layout.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyBindGroupLayout(bind_group_layout_id));
             }
         }
@@ -660,19 +663,13 @@ impl Global {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
                     .iter()
-                    .map(|bgl_id| {
-                        bind_group_layouts_guard.get_owned(*bgl_id).map_err(|_| {
-                            binding_model::CreatePipelineLayoutError::InvalidBindGroupLayoutId(
-                                *bgl_id,
-                            )
-                        })
-                    })
+                    .map(|bgl_id| bind_group_layouts_guard.strict_get(*bgl_id).get())
                     .collect::<Result<Vec<_>, _>>()
             };
 
             let bind_group_layouts = match bind_group_layouts {
                 Ok(bind_group_layouts) => bind_group_layouts,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let desc = binding_model::ResolvedPipelineLayoutDescriptor {
@@ -727,9 +724,9 @@ impl Global {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let layout = match hub.bind_group_layouts.get(desc.layout) {
+            let layout = match hub.bind_group_layouts.strict_get(desc.layout).get() {
                 Ok(layout) => layout,
-                Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
+                Err(e) => break 'error e.into(),
             };
 
             fn resolve_entry<'a>(
@@ -1341,10 +1338,10 @@ impl Global {
                     .iter()
                     .zip(&mut group_ids)
                 {
-                    bgl_guard.insert(*bgl_id, bgl.clone());
+                    bgl_guard.insert(*bgl_id, Fallible::Valid(bgl.clone()));
                 }
                 for bgl_id in group_ids {
-                    bgl_guard.insert_error(*bgl_id);
+                    bgl_guard.insert(*bgl_id, Fallible::Invalid(Arc::new(String::new())));
                 }
             }
 
@@ -1363,7 +1360,7 @@ impl Global {
             let mut bgl_guard = hub.bind_group_layouts.write();
             pipeline_layout_guard.insert_error(ids.root_id);
             for bgl_id in ids.group_ids {
-                bgl_guard.insert_error(bgl_id);
+                bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
             }
         }
 
@@ -1385,16 +1382,15 @@ impl Global {
     ) {
         let hub = &self.hub;
 
+        let fid = hub.bind_group_layouts.prepare(pipeline_id.backend(), id_in);
+
         let error = 'error: {
             let pipeline = match hub.render_pipelines.strict_get(pipeline_id).get() {
                 Ok(pipeline) => pipeline,
                 Err(e) => break 'error e.into(),
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub
-                    .bind_group_layouts
-                    .prepare(pipeline_id.backend(), id_in)
-                    .assign(bg.clone()),
+                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
                 None => {
                     break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
                 }
@@ -1402,10 +1398,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(pipeline_id.backend(), id_in)
-            .assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
         (id, Some(error))
     }
 
@@ -1542,10 +1535,10 @@ impl Global {
                     .iter()
                     .zip(&mut group_ids)
                 {
-                    bgl_guard.insert(*bgl_id, bgl.clone());
+                    bgl_guard.insert(*bgl_id, Fallible::Valid(bgl.clone()));
                 }
                 for bgl_id in group_ids {
-                    bgl_guard.insert_error(*bgl_id);
+                    bgl_guard.insert(*bgl_id, Fallible::Invalid(Arc::new(String::new())));
                 }
             }
 
@@ -1564,7 +1557,7 @@ impl Global {
             let mut bgl_guard = hub.bind_group_layouts.write();
             pipeline_layout_guard.insert_error(ids.root_id);
             for bgl_id in ids.group_ids {
-                bgl_guard.insert_error(bgl_id);
+                bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
             }
         }
 
@@ -1584,6 +1577,8 @@ impl Global {
     ) {
         let hub = &self.hub;
 
+        let fid = hub.bind_group_layouts.prepare(pipeline_id.backend(), id_in);
+
         let error = 'error: {
             let pipeline = match hub.compute_pipelines.strict_get(pipeline_id).get() {
                 Ok(pipeline) => pipeline,
@@ -1591,10 +1586,7 @@ impl Global {
             };
 
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub
-                    .bind_group_layouts
-                    .prepare(pipeline_id.backend(), id_in)
-                    .assign(bg.clone()),
+                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
                 None => {
                     break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
                 }
@@ -1603,10 +1595,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(pipeline_id.backend(), id_in)
-            .assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
         (id, Some(error))
     }
 
