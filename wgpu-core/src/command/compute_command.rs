@@ -81,113 +81,113 @@ impl ComputeCommand {
         let query_set_guard = hub.query_sets.read();
         let pipelines_guard = hub.compute_pipelines.read();
 
-        let resolved_commands: Vec<ArcComputeCommand> = commands
-            .iter()
-            .map(|c| -> Result<ArcComputeCommand, ComputePassError> {
-                Ok(match *c {
-                    ComputeCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group_id,
-                    } => {
-                        if bind_group_id.is_none() {
-                            return Ok(ArcComputeCommand::SetBindGroup {
-                                index,
-                                num_dynamic_offsets,
-                                bind_group: None,
-                            });
-                        }
-
-                        let bind_group_id = bind_group_id.unwrap();
-                        let bg = bind_group_guard.get_owned(bind_group_id).map_err(|_| {
-                            ComputePassError {
-                                scope: PassErrorScope::SetBindGroup,
-                                inner: ComputePassErrorInner::InvalidBindGroupId(bind_group_id),
-                            }
-                        })?;
-
-                        ArcComputeCommand::SetBindGroup {
+        let resolved_commands: Vec<ArcComputeCommand> =
+            commands
+                .iter()
+                .map(|c| -> Result<ArcComputeCommand, ComputePassError> {
+                    Ok(match *c {
+                        ComputeCommand::SetBindGroup {
                             index,
                             num_dynamic_offsets,
-                            bind_group: Some(bg),
-                        }
-                    }
+                            bind_group_id,
+                        } => {
+                            if bind_group_id.is_none() {
+                                return Ok(ArcComputeCommand::SetBindGroup {
+                                    index,
+                                    num_dynamic_offsets,
+                                    bind_group: None,
+                                });
+                            }
 
-                    ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
-                        pipelines_guard
-                            .get_owned(pipeline_id)
-                            .map_err(|_| ComputePassError {
-                                scope: PassErrorScope::SetPipelineCompute,
-                                inner: ComputePassErrorInner::InvalidPipelineId(pipeline_id),
-                            })?,
-                    ),
-
-                    ComputeCommand::SetPushConstant {
-                        offset,
-                        size_bytes,
-                        values_offset,
-                    } => ArcComputeCommand::SetPushConstant {
-                        offset,
-                        size_bytes,
-                        values_offset,
-                    },
-
-                    ComputeCommand::Dispatch(dim) => ArcComputeCommand::Dispatch(dim),
-
-                    ComputeCommand::DispatchIndirect { buffer_id, offset } => {
-                        ArcComputeCommand::DispatchIndirect {
-                            buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
+                            let bind_group_id = bind_group_id.unwrap();
+                            let bg = bind_group_guard.get_owned(bind_group_id).map_err(|_| {
                                 ComputePassError {
-                                    scope: PassErrorScope::Dispatch { indirect: true },
-                                    inner: e.into(),
+                                    scope: PassErrorScope::SetBindGroup,
+                                    inner: ComputePassErrorInner::InvalidBindGroupId(bind_group_id),
+                                }
+                            })?;
+
+                            ArcComputeCommand::SetBindGroup {
+                                index,
+                                num_dynamic_offsets,
+                                bind_group: Some(bg),
+                            }
+                        }
+                        ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
+                            pipelines_guard.get_owned(pipeline_id).map_err(|_| {
+                                ComputePassError {
+                                    scope: PassErrorScope::SetPipelineCompute,
+                                    inner: ComputePassErrorInner::InvalidPipelineId(pipeline_id),
                                 }
                             })?,
+                        ),
+
+                        ComputeCommand::SetPushConstant {
                             offset,
+                            size_bytes,
+                            values_offset,
+                        } => ArcComputeCommand::SetPushConstant {
+                            offset,
+                            size_bytes,
+                            values_offset,
+                        },
+
+                        ComputeCommand::Dispatch(dim) => ArcComputeCommand::Dispatch(dim),
+
+                        ComputeCommand::DispatchIndirect { buffer_id, offset } => {
+                            ArcComputeCommand::DispatchIndirect {
+                                buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
+                                    ComputePassError {
+                                        scope: PassErrorScope::Dispatch { indirect: true },
+                                        inner: e.into(),
+                                    }
+                                })?,
+                                offset,
+                            }
                         }
-                    }
 
-                    ComputeCommand::PushDebugGroup { color, len } => {
-                        ArcComputeCommand::PushDebugGroup { color, len }
-                    }
+                        ComputeCommand::PushDebugGroup { color, len } => {
+                            ArcComputeCommand::PushDebugGroup { color, len }
+                        }
 
-                    ComputeCommand::PopDebugGroup => ArcComputeCommand::PopDebugGroup,
+                        ComputeCommand::PopDebugGroup => ArcComputeCommand::PopDebugGroup,
 
-                    ComputeCommand::InsertDebugMarker { color, len } => {
-                        ArcComputeCommand::InsertDebugMarker { color, len }
-                    }
+                        ComputeCommand::InsertDebugMarker { color, len } => {
+                            ArcComputeCommand::InsertDebugMarker { color, len }
+                        }
 
-                    ComputeCommand::WriteTimestamp {
-                        query_set_id,
-                        query_index,
-                    } => ArcComputeCommand::WriteTimestamp {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
-                            ComputePassError {
-                                scope: PassErrorScope::WriteTimestamp,
-                                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
-                            }
-                        })?,
-                        query_index,
-                    },
+                        ComputeCommand::WriteTimestamp {
+                            query_set_id,
+                            query_index,
+                        } => ArcComputeCommand::WriteTimestamp {
+                            query_set: query_set_guard.strict_get(query_set_id).get().map_err(
+                                |e| ComputePassError {
+                                    scope: PassErrorScope::WriteTimestamp,
+                                    inner: e.into(),
+                                },
+                            )?,
+                            query_index,
+                        },
 
-                    ComputeCommand::BeginPipelineStatisticsQuery {
-                        query_set_id,
-                        query_index,
-                    } => ArcComputeCommand::BeginPipelineStatisticsQuery {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
-                            ComputePassError {
-                                scope: PassErrorScope::BeginPipelineStatisticsQuery,
-                                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
-                            }
-                        })?,
-                        query_index,
-                    },
+                        ComputeCommand::BeginPipelineStatisticsQuery {
+                            query_set_id,
+                            query_index,
+                        } => ArcComputeCommand::BeginPipelineStatisticsQuery {
+                            query_set: query_set_guard.strict_get(query_set_id).get().map_err(
+                                |e| ComputePassError {
+                                    scope: PassErrorScope::BeginPipelineStatisticsQuery,
+                                    inner: e.into(),
+                                },
+                            )?,
+                            query_index,
+                        },
 
-                    ComputeCommand::EndPipelineStatisticsQuery => {
-                        ArcComputeCommand::EndPipelineStatisticsQuery
-                    }
+                        ComputeCommand::EndPipelineStatisticsQuery => {
+                            ArcComputeCommand::EndPipelineStatisticsQuery
+                        }
+                    })
                 })
-            })
-            .collect::<Result<Vec<_>, ComputePassError>>()?;
+                .collect::<Result<Vec<_>, ComputePassError>>()?;
         Ok(resolved_commands)
     }
 }

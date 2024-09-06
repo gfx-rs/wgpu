@@ -80,8 +80,6 @@ pub enum RenderCommandError {
     UnalignedBufferOffset(u64, &'static str, u32),
     #[error("RenderPipelineId {0:?} is invalid")]
     InvalidPipelineId(id::RenderPipelineId),
-    #[error("QuerySet {0:?} is invalid")]
-    InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline targets are incompatible with render pass")]
     IncompatiblePipelineTargets(#[from] crate::device::RenderPassCompatibilityError),
     #[error("{0} writes to depth, while the pass has read-only depth access")]

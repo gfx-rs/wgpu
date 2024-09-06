@@ -597,12 +597,8 @@ pub enum CommandEncoderError {
     #[error("Command encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
     Locked,
 
-    #[error("QuerySet {0:?} for pass timestamp writes is invalid.")]
-    InvalidTimestampWritesQuerySetId(id::QuerySetId),
     #[error(transparent)]
     InvalidColorAttachment(#[from] ColorAttachmentError),
-    #[error("Occlusion QuerySetId {0:?} is invalid")]
-    InvalidOcclusionQuerySetId(id::QuerySetId),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
