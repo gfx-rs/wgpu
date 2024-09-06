@@ -447,7 +447,7 @@ fn run_bench(ctx: &mut Criterion) {
             };
 
             group.bench_function(
-                &format!("{cpasses} computepasses x {dispatch_per_pass} dispatches ({label})"),
+                format!("{cpasses} computepasses x {dispatch_per_pass} dispatches ({label})"),
                 |b| {
                     Lazy::force(&state);
 
@@ -496,7 +496,7 @@ fn run_bench(ctx: &mut Criterion) {
     for threads in [2, 4, 8] {
         let dispatch_per_pass = dispatch_count / threads;
         group.bench_function(
-            &format!("{threads} threads x {dispatch_per_pass} dispatch"),
+            format!("{threads} threads x {dispatch_per_pass} dispatch"),
             |b| {
                 Lazy::force(&state);
 
@@ -537,7 +537,7 @@ fn run_bench(ctx: &mut Criterion) {
     let mut group = ctx.benchmark_group("Computepass: Bindless");
     group.throughput(Throughput::Elements(dispatch_count_bindless as _));
 
-    group.bench_function(&format!("{dispatch_count_bindless} dispatch"), |b| {
+    group.bench_function(format!("{dispatch_count_bindless} dispatch"), |b| {
         Lazy::force(&state);
 
         b.iter_custom(|iters| {

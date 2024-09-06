@@ -1403,14 +1403,6 @@ impl crate::context::Context for ContextWebGpu {
         map_wgt_limits(device_data.0.limits())
     }
 
-    fn device_downlevel_properties(
-        &self,
-        _device_data: &Self::DeviceData,
-    ) -> wgt::DownlevelCapabilities {
-        // WebGPU is assumed to be fully compliant
-        wgt::DownlevelCapabilities::default()
-    }
-
     #[cfg_attr(
         not(any(
             feature = "spirv",
@@ -2031,12 +2023,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_destroy(&self, device_data: &Self::DeviceData) {
         device_data.0.destroy();
-    }
-
-    fn device_mark_lost(&self, _device_data: &Self::DeviceData, _message: &str) {
-        // TODO: figure out the GPUDevice implementation of this, including resolving
-        // the device.lost promise, which will require a different invocation pattern
-        // with a callback.
     }
 
     fn queue_drop(&self, _queue_data: &Self::QueueData) {
@@ -3021,52 +3007,6 @@ impl crate::context::Context for ContextWebGpu {
         encoder_data
             .0
             .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indexed_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!(
-            "MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indirect_count"
-        )
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
     }
 
     fn render_pass_set_pipeline(

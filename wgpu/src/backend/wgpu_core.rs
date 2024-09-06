@@ -793,13 +793,6 @@ impl crate::Context for ContextWgpuCore {
         }
     }
 
-    fn device_downlevel_properties(&self, device_data: &Self::DeviceData) -> DownlevelCapabilities {
-        match self.0.device_downlevel_properties(device_data.id) {
-            Ok(limits) => limits,
-            Err(err) => self.handle_error_fatal(err, "Device::downlevel_properties"),
-        }
-    }
-
     #[cfg_attr(
         not(any(
             feature = "spirv",
@@ -1374,17 +1367,12 @@ impl crate::Context for ContextWgpuCore {
     fn device_destroy(&self, device_data: &Self::DeviceData) {
         self.0.device_destroy(device_data.id);
     }
-    fn device_mark_lost(&self, device_data: &Self::DeviceData, message: &str) {
-        // We do not provide a reason to device_lose, because all reasons other than
-        // destroyed (which this is not) are "unknown".
-        self.0.device_mark_lost(device_data.id, message);
-    }
     fn device_poll(
         &self,
         device_data: &Self::DeviceData,
         maintain: crate::Maintain,
     ) -> wgt::MaintainResult {
-        let maintain_inner = maintain.map_index(|i| *i.0.as_ref().downcast_ref().unwrap());
+        let maintain_inner = maintain.map_index(|i| *i.data.as_ref().downcast_ref().unwrap());
         match self.0.device_poll(device_data.id, maintain_inner) {
             Ok(done) => match done {
                 true => wgt::MaintainResult::SubmissionQueueEmpty,
@@ -2482,50 +2470,6 @@ impl crate::Context for ContextWgpuCore {
             indirect_buffer_data.id,
             indirect_offset,
         )
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        unimplemented!()
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        unimplemented!()
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        unimplemented!()
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        unimplemented!()
     }
 
     fn render_pass_set_pipeline(

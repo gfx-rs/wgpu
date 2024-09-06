@@ -37,7 +37,10 @@ impl Drop for Queue {
 /// This type is unique to the Rust API of `wgpu`.
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
-pub struct SubmissionIndex(pub(crate) Arc<crate::Data>);
+pub struct SubmissionIndex {
+    #[cfg_attr(not(native), allow(dead_code))]
+    pub(crate) data: Arc<crate::Data>,
+}
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
@@ -248,7 +251,7 @@ impl Queue {
         let data =
             DynContext::queue_submit(&*self.context, self.data.as_ref(), &mut command_buffers);
 
-        SubmissionIndex(data)
+        SubmissionIndex { data }
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
