@@ -270,8 +270,8 @@ enum LiteralVector {
 }
 
 impl LiteralVector {
-    #[allow(clippy::pattern_type_mismatch)]
-    const fn len(&self) -> usize {
+    #[allow(clippy::pattern_type_mismatch, clippy::missing_const_for_fn)]
+    fn len(&self) -> usize {
         match self {
             LiteralVector::F64(v) => v.len(),
             LiteralVector::F32(v) => v.len(),
@@ -441,7 +441,7 @@ impl LiteralVector {
         }
     }
 
-    /// Returns [`ArrayVec`] of [`Literals`]
+    /// Returns [`ArrayVec`] of [`Literal`]s
     fn to_literal_vec(&self) -> ArrayVec<Literal, { crate::VectorSize::MAX }> {
         #[allow(clippy::pattern_type_mismatch)]
         match self {
@@ -459,13 +459,16 @@ impl LiteralVector {
         }
     }
 
-    fn to_expr(&self, eval: &mut ConstantEvaluator<'_>) -> Expression {
+    fn to_expr(
+        &self,
+        eval: &mut ConstantEvaluator<'_>,
+    ) -> Result<Expression, ConstantEvaluatorError> {
         let lit_vec = self.to_literal_vec();
         assert!(!lit_vec.is_empty());
         if lit_vec.len() == 1 {
-            Expression::Literal(lit_vec[0])
+            Ok(Expression::Literal(lit_vec[0]))
         } else {
-            Expression::Compose {
+            Ok(Expression::Compose {
                 ty: eval.types.insert(
                     Type {
                         name: None,
@@ -483,12 +486,9 @@ impl LiteralVector {
                 ),
                 components: lit_vec
                     .iter()
-                    .map(|&l| {
-                        eval.expressions
-                            .append(Expression::Literal(l), Span::UNDEFINED)
-                    })
-                    .collect(),
-            }
+                    .map(|&l| eval.register_evaluated_expr(Expression::Literal(l), Span::UNDEFINED))
+                    .collect::<Result<_, _>>()?,
+            })
         }
     }
 
@@ -498,7 +498,7 @@ impl LiteralVector {
         eval: &mut ConstantEvaluator<'_>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let expr = self.to_expr(eval);
+        let expr = self.to_expr(eval)?;
         eval.register_evaluated_expr(expr, span)
     }
 }
