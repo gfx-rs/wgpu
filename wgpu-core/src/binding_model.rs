@@ -1003,6 +1003,8 @@ pub enum GetBindGroupLayoutError {
     InvalidPipeline,
     #[error("Invalid group index {0}")]
     InvalidGroupIndex(u32),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
