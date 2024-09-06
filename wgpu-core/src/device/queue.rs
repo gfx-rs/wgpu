@@ -619,10 +619,7 @@ impl Global {
             return Ok(());
         }
 
-        let dst = hub
-            .textures
-            .get(destination.texture)
-            .map_err(|_| TransferError::InvalidTextureId(destination.texture))?;
+        let dst = hub.textures.strict_get(destination.texture).get()?;
 
         dst.same_device_as(queue.as_ref())?;
 
@@ -712,12 +709,6 @@ impl Global {
         }
 
         let snatch_guard = device.snatchable_lock.read();
-
-        // Re-get `dst` immutably here, so that the mutable borrow of the
-        // `texture_guard.get` above ends in time for the `clear_texture`
-        // call above. Since we've held `texture_guard` the whole time, we know
-        // the texture hasn't gone away in the mean time, so we can unwrap.
-        let dst = hub.textures.get(destination.texture).unwrap();
 
         let dst_raw = dst.try_raw(&snatch_guard)?;
 
@@ -865,7 +856,7 @@ impl Global {
         let src_width = source.source.width();
         let src_height = source.source.height();
 
-        let dst = hub.textures.get(destination.texture).unwrap();
+        let dst = hub.textures.strict_get(destination.texture).get()?;
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
             return Err(

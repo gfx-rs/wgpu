@@ -27,8 +27,6 @@ use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, Te
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,
-    #[error("TextureId {0:?} is invalid")]
-    InvalidTextureId(TextureId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("{0} can not be cleared")]
@@ -203,10 +201,7 @@ impl Global {
             return Err(ClearError::MissingClearTextureFeature);
         }
 
-        let dst_texture = hub
-            .textures
-            .get(dst)
-            .map_err(|_| ClearError::InvalidTextureId(dst))?;
+        let dst_texture = hub.textures.strict_get(dst).get()?;
 
         dst_texture.same_device_as(cmd_buf.as_ref())?;
 

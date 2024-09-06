@@ -1266,7 +1266,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Ok(texture) = hub.textures.get(id) {
+        if let Ok(texture) = hub.textures.strict_get(id).get() {
             let snatch_guard = texture.device.snatchable_lock.read();
             let hal_texture = texture.raw(&snatch_guard);
             let hal_texture = hal_texture
@@ -1646,8 +1646,6 @@ impl TextureView {
 pub enum CreateTextureViewError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("TextureId {0:?} is invalid")]
-    InvalidTextureId(TextureId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("Not enough memory left to create texture view")]
@@ -1690,6 +1688,8 @@ pub enum CreateTextureViewError {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
     },
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -1862,8 +1862,6 @@ impl QuerySet {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DestroyError {
-    #[error("TextureId {0:?} is invalid")]
-    InvalidTextureId(TextureId),
     #[error("Resource is already destroyed")]
     AlreadyDestroyed,
     #[error(transparent)]

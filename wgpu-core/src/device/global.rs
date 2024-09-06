@@ -196,11 +196,14 @@ impl Global {
     /// Assign `id_in` an error with the given `label`.
     ///
     /// See `create_buffer_error` for more context and explanation.
-    pub fn create_texture_error(&self, backend: wgt::Backend, id_in: Option<id::TextureId>) {
-        let hub = &self.hub;
-        let fid = hub.textures.prepare(backend, id_in);
-
-        fid.assign_error();
+    pub fn create_texture_error(
+        &self,
+        backend: wgt::Backend,
+        id_in: Option<id::TextureId>,
+        desc: &resource::TextureDescriptor,
+    ) {
+        let fid = self.hub.textures.prepare(backend, id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
     #[cfg(feature = "replay")]
@@ -323,7 +326,7 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let id = fid.assign(texture);
+            let id = fid.assign(Fallible::Valid(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             return (id, None);
@@ -331,7 +334,7 @@ impl Global {
 
         log::error!("Device::create_texture error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -368,7 +371,7 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let id = fid.assign(texture);
+            let id = fid.assign(Fallible::Valid(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             return (id, None);
@@ -376,7 +379,7 @@ impl Global {
 
         log::error!("Device::create_texture error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -420,10 +423,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let texture = hub
-            .textures
-            .get(texture_id)
-            .map_err(|_| resource::DestroyError::InvalidTextureId(texture_id))?;
+        let texture = hub.textures.strict_get(texture_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
@@ -439,9 +439,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_texture) = hub.textures.unregister(texture_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _texture.device.trace.lock().as_mut() {
+        let _texture = hub.textures.strict_unregister(texture_id);
+        #[cfg(feature = "trace")]
+        if let Ok(texture) = _texture.get() {
+            if let Some(t) = texture.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTexture(texture_id));
             }
         }
@@ -460,11 +461,9 @@ impl Global {
         let fid = hub.texture_views.prepare(texture_id.backend(), id_in);
 
         let error = 'error: {
-            let texture = match hub.textures.get(texture_id) {
+            let texture = match hub.textures.strict_get(texture_id).get() {
                 Ok(texture) => texture,
-                Err(_) => {
-                    break 'error resource::CreateTextureViewError::InvalidTextureId(texture_id)
-                }
+                Err(e) => break 'error e.into(),
             };
             let device = &texture.device;
 
