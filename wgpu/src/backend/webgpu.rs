@@ -225,7 +225,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
             unimplemented!("Current version of web_sys is missing {texture_format:?}")
         }
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
-        TextureFormat::Rg11b10UFloat => tf::Rg11b10ufloat,
+        TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
