@@ -2293,7 +2293,7 @@ impl Global {
             // check for empty queues and a DeviceLostClosure. At that time,
             // the DeviceLostClosure will be called with "destroyed" as the
             // reason.
-            device.valid.store(false, Ordering::Relaxed);
+            device.valid.store(false, Ordering::Release);
         }
     }
 
