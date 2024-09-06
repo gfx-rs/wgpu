@@ -41,8 +41,6 @@ pub enum CopySide {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TransferError {
-    #[error("TextureId {0:?} is invalid")]
-    InvalidTextureId(TextureId),
     #[error("Source and destination cannot be the same buffer")]
     SameSourceDestinationBuffer,
     #[error(transparent)]
@@ -740,10 +738,7 @@ impl Global {
             return Ok(());
         }
 
-        let dst_texture = hub
-            .textures
-            .get(destination.texture)
-            .map_err(|_| TransferError::InvalidTextureId(destination.texture))?;
+        let dst_texture = hub.textures.strict_get(destination.texture).get()?;
 
         dst_texture.same_device_as(cmd_buf.as_ref())?;
 
@@ -904,10 +899,7 @@ impl Global {
             return Ok(());
         }
 
-        let src_texture = hub
-            .textures
-            .get(source.texture)
-            .map_err(|_| TransferError::InvalidTextureId(source.texture))?;
+        let src_texture = hub.textures.strict_get(source.texture).get()?;
 
         src_texture.same_device_as(cmd_buf.as_ref())?;
 
@@ -1082,14 +1074,8 @@ impl Global {
             return Ok(());
         }
 
-        let src_texture = hub
-            .textures
-            .get(source.texture)
-            .map_err(|_| TransferError::InvalidTextureId(source.texture))?;
-        let dst_texture = hub
-            .textures
-            .get(destination.texture)
-            .map_err(|_| TransferError::InvalidTextureId(source.texture))?;
+        let src_texture = hub.textures.strict_get(source.texture).get()?;
+        let dst_texture = hub.textures.strict_get(destination.texture).get()?;
 
         src_texture.same_device_as(cmd_buf.as_ref())?;
         dst_texture.same_device_as(cmd_buf.as_ref())?;

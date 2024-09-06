@@ -215,7 +215,7 @@ impl Global {
                     .textures
                     .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
 
-                let id = fid.assign(texture);
+                let id = fid.assign(resource::Fallible::Valid(texture));
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
@@ -280,8 +280,8 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            let texture = hub.textures.unregister(texture_id);
-            if let Some(texture) = texture {
+            let texture = hub.textures.strict_unregister(texture_id).get();
+            if let Ok(texture) = texture {
                 device
                     .trackers
                     .lock()
@@ -350,9 +350,9 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            let texture = hub.textures.unregister(texture_id);
+            let texture = hub.textures.strict_unregister(texture_id).get();
 
-            if let Some(texture) = texture {
+            if let Ok(texture) = texture {
                 device
                     .trackers
                     .lock()
