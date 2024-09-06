@@ -1,4 +1,4 @@
-use crate::{device::bgl, FastHashMap, FastHashSet};
+use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
@@ -200,8 +200,6 @@ pub enum InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
-    #[error("Shader module is invalid")]
-    InvalidModule,
     #[error(
         "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension limit {limit:?} and the total invocation limit {total}"
     )]
@@ -241,6 +239,8 @@ pub enum StageError {
         but no entry point was specified"
     )]
     MultipleEntryPointsFound,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
