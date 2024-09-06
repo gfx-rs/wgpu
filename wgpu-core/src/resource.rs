@@ -832,8 +832,10 @@ impl StagingBuffer {
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
-        let raw = unsafe { device.raw().create_buffer(&stage_desc)? };
-        let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }?;
+        let raw = unsafe { device.raw().create_buffer(&stage_desc) }
+            .map_err(|e| device.handle_hal_error(e))?;
+        let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
+            .map_err(|e| device.handle_hal_error(e))?;
 
         let staging_buffer = StagingBuffer {
             raw,
@@ -1358,7 +1360,7 @@ impl Global {
             let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
             let cmd_buf_raw = cmd_buf_data
                 .encoder
-                .open()
+                .open(&cmd_buf.device)
                 .ok()
                 .and_then(|encoder| encoder.as_any_mut().downcast_mut());
             hal_command_encoder_callback(cmd_buf_raw)

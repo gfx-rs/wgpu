@@ -191,7 +191,7 @@ impl Global {
                         .raw()
                         .create_texture_view(ast.texture.as_ref().borrow(), &clear_view_desc)
                 }
-                .map_err(DeviceError::from)?;
+                .map_err(|e| device.handle_hal_error(e))?;
 
                 let mut presentation = surface.presentation.lock();
                 let present = presentation.as_mut().unwrap();
@@ -238,7 +238,7 @@ impl Global {
                 match err {
                     hal::SurfaceError::Lost => Status::Lost,
                     hal::SurfaceError::Device(err) => {
-                        return Err(DeviceError::from(err).into());
+                        return Err(device.handle_hal_error(err).into());
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
                     hal::SurfaceError::Other(msg) => {
@@ -315,7 +315,9 @@ impl Global {
             Ok(()) => Ok(Status::Good),
             Err(err) => match err {
                 hal::SurfaceError::Lost => Ok(Status::Lost),
-                hal::SurfaceError::Device(err) => Err(SurfaceError::from(DeviceError::from(err))),
+                hal::SurfaceError::Device(err) => {
+                    Err(SurfaceError::from(device.handle_hal_error(err)))
+                }
                 hal::SurfaceError::Outdated => Ok(Status::Outdated),
                 hal::SurfaceError::Other(msg) => {
                     log::error!("acquire error: {}", msg);

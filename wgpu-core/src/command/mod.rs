@@ -172,10 +172,10 @@ impl CommandEncoder {
     /// [l]: CommandEncoder::list
     /// [`transition_buffers`]: hal::CommandEncoder::transition_buffers
     /// [`transition_textures`]: hal::CommandEncoder::transition_textures
-    fn close_and_swap(&mut self) -> Result<(), DeviceError> {
+    fn close_and_swap(&mut self, device: &Device) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
-            let new = unsafe { self.raw.end_encoding()? };
+            let new = unsafe { self.raw.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
             self.list.insert(self.list.len() - 1, new);
         }
 
@@ -192,10 +192,11 @@ impl CommandEncoder {
     /// On return, the underlying hal encoder is closed.
     ///
     /// [l]: CommandEncoder::list
-    fn close(&mut self) -> Result<(), DeviceError> {
+    fn close(&mut self, device: &Device) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
-            let cmd_buf = unsafe { self.raw.end_encoding()? };
+            let cmd_buf =
+                unsafe { self.raw.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
             self.list.push(cmd_buf);
         }
 
@@ -215,11 +216,15 @@ impl CommandEncoder {
     /// Begin recording a new command buffer, if we haven't already.
     ///
     /// The underlying hal encoder is put in the "recording" state.
-    pub(crate) fn open(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
+    pub(crate) fn open(
+        &mut self,
+        device: &Device,
+    ) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
             let hal_label = self.hal_label.as_deref();
-            unsafe { self.raw.begin_encoding(hal_label)? };
+            unsafe { self.raw.begin_encoding(hal_label) }
+                .map_err(|e| device.handle_hal_error(e))?;
         }
 
         Ok(self.raw.as_mut())
@@ -229,9 +234,9 @@ impl CommandEncoder {
     /// its own label.
     ///
     /// The underlying hal encoder is put in the "recording" state.
-    fn open_pass(&mut self, hal_label: Option<&str>) -> Result<(), DeviceError> {
+    fn open_pass(&mut self, hal_label: Option<&str>, device: &Device) -> Result<(), DeviceError> {
         self.is_open = true;
-        unsafe { self.raw.begin_encoding(hal_label)? };
+        unsafe { self.raw.begin_encoding(hal_label) }.map_err(|e| device.handle_hal_error(e))?;
 
         Ok(())
     }
@@ -276,8 +281,9 @@ pub struct CommandBufferMutable {
 impl CommandBufferMutable {
     pub(crate) fn open_encoder_and_tracker(
         &mut self,
+        device: &Device,
     ) -> Result<(&mut dyn hal::DynCommandEncoder, &mut Tracker), DeviceError> {
-        let encoder = self.encoder.open()?;
+        let encoder = self.encoder.open(device)?;
         let tracker = &mut self.trackers;
 
         Ok((encoder, tracker))
@@ -621,7 +627,7 @@ impl Global {
                 let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
                 match cmd_buf_data.status {
                     CommandEncoderStatus::Recording => {
-                        if let Err(e) = cmd_buf_data.encoder.close() {
+                        if let Err(e) = cmd_buf_data.encoder.close(&cmd_buf.device) {
                             Some(e.into())
                         } else {
                             cmd_buf_data.status = CommandEncoderStatus::Finished;
@@ -671,7 +677,7 @@ impl Global {
             list.push(TraceCommand::PushDebugGroup(label.to_string()));
         }
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
         if !self
             .instance
             .flags
@@ -713,7 +719,7 @@ impl Global {
             .flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
         {
-            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+            let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
             unsafe {
                 cmd_buf_raw.insert_debug_marker(label);
             }
@@ -744,7 +750,7 @@ impl Global {
             list.push(TraceCommand::PopDebugGroup);
         }
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
         if !self
             .instance
             .flags

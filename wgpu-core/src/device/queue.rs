@@ -269,17 +269,20 @@ impl PendingWrites {
     fn pre_submit(
         &mut self,
         command_allocator: &CommandAllocator,
-        device: &dyn hal::DynDevice,
-        queue: &dyn hal::DynQueue,
+        device: &Device,
+        queue: &Queue,
     ) -> Result<Option<EncoderInFlight>, DeviceError> {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
 
-            let cmd_buf = unsafe { self.command_encoder.end_encoding()? };
+            let cmd_buf = unsafe { self.command_encoder.end_encoding() }
+                .map_err(|e| device.handle_hal_error(e))?;
             self.is_recording = false;
 
-            let new_encoder = command_allocator.acquire_encoder(device, queue)?;
+            let new_encoder = command_allocator
+                .acquire_encoder(device.raw(), queue.raw())
+                .map_err(|e| device.handle_hal_error(e))?;
 
             let encoder = EncoderInFlight {
                 raw: mem::replace(&mut self.command_encoder, new_encoder),
@@ -1194,14 +1197,12 @@ impl Global {
 
                         // execute resource transitions
                         unsafe {
-                            baked
-                                .encoder
-                                .begin_encoding(hal_label(
-                                    Some("(wgpu internal) Transit"),
-                                    device.instance_flags,
-                                ))
-                                .map_err(DeviceError::from)?
-                        };
+                            baked.encoder.begin_encoding(hal_label(
+                                Some("(wgpu internal) Transit"),
+                                device.instance_flags,
+                            ))
+                        }
+                        .map_err(|e| device.handle_hal_error(e))?;
 
                         //Note: locking the trackers has to be done after the storages
                         let mut trackers = device.trackers.lock();
@@ -1224,14 +1225,12 @@ impl Global {
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
                             unsafe {
-                                baked
-                                    .encoder
-                                    .begin_encoding(hal_label(
-                                        Some("(wgpu internal) Present"),
-                                        device.instance_flags,
-                                    ))
-                                    .map_err(DeviceError::from)?
-                            };
+                                baked.encoder.begin_encoding(hal_label(
+                                    Some("(wgpu internal) Present"),
+                                    device.instance_flags,
+                                ))
+                            }
+                            .map_err(|e| device.handle_hal_error(e))?;
                             let texture_barriers = trackers
                                 .textures
                                 .set_from_usage_scope_and_drain_transitions(
@@ -1299,7 +1298,7 @@ impl Global {
             }
 
             if let Some(pending_execution) =
-                pending_writes.pre_submit(&device.command_allocator, device.raw(), queue.raw())?
+                pending_writes.pre_submit(&device.command_allocator, device, &queue)?
             {
                 active_executions.insert(0, pending_execution);
             }
@@ -1324,15 +1323,13 @@ impl Global {
                 }
 
                 unsafe {
-                    queue
-                        .raw()
-                        .submit(
-                            &hal_command_buffers,
-                            &submit_surface_textures,
-                            (fence.as_mut(), submit_index),
-                        )
-                        .map_err(DeviceError::from)?;
+                    queue.raw().submit(
+                        &hal_command_buffers,
+                        &submit_surface_textures,
+                        (fence.as_mut(), submit_index),
+                    )
                 }
+                .map_err(|e| device.handle_hal_error(e))?;
 
                 // Advance the successful submission index.
                 device
