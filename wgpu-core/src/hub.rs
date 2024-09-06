@@ -179,7 +179,7 @@ pub struct Hub {
     pub(crate) staging_buffers: Registry<Arc<StagingBuffer>>,
     pub(crate) textures: Registry<Fallible<Texture>>,
     pub(crate) texture_views: Registry<Fallible<TextureView>>,
-    pub(crate) samplers: Registry<Arc<Sampler>>,
+    pub(crate) samplers: Registry<Fallible<Sampler>>,
 }
 
 impl Hub {
