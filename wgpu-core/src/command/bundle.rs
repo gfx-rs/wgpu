@@ -631,15 +631,13 @@ fn set_bind_group(
 
 fn set_pipeline(
     state: &mut State,
-    pipeline_guard: &crate::storage::Storage<Arc<RenderPipeline>>,
+    pipeline_guard: &crate::storage::Storage<Fallible<RenderPipeline>>,
     context: &RenderPassContext,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
     pipeline_id: id::Id<id::markers::RenderPipeline>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let pipeline = pipeline_guard
-        .get_owned(pipeline_id)
-        .map_err(|_| RenderCommandError::InvalidPipelineId(pipeline_id))?;
+    let pipeline = pipeline_guard.strict_get(pipeline_id).get()?;
 
     pipeline.same_device(&state.device)?;
 

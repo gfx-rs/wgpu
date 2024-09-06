@@ -171,12 +171,12 @@ impl RenderCommand {
                     }
 
                     RenderCommand::SetPipeline(pipeline_id) => ArcRenderCommand::SetPipeline(
-                        pipelines_guard
-                            .get_owned(pipeline_id)
-                            .map_err(|_| RenderPassError {
+                        pipelines_guard.strict_get(pipeline_id).get().map_err(|e| {
+                            RenderPassError {
                                 scope: PassErrorScope::SetPipelineRender,
-                                inner: RenderCommandError::InvalidPipelineId(pipeline_id).into(),
-                            })?,
+                                inner: e.into(),
+                            }
+                        })?,
                     ),
 
                     RenderCommand::SetPushConstant {

@@ -583,8 +583,6 @@ pub enum RenderPassErrorInner {
     InvalidParentEncoder,
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
-    #[error("Render pipeline {0:?} is invalid")]
-    InvalidPipeline(id::RenderPipelineId),
     #[error("Render bundle {0:?} is invalid")]
     InvalidRenderBundle(id::RenderBundleId),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
@@ -2847,8 +2845,8 @@ impl Global {
         let hub = &self.hub;
         let pipeline = hub
             .render_pipelines
-            .get(pipeline_id)
-            .map_err(|_| RenderPassErrorInner::InvalidPipeline(pipeline_id))
+            .strict_get(pipeline_id)
+            .get()
             .map_pass_err(scope)?;
 
         base.commands.push(ArcRenderCommand::SetPipeline(pipeline));
