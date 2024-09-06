@@ -921,14 +921,14 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(shader);
+            let id = fid.assign(Fallible::Valid(shader));
             api_log!("Device::create_shader_module -> {id:?}");
             return (id, None);
         };
 
         log::error!("Device::create_shader_module error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -972,14 +972,14 @@ impl Global {
                 Ok(shader) => shader,
                 Err(e) => break 'error e,
             };
-            let id = fid.assign(shader);
+            let id = fid.assign(Fallible::Valid(shader));
             api_log!("Device::create_shader_module_spirv -> {id:?}");
             return (id, None);
         };
 
         log::error!("Device::create_shader_module_spirv error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -989,12 +989,13 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(shader_module) = hub.shader_modules.unregister(shader_module_id) {
-            #[cfg(feature = "trace")]
+        let _shader_module = hub.shader_modules.strict_unregister(shader_module_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(shader_module) = _shader_module.get() {
             if let Some(t) = shader_module.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyShaderModule(shader_module_id));
             }
-            drop(shader_module)
         }
     }
 
@@ -1241,10 +1242,11 @@ impl Global {
             let vertex = {
                 let module = hub
                     .shader_modules
-                    .get(desc.vertex.stage.module)
-                    .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
+                    .strict_get(desc.vertex.stage.module)
+                    .get()
+                    .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
                         stage: wgt::ShaderStages::VERTEX,
-                        error: crate::validation::StageError::InvalidModule,
+                        error: e.into(),
                     });
                 let module = match module {
                     Ok(module) => module,
@@ -1266,12 +1268,14 @@ impl Global {
             };
 
             let fragment = if let Some(ref state) = desc.fragment {
-                let module = hub.shader_modules.get(state.stage.module).map_err(|_| {
-                    pipeline::CreateRenderPipelineError::Stage {
+                let module = hub
+                    .shader_modules
+                    .strict_get(state.stage.module)
+                    .get()
+                    .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
                         stage: wgt::ShaderStages::FRAGMENT,
-                        error: crate::validation::StageError::InvalidModule,
-                    }
-                });
+                        error: e.into(),
+                    });
                 let module = match module {
                     Ok(module) => module,
                     Err(e) => break 'error e,
@@ -1476,10 +1480,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let module = hub
-                .shader_modules
-                .get(desc.stage.module)
-                .map_err(|_| crate::validation::StageError::InvalidModule);
+            let module = hub.shader_modules.strict_get(desc.stage.module).get();
             let module = match module {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
