@@ -1572,6 +1572,57 @@ impl<'a> ConstantEvaluator<'a> {
                     Err(ConstantEvaluatorError::InvalidMathArg)
                 }
             }
+            crate::MathFunction::Length => {
+                let e1 = LiteralVector::from_expr(arg, self, span, true)?;
+
+                fn float_length<F, const CAP: usize>(e: ArrayVec<F, CAP>) -> F
+                where
+                    F: std::ops::Mul<F>,
+                    F: num_traits::Float + std::iter::Sum,
+                {
+                    e.iter().map(|&ei| ei * ei).sum::<F>().sqrt()
+                }
+
+                LiteralVector::from_literal(match e1 {
+                    LiteralVector::AbstractFloat(a) => Literal::AbstractFloat(float_length(a)),
+                    LiteralVector::F32(a) => Literal::F32(float_length(a)),
+                    _ => return Err(ConstantEvaluatorError::InvalidMathArg),
+                })
+                .handle(self, span)
+            }
+            crate::MathFunction::Distance => {
+                let e1 = LiteralVector::from_expr(arg, self, span, true)?;
+                let e2 = LiteralVector::from_expr(arg1.unwrap(), self, span, true)?;
+                if e1.len() != e2.len() {
+                    return Err(ConstantEvaluatorError::InvalidMathArg);
+                }
+
+                fn float_distance<F, const CAP: usize>(
+                    a: ArrayVec<F, CAP>,
+                    b: ArrayVec<F, CAP>,
+                ) -> F
+                where
+                    F: std::ops::Mul<F>,
+                    F: num_traits::Float + std::iter::Sum + std::ops::Sub,
+                {
+                    a.iter()
+                        .zip(b.iter())
+                        .map(|(&aa, &bb)| aa - bb)
+                        .map(|ei| ei * ei)
+                        .sum::<F>()
+                        .sqrt()
+                }
+                LiteralVector::from_literal(match (e1, e2) {
+                    (LiteralVector::AbstractFloat(a), LiteralVector::AbstractFloat(b)) => {
+                        Literal::AbstractFloat(float_distance(a, b))
+                    }
+                    (LiteralVector::F32(a), LiteralVector::F32(b)) => {
+                        Literal::F32(float_distance(a, b))
+                    }
+                    _ => return Err(ConstantEvaluatorError::InvalidMathArg),
+                })
+                .handle(self, span)
+            }
             // computational
             crate::MathFunction::Sign => {
                 component_wise_signed!(self, span, [arg], |e| { Ok([e.signum()]) })
