@@ -1884,6 +1884,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "log",
+ "num-traits",
  "petgraph",
  "pp-rs",
  "ron",
