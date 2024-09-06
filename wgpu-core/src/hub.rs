@@ -170,7 +170,7 @@ pub struct Hub {
     pub(crate) bind_group_layouts: Registry<Fallible<BindGroupLayout>>,
     pub(crate) bind_groups: Registry<Fallible<BindGroup>>,
     pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,
-    pub(crate) render_bundles: Registry<Arc<RenderBundle>>,
+    pub(crate) render_bundles: Registry<Fallible<RenderBundle>>,
     pub(crate) render_pipelines: Registry<Fallible<RenderPipeline>>,
     pub(crate) compute_pipelines: Registry<Fallible<ComputePipeline>>,
     pub(crate) pipeline_caches: Registry<Fallible<PipelineCache>>,
