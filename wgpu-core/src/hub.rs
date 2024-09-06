@@ -176,7 +176,7 @@ pub struct Hub {
     pub(crate) pipeline_caches: Registry<Arc<PipelineCache>>,
     pub(crate) query_sets: Registry<Fallible<QuerySet>>,
     pub(crate) buffers: Registry<Fallible<Buffer>>,
-    pub(crate) staging_buffers: Registry<Arc<StagingBuffer>>,
+    pub(crate) staging_buffers: Registry<StagingBuffer>,
     pub(crate) textures: Registry<Fallible<Texture>>,
     pub(crate) texture_views: Registry<Fallible<TextureView>>,
     pub(crate) samplers: Registry<Fallible<Sampler>>,
