@@ -334,8 +334,6 @@ pub enum QueueWriteError {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
-    #[error("StagingBufferId {0:?} is invalid")]
-    InvalidStagingBufferId(id::StagingBufferId),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -442,7 +440,7 @@ impl Global {
         let ptr = unsafe { staging_buffer.ptr() };
 
         let fid = hub.staging_buffers.prepare(queue_id.backend(), id_in);
-        let id = fid.assign(Arc::new(staging_buffer));
+        let id = fid.assign(staging_buffer);
         resource_log!("Queue::create_staging_buffer {id:?}");
 
         Ok((id, ptr))
@@ -462,11 +460,7 @@ impl Global {
 
         let device = &queue.device;
 
-        let staging_buffer = hub
-            .staging_buffers
-            .unregister(staging_buffer_id)
-            .and_then(Arc::into_inner)
-            .ok_or_else(|| QueueWriteError::InvalidStagingBufferId(staging_buffer_id))?;
+        let staging_buffer = hub.staging_buffers.strict_unregister(staging_buffer_id);
 
         let mut pending_writes = device.pending_writes.lock();
 
