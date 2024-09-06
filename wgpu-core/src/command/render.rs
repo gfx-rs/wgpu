@@ -1363,14 +1363,10 @@ impl Global {
                     channel,
                 }) = color_attachment
                 {
-                    let view = texture_views
-                        .get_owned(*view_id)
-                        .map_err(|_| CommandEncoderError::InvalidAttachmentId(*view_id))?;
+                    let view = texture_views.strict_get(*view_id).get()?;
 
                     let resolve_target = if let Some(resolve_target_id) = resolve_target {
-                        let rt_arc = texture_views.get_owned(*resolve_target_id).map_err(|_| {
-                            CommandEncoderError::InvalidResolveTargetId(*resolve_target_id)
-                        })?;
+                        let rt_arc = texture_views.strict_get(*resolve_target_id).get()?;
 
                         Some(rt_arc)
                     } else {
@@ -1392,12 +1388,8 @@ impl Global {
             arc_desc.depth_stencil_attachment =
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
                     let view = texture_views
-                        .get_owned(depth_stencil_attachment.view)
-                        .map_err(|_| {
-                            CommandEncoderError::InvalidDepthStencilAttachmentId(
-                                depth_stencil_attachment.view,
-                            )
-                        })?;
+                        .strict_get(depth_stencil_attachment.view)
+                        .get()?;
 
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
