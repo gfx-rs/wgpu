@@ -55,12 +55,7 @@ pub(crate) struct FutureId<'a, T: StorageItem> {
 }
 
 impl<T: StorageItem> FutureId<'_, T> {
-    #[allow(dead_code)]
     pub fn id(&self) -> Id<T::Marker> {
-        self.id
-    }
-
-    pub fn into_id(self) -> Id<T::Marker> {
         self.id
     }
 
