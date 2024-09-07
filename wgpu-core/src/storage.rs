@@ -74,11 +74,13 @@ impl<T> Storage<T>
 where
     T: StorageItem,
 {
-    fn insert_impl(&mut self, index: usize, epoch: Epoch, element: Element<T>) {
+    pub(crate) fn insert(&mut self, id: Id<T::Marker>, value: T) {
+        let (index, epoch, _) = id.unzip();
+        let index = index as usize;
         if index >= self.map.len() {
             self.map.resize_with(index + 1, || Element::Vacant);
         }
-        match std::mem::replace(&mut self.map[index], element) {
+        match std::mem::replace(&mut self.map[index], Element::Occupied(value, epoch)) {
             Element::Vacant => {}
             Element::Occupied(_, storage_epoch) => {
                 assert_ne!(
@@ -89,11 +91,6 @@ where
                 );
             }
         }
-    }
-
-    pub(crate) fn insert(&mut self, id: Id<T::Marker>, value: T) {
-        let (index, epoch, _backend) = id.unzip();
-        self.insert_impl(index as usize, epoch, Element::Occupied(value, epoch))
     }
 
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> T {
