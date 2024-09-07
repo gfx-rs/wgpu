@@ -710,9 +710,7 @@ impl Global {
             }
         }
 
-        let compatible_surface = desc
-            .compatible_surface
-            .map(|id| self.surfaces.strict_get(id));
+        let compatible_surface = desc.compatible_surface.map(|id| self.surfaces.get(id));
         let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
         let mut device_types = Vec::new();
 
@@ -844,7 +842,7 @@ impl Global {
     }
 
     pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         adapter.raw.info.clone()
     }
 
@@ -853,17 +851,17 @@ impl Global {
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         adapter.get_texture_format_features(format)
     }
 
     pub fn adapter_features(&self, adapter_id: AdapterId) -> wgt::Features {
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         adapter.raw.features
     }
 
     pub fn adapter_limits(&self, adapter_id: AdapterId) -> wgt::Limits {
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         adapter.raw.capabilities.limits.clone()
     }
 
@@ -871,7 +869,7 @@ impl Global {
         &self,
         adapter_id: AdapterId,
     ) -> wgt::DownlevelCapabilities {
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         adapter.raw.capabilities.downlevel.clone()
     }
 
@@ -879,7 +877,7 @@ impl Global {
         &self,
         adapter_id: AdapterId,
     ) -> wgt::PresentationTimestamp {
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         unsafe { adapter.raw.adapter.get_presentation_timestamp() }
     }
 
@@ -907,7 +905,7 @@ impl Global {
         let device_fid = self.hub.devices.prepare(backend, device_id_in);
         let queue_fid = self.hub.queues.prepare(backend, queue_id_in);
 
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         let (device, queue) =
             adapter.create_device_and_queue(desc, self.instance.flags, trace_path)?;
 
@@ -939,7 +937,7 @@ impl Global {
         let devices_fid = self.hub.devices.prepare(backend, device_id_in);
         let queues_fid = self.hub.queues.prepare(backend, queue_id_in);
 
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         let (device, queue) = adapter.create_device_and_queue_from_hal(
             hal_device,
             desc,

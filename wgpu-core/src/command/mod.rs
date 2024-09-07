@@ -654,9 +654,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .strict_get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
         let error = match cmd_buf
             .try_get()
@@ -680,9 +678,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .strict_get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -714,9 +710,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .strict_get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -747,9 +741,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .strict_get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 

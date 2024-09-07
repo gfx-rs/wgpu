@@ -375,9 +375,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.strict_get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
-        let queue = hub.queues.strict_get(queue_id);
+        let queue = hub.queues.get(queue_id);
 
         let device = &queue.device;
 
@@ -437,7 +437,7 @@ impl Global {
         profiling::scope!("Queue::create_staging_buffer");
         let hub = &self.hub;
 
-        let queue = hub.queues.strict_get(queue_id);
+        let queue = hub.queues.get(queue_id);
 
         let device = &queue.device;
 
@@ -461,7 +461,7 @@ impl Global {
         profiling::scope!("Queue::write_staging_buffer");
         let hub = &self.hub;
 
-        let queue = hub.queues.strict_get(queue_id);
+        let queue = hub.queues.get(queue_id);
 
         let device = &queue.device;
 
@@ -498,7 +498,7 @@ impl Global {
         profiling::scope!("Queue::validate_write_buffer");
         let hub = &self.hub;
 
-        let buffer = hub.buffers.strict_get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         self.queue_validate_write_buffer_impl(&buffer, buffer_offset, buffer_size)?;
 
@@ -541,7 +541,7 @@ impl Global {
     ) -> Result<(), QueueWriteError> {
         let hub = &self.hub;
 
-        let dst = hub.buffers.strict_get(buffer_id).get()?;
+        let dst = hub.buffers.get(buffer_id).get()?;
 
         let transition = {
             let mut trackers = device.trackers.lock();
@@ -598,7 +598,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let queue = hub.queues.strict_get(queue_id);
+        let queue = hub.queues.get(queue_id);
 
         let device = &queue.device;
 
@@ -618,7 +618,7 @@ impl Global {
             return Ok(());
         }
 
-        let dst = hub.textures.strict_get(destination.texture).get()?;
+        let dst = hub.textures.get(destination.texture).get()?;
 
         dst.same_device_as(queue.as_ref())?;
 
@@ -827,7 +827,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let queue = hub.queues.strict_get(queue_id);
+        let queue = hub.queues.get(queue_id);
 
         let device = &queue.device;
 
@@ -855,7 +855,7 @@ impl Global {
         let src_width = source.source.width();
         let src_height = source.source.height();
 
-        let dst = hub.textures.strict_get(destination.texture).get()?;
+        let dst = hub.textures.get(destination.texture).get()?;
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
             return Err(
@@ -1034,7 +1034,7 @@ impl Global {
         let (submit_index, callbacks) = {
             let hub = &self.hub;
 
-            let queue = hub.queues.strict_get(queue_id);
+            let queue = hub.queues.get(queue_id);
 
             let device = &queue.device;
 
@@ -1074,7 +1074,7 @@ impl Global {
                         // it, so make sure to set_size on it.
                         used_surface_textures.set_size(device.tracker_indices.textures.size());
 
-                        let command_buffer = command_buffer_guard.strict_get(*command_buffer_id);
+                        let command_buffer = command_buffer_guard.get(*command_buffer_id);
 
                         // Note that we are required to invalidate all command buffers in both the success and failure paths.
                         // This is why we `continue` and don't early return via `?`.
@@ -1297,7 +1297,7 @@ impl Global {
     }
 
     pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
-        let queue = self.hub.queues.strict_get(queue_id);
+        let queue = self.hub.queues.get(queue_id);
         unsafe { queue.raw().get_timestamp_period() }
     }
 
@@ -1309,7 +1309,7 @@ impl Global {
         api_log!("Queue::on_submitted_work_done {queue_id:?}");
 
         //TODO: flush pending writes
-        let queue = self.hub.queues.strict_get(queue_id);
+        let queue = self.hub.queues.get(queue_id);
         queue.device.lock_life().add_work_done_closure(closure);
     }
 }

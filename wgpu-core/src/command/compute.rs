@@ -292,9 +292,7 @@ impl Global {
 
         let make_err = |e, arc_desc| (ComputePass::new(None, arc_desc), Some(e));
 
-        let cmd_buf = hub
-            .command_buffers
-            .strict_get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
         match cmd_buf
             .try_get()
@@ -306,7 +304,7 @@ impl Global {
         };
 
         arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-            let query_set = match hub.query_sets.strict_get(tw.query_set).get() {
+            let query_set = match hub.query_sets.get(tw.query_set).get() {
                 Ok(query_set) => query_set,
                 Err(e) => return make_err(e.into(), arc_desc),
             };
@@ -340,7 +338,7 @@ impl Global {
             let cmd_buf = self
                 .hub
                 .command_buffers
-                .strict_get(encoder_id.into_command_buffer_id());
+                .get(encoder_id.into_command_buffer_id());
             let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
 
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -975,7 +973,7 @@ impl Global {
             let hub = &self.hub;
             let bg = hub
                 .bind_groups
-                .strict_get(bind_group_id)
+                .get(bind_group_id)
                 .get()
                 .map_pass_err(scope)?;
             bind_group = Some(bg);
@@ -1008,7 +1006,7 @@ impl Global {
         let hub = &self.hub;
         let pipeline = hub
             .compute_pipelines
-            .strict_get(pipeline_id)
+            .get(pipeline_id)
             .get()
             .map_pass_err(scope)?;
 
@@ -1080,11 +1078,7 @@ impl Global {
         let scope = PassErrorScope::Dispatch { indirect: true };
         let base = pass.base_mut(scope)?;
 
-        let buffer = hub
-            .buffers
-            .strict_get(buffer_id)
-            .get()
-            .map_pass_err(scope)?;
+        let buffer = hub.buffers.get(buffer_id).get().map_pass_err(scope)?;
 
         base.commands
             .push(ArcComputeCommand::DispatchIndirect { buffer, offset });
@@ -1151,11 +1145,7 @@ impl Global {
         let base = pass.base_mut(scope)?;
 
         let hub = &self.hub;
-        let query_set = hub
-            .query_sets
-            .strict_get(query_set_id)
-            .get()
-            .map_pass_err(scope)?;
+        let query_set = hub.query_sets.get(query_set_id).get().map_pass_err(scope)?;
 
         base.commands.push(ArcComputeCommand::WriteTimestamp {
             query_set,
@@ -1175,11 +1165,7 @@ impl Global {
         let base = pass.base_mut(scope)?;
 
         let hub = &self.hub;
-        let query_set = hub
-            .query_sets
-            .strict_get(query_set_id)
-            .get()
-            .map_pass_err(scope)?;
+        let query_set = hub.query_sets.get(query_set_id).get().map_pass_err(scope)?;
 
         base.commands
             .push(ArcComputeCommand::BeginPipelineStatisticsQuery {

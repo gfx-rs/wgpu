@@ -130,7 +130,7 @@ where
 {
     /// Get an owned reference to an item.
     /// Panics if there is an epoch mismatch, the entry is empty or in error.
-    pub(crate) fn strict_get(&self, id: Id<T::Marker>) -> T {
+    pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (v.clone(), epoch),

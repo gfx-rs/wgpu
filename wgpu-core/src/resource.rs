@@ -1243,7 +1243,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Ok(buffer) = hub.buffers.strict_get(id).get() {
+        if let Ok(buffer) = hub.buffers.get(id).get() {
             let snatch_guard = buffer.device.snatchable_lock.read();
             let hal_buffer = buffer
                 .raw(&snatch_guard)
@@ -1266,7 +1266,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Ok(texture) = hub.textures.strict_get(id).get() {
+        if let Ok(texture) = hub.textures.get(id).get() {
             let snatch_guard = texture.device.snatchable_lock.read();
             let hal_texture = texture.raw(&snatch_guard);
             let hal_texture = hal_texture
@@ -1290,7 +1290,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Ok(texture_view) = hub.texture_views.strict_get(id).get() {
+        if let Ok(texture_view) = hub.texture_views.get(id).get() {
             let snatch_guard = texture_view.device.snatchable_lock.read();
             let hal_texture_view = texture_view.raw(&snatch_guard);
             let hal_texture_view = hal_texture_view
@@ -1313,7 +1313,7 @@ impl Global {
         profiling::scope!("Adapter::as_hal");
 
         let hub = &self.hub;
-        let adapter = hub.adapters.strict_get(id);
+        let adapter = hub.adapters.get(id);
         let hal_adapter = adapter.raw.adapter.as_any().downcast_ref();
 
         hal_adapter_callback(hal_adapter)
@@ -1329,7 +1329,7 @@ impl Global {
     ) -> R {
         profiling::scope!("Device::as_hal");
 
-        let device = self.hub.devices.strict_get(id);
+        let device = self.hub.devices.get(id);
         let hal_device = device.raw().as_any().downcast_ref();
 
         hal_device_callback(hal_device)
@@ -1345,7 +1345,7 @@ impl Global {
     ) -> R {
         profiling::scope!("Device::fence_as_hal");
 
-        let device = self.hub.devices.strict_get(id);
+        let device = self.hub.devices.get(id);
         let fence = device.fence.read();
         hal_fence_callback(fence.as_any().downcast_ref())
     }
@@ -1359,7 +1359,7 @@ impl Global {
     ) -> R {
         profiling::scope!("Surface::as_hal");
 
-        let surface = self.surfaces.strict_get(id);
+        let surface = self.surfaces.get(id);
         let hal_surface = surface
             .raw(A::VARIANT)
             .and_then(|surface| surface.as_any().downcast_ref());
@@ -1383,7 +1383,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.strict_get(id.into_command_buffer_id());
+        let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
         let cmd_buf_data = cmd_buf.try_get();
 
         if let Ok(mut cmd_buf_data) = cmd_buf_data {

@@ -122,7 +122,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let surface = self.surfaces.strict_get(surface_id);
+        let surface = self.surfaces.get(surface_id);
 
         let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
             present.device.check_is_valid()?;
@@ -254,7 +254,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let surface = self.surfaces.strict_get(surface_id);
+        let surface = self.surfaces.get(surface_id);
 
         let mut presentation = surface.presentation.lock();
         let present = match presentation.as_mut() {
@@ -326,7 +326,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let surface = self.surfaces.strict_get(surface_id);
+        let surface = self.surfaces.get(surface_id);
         let mut presentation = surface.presentation.lock();
         let present = match presentation.as_mut() {
             Some(present) => present,

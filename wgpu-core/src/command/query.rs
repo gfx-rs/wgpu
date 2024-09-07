@@ -320,7 +320,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -338,7 +338,7 @@ impl Global {
 
         let raw_encoder = cmd_buf_data.encoder.open(&cmd_buf.device)?;
 
-        let query_set = hub.query_sets.strict_get(query_set_id).get()?;
+        let query_set = hub.query_sets.get(query_set_id).get()?;
 
         query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
@@ -360,7 +360,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -379,11 +379,11 @@ impl Global {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
-        let query_set = hub.query_sets.strict_get(query_set_id).get()?;
+        let query_set = hub.query_sets.get(query_set_id).get()?;
 
         query_set.same_device_as(cmd_buf.as_ref())?;
 
-        let dst_buffer = hub.buffers.strict_get(destination).get()?;
+        let dst_buffer = hub.buffers.get(destination).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 

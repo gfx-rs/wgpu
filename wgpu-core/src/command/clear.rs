@@ -90,7 +90,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -99,7 +99,7 @@ impl Global {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        let dst_buffer = hub.buffers.strict_get(dst).get()?;
+        let dst_buffer = hub.buffers.get(dst).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -173,7 +173,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -189,7 +189,7 @@ impl Global {
             return Err(ClearError::MissingClearTextureFeature);
         }
 
-        let dst_texture = hub.textures.strict_get(dst).get()?;
+        let dst_texture = hub.textures.get(dst).get()?;
 
         dst_texture.same_device_as(cmd_buf.as_ref())?;
 
