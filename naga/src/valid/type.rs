@@ -362,7 +362,6 @@ impl super::Validator {
             Ti::Atomic(crate::Scalar { kind, width }) => {
                 match kind {
                     crate::ScalarKind::Bool
-                    | crate::ScalarKind::Float
                     | crate::ScalarKind::AbstractInt
                     | crate::ScalarKind::AbstractFloat => {
                         return Err(TypeError::InvalidAtomicWidth(kind, width))
@@ -378,6 +377,20 @@ impl super::Validator {
                                 ));
                             }
                         } else if width != 4 {
+                            return Err(TypeError::InvalidAtomicWidth(kind, width));
+                        }
+                    }
+                    crate::ScalarKind::Float => {
+                        if width == 4 {
+                            if !self
+                                .capabilities
+                                .intersects(Capabilities::SHADER_FLT32_ATOMIC)
+                            {
+                                return Err(TypeError::MissingCapability(
+                                    Capabilities::SHADER_FLT32_ATOMIC,
+                                ));
+                            }
+                        } else {
                             return Err(TypeError::InvalidAtomicWidth(kind, width));
                         }
                     }

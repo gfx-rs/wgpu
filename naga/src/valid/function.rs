@@ -41,8 +41,10 @@ pub enum CallError {
 pub enum AtomicError {
     #[error("Pointer {0:?} to atomic is invalid.")]
     InvalidPointer(Handle<crate::Expression>),
-    #[error("Address space {0:?} does not support 64bit atomics.")]
+    #[error("Address space {0:?} is not supported.")]
     InvalidAddressSpace(crate::AddressSpace),
+    #[error("Function {0:?} is not supported.")]
+    InvalidFunction(crate::AtomicFunction),
     #[error("Operand {0:?} has invalid type.")]
     InvalidOperand(Handle<crate::Expression>),
     #[error("Result expression {0:?} is not an `AtomicResult` expression")]
@@ -443,6 +445,47 @@ impl super::Validator {
                     .with_span_handle(value, context.expressions)
                     .into_other());
                 }
+            }
+        }
+
+        // Check for the special restrictions on 32-bit floating-point atomic operations.
+        //
+        // We don't need to consider other widths here: this function has already checked
+        // that `pointer`'s type is an `Atomic`, and `validate_type` has already checked
+        // that that `Atomic` type has a permitted scalar width.
+        if let crate::ScalarKind::Float = pointer_scalar.kind {
+            // `Capabilities::SHADER_FLT32_ATOMIC` enables 32-bit floating-point
+            // atomic operations including `Add`, `Subtract`, and `Exchange`
+            // in storage address space.
+            if !matches!(
+                *fun,
+                crate::AtomicFunction::Add
+                    | crate::AtomicFunction::Subtract
+                    | crate::AtomicFunction::Exchange { compare: _ }
+            ) {
+                log::error!("Float32 atomic operation {:?} is not supported", fun);
+                return Err(AtomicError::InvalidFunction(*fun)
+                    .with_span_handle(value, context.expressions)
+                    .into_other());
+            }
+            if !self
+                .capabilities
+                .contains(super::Capabilities::SHADER_FLT32_ATOMIC)
+            {
+                log::error!("Float32 atomic operations are not supported");
+                return Err(AtomicError::MissingCapability(
+                    super::Capabilities::SHADER_FLT32_ATOMIC,
+                )
+                .with_span_handle(value, context.expressions)
+                .into_other());
+            }
+            if !matches!(pointer_space, crate::AddressSpace::Storage { .. }) {
+                log::error!(
+                    "Float32 atomic operations are only supported in storage address space"
+                );
+                return Err(AtomicError::InvalidAddressSpace(pointer_space)
+                    .with_span_handle(value, context.expressions)
+                    .into_other());
             }
         }
 

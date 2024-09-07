@@ -532,6 +532,10 @@ pub fn create_validator(
         features.contains(wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS),
     );
     caps.set(
+        Caps::SHADER_FLT32_ATOMIC,
+        features.contains(wgt::Features::SHADER_FLT32_ATOMIC),
+    );
+    caps.set(
         Caps::MULTISAMPLED_SHADING,
         downlevel.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
     );

@@ -1934,12 +1934,15 @@ pub enum Statement {
         /// If [`SHADER_INT64_ATOMIC_MIN_MAX`] or [`SHADER_INT64_ATOMIC_ALL_OPS`] are
         /// enabled, this may also be [`I64`] or [`U64`].
         ///
+        /// If [`SHADER_FLT32_ATOMIC`] is enabled, this may be [`F32`].
+        ///
         /// [`Pointer`]: TypeInner::Pointer
         /// [`Atomic`]: TypeInner::Atomic
         /// [`I32`]: Scalar::I32
         /// [`U32`]: Scalar::U32
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
         /// [`I64`]: Scalar::I64
         /// [`U64`]: Scalar::U64
         pointer: Handle<Expression>,
@@ -1957,9 +1960,16 @@ pub enum Statement {
         /// - If neither of those capabilities are present, then 64-bit scalar
         ///   atomics are not allowed.
         ///
+        /// If [`pointer`] refers to a 32-bit floating-point atomic value, then:
+        ///
+        /// - The [`SHADER_FLT32_ATOMIC`] capability allows allows
+        ///   [`AtomicFunction::Add`], [`AtomicFunction::Subtract`] and
+        ///   [`AtomicFunction::Exchange`] here.
+        ///
         /// [`pointer`]: Statement::Atomic::pointer
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
         fun: AtomicFunction,
 
         /// Value to use in the function.
@@ -1986,6 +1996,7 @@ pub enum Statement {
         /// [`Exchange { compare: None }`]: AtomicFunction::Exchange
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
         result: Option<Handle<Expression>>,
     },
     /// Load uniformly from a uniform pointer in the workgroup address space.

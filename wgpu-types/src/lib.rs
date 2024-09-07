@@ -953,6 +953,13 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 61;
+        /// Allows shaders to use all f32 atomic operations.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 3.0+)
+        ///
+        /// This is a native only feature.
+        const SHADER_FLT32_ATOMIC = 1 << 62;
         /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
         ///
         /// This is used for frame pacing to reduce latency, and is generally only available on Android.
@@ -968,7 +975,7 @@ bitflags::bitflags! {
         ///
         /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
         /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
-        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 62;
+        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 63;
     }
 }
 

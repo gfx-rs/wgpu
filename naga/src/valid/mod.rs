@@ -143,6 +143,15 @@ bitflags::bitflags! {
         const SHADER_INT64_ATOMIC_MIN_MAX = 0x80000;
         /// Support for all atomic operations on 64-bit integers.
         const SHADER_INT64_ATOMIC_ALL_OPS = 0x100000;
+        /// Support for [`AtomicFunction::Add`], [`AtomicFunction::Sub`]
+        /// and [`AtomicFunction::Exchange`] on 32-bit floating-point numbers
+        /// in the [`Storage`] address space.
+        ///
+        /// [`AtomicFunction::Add`]: crate::AtomicFunction::Add
+        /// [`AtomicFunction::Sub`]: crate::AtomicFunction::Sub
+        /// [`AtomicFunction::Exchange`]: crate::AtomicFunction::Exchange
+        /// [`Storage`]: crate::AddressSpace::Storage
+        const SHADER_FLT32_ATOMIC = 0x200000;
     }
 }
 
@@ -600,6 +609,8 @@ impl Validator {
             const_expression_types: vec![placeholder; module.global_expressions.len()]
                 .into_boxed_slice(),
         };
+
+        // TODO: Error
 
         for (handle, ty) in module.types.iter() {
             let ty_info = self
