@@ -3630,16 +3630,6 @@ impl Device {
 }
 
 impl Device {
-    pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer) {
-        let mut baked = cmd_buf.extract_baked_commands();
-        unsafe {
-            baked.encoder.reset_all(baked.list);
-        }
-        unsafe {
-            self.raw().destroy_command_encoder(baked.encoder);
-        }
-    }
-
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
         self.pending_writes.lock().deactivate();

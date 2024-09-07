@@ -6,7 +6,8 @@ use crate::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
-    command, conv,
+    command::{self, CommandBuffer},
+    conv,
     device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
     global::Global,
     hal_api::HalApi,
@@ -1012,9 +1013,9 @@ impl Global {
             id_in.map(|id| id.into_command_buffer_id()),
         );
 
-        let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.strict_get(device_id);
 
+        let error = 'error: {
             let command_buffer = match device.create_command_encoder(&desc.label) {
                 Ok(command_buffer) => command_buffer,
                 Err(e) => break 'error e,
@@ -1025,7 +1026,7 @@ impl Global {
             return (id.into_command_encoder_id(), None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(&device, &desc.label)));
         (id.into_command_encoder_id(), Some(error))
     }
 
@@ -1035,12 +1036,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(cmd_buf) = hub
+        let _cmd_buf = hub
             .command_buffers
-            .unregister(command_encoder_id.into_command_buffer_id())
-        {
-            cmd_buf.data.lock().as_mut().unwrap().encoder.discard();
-        }
+            .strict_unregister(command_encoder_id.into_command_buffer_id());
     }
 
     pub fn command_buffer_drop(&self, command_buffer_id: id::CommandBufferId) {

@@ -4,7 +4,8 @@ use crate::{
     api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
-        ClearError, CommandAllocator, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
+        ClearError, CommandAllocator, CommandBuffer, CommandEncoderError, CopySide,
+        ImageCopyTexture, TransferError,
     },
     conv,
     device::{DeviceError, WaitIdleError},
@@ -353,6 +354,10 @@ pub enum QueueSubmitError {
     SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    CommandEncoder(#[from] CommandEncoderError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -1050,104 +1055,68 @@ impl Global {
             let mut submit_surface_textures_owned = FastHashMap::default();
 
             {
-                let mut command_buffer_guard = hub.command_buffers.write();
+                let command_buffer_guard = hub.command_buffers.read();
 
                 if !command_buffer_ids.is_empty() {
                     profiling::scope!("prepare");
+
+                    let mut first_error = None;
 
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
 
                     // finish all the command buffers first
-                    for &cmb_id in command_buffer_ids {
+                    for command_buffer_id in command_buffer_ids {
                         profiling::scope!("process command buffer");
 
                         // we reset the used surface textures every time we use
                         // it, so make sure to set_size on it.
                         used_surface_textures.set_size(device.tracker_indices.textures.size());
 
+                        let command_buffer = command_buffer_guard.strict_get(*command_buffer_id);
+
+                        // Note that we are required to invalidate all command buffers in both the success and failure paths.
+                        // This is why we `continue` and don't early return via `?`.
                         #[allow(unused_mut)]
-                        let mut cmdbuf = match command_buffer_guard.replace_with_error(cmb_id) {
-                            Ok(cmdbuf) => cmdbuf,
-                            Err(_) => continue,
-                        };
+                        let mut cmd_buf_data = command_buffer.try_take();
 
                         #[cfg(feature = "trace")]
                         if let Some(ref mut trace) = *device.trace.lock() {
-                            trace.add(Action::Submit(
-                                submit_index,
-                                cmdbuf
-                                    .data
-                                    .lock()
-                                    .as_mut()
-                                    .unwrap()
-                                    .commands
-                                    .take()
-                                    .unwrap(),
-                            ));
+                            if let Ok(ref mut cmd_buf_data) = cmd_buf_data {
+                                trace.add(Action::Submit(
+                                    submit_index,
+                                    cmd_buf_data.commands.take().unwrap(),
+                                ));
+                            }
                         }
 
-                        cmdbuf.same_device_as(queue.as_ref())?;
+                        let mut baked = match cmd_buf_data {
+                            Ok(cmd_buf_data) => {
+                                let res = validate_command_buffer(
+                                    &command_buffer,
+                                    &queue,
+                                    &cmd_buf_data,
+                                    &snatch_guard,
+                                    &mut submit_surface_textures_owned,
+                                    &mut used_surface_textures,
+                                );
+                                if let Err(err) = res {
+                                    first_error.get_or_insert(err);
+                                    cmd_buf_data.destroy(&command_buffer.device);
+                                    continue;
+                                }
+                                cmd_buf_data.into_baked_commands()
+                            }
+                            Err(err) => {
+                                first_error.get_or_insert(err.into());
+                                continue;
+                            }
+                        };
 
-                        if !cmdbuf.is_finished() {
-                            let cmdbuf = Arc::into_inner(cmdbuf).expect(
-                                "Command buffer cannot be destroyed because is still in use",
-                            );
-                            device.destroy_command_buffer(cmdbuf);
+                        if first_error.is_some() {
                             continue;
                         }
-
-                        {
-                            profiling::scope!("check resource state");
-
-                            let cmd_buf_data = cmdbuf.data.lock();
-                            let cmd_buf_trackers = &cmd_buf_data.as_ref().unwrap().trackers;
-
-                            // update submission IDs
-                            {
-                                profiling::scope!("buffers");
-                                for buffer in cmd_buf_trackers.buffers.used_resources() {
-                                    buffer.check_destroyed(&snatch_guard)?;
-
-                                    match *buffer.map_state.lock() {
-                                        BufferMapState::Idle => (),
-                                        _ => {
-                                            return Err(QueueSubmitError::BufferStillMapped(
-                                                buffer.error_ident(),
-                                            ))
-                                        }
-                                    }
-                                }
-                            }
-                            {
-                                profiling::scope!("textures");
-                                for texture in cmd_buf_trackers.textures.used_resources() {
-                                    let should_extend = match texture.try_inner(&snatch_guard)? {
-                                        TextureInner::Native { .. } => false,
-                                        TextureInner::Surface { .. } => {
-                                            // Compare the Arcs by pointer as Textures don't implement Eq.
-                                            submit_surface_textures_owned
-                                                .insert(Arc::as_ptr(&texture), texture.clone());
-
-                                            true
-                                        }
-                                    };
-                                    if should_extend {
-                                        unsafe {
-                                            used_surface_textures
-                                                .merge_single(
-                                                    &texture,
-                                                    None,
-                                                    hal::TextureUses::PRESENT,
-                                                )
-                                                .unwrap();
-                                        };
-                                    }
-                                }
-                            }
-                        }
-                        let mut baked = cmdbuf.from_arc_into_baked();
 
                         // execute resource transitions
                         unsafe {
@@ -1208,6 +1177,10 @@ impl Global {
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),
                         });
+                    }
+
+                    if let Some(first_error) = first_error {
+                        return Err(first_error);
                     }
                 }
             }
@@ -1339,4 +1312,55 @@ impl Global {
         let queue = self.hub.queues.strict_get(queue_id);
         queue.device.lock_life().add_work_done_closure(closure);
     }
+}
+
+fn validate_command_buffer(
+    command_buffer: &CommandBuffer,
+    queue: &Queue,
+    cmd_buf_data: &crate::command::CommandBufferMutable,
+    snatch_guard: &crate::snatch::SnatchGuard<'_>,
+    submit_surface_textures_owned: &mut FastHashMap<*const Texture, Arc<Texture>>,
+    used_surface_textures: &mut track::TextureUsageScope,
+) -> Result<(), QueueSubmitError> {
+    command_buffer.same_device_as(queue)?;
+    cmd_buf_data.check_finished()?;
+
+    {
+        profiling::scope!("check resource state");
+
+        {
+            profiling::scope!("buffers");
+            for buffer in cmd_buf_data.trackers.buffers.used_resources() {
+                buffer.check_destroyed(snatch_guard)?;
+
+                match *buffer.map_state.lock() {
+                    BufferMapState::Idle => (),
+                    _ => return Err(QueueSubmitError::BufferStillMapped(buffer.error_ident())),
+                }
+            }
+        }
+        {
+            profiling::scope!("textures");
+            for texture in cmd_buf_data.trackers.textures.used_resources() {
+                let should_extend = match texture.try_inner(snatch_guard)? {
+                    TextureInner::Native { .. } => false,
+                    TextureInner::Surface { .. } => {
+                        // Compare the Arcs by pointer as Textures don't implement Eq.
+                        submit_surface_textures_owned
+                            .insert(Arc::as_ptr(&texture), texture.clone());
+
+                        true
+                    }
+                };
+                if should_extend {
+                    unsafe {
+                        used_surface_textures
+                            .merge_single(&texture, None, hal::TextureUses::PRESENT)
+                            .unwrap();
+                    };
+                }
+            }
+        }
+    }
+    Ok(())
 }
