@@ -462,15 +462,11 @@ impl ImplicitPipelineIds<'_> {
             root_id: hub
                 .pipeline_layouts
                 .prepare(backend, Some(self.root_id))
-                .into_id(),
+                .id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| {
-                    hub.bind_group_layouts
-                        .prepare(backend, Some(*id_in))
-                        .into_id()
-                })
+                .map(|id_in| hub.bind_group_layouts.prepare(backend, Some(*id_in)).id())
                 .collect(),
         }
     }
