@@ -593,7 +593,7 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        let surface = self.surfaces.strict_unregister(id);
+        let surface = self.surfaces.remove(id);
         let surface =
             Arc::into_inner(surface).expect("Surface cannot be destroyed because is still in use");
 
@@ -885,7 +885,7 @@ impl Global {
         profiling::scope!("Adapter::drop");
         api_log!("Adapter::drop {adapter_id:?}");
 
-        self.hub.adapters.strict_unregister(adapter_id);
+        self.hub.adapters.remove(adapter_id);
     }
 }
 
