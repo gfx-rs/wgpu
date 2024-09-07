@@ -96,7 +96,7 @@ where
         self.insert_impl(index as usize, epoch, Element::Occupied(value, epoch))
     }
 
-    pub(crate) fn strict_remove(&mut self, id: Id<T::Marker>) -> T {
+    pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> T {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {

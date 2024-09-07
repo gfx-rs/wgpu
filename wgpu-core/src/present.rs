@@ -280,7 +280,7 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            let texture = hub.textures.strict_unregister(texture_id).get();
+            let texture = hub.textures.remove(texture_id).get();
             if let Ok(texture) = texture {
                 device
                     .trackers
@@ -350,7 +350,7 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            let texture = hub.textures.strict_unregister(texture_id).get();
+            let texture = hub.textures.remove(texture_id).get();
 
             if let Ok(texture) = texture {
                 device

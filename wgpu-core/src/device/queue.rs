@@ -465,7 +465,7 @@ impl Global {
 
         let device = &queue.device;
 
-        let staging_buffer = hub.staging_buffers.strict_unregister(staging_buffer_id);
+        let staging_buffer = hub.staging_buffers.remove(staging_buffer_id);
 
         let mut pending_writes = device.pending_writes.lock();
 

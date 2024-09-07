@@ -100,8 +100,8 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub(crate) fn strict_unregister(&self, id: Id<T::Marker>) -> T {
-        let value = self.storage.write().strict_remove(id);
+    pub(crate) fn remove(&self, id: Id<T::Marker>) -> T {
+        let value = self.storage.write().remove(id);
         // This needs to happen *after* removing it from the storage, to maintain the
         // invariant that `self.identity` only contains ids which are actually available
         // See https://github.com/gfx-rs/wgpu/issues/5372
@@ -161,7 +161,7 @@ mod tests {
                         let value = Arc::new(TestData);
                         let new_id = registry.prepare(wgt::Backend::Empty, None);
                         let id = new_id.assign(value);
-                        registry.strict_unregister(id);
+                        registry.remove(id);
                     }
                 });
             }

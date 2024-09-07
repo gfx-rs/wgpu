@@ -283,7 +283,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = match hub.buffers.strict_unregister(buffer_id).get() {
+        let buffer = match hub.buffers.remove(buffer_id).get() {
             Ok(buffer) => buffer,
             Err(_) => {
                 return;
@@ -439,7 +439,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _texture = hub.textures.strict_unregister(texture_id);
+        let _texture = hub.textures.remove(texture_id);
         #[cfg(feature = "trace")]
         if let Ok(texture) = _texture.get() {
             if let Some(t) = texture.device.trace.lock().as_mut() {
@@ -502,7 +502,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _view = hub.texture_views.strict_unregister(texture_view_id);
+        let _view = hub.texture_views.remove(texture_view_id);
 
         #[cfg(feature = "trace")]
         if let Ok(view) = _view.get() {
@@ -553,7 +553,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _sampler = hub.samplers.strict_unregister(sampler_id);
+        let _sampler = hub.samplers.remove(sampler_id);
 
         #[cfg(feature = "trace")]
         if let Ok(sampler) = _sampler.get() {
@@ -625,9 +625,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _layout = hub
-            .bind_group_layouts
-            .strict_unregister(bind_group_layout_id);
+        let _layout = hub.bind_group_layouts.remove(bind_group_layout_id);
 
         #[cfg(feature = "trace")]
         if let Ok(layout) = _layout.get() {
@@ -698,7 +696,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _layout = hub.pipeline_layouts.strict_unregister(pipeline_layout_id);
+        let _layout = hub.pipeline_layouts.remove(pipeline_layout_id);
 
         #[cfg(feature = "trace")]
         if let Ok(layout) = _layout.get() {
@@ -842,7 +840,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _bind_group = hub.bind_groups.strict_unregister(bind_group_id);
+        let _bind_group = hub.bind_groups.remove(bind_group_id);
 
         #[cfg(feature = "trace")]
         if let Ok(_bind_group) = _bind_group.get() {
@@ -989,7 +987,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _shader_module = hub.shader_modules.strict_unregister(shader_module_id);
+        let _shader_module = hub.shader_modules.remove(shader_module_id);
 
         #[cfg(feature = "trace")]
         if let Ok(shader_module) = _shader_module.get() {
@@ -1038,7 +1036,7 @@ impl Global {
 
         let _cmd_buf = hub
             .command_buffers
-            .strict_unregister(command_encoder_id.into_command_buffer_id());
+            .remove(command_encoder_id.into_command_buffer_id());
     }
 
     pub fn command_buffer_drop(&self, command_buffer_id: id::CommandBufferId) {
@@ -1116,7 +1114,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _bundle = hub.render_bundles.strict_unregister(render_bundle_id);
+        let _bundle = hub.render_bundles.remove(render_bundle_id);
 
         #[cfg(feature = "trace")]
         if let Ok(bundle) = _bundle.get() {
@@ -1169,7 +1167,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _query_set = hub.query_sets.strict_unregister(query_set_id);
+        let _query_set = hub.query_sets.remove(query_set_id);
 
         #[cfg(feature = "trace")]
         if let Ok(query_set) = _query_set.get() {
@@ -1406,7 +1404,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _pipeline = hub.render_pipelines.strict_unregister(render_pipeline_id);
+        let _pipeline = hub.render_pipelines.remove(render_pipeline_id);
 
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
@@ -1592,7 +1590,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _pipeline = hub.compute_pipelines.strict_unregister(compute_pipeline_id);
+        let _pipeline = hub.compute_pipelines.remove(compute_pipeline_id);
 
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
@@ -1652,7 +1650,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _cache = hub.pipeline_caches.strict_unregister(pipeline_cache_id);
+        let _cache = hub.pipeline_caches.remove(pipeline_cache_id);
 
         #[cfg(feature = "trace")]
         if let Ok(cache) = _cache.get() {
@@ -2089,7 +2087,7 @@ impl Global {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {device_id:?}");
 
-        let device = self.hub.devices.strict_unregister(device_id);
+        let device = self.hub.devices.remove(device_id);
         let device_lost_closure = device.lock_life().device_lost_closure.take();
         if let Some(closure) = device_lost_closure {
             closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
@@ -2168,7 +2166,7 @@ impl Global {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {queue_id:?}");
 
-        self.hub.queues.strict_unregister(queue_id);
+        self.hub.queues.remove(queue_id);
     }
 
     pub fn buffer_map_async(
