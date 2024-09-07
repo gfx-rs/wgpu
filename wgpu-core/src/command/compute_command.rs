@@ -99,13 +99,12 @@ impl ComputeCommand {
                         }
 
                         let bind_group_id = bind_group_id.unwrap();
-                        let bg = bind_group_guard
-                            .strict_get(bind_group_id)
-                            .get()
-                            .map_err(|e| ComputePassError {
+                        let bg = bind_group_guard.get(bind_group_id).get().map_err(|e| {
+                            ComputePassError {
                                 scope: PassErrorScope::SetBindGroup,
                                 inner: e.into(),
-                            })?;
+                            }
+                        })?;
 
                         ArcComputeCommand::SetBindGroup {
                             index,
@@ -114,12 +113,13 @@ impl ComputeCommand {
                         }
                     }
                     ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
-                        pipelines_guard.strict_get(pipeline_id).get().map_err(|e| {
-                            ComputePassError {
+                        pipelines_guard
+                            .get(pipeline_id)
+                            .get()
+                            .map_err(|e| ComputePassError {
                                 scope: PassErrorScope::SetPipelineCompute,
                                 inner: e.into(),
-                            }
-                        })?,
+                            })?,
                     ),
 
                     ComputeCommand::SetPushConstant {
@@ -136,7 +136,7 @@ impl ComputeCommand {
 
                     ComputeCommand::DispatchIndirect { buffer_id, offset } => {
                         ArcComputeCommand::DispatchIndirect {
-                            buffer: buffers_guard.strict_get(buffer_id).get().map_err(|e| {
+                            buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
                                 ComputePassError {
                                     scope: PassErrorScope::Dispatch { indirect: true },
                                     inner: e.into(),
@@ -160,13 +160,12 @@ impl ComputeCommand {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::WriteTimestamp {
-                        query_set: query_set_guard
-                            .strict_get(query_set_id)
-                            .get()
-                            .map_err(|e| ComputePassError {
+                        query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
+                            ComputePassError {
                                 scope: PassErrorScope::WriteTimestamp,
                                 inner: e.into(),
-                            })?,
+                            }
+                        })?,
                         query_index,
                     },
 
@@ -174,13 +173,12 @@ impl ComputeCommand {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::BeginPipelineStatisticsQuery {
-                        query_set: query_set_guard
-                            .strict_get(query_set_id)
-                            .get()
-                            .map_err(|e| ComputePassError {
+                        query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
+                            ComputePassError {
                                 scope: PassErrorScope::BeginPipelineStatisticsQuery,
                                 inner: e.into(),
-                            })?,
+                            }
+                        })?,
                         query_index,
                     },
 

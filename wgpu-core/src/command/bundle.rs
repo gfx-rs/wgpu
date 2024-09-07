@@ -594,7 +594,7 @@ fn set_bind_group(
 
     let bind_group_id = bind_group_id.unwrap();
 
-    let bind_group = bind_group_guard.strict_get(bind_group_id).get()?;
+    let bind_group = bind_group_guard.get(bind_group_id).get()?;
 
     bind_group.same_device(&state.device)?;
 
@@ -637,7 +637,7 @@ fn set_pipeline(
     is_stencil_read_only: bool,
     pipeline_id: id::Id<id::markers::RenderPipeline>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let pipeline = pipeline_guard.strict_get(pipeline_id).get()?;
+    let pipeline = pipeline_guard.get(pipeline_id).get()?;
 
     pipeline.same_device(&state.device)?;
 
@@ -678,7 +678,7 @@ fn set_index_buffer(
     offset: u64,
     size: Option<std::num::NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let buffer = buffer_guard.strict_get(buffer_id).get()?;
+    let buffer = buffer_guard.get(buffer_id).get()?;
 
     state
         .trackers
@@ -720,7 +720,7 @@ fn set_vertex_buffer(
         .into());
     }
 
-    let buffer = buffer_guard.strict_get(buffer_id).get()?;
+    let buffer = buffer_guard.get(buffer_id).get()?;
 
     state
         .trackers
@@ -859,7 +859,7 @@ fn multi_draw_indirect(
     let pipeline = state.pipeline()?;
     let used_bind_groups = pipeline.used_bind_groups;
 
-    let buffer = buffer_guard.strict_get(buffer_id).get()?;
+    let buffer = buffer_guard.get(buffer_id).get()?;
 
     state
         .trackers

@@ -128,8 +128,8 @@ impl<T: StorageItem> Registry<T> {
 }
 
 impl<T: StorageItem + Clone> Registry<T> {
-    pub(crate) fn strict_get(&self, id: Id<T::Marker>) -> T {
-        self.read().strict_get(id)
+    pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
+        self.read().get(id)
     }
 }
 

@@ -534,7 +534,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -554,7 +554,7 @@ impl Global {
 
         let snatch_guard = device.snatchable_lock.read();
 
-        let src_buffer = hub.buffers.strict_get(source).get()?;
+        let src_buffer = hub.buffers.get(source).get()?;
 
         src_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -570,7 +570,7 @@ impl Global {
         // expecting only a single barrier
         let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
 
-        let dst_buffer = hub.buffers.strict_get(destination).get()?;
+        let dst_buffer = hub.buffers.get(destination).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -692,7 +692,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -713,7 +713,7 @@ impl Global {
             return Ok(());
         }
 
-        let dst_texture = hub.textures.strict_get(destination.texture).get()?;
+        let dst_texture = hub.textures.get(destination.texture).get()?;
 
         dst_texture.same_device_as(cmd_buf.as_ref())?;
 
@@ -740,7 +740,7 @@ impl Global {
             &snatch_guard,
         )?;
 
-        let src_buffer = hub.buffers.strict_get(source.buffer).get()?;
+        let src_buffer = hub.buffers.get(source.buffer).get()?;
 
         src_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -845,7 +845,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -866,7 +866,7 @@ impl Global {
             return Ok(());
         }
 
-        let src_texture = hub.textures.strict_get(source.texture).get()?;
+        let src_texture = hub.textures.get(source.texture).get()?;
 
         src_texture.same_device_as(cmd_buf.as_ref())?;
 
@@ -915,7 +915,7 @@ impl Global {
             .map(|pending| pending.into_hal(src_raw))
             .collect::<Vec<_>>();
 
-        let dst_buffer = hub.buffers.strict_get(destination.buffer).get()?;
+        let dst_buffer = hub.buffers.get(destination.buffer).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -1012,7 +1012,7 @@ impl Global {
 
         let cmd_buf = hub
             .command_buffers
-            .strict_get(command_encoder_id.into_command_buffer_id());
+            .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.try_get()?;
         cmd_buf_data.check_recording()?;
 
@@ -1035,8 +1035,8 @@ impl Global {
             return Ok(());
         }
 
-        let src_texture = hub.textures.strict_get(source.texture).get()?;
-        let dst_texture = hub.textures.strict_get(destination.texture).get()?;
+        let src_texture = hub.textures.get(source.texture).get()?;
+        let dst_texture = hub.textures.get(destination.texture).get()?;
 
         src_texture.same_device_as(cmd_buf.as_ref())?;
         dst_texture.same_device_as(cmd_buf.as_ref())?;

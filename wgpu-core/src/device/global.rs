@@ -42,8 +42,8 @@ impl Global {
         adapter_id: AdapterId,
         surface_id: SurfaceId,
     ) -> bool {
-        let surface = self.surfaces.strict_get(surface_id);
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let surface = self.surfaces.get(surface_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         adapter.is_surface_supported(&surface)
     }
 
@@ -75,23 +75,23 @@ impl Global {
         adapter_id: AdapterId,
         get_supported_callback: F,
     ) -> B {
-        let surface = self.surfaces.strict_get(surface_id);
-        let adapter = self.hub.adapters.strict_get(adapter_id);
+        let surface = self.surfaces.get(surface_id);
+        let adapter = self.hub.adapters.get(adapter_id);
         get_supported_callback(&adapter, &surface)
     }
 
     pub fn device_features(&self, device_id: DeviceId) -> wgt::Features {
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
         device.features
     }
 
     pub fn device_limits(&self, device_id: DeviceId) -> wgt::Limits {
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
         device.limits.clone()
     }
 
     pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
         device.downlevel.clone()
     }
 
@@ -107,7 +107,7 @@ impl Global {
         let fid = hub.buffers.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -215,7 +215,7 @@ impl Global {
     ) -> BufferAccessResult {
         let hub = &self.hub;
 
-        let buffer = hub.buffers.strict_get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         let device = &buffer.device;
 
@@ -262,7 +262,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.strict_get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
@@ -314,7 +314,7 @@ impl Global {
         let fid = hub.textures.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -357,7 +357,7 @@ impl Global {
         let fid = hub.textures.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -400,7 +400,7 @@ impl Global {
         let hub = &self.hub;
         let fid = hub.buffers.prepare(A::VARIANT, id_in);
 
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
 
         // NB: Any change done through the raw buffer handle will not be
         // recorded in the replay
@@ -423,7 +423,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let texture = hub.textures.strict_get(texture_id).get()?;
+        let texture = hub.textures.get(texture_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
@@ -461,7 +461,7 @@ impl Global {
         let fid = hub.texture_views.prepare(texture_id.backend(), id_in);
 
         let error = 'error: {
-            let texture = match hub.textures.strict_get(texture_id).get() {
+            let texture = match hub.textures.get(texture_id).get() {
                 Ok(texture) => texture,
                 Err(e) => break 'error e.into(),
             };
@@ -525,7 +525,7 @@ impl Global {
         let fid = hub.samplers.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -578,7 +578,7 @@ impl Global {
         let fid = hub.bind_group_layouts.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -652,7 +652,7 @@ impl Global {
         let fid = hub.pipeline_layouts.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -663,7 +663,7 @@ impl Global {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
                     .iter()
-                    .map(|bgl_id| bind_group_layouts_guard.strict_get(*bgl_id).get())
+                    .map(|bgl_id| bind_group_layouts_guard.get(*bgl_id).get())
                     .collect::<Result<Vec<_>, _>>()
             };
 
@@ -720,14 +720,14 @@ impl Global {
         let fid = hub.bind_groups.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let layout = match hub.bind_group_layouts.strict_get(desc.layout).get() {
+            let layout = match hub.bind_group_layouts.get(desc.layout).get() {
                 Ok(layout) => layout,
                 Err(e) => break 'error e.into(),
             };
@@ -741,7 +741,7 @@ impl Global {
             {
                 let resolve_buffer = |bb: &BufferBinding| {
                     buffer_storage
-                        .strict_get(bb.buffer_id)
+                        .get(bb.buffer_id)
                         .get()
                         .map(|buffer| ResolvedBufferBinding {
                             buffer,
@@ -752,13 +752,13 @@ impl Global {
                 };
                 let resolve_sampler = |id: &id::SamplerId| {
                     sampler_storage
-                        .strict_get(*id)
+                        .get(*id)
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
                 };
                 let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
-                        .strict_get(*id)
+                        .get(*id)
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
                 };
@@ -882,7 +882,7 @@ impl Global {
         let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -954,7 +954,7 @@ impl Global {
         let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1013,7 +1013,7 @@ impl Global {
             id_in.map(|id| id.into_command_buffer_id()),
         );
 
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
 
         let error = 'error: {
             let command_buffer = match device.create_command_encoder(&desc.label) {
@@ -1079,7 +1079,7 @@ impl Global {
             .prepare(bundle_encoder.parent().backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(bundle_encoder.parent());
+            let device = self.hub.devices.get(bundle_encoder.parent());
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1138,7 +1138,7 @@ impl Global {
         let fid = hub.query_sets.prepare(device_id.backend(), id_in);
 
         let error = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1205,7 +1205,7 @@ impl Global {
                 break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
             }
 
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1218,7 +1218,7 @@ impl Global {
 
             let layout = desc
                 .layout
-                .map(|layout| hub.pipeline_layouts.strict_get(layout).get())
+                .map(|layout| hub.pipeline_layouts.get(layout).get())
                 .transpose();
             let layout = match layout {
                 Ok(layout) => layout,
@@ -1227,7 +1227,7 @@ impl Global {
 
             let cache = desc
                 .cache
-                .map(|cache| hub.pipeline_caches.strict_get(cache).get())
+                .map(|cache| hub.pipeline_caches.get(cache).get())
                 .transpose();
             let cache = match cache {
                 Ok(cache) => cache,
@@ -1237,7 +1237,7 @@ impl Global {
             let vertex = {
                 let module = hub
                     .shader_modules
-                    .strict_get(desc.vertex.stage.module)
+                    .get(desc.vertex.stage.module)
                     .get()
                     .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
                         stage: wgt::ShaderStages::VERTEX,
@@ -1265,7 +1265,7 @@ impl Global {
             let fragment = if let Some(ref state) = desc.fragment {
                 let module = hub
                     .shader_modules
-                    .strict_get(state.stage.module)
+                    .get(state.stage.module)
                     .get()
                     .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
                         stage: wgt::ShaderStages::FRAGMENT,
@@ -1383,7 +1383,7 @@ impl Global {
         let fid = hub.bind_group_layouts.prepare(pipeline_id.backend(), id_in);
 
         let error = 'error: {
-            let pipeline = match hub.render_pipelines.strict_get(pipeline_id).get() {
+            let pipeline = match hub.render_pipelines.get(pipeline_id).get() {
                 Ok(pipeline) => pipeline,
                 Err(e) => break 'error e.into(),
             };
@@ -1442,7 +1442,7 @@ impl Global {
                 break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
             }
 
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1455,7 +1455,7 @@ impl Global {
 
             let layout = desc
                 .layout
-                .map(|layout| hub.pipeline_layouts.strict_get(layout).get())
+                .map(|layout| hub.pipeline_layouts.get(layout).get())
                 .transpose();
             let layout = match layout {
                 Ok(layout) => layout,
@@ -1464,14 +1464,14 @@ impl Global {
 
             let cache = desc
                 .cache
-                .map(|cache| hub.pipeline_caches.strict_get(cache).get())
+                .map(|cache| hub.pipeline_caches.get(cache).get())
                 .transpose();
             let cache = match cache {
                 Ok(cache) => cache,
                 Err(e) => break 'error e.into(),
             };
 
-            let module = hub.shader_modules.strict_get(desc.stage.module).get();
+            let module = hub.shader_modules.get(desc.stage.module).get();
             let module = match module {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
@@ -1567,7 +1567,7 @@ impl Global {
         let fid = hub.bind_group_layouts.prepare(pipeline_id.backend(), id_in);
 
         let error = 'error: {
-            let pipeline = match hub.compute_pipelines.strict_get(pipeline_id).get() {
+            let pipeline = match hub.compute_pipelines.get(pipeline_id).get() {
                 Ok(pipeline) => pipeline,
                 Err(e) => break 'error e.into(),
             };
@@ -1620,7 +1620,7 @@ impl Global {
 
         let fid = hub.pipeline_caches.prepare(device_id.backend(), id_in);
         let error: pipeline::CreatePipelineCacheError = 'error: {
-            let device = self.hub.devices.strict_get(device_id);
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1789,7 +1789,7 @@ impl Global {
             // User callbacks must not be called while we are holding locks.
             let user_callbacks;
             {
-                let device = self.hub.devices.strict_get(device_id);
+                let device = self.hub.devices.get(device_id);
 
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
@@ -1800,7 +1800,7 @@ impl Global {
                     break 'error e.into();
                 }
 
-                let surface = self.surfaces.strict_get(surface_id);
+                let surface = self.surfaces.get(surface_id);
 
                 let caps = match surface.get_capabilities(&device.adapter) {
                     Ok(caps) => caps,
@@ -1927,7 +1927,7 @@ impl Global {
     ) -> Result<bool, WaitIdleError> {
         api_log!("Device::poll {maintain:?}");
 
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
 
         let DevicePoll {
             closures,
@@ -2037,7 +2037,7 @@ impl Global {
     pub fn device_start_capture(&self, device_id: DeviceId) {
         api_log!("Device::start_capture");
 
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
 
         if !device.is_valid() {
             return;
@@ -2048,7 +2048,7 @@ impl Global {
     pub fn device_stop_capture(&self, device_id: DeviceId) {
         api_log!("Device::stop_capture");
 
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
 
         if !device.is_valid() {
             return;
@@ -2061,7 +2061,7 @@ impl Global {
         api_log!("PipelineCache::get_data");
         let hub = &self.hub;
 
-        if let Ok(cache) = hub.pipeline_caches.strict_get(id).get() {
+        if let Ok(cache) = hub.pipeline_caches.get(id).get() {
             // TODO: Is this check needed?
             if !cache.device.is_valid() {
                 return None;
@@ -2112,7 +2112,7 @@ impl Global {
         device_id: DeviceId,
         device_lost_closure: DeviceLostClosure,
     ) {
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
 
         let mut life_tracker = device.lock_life();
         if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
@@ -2127,7 +2127,7 @@ impl Global {
     pub fn device_destroy(&self, device_id: DeviceId) {
         api_log!("Device::destroy {device_id:?}");
 
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
 
         // Follow the steps at
         // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
@@ -2149,7 +2149,7 @@ impl Global {
     }
 
     pub fn device_get_internal_counters(&self, device_id: DeviceId) -> wgt::InternalCounters {
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
         wgt::InternalCounters {
             hal: device.get_hal_counters(),
             core: wgt::CoreCounters {},
@@ -2160,7 +2160,7 @@ impl Global {
         &self,
         device_id: DeviceId,
     ) -> Option<wgt::AllocatorReport> {
-        let device = self.hub.devices.strict_get(device_id);
+        let device = self.hub.devices.get(device_id);
         device.generate_allocator_report()
     }
 
@@ -2184,7 +2184,7 @@ impl Global {
         let hub = &self.hub;
 
         let op_and_err = 'error: {
-            let buffer = match hub.buffers.strict_get(buffer_id).get() {
+            let buffer = match hub.buffers.get(buffer_id).get() {
                 Ok(buffer) => buffer,
                 Err(e) => break 'error Some((op, e.into())),
             };
@@ -2217,7 +2217,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.strict_get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         {
             let snatch_guard = buffer.device.snatchable_lock.read();
@@ -2290,7 +2290,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.strict_get(buffer_id).get()?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         let snatch_guard = buffer.device.snatchable_lock.read();
         buffer.check_destroyed(&snatch_guard)?;

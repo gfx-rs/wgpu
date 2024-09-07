@@ -1355,10 +1355,10 @@ impl Global {
                     channel,
                 }) = color_attachment
                 {
-                    let view = texture_views.strict_get(*view_id).get()?;
+                    let view = texture_views.get(*view_id).get()?;
 
                     let resolve_target = if let Some(resolve_target_id) = resolve_target {
-                        let rt_arc = texture_views.strict_get(*resolve_target_id).get()?;
+                        let rt_arc = texture_views.get(*resolve_target_id).get()?;
 
                         Some(rt_arc)
                     } else {
@@ -1379,9 +1379,7 @@ impl Global {
 
             arc_desc.depth_stencil_attachment =
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
-                    let view = texture_views
-                        .strict_get(depth_stencil_attachment.view)
-                        .get()?;
+                    let view = texture_views.get(depth_stencil_attachment.view).get()?;
 
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
@@ -1393,7 +1391,7 @@ impl Global {
                 };
 
             arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                let query_set = query_sets.strict_get(tw.query_set).get()?;
+                let query_set = query_sets.get(tw.query_set).get()?;
 
                 Some(ArcPassTimestampWrites {
                     query_set,
@@ -1406,7 +1404,7 @@ impl Global {
 
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {
-                    let query_set = query_sets.strict_get(occlusion_query_set).get()?;
+                    let query_set = query_sets.get(occlusion_query_set).get()?;
 
                     Some(query_set)
                 } else {
@@ -1427,9 +1425,7 @@ impl Global {
 
         let make_err = |e, arc_desc| (RenderPass::new(None, arc_desc), Some(e));
 
-        let cmd_buf = hub
-            .command_buffers
-            .strict_get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
         match cmd_buf
             .try_get()
@@ -1465,7 +1461,7 @@ impl Global {
             let cmd_buf = self
                 .hub
                 .command_buffers
-                .strict_get(encoder_id.into_command_buffer_id());
+                .get(encoder_id.into_command_buffer_id());
             let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
 
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -2746,11 +2742,7 @@ impl Global {
         buffer_id: id::Id<id::markers::Buffer>,
     ) -> Result<Arc<crate::resource::Buffer>, RenderPassError> {
         let hub = &self.hub;
-        let buffer = hub
-            .buffers
-            .strict_get(buffer_id)
-            .get()
-            .map_pass_err(scope)?;
+        let buffer = hub.buffers.get(buffer_id).get().map_pass_err(scope)?;
 
         Ok(buffer)
     }
@@ -2761,11 +2753,7 @@ impl Global {
         query_set_id: id::Id<id::markers::QuerySet>,
     ) -> Result<Arc<QuerySet>, RenderPassError> {
         let hub = &self.hub;
-        let query_set = hub
-            .query_sets
-            .strict_get(query_set_id)
-            .get()
-            .map_pass_err(scope)?;
+        let query_set = hub.query_sets.get(query_set_id).get().map_pass_err(scope)?;
 
         Ok(query_set)
     }
@@ -2801,7 +2789,7 @@ impl Global {
             let hub = &self.hub;
             let bg = hub
                 .bind_groups
-                .strict_get(bind_group_id)
+                .get(bind_group_id)
                 .get()
                 .map_pass_err(scope)?;
             bind_group = Some(bg);
@@ -2834,7 +2822,7 @@ impl Global {
         let hub = &self.hub;
         let pipeline = hub
             .render_pipelines
-            .strict_get(pipeline_id)
+            .get(pipeline_id)
             .get()
             .map_pass_err(scope)?;
 
@@ -3322,7 +3310,7 @@ impl Global {
         let bundles = hub.render_bundles.read();
 
         for &bundle_id in render_bundle_ids {
-            let bundle = bundles.strict_get(bundle_id).get().map_pass_err(scope)?;
+            let bundle = bundles.get(bundle_id).get().map_pass_err(scope)?;
 
             base.commands.push(ArcRenderCommand::ExecuteBundle(bundle));
         }
