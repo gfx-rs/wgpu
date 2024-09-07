@@ -1427,12 +1427,15 @@ impl Global {
 
         let make_err = |e, arc_desc| (RenderPass::new(None, arc_desc), Some(e));
 
-        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
-        };
+        let cmd_buf = hub
+            .command_buffers
+            .strict_get(encoder_id.into_command_buffer_id());
 
-        match cmd_buf.lock_encoder() {
+        match cmd_buf
+            .try_get()
+            .map_err(|e| e.into())
+            .and_then(|mut cmd_buf_data| cmd_buf_data.lock_encoder())
+        {
             Ok(_) => {}
             Err(e) => return make_err(e, arc_desc),
         };
@@ -1442,6 +1445,8 @@ impl Global {
         (RenderPass::new(Some(cmd_buf), arc_desc), err)
     }
 
+    /// Note that this differs from [`Self::render_pass_end`], it will
+    /// create a new pass, replay the commands and end the pass.
     #[doc(hidden)]
     #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn render_pass_end_with_unresolved_commands(
@@ -1457,15 +1462,11 @@ impl Global {
 
         #[cfg(feature = "trace")]
         {
-            let hub = &self.hub;
-
-            let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-                Ok(cmd_buf) => cmd_buf,
-                Err(_) => return Err(CommandEncoderError::Invalid).map_pass_err(pass_scope)?,
-            };
-
-            let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            let cmd_buf = self
+                .hub
+                .command_buffers
+                .strict_get(encoder_id.into_command_buffer_id());
+            let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
@@ -1509,28 +1510,25 @@ impl Global {
             });
         };
 
-        let hub = &self.hub;
         render_pass.base = Some(BasePass {
             label,
-            commands: super::RenderCommand::resolve_render_command_ids(hub, &commands)?,
+            commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)?,
             dynamic_offsets,
             string_data,
             push_constant_data,
         });
 
-        if let Some(err) = encoder_error {
-            Err(RenderPassError {
-                scope: pass_scope,
-                inner: err.into(),
-            })
-        } else {
-            self.render_pass_end(&mut render_pass)
-        }
+        self.render_pass_end(&mut render_pass)
     }
 
-    #[doc(hidden)]
     pub fn render_pass_end(&self, pass: &mut RenderPass) -> Result<(), RenderPassError> {
         let pass_scope = PassErrorScope::Pass;
+
+        let cmd_buf = pass
+            .parent
+            .as_ref()
+            .ok_or(RenderPassErrorInner::InvalidParentEncoder)
+            .map_pass_err(pass_scope)?;
 
         let base = pass
             .base
@@ -1543,10 +1541,9 @@ impl Global {
             base.label.as_deref().unwrap_or("")
         );
 
-        let Some(cmd_buf) = pass.parent.as_ref() else {
-            return Err(RenderPassErrorInner::InvalidParentEncoder).map_pass_err(pass_scope);
-        };
-        cmd_buf.unlock_encoder().map_pass_err(pass_scope)?;
+        let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+        cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
+        let cmd_buf_data = &mut *cmd_buf_data;
 
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
@@ -1554,9 +1551,6 @@ impl Global {
         let hal_label = hal_label(base.label.as_deref(), device.instance_flags);
 
         let (scope, pending_discard_init_fixups) = {
-            let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-
             device.check_is_valid().map_pass_err(pass_scope)?;
 
             let encoder = &mut cmd_buf_data.encoder;
@@ -1880,9 +1874,6 @@ impl Global {
             encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
             (trackers, pending_discard_init_fixups)
         };
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;

@@ -292,12 +292,15 @@ impl Global {
 
         let make_err = |e, arc_desc| (ComputePass::new(None, arc_desc), Some(e));
 
-        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
-        };
+        let cmd_buf = hub
+            .command_buffers
+            .strict_get(encoder_id.into_command_buffer_id());
 
-        match cmd_buf.lock_encoder() {
+        match cmd_buf
+            .try_get()
+            .map_err(|e| e.into())
+            .and_then(|mut cmd_buf_data| cmd_buf_data.lock_encoder())
+        {
             Ok(_) => {}
             Err(e) => return make_err(e, arc_desc),
         };
@@ -320,25 +323,8 @@ impl Global {
         (ComputePass::new(Some(cmd_buf), arc_desc), None)
     }
 
-    pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), ComputePassError> {
-        let scope = PassErrorScope::Pass;
-
-        let cmd_buf = pass
-            .parent
-            .as_ref()
-            .ok_or(ComputePassErrorInner::InvalidParentEncoder)
-            .map_pass_err(scope)?;
-
-        cmd_buf.unlock_encoder().map_pass_err(scope)?;
-
-        let base = pass
-            .base
-            .take()
-            .ok_or(ComputePassErrorInner::PassEnded)
-            .map_pass_err(scope)?;
-        self.compute_pass_end_impl(cmd_buf, base, pass.timestamp_writes.take())
-    }
-
+    /// Note that this differs from [`Self::compute_pass_end`], it will
+    /// create a new pass, replay the commands and end the pass.
     #[doc(hidden)]
     #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn compute_pass_end_with_unresolved_commands(
@@ -347,19 +333,16 @@ impl Global {
         base: BasePass<super::ComputeCommand>,
         timestamp_writes: Option<&PassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
-        let hub = &self.hub;
-        let scope = PassErrorScope::Pass;
-
-        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid).map_pass_err(scope),
-        };
-        cmd_buf.check_recording().map_pass_err(scope)?;
+        let pass_scope = PassErrorScope::Pass;
 
         #[cfg(feature = "trace")]
         {
-            let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            let cmd_buf = self
+                .hub
+                .command_buffers
+                .strict_get(encoder_id.into_command_buffer_id());
+            let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunComputePass {
                     base: BasePass {
@@ -374,50 +357,61 @@ impl Global {
             }
         }
 
-        let commands =
-            super::ComputeCommand::resolve_compute_command_ids(&self.hub, &base.commands)?;
+        let BasePass {
+            label,
+            commands,
+            dynamic_offsets,
+            string_data,
+            push_constant_data,
+        } = base;
 
-        let timestamp_writes = if let Some(tw) = timestamp_writes {
-            Some(ArcPassTimestampWrites {
-                query_set: hub
-                    .query_sets
-                    .strict_get(tw.query_set)
-                    .get()
-                    .map_pass_err(scope)?,
-                beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                end_of_pass_write_index: tw.end_of_pass_write_index,
-            })
-        } else {
-            None
+        let (mut compute_pass, encoder_error) = self.command_encoder_create_compute_pass(
+            encoder_id,
+            &ComputePassDescriptor {
+                label: label.as_deref().map(std::borrow::Cow::Borrowed),
+                timestamp_writes,
+            },
+        );
+        if let Some(err) = encoder_error {
+            return Err(ComputePassError {
+                scope: pass_scope,
+                inner: err.into(),
+            });
         };
 
-        self.compute_pass_end_impl(
-            &cmd_buf,
-            BasePass {
-                label: base.label,
-                commands,
-                dynamic_offsets: base.dynamic_offsets,
-                string_data: base.string_data,
-                push_constant_data: base.push_constant_data,
-            },
-            timestamp_writes,
-        )
+        compute_pass.base = Some(BasePass {
+            label,
+            commands: super::ComputeCommand::resolve_compute_command_ids(&self.hub, &commands)?,
+            dynamic_offsets,
+            string_data,
+            push_constant_data,
+        });
+
+        self.compute_pass_end(&mut compute_pass)
     }
 
-    fn compute_pass_end_impl(
-        &self,
-        cmd_buf: &CommandBuffer,
-        base: BasePass<ArcComputeCommand>,
-        mut timestamp_writes: Option<ArcPassTimestampWrites>,
-    ) -> Result<(), ComputePassError> {
+    pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
         let pass_scope = PassErrorScope::Pass;
+
+        let cmd_buf = pass
+            .parent
+            .as_ref()
+            .ok_or(ComputePassErrorInner::InvalidParentEncoder)
+            .map_pass_err(pass_scope)?;
+
+        let base = pass
+            .base
+            .take()
+            .ok_or(ComputePassErrorInner::PassEnded)
+            .map_pass_err(pass_scope)?;
 
         let device = &cmd_buf.device;
         device.check_is_valid().map_pass_err(pass_scope)?;
 
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+        cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
+        let cmd_buf_data = &mut *cmd_buf_data;
 
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;
@@ -459,9 +453,9 @@ impl Global {
         state.tracker.textures.set_size(indices.textures.size());
 
         let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
-            if let Some(tw) = timestamp_writes.take() {
+            if let Some(tw) = pass.timestamp_writes.take() {
                 tw.query_set
-                    .same_device_as(cmd_buf)
+                    .same_device_as(cmd_buf.as_ref())
                     .map_pass_err(pass_scope)?;
 
                 let query_set = state.tracker.query_sets.insert_single(tw.query_set);

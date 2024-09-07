@@ -88,17 +88,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            .strict_get(command_encoder_id.into_command_buffer_id());
+        let mut cmd_buf_data = cmd_buf.try_get()?;
+        cmd_buf_data.check_recording()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -177,17 +171,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            .strict_get(command_encoder_id.into_command_buffer_id());
+        let mut cmd_buf_data = cmd_buf.try_get()?;
+        cmd_buf_data.check_recording()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {

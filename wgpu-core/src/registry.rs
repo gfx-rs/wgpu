@@ -4,7 +4,7 @@ use crate::{
     id::Id,
     identity::IdentityManager,
     lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard},
-    storage::{Element, InvalidId, Storage, StorageItem},
+    storage::{Element, Storage, StorageItem},
 };
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -12,7 +12,6 @@ pub struct RegistryReport {
     pub num_allocated: usize,
     pub num_kept_from_user: usize,
     pub num_released_from_user: usize,
-    pub num_error: usize,
     pub element_size: usize,
 }
 
@@ -73,11 +72,6 @@ impl<T: StorageItem> FutureId<'_, T> {
         data.insert(self.id, value);
         self.id
     }
-
-    pub fn assign_error(self) -> Id<T::Marker> {
-        self.data.write().insert_error(self.id);
-        self.id
-    }
 }
 
 impl<T: StorageItem> Registry<T> {
@@ -106,15 +100,6 @@ impl<T: StorageItem> Registry<T> {
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<T> {
-        let value = self.storage.write().remove(id);
-        // This needs to happen *after* removing it from the storage, to maintain the
-        // invariant that `self.identity` only contains ids which are actually available
-        // See https://github.com/gfx-rs/wgpu/issues/5372
-        self.identity.free(id);
-        //Returning None is legal if it's an error ID
-        value
-    }
     pub(crate) fn strict_unregister(&self, id: Id<T::Marker>) -> T {
         let value = self.storage.write().strict_remove(id);
         // This needs to happen *after* removing it from the storage, to maintain the
@@ -136,7 +121,6 @@ impl<T: StorageItem> Registry<T> {
             match *element {
                 Element::Occupied(..) => report.num_kept_from_user += 1,
                 Element::Vacant => report.num_released_from_user += 1,
-                Element::Error(_) => report.num_error += 1,
             }
         }
         report
@@ -144,10 +128,6 @@ impl<T: StorageItem> Registry<T> {
 }
 
 impl<T: StorageItem + Clone> Registry<T> {
-    pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<T, InvalidId> {
-        self.read().get_owned(id)
-    }
-
     pub(crate) fn strict_get(&self, id: Id<T::Marker>) -> T {
         self.read().strict_get(id)
     }
@@ -181,7 +161,7 @@ mod tests {
                         let value = Arc::new(TestData);
                         let new_id = registry.prepare(wgt::Backend::Empty, None);
                         let id = new_id.assign(value);
-                        registry.unregister(id);
+                        registry.strict_unregister(id);
                     }
                 });
             }
