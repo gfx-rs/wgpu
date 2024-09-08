@@ -5547,8 +5547,18 @@ pub struct SurfaceConfiguration<V> {
     /// `Bgra8Unorm` and `Bgra8UnormSrgb`
     pub format: TextureFormat,
     /// Width of the swap chain. Must be the same size as the surface, and nonzero.
+    ///
+    /// If this is not the same size as the underlying surface (e.g. if it is
+    /// set once, and the window is later resized), the behaviour is defined
+    /// but platform-specific, and may change in the future (currently macOS
+    /// scales the surface, other platforms may do something else).
     pub width: u32,
     /// Height of the swap chain. Must be the same size as the surface, and nonzero.
+    ///
+    /// If this is not the same size as the underlying surface (e.g. if it is
+    /// set once, and the window is later resized), the behaviour is defined
+    /// but platform-specific, and may change in the future (currently macOS
+    /// scales the surface, other platforms may do something else).
     pub height: u32,
     /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
     /// FifoRelaxed, Immediate, and Mailbox will crash if unsupported, while AutoVsync and
