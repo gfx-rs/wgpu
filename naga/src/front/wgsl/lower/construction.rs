@@ -578,8 +578,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Constructor::Type(ty)
             }
             ast::ConstructorType::PartialVector { size } => Constructor::PartialVector { size },
-            ast::ConstructorType::Vector { size, scalar } => {
-                let ty = ctx.ensure_type_exists(scalar.to_inner_vector(size));
+            ast::ConstructorType::Vector { size, ty, ty_span } => {
+                let ty = self.resolve_ast_type(ty, &mut ctx.as_global())?;
+                let scalar = match ctx.module.types[ty].inner {
+                    crate::TypeInner::Scalar(sc) => sc,
+                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                };
+                let ty = ctx.ensure_type_exists(crate::TypeInner::Vector { size, scalar });
                 Constructor::Type(ty)
             }
             ast::ConstructorType::PartialMatrix { columns, rows } => {
@@ -588,13 +593,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::ConstructorType::Matrix {
                 rows,
                 columns,
-                width,
+                ty,
+                ty_span,
             } => {
-                let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
-                    columns,
-                    rows,
-                    scalar: crate::Scalar::float(width),
-                });
+                let ty = self.resolve_ast_type(ty, &mut ctx.as_global())?;
+                let scalar = match ctx.module.types[ty].inner {
+                    crate::TypeInner::Scalar(sc) => sc,
+                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                };
+                let ty = match scalar.kind {
+                    crate::ScalarKind::Float => ctx.ensure_type_exists(crate::TypeInner::Matrix {
+                        columns,
+                        rows,
+                        scalar,
+                    }),
+                    _ => return Err(Error::BadMatrixScalarKind(ty_span, scalar)),
+                };
                 Constructor::Type(ty)
             }
             ast::ConstructorType::PartialArray => Constructor::PartialArray,

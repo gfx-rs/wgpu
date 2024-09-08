@@ -150,7 +150,7 @@ pub fn op_webgpu_render_bundle_encoder_set_bind_group(
         wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_bind_group(
             &mut render_bundle_encoder_resource.0.borrow_mut(),
             index,
-            bind_group_resource.1,
+            Some(bind_group_resource.1),
             dynamic_offsets_data.as_ptr(),
             dynamic_offsets_data.len(),
         );

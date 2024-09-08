@@ -66,14 +66,15 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: Option<&'a BindGroup>,
         offsets: &[DynamicOffset],
     ) {
+        let bg = bind_group.map(|x| x.data.as_ref());
         DynContext::render_bundle_encoder_set_bind_group(
             &*self.parent.context,
             self.data.as_mut(),
             index,
-            bind_group.data.as_ref(),
+            bg,
             offsets,
         )
     }

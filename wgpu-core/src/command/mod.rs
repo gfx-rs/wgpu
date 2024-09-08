@@ -82,8 +82,8 @@ pub(crate) enum CommandEncoderStatus {
     ///
     /// When a `CommandEncoder` is left in this state, we have also
     /// returned an error result from the function that encountered
-    /// the problem. Future attempts to use the encoder (that is,
-    /// calls to [`CommandBuffer::get_encoder`]) will also return
+    /// the problem. Future attempts to use the encoder (for example,
+    /// calls to [`CommandBuffer::check_recording`]) will also return
     /// errors.
     ///
     /// Calling [`Global::command_encoder_finish`] in this state
@@ -805,7 +805,7 @@ impl<T: Copy + PartialEq> Default for StateChange<T> {
 
 #[derive(Debug)]
 struct BindGroupStateChange {
-    last_states: [StateChange<id::BindGroupId>; hal::MAX_BIND_GROUPS],
+    last_states: [StateChange<Option<id::BindGroupId>>; hal::MAX_BIND_GROUPS],
 }
 
 impl BindGroupStateChange {
@@ -817,7 +817,7 @@ impl BindGroupStateChange {
 
     fn set_and_check_redundant(
         &mut self,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
         index: u32,
         dynamic_offsets: &mut Vec<u32>,
         offsets: &[wgt::DynamicOffset],

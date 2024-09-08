@@ -13,7 +13,7 @@ pub enum ComputeCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
     },
 
     SetPipeline(id::ComputePipelineId),
@@ -89,16 +89,29 @@ impl ComputeCommand {
                         index,
                         num_dynamic_offsets,
                         bind_group_id,
-                    } => ArcComputeCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group: bind_group_guard.get_owned(bind_group_id).map_err(|_| {
+                    } => {
+                        if bind_group_id.is_none() {
+                            return Ok(ArcComputeCommand::SetBindGroup {
+                                index,
+                                num_dynamic_offsets,
+                                bind_group: None,
+                            });
+                        }
+
+                        let bind_group_id = bind_group_id.unwrap();
+                        let bg = bind_group_guard.get_owned(bind_group_id).map_err(|_| {
                             ComputePassError {
                                 scope: PassErrorScope::SetBindGroup,
                                 inner: ComputePassErrorInner::InvalidBindGroupId(bind_group_id),
                             }
-                        })?,
-                    },
+                        })?;
+
+                        ArcComputeCommand::SetBindGroup {
+                            index,
+                            num_dynamic_offsets,
+                            bind_group: Some(bg),
+                        }
+                    }
 
                     ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
                         pipelines_guard
@@ -185,7 +198,7 @@ pub enum ArcComputeCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group: Arc<BindGroup>,
+        bind_group: Option<Arc<BindGroup>>,
     },
 
     SetPipeline(Arc<ComputePipeline>),
@@ -215,6 +228,7 @@ pub enum ArcComputeCommand {
     },
 
     PushDebugGroup {
+        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
         color: u32,
         len: usize,
     },
@@ -222,6 +236,7 @@ pub enum ArcComputeCommand {
     PopDebugGroup,
 
     InsertDebugMarker {
+        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
         color: u32,
         len: usize,
     },

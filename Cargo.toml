@@ -120,7 +120,7 @@ renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.125"
+serde_json = "1.0.127"
 smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
@@ -149,7 +149,6 @@ gpu-descriptor = "0.3"
 bit-set = "0.8"
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
-hassle-rs = "0.11.0"
 windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
@@ -179,7 +178,7 @@ deno_url = "0.143.0"
 deno_web = "0.174.0"
 deno_webidl = "0.143.0"
 deno_webgpu = { version = "0.118.0", path = "./deno_webgpu" }
-tokio = "1.39.3"
+tokio = "1.40.0"
 termcolor = "1.4.1"
 
 # android dependencies

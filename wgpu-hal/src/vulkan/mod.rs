@@ -493,9 +493,36 @@ struct PrivateCapabilities {
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,
+
+    /// True if this adapter advertises the [`robustBufferAccess`][vrba] feature.
+    ///
+    /// Note that Vulkan's `robustBufferAccess` is not sufficient to implement
+    /// `wgpu_hal`'s guarantee that shaders will not access buffer contents via
+    /// a given bindgroup binding outside that binding's [accessible
+    /// region][ar]. Enabling `robustBufferAccess` does ensure that
+    /// out-of-bounds reads and writes are not undefined behavior (that's good),
+    /// but still permits out-of-bounds reads to return data from anywhere
+    /// within the buffer, not just the accessible region.
+    ///
+    /// [ar]: ../struct.BufferBinding.html#accessible-region
+    /// [vrba]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#features-robustBufferAccess
     robust_buffer_access: bool,
+
     robust_image_access: bool,
+
+    /// True if this adapter supports the [`VK_EXT_robustness2`] extension's
+    /// [`robustBufferAccess2`] feature.
+    ///
+    /// This is sufficient to implement `wgpu_hal`'s [required bounds-checking][ar] of
+    /// shader accesses to buffer contents. If this feature is not available,
+    /// this backend must have Naga inject bounds checks in the generated
+    /// SPIR-V.
+    ///
+    /// [`VK_EXT_robustness2`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_robustness2.html
+    /// [`robustBufferAccess2`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceRobustness2FeaturesEXT.html#features-robustBufferAccess2
+    /// [ar]: ../struct.BufferBinding.html#accessible-region
     robust_buffer_access2: bool,
+
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
@@ -1359,9 +1386,4 @@ fn get_lost_err() -> crate::DeviceError {
 
     #[allow(unreachable_code)]
     crate::DeviceError::Lost
-}
-
-#[cold]
-fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
-    panic!("wgpu-hal invariant was violated (usage error): {txt}")
 }

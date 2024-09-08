@@ -442,10 +442,9 @@ impl TextureTracker {
         let transitions = self
             .temp
             .drain(..)
-            .map(|pending| {
+            .inspect(|pending| {
                 let tex = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
                 textures.push(tex.inner.get(snatch_guard));
-                pending
             })
             .collect();
         (transitions, textures)

@@ -582,8 +582,15 @@ fn set_bind_group(
     dynamic_offsets: &[u32],
     index: u32,
     num_dynamic_offsets: usize,
-    bind_group_id: id::Id<id::markers::BindGroup>,
+    bind_group_id: Option<id::Id<id::markers::BindGroup>>,
 ) -> Result<(), RenderBundleErrorInner> {
+    if bind_group_id.is_none() {
+        // TODO: do appropriate cleanup for null bind_group.
+        return Ok(());
+    }
+
+    let bind_group_id = bind_group_id.unwrap();
+
     let bind_group = bind_group_guard
         .get_owned(bind_group_id)
         .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))?;
@@ -981,12 +988,17 @@ impl RenderBundle {
                     num_dynamic_offsets,
                     bind_group,
                 } => {
-                    let raw_bg = bind_group.try_raw(snatch_guard)?;
+                    let mut bg = None;
+                    if bind_group.is_some() {
+                        let bind_group = bind_group.as_ref().unwrap();
+                        let raw_bg = bind_group.try_raw(snatch_guard)?;
+                        bg = Some(raw_bg);
+                    }
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
                             *index,
-                            raw_bg,
+                            bg,
                             &offsets[..*num_dynamic_offsets],
                         )
                     };
@@ -1501,7 +1513,7 @@ impl State {
                         let offsets = &contents.dynamic_offsets;
                         return Some(ArcRenderCommand::SetBindGroup {
                             index: i.try_into().unwrap(),
-                            bind_group: contents.bind_group.clone(),
+                            bind_group: Some(contents.bind_group.clone()),
                             num_dynamic_offsets: offsets.end - offsets.start,
                         });
                     }
@@ -1581,7 +1593,7 @@ pub mod bundle_ffi {
     pub unsafe extern "C" fn wgpu_render_bundle_set_bind_group(
         bundle: &mut RenderBundleEncoder,
         index: u32,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {

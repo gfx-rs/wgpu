@@ -52,11 +52,11 @@ OpDecorate %73 Location 1
 OpDecorate %75 Location 2
 OpDecorate %77 BuiltIn Position
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 3
-%5 = OpTypeStruct %3 %4
-%6 = OpTypeVector %4 4
-%7 = OpTypeStruct %4 %3 %4
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 3
+%5 = OpTypeStruct %4 %3
+%6 = OpTypeVector %3 4
+%7 = OpTypeStruct %3 %4 %3
 %9 = OpTypeStruct %5
 %10 = OpTypePointer Uniform %9
 %8 = OpVariable  %10  Uniform
@@ -69,14 +69,14 @@ OpDecorate %77 BuiltIn Position
 %18 = OpTypeStruct %7
 %19 = OpTypePointer StorageBuffer %18
 %17 = OpVariable  %19  StorageBuffer
-%23 = OpTypePointer Input %3
+%23 = OpTypePointer Input %4
 %22 = OpVariable  %23  Input
-%26 = OpTypePointer Input %4
+%26 = OpTypePointer Input %3
 %25 = OpVariable  %26  Input
 %29 = OpTypePointer Output %6
 %28 = OpVariable  %29  Output
 %31 = OpTypeFunction %2
-%32 = OpConstant  %4  0.0
+%32 = OpConstant  %3  0.0
 %33 = OpConstantComposite  %6  %32 %32 %32 %32
 %37 = OpVariable  %23  Input
 %39 = OpVariable  %26  Input
@@ -101,8 +101,8 @@ OpDecorate %77 BuiltIn Position
 %88 = OpConstantNull  %7
 %30 = OpFunction  %2  None %31
 %20 = OpLabel
-%24 = OpLoad  %3  %22
-%27 = OpLoad  %4  %25
+%24 = OpLoad  %4  %22
+%27 = OpLoad  %3  %25
 %21 = OpCompositeConstruct  %5  %24 %27
 OpBranch %34
 %34 = OpLabel
@@ -111,8 +111,8 @@ OpReturn
 OpFunctionEnd
 %42 = OpFunction  %2  None %31
 %35 = OpLabel
-%38 = OpLoad  %3  %37
-%40 = OpLoad  %4  %39
+%38 = OpLoad  %4  %37
+%40 = OpLoad  %3  %39
 %36 = OpCompositeConstruct  %5  %38 %40
 OpBranch %43
 %43 = OpLabel
@@ -134,9 +134,9 @@ OpReturn
 OpFunctionEnd
 %67 = OpFunction  %2  None %31
 %58 = OpLabel
-%61 = OpLoad  %4  %60
-%63 = OpLoad  %3  %62
-%65 = OpLoad  %4  %64
+%61 = OpLoad  %3  %60
+%63 = OpLoad  %4  %62
+%65 = OpLoad  %3  %64
 %59 = OpCompositeConstruct  %7  %61 %63 %65
 OpBranch %68
 %68 = OpLabel
@@ -145,9 +145,9 @@ OpReturn
 OpFunctionEnd
 %78 = OpFunction  %2  None %31
 %69 = OpLabel
-%72 = OpLoad  %4  %71
-%74 = OpLoad  %3  %73
-%76 = OpLoad  %4  %75
+%72 = OpLoad  %3  %71
+%74 = OpLoad  %4  %73
+%76 = OpLoad  %3  %75
 %70 = OpCompositeConstruct  %7  %72 %74 %76
 OpBranch %79
 %79 = OpLabel

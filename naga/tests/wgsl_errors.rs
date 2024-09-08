@@ -363,13 +363,13 @@ fn unknown_ident() {
 fn unknown_scalar_type() {
     check(
         r#"
-            const a: vec2<something>;
+            const a = vec2<vec2f>();
         "#,
-        r#"error: unknown scalar type: 'something'
-  ┌─ wgsl:2:27
+        r#"error: unknown scalar type: 'vec2f'
+  ┌─ wgsl:2:28
   │
-2 │             const a: vec2<something>;
-  │                           ^^^^^^^^^ unknown scalar type
+2 │             const a = vec2<vec2f>();
+  │                            ^^^^^ unknown scalar type
   │
   = note: Valid scalar types are f32, f64, i32, u32, bool
 
@@ -833,13 +833,13 @@ fn matrix_with_bad_type() {
     check(
         r#"
             fn main() {
-                let m: mat3x3<i32>;
+                var m: mat3x3<i32>;
             }
         "#,
         r#"error: matrix scalar type must be floating-point, but found `i32`
   ┌─ wgsl:3:31
   │
-3 │                 let m: mat3x3<i32>;
+3 │                 var m: mat3x3<i32>;
   │                               ^^^ must be floating-point (e.g. `f32`)
 
 "#,
@@ -2385,6 +2385,57 @@ fn only_one_swizzle_type() {
   │
 4 │         const err = vec2(0.0, 0.0).xg;
   │                                    ^^ invalid accessor
+
+"###,
+    );
+}
+
+#[test]
+fn const_assert_must_be_const() {
+    check(
+        "
+        fn foo() {
+            let a = 5;
+            const_assert a != 0;
+        }
+        ",
+        r###"error: this operation is not supported in a const context
+  ┌─ wgsl:4:26
+  │
+4 │             const_assert a != 0;
+  │                          ^ operation not supported here
+
+"###,
+    );
+}
+
+#[test]
+fn const_assert_must_be_bool() {
+    check(
+        "
+            const_assert(5); // 5 is not bool
+        ",
+        r###"error: must be a const-expression that resolves to a bool
+  ┌─ wgsl:2:26
+  │
+2 │             const_assert(5); // 5 is not bool
+  │                          ^ must resolve to bool
+
+"###,
+    );
+}
+
+#[test]
+fn const_assert_failed() {
+    check(
+        "
+            const_assert(false);
+        ",
+        r###"error: const_assert failure
+  ┌─ wgsl:2:26
+  │
+2 │             const_assert(false);
+  │                          ^^^^^ evaluates to false
 
 "###,
     );

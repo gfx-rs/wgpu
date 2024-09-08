@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use std::borrow::Cow;
-use std::mem;
+use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -31,7 +31,7 @@ impl crate::framework::Example for Example {
         _queue: &wgpu::Queue,
     ) -> Self {
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let outer_vertices = [vertex(-1.0, -1.0), vertex(1.0, -1.0), vertex(0.0, 1.0)];
         let mask_vertices = [vertex(-0.5, 0.0), vertex(0.0, -1.0), vertex(0.5, 0.0)];
 

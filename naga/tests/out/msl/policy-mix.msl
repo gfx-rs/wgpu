@@ -10,17 +10,17 @@ struct DefaultConstructible {
     }
 };
 
-struct type_1 {
+struct type_2 {
     metal::float4 inner[10];
 };
 struct InStorage {
-    type_1 a;
+    type_2 a;
 };
-struct type_2 {
+struct type_3 {
     metal::float4 inner[20];
 };
 struct InUniform {
-    type_2 a;
+    type_3 a;
 };
 struct type_5 {
     float inner[30];

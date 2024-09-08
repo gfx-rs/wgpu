@@ -795,14 +795,14 @@ impl Global {
                 Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
             };
 
-            fn map_entry<'a>(
+            fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
                 buffer_storage: &Storage<resource::Buffer>,
                 sampler_storage: &Storage<resource::Sampler>,
                 texture_view_storage: &Storage<resource::TextureView>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
-                let map_buffer = |bb: &BufferBinding| {
+                let resolve_buffer = |bb: &BufferBinding| {
                     buffer_storage
                         .get_owned(bb.buffer_id)
                         .map(|buffer| ResolvedBufferBinding {
@@ -814,42 +814,45 @@ impl Global {
                             binding_model::CreateBindGroupError::InvalidBufferId(bb.buffer_id)
                         })
                 };
-                let map_sampler = |id: &id::SamplerId| {
+                let resolve_sampler = |id: &id::SamplerId| {
                     sampler_storage
                         .get_owned(*id)
                         .map_err(|_| binding_model::CreateBindGroupError::InvalidSamplerId(*id))
                 };
-                let map_view = |id: &id::TextureViewId| {
+                let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
                         .get_owned(*id)
                         .map_err(|_| binding_model::CreateBindGroupError::InvalidTextureViewId(*id))
                 };
                 let resource = match e.resource {
                     BindingResource::Buffer(ref buffer) => {
-                        ResolvedBindingResource::Buffer(map_buffer(buffer)?)
+                        ResolvedBindingResource::Buffer(resolve_buffer(buffer)?)
                     }
                     BindingResource::BufferArray(ref buffers) => {
                         let buffers = buffers
                             .iter()
-                            .map(map_buffer)
+                            .map(resolve_buffer)
                             .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
                     }
                     BindingResource::Sampler(ref sampler) => {
-                        ResolvedBindingResource::Sampler(map_sampler(sampler)?)
+                        ResolvedBindingResource::Sampler(resolve_sampler(sampler)?)
                     }
                     BindingResource::SamplerArray(ref samplers) => {
                         let samplers = samplers
                             .iter()
-                            .map(map_sampler)
+                            .map(resolve_sampler)
                             .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
                     }
                     BindingResource::TextureView(ref view) => {
-                        ResolvedBindingResource::TextureView(map_view(view)?)
+                        ResolvedBindingResource::TextureView(resolve_view(view)?)
                     }
                     BindingResource::TextureViewArray(ref views) => {
-                        let views = views.iter().map(map_view).collect::<Result<Vec<_>, _>>()?;
+                        let views = views
+                            .iter()
+                            .map(resolve_view)
+                            .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
                 };
@@ -865,7 +868,7 @@ impl Global {
                 let sampler_guard = hub.samplers.read();
                 desc.entries
                     .iter()
-                    .map(|e| map_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard))
+                    .map(|e| resolve_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard))
                     .collect::<Result<Vec<_>, _>>()
             };
             let entries = match entries {

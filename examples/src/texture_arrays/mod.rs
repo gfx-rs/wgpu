@@ -1,5 +1,8 @@
 use bytemuck::{Pod, Zeroable};
-use std::num::{NonZeroU32, NonZeroU64};
+use std::{
+    mem::size_of,
+    num::{NonZeroU32, NonZeroU64},
+};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -124,7 +127,7 @@ impl crate::framework::Example for Example {
 
         println!("Using fragment entry point '{fragment_entry_point}'");
 
-        let vertex_size = std::mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let vertex_data = create_vertices();
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -388,12 +391,12 @@ impl crate::framework::Example for Example {
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..), self.index_format);
         if self.uniform_workaround {
-            rpass.set_bind_group(0, &self.bind_group, &[0]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[0]);
             rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_bind_group(0, &self.bind_group, &[256]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[256]);
             rpass.draw_indexed(6..12, 0, 0..1);
         } else {
-            rpass.set_bind_group(0, &self.bind_group, &[0]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[0]);
             rpass.draw_indexed(0..12, 0, 0..1);
         }
 

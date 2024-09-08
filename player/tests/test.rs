@@ -14,6 +14,7 @@ use player::GlobalPlay;
 use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
+    mem::size_of,
     path::{Path, PathBuf},
     slice,
 };
@@ -35,7 +36,7 @@ impl ExpectedData {
     fn len(&self) -> usize {
         match self {
             ExpectedData::Raw(vec) => vec.len(),
-            ExpectedData::U64(vec) => vec.len() * std::mem::size_of::<u64>(),
+            ExpectedData::U64(vec) => vec.len() * size_of::<u64>(),
             ExpectedData::File(_, size) => *size,
         }
     }

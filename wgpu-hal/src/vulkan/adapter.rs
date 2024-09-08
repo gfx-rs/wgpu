@@ -342,9 +342,6 @@ impl PhysicalDeviceFeatures {
                 None
             },
             robustness2: if enabled_extensions.contains(&ext::robustness2::NAME) {
-                // Note: enabling `robust_buffer_access2` isn't requires, strictly speaking
-                // since we can enable `robust_buffer_access` all the time. But it improves
-                // program portability, so we opt into it if they are supported.
                 Some(
                     vk::PhysicalDeviceRobustness2FeaturesEXT::default()
                         .robust_buffer_access2(private_caps.robust_buffer_access2)
@@ -842,6 +839,10 @@ pub struct PhysicalDeviceProperties {
     /// `VK_EXT_subgroup_size_control` extension, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlProperties<'static>>,
 
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_robustness2` extension.
+    robustness2: Option<vk::PhysicalDeviceRobustness2PropertiesEXT<'static>>,
+
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -1097,13 +1098,38 @@ impl PhysicalDeviceProperties {
         }
     }
 
-    fn to_hal_alignments(&self) -> crate::Alignments {
+    /// Return a `wgpu_hal::Alignments` structure describing this adapter.
+    ///
+    /// The `using_robustness2` argument says how this adapter will implement
+    /// `wgpu_hal`'s guarantee that shaders can only read the [accessible
+    /// region][ar] of bindgroup's buffer bindings:
+    ///
+    /// - If this adapter will depend on `VK_EXT_robustness2`'s
+    ///   `robustBufferAccess2` feature to apply bounds checks to shader buffer
+    ///   access, `using_robustness2` must be `true`.
+    ///
+    /// - Otherwise, this adapter must use Naga to inject bounds checks on
+    ///   buffer accesses, and `using_robustness2` must be `false`.
+    ///
+    /// [ar]: ../../struct.BufferBinding.html#accessible-region
+    fn to_hal_alignments(&self, using_robustness2: bool) -> crate::Alignments {
         let limits = &self.properties.limits;
         crate::Alignments {
             buffer_copy_offset: wgt::BufferSize::new(limits.optimal_buffer_copy_offset_alignment)
                 .unwrap(),
             buffer_copy_pitch: wgt::BufferSize::new(limits.optimal_buffer_copy_row_pitch_alignment)
                 .unwrap(),
+            uniform_bounds_check_alignment: {
+                let alignment = if using_robustness2 {
+                    self.robustness2
+                        .unwrap() // if we're using it, we should have its properties
+                        .robust_uniform_buffer_access_size_alignment
+                } else {
+                    // If the `robustness2` properties are unavailable, then `robustness2` is not available either Naga-injected bounds checks are precise.
+                    1
+                };
+                wgt::BufferSize::new(alignment).unwrap()
+            },
         }
     }
 }
@@ -1133,6 +1159,7 @@ impl super::InstanceShared {
                 let supports_subgroup_size_control = capabilities.device_api_version
                     >= vk::API_VERSION_1_3
                     || capabilities.supports_extension(ext::subgroup_size_control::NAME);
+                let supports_robustness2 = capabilities.supports_extension(ext::robustness2::NAME);
 
                 let supports_acceleration_structure =
                     capabilities.supports_extension(khr::acceleration_structure::NAME);
@@ -1180,6 +1207,13 @@ impl super::InstanceShared {
                     properties2 = properties2.push_next(next);
                 }
 
+                if supports_robustness2 {
+                    let next = capabilities
+                        .robustness2
+                        .insert(vk::PhysicalDeviceRobustness2PropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
                 unsafe {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                 };
@@ -1191,6 +1225,7 @@ impl super::InstanceShared {
                     capabilities
                         .supported_extensions
                         .retain(|&x| x.extension_name_as_c_str() != Ok(ext::robustness2::NAME));
+                    capabilities.robustness2 = None;
                 }
             };
             capabilities
@@ -1507,7 +1542,7 @@ impl super::Instance {
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
-            alignments: phd_capabilities.to_hal_alignments(),
+            alignments: phd_capabilities.to_hal_alignments(private_caps.robust_buffer_access2),
             downlevel: wgt::DownlevelCapabilities {
                 flags: downlevel_flags,
                 limits: wgt::DownlevelLimits {},
@@ -1779,7 +1814,7 @@ impl super::Adapter {
                 capabilities: Some(capabilities.iter().cloned().collect()),
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {
                     index: naga::proc::BoundsCheckPolicy::Restrict,
-                    buffer: if self.private_caps.robust_buffer_access {
+                    buffer: if self.private_caps.robust_buffer_access2 {
                         naga::proc::BoundsCheckPolicy::Unchecked
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
@@ -2010,7 +2045,7 @@ impl crate::Adapter for super::Adapter {
                 vk::Result::ERROR_TOO_MANY_OBJECTS => crate::DeviceError::OutOfMemory,
                 vk::Result::ERROR_INITIALIZATION_FAILED => crate::DeviceError::Lost,
                 vk::Result::ERROR_EXTENSION_NOT_PRESENT | vk::Result::ERROR_FEATURE_NOT_PRESENT => {
-                    super::hal_usage_error(err)
+                    crate::hal_usage_error(err)
                 }
                 other => super::map_host_device_oom_and_lost_err(other),
             }

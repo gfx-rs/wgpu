@@ -349,7 +349,7 @@ async fn shader_input_output_test(
             timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bg, &[]);
+        cpass.set_bind_group(0, Some(&bg), &[]);
 
         if let InputStorageType::PushConstant = storage_type {
             cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values))

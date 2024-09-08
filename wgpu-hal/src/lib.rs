@@ -51,8 +51,8 @@
 //!   must use [`CommandEncoder::transition_buffers`] between those two
 //!   operations.
 //!
-//! - Pipeline layouts are *explicitly specified* when setting bind
-//!   group. Incompatible layouts disturb groups bound at higher indices.
+//! - Pipeline layouts are *explicitly specified* when setting bind groups.
+//!   Incompatible layouts disturb groups bound at higher indices.
 //!
 //! - The API *accepts collections as iterators*, to avoid forcing the user to
 //!   store data in particular containers. The implementation doesn't guarantee
@@ -327,7 +327,7 @@ impl Drop for DropGuard {
 }
 
 #[cfg(any(gles, vulkan))]
-impl std::fmt::Debug for DropGuard {
+impl fmt::Debug for DropGuard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DropGuard").finish()
     }
@@ -343,6 +343,18 @@ pub enum DeviceError {
     ResourceCreationFailed,
     #[error("Unexpected error variant (driver implementation is at fault)")]
     Unexpected,
+}
+
+#[allow(dead_code)] // may be unused on some platforms
+#[cold]
+fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
+    panic!("wgpu-hal invariant was violated (usage error): {txt}")
+}
+
+#[allow(dead_code)] // may be unused on some platforms
+#[cold]
+fn hal_internal_error<T: fmt::Display>(txt: T) -> ! {
+    panic!("wgpu-hal ran into a preventable internal error: {txt}")
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
@@ -711,6 +723,9 @@ pub trait Device: WasmNotSendSync {
     /// - The given `buffer` must not currently be mapped.
     unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer);
 
+    /// A hook for when a wgpu-core buffer is created from a raw wgpu-hal buffer.
+    unsafe fn add_raw_buffer(&self, buffer: &<Self::A as Api>::Buffer);
+
     /// Return a pointer to CPU memory mapping the contents of `buffer`.
     ///
     /// Buffer mappings are persistent: the buffer may remain mapped on the CPU
@@ -802,6 +817,10 @@ pub trait Device: WasmNotSendSync {
         desc: &TextureDescriptor,
     ) -> Result<<Self::A as Api>::Texture, DeviceError>;
     unsafe fn destroy_texture(&self, texture: <Self::A as Api>::Texture);
+
+    /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
+    unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
+
     unsafe fn create_texture_view(
         &self,
         texture: &<Self::A as Api>::Texture,
@@ -1230,8 +1249,40 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     // pass common
 
-    /// Sets the bind group at `index` to `group`, assuming the layout
-    /// of all the preceding groups to be taken from `layout`.
+    /// Sets the bind group at `index` to `group`.
+    ///
+    /// If this is not the first call to `set_bind_group` within the current
+    /// render or compute pass:
+    ///
+    /// - If `layout` contains `n` bind group layouts, then any previously set
+    ///   bind groups at indices `n` or higher are cleared.
+    ///
+    /// - If the first `m` bind group layouts of `layout` are equal to those of
+    ///   the previously passed layout, but no more, then any previously set
+    ///   bind groups at indices `m` or higher are cleared.
+    ///
+    /// It follows from the above that passing the same layout as before doesn't
+    /// clear any bind groups.
+    ///
+    /// # Safety
+    ///
+    /// - This [`CommandEncoder`] must be within a render or compute pass.
+    ///
+    /// - `index` must be the valid index of some bind group layout in `layout`.
+    ///   Call this the "relevant bind group layout".
+    ///
+    /// - The layout of `group` must be equal to the relevant bind group layout.
+    ///
+    /// - The length of `dynamic_offsets` must match the number of buffer
+    ///   bindings [with dynamic offsets][hdo] in the relevant bind group
+    ///   layout.
+    ///
+    /// - If those buffer bindings are ordered by increasing [`binding` number]
+    ///   and paired with elements from `dynamic_offsets`, then each offset must
+    ///   be a valid offset for the binding's corresponding buffer in `group`.
+    ///
+    /// [hdo]: wgt::BindingType::Buffer::has_dynamic_offset
+    /// [`binding` number]: wgt::BindGroupLayoutEntry::binding
     unsafe fn set_bind_group(
         &mut self,
         layout: &<Self::A as Api>::PipelineLayout,
@@ -1283,11 +1334,43 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     // render passes
 
-    // Begins a render pass, clears all active bindings.
+    /// Begin a new render pass, clearing all active bindings.
+    ///
+    /// This clears any bindings established by the following calls:
+    ///
+    /// - [`set_bind_group`](CommandEncoder::set_bind_group)
+    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`begin_query`](CommandEncoder::begin_query)
+    /// - [`set_render_pipeline`](CommandEncoder::set_render_pipeline)
+    /// - [`set_index_buffer`](CommandEncoder::set_index_buffer)
+    /// - [`set_vertex_buffer`](CommandEncoder::set_vertex_buffer)
+    ///
+    /// # Safety
+    ///
+    /// - All prior calls to [`begin_render_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_render_pass`].
+    ///
+    /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_compute_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
     );
+
+    /// End the current render pass.
+    ///
+    /// # Safety
+    ///
+    /// - There must have been a prior call to [`begin_render_pass`] on this [`CommandEncoder`]
+    ///   that has not been followed by a call to [`end_render_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
     unsafe fn end_render_pass(&mut self);
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &<Self::A as Api>::RenderPipeline);
@@ -1353,11 +1436,41 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
 
     // compute passes
 
-    // Begins a compute pass, clears all active bindings.
+    /// Begin a new compute pass, clearing all active bindings.
+    ///
+    /// This clears any bindings established by the following calls:
+    ///
+    /// - [`set_bind_group`](CommandEncoder::set_bind_group)
+    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`begin_query`](CommandEncoder::begin_query)
+    /// - [`set_compute_pipeline`](CommandEncoder::set_compute_pipeline)
+    ///
+    /// # Safety
+    ///
+    /// - All prior calls to [`begin_render_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_render_pass`].
+    ///
+    /// - All prior calls to [`begin_compute_pass`] on this [`CommandEncoder`] must have been followed
+    ///   by a call to [`end_compute_pass`].
+    ///
+    /// [`begin_render_pass`]: CommandEncoder::begin_render_pass
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`end_render_pass`]: CommandEncoder::end_render_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
     unsafe fn begin_compute_pass(
         &mut self,
         desc: &ComputePassDescriptor<<Self::A as Api>::QuerySet>,
     );
+
+    /// End the current compute pass.
+    ///
+    /// # Safety
+    ///
+    /// - There must have been a prior call to [`begin_compute_pass`] on this [`CommandEncoder`]
+    ///   that has not been followed by a call to [`end_compute_pass`].
+    ///
+    /// [`begin_compute_pass`]: CommandEncoder::begin_compute_pass
+    /// [`end_compute_pass`]: CommandEncoder::end_compute_pass
     unsafe fn end_compute_pass(&mut self);
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &<Self::A as Api>::ComputePipeline);
@@ -1635,9 +1748,27 @@ pub struct InstanceDescriptor<'a> {
 pub struct Alignments {
     /// The alignment of the start of the buffer used as a GPU copy source.
     pub buffer_copy_offset: wgt::BufferSize,
+
     /// The alignment of the row pitch of the texture data stored in a buffer that is
     /// used in a GPU copy operation.
     pub buffer_copy_pitch: wgt::BufferSize,
+
+    /// The finest alignment of bound range checking for uniform buffers.
+    ///
+    /// When `wgpu_hal` restricts shader references to the [accessible
+    /// region][ar] of a [`Uniform`] buffer, the size of the accessible region
+    /// is the bind group binding's stated [size], rounded up to the next
+    /// multiple of this value.
+    ///
+    /// We don't need an analogous field for storage buffer bindings, because
+    /// all our backends promise to enforce the size at least to a four-byte
+    /// alignment, and `wgpu_hal` requires bound range lengths to be a multiple
+    /// of four anyway.
+    ///
+    /// [ar]: struct.BufferBinding.html#accessible-region
+    /// [`Uniform`]: wgt::BufferBindingType::Uniform
+    /// [size]: BufferBinding::size
+    pub uniform_bounds_check_alignment: wgt::BufferSize,
 }
 
 #[derive(Clone, Debug)]
@@ -1807,6 +1938,40 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub push_constant_ranges: &'a [wgt::PushConstantRange],
 }
 
+/// A region of a buffer made visible to shaders via a [`BindGroup`].
+///
+/// [`BindGroup`]: Api::BindGroup
+///
+/// ## Accessible region
+///
+/// `wgpu_hal` guarantees that shaders compiled with
+/// [`ShaderModuleDescriptor::runtime_checks`] set to `true` cannot read or
+/// write data via this binding outside the *accessible region* of [`buffer`]:
+///
+/// - The accessible region starts at [`offset`].
+///
+/// - For [`Storage`] bindings, the size of the accessible region is [`size`],
+///   which must be a multiple of 4.
+///
+/// - For [`Uniform`] bindings, the size of the accessible region is [`size`]
+///   rounded up to the next multiple of
+///   [`Alignments::uniform_bounds_check_alignment`].
+///
+/// Note that this guarantee is stricter than WGSL's requirements for
+/// [out-of-bounds accesses][woob], as WGSL allows them to return values from
+/// elsewhere in the buffer. But this guarantee is necessary anyway, to permit
+/// `wgpu-core` to avoid clearing uninitialized regions of buffers that will
+/// never be read by the application before they are overwritten. This
+/// optimization consults bind group buffer binding regions to determine which
+/// parts of which buffers shaders might observe. This optimization is only
+/// sound if shader access is bounds-checked.
+///
+/// [`buffer`]: BufferBinding::buffer
+/// [`offset`]: BufferBinding::offset
+/// [`size`]: BufferBinding::size
+/// [`Storage`]: wgt::BufferBindingType::Storage
+/// [`Uniform`]: wgt::BufferBindingType::Uniform
+/// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
 pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     /// The buffer being bound.
@@ -1925,6 +2090,26 @@ pub enum ShaderInput<'a> {
 
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
+
+    /// Enforce bounds checks in shaders, even if the underlying driver doesn't
+    /// support doing so natively.
+    ///
+    /// When this is `true`, `wgpu_hal` promises that shaders can only read or
+    /// write the [accessible region][ar] of a bindgroup's buffer bindings. If
+    /// the underlying graphics platform cannot implement these bounds checks
+    /// itself, `wgpu_hal` will inject bounds checks before presenting the
+    /// shader to the platform.
+    ///
+    /// When this is `false`, `wgpu_hal` only enforces such bounds checks if the
+    /// underlying platform provides a way to do so itself. `wgpu_hal` does not
+    /// itself add any bounds checks to generated shader code.
+    ///
+    /// Note that `wgpu_hal` users may try to initialize only those portions of
+    /// buffers that they anticipate might be read from. Passing `false` here
+    /// may allow shaders to see wider regions of the buffers than expected,
+    /// making such deferred initialization visible to the application.
+    ///
+    /// [ar]: struct.BufferBinding.html#accessible-region
     pub runtime_checks: bool,
 }
 

@@ -649,10 +649,8 @@ fn set_bind_group(
     dynamic_offsets: &[DynamicOffset],
     index: u32,
     num_dynamic_offsets: usize,
-    bind_group: Arc<BindGroup>,
+    bind_group: Option<Arc<BindGroup>>,
 ) -> Result<(), ComputePassErrorInner> {
-    bind_group.same_device_as(cmd_buf)?;
-
     let max_bind_groups = state.device.limits.max_bind_groups;
     if index >= max_bind_groups {
         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
@@ -668,7 +666,16 @@ fn set_bind_group(
     );
     state.dynamic_offset_count += num_dynamic_offsets;
 
+    if bind_group.is_none() {
+        // TODO: Handle bind_group None.
+        return Ok(());
+    }
+
+    let bind_group = bind_group.unwrap();
     let bind_group = state.tracker.bind_groups.insert_single(bind_group);
+
+    bind_group.same_device_as(cmd_buf)?;
+
     bind_group.validate_dynamic_bindings(index, &state.temp_offsets)?;
 
     state
@@ -700,7 +707,7 @@ fn set_bind_group(
                     state.raw_encoder.set_bind_group(
                         pipeline_layout,
                         index + i as u32,
-                        raw_bg,
+                        Some(raw_bg),
                         &e.dynamic_offsets,
                     );
                 }
@@ -745,7 +752,7 @@ fn set_pipeline(
                         state.raw_encoder.set_bind_group(
                             pipeline.layout.raw(),
                             start_index as u32 + i as u32,
-                            raw_bg,
+                            Some(raw_bg),
                             &e.dynamic_offsets,
                         );
                     }
@@ -952,7 +959,7 @@ impl Global {
         &self,
         pass: &mut ComputePass,
         index: u32,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
         offsets: &[DynamicOffset],
     ) -> Result<(), ComputePassError> {
         let scope = PassErrorScope::SetBindGroup;
@@ -973,12 +980,18 @@ impl Global {
             return Ok(());
         }
 
-        let hub = &self.hub;
-        let bind_group = hub
-            .bind_groups
-            .get(bind_group_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBindGroupId(bind_group_id))
-            .map_pass_err(scope)?;
+        let mut bind_group = None;
+        if bind_group_id.is_some() {
+            let bind_group_id = bind_group_id.unwrap();
+
+            let hub = &self.hub;
+            let bg = hub
+                .bind_groups
+                .get(bind_group_id)
+                .map_err(|_| ComputePassErrorInner::InvalidBindGroupId(bind_group_id))
+                .map_pass_err(scope)?;
+            bind_group = Some(bg);
+        }
 
         base.commands.push(ArcComputeCommand::SetBindGroup {
             index,

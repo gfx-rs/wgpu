@@ -85,6 +85,7 @@ pub enum GlobalDeclKind<'a> {
     Override(Override<'a>),
     Struct(Struct<'a>),
     Type(TypeAlias<'a>),
+    ConstAssert(Handle<Expression<'a>>),
 }
 
 #[derive(Debug)]
@@ -142,7 +143,7 @@ pub struct GlobalVariable<'a> {
     pub name: Ident<'a>,
     pub space: crate::AddressSpace,
     pub binding: Option<ResourceBinding<'a>>,
-    pub ty: Handle<Type<'a>>,
+    pub ty: Option<Handle<Type<'a>>>,
     pub init: Option<Handle<Expression<'a>>>,
 }
 
@@ -198,12 +199,14 @@ pub enum Type<'a> {
     Scalar(Scalar),
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Atomic(Scalar),
     Pointer {
@@ -282,6 +285,7 @@ pub enum StatementKind<'a> {
     Increment(Handle<Expression<'a>>),
     Decrement(Handle<Expression<'a>>),
     Ignore(Handle<Expression<'a>>),
+    ConstAssert(Handle<Expression<'a>>),
 }
 
 #[derive(Debug)]
@@ -330,7 +334,8 @@ pub enum ConstructorType<'a> {
     /// `vec3<f32>(1.0)`.
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// A matrix construction whose component type is inferred from the
@@ -345,7 +350,8 @@ pub enum ConstructorType<'a> {
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// An array whose component type and size are inferred from the arguments:
@@ -478,5 +484,5 @@ pub enum LocalDecl<'a> {
 #[derive(Debug)]
 /// A placeholder for a local variable declaration.
 ///
-/// See [`Function::locals`] for more information.
+/// See [`super::ExpressionContext::locals`] for more information.
 pub struct Local;
