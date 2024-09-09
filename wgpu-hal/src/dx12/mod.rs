@@ -108,7 +108,7 @@ impl D3D12Lib {
         &self,
         adapter: &DxgiAdapter,
         feature_level: Direct3D::D3D_FEATURE_LEVEL,
-    ) -> Result<Direct3D12::ID3D12Device, crate::DeviceError> {
+    ) -> Result<Option<Direct3D12::ID3D12Device>, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll
         type Fun = extern "system" fn(
             padapter: *mut core::ffi::c_void,
@@ -118,19 +118,28 @@ impl D3D12Lib {
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12CreateDevice\0") }?;
 
-        let mut result__ = None;
+        let mut result__: Option<Direct3D12::ID3D12Device> = None;
 
-        (func)(
+        let res = (func)(
             adapter.as_raw(),
             feature_level,
             // TODO: Generic?
             &Direct3D12::ID3D12Device::IID,
             <*mut _>::cast(&mut result__),
         )
-        .ok()
-        .into_device_result("Device creation")?;
+        .ok();
 
-        result__.ok_or(crate::DeviceError::Unexpected)
+        if let Err(ref err) = res {
+            match err.code() {
+                Dxgi::DXGI_ERROR_UNSUPPORTED => return Ok(None),
+                Dxgi::DXGI_ERROR_DRIVER_INTERNAL_ERROR => return Err(crate::DeviceError::Lost),
+                _ => {}
+            }
+        }
+
+        res.into_device_result("Device creation")?;
+
+        result__.ok_or(crate::DeviceError::Unexpected).map(Some)
     }
 
     fn serialize_root_signature(
