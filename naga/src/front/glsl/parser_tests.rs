@@ -128,7 +128,7 @@ fn control_flow() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             if (true) {
@@ -137,28 +137,28 @@ fn control_flow() {
                 return 2;
             }
         }
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             if (true) {
                 return 1;
             }
         }
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             int x;
@@ -174,14 +174,14 @@ fn control_flow() {
                     x = 0;
             }
         }
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             int x = 0;
@@ -192,14 +192,14 @@ fn control_flow() {
                 x = x - 1;
             } while(x >= 4)
         }
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             int x = 0;
@@ -209,7 +209,7 @@ fn control_flow() {
             for(;;);
             return x;
         }
-        "#,
+        ",
         )
         .unwrap();
 }
@@ -221,7 +221,7 @@ fn declarations() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         layout(location = 0) in vec2 v_uv;
         layout(location = 0) out vec4 o_color;
@@ -231,14 +231,14 @@ fn declarations() {
         layout(early_fragment_tests) in;
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         layout(std140, set = 2, binding = 0)
         uniform u_locals {
@@ -248,14 +248,14 @@ fn declarations() {
         };
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         layout(push_constant)
         uniform u_locals {
@@ -265,14 +265,14 @@ fn declarations() {
         };
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         layout(std430, set = 2, binding = 0)
         uniform u_locals {
@@ -282,14 +282,14 @@ fn declarations() {
         };
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         layout(std140, set = 2, binding = 0)
         uniform u_locals {
@@ -301,31 +301,31 @@ fn declarations() {
             load_time * model_offs;
             block_var.load_time * block_var.model_offs;
         }
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         float vector = vec4(1.0 / 17.0,  9.0 / 17.0,  3.0 / 17.0, 11.0 / 17.0);
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         precision highp float;
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 }
@@ -337,7 +337,7 @@ fn textures() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #version 450
         layout(location = 0) in vec2 v_uv;
         layout(location = 0) out vec4 o_color;
@@ -347,7 +347,7 @@ fn textures() {
             o_color = texture(sampler2D(tex, tex_sampler), v_uv);
             o_color.a = texture(sampler2D(tex, tex_sampler), v_uv, 2.0).a;
         }
-        "#,
+        ",
         )
         .unwrap();
 }
@@ -359,53 +359,53 @@ fn functions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void test1(float);
         void test1(float) {}
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void test2(float a) {}
         void test3(float a, float b) {}
         void test4(float, float) {}
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         float test(float a) { return a; }
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         float test(vec4 p) {
             return p.x;
         }
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
@@ -413,7 +413,7 @@ fn functions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         float test(vec2 p);
         float test(vec3 p);
@@ -432,7 +432,7 @@ fn functions() {
         }
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
@@ -440,7 +440,7 @@ fn functions() {
         frontend
             .parse(
                 &Options::from(ShaderStage::Vertex),
-                r#"
+                r"
                 #  version 450
                 int test(vec4 p) {
                     return p.x;
@@ -451,7 +451,7 @@ fn functions() {
                 }
 
                 void main() {}
-                "#,
+                ",
             )
             .err()
             .unwrap(),
@@ -468,7 +468,7 @@ fn functions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         float callee(uint q) {
             return float(q);
@@ -479,7 +479,7 @@ fn functions() {
         }
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
@@ -487,7 +487,7 @@ fn functions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
             #  version 450
             layout(set = 0, binding = 1) uniform texture2D t_noise;
             layout(set = 0, binding = 2) uniform sampler s_noise;
@@ -495,14 +495,14 @@ fn functions() {
             void main() {
                 textureLod(sampler2D(t_noise, s_noise), vec2(1.0), 0);
             }
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void fun(vec2 in_parameter, out float out_parameter) {
             ivec2 _ = ivec2(in_parameter);
@@ -512,7 +512,7 @@ fn functions() {
             float a;
             fun(vec2(1.0), a);
         }
-        "#,
+        ",
         )
         .unwrap();
 }
@@ -526,14 +526,14 @@ fn constants() {
     let module = frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         const float a = 1.0;
         float global = a;
         const float b = a;
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
@@ -581,7 +581,7 @@ fn function_overloading() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
 
         float saturate(float v) { return clamp(v, 0.0, 1.0); }
@@ -595,7 +595,7 @@ fn function_overloading() {
             vec3 v3 = saturate(vec3(0.5, 1.5, 2.5));
             vec3 v4 = saturate(vec4(0.5, 1.5, 2.5, 3.5));
         }
-        "#,
+        ",
         )
         .unwrap();
 }
@@ -607,14 +607,14 @@ fn implicit_conversions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             mat4 a = mat4(1);
             float b = 1u;
             float c = 1 + 2.0;
         }
-        "#,
+        ",
         )
         .unwrap();
 
@@ -622,7 +622,7 @@ fn implicit_conversions() {
         frontend
             .parse(
                 &Options::from(ShaderStage::Vertex),
-                r#"
+                r"
                 #  version 450
                 void test(int a) {}
                 void test(uint a) {}
@@ -630,7 +630,7 @@ fn implicit_conversions() {
                 void main() {
                     test(1.0);
                 }
-                "#,
+                ",
             )
             .err()
             .unwrap(),
@@ -646,7 +646,7 @@ fn implicit_conversions() {
         frontend
             .parse(
                 &Options::from(ShaderStage::Vertex),
-                r#"
+                r"
                 #  version 450
                 void test(float a) {}
                 void test(uint a) {}
@@ -654,7 +654,7 @@ fn implicit_conversions() {
                 void main() {
                     test(1);
                 }
-                "#,
+                ",
             )
             .err()
             .unwrap(),
@@ -674,35 +674,35 @@ fn structs() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         Test {
             vec4 pos;
           } xx;
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap_err();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         struct Test {
             vec4 pos;
         };
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         const int NUM_VECS = 42;
         struct Test {
@@ -710,14 +710,14 @@ fn structs() {
         };
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         struct Hello {
             vec4 test;
@@ -726,33 +726,33 @@ fn structs() {
         }
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         struct Test {};
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap_err();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         inout struct Test {
             vec4 x;
         };
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap_err();
 }
@@ -764,7 +764,7 @@ fn swizzles() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             vec4 v = vec4(1);
@@ -772,33 +772,33 @@ fn swizzles() {
             v.x = 5.0;
             v.xyz.zxy.yx.xy = vec2(5.0, 1.0);
         }
-        "#,
+        ",
         )
         .unwrap();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             vec4 v = vec4(1);
             v.xx = vec2(5.0);
         }
-        "#,
+        ",
         )
         .unwrap_err();
 
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             vec3 v = vec3(1);
             v.w = 2.0;
         }
-        "#,
+        ",
         )
         .unwrap_err();
 }
@@ -811,7 +811,7 @@ fn expressions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         float test(int index) {
             vec4 v = vec4(1.0, 2.0, 3.0, 4.0);
@@ -819,7 +819,7 @@ fn expressions() {
         }
 
         void main() {}
-        "#,
+        ",
         )
         .unwrap();
 
@@ -827,7 +827,7 @@ fn expressions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             uint index = 0;
@@ -835,7 +835,7 @@ fn expressions() {
             --index;
             ++index;
         }
-        "#,
+        ",
         )
         .unwrap();
 
@@ -843,14 +843,14 @@ fn expressions() {
     frontend
         .parse(
             &Options::from(ShaderStage::Vertex),
-            r#"
+            r"
         #  version 450
         void main() {
             const vec4 positions[1] = { vec4(0) };
 
             gl_Position = positions[gl_VertexIndex];
         }
-        "#,
+        ",
         )
         .unwrap();
 }

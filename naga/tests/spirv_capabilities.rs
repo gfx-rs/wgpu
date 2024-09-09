@@ -59,10 +59,10 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
 fn sampler1d() {
     require(
         &[Ca::Sampled1D],
-        r#"
+        r"
         @group(0) @binding(0)
         var image_1d: texture_1d<f32>;
-    "#,
+    ",
     );
 }
 
@@ -70,10 +70,10 @@ fn sampler1d() {
 fn storage1d() {
     require(
         &[Ca::Image1D],
-        r#"
+        r"
         @group(0) @binding(0)
         var image_1d: texture_storage_1d<rgba8unorm,write>;
-    "#,
+    ",
     );
 }
 
@@ -84,10 +84,10 @@ fn cube_array() {
     require_and_forbid(
         &[Ca::SampledCubeArray],
         &[Ca::ImageCubeArray],
-        r#"
+        r"
         @group(0) @binding(0)
         var image_cube: texture_cube_array<f32>;
-    "#,
+    ",
     );
 }
 
@@ -95,35 +95,35 @@ fn cube_array() {
 fn image_queries() {
     require(
         &[Ca::ImageQuery],
-        r#"
+        r"
         fn f(i: texture_2d<f32>) -> vec2<u32> {
             return textureDimensions(i);
         }
-    "#,
+    ",
     );
     require(
         &[Ca::ImageQuery],
-        r#"
+        r"
         fn f(i: texture_2d_array<f32>) -> u32 {
             return textureNumLayers(i);
         }
-    "#,
+    ",
     );
     require(
         &[Ca::ImageQuery],
-        r#"
+        r"
         fn f(i: texture_2d<f32>) -> u32 {
             return textureNumLevels(i);
         }
-    "#,
+    ",
     );
     require(
         &[Ca::ImageQuery],
-        r#"
+        r"
         fn f(i: texture_multisampled_2d<f32>) -> u32 {
             return textureNumSamples(i);
         }
-    "#,
+    ",
     );
 }
 
@@ -131,18 +131,18 @@ fn image_queries() {
 fn sample_rate_shading() {
     require(
         &[Ca::SampleRateShading],
-        r#"
+        r"
         @fragment
         fn f(@location(0) @interpolate(perspective, sample) x: f32) { }
-    "#,
+    ",
     );
 
     require(
         &[Ca::SampleRateShading],
-        r#"
+        r"
         @fragment
         fn f(@builtin(sample_index) x: u32) { }
-    "#,
+    ",
     );
 }
 
@@ -150,10 +150,10 @@ fn sample_rate_shading() {
 fn geometry() {
     require(
         &[Ca::Geometry],
-        r#"
+        r"
         @fragment
         fn f(@builtin(primitive_index) x: u32) { }
-    "#,
+    ",
     );
 }
 
@@ -162,18 +162,18 @@ fn storage_image_formats() {
     require_and_forbid(
         &[Ca::Shader],
         &[Ca::StorageImageExtendedFormats],
-        r#"
+        r"
             @group(0) @binding(0)
             var image_rg32f: texture_storage_2d<rgba16uint, read>;
-        "#,
+        ",
     );
 
     require(
         &[Ca::StorageImageExtendedFormats],
-        r#"
+        r"
             @group(0) @binding(0)
             var image_rg32f: texture_storage_2d<rg32float, read>;
-        "#,
+        ",
     );
 }
 
@@ -181,11 +181,11 @@ fn storage_image_formats() {
 fn float64() {
     require(
         &[Ca::Float64],
-        r#"
+        r"
             fn f(x: f64) -> f64 {
                 return x;
             }
-        "#,
+        ",
     );
 }
 
@@ -193,18 +193,18 @@ fn float64() {
 fn int64() {
     require(
         &[Ca::Int64],
-        r#"
+        r"
             fn f(x: i64) -> i64 {
                 return x;
             }
-        "#,
+        ",
     );
     require(
         &[Ca::Int64],
-        r#"
+        r"
             fn f(x: u64) -> u64 {
                 return x;
             }
-        "#,
+        ",
     );
 }

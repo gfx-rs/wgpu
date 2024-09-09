@@ -24,13 +24,13 @@ fn very_negative_integers() {
     // wgpu#4492
     check(
         "const i32min = -0x80000000i;",
-        r###"error: numeric literal not representable by target type: `0x80000000i`
+        r"error: numeric literal not representable by target type: `0x80000000i`
   ┌─ wgsl:1:17
   │
 1 │ const i32min = -0x80000000i;
   │                 ^^^^^^^^^^^ numeric literal not representable by target type
 
-"###,
+",
     );
 }
 
@@ -38,13 +38,13 @@ fn very_negative_integers() {
 fn reserved_identifier_prefix() {
     check(
         "var __bad;",
-        r###"error: Identifier starts with a reserved prefix: '__bad'
+        r"error: Identifier starts with a reserved prefix: '__bad'
   ┌─ wgsl:1:5
   │
 1 │ var __bad;
   │     ^^^^^ invalid identifier
 
-"###,
+",
     );
 }
 
@@ -52,13 +52,13 @@ fn reserved_identifier_prefix() {
 fn function_without_identifier() {
     check(
         "fn () {}",
-        r###"error: expected identifier, found '('
+        r"error: expected identifier, found '('
   ┌─ wgsl:1:4
   │
 1 │ fn () {}
   │    ^ expected identifier
 
-"###,
+",
     );
 }
 
@@ -66,13 +66,13 @@ fn function_without_identifier() {
 fn invalid_integer() {
     check(
         "fn foo([location(1.)] x: i32) {}",
-        r###"error: expected identifier, found '['
+        r"error: expected identifier, found '['
   ┌─ wgsl:1:8
   │
 1 │ fn foo([location(1.)] x: i32) {}
   │        ^ expected identifier
 
-"###,
+",
     );
 }
 
@@ -80,13 +80,13 @@ fn invalid_integer() {
 fn invalid_float() {
     check(
         "const scale: f32 = 1.1.;",
-        r###"error: expected identifier, found ';'
+        r"error: expected identifier, found ';'
   ┌─ wgsl:1:24
   │
 1 │ const scale: f32 = 1.1.;
   │                        ^ expected identifier
 
-"###,
+",
     );
 }
 
@@ -94,38 +94,38 @@ fn invalid_float() {
 fn invalid_texture_sample_type() {
     check(
         "const x: texture_2d<bool>;",
-        r###"error: texture sample type must be one of f32, i32 or u32, but found bool
+        r"error: texture sample type must be one of f32, i32 or u32, but found bool
   ┌─ wgsl:1:21
   │
 1 │ const x: texture_2d<bool>;
   │                     ^^^^ must be one of f32, i32 or u32
 
-"###,
+",
     );
 }
 
 #[test]
 fn unknown_identifier() {
     check(
-        r###"
+        r"
               fn f(x: f32) -> f32 {
                   return x * schmoo;
               }
-          "###,
-        r###"error: no definition in scope for identifier: 'schmoo'
+          ",
+        r"error: no definition in scope for identifier: 'schmoo'
   ┌─ wgsl:3:30
   │
 3 │                   return x * schmoo;
   │                              ^^^^^^ unknown identifier
 
-"###,
+",
     );
 }
 
 #[test]
 fn bad_texture() {
     check(
-        r#"
+        r"
             @group(0) @binding(0) var sampler1 : sampler;
 
             @fragment
@@ -133,98 +133,98 @@ fn bad_texture() {
                 let a = 3;
                 return textureSample(a, sampler1, vec2<f32>(0.0));
             }
-        "#,
-        r#"error: expected an image, but found 'a' which is not an image
+        ",
+        r"error: expected an image, but found 'a' which is not an image
   ┌─ wgsl:7:38
   │
 7 │                 return textureSample(a, sampler1, vec2<f32>(0.0));
   │                                      ^ not an image
 
-"#,
+",
     );
 }
 
 #[test]
 fn bad_type_cast() {
     check(
-        r#"
+        r"
             fn x() -> i32 {
                 return i32(vec2<f32>(0.0));
             }
-        "#,
-        r#"error: cannot cast a vec2<f32> to a i32
+        ",
+        r"error: cannot cast a vec2<f32> to a i32
   ┌─ wgsl:3:28
   │
 3 │                 return i32(vec2<f32>(0.0));
   │                            ^^^^^^^^^^^^^^ cannot cast a vec2<f32> to a i32
 
-"#,
+",
     );
 }
 
 #[test]
 fn type_not_constructible() {
     check(
-        r#"
+        r"
             fn x() {
                 _ = atomic<i32>(0);
             }
-        "#,
-        r#"error: type `atomic` is not constructible
+        ",
+        r"error: type `atomic` is not constructible
   ┌─ wgsl:3:21
   │
 3 │                 _ = atomic<i32>(0);
   │                     ^^^^^^ type is not constructible
 
-"#,
+",
     );
 }
 
 #[test]
 fn type_not_inferable() {
     check(
-        r#"
+        r"
             fn x() {
                 _ = vec2();
             }
-        "#,
-        r#"error: type can't be inferred
+        ",
+        r"error: type can't be inferred
   ┌─ wgsl:3:21
   │
 3 │                 _ = vec2();
   │                     ^^^^ type can't be inferred
 
-"#,
+",
     );
 }
 
 #[test]
 fn unexpected_constructor_parameters() {
     check(
-        r#"
+        r"
             fn x() {
                 _ = i32(0, 1);
             }
-        "#,
-        r#"error: unexpected components
+        ",
+        r"error: unexpected components
   ┌─ wgsl:3:28
   │
 3 │                 _ = i32(0, 1);
   │                            ^ unexpected components
 
-"#,
+",
     );
 }
 
 #[test]
 fn constructor_parameter_type_mismatch() {
     check(
-        r#"
+        r"
             fn x() {
                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
             }
-        "#,
-        r#"error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
+        ",
+        r"error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
   ┌─ wgsl:3:21
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
@@ -232,14 +232,14 @@ fn constructor_parameter_type_mismatch() {
   │                     │            
   │                     a value of type vec2<f32> is required here
 
-"#,
+",
     );
 }
 
 #[test]
 fn bad_texture_sample_type() {
     check(
-        r#"
+        r"
             @group(0) @binding(0) var sampler1 : sampler;
             @group(0) @binding(1) var texture : texture_2d<bool>;
 
@@ -247,125 +247,125 @@ fn bad_texture_sample_type() {
             fn main() -> @location(0) vec4<f32> {
                 return textureSample(texture, sampler1, vec2<f32>(0.0));
             }
-        "#,
-        r#"error: texture sample type must be one of f32, i32 or u32, but found bool
+        ",
+        r"error: texture sample type must be one of f32, i32 or u32, but found bool
   ┌─ wgsl:3:60
   │
 3 │             @group(0) @binding(1) var texture : texture_2d<bool>;
   │                                                            ^^^^ must be one of f32, i32 or u32
 
-"#,
+",
     );
 }
 
 #[test]
 fn bad_for_initializer() {
     check(
-        r#"
+        r"
             fn x() {
                 for ({};;) {}
             }
-        "#,
-        r#"error: for(;;) initializer is not an assignment or a function call: '{}'
+        ",
+        r"error: for(;;) initializer is not an assignment or a function call: '{}'
   ┌─ wgsl:3:22
   │
 3 │                 for ({};;) {}
   │                      ^^ not an assignment or function call
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_storage_class() {
     check(
-        r#"
+        r"
             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
-        "#,
-        r#"error: unknown address space: 'bad'
+        ",
+        r"error: unknown address space: 'bad'
   ┌─ wgsl:2:39
   │
 2 │             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
   │                                       ^^^ unknown address space
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_attribute() {
     check(
-        r#"
+        r"
             @a
             fn x() {}
-        "#,
-        r#"error: unknown attribute: 'a'
+        ",
+        r"error: unknown attribute: 'a'
   ┌─ wgsl:2:14
   │
 2 │             @a
   │              ^ unknown attribute
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_built_in() {
     check(
-        r#"
+        r"
             fn x(@builtin(unknown_built_in) y: u32) {}
-        "#,
-        r#"error: unknown builtin: 'unknown_built_in'
+        ",
+        r"error: unknown builtin: 'unknown_built_in'
   ┌─ wgsl:2:27
   │
 2 │             fn x(@builtin(unknown_built_in) y: u32) {}
   │                           ^^^^^^^^^^^^^^^^ unknown builtin
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_access() {
     check(
-        r#"
+        r"
             var<storage,unknown_access> x: array<u32>;
-        "#,
-        r#"error: unknown access: 'unknown_access'
+        ",
+        r"error: unknown access: 'unknown_access'
   ┌─ wgsl:2:25
   │
 2 │             var<storage,unknown_access> x: array<u32>;
   │                         ^^^^^^^^^^^^^^ unknown access
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_ident() {
     check(
-        r#"
+        r"
             fn main() {
                 let a = b;
             }
-        "#,
-        r#"error: no definition in scope for identifier: 'b'
+        ",
+        r"error: no definition in scope for identifier: 'b'
   ┌─ wgsl:3:25
   │
 3 │                 let a = b;
   │                         ^ unknown identifier
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_scalar_type() {
     check(
-        r#"
+        r"
             const a = vec2<vec2f>();
-        "#,
-        r#"error: unknown scalar type: 'vec2f'
+        ",
+        r"error: unknown scalar type: 'vec2f'
   ┌─ wgsl:2:28
   │
 2 │             const a = vec2<vec2f>();
@@ -373,248 +373,248 @@ fn unknown_scalar_type() {
   │
   = note: Valid scalar types are f32, f64, i32, u32, bool
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_type() {
     check(
-        r#"
+        r"
             const a: Vec = 10;
-        "#,
-        r#"error: unknown type: 'Vec'
+        ",
+        r"error: unknown type: 'Vec'
   ┌─ wgsl:2:22
   │
 2 │             const a: Vec = 10;
   │                      ^^^ unknown type
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_storage_format() {
     check(
-        r#"
+        r"
             const storage1: texture_storage_1d<rgba>;
-        "#,
-        r#"error: unknown storage format: 'rgba'
+        ",
+        r"error: unknown storage format: 'rgba'
   ┌─ wgsl:2:48
   │
 2 │             const storage1: texture_storage_1d<rgba>;
   │                                                ^^^^ unknown storage format
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_conservative_depth() {
     check(
-        r#"
+        r"
             @early_depth_test(abc) fn main() {}
-        "#,
-        r#"error: unknown conservative depth: 'abc'
+        ",
+        r"error: unknown conservative depth: 'abc'
   ┌─ wgsl:2:31
   │
 2 │             @early_depth_test(abc) fn main() {}
   │                               ^^^ unknown conservative depth
 
-"#,
+",
     );
 }
 
 #[test]
 fn struct_member_size_too_low() {
     check(
-        r#"
+        r"
             struct Bar {
                 @size(0) data: array<f32>
             }
-        "#,
-        r#"error: struct member size must be at least 4
+        ",
+        r"error: struct member size must be at least 4
   ┌─ wgsl:3:23
   │
 3 │                 @size(0) data: array<f32>
   │                       ^ must be at least 4
 
-"#,
+",
     );
 }
 
 #[test]
 fn struct_member_align_too_low() {
     check(
-        r#"
+        r"
             struct Bar {
                 @align(8) data: vec3<f32>
             }
-        "#,
-        r#"error: struct member alignment must be at least 16
+        ",
+        r"error: struct member alignment must be at least 16
   ┌─ wgsl:3:24
   │
 3 │                 @align(8) data: vec3<f32>
   │                        ^ must be at least 16
 
-"#,
+",
     );
 }
 
 #[test]
 fn struct_member_non_po2_align() {
     check(
-        r#"
+        r"
             struct Bar {
                 @align(7) data: array<f32>
             }
-        "#,
-        r#"error: struct member alignment must be a power of 2
+        ",
+        r"error: struct member alignment must be a power of 2
   ┌─ wgsl:3:24
   │
 3 │                 @align(7) data: array<f32>
   │                        ^ must be a power of 2
 
-"#,
+",
     );
 }
 
 #[test]
 fn inconsistent_binding() {
     check(
-        r#"
+        r"
         fn foo(@builtin(vertex_index) @location(0) x: u32) {}
-        "#,
-        r#"error: input/output binding is not consistent
+        ",
+        r"error: input/output binding is not consistent
   ┌─ wgsl:2:16
   │
 2 │         fn foo(@builtin(vertex_index) @location(0) x: u32) {}
   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ input/output binding is not consistent
 
-"#,
+",
     );
 }
 
 #[test]
 fn unknown_local_function() {
     check(
-        r#"
+        r"
             fn x() {
                 for (a();;) {}
             }
-        "#,
-        r#"error: no definition in scope for identifier: 'a'
+        ",
+        r"error: no definition in scope for identifier: 'a'
   ┌─ wgsl:3:22
   │
 3 │                 for (a();;) {}
   │                      ^ unknown identifier
 
-"#,
+",
     );
 }
 
 #[test]
 fn let_type_mismatch() {
     check(
-        r#"
+        r"
             const x: i32 = 1.0;
-        "#,
-        r#"error: the type of `x` is expected to be `i32`, but got `{AbstractFloat}`
+        ",
+        r"error: the type of `x` is expected to be `i32`, but got `{AbstractFloat}`
   ┌─ wgsl:2:19
   │
 2 │             const x: i32 = 1.0;
   │                   ^ definition of `x`
 
-"#,
+",
     );
 
     check(
-        r#"
+        r"
             fn foo() {
                 let x: f32 = true;
             }
-        "#,
-        r#"error: the type of `x` is expected to be `f32`, but got `bool`
+        ",
+        r"error: the type of `x` is expected to be `f32`, but got `bool`
   ┌─ wgsl:3:21
   │
 3 │                 let x: f32 = true;
   │                     ^ definition of `x`
 
-"#,
+",
     );
 }
 
 #[test]
 fn var_type_mismatch() {
     check(
-        r#"
+        r"
             fn foo() {
                 var x: f32 = 1u;
             }
-        "#,
-        r#"error: the type of `x` is expected to be `f32`, but got `u32`
+        ",
+        r"error: the type of `x` is expected to be `f32`, but got `u32`
   ┌─ wgsl:3:21
   │
 3 │                 var x: f32 = 1u;
   │                     ^ definition of `x`
 
-"#,
+",
     );
 }
 
 #[test]
 fn local_var_missing_type() {
     check(
-        r#"
+        r"
             fn foo() {
                 var x;
             }
-        "#,
-        r#"error: declaration of `x` needs a type specifier or initializer
+        ",
+        r"error: declaration of `x` needs a type specifier or initializer
   ┌─ wgsl:3:21
   │
 3 │                 var x;
   │                     ^ needs a type specifier or initializer
 
-"#,
+",
     );
 }
 
 #[test]
 fn postfix_pointers() {
     check(
-        r#"
+        r"
             fn main() {
                 var v: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
                 let pv = &v;
                 let a = *pv[3]; // Problematic line
             }
-        "#,
-        r#"error: the value indexed by a `[]` subscripting expression must not be a pointer
+        ",
+        r"error: the value indexed by a `[]` subscripting expression must not be a pointer
   ┌─ wgsl:5:26
   │
 5 │                 let a = *pv[3]; // Problematic line
   │                          ^^ expression is a pointer
 
-"#,
+",
     );
 
     check(
-        r#"
+        r"
             struct S { m: i32 };
             fn main() {
                 var s: S = S(42);
                 let ps = &s;
                 let a = *ps.m; // Problematic line
             }
-        "#,
-        r#"error: the value accessed by a `.member` expression must not be a pointer
+        ",
+        r"error: the value accessed by a `.member` expression must not be a pointer
   ┌─ wgsl:6:26
   │
 6 │                 let a = *ps.m; // Problematic line
   │                          ^^ expression is a pointer
 
-"#,
+",
     );
 }
 
@@ -622,107 +622,107 @@ fn postfix_pointers() {
 fn reserved_keyword() {
     // global var
     check(
-        r#"
+        r"
             var bool: bool = true;
-        "#,
-        r###"error: name `bool` is a reserved keyword
+        ",
+        r"error: name `bool` is a reserved keyword
   ┌─ wgsl:2:17
   │
 2 │             var bool: bool = true;
   │                 ^^^^ definition of `bool`
 
-"###,
+",
     );
 
     // global constant
     check(
-        r#"
+        r"
             const break: bool = true;
             fn foo() {
                 var foo = break;
             }
-        "#,
-        r###"error: name `break` is a reserved keyword
+        ",
+        r"error: name `break` is a reserved keyword
   ┌─ wgsl:2:19
   │
 2 │             const break: bool = true;
   │                   ^^^^^ definition of `break`
 
-"###,
+",
     );
 
     // local let
     check(
-        r#"
+        r"
             fn foo() {
                 let atomic: f32 = 1.0;
             }
-        "#,
-        r###"error: name `atomic` is a reserved keyword
+        ",
+        r"error: name `atomic` is a reserved keyword
   ┌─ wgsl:3:21
   │
 3 │                 let atomic: f32 = 1.0;
   │                     ^^^^^^ definition of `atomic`
 
-"###,
+",
     );
 
     // local var
     check(
-        r#"
+        r"
             fn foo() {
                 var sampler: f32 = 1.0;
             }
-        "#,
-        r###"error: name `sampler` is a reserved keyword
+        ",
+        r"error: name `sampler` is a reserved keyword
   ┌─ wgsl:3:21
   │
 3 │                 var sampler: f32 = 1.0;
   │                     ^^^^^^^ definition of `sampler`
 
-"###,
+",
     );
 
     // fn name
     check(
-        r#"
+        r"
             fn break() {}
-        "#,
-        r###"error: name `break` is a reserved keyword
+        ",
+        r"error: name `break` is a reserved keyword
   ┌─ wgsl:2:16
   │
 2 │             fn break() {}
   │                ^^^^^ definition of `break`
 
-"###,
+",
     );
 
     // struct
     check(
-        r#"
+        r"
             struct array {}
-        "#,
-        r###"error: name `array` is a reserved keyword
+        ",
+        r"error: name `array` is a reserved keyword
   ┌─ wgsl:2:20
   │
 2 │             struct array {}
   │                    ^^^^^ definition of `array`
 
-"###,
+",
     );
 
     // struct member
     check(
-        r#"
+        r"
             struct Foo { sampler: f32 }
-        "#,
-        r###"error: name `sampler` is a reserved keyword
+        ",
+        r"error: name `sampler` is a reserved keyword
   ┌─ wgsl:2:26
   │
 2 │             struct Foo { sampler: f32 }
   │                          ^^^^^^^ definition of `sampler`
 
-"###,
+",
     );
 }
 
@@ -730,11 +730,11 @@ fn reserved_keyword() {
 fn module_scope_identifier_redefinition() {
     // const
     check(
-        r#"
+        r"
             const foo: bool = true;
             const foo: bool = true;
-        "#,
-        r###"error: redefinition of `foo`
+        ",
+        r"error: redefinition of `foo`
   ┌─ wgsl:2:19
   │
 2 │             const foo: bool = true;
@@ -742,15 +742,15 @@ fn module_scope_identifier_redefinition() {
 3 │             const foo: bool = true;
   │                   ^^^ redefinition of `foo`
 
-"###,
+",
     );
     // var
     check(
-        r#"
+        r"
             var foo: bool = true;
             var foo: bool = true;
-        "#,
-        r###"error: redefinition of `foo`
+        ",
+        r"error: redefinition of `foo`
   ┌─ wgsl:2:17
   │
 2 │             var foo: bool = true;
@@ -758,16 +758,16 @@ fn module_scope_identifier_redefinition() {
 3 │             var foo: bool = true;
   │                 ^^^ redefinition of `foo`
 
-"###,
+",
     );
 
     // let and var
     check(
-        r#"
+        r"
             var foo: bool = true;
             const foo: bool = true;
-        "#,
-        r###"error: redefinition of `foo`
+        ",
+        r"error: redefinition of `foo`
   ┌─ wgsl:2:17
   │
 2 │             var foo: bool = true;
@@ -775,15 +775,15 @@ fn module_scope_identifier_redefinition() {
 3 │             const foo: bool = true;
   │                   ^^^ redefinition of `foo`
 
-"###,
+",
     );
 
     // function
     check(
-        r#"fn foo() {}
+        r"fn foo() {}
                 fn bar() {}
-                fn foo() {}"#,
-        r###"error: redefinition of `foo`
+                fn foo() {}",
+        r"error: redefinition of `foo`
   ┌─ wgsl:1:4
   │
 1 │ fn foo() {}
@@ -792,16 +792,16 @@ fn module_scope_identifier_redefinition() {
 3 │                 fn foo() {}
   │                    ^^^ redefinition of `foo`
 
-"###,
+",
     );
 
     // let and function
     check(
-        r#"
+        r"
             const foo: bool = true;
             fn foo() {}
-        "#,
-        r###"error: redefinition of `foo`
+        ",
+        r"error: redefinition of `foo`
   ┌─ wgsl:2:19
   │
 2 │             const foo: bool = true;
@@ -809,56 +809,56 @@ fn module_scope_identifier_redefinition() {
 3 │             fn foo() {}
   │                ^^^ redefinition of `foo`
 
-"###,
+",
     );
 }
 
 #[test]
 fn matrix_with_bad_type() {
     check(
-        r#"
+        r"
             fn main() {
                 let m = mat2x2<i32>();
             }
-        "#,
-        r#"error: matrix scalar type must be floating-point, but found `i32`
+        ",
+        r"error: matrix scalar type must be floating-point, but found `i32`
   ┌─ wgsl:3:32
   │
 3 │                 let m = mat2x2<i32>();
   │                                ^^^ must be floating-point (e.g. `f32`)
 
-"#,
+",
     );
 
     check(
-        r#"
+        r"
             fn main() {
                 var m: mat3x3<i32>;
             }
-        "#,
-        r#"error: matrix scalar type must be floating-point, but found `i32`
+        ",
+        r"error: matrix scalar type must be floating-point, but found `i32`
   ┌─ wgsl:3:31
   │
 3 │                 var m: mat3x3<i32>;
   │                               ^^^ must be floating-point (e.g. `f32`)
 
-"#,
+",
     );
 }
 
 #[test]
 fn matrix_constructor_inferred() {
     check(
-        r#"
+        r"
             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
-        "#,
-        r#"error: the type of `m` is expected to be `mat2x2<f64>`, but got `mat2x2<f32>`
+        ",
+        r"error: the type of `m` is expected to be `mat2x2<f64>`, but got `mat2x2<f32>`
   ┌─ wgsl:2:19
   │
 2 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
   │                   ^ definition of `m`
 
-"#,
+",
     );
 }
 
@@ -989,12 +989,12 @@ fn invalid_arrays() {
     }
 
     check_validation! {
-        r#"
+        r"
             fn main() -> f32 {
                 let a = array<f32, 3>(0., 1., 2.);
                 return a[-1];
             }
-        "#:
+        ":
         Err(
             naga::valid::ValidationError::Function {
                 name,
@@ -1010,49 +1010,49 @@ fn invalid_arrays() {
 
     check(
         "alias Bad = array<f32, true>;",
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
+        r"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, true>;
   │                        ^^^^ must resolve to u32 or i32
 
-"###,
+",
     );
 
     check(
-        r#"
+        r"
             const length: f32 = 2.718;
             alias Bad = array<f32, length>;
-        "#,
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
+        ",
+        r"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
   ┌─ wgsl:3:36
   │
 3 │             alias Bad = array<f32, length>;
   │                                    ^^^^^^ must resolve to u32 or i32
 
-"###,
+",
     );
 
     check(
         "alias Bad = array<f32, 0>;",
-        r###"error: array element count must be positive (> 0)
+        r"error: array element count must be positive (> 0)
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, 0>;
   │                        ^ must be positive
 
-"###,
+",
     );
 
     check(
         "alias Bad = array<f32, -1>;",
-        r###"error: array element count must be positive (> 0)
+        r"error: array element count must be positive (> 0)
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, -1>;
   │                        ^^ must be positive
 
-"###,
+",
     );
 }
 
@@ -1233,7 +1233,7 @@ fn invalid_functions() {
 #[test]
 fn pointer_type_equivalence() {
     check_validation! {
-        r#"
+        r"
             fn f(pv: ptr<function, vec2<f32>>, pf: ptr<function, f32>) { }
 
             fn g() {
@@ -1243,7 +1243,7 @@ fn pointer_type_equivalence() {
 
                f(pv, pf);
             }
-        "#:
+        ":
         Ok(_)
     }
 }
@@ -1379,12 +1379,12 @@ fn invalid_access() {
     }
 
     check_validation! {
-        r#"
+        r"
             fn main() -> f32 {
                 let a = array<f32, 3>(0., 1., 2.);
                 return a[3];
             }
-        "#:
+        ":
         Err(naga::valid::ValidationError::Function {
             source: naga::valid::FunctionError::Expression {
                 source: naga::valid::ExpressionError::IndexOutOfBounds(_, _),
@@ -1747,13 +1747,13 @@ fn misplaced_break_if() {
             }
         }
         ",
-        r###"error: A break if is only allowed in a continuing block
+        r"error: A break if is only allowed in a continuing block
   ┌─ wgsl:4:17
   │
 4 │                 break if true;
   │                 ^^^^^^^^ not in a continuing block
 
-"###,
+",
     );
 }
 
@@ -1787,7 +1787,7 @@ fn swizzle_assignment() {
             v.xy = vec2(1);
         }
     ",
-        r###"error: invalid left-hand side of assignment
+        r"error: invalid left-hand side of assignment
   ┌─ wgsl:4:13
   │
 4 │             v.xy = vec2(1);
@@ -1796,7 +1796,7 @@ fn swizzle_assignment() {
   = note: WGSL does not support assignments to swizzles
   = note: consider assigning each component individually
 
-"###,
+",
     );
 }
 
@@ -1808,13 +1808,13 @@ fn binary_statement() {
             3 + 5;
         }
     ",
-        r###"error: expected assignment or increment/decrement, found ';'
+        r"error: expected assignment or increment/decrement, found ';'
   ┌─ wgsl:3:18
   │
 3 │             3 + 5;
   │                  ^ expected assignment or increment/decrement
 
-"###,
+",
     );
 }
 
@@ -1826,13 +1826,13 @@ fn assign_to_expr() {
             3 + 5 = 10;
         }
         ",
-        r###"error: invalid left-hand side of assignment
+        r"error: invalid left-hand side of assignment
   ┌─ wgsl:3:13
   │
 3 │             3 + 5 = 10;
   │             ^^^^^ cannot assign to this expression
 
-"###,
+",
     );
 }
 
@@ -1845,7 +1845,7 @@ fn assign_to_let() {
 	        a = 20;
         }
         ",
-        r###"error: invalid left-hand side of assignment
+        r"error: invalid left-hand side of assignment
   ┌─ wgsl:3:17
   │
 3 │             let a = 10;
@@ -1855,7 +1855,7 @@ fn assign_to_let() {
   │
   = note: consider declaring 'a' with `var` instead of `let`
 
-"###,
+",
     );
 
     check(
@@ -1865,7 +1865,7 @@ fn assign_to_let() {
 			a[0] = 1;
         }
         ",
-        r###"error: invalid left-hand side of assignment
+        r"error: invalid left-hand side of assignment
   ┌─ wgsl:3:17
   │
 3 │             let a = array(1, 2);
@@ -1875,7 +1875,7 @@ fn assign_to_let() {
   │
   = note: consider declaring 'a' with `var` instead of `let`
 
-"###,
+",
     );
 
     check(
@@ -1887,7 +1887,7 @@ fn assign_to_let() {
 	        a.a = 20;
         }
         ",
-        r###"error: invalid left-hand side of assignment
+        r"error: invalid left-hand side of assignment
   ┌─ wgsl:5:17
   │
 5 │             let a = S(10);
@@ -1897,7 +1897,7 @@ fn assign_to_let() {
   │
   = note: consider declaring 'a' with `var` instead of `let`
 
-"###,
+",
     );
 }
 
@@ -1909,7 +1909,7 @@ fn recursive_function() {
             f();
         }
         ",
-        r###"error: declaration of `f` is recursive
+        r"error: declaration of `f` is recursive
   ┌─ wgsl:2:12
   │
 2 │         fn f() {
@@ -1917,7 +1917,7 @@ fn recursive_function() {
 3 │             f();
   │             ^ uses itself here
 
-"###,
+",
     );
 }
 
@@ -1932,7 +1932,7 @@ fn cyclic_function() {
             f();
         }
         ",
-        r###"error: declaration of `f` is cyclic
+        r"error: declaration of `f` is cyclic
   ┌─ wgsl:2:12
   │
 2 │         fn f() {
@@ -1945,7 +1945,7 @@ fn cyclic_function() {
 6 │             f();
   │             ^ ending the cycle
 
-"###,
+",
     );
 }
 
@@ -1959,7 +1959,7 @@ fn switch_signed_unsigned_mismatch() {
 	        }
         }
         ",
-        r###"error: invalid switch value
+        r"error: invalid switch value
   ┌─ wgsl:4:16
   │
 4 │                 case 1: {}
@@ -1967,7 +1967,7 @@ fn switch_signed_unsigned_mismatch() {
   │
   = note: suffix the integer with a `u`: '1u'
 
-"###,
+",
     );
 
     check(
@@ -1978,7 +1978,7 @@ fn switch_signed_unsigned_mismatch() {
 	        }
         }
         ",
-        r###"error: invalid switch value
+        r"error: invalid switch value
   ┌─ wgsl:4:16
   │
 4 │                 case 1u: {}
@@ -1986,7 +1986,7 @@ fn switch_signed_unsigned_mismatch() {
   │
   = note: remove the `u` suffix: '1'
 
-"###,
+",
     );
 }
 
@@ -2002,7 +2002,7 @@ fn function_returns_void() {
 	        let a = x();
         }
     ",
-        r###"error: function does not return any value
+        r"error: function does not return any value
   ┌─ wgsl:7:18
   │
 7 │             let a = x();
@@ -2010,7 +2010,7 @@ fn function_returns_void() {
   │
   = note: perhaps you meant to call the function in a separate statement?
 
-"###,
+",
     )
 }
 
@@ -2020,7 +2020,7 @@ fn function_param_redefinition_as_param() {
         "
         fn x(a: f32, a: vec2<f32>) {}
     ",
-        r###"error: redefinition of `a`
+        r"error: redefinition of `a`
   ┌─ wgsl:2:14
   │
 2 │         fn x(a: f32, a: vec2<f32>) {}
@@ -2028,7 +2028,7 @@ fn function_param_redefinition_as_param() {
   │              │        
   │              previous definition of `a`
 
-"###,
+",
     )
 }
 
@@ -2040,7 +2040,7 @@ fn function_param_redefinition_as_local() {
 			let a = 0.0;
 		}
     ",
-        r###"error: redefinition of `a`
+        r"error: redefinition of `a`
   ┌─ wgsl:2:14
   │
 2 │         fn x(a: f32) {
@@ -2048,7 +2048,7 @@ fn function_param_redefinition_as_local() {
 3 │             let a = 0.0;
   │                 ^ redefinition of `a`
 
-"###,
+",
     )
 }
 
@@ -2061,13 +2061,13 @@ fn constructor_type_error_span() {
             var a: array<f32, 1> = array<f32, 1>(i);
         }
     ",
-        r###"error: automatic conversions cannot convert `i32` to `f32`
+        r"error: automatic conversions cannot convert `i32` to `f32`
   ┌─ wgsl:4:36
   │
 4 │             var a: array<f32, 1> = array<f32, 1>(i);
   │                                    ^^^^^^^^^^^^^ a value of type f32 is required here
 
-"###,
+",
     )
 }
 
@@ -2077,13 +2077,13 @@ fn global_initialization_type_mismatch() {
         "
         var<private> a: vec2<f32> = vec2<i32>(1i, 2i);
     ",
-        r###"error: the type of `a` is expected to be `vec2<f32>`, but got `vec2<i32>`
+        r"error: the type of `a` is expected to be `vec2<f32>`, but got `vec2<i32>`
   ┌─ wgsl:2:22
   │
 2 │         var<private> a: vec2<f32> = vec2<i32>(1i, 2i);
   │                      ^ definition of `a`
 
-"###,
+",
     )
 }
 
@@ -2116,13 +2116,13 @@ fn binding_array_non_struct() {
 
 #[test]
 fn compaction_preserves_spans() {
-    let source = r#"
+    let source = r"
         fn f() {
            var a: i32 = -(-(-(-42i)));
            var x: i32;
            x = 42u;
         }
-    "#; //     ^^^   correct error span: 95..98
+    "; //     ^^^   correct error span: 95..98
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
     naga::compact::compact(&mut module);
     let err = naga::valid::Validator::new(
@@ -2156,7 +2156,7 @@ fn compaction_preserves_spans() {
 fn limit_braced_statement_nesting() {
     let too_many_braces = "fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
 
-    let expected_diagnostic = r###"error: brace nesting limit reached
+    let expected_diagnostic = r"error: brace nesting limit reached
   ┌─ wgsl:1:72
   │
 1 │ fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
@@ -2164,7 +2164,7 @@ fn limit_braced_statement_nesting() {
   │
   = note: nesting limit is currently set to 64
 
-"###;
+";
 
     // In debug builds, we might actually overflow the stack before exercising this error case,
     // depending on the platform and the `RUST_MIN_STACK` env. var. Use a thread with a custom
@@ -2257,7 +2257,7 @@ fn too_many_unclosed_loops() {
        loop {
            ";
 
-    let expected_diagnostic = r###"error: brace nesting limit reached
+    let expected_diagnostic = r"error: brace nesting limit reached
    ┌─ wgsl:65:13
    │
 65 │        loop {
@@ -2265,7 +2265,7 @@ fn too_many_unclosed_loops() {
    │
    = note: nesting limit is currently set to 64
 
-"###;
+";
 
     // In debug builds, we might actually overflow the stack before exercising this error case,
     // depending on the platform and the `RUST_MIN_STACK` env. var. Use a thread with a custom
@@ -2286,13 +2286,13 @@ fn local_const_wrong_type() {
             const c: i32 = 5u;
         }
         ",
-        r###"error: the type of `c` is expected to be `i32`, but got `u32`
+        r"error: the type of `c` is expected to be `i32`, but got `u32`
   ┌─ wgsl:3:19
   │
 3 │             const c: i32 = 5u;
   │                   ^ definition of `c`
 
-"###,
+",
     );
 }
 
@@ -2305,13 +2305,13 @@ fn local_const_from_let() {
             const c = a;
         }
         ",
-        r###"error: this operation is not supported in a const context
+        r"error: this operation is not supported in a const context
   ┌─ wgsl:4:23
   │
 4 │             const c = a;
   │                       ^ operation not supported here
 
-"###,
+",
     );
 }
 
@@ -2324,13 +2324,13 @@ fn local_const_from_var() {
             const c = a;
         }
         ",
-        r###"error: this operation is not supported in a const context
+        r"error: this operation is not supported in a const context
   ┌─ wgsl:4:23
   │
 4 │             const c = a;
   │                       ^ operation not supported here
 
-"###,
+",
     );
 }
 
@@ -2343,13 +2343,13 @@ fn local_const_from_override() {
             const c = o;
         }
         ",
-        r###"error: Unexpected override-expression
+        r"error: Unexpected override-expression
   ┌─ wgsl:4:23
   │
 4 │             const c = o;
   │                       ^ see msg
 
-"###,
+",
     );
 }
 
@@ -2362,13 +2362,13 @@ fn local_const_from_global_var() {
             const c = v;
         }
         ",
-        r###"error: Unexpected runtime-expression
+        r"error: Unexpected runtime-expression
   ┌─ wgsl:4:23
   │
 4 │             const c = v;
   │                       ^ see msg
 
-"###,
+",
     );
 }
 
@@ -2380,13 +2380,13 @@ fn only_one_swizzle_type() {
         const ok2 = vec2(0.0, 0.0).rg;
         const err = vec2(0.0, 0.0).xg;
         ",
-        r###"error: invalid field accessor `xg`
+        r"error: invalid field accessor `xg`
   ┌─ wgsl:4:36
   │
 4 │         const err = vec2(0.0, 0.0).xg;
   │                                    ^^ invalid accessor
 
-"###,
+",
     );
 }
 
@@ -2399,13 +2399,13 @@ fn const_assert_must_be_const() {
             const_assert a != 0;
         }
         ",
-        r###"error: this operation is not supported in a const context
+        r"error: this operation is not supported in a const context
   ┌─ wgsl:4:26
   │
 4 │             const_assert a != 0;
   │                          ^ operation not supported here
 
-"###,
+",
     );
 }
 
@@ -2415,13 +2415,13 @@ fn const_assert_must_be_bool() {
         "
             const_assert(5); // 5 is not bool
         ",
-        r###"error: must be a const-expression that resolves to a bool
+        r"error: must be a const-expression that resolves to a bool
   ┌─ wgsl:2:26
   │
 2 │             const_assert(5); // 5 is not bool
   │                          ^ must resolve to bool
 
-"###,
+",
     );
 }
 
@@ -2431,12 +2431,12 @@ fn const_assert_failed() {
         "
             const_assert(false);
         ",
-        r###"error: const_assert failure
+        r"error: const_assert failure
   ┌─ wgsl:2:26
   │
 2 │             const_assert(false);
   │                          ^^^^^ evaluates to false
 
-"###,
+",
     );
 }

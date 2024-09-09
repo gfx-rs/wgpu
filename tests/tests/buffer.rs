@@ -182,14 +182,14 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
-                    r#"
+                    r"
                         @group(0) @binding(0)
                         var<storage, read_write> a: array<u32, 8>;
                         @compute @workgroup_size(1)
                         fn main() {
                             a[0] = a[1];
                         }
-            "#,
+            ",
                 )),
             });
 
@@ -256,14 +256,14 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
-                    r#"
+                    r"
                         @group(0) @binding(0)
                         var<storage, read_write> a: array<u32, 8>;
                         @compute @workgroup_size(1)
                         fn main() {
                             a[0] = a[1];
                         }
-            "#,
+            ",
                 )),
             });
 

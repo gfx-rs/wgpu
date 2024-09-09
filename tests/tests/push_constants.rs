@@ -21,7 +21,7 @@ static PARTIAL_UPDATE: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_async(partial_update_test);
 
-const SHADER: &str = r#"
+const SHADER: &str = r"
     struct Pc {
         offset: u32,
         vector: vec4f,
@@ -36,7 +36,7 @@ const SHADER: &str = r#"
     fn main() {
         output[pc.offset] = pc.vector;
     }
-"#;
+";
 
 async fn partial_update_test(ctx: TestingContext) {
     let sm = ctx
