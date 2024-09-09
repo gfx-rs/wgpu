@@ -44,6 +44,9 @@ metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
     "naga/msl-out-if-target-apple",
     "dep:block",
+    "dep:core-graphics-types",
+    "dep:metal",
+    "dep:objc",
     "dep:raw-window-metal",
 ]
 vulkan = [
@@ -52,9 +55,9 @@ vulkan = [
     "dep:gpu-alloc",
     "dep:gpu-descriptor",
     "dep:libloading",
+    "dep:raw-window-metal",
     "dep:smallvec",
     "dep:android_system_properties",
-    "dep:raw-window-metal",
 ]
 gles = [
     "naga/glsl-out",
@@ -63,6 +66,7 @@ gles = [
     "dep:khronos-egl",
     "dep:libloading",
     "dep:ndk-sys",
+    "dep:objc",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -167,13 +171,14 @@ glutin_wgl_sys = { workspace = true, optional = true }
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
 block = { workspace = true, optional = true }
+metal = { workspace = true, optional = true }
+core-graphics-types = { workspace = true, optional = true }
+
+# backend: Metal + GLES
+objc = { workspace = true, optional = true }
 
 # backend: Metal + Vulkan
 raw-window-metal = { workspace = true, optional = true }
-
-metal.workspace = true
-objc.workspace = true
-core-graphics-types.workspace = true
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen.workspace = true

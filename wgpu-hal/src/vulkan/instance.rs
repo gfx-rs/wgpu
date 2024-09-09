@@ -511,7 +511,7 @@ impl super::Instance {
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
-    #[cfg(metal)]
+    #[cfg(target_vendor = "apple")]
     fn create_surface_from_layer(
         &self,
         layer: raw_window_metal::Layer,
