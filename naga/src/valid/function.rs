@@ -459,8 +459,7 @@ impl super::Validator {
             // in storage address space.
             if !matches!(
                 *fun,
-                crate::AtomicFunction::Add
-                    | crate::AtomicFunction::Exchange { compare: _ }
+                crate::AtomicFunction::Add | crate::AtomicFunction::Exchange { compare: _ }
             ) {
                 log::error!("Float32 atomic operation {:?} is not supported", fun);
                 return Err(AtomicError::InvalidFunction(*fun)

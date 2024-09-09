@@ -141,20 +141,9 @@ fn create_flt32_atomic_test() -> Vec<ShaderTest> {
     let test = ShaderTest::new(
         "atomicAdd".into(),
         "value: f32".into(),
-        "atomicStore(&output, 0.0); atomicAdd(&output, 1.0); atomicAdd(&output, 1.0);".into(),
+        "atomicStore(&output, 0.0); atomicAdd(&output, -0.5); atomicAdd(&output, 1.5);".into(),
         &[0.0_f32],
-        &[2.0_f32],
-    )
-    .output_type("atomic<f32>".into());
-
-    tests.push(test);
-
-    let test = ShaderTest::new(
-        "atomicSub".into(),
-        "value: f32".into(),
-        "atomicStore(&output, 0.0); atomicSub(&output, -1.0); atomicSub(&output, 0.5);".into(),
-        &[0.0_f32],
-        &[0.5_f32],
+        &[1.0_f32],
     )
     .output_type("atomic<f32>".into());
 
