@@ -84,10 +84,11 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### Vulkan
 
 - Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely with the `VULKAN_GOOGLE_DISPLAY_TIMING` feature. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149)
+- Support some 32-bit floating-point atomic operations in shaders. It requires the capability `AtomicFloat32AddEXT` with SPIR-V extension `SPV_EXT_shader_atomic_float_add` enabled. By @AsherJingkongChen in [#6234](https://github.com/gfx-rs/wgpu/pull/6234)
 
 #### Metal
 
-- Support 32-bit floating-point atomic operations in shaders. It requires Metal 3.0 or later with Apple 7, 8, 9 or Mac 2. By @AsherJingkongChen in [#6234](https://github.com/gfx-rs/wgpu/pull/6234).
+- Support some 32-bit floating-point atomic operations in shaders. It requires Metal 3.0 or later with Apple 7, 8, 9 or Mac 2. By @AsherJingkongChen in [#6234](https://github.com/gfx-rs/wgpu/pull/6234)
 
 ### Bug Fixes
 

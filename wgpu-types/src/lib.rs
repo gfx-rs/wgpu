@@ -953,10 +953,11 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 61;
-        /// Allows shaders to use all f32 atomic operations.
+        /// Allows shaders to use some f32 atomic operations:
         ///
         /// Supported platforms:
         /// - Metal (with MSL 3.0+)
+        /// - Vulkan (with VK_EXT_shader_atomic_float)
         ///
         /// This is a native only feature.
         const SHADER_FLT32_ATOMIC = 1 << 62;

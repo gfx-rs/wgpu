@@ -384,7 +384,7 @@ impl super::Validator {
                         if width == 4 {
                             if !self
                                 .capabilities
-                                .intersects(Capabilities::SHADER_FLT32_ATOMIC)
+                                .contains(Capabilities::SHADER_FLT32_ATOMIC)
                             {
                                 return Err(TypeError::MissingCapability(
                                     Capabilities::SHADER_FLT32_ATOMIC,

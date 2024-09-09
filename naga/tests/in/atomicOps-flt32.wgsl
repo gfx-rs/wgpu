@@ -34,13 +34,6 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
 
     workgroupBarrier();
 
-    atomicSub(&storage_atomic_scalar, 1.0);
-    atomicSub(&storage_atomic_arr[1], 1.0);
-    atomicSub(&storage_struct.atomic_scalar, 1.0);
-    atomicSub(&storage_struct.atomic_arr[1], 1.0);
-
-    workgroupBarrier();
-
     atomicExchange(&storage_atomic_scalar, 1.0);
     atomicExchange(&storage_atomic_arr[1], 1.0);
     atomicExchange(&storage_struct.atomic_scalar, 1.0);

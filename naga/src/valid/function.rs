@@ -455,12 +455,11 @@ impl super::Validator {
         // that that `Atomic` type has a permitted scalar width.
         if let crate::ScalarKind::Float = pointer_scalar.kind {
             // `Capabilities::SHADER_FLT32_ATOMIC` enables 32-bit floating-point
-            // atomic operations including `Add`, `Subtract`, and `Exchange`
+            // atomic operations including `Add` and `Exchange`
             // in storage address space.
             if !matches!(
                 *fun,
                 crate::AtomicFunction::Add
-                    | crate::AtomicFunction::Subtract
                     | crate::AtomicFunction::Exchange { compare: _ }
             ) {
                 log::error!("Float32 atomic operation {:?} is not supported", fun);

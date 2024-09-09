@@ -27,14 +27,9 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     let _e35 = atomicAdd((&storage_struct.atomic_scalar), 1f);
     let _e40 = atomicAdd((&storage_struct.atomic_arr[1]), 1f);
     workgroupBarrier();
-    let _e43 = atomicSub((&storage_atomic_scalar), 1f);
-    let _e47 = atomicSub((&storage_atomic_arr[1]), 1f);
-    let _e51 = atomicSub((&storage_struct.atomic_scalar), 1f);
-    let _e56 = atomicSub((&storage_struct.atomic_arr[1]), 1f);
-    workgroupBarrier();
-    let _e59 = atomicExchange((&storage_atomic_scalar), 1f);
-    let _e63 = atomicExchange((&storage_atomic_arr[1]), 1f);
-    let _e67 = atomicExchange((&storage_struct.atomic_scalar), 1f);
-    let _e72 = atomicExchange((&storage_struct.atomic_arr[1]), 1f);
+    let _e43 = atomicExchange((&storage_atomic_scalar), 1f);
+    let _e47 = atomicExchange((&storage_atomic_arr[1]), 1f);
+    let _e51 = atomicExchange((&storage_struct.atomic_scalar), 1f);
+    let _e56 = atomicExchange((&storage_struct.atomic_arr[1]), 1f);
     return;
 }

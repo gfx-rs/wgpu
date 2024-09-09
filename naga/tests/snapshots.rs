@@ -782,7 +782,10 @@ fn convert_wgsl() {
             "atomicOps-int64-min-max",
             Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
         ),
-        ("atomicOps-flt32", Targets::METAL | Targets::WGSL),
+        (
+            "atomicOps-flt32",
+            Targets::SPIRV | Targets::METAL | Targets::WGSL,
+        ),
         (
             "atomicCompareExchange-int64",
             Targets::SPIRV | Targets::WGSL,
