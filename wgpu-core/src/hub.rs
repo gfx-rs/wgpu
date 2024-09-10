@@ -107,10 +107,10 @@ use crate::{
     instance::{Adapter, Surface},
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
-    resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
+    resource::{Buffer, Fallible, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
     storage::{Element, Storage},
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct HubReport {
@@ -162,24 +162,24 @@ impl HubReport {
 ///
 /// [`A::hub(global)`]: HalApi::hub
 pub struct Hub {
-    pub(crate) adapters: Registry<Adapter>,
-    pub(crate) devices: Registry<Device>,
-    pub(crate) queues: Registry<Queue>,
-    pub(crate) pipeline_layouts: Registry<PipelineLayout>,
-    pub(crate) shader_modules: Registry<ShaderModule>,
-    pub(crate) bind_group_layouts: Registry<BindGroupLayout>,
-    pub(crate) bind_groups: Registry<BindGroup>,
-    pub(crate) command_buffers: Registry<CommandBuffer>,
-    pub(crate) render_bundles: Registry<RenderBundle>,
-    pub(crate) render_pipelines: Registry<RenderPipeline>,
-    pub(crate) compute_pipelines: Registry<ComputePipeline>,
-    pub(crate) pipeline_caches: Registry<PipelineCache>,
-    pub(crate) query_sets: Registry<QuerySet>,
-    pub(crate) buffers: Registry<Buffer>,
+    pub(crate) adapters: Registry<Arc<Adapter>>,
+    pub(crate) devices: Registry<Arc<Device>>,
+    pub(crate) queues: Registry<Arc<Queue>>,
+    pub(crate) pipeline_layouts: Registry<Fallible<PipelineLayout>>,
+    pub(crate) shader_modules: Registry<Fallible<ShaderModule>>,
+    pub(crate) bind_group_layouts: Registry<Fallible<BindGroupLayout>>,
+    pub(crate) bind_groups: Registry<Fallible<BindGroup>>,
+    pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,
+    pub(crate) render_bundles: Registry<Fallible<RenderBundle>>,
+    pub(crate) render_pipelines: Registry<Fallible<RenderPipeline>>,
+    pub(crate) compute_pipelines: Registry<Fallible<ComputePipeline>>,
+    pub(crate) pipeline_caches: Registry<Fallible<PipelineCache>>,
+    pub(crate) query_sets: Registry<Fallible<QuerySet>>,
+    pub(crate) buffers: Registry<Fallible<Buffer>>,
     pub(crate) staging_buffers: Registry<StagingBuffer>,
-    pub(crate) textures: Registry<Texture>,
-    pub(crate) texture_views: Registry<TextureView>,
-    pub(crate) samplers: Registry<Sampler>,
+    pub(crate) textures: Registry<Fallible<Texture>>,
+    pub(crate) texture_views: Registry<Fallible<TextureView>>,
+    pub(crate) samplers: Registry<Fallible<Sampler>>,
 }
 
 impl Hub {
@@ -206,7 +206,7 @@ impl Hub {
         }
     }
 
-    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>) {
+    pub(crate) fn clear(&self, surface_guard: &Storage<Arc<Surface>>) {
         let mut devices = self.devices.write();
         for element in devices.map.iter() {
             if let Element::Occupied(ref device, _) = *element {

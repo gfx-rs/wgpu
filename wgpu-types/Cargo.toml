@@ -43,9 +43,11 @@ js-sys.workspace = true
 web-sys = { workspace = true, features = [
     "ImageBitmap",
     "ImageData",
+    "HtmlImageElement",
     "HtmlVideoElement",
     "HtmlCanvasElement",
     "OffscreenCanvas",
+    "VideoFrame",
 ] }
 
 [dev-dependencies]

@@ -5,7 +5,7 @@
 //! * passing `wgpu::RenderPassTimestampWrites`/`wgpu::ComputePassTimestampWrites` during render/compute pass creation.
 //!     This writes timestamps for the beginning and end of a given pass.
 //!     (enabled with wgpu::Features::TIMESTAMP_QUERY)
-//! * `wgpu::CommandEncoder::write_timestamp` writes a between any commands recorded on an encoder.
+//! * `wgpu::CommandEncoder::write_timestamp` writes a timestamp between any commands recorded on an encoder.
 //!     (enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
 //! * `wgpu::RenderPass/ComputePass::write_timestamp` writes a timestamp within commands of a render pass.
 //!     Note that some GPU architectures do not support this.
@@ -16,6 +16,8 @@
 //!
 //! The period, i.e. the unit of time, of the timestamps in wgpu is undetermined and needs to be queried with `wgpu::Queue::get_timestamp_period`
 //! in order to get comparable results.
+
+use std::mem::size_of;
 
 use wgpu::util::DeviceExt;
 
@@ -123,13 +125,13 @@ impl Queries {
             }),
             resolve_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query resolve buffer"),
-                size: std::mem::size_of::<u64>() as u64 * num_queries,
+                size: size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
                 mapped_at_creation: false,
             }),
             destination_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query dest buffer"),
-                size: std::mem::size_of::<u64>() as u64 * num_queries,
+                size: size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             }),
@@ -164,7 +166,7 @@ impl Queries {
         let timestamps = {
             let timestamp_view = self
                 .destination_buffer
-                .slice(..(std::mem::size_of::<u64>() as wgpu::BufferAddress * self.num_queries))
+                .slice(..(size_of::<u64>() as wgpu::BufferAddress * self.num_queries))
                 .get_mapped_range();
             bytemuck::cast_slice(&timestamp_view).to_vec()
         };
@@ -322,7 +324,7 @@ fn compute_pass(
     });
     *next_unused_query += 2;
     cpass.set_pipeline(&compute_pipeline);
-    cpass.set_bind_group(0, &bind_group, &[]);
+    cpass.set_bind_group(0, Some(&bind_group), &[]);
     cpass.dispatch_workgroups(1, 1, 1);
     if device
         .features()

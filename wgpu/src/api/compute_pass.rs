@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc, thread};
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// In-progress recording of a compute pass.
@@ -48,16 +48,15 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &BindGroup,
+        bind_group: Option<&BindGroup>,
         offsets: &[DynamicOffset],
     ) {
+        let bg = bind_group.map(|x| x.data.as_ref());
         DynContext::compute_pass_set_bind_group(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             index,
-            &bind_group.id,
-            bind_group.data.as_ref(),
+            bg,
             offsets,
         );
     }
@@ -66,9 +65,7 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &pipeline.id,
             pipeline.data.as_ref(),
         );
     }
@@ -77,7 +74,6 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn insert_debug_marker(&mut self, label: &str) {
         DynContext::compute_pass_insert_debug_marker(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             label,
         );
@@ -87,7 +83,6 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn push_debug_group(&mut self, label: &str) {
         DynContext::compute_pass_push_debug_group(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             label,
         );
@@ -95,11 +90,7 @@ impl<'encoder> ComputePass<'encoder> {
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        DynContext::compute_pass_pop_debug_group(
-            &*self.inner.context,
-            &mut self.inner.id,
-            self.inner.data.as_mut(),
-        );
+        DynContext::compute_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut());
     }
 
     /// Dispatches compute work operations.
@@ -108,7 +99,6 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
         DynContext::compute_pass_dispatch_workgroups(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             x,
             y,
@@ -126,9 +116,7 @@ impl<'encoder> ComputePass<'encoder> {
     ) {
         DynContext::compute_pass_dispatch_workgroups_indirect(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
         );
@@ -148,7 +136,6 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
         DynContext::compute_pass_set_push_constants(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
             offset,
             data,
@@ -167,9 +154,7 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_write_timestamp(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_index,
         )
@@ -183,9 +168,7 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::compute_pass_begin_pipeline_statistics_query(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_index,
         );
@@ -196,7 +179,6 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn end_pipeline_statistics_query(&mut self) {
         DynContext::compute_pass_end_pipeline_statistics_query(
             &*self.inner.context,
-            &mut self.inner.id,
             self.inner.data.as_mut(),
         );
     }
@@ -204,7 +186,6 @@ impl<'encoder> ComputePass<'encoder> {
 
 #[derive(Debug)]
 pub(crate) struct ComputePassInner {
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
     pub(crate) context: Arc<C>,
 }
@@ -212,8 +193,7 @@ pub(crate) struct ComputePassInner {
 impl Drop for ComputePassInner {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .compute_pass_end(&mut self.id, self.data.as_mut());
+            self.context.compute_pass_end(self.data.as_mut());
         }
     }
 }

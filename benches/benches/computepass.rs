@@ -389,7 +389,7 @@ impl ComputepassState {
         let end_idx = start_idx + dispatch_per_pass;
         for dispatch_idx in start_idx..end_idx {
             compute_pass.set_pipeline(&self.pipeline);
-            compute_pass.set_bind_group(0, &self.bind_groups[dispatch_idx], &[]);
+            compute_pass.set_bind_group(0, Some(&self.bind_groups[dispatch_idx]), &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
 
@@ -412,7 +412,7 @@ impl ComputepassState {
         });
 
         compute_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
-        compute_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]);
+        compute_pass.set_bind_group(0, Some(self.bindless_bind_group.as_ref().unwrap()), &[]);
         for _ in 0..dispatch_count_bindless {
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
@@ -447,7 +447,7 @@ fn run_bench(ctx: &mut Criterion) {
             };
 
             group.bench_function(
-                &format!("{cpasses} computepasses x {dispatch_per_pass} dispatches ({label})"),
+                format!("{cpasses} computepasses x {dispatch_per_pass} dispatches ({label})"),
                 |b| {
                     Lazy::force(&state);
 
@@ -496,7 +496,7 @@ fn run_bench(ctx: &mut Criterion) {
     for threads in [2, 4, 8] {
         let dispatch_per_pass = dispatch_count / threads;
         group.bench_function(
-            &format!("{threads} threads x {dispatch_per_pass} dispatch"),
+            format!("{threads} threads x {dispatch_per_pass} dispatch"),
             |b| {
                 Lazy::force(&state);
 
@@ -537,7 +537,7 @@ fn run_bench(ctx: &mut Criterion) {
     let mut group = ctx.benchmark_group("Computepass: Bindless");
     group.throughput(Throughput::Elements(dispatch_count_bindless as _));
 
-    group.bench_function(&format!("{dispatch_count_bindless} dispatch"), |b| {
+    group.bench_function(format!("{dispatch_count_bindless} dispatch"), |b| {
         Lazy::force(&state);
 
         b.iter_custom(|iters| {

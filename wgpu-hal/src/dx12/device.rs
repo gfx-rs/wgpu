@@ -1,5 +1,6 @@
 use std::{
-    ffi, mem,
+    ffi,
+    mem::{self, size_of},
     num::NonZeroU32,
     ptr,
     sync::Arc,
@@ -84,7 +85,7 @@ impl super::Device {
         }
         .into_device_result("Zero buffer creation")?;
 
-        let zero_buffer = zero_buffer.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+        let zero_buffer = zero_buffer.ok_or(crate::DeviceError::Unexpected)?;
 
         // Note: without `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`
         // this resource is zeroed by default.
@@ -113,7 +114,7 @@ impl super::Device {
                 )
             }
             .into_device_result("Command signature creation")?;
-            signature.ok_or(crate::DeviceError::ResourceCreationFailed)
+            signature.ok_or(crate::DeviceError::Unexpected)
         }
 
         let shared = super::DeviceShared {
@@ -121,7 +122,7 @@ impl super::Device {
             cmd_signatures: super::CommandSignatures {
                 draw: create_command_signature(
                     &raw,
-                    mem::size_of::<wgt::DrawIndirectArgs>(),
+                    size_of::<wgt::DrawIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
                         ..Default::default()
@@ -130,7 +131,7 @@ impl super::Device {
                 )?,
                 draw_indexed: create_command_signature(
                     &raw,
-                    mem::size_of::<wgt::DrawIndexedIndirectArgs>(),
+                    size_of::<wgt::DrawIndexedIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
                         ..Default::default()
@@ -139,7 +140,7 @@ impl super::Device {
                 )?,
                 dispatch: create_command_signature(
                     &raw,
-                    mem::size_of::<wgt::DispatchIndirectArgs>(),
+                    size_of::<wgt::DispatchIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
                         ..Default::default()
@@ -287,7 +288,7 @@ impl super::Device {
         };
 
         let full_stage = format!(
-            "{}_{}\0",
+            "{}_{}",
             naga_stage.to_hlsl_str(),
             naga_options.shader_model.to_str()
         );
@@ -305,26 +306,31 @@ impl super::Device {
         let source_name = stage.module.raw_name.as_deref();
 
         // Compile with DXC if available, otherwise fall back to FXC
-        let (result, log_level) = if let Some(ref dxc_container) = self.dxc_container {
+        let result = if let Some(ref dxc_container) = self.dxc_container {
             shader_compilation::compile_dxc(
                 self,
                 &source,
                 source_name,
                 raw_ep,
                 stage_bit,
-                full_stage,
+                &full_stage,
                 dxc_container,
             )
         } else {
-            let full_stage = ffi::CStr::from_bytes_with_nul(full_stage.as_bytes()).unwrap();
             shader_compilation::compile_fxc(
                 self,
                 &source,
                 source_name,
-                &ffi::CString::new(raw_ep.as_str()).unwrap(),
+                raw_ep,
                 stage_bit,
-                full_stage,
+                &full_stage,
             )
+        };
+
+        let log_level = if result.is_ok() {
+            log::Level::Info
+        } else {
+            log::Level::Error
         };
 
         log::log!(
@@ -387,7 +393,6 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let mut resource = None;
         let mut size = desc.size;
         if desc.usage.contains(crate::BufferUses::UNIFORM) {
             let align_mask = Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
@@ -410,10 +415,8 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let allocation =
-            super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
-
-        let resource = resource.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+        let (resource, allocation) =
+            super::suballocation::create_buffer_resource(self, desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -439,6 +442,10 @@ impl crate::Device for super::Device {
         }
 
         self.counters.buffers.sub(1);
+    }
+
+    unsafe fn add_raw_buffer(&self, _buffer: &super::Buffer) {
+        self.counters.buffers.add(1);
     }
 
     unsafe fn map_buffer(
@@ -470,10 +477,6 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        use super::suballocation::create_texture_resource;
-
-        let mut resource = None;
-
         let raw_desc = Direct3D12::D3D12_RESOURCE_DESC {
             Dimension: conv::map_texture_dimension(desc.dimension),
             Alignment: 0,
@@ -495,9 +498,9 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let allocation = create_texture_resource(self, desc, raw_desc, &mut resource)?;
+        let (resource, allocation) =
+            super::suballocation::create_texture_resource(self, desc, raw_desc)?;
 
-        let resource = resource.ok_or(crate::DeviceError::ResourceCreationFailed)?;
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
                 .into_device_result("SetName")?;
@@ -530,6 +533,10 @@ impl crate::Device for super::Device {
         }
 
         self.counters.textures.sub(1);
+    }
+
+    unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
+        self.counters.textures.add(1);
     }
 
     unsafe fn create_texture_view(
@@ -1295,7 +1302,7 @@ impl crate::Device for super::Device {
             Some(inner) => {
                 let dual = unsafe {
                     descriptor::upload(
-                        self.raw.clone(),
+                        &self.raw,
                         &inner,
                         &self.shared.heap_views,
                         &desc.layout.copy_counts,
@@ -1309,7 +1316,7 @@ impl crate::Device for super::Device {
             Some(inner) => {
                 let dual = unsafe {
                     descriptor::upload(
-                        self.raw.clone(),
+                        &self.raw,
                         &inner,
                         &self.shared.heap_samplers,
                         &desc.layout.copy_counts,
@@ -1643,7 +1650,7 @@ impl crate::Device for super::Device {
         }
         .into_device_result("Query heap creation")?;
 
-        let raw = raw.ok_or(crate::DeviceError::ResourceCreationFailed)?;
+        let raw = raw.ok_or(crate::DeviceError::Unexpected)?;
 
         if let Some(label) = desc.label {
             unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }

@@ -4,7 +4,7 @@ use std::{borrow::Cow, collections::HashMap};
 use crate::hub::Hub;
 use crate::{
     api_log,
-    device::{queue::Queue, resource::Device, DeviceDescriptor},
+    device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
     hal_api::HalApi,
     id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
@@ -272,20 +272,19 @@ impl Adapter {
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        if let Ok(device) = Device::new(
+        let device = Device::new(
             hal_device.device,
             hal_device.queue.as_ref(),
             self,
             desc,
             trace_path,
             instance_flags,
-        ) {
-            let device = Arc::new(device);
-            let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
-            device.set_queue(&queue);
-            return Ok((device, queue));
-        }
-        Err(RequestDeviceError::OutOfMemory)
+        )?;
+
+        let device = Arc::new(device);
+        let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
+        device.set_queue(&queue);
+        Ok((device, queue))
     }
 
     #[allow(clippy::type_complexity)]
@@ -338,12 +337,7 @@ impl Adapter {
                 &desc.memory_hints,
             )
         }
-        .map_err(|err| match err {
-            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
-            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
-            hal::DeviceError::Unexpected => RequestDeviceError::DeviceLost,
-        })?;
+        .map_err(DeviceError::from_hal)?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
     }
@@ -354,20 +348,7 @@ crate::impl_storage_item!(Adapter);
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
-pub enum IsSurfaceSupportedError {
-    #[error("Invalid adapter")]
-    InvalidAdapter,
-    #[error("Invalid surface")]
-    InvalidSurface,
-}
-
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
 pub enum GetSurfaceSupportError {
-    #[error("Invalid adapter")]
-    InvalidAdapter,
-    #[error("Invalid surface")]
-    InvalidSurface,
     #[error("Surface is not supported by the adapter")]
     Unsupported,
 }
@@ -377,18 +358,12 @@ pub enum GetSurfaceSupportError {
 /// Error when requesting a device from the adaptor
 #[non_exhaustive]
 pub enum RequestDeviceError {
-    #[error("Parent adapter is invalid")]
-    InvalidAdapter,
-    #[error("Connection to device was lost during initialization")]
-    DeviceLost,
-    #[error("Device initialization failed due to implementation specific errors")]
-    Internal,
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
     #[error("Device has no queue supporting graphics")]
     NoGraphicsQueue,
-    #[error("Not enough memory left to request device")]
-    OutOfMemory,
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }
@@ -414,17 +389,11 @@ impl<M: Marker> AdapterInputs<'_, M> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("Adapter is invalid")]
-pub struct InvalidAdapter;
-
-#[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum RequestAdapterError {
     #[error("No suitable adapter found")]
     NotFound,
-    #[error("Surface {0:?} is invalid")]
-    InvalidSurface(SurfaceId),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -624,9 +593,9 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        let surface = self.surfaces.unregister(id);
-        let surface = Arc::into_inner(surface.unwrap())
-            .expect("Surface cannot be destroyed because is still in use");
+        let surface = self.surfaces.remove(id);
+        let surface =
+            Arc::into_inner(surface).expect("Surface cannot be destroyed because is still in use");
 
         if let Some(present) = surface.presentation.lock().take() {
             for (&backend, surface) in &surface.surface_per_backend {
@@ -741,14 +710,7 @@ impl Global {
             }
         }
 
-        let compatible_surface = desc
-            .compatible_surface
-            .map(|id| {
-                self.surfaces
-                    .get(id)
-                    .map_err(|_| RequestAdapterError::InvalidSurface(id))
-            })
-            .transpose()?;
+        let compatible_surface = desc.compatible_surface.map(|id| self.surfaces.get(id));
         let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
         let mut device_types = Vec::new();
 
@@ -879,73 +841,51 @@ impl Global {
         id
     }
 
-    pub fn adapter_get_info(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.info.clone())
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.info.clone()
     }
 
     pub fn adapter_get_texture_format_features(
         &self,
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
-    ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.get_texture_format_features(format))
-            .map_err(|_| InvalidAdapter)
+    ) -> wgt::TextureFormatFeatures {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.get_texture_format_features(format)
     }
 
-    pub fn adapter_features(&self, adapter_id: AdapterId) -> Result<wgt::Features, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.features)
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_features(&self, adapter_id: AdapterId) -> wgt::Features {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.features
     }
 
-    pub fn adapter_limits(&self, adapter_id: AdapterId) -> Result<wgt::Limits, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.limits.clone())
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_limits(&self, adapter_id: AdapterId) -> wgt::Limits {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.capabilities.limits.clone()
     }
 
     pub fn adapter_downlevel_capabilities(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<wgt::DownlevelCapabilities, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.downlevel.clone())
-            .map_err(|_| InvalidAdapter)
+    ) -> wgt::DownlevelCapabilities {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.capabilities.downlevel.clone()
     }
 
     pub fn adapter_get_presentation_timestamp(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<wgt::PresentationTimestamp, InvalidAdapter> {
-        let hub = &self.hub;
-
-        let adapter = hub.adapters.get(adapter_id).map_err(|_| InvalidAdapter)?;
-
-        Ok(unsafe { adapter.raw.adapter.get_presentation_timestamp() })
+    ) -> wgt::PresentationTimestamp {
+        let adapter = self.hub.adapters.get(adapter_id);
+        unsafe { adapter.raw.adapter.get_presentation_timestamp() }
     }
 
     pub fn adapter_drop(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
         api_log!("Adapter::drop {adapter_id:?}");
 
-        let hub = &self.hub;
-        hub.adapters.unregister(adapter_id);
+        self.hub.adapters.remove(adapter_id);
     }
 }
 
@@ -957,7 +897,7 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
-    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
+    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
@@ -965,29 +905,17 @@ impl Global {
         let device_fid = self.hub.devices.prepare(backend, device_id_in);
         let queue_fid = self.hub.queues.prepare(backend, queue_id_in);
 
-        let error = 'error: {
-            let adapter = match self.hub.adapters.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
-            };
-            let (device, queue) =
-                match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
-                    Ok((device, queue)) => (device, queue),
-                    Err(e) => break 'error e,
-                };
+        let adapter = self.hub.adapters.get(adapter_id);
+        let (device, queue) =
+            adapter.create_device_and_queue(desc, self.instance.flags, trace_path)?;
 
-            let device_id = device_fid.assign(device);
-            resource_log!("Created Device {:?}", device_id);
+        let device_id = device_fid.assign(device);
+        resource_log!("Created Device {:?}", device_id);
 
-            let queue_id = queue_fid.assign(queue);
-            resource_log!("Created Queue {:?}", queue_id);
+        let queue_id = queue_fid.assign(queue);
+        resource_log!("Created Queue {:?}", queue_id);
 
-            return (device_id, queue_id, None);
-        };
-
-        let device_id = device_fid.assign_error();
-        let queue_id = queue_fid.assign_error();
-        (device_id, queue_id, Some(error))
+        Ok((device_id, queue_id))
     }
 
     /// # Safety
@@ -1002,40 +930,28 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
-    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
+    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Global::create_device_from_hal");
 
         let backend = adapter_id.backend();
         let devices_fid = self.hub.devices.prepare(backend, device_id_in);
         let queues_fid = self.hub.queues.prepare(backend, queue_id_in);
 
-        let error = 'error: {
-            let adapter = match self.hub.adapters.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
-            };
-            let (device, queue) = match adapter.create_device_and_queue_from_hal(
-                hal_device,
-                desc,
-                self.instance.flags,
-                trace_path,
-            ) {
-                Ok(device) => device,
-                Err(e) => break 'error e,
-            };
+        let adapter = self.hub.adapters.get(adapter_id);
+        let (device, queue) = adapter.create_device_and_queue_from_hal(
+            hal_device,
+            desc,
+            self.instance.flags,
+            trace_path,
+        )?;
 
-            let device_id = devices_fid.assign(device);
-            resource_log!("Created Device {:?}", device_id);
+        let device_id = devices_fid.assign(device);
+        resource_log!("Created Device {:?}", device_id);
 
-            let queue_id = queues_fid.assign(queue);
-            resource_log!("Created Queue {:?}", queue_id);
+        let queue_id = queues_fid.assign(queue);
+        resource_log!("Created Queue {:?}", queue_id);
 
-            return (device_id, queue_id, None);
-        };
-
-        let device_id = devices_fid.assign_error();
-        let queue_id = queues_fid.assign_error();
-        (device_id, queue_id, Some(error))
+        Ok((device_id, queue_id))
     }
 }
 

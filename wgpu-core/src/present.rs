@@ -122,10 +122,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let surface = self
-            .surfaces
-            .get(surface_id)
-            .map_err(|_| SurfaceError::Invalid)?;
+        let surface = self.surfaces.get(surface_id);
 
         let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
             present.device.check_is_valid()?;
@@ -179,7 +176,7 @@ impl Global {
                 let clear_view_desc = hal::TextureViewDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) clear surface texture view"),
-                        self.instance.flags,
+                        device.instance_flags,
                     ),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
@@ -191,7 +188,7 @@ impl Global {
                         .raw()
                         .create_texture_view(ast.texture.as_ref().borrow(), &clear_view_desc)
                 }
-                .map_err(DeviceError::from)?;
+                .map_err(|e| device.handle_hal_error(e))?;
 
                 let mut presentation = surface.presentation.lock();
                 let present = presentation.as_mut().unwrap();
@@ -218,7 +215,7 @@ impl Global {
                     .textures
                     .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
 
-                let id = fid.assign(texture);
+                let id = fid.assign(resource::Fallible::Valid(texture));
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
@@ -238,7 +235,7 @@ impl Global {
                 match err {
                     hal::SurfaceError::Lost => Status::Lost,
                     hal::SurfaceError::Device(err) => {
-                        return Err(DeviceError::from(err).into());
+                        return Err(device.handle_hal_error(err).into());
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
                     hal::SurfaceError::Other(msg) => {
@@ -257,10 +254,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let surface = self
-            .surfaces
-            .get(surface_id)
-            .map_err(|_| SurfaceError::Invalid)?;
+        let surface = self.surfaces.get(surface_id);
 
         let mut presentation = surface.presentation.lock();
         let present = match presentation.as_mut() {
@@ -286,8 +280,8 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            let texture = hub.textures.unregister(texture_id);
-            if let Some(texture) = texture {
+            let texture = hub.textures.remove(texture_id).get();
+            if let Ok(texture) = texture {
                 device
                     .trackers
                     .lock()
@@ -315,7 +309,9 @@ impl Global {
             Ok(()) => Ok(Status::Good),
             Err(err) => match err {
                 hal::SurfaceError::Lost => Ok(Status::Lost),
-                hal::SurfaceError::Device(err) => Err(SurfaceError::from(DeviceError::from(err))),
+                hal::SurfaceError::Device(err) => {
+                    Err(SurfaceError::from(device.handle_hal_error(err)))
+                }
                 hal::SurfaceError::Outdated => Ok(Status::Outdated),
                 hal::SurfaceError::Other(msg) => {
                     log::error!("acquire error: {}", msg);
@@ -330,10 +326,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let surface = self
-            .surfaces
-            .get(surface_id)
-            .map_err(|_| SurfaceError::Invalid)?;
+        let surface = self.surfaces.get(surface_id);
         let mut presentation = surface.presentation.lock();
         let present = match presentation.as_mut() {
             Some(present) => present,
@@ -357,9 +350,9 @@ impl Global {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
-            let texture = hub.textures.unregister(texture_id);
+            let texture = hub.textures.remove(texture_id).get();
 
-            if let Some(texture) = texture {
+            if let Ok(texture) = texture {
                 device
                     .trackers
                     .lock()

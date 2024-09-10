@@ -9,7 +9,7 @@
 //! * rpass.multi_draw_indirect_count
 //! * rpass.multi_draw_indexed_indirect_count
 //!
-use std::num::NonZeroU64;
+use std::{mem::size_of, num::NonZeroU64};
 
 use wgpu::util::DeviceExt as _;
 use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
@@ -87,7 +87,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         drop(depth_stencil_view);
 
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.set_bind_group(0, Some(&bind_group), &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.begin_occlusion_query(0);
@@ -163,7 +163,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
             ..Default::default()
         });
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.set_bind_group(0, Some(&bind_group), &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.begin_pipeline_statistics_query(&query_set, 0);
@@ -242,7 +242,7 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         rpass.write_timestamp(&query_set_write_timestamp, 0);
 
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
+        rpass.set_bind_group(0, Some(&bind_group), &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.draw(0..3, 0..1);
@@ -305,7 +305,7 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
 
     // Record some a draw command.
     rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, &bind_group, &[]);
+    rpass.set_bind_group(0, Some(&bind_group), &[]);
     rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
     rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
     rpass.draw(0..3, 0..1);
@@ -367,7 +367,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
         });
 
-    let buffer_size = 4 * std::mem::size_of::<f32>() as u64;
+    let buffer_size = 4 * size_of::<f32>() as u64;
 
     let bgl = ctx
         .device
@@ -418,7 +418,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let vertex_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertex_buffer"),
         usage: wgpu::BufferUsages::VERTEX,
-        size: std::mem::size_of::<u32>() as u64 * vertex_count as u64,
+        size: size_of::<u32>() as u64 * vertex_count as u64,
         mapped_at_creation: false,
     });
 

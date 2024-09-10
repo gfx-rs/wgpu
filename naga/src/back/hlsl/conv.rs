@@ -132,7 +132,7 @@ impl crate::StorageFormat {
             Self::Rg8Sint | Self::Rg16Sint | Self::Rg32Uint => "int2",
             Self::Rg8Uint | Self::Rg16Uint | Self::Rg32Sint => "uint2",
 
-            Self::Rg11b10UFloat => "float3",
+            Self::Rg11b10Ufloat => "float3",
 
             Self::Rgba16Float | Self::Rgba32Float => "float4",
             Self::Rgba8Unorm | Self::Bgra8Unorm | Self::Rgba16Unorm | Self::Rgb10a2Unorm => {
@@ -202,7 +202,7 @@ impl crate::Sampling {
     /// Return the HLSL auxiliary qualifier for the given sampling value.
     pub(super) const fn to_hlsl_str(self) -> Option<&'static str> {
         match self {
-            Self::Center => None,
+            Self::Center | Self::First | Self::Either => None,
             Self::Centroid => Some("centroid"),
             Self::Sample => Some("sample"),
         }

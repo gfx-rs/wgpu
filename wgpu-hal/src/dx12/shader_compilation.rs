@@ -1,13 +1,11 @@
-use std::ffi::CStr;
-use std::ptr;
-
-pub(super) use dxc::{compile_dxc, get_dxc_container, DxcContainer};
-use windows::Win32::Graphics::Direct3D;
-
 use crate::auxil::dxgi::result::HResult;
+use std::ffi::CStr;
+use std::path::PathBuf;
+use windows::{
+    core::{Interface, PCSTR, PCWSTR},
+    Win32::Graphics::Direct3D::{Dxc, Fxc},
+};
 
-// This exists so that users who don't want to use dxc can disable the dxc_shader_compiler feature
-// and not have to compile hassle_rs.
 // Currently this will use Dxc if it is chosen as the dx12 compiler at `Instance` creation time, and will
 // fallback to FXC if the Dxc libraries (dxil.dll and dxcompiler.dll) are not found, or if Fxc is chosen at'
 // `Instance` creation time.
@@ -16,40 +14,41 @@ pub(super) fn compile_fxc(
     device: &super::Device,
     source: &str,
     source_name: Option<&CStr>,
-    raw_ep: &CStr,
+    raw_ep: &str,
     stage_bit: wgt::ShaderStages,
-    full_stage: &CStr,
-) -> (
-    Result<super::CompiledShader, crate::PipelineError>,
-    log::Level,
-) {
+    full_stage: &str,
+) -> Result<super::CompiledShader, crate::PipelineError> {
     profiling::scope!("compile_fxc");
     let mut shader_data = None;
-    let mut compile_flags = Direct3D::Fxc::D3DCOMPILE_ENABLE_STRICTNESS;
+    let mut compile_flags = Fxc::D3DCOMPILE_ENABLE_STRICTNESS;
     if device
         .private_caps
         .instance_flags
         .contains(wgt::InstanceFlags::DEBUG)
     {
-        compile_flags |=
-            Direct3D::Fxc::D3DCOMPILE_DEBUG | Direct3D::Fxc::D3DCOMPILE_SKIP_OPTIMIZATION;
+        compile_flags |= Fxc::D3DCOMPILE_DEBUG | Fxc::D3DCOMPILE_SKIP_OPTIMIZATION;
     }
 
+    let raw_ep = std::ffi::CString::new(raw_ep).unwrap();
+    let full_stage = std::ffi::CString::new(full_stage).unwrap();
+
     // If no name has been set, D3DCompile wants the null pointer.
-    let source_name = source_name.map(|cstr| cstr.as_ptr()).unwrap_or(ptr::null());
+    let source_name = source_name
+        .map(|cstr| cstr.as_ptr().cast())
+        .unwrap_or(core::ptr::null());
 
     let mut error = None;
     let hr = unsafe {
-        profiling::scope!("Direct3D::Fxc::D3DCompile");
-        Direct3D::Fxc::D3DCompile(
+        profiling::scope!("Fxc::D3DCompile");
+        Fxc::D3DCompile(
             // TODO: Update low-level bindings to accept a slice here
             source.as_ptr().cast(),
             source.len(),
-            windows::core::PCSTR(source_name.cast()),
+            PCSTR(source_name),
             None,
             None,
-            windows::core::PCSTR(raw_ep.as_ptr().cast()),
-            windows::core::PCSTR(full_stage.as_ptr().cast()),
+            PCSTR(raw_ep.as_ptr().cast()),
+            PCSTR(full_stage.as_ptr().cast()),
             compile_flags,
             0,
             &mut shader_data,
@@ -57,13 +56,10 @@ pub(super) fn compile_fxc(
         )
     };
 
-    match hr.into_result() {
+    match hr {
         Ok(()) => {
             let shader_data = shader_data.unwrap();
-            (
-                Ok(super::CompiledShader::Fxc(shader_data)),
-                log::Level::Info,
-            )
+            Ok(super::CompiledShader::Fxc(shader_data))
         }
         Err(e) => {
             let mut full_msg = format!("FXC D3DCompile error ({e})");
@@ -77,234 +73,237 @@ pub(super) fn compile_fxc(
                 };
                 let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
             }
-            (
-                Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
-                log::Level::Warn,
-            )
+            Err(crate::PipelineError::Linkage(stage_bit, full_msg))
         }
     }
 }
 
-// The Dxc implementation is behind a feature flag so that users who don't want to use dxc can disable the feature.
-#[cfg(feature = "dxc_shader_compiler")]
-mod dxc {
-    use std::ffi::CStr;
-    use std::path::PathBuf;
+trait DxcObj: Interface {
+    const CLSID: windows::core::GUID;
+}
+impl DxcObj for Dxc::IDxcCompiler3 {
+    const CLSID: windows::core::GUID = Dxc::CLSID_DxcCompiler;
+}
+impl DxcObj for Dxc::IDxcUtils {
+    const CLSID: windows::core::GUID = Dxc::CLSID_DxcUtils;
+}
+impl DxcObj for Dxc::IDxcValidator {
+    const CLSID: windows::core::GUID = Dxc::CLSID_DxcValidator;
+}
 
-    // Destructor order should be fine since _dxil and _dxc don't rely on each other.
-    pub(crate) struct DxcContainer {
-        compiler: hassle_rs::DxcCompiler,
-        library: hassle_rs::DxcLibrary,
-        validator: hassle_rs::DxcValidator,
-        // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
-        _dxc: hassle_rs::Dxc,
-        // Also Has to be held onto for the lifetime of the device otherwise shaders will fail to validate.
-        _dxil: hassle_rs::Dxil,
-    }
+#[derive(Debug)]
+struct DxcLib {
+    lib: crate::dx12::DynLib,
+}
 
-    pub(crate) fn get_dxc_container(
-        dxc_path: Option<PathBuf>,
-        dxil_path: Option<PathBuf>,
-    ) -> Result<Option<DxcContainer>, crate::DeviceError> {
-        // Make sure that dxil.dll exists.
-        let dxil = match hassle_rs::Dxil::new(dxil_path) {
-            Ok(dxil) => dxil,
-            Err(e) => {
-                log::warn!("Failed to load dxil.dll. Defaulting to FXC instead: {}", e);
-                return Ok(None);
+impl DxcLib {
+    fn new(lib_path: Option<PathBuf>, lib_name: &'static str) -> Result<Self, libloading::Error> {
+        let lib_path = if let Some(lib_path) = lib_path {
+            if lib_path.is_file() {
+                lib_path
+            } else {
+                lib_path.join(lib_name)
             }
+        } else {
+            PathBuf::from(lib_name)
         };
-
-        // Needed for explicit validation.
-        let validator = dxil.create_validator()?;
-
-        let dxc = match hassle_rs::Dxc::new(dxc_path) {
-            Ok(dxc) => dxc,
-            Err(e) => {
-                log::warn!(
-                    "Failed to load dxcompiler.dll. Defaulting to FXC instead: {}",
-                    e
-                );
-                return Ok(None);
-            }
-        };
-        let compiler = dxc.create_compiler()?;
-        let library = dxc.create_library()?;
-
-        Ok(Some(DxcContainer {
-            _dxc: dxc,
-            compiler,
-            library,
-            _dxil: dxil,
-            validator,
-        }))
+        unsafe { crate::dx12::DynLib::new(lib_path).map(|lib| Self { lib }) }
     }
 
-    pub(crate) fn compile_dxc(
-        device: &crate::dx12::Device,
-        source: &str,
-        source_name: Option<&CStr>,
-        raw_ep: &str,
-        stage_bit: wgt::ShaderStages,
-        full_stage: String,
-        dxc_container: &DxcContainer,
-    ) -> (
-        Result<crate::dx12::CompiledShader, crate::PipelineError>,
-        log::Level,
-    ) {
-        profiling::scope!("compile_dxc");
-        let mut compile_flags = arrayvec::ArrayVec::<&str, 6>::new_const();
-        compile_flags.push("-Ges"); // Direct3D::Fxc::D3DCOMPILE_ENABLE_STRICTNESS
-        compile_flags.push("-Vd"); // Disable implicit validation to work around bugs when dxil.dll isn't in the local directory.
-        compile_flags.push("-HV"); // Use HLSL 2018, Naga doesn't supported 2021 yet.
-        compile_flags.push("2018");
+    pub fn create_instance<T: DxcObj>(&self) -> Result<T, crate::DeviceError> {
+        type Fun = extern "system" fn(
+            rclsid: *const windows_core::GUID,
+            riid: *const windows_core::GUID,
+            ppv: *mut *mut core::ffi::c_void,
+        ) -> windows_core::HRESULT;
+        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"DxcCreateInstance\0") }?;
 
-        if device
-            .private_caps
-            .instance_flags
-            .contains(wgt::InstanceFlags::DEBUG)
-        {
-            compile_flags.push("-Zi"); // Direct3D::Fxc::D3DCOMPILE_SKIP_OPTIMIZATION
-            compile_flags.push("-Od"); // Direct3D::Fxc::D3DCOMPILE_DEBUG
-        }
-
-        let blob = match dxc_container
-            .library
-            .create_blob_with_encoding_from_str(source)
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("DXC blob error: {e}")))
-        {
-            Ok(blob) => blob,
-            Err(e) => return (Err(e), log::Level::Error),
-        };
-
-        let source_name = source_name
-            .and_then(|cstr| cstr.to_str().ok())
-            .unwrap_or("");
-
-        let compiled = dxc_container.compiler.compile(
-            &blob,
-            source_name,
-            raw_ep,
-            &full_stage,
-            &compile_flags,
-            None,
-            &[],
-        );
-
-        let (result, log_level) = match compiled {
-            Ok(dxc_result) => match dxc_result.get_result() {
-                Ok(dxc_blob) => {
-                    // Validate the shader.
-                    match dxc_container.validator.validate(dxc_blob) {
-                        Ok(validated_blob) => (
-                            Ok(crate::dx12::CompiledShader::Dxc(validated_blob.to_vec())),
-                            log::Level::Info,
-                        ),
-                        Err(e) => (
-                            Err(crate::PipelineError::Linkage(
-                                stage_bit,
-                                format!(
-                                    "DXC validation error: {:?}\n{:?}",
-                                    get_error_string_from_dxc_result(&dxc_container.library, &e.0)
-                                        .unwrap_or_default(),
-                                    e.1
-                                ),
-                            )),
-                            log::Level::Error,
-                        ),
-                    }
-                }
-                Err(e) => (
-                    Err(crate::PipelineError::Linkage(
-                        stage_bit,
-                        format!("DXC compile error: {e}"),
-                    )),
-                    log::Level::Error,
-                ),
-            },
-            Err(e) => (
-                Err(crate::PipelineError::Linkage(
-                    stage_bit,
-                    format!(
-                        "DXC compile error: {}",
-                        get_error_string_from_dxc_result(&dxc_container.library, &e.0)
-                            .unwrap_or_default()
-                    ),
-                )),
-                log::Level::Error,
-            ),
-        };
-
-        (result, log_level)
-    }
-
-    impl From<hassle_rs::HassleError> for crate::DeviceError {
-        fn from(value: hassle_rs::HassleError) -> Self {
-            match value {
-                hassle_rs::HassleError::Win32Error(e) => {
-                    // TODO: This returns an HRESULT, should we try and use the associated Windows error message?
-                    log::error!("Win32 error: {e:?}");
-                    crate::DeviceError::Lost
-                }
-                hassle_rs::HassleError::LoadLibraryError { filename, inner } => {
-                    log::error!("Failed to load dxc library {filename:?}. Inner error: {inner:?}");
-                    crate::DeviceError::Lost
-                }
-                hassle_rs::HassleError::LibLoadingError(e) => {
-                    log::error!("Failed to load dxc library. {e:?}");
-                    crate::DeviceError::Lost
-                }
-                hassle_rs::HassleError::WindowsOnly(e) => {
-                    log::error!("Signing with dxil.dll is only supported on Windows. {e:?}");
-                    crate::DeviceError::Lost
-                }
-                // `ValidationError` and `CompileError` should never happen in a context involving `DeviceError`
-                hassle_rs::HassleError::ValidationError(_e) => unimplemented!(),
-                hassle_rs::HassleError::CompileError(_e) => unimplemented!(),
-            }
-        }
-    }
-
-    fn get_error_string_from_dxc_result(
-        library: &hassle_rs::DxcLibrary,
-        error: &hassle_rs::DxcOperationResult,
-    ) -> Result<String, hassle_rs::HassleError> {
-        error
-            .get_error_buffer()
-            .and_then(|error| library.get_blob_as_string(&hassle_rs::DxcBlob::from(error)))
+        let mut result__ = None;
+        (func)(&T::CLSID, &T::IID, <*mut _>::cast(&mut result__))
+            .ok()
+            .into_device_result("DxcCreateInstance")?;
+        result__.ok_or(crate::DeviceError::Unexpected)
     }
 }
 
-// These are stubs for when the `dxc_shader_compiler` feature is disabled.
-#[cfg(not(feature = "dxc_shader_compiler"))]
-mod dxc {
-    use std::ffi::CStr;
-    use std::path::PathBuf;
+// Destructor order should be fine since _dxil and _dxc don't rely on each other.
+pub(super) struct DxcContainer {
+    compiler: Dxc::IDxcCompiler3,
+    utils: Dxc::IDxcUtils,
+    validator: Dxc::IDxcValidator,
+    // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
+    _dxc: DxcLib,
+    // Also Has to be held onto for the lifetime of the device otherwise shaders will fail to validate.
+    _dxil: DxcLib,
+}
 
-    pub(crate) struct DxcContainer {}
+pub(super) fn get_dxc_container(
+    dxc_path: Option<PathBuf>,
+    dxil_path: Option<PathBuf>,
+) -> Result<Option<DxcContainer>, crate::DeviceError> {
+    let dxc = match DxcLib::new(dxc_path, "dxcompiler.dll") {
+        Ok(dxc) => dxc,
+        Err(e) => {
+            log::warn!(
+                "Failed to load dxcompiler.dll. Defaulting to FXC instead: {}",
+                e
+            );
+            return Ok(None);
+        }
+    };
 
-    pub(crate) fn get_dxc_container(
-        _dxc_path: Option<PathBuf>,
-        _dxil_path: Option<PathBuf>,
-    ) -> Result<Option<DxcContainer>, crate::DeviceError> {
-        // Falls back to Fxc and logs an error.
-        log::error!("DXC shader compiler was requested on Instance creation, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC.");
-        Ok(None)
+    let dxil = match DxcLib::new(dxil_path, "dxil.dll") {
+        Ok(dxil) => dxil,
+        Err(e) => {
+            log::warn!("Failed to load dxil.dll. Defaulting to FXC instead: {}", e);
+            return Ok(None);
+        }
+    };
+
+    let compiler = dxc.create_instance::<Dxc::IDxcCompiler3>()?;
+    let utils = dxc.create_instance::<Dxc::IDxcUtils>()?;
+    let validator = dxil.create_instance::<Dxc::IDxcValidator>()?;
+
+    Ok(Some(DxcContainer {
+        compiler,
+        utils,
+        validator,
+        _dxc: dxc,
+        _dxil: dxil,
+    }))
+}
+
+/// Owned PCWSTR
+#[allow(clippy::upper_case_acronyms)]
+struct OPCWSTR {
+    inner: Vec<u16>,
+}
+
+impl OPCWSTR {
+    fn new(s: &str) -> Self {
+        let mut inner: Vec<_> = s.encode_utf16().collect();
+        inner.push(0);
+        Self { inner }
     }
 
-    // It shouldn't be possible that this gets called with the `dxc_shader_compiler` feature disabled.
-    pub(crate) fn compile_dxc(
-        _device: &crate::dx12::Device,
-        _source: &str,
-        _source_name: Option<&CStr>,
-        _raw_ep: &str,
-        _stage_bit: wgt::ShaderStages,
-        _full_stage: String,
-        _dxc_container: &DxcContainer,
-    ) -> (
-        Result<crate::dx12::CompiledShader, crate::PipelineError>,
-        log::Level,
-    ) {
-        unimplemented!("Something went really wrong, please report this. Attempted to compile shader with DXC, but the DXC feature is disabled. Enable the `dxc_shader_compiler` feature on wgpu_hal to use DXC.");
+    fn ptr(&self) -> PCWSTR {
+        PCWSTR(self.inner.as_ptr())
     }
+}
+
+fn get_output<T: Interface>(
+    res: &Dxc::IDxcResult,
+    kind: Dxc::DXC_OUT_KIND,
+) -> Result<T, crate::DeviceError> {
+    let mut result__: Option<T> = None;
+    unsafe { res.GetOutput::<T>(kind, &mut None, <*mut _>::cast(&mut result__)) }
+        .into_device_result("GetOutput")?;
+    result__.ok_or(crate::DeviceError::Unexpected)
+}
+
+fn as_err_str(blob: &Dxc::IDxcBlobUtf8) -> Result<&str, crate::DeviceError> {
+    let ptr = unsafe { blob.GetStringPointer() };
+    let len = unsafe { blob.GetStringLength() };
+    core::str::from_utf8(unsafe { core::slice::from_raw_parts(ptr.0, len) })
+        .map_err(|_| crate::DeviceError::Unexpected)
+}
+
+pub(super) fn compile_dxc(
+    device: &crate::dx12::Device,
+    source: &str,
+    source_name: Option<&CStr>,
+    raw_ep: &str,
+    stage_bit: wgt::ShaderStages,
+    full_stage: &str,
+    dxc_container: &DxcContainer,
+) -> Result<crate::dx12::CompiledShader, crate::PipelineError> {
+    profiling::scope!("compile_dxc");
+
+    let source_name = source_name.and_then(|cstr| cstr.to_str().ok());
+
+    let source_name = source_name.map(OPCWSTR::new);
+    let raw_ep = OPCWSTR::new(raw_ep);
+    let full_stage = OPCWSTR::new(full_stage);
+
+    let mut compile_args = arrayvec::ArrayVec::<PCWSTR, 12>::new_const();
+
+    if let Some(source_name) = source_name.as_ref() {
+        compile_args.push(source_name.ptr())
+    }
+
+    compile_args.extend([
+        windows::core::w!("-E"),
+        raw_ep.ptr(),
+        windows::core::w!("-T"),
+        full_stage.ptr(),
+        windows::core::w!("-HV"),
+        windows::core::w!("2018"), // Use HLSL 2018, Naga doesn't supported 2021 yet.
+        windows::core::w!("-no-warnings"),
+        Dxc::DXC_ARG_ENABLE_STRICTNESS,
+        Dxc::DXC_ARG_SKIP_VALIDATION, // Disable implicit validation to work around bugs when dxil.dll isn't in the local directory.
+    ]);
+
+    if device
+        .private_caps
+        .instance_flags
+        .contains(wgt::InstanceFlags::DEBUG)
+    {
+        compile_args.push(Dxc::DXC_ARG_DEBUG);
+        compile_args.push(Dxc::DXC_ARG_SKIP_OPTIMIZATIONS);
+    }
+
+    let buffer = Dxc::DxcBuffer {
+        Ptr: source.as_ptr().cast(),
+        Size: source.len(),
+        Encoding: Dxc::DXC_CP_UTF8.0,
+    };
+
+    let compile_res: Dxc::IDxcResult = unsafe {
+        dxc_container
+            .compiler
+            .Compile(&buffer, Some(&compile_args), None)
+    }
+    .into_device_result("Compile")?;
+
+    drop(compile_args);
+    drop(source_name);
+    drop(raw_ep);
+    drop(full_stage);
+
+    let err_blob = get_output::<Dxc::IDxcBlobUtf8>(&compile_res, Dxc::DXC_OUT_ERRORS)?;
+
+    let len = unsafe { err_blob.GetStringLength() };
+    if len != 0 {
+        let err = as_err_str(&err_blob)?;
+        return Err(crate::PipelineError::Linkage(
+            stage_bit,
+            format!("DXC compile error: {err}"),
+        ));
+    }
+
+    let blob = get_output::<Dxc::IDxcBlob>(&compile_res, Dxc::DXC_OUT_OBJECT)?;
+
+    let err_blob = {
+        let res = unsafe {
+            dxc_container
+                .validator
+                .Validate(&blob, Dxc::DxcValidatorFlags_InPlaceEdit)
+        }
+        .into_device_result("Validate")?;
+
+        unsafe { res.GetErrorBuffer() }.into_device_result("GetErrorBuffer")?
+    };
+
+    let size = unsafe { err_blob.GetBufferSize() };
+    if size != 0 {
+        let err_blob = unsafe { dxc_container.utils.GetBlobAsUtf8(&err_blob) }
+            .into_device_result("GetBlobAsUtf8")?;
+        let err = as_err_str(&err_blob)?;
+        return Err(crate::PipelineError::Linkage(
+            stage_bit,
+            format!("DXC validation error: {err}"),
+        ));
+    }
+
+    Ok(crate::dx12::CompiledShader::Dxc(blob))
 }

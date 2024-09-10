@@ -530,6 +530,13 @@ pub enum Sampling {
     /// Interpolate the value at each sample location. In multisampling, invoke
     /// the fragment shader once per sample.
     Sample,
+
+    /// Use the value provided by the first vertex of the current primitive.
+    First,
+
+    /// Use the value provided by the first or last vertex of the current primitive. The exact
+    /// choice is implementation-dependent.
+    Either,
 }
 
 /// Member of a user-defined structure.
@@ -615,7 +622,7 @@ pub enum StorageFormat {
     // Packed 32-bit formats
     Rgb10a2Uint,
     Rgb10a2Unorm,
-    Rg11b10UFloat,
+    Rg11b10Ufloat,
 
     // 64-bit formats
     Rg32Uint,

@@ -161,10 +161,7 @@ hal = { workspace = true }
 hal = { workspace = true, features = ["renderdoc"] }
 
 [target.'cfg(windows)'.dependencies]
-hal = { workspace = true, features = [
-    "dxc_shader_compiler",
-    "renderdoc",
-] }
+hal = { workspace = true, features = ["renderdoc"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.hal]
 workspace = true

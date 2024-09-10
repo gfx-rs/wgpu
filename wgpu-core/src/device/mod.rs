@@ -308,7 +308,7 @@ fn map_buffer(
     let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
         raw.map_buffer(raw_buffer, offset..offset + size)
-            .map_err(DeviceError::from)?
+            .map_err(|e| buffer.device.handle_hal_error(e))?
     };
 
     if !mapping.is_coherent && kind == HostMap::Read {
@@ -336,19 +336,41 @@ fn map_buffer(
 
     let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
-    for uninitialized in buffer
-        .initialization_status
-        .write()
-        .drain(offset..(size + offset))
+    // We can't call flush_mapped_ranges in this case, so we can't drain the uninitialized ranges either
+    if !mapping.is_coherent
+        && kind == HostMap::Read
+        && !buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
     {
-        // The mapping's pointer is already offset, however we track the
-        // uninitialized range relative to the buffer's start.
-        let fill_range =
-            (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
-        mapped[fill_range].fill(0);
+        for uninitialized in buffer
+            .initialization_status
+            .write()
+            .uninitialized(offset..(size + offset))
+        {
+            // The mapping's pointer is already offset, however we track the
+            // uninitialized range relative to the buffer's start.
+            let fill_range =
+                (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+            mapped[fill_range].fill(0);
+        }
+    } else {
+        for uninitialized in buffer
+            .initialization_status
+            .write()
+            .drain(offset..(size + offset))
+        {
+            // The mapping's pointer is already offset, however we track the
+            // uninitialized range relative to the buffer's start.
+            let fill_range =
+                (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+            mapped[fill_range].fill(0);
 
-        if !mapping.is_coherent && kind == HostMap::Read {
-            unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
+            // NOTE: This is only possible when MAPPABLE_PRIMARY_BUFFERS is enabled.
+            if !mapping.is_coherent
+                && kind == HostMap::Read
+                && buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
+            {
+                unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
+            }
         }
     }
 
@@ -392,19 +414,20 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
-    #[error("DeviceId is invalid")]
-    InvalidDeviceId,
     #[error(transparent)]
     DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
 
-impl From<hal::DeviceError> for DeviceError {
-    fn from(error: hal::DeviceError) -> Self {
+impl DeviceError {
+    /// Only use this function in contexts where there is no `Device`.
+    ///
+    /// Use [`Device::handle_hal_error`] otherwise.
+    pub fn from_hal(error: hal::DeviceError) -> Self {
         match error {
-            hal::DeviceError::Lost => DeviceError::Lost,
-            hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
-            hal::DeviceError::Unexpected => DeviceError::Lost,
+            hal::DeviceError::Lost => Self::Lost,
+            hal::DeviceError::OutOfMemory => Self::OutOfMemory,
+            hal::DeviceError::ResourceCreationFailed => Self::ResourceCreationFailed,
+            hal::DeviceError::Unexpected => Self::Lost,
         }
     }
 }
@@ -439,15 +462,11 @@ impl ImplicitPipelineIds<'_> {
             root_id: hub
                 .pipeline_layouts
                 .prepare(backend, Some(self.root_id))
-                .into_id(),
+                .id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| {
-                    hub.bind_group_layouts
-                        .prepare(backend, Some(*id_in))
-                        .into_id()
-                })
+                .map(|id_in| hub.bind_group_layouts.prepare(backend, Some(*id_in)).id())
                 .collect(),
         }
     }

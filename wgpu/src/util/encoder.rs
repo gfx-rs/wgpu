@@ -10,7 +10,12 @@ pub trait RenderEncoder<'a> {
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in order of their declaration.
-    fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]);
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<&'a BindGroup>,
+        offsets: &[DynamicOffset],
+    );
 
     /// Sets the active render pipeline.
     ///
@@ -101,7 +106,12 @@ pub trait RenderEncoder<'a> {
 
 impl<'a> RenderEncoder<'a> for RenderPass<'a> {
     #[inline(always)]
-    fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]) {
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<&'a BindGroup>,
+        offsets: &[DynamicOffset],
+    ) {
         Self::set_bind_group(self, index, bind_group, offsets);
     }
 
@@ -152,7 +162,12 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
 
 impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
     #[inline(always)]
-    fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]) {
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: Option<&'a BindGroup>,
+        offsets: &[DynamicOffset],
+    ) {
         Self::set_bind_group(self, index, bind_group, offsets);
     }
 

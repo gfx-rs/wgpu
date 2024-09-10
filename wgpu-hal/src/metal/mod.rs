@@ -107,9 +107,7 @@ crate::impl_dyn_resource!(
     TextureView
 );
 
-pub struct Instance {
-    managed_metal_layer_delegate: surface::HalManagedMetalLayerDelegate,
-}
+pub struct Instance {}
 
 impl Instance {
     pub fn create_surface_from_layer(&self, layer: &CAMetalLayer) -> Surface {
@@ -124,9 +122,7 @@ impl crate::Instance for Instance {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
         // process. Instead, we enable the validation inside the test harness itself in tests/src/native.rs.
-        Ok(Instance {
-            managed_metal_layer_delegate: surface::HalManagedMetalLayerDelegate::new(),
-        })
+        Ok(Instance {})
     }
 
     unsafe fn create_surface(
@@ -137,16 +133,12 @@ impl crate::Instance for Instance {
         match window_handle {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
-                let _ = &self.managed_metal_layer_delegate;
-                Ok(unsafe { Surface::from_view(handle.ui_view.as_ptr(), None) })
+                Ok(unsafe { Surface::from_view(handle.ui_view.cast()) })
             }
             #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
-                Surface::from_view(
-                    handle.ns_view.as_ptr(),
-                    Some(&self.managed_metal_layer_delegate),
-                )
-            }),
+            raw_window_handle::RawWindowHandle::AppKit(handle) => {
+                Ok(unsafe { Surface::from_view(handle.ns_view.cast()) })
+            }
             _ => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Metal-compatible handle"
             ))),
@@ -381,7 +373,6 @@ pub struct Device {
 }
 
 pub struct Surface {
-    view: Option<NonNull<objc2::runtime::AnyObject>>,
     render_layer: Mutex<Retained<CAMetalLayer>>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,

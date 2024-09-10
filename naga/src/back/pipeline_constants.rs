@@ -289,6 +289,7 @@ fn process_function(
         &mut local_expression_kind_tracker,
         &mut emitter,
         &mut block,
+        false,
     );
 
     for (old_h, mut expr, span) in expressions.drain() {

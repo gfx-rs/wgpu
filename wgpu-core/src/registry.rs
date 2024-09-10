@@ -4,7 +4,7 @@ use crate::{
     id::Id,
     identity::IdentityManager,
     lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard},
-    storage::{Element, InvalidId, Storage, StorageItem},
+    storage::{Element, Storage, StorageItem},
 };
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -12,7 +12,6 @@ pub struct RegistryReport {
     pub num_allocated: usize,
     pub num_kept_from_user: usize,
     pub num_released_from_user: usize,
-    pub num_error: usize,
     pub element_size: usize,
 }
 
@@ -56,26 +55,16 @@ pub(crate) struct FutureId<'a, T: StorageItem> {
 }
 
 impl<T: StorageItem> FutureId<'_, T> {
-    #[allow(dead_code)]
     pub fn id(&self) -> Id<T::Marker> {
-        self.id
-    }
-
-    pub fn into_id(self) -> Id<T::Marker> {
         self.id
     }
 
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry.
-    pub fn assign(self, value: Arc<T>) -> Id<T::Marker> {
+    pub fn assign(self, value: T) -> Id<T::Marker> {
         let mut data = self.data.write();
         data.insert(self.id, value);
-        self.id
-    }
-
-    pub fn assign_error(self) -> Id<T::Marker> {
-        self.data.write().insert_error(self.id);
         self.id
     }
 }
@@ -98,21 +87,15 @@ impl<T: StorageItem> Registry<T> {
         }
     }
 
-    pub(crate) fn get(&self, id: Id<T::Marker>) -> Result<Arc<T>, InvalidId> {
-        self.read().get_owned(id)
-    }
+    #[track_caller]
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
         self.storage.read()
     }
+    #[track_caller]
     pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
         self.storage.write()
     }
-    pub(crate) fn force_replace_with_error(&self, id: Id<T::Marker>) {
-        let mut storage = self.storage.write();
-        storage.remove(id);
-        storage.insert_error(id);
-    }
-    pub(crate) fn unregister(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
+    pub(crate) fn remove(&self, id: Id<T::Marker>) -> T {
         let value = self.storage.write().remove(id);
         // This needs to happen *after* removing it from the storage, to maintain the
         // invariant that `self.identity` only contains ids which are actually available
@@ -133,10 +116,15 @@ impl<T: StorageItem> Registry<T> {
             match *element {
                 Element::Occupied(..) => report.num_kept_from_user += 1,
                 Element::Vacant => report.num_released_from_user += 1,
-                Element::Error(_) => report.num_error += 1,
             }
         }
         report
+    }
+}
+
+impl<T: StorageItem + Clone> Registry<T> {
+    pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
+        self.read().get(id)
     }
 }
 
@@ -168,7 +156,7 @@ mod tests {
                         let value = Arc::new(TestData);
                         let new_id = registry.prepare(wgt::Backend::Empty, None);
                         let id = new_id.assign(value);
-                        registry.unregister(id);
+                        registry.remove(id);
                     }
                 });
             }

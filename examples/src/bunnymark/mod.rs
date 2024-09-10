@@ -34,12 +34,19 @@ impl Bunny {
         self.position[0] += self.velocity[0] * delta;
         self.position[1] += self.velocity[1] * delta;
         self.velocity[1] += GRAVITY * delta;
+
         if (self.velocity[0] > 0.0 && self.position[0] + 0.5 * BUNNY_SIZE > extent[0] as f32)
             || (self.velocity[0] < 0.0 && self.position[0] - 0.5 * BUNNY_SIZE < 0.0)
         {
             self.velocity[0] *= -1.0;
         }
+
         if self.velocity[1] < 0.0 && self.position[1] < 0.5 * BUNNY_SIZE {
+            self.velocity[1] *= -1.0;
+        }
+
+        // Top boundary check
+        if self.velocity[1] > 0.0 && self.position[1] + 0.5 * BUNNY_SIZE > extent[1] as f32 {
             self.velocity[1] *= -1.0;
         }
     }
@@ -47,6 +54,9 @@ impl Bunny {
 
 /// Example struct holds references to wgpu resources and frame persistent data
 struct Example {
+    view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
+    global_bind_group_layout: wgpu::BindGroupLayout,
     global_group: wgpu::BindGroup,
     local_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
@@ -118,11 +128,11 @@ impl Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.global_group, &[]);
+            rpass.set_bind_group(0, Some(&self.global_group), &[]);
             for i in 0..self.bunnies.len() {
                 let offset =
                     (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
-                rpass.set_bind_group(1, &self.local_group, &[offset]);
+                rpass.set_bind_group(1, Some(&self.local_group), &[offset]);
                 rpass.draw(0..4, 0..1);
             }
         }
@@ -286,6 +296,7 @@ impl crate::framework::Example for Example {
             size: [BUNNY_SIZE; 2],
             pad: [0.0; 2],
         };
+
         let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("global"),
             contents: bytemuck::bytes_of(&globals),
@@ -335,6 +346,9 @@ impl crate::framework::Example for Example {
         let rng = WyRand::new_seed(42);
 
         let mut ex = Example {
+            view,
+            sampler,
+            global_bind_group_layout,
             pipeline,
             global_group,
             local_group,
@@ -366,11 +380,51 @@ impl crate::framework::Example for Example {
 
     fn resize(
         &mut self,
-        _sc_desc: &wgpu::SurfaceConfiguration,
-        _device: &wgpu::Device,
+        sc_desc: &wgpu::SurfaceConfiguration,
+        device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {
-        //empty
+        self.extent = [sc_desc.width, sc_desc.height];
+
+        let globals = Globals {
+            mvp: glam::Mat4::orthographic_rh(
+                0.0,
+                sc_desc.width as f32,
+                0.0,
+                sc_desc.height as f32,
+                -1.0,
+                1.0,
+            )
+            .to_cols_array_2d(),
+            size: [BUNNY_SIZE; 2],
+            pad: [0.0; 2],
+        };
+
+        let global_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("global"),
+            contents: bytemuck::bytes_of(&globals),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+        });
+
+        let global_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.global_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: global_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&self.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+            label: None,
+        });
+        self.global_group = global_group;
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {

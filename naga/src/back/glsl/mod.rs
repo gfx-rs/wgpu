@@ -47,7 +47,7 @@ pub use features::Features;
 
 use crate::{
     back::{self, Baked},
-    proc::{self, NameKey},
+    proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
@@ -498,6 +498,9 @@ pub enum Error {
     Custom(String),
     #[error("overrides should not be present at this stage")]
     Override,
+    /// [`crate::Sampling::First`] is unsupported.
+    #[error("`{:?}` sampling is unsupported", crate::Sampling::First)]
+    FirstSamplingNotSupported,
 }
 
 /// Binary operation with a different logic on the GLSL side.
@@ -1534,7 +1537,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // here, regardless of the version.
         if let Some(sampling) = sampling {
             if emit_interpolation_and_auxiliary {
-                if let Some(qualifier) = glsl_sampling(sampling) {
+                if let Some(qualifier) = glsl_sampling(sampling)? {
                     write!(self.out, "{qualifier} ")?;
                 }
             }
@@ -1584,6 +1587,7 @@ impl<'a, W: Write> Writer<'a, W> {
             info,
             expressions: &func.expressions,
             named_expressions: &func.named_expressions,
+            expr_kind_tracker: ExpressionKindTracker::from_arena(&func.expressions),
         };
 
         self.named_expressions.clear();
@@ -4770,14 +4774,15 @@ const fn glsl_interpolation(interpolation: crate::Interpolation) -> &'static str
 }
 
 /// Return the GLSL auxiliary qualifier for the given sampling value.
-const fn glsl_sampling(sampling: crate::Sampling) -> Option<&'static str> {
+const fn glsl_sampling(sampling: crate::Sampling) -> BackendResult<Option<&'static str>> {
     use crate::Sampling as S;
 
-    match sampling {
-        S::Center => None,
+    Ok(match sampling {
+        S::First => return Err(Error::FirstSamplingNotSupported),
+        S::Center | S::Either => None,
         S::Centroid => Some("centroid"),
         S::Sample => Some("sample"),
-    }
+    })
 }
 
 /// Helper function that returns the glsl dimension string of [`ImageDimension`](crate::ImageDimension)
@@ -4820,7 +4825,7 @@ fn glsl_storage_format(format: crate::StorageFormat) -> Result<&'static str, Err
         Sf::Rgba8Sint => "rgba8i",
         Sf::Rgb10a2Uint => "rgb10_a2ui",
         Sf::Rgb10a2Unorm => "rgb10_a2",
-        Sf::Rg11b10UFloat => "r11f_g11f_b10f",
+        Sf::Rg11b10Ufloat => "r11f_g11f_b10f",
         Sf::Rg32Uint => "rg32ui",
         Sf::Rg32Sint => "rg32i",
         Sf::Rg32Float => "rg32f",

@@ -355,6 +355,13 @@ struct Swapchain {
     /// index as the image index, but we need to specify the semaphore as an argument
     /// to the acquire_next_image function which is what tells us which image to use.
     next_semaphore_index: usize,
+    /// The present timing information which will be set in the next call to [`present()`](crate::Queue::present()).
+    ///
+    /// # Safety
+    ///
+    /// This must only be set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
+    /// so the VK_GOOGLE_display_timing extension is present.
+    next_present_time: Option<vk::PresentTimeGOOGLE>,
 }
 
 impl Swapchain {
@@ -373,6 +380,47 @@ pub struct Surface {
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
     swapchain: RwLock<Option<Swapchain>>,
+}
+
+impl Surface {
+    /// Get the raw Vulkan swapchain associated with this surface.
+    ///
+    /// Returns [`None`] if the surface is not configured.
+    pub fn raw_swapchain(&self) -> Option<vk::SwapchainKHR> {
+        let read = self.swapchain.read();
+        read.as_ref().map(|it| it.raw)
+    }
+
+    /// Set the present timing information which will be used for the next [presentation](crate::Queue::present()) of this surface,
+    /// using [VK_GOOGLE_display_timing].
+    ///
+    /// This can be used to give an id to presentations, for future use of [`vk::PastPresentationTimingGOOGLE`].
+    /// Note that `wgpu-hal` does *not* provide a way to use that API - you should manually access this through [`ash`].
+    ///
+    /// This can also be used to add a "not before" timestamp to the presentation.
+    ///
+    /// The exact semantics of the fields are also documented in the [specification](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPresentTimeGOOGLE.html) for the extension.
+    ///
+    /// # Panics
+    ///
+    /// - If the surface hasn't been configured.
+    /// - If the device doesn't [support present timing](wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING).
+    ///
+    /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
+    #[track_caller]
+    pub fn set_next_present_time(&self, present_timing: vk::PresentTimeGOOGLE) {
+        let mut swapchain = self.swapchain.write();
+        let swapchain = swapchain
+            .as_mut()
+            .expect("Surface should have been configured");
+        let features = wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING;
+        if swapchain.device.features.contains(features) {
+            swapchain.next_present_time = Some(present_timing);
+        } else {
+            // Ideally we'd use something like `device.required_features` here, but that's in `wgpu-core`, which we are a dependency of
+            panic!("Tried to set display timing properties without the corresponding feature ({features:?}) enabled.");
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -445,9 +493,36 @@ struct PrivateCapabilities {
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,
+
+    /// True if this adapter advertises the [`robustBufferAccess`][vrba] feature.
+    ///
+    /// Note that Vulkan's `robustBufferAccess` is not sufficient to implement
+    /// `wgpu_hal`'s guarantee that shaders will not access buffer contents via
+    /// a given bindgroup binding outside that binding's [accessible
+    /// region][ar]. Enabling `robustBufferAccess` does ensure that
+    /// out-of-bounds reads and writes are not undefined behavior (that's good),
+    /// but still permits out-of-bounds reads to return data from anywhere
+    /// within the buffer, not just the accessible region.
+    ///
+    /// [ar]: ../struct.BufferBinding.html#accessible-region
+    /// [vrba]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#features-robustBufferAccess
     robust_buffer_access: bool,
+
     robust_image_access: bool,
+
+    /// True if this adapter supports the [`VK_EXT_robustness2`] extension's
+    /// [`robustBufferAccess2`] feature.
+    ///
+    /// This is sufficient to implement `wgpu_hal`'s [required bounds-checking][ar] of
+    /// shader accesses to buffer contents. If this feature is not available,
+    /// this backend must have Naga inject bounds checks in the generated
+    /// SPIR-V.
+    ///
+    /// [`VK_EXT_robustness2`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_robustness2.html
+    /// [`robustBufferAccess2`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceRobustness2FeaturesEXT.html#features-robustBufferAccess2
+    /// [ar]: ../struct.BufferBinding.html#accessible-region
     robust_buffer_access2: bool,
+
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
@@ -547,7 +622,7 @@ struct DeviceShared {
     family_index: u32,
     queue_index: u32,
     raw_queue: vk::Queue,
-    handle_is_owned: bool,
+    drop_guard: Option<crate::DropGuard>,
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
@@ -1158,6 +1233,23 @@ impl crate::Queue for Queue {
             .image_indices(&image_indices)
             .wait_semaphores(swapchain_semaphores.get_present_wait_semaphores());
 
+        let mut display_timing;
+        let present_times;
+        let vk_info = if let Some(present_time) = ssc.next_present_time.take() {
+            debug_assert!(
+                ssc.device
+                    .features
+                    .contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING),
+                "`next_present_time` should only be set if `VULKAN_GOOGLE_DISPLAY_TIMING` is enabled"
+            );
+            present_times = [present_time];
+            display_timing = vk::PresentTimesInfoGOOGLE::default().times(&present_times);
+            // SAFETY: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_time`.
+            vk_info.push_next(&mut display_timing)
+        } else {
+            vk_info
+        };
+
         let suboptimal = {
             profiling::scope!("vkQueuePresentKHR");
             unsafe { self.swapchain_fn.queue_present(self.raw, &vk_info) }.map_err(|error| {
@@ -1294,9 +1386,4 @@ fn get_lost_err() -> crate::DeviceError {
 
     #[allow(unreachable_code)]
     crate::DeviceError::Lost
-}
-
-#[cold]
-fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
-    panic!("wgpu-hal invariant was violated (usage error): {txt}")
 }

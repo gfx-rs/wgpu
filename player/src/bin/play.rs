@@ -78,18 +78,18 @@ fn main() {
                 )
                 .expect("Unable to find an adapter for selected backend");
 
-            let info = global.adapter_get_info(adapter).unwrap();
+            let info = global.adapter_get_info(adapter);
             log::info!("Picked '{}'", info.name);
             let device_id = wgc::id::Id::zip(1, 0, backend);
             let queue_id = wgc::id::Id::zip(1, 0, backend);
-            let (_, _, error) = global.adapter_request_device(
+            let res = global.adapter_request_device(
                 adapter,
                 &desc,
                 None,
                 Some(device_id),
                 Some(queue_id),
             );
-            if let Some(e) = error {
+            if let Err(e) = res {
                 panic!("{:?}", e);
             }
             (device_id, queue_id)

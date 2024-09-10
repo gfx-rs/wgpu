@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, num::NonZeroU32, ops::Range, sync::Arc};
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// Encodes a series of GPU operations into a reusable "render bundle".
@@ -17,7 +17,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct RenderBundleEncoder<'a> {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
     pub(crate) parent: &'a Device,
     /// This type should be !Send !Sync, because it represents an allocation on this thread's
@@ -53,11 +52,9 @@ static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor<'_>: Send, Syn
 impl<'a> RenderBundleEncoder<'a> {
     /// Finishes recording and returns a [`RenderBundle`] that can be executed in other render passes.
     pub fn finish(self, desc: &RenderBundleDescriptor<'_>) -> RenderBundle {
-        let (id, data) =
-            DynContext::render_bundle_encoder_finish(&*self.context, self.id, self.data, desc);
+        let data = DynContext::render_bundle_encoder_finish(&*self.context, self.data, desc);
         RenderBundle {
             context: Arc::clone(&self.context),
-            id,
             data,
         }
     }
@@ -69,16 +66,15 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: Option<&'a BindGroup>,
         offsets: &[DynamicOffset],
     ) {
+        let bg = bind_group.map(|x| x.data.as_ref());
         DynContext::render_bundle_encoder_set_bind_group(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
             index,
-            &bind_group.id,
-            bind_group.data.as_ref(),
+            bg,
             offsets,
         )
     }
@@ -89,9 +85,7 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
         DynContext::render_bundle_encoder_set_pipeline(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
-            &pipeline.id,
             pipeline.data.as_ref(),
         )
     }
@@ -103,9 +97,7 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
         DynContext::render_bundle_encoder_set_index_buffer(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
-            &buffer_slice.buffer.id,
             buffer_slice.buffer.data.as_ref(),
             index_format,
             buffer_slice.offset,
@@ -126,10 +118,8 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
         DynContext::render_bundle_encoder_set_vertex_buffer(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
             slot,
-            &buffer_slice.buffer.id,
             buffer_slice.buffer.data.as_ref(),
             buffer_slice.offset,
             buffer_slice.size,
@@ -157,7 +147,6 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
             vertices,
             instances,
@@ -188,7 +177,6 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw_indexed(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
             indices,
             base_vertex,
@@ -204,9 +192,7 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_bundle_encoder_draw_indirect(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
         );
@@ -226,9 +212,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ) {
         DynContext::render_bundle_encoder_draw_indexed_indirect(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
-            &indirect_buffer.id,
             indirect_buffer.data.as_ref(),
             indirect_offset,
         );
@@ -268,7 +252,6 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
         DynContext::render_bundle_encoder_set_push_constants(
             &*self.parent.context,
-            &mut self.id,
             self.data.as_mut(),
             stages,
             offset,

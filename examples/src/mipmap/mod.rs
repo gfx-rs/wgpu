@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem};
+use std::{borrow::Cow, f32::consts, mem::size_of};
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -54,8 +54,7 @@ type TimestampQueries = [TimestampData; MIP_PASS_COUNT as usize];
 type PipelineStatisticsQueries = [u64; MIP_PASS_COUNT as usize];
 
 fn pipeline_statistics_offset() -> wgpu::BufferAddress {
-    (mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
-        .max(wgpu::QUERY_RESOLVE_BUFFER_ALIGNMENT)
+    (size_of::<TimestampQueries>() as wgpu::BufferAddress).max(wgpu::QUERY_RESOLVE_BUFFER_ALIGNMENT)
 }
 
 struct Example {
@@ -181,7 +180,7 @@ impl Example {
                 );
             }
             rpass.set_pipeline(&pipeline);
-            rpass.set_bind_group(0, &bind_group, &[]);
+            rpass.set_bind_group(0, Some(&bind_group), &[]);
             rpass.draw(0..3, 0..1);
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base + 1);
@@ -363,7 +362,7 @@ impl crate::framework::Example for Example {
             // This databuffer has to store all of the query results, 2 * passes timestamp queries
             // and 1 * passes statistics queries. Each query returns a u64 value.
             let buffer_size = pipeline_statistics_offset()
-                + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress;
+                + size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress;
             let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query buffer"),
                 size: buffer_size,
@@ -420,7 +419,7 @@ impl crate::framework::Example for Example {
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .mapping_buffer
-                .slice(..mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
+                .slice(..size_of::<TimestampQueries>() as wgpu::BufferAddress)
                 .get_mapped_range();
             let pipeline_stats_view = query_sets
                 .mapping_buffer
@@ -498,7 +497,7 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.draw_pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
             rpass.draw(0..4, 0..1);
         }
 
