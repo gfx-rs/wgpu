@@ -142,6 +142,7 @@ objc2-foundation = { version = "0.2.2", features = [
     "NSProcessInfo",
     "NSRange",
     "NSString",
+    "NSThread",
 ] }
 objc2-metal = { version = "0.2.2", features = [
     "block2",

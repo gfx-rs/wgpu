@@ -1,6 +1,5 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
-use std::ffi::c_uint;
 use std::ptr::NonNull;
 use std::sync::Once;
 use std::thread;
@@ -8,14 +7,16 @@ use std::thread;
 use objc2::{
     class,
     declare::ClassBuilder,
-    msg_send,
+    msg_send, msg_send_id,
     rc::{autoreleasepool, Retained},
     runtime::{AnyClass, AnyObject, Bool, ProtocolObject, Sel},
     sel, ClassType,
 };
-use objc2_foundation::{CGFloat, CGRect, CGSize, NSObject, NSObjectProtocol};
+use objc2_foundation::{CGFloat, CGRect, CGSize, MainThreadMarker, NSObject, NSObjectProtocol};
 use objc2_metal::MTLTextureType;
-use objc2_quartz_core::{kCAGravityResize, CALayer, CAMetalDrawable, CAMetalLayer};
+use objc2_quartz_core::{
+    kCAGravityResize, CAAutoresizingMask, CALayer, CAMetalDrawable, CAMetalLayer,
+};
 use parking_lot::{Mutex, RwLock};
 
 extern "C" fn layer_should_inherit_contents_scale_from_window(
@@ -86,20 +87,19 @@ impl super::Surface {
     ///
     /// The `view` must be a valid instance of `NSView` or `UIView`.
     pub(crate) unsafe fn get_metal_layer(view: NonNull<NSObject>) -> Retained<CAMetalLayer> {
-        let is_main_thread: bool = msg_send![class!(NSThread), isMainThread];
-        if is_main_thread {
+        let Some(_mtm) = MainThreadMarker::new() else {
             panic!("get_metal_layer cannot be called in non-ui thread.");
-        }
+        };
 
         // Ensure that the view is layer-backed.
         // Views are always layer-backed in UIKit.
         #[cfg(target_os = "macos")]
         let () = msg_send![view.as_ptr(), setWantsLayer: true];
 
-        let root_layer: *mut CALayer = msg_send![view.as_ptr(), layer];
+        let root_layer: Option<Retained<CALayer>> = msg_send_id![view.as_ptr(), layer];
         // `-[NSView layer]` can return `NULL`, while `-[UIView layer]` should
         // always be available.
-        assert!(!root_layer.is_null(), "failed making the view layer-backed");
+        let root_layer = root_layer.expect("failed making the view layer-backed");
 
         // NOTE: We explicitly do not touch properties such as
         // `layerContentsPlacement`, `needsDisplayOnBoundsChange` and
@@ -109,8 +109,7 @@ impl super::Surface {
         // `NSViewLayerContentsRedrawDuringViewResize`, which allows the view
         // to receive `drawRect:`/`updateLayer` calls).
 
-        let is_metal_layer: bool = msg_send![root_layer, isKindOfClass: class!(CAMetalLayer)];
-        if is_metal_layer {
+        if root_layer.isKindOfClass(CAMetalLayer::class()) {
             // The view has a `CAMetalLayer` as the root layer, which can
             // happen for example if user overwrote `-[NSView layerClass]` or
             // the view is `MTKView`.
@@ -119,7 +118,7 @@ impl super::Surface {
             // render directly into that; after all, the user passed a view
             // with an explicit Metal layer to us, so this is very likely what
             // they expect us to do.
-            unsafe { Retained::retain(root_layer.cast()).unwrap() }
+            unsafe { Retained::cast(root_layer) }
         } else {
             // The view does not have a `CAMetalLayer` as the root layer (this
             // is the default for most views).
@@ -188,8 +187,8 @@ impl super::Surface {
             // we're going to do.
 
             // Create a new sublayer.
-            let new_layer: *mut CAMetalLayer = msg_send![class!(CAMetalLayer), new];
-            let () = msg_send![root_layer, addSublayer: new_layer];
+            let new_layer = CAMetalLayer::new();
+            root_layer.addSublayer(&new_layer);
 
             // Automatically resize the sublayer's frame to match the
             // superlayer's bounds.
@@ -204,15 +203,15 @@ impl super::Surface {
             // We _could_ also let `configure` set the `bounds` size, however
             // that would be inconsistent with using the root layer directly
             // (as we may do, see above).
-            let width_sizable = 1 << 1; // kCALayerWidthSizable
-            let height_sizable = 1 << 4; // kCALayerHeightSizable
-            let mask: c_uint = width_sizable | height_sizable;
-            let () = msg_send![new_layer, setAutoresizingMask: mask];
+            new_layer.setAutoresizingMask(
+                CAAutoresizingMask::kCALayerWidthSizable
+                    | CAAutoresizingMask::kCALayerHeightSizable,
+            );
 
             // Specify the relative size that the auto resizing mask above
             // will keep (i.e. tell it to fill out its superlayer).
-            let frame: CGRect = msg_send![root_layer, bounds];
-            let () = msg_send![new_layer, setFrame: frame];
+            let frame = root_layer.bounds();
+            new_layer.setFrame(frame);
 
             // The gravity to use when the layer's `drawableSize` isn't the
             // same as the bounds rectangle.
@@ -225,26 +224,25 @@ impl super::Surface {
             // Unfortunately, it also makes it harder to see changes to
             // `width` and `height` in `configure`. When debugging resize
             // issues, swap this for `kCAGravityTopLeft` instead.
-            let _: () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityResize }];
+            new_layer.setContentsGravity(unsafe { kCAGravityResize });
 
             // Set initial scale factor of the layer. This is kept in sync by
             // `configure` (on UIKit), and the delegate below (on AppKit).
-            let scale_factor: CGFloat = msg_send![root_layer, contentsScale];
-            let () = msg_send![new_layer, setContentsScale: scale_factor];
+            let scale_factor = root_layer.contentsScale();
+            new_layer.setContentsScale(scale_factor);
 
             let delegate = HalManagedMetalLayerDelegate::new();
-            let () = msg_send![new_layer, setDelegate: delegate.0];
+            new_layer.setDelegate(std::mem::transmute(delegate.0));
 
-            unsafe { Retained::from_raw(new_layer).unwrap() }
+            new_layer
         }
     }
 
     pub(super) fn dimensions(&self) -> wgt::Extent3d {
-        let (size, scale): (CGSize, CGFloat) = unsafe {
-            let render_layer_borrow = self.render_layer.lock();
-            let render_layer = render_layer_borrow.as_ref();
-            let bounds: CGRect = msg_send![render_layer, bounds];
-            let contents_scale: CGFloat = msg_send![render_layer, contentsScale];
+        let (size, scale): (CGSize, CGFloat) = {
+            let render_layer = self.render_layer.lock();
+            let bounds = render_layer.bounds();
+            let contents_scale = render_layer.contentsScale();
             (bounds.size, contents_scale)
         };
 
