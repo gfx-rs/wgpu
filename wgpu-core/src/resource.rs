@@ -1057,7 +1057,7 @@ impl Texture {
                 if init {
                     TextureInitTracker::new(desc.mip_level_count, desc.array_layer_count())
                 } else {
-                    TextureInitTracker::new(0, 0)
+                    TextureInitTracker::new(desc.mip_level_count, 0)
                 },
             ),
             full_range: TextureSelector {
