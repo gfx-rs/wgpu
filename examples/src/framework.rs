@@ -226,6 +226,7 @@ impl SurfaceWrapper {
                 // If the surface is outdated, or was lost, reconfigure it.
                 wgpu::SurfaceError::Outdated
                 | wgpu::SurfaceError::Lost
+                | wgpu::SurfaceError::Other
                 // If OutOfMemory happens, reconfiguring may not help, but we might as well try
                 | wgpu::SurfaceError::OutOfMemory,
             ) => {

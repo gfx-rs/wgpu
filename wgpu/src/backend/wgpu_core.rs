@@ -441,6 +441,9 @@ pub struct Surface {
     /// Configured device is needed to know which backend
     /// code to execute when acquiring a new frame.
     configured_device: Mutex<Option<wgc::id::DeviceId>>,
+    /// The error sink with which to report errors.
+    /// `None` if the surface has not been configured.
+    error_sink: Mutex<Option<ErrorSink>>
 }
 
 #[derive(Debug)]
@@ -572,6 +575,7 @@ impl crate::Context for ContextWgpuCore {
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
+            error_sink: Mutex::default(),
         })
     }
 
@@ -710,6 +714,7 @@ impl crate::Context for ContextWgpuCore {
             self.handle_error_nolabel(&device_data.error_sink, e, "Surface::configure");
         } else {
             *surface_data.configured_device.lock() = Some(device_data.id);
+            *surface_data.error_sink.lock() = Some(device_data.error_sink.clone());
         }
     }
 
@@ -736,7 +741,20 @@ impl crate::Context for ContextWgpuCore {
                     },
                 )
             }
-            Err(err) => self.handle_error_fatal(err, "Surface::get_current_texture_view"),
+            Err(err) => {
+                match surface_data.error_sink.lock().as_ref() {
+                    Some(error_sink) => {
+                        self.handle_error_nolabel(error_sink, err, "Surface::get_current_texture_view");
+                        (None, SurfaceStatus::Unknown,
+                         SurfaceOutputDetail {
+                             surface_id: surface_data.id,
+                         })
+                    },
+                    None => {
+                        self.handle_error_fatal(err, "Surface::get_current_texture_view")
+                    }
+                }
+            },
         }
     }
 
