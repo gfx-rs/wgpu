@@ -217,7 +217,6 @@ impl WgpuContext {
         self.surface_config.width = new_size.width;
         self.surface_config.height = new_size.height;
         self.surface.configure(&self.device, &self.surface_config);
-        self.window.request_redraw();
     }
 }
 
@@ -285,7 +284,6 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                         WindowEvent::Resized(new_size) => {
                             let wgpu_context_mut = wgpu_context.as_mut().unwrap();
                             wgpu_context_mut.resize(new_size);
-                            wgpu_context_mut.window.request_redraw();
                         }
                         WindowEvent::RedrawRequested => {
                             let wgpu_context_ref = wgpu_context.as_ref().unwrap();
