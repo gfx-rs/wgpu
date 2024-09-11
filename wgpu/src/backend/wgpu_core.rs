@@ -707,7 +707,7 @@ impl crate::Context for ContextWgpuCore {
             .0
             .surface_configure(surface_data.id, device_data.id, config);
         if let Some(e) = error {
-            self.handle_error_fatal(e, "Surface::configure");
+            self.handle_error_nolabel(&device_data.error_sink, e, "Surface::configure");
         } else {
             *surface_data.configured_device.lock() = Some(device_data.id);
         }
