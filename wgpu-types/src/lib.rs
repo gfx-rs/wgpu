@@ -5627,7 +5627,7 @@ pub enum SurfaceStatus {
     /// The surface under the swap chain is lost.
     Lost,
     /// The surface status is not known.
-    Unknown
+    Unknown,
 }
 
 /// Nanosecond timestamp used by the presentation engine.
