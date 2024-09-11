@@ -79,7 +79,7 @@ impl fmt::Display for SurfaceError {
             Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
             Self::Lost =>  "The swap chain has been lost and needs to be recreated",
             Self::OutOfMemory => "There is no more memory left to allocate a new frame",
-            SurfaceError::Other => "Acquiring a texture failed for an unknown reason"
+            Self::Other => "Acquiring a texture failed for an unknown reason"
         })
     }
 }
