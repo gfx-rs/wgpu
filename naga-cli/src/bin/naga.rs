@@ -465,6 +465,7 @@ fn run() -> anyhow::Result<()> {
     let Parsed {
         mut module,
         input_text,
+        language,
     } = parse_input(input_path, input, &params)?;
 
     // Include debugging information if requested.
@@ -477,6 +478,7 @@ fn run() -> anyhow::Result<()> {
             params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
                 source_code: input_text,
                 file_name: input_path,
+                language,
             })
         } else {
             eprintln!(
@@ -579,6 +581,7 @@ fn run() -> anyhow::Result<()> {
 struct Parsed {
     module: naga::Module,
     input_text: Option<String>,
+    language: naga::back::spv::SourceLanguage,
 }
 
 fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow::Result<Parsed> {
@@ -593,16 +596,26 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
             .context("Unable to determine --input-kind from filename")?,
     };
 
-    let (module, input_text) = match input_kind {
-        InputKind::Bincode => (bincode::deserialize(&input)?, None),
-        InputKind::SpirV => {
-            naga::front::spv::parse_u8_slice(&input, &params.spv_in).map(|m| (m, None))?
-        }
+    Ok(match input_kind {
+        InputKind::Bincode => Parsed {
+            module: bincode::deserialize(&input)?,
+            input_text: None,
+            language: naga::back::spv::SourceLanguage::Unknown,
+        },
+        InputKind::SpirV => Parsed {
+            module: naga::front::spv::parse_u8_slice(&input, &params.spv_in)?,
+            input_text: None,
+            language: naga::back::spv::SourceLanguage::Unknown,
+        },
         InputKind::Wgsl => {
             let input = String::from_utf8(input)?;
             let result = naga::front::wgsl::parse_str(&input);
             match result {
-                Ok(v) => (v, Some(input)),
+                Ok(v) => Parsed {
+                    module: v,
+                    input_text: Some(input),
+                    language: naga::back::spv::SourceLanguage::WGSL,
+                },
                 Err(ref e) => {
                     let message = anyhow!(
                         "Could not parse WGSL:\n{}",
@@ -631,8 +644,8 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
             };
             let input = String::from_utf8(input)?;
             let mut parser = naga::front::glsl::Frontend::default();
-            (
-                parser
+            Parsed {
+                module: parser
                     .parse(
                         &naga::front::glsl::Options {
                             stage: shader_stage.0,
@@ -649,12 +662,11 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                         error.emit_to_writer_with_path(&mut writer, &input, filename);
                         std::process::exit(1);
                     }),
-                Some(input),
-            )
+                input_text: Some(input),
+                language: naga::back::spv::SourceLanguage::GLSL,
+            }
         }
-    };
-
-    Ok(Parsed { module, input_text })
+    })
 }
 
 fn write_output(
@@ -833,7 +845,11 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
         let path = Path::new(&input_path);
         let input = fs::read(path)?;
 
-        let Parsed { module, input_text } = match parse_input(path, input, params) {
+        let Parsed {
+            module,
+            input_text,
+            language: _,
+        } = match parse_input(path, input, params) {
             Ok(parsed) => parsed,
             Err(error) => {
                 invalid.push(input_path.clone());

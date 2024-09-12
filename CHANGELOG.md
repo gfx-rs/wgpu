@@ -83,6 +83,7 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 #### Naga
 
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
+- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256)
 
 #### General
 
