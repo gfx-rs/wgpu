@@ -285,7 +285,7 @@ impl Device {
                     Ok(mut trace) => {
                         trace.add(trace::Action::Init {
                             desc: desc.clone(),
-                            backend: adapter.raw.backend(),
+                            backend: adapter.backend(),
                         });
                         Some(trace)
                     }
@@ -311,7 +311,7 @@ impl Device {
 
     /// Returns the backend this device is using.
     pub fn backend(&self) -> wgt::Backend {
-        self.adapter.raw.backend()
+        self.adapter.backend()
     }
 
     pub fn is_valid(&self) -> bool {
