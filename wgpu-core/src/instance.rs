@@ -273,6 +273,11 @@ impl Adapter {
         Self { raw }
     }
 
+    /// Returns the backend this adapter is using.
+    pub fn backend(&self) -> Backend {
+        self.raw.backend()
+    }
+
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
         // If get_capabilities returns Err, then the API does not advertise support for the surface.
         //
@@ -389,7 +394,7 @@ impl Adapter {
         }
 
         let caps = &self.raw.capabilities;
-        if Backends::PRIMARY.contains(Backends::from(self.raw.backend()))
+        if Backends::PRIMARY.contains(Backends::from(self.backend()))
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;
