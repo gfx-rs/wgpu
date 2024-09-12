@@ -61,13 +61,7 @@ impl Global {
     ///
     /// - The raw instance handle returned must not be manually destroyed.
     pub unsafe fn instance_as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
-        self.instance.raw(A::VARIANT).map(|instance| {
-            instance
-                .as_any()
-                .downcast_ref()
-                // This should be impossible. It would mean that backend instance and enum type are mismatching.
-                .expect("Stored instance is not of the correct type")
-        })
+        unsafe { self.instance.as_hal::<A>() }
     }
 
     /// # Safety
