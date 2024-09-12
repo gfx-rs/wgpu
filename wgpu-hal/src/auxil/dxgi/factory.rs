@@ -138,7 +138,7 @@ pub fn create_factory(
         // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.
-        if lib_dxgi.debug_interface1().is_ok() {
+        if let Ok(Some(_)) = lib_dxgi.debug_interface1() {
             factory_flags |= Dxgi::DXGI_CREATE_FACTORY_DEBUG;
         }
 
