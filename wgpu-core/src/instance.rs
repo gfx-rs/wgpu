@@ -257,7 +257,7 @@ pub struct Adapter {
 }
 
 impl Adapter {
-    fn new(mut raw: hal::DynExposedAdapter) -> Self {
+    pub fn new(mut raw: hal::DynExposedAdapter) -> Self {
         // WebGPU requires this offset alignment as lower bound on all adapters.
         const MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND: u32 = 32;
 
@@ -306,7 +306,7 @@ impl Adapter {
         unsafe { self.raw.adapter.get_presentation_timestamp() }
     }
 
-    pub(crate) fn get_texture_format_features(
+    pub fn get_texture_format_features(
         &self,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
@@ -399,8 +399,7 @@ impl Adapter {
         Ok((device, queue))
     }
 
-    #[allow(clippy::type_complexity)]
-    fn create_device_and_queue(
+    pub fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
