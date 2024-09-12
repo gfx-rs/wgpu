@@ -286,6 +286,26 @@ impl Adapter {
         surface.get_capabilities(self).is_ok()
     }
 
+    pub fn get_info(&self) -> wgt::AdapterInfo {
+        self.raw.info.clone()
+    }
+
+    pub fn features(&self) -> wgt::Features {
+        self.raw.features
+    }
+
+    pub fn limits(&self) -> wgt::Limits {
+        self.raw.capabilities.limits.clone()
+    }
+
+    pub fn downlevel_capabilities(&self) -> wgt::DownlevelCapabilities {
+        self.raw.capabilities.downlevel.clone()
+    }
+
+    pub fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        unsafe { self.raw.adapter.get_presentation_timestamp() }
+    }
+
     pub(crate) fn get_texture_format_features(
         &self,
         format: wgt::TextureFormat,
@@ -727,7 +747,7 @@ impl Global {
 
     pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.info.clone()
+        adapter.get_info()
     }
 
     pub fn adapter_get_texture_format_features(
@@ -741,12 +761,12 @@ impl Global {
 
     pub fn adapter_features(&self, adapter_id: AdapterId) -> wgt::Features {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.features
+        adapter.features()
     }
 
     pub fn adapter_limits(&self, adapter_id: AdapterId) -> wgt::Limits {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.capabilities.limits.clone()
+        adapter.limits()
     }
 
     pub fn adapter_downlevel_capabilities(
@@ -754,7 +774,7 @@ impl Global {
         adapter_id: AdapterId,
     ) -> wgt::DownlevelCapabilities {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.capabilities.downlevel.clone()
+        adapter.downlevel_capabilities()
     }
 
     pub fn adapter_get_presentation_timestamp(
@@ -762,7 +782,7 @@ impl Global {
         adapter_id: AdapterId,
     ) -> wgt::PresentationTimestamp {
         let adapter = self.hub.adapters.get(adapter_id);
-        unsafe { adapter.raw.adapter.get_presentation_timestamp() }
+        adapter.get_presentation_timestamp()
     }
 
     pub fn adapter_drop(&self, adapter_id: AdapterId) {
