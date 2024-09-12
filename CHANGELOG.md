@@ -111,6 +111,10 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
 
+#### Vulkan
+
+- Vulkan debug labels assumed no interior nul byte. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257)
+
 ### Changes
 
 - `wgpu_hal::gles::Adapter::new_external` now requires the context to be current when dropping the adapter and related objects. By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
