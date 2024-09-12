@@ -121,6 +121,19 @@ impl Instance {
                 (*instance_backend == backend).then(|| instance.as_ref())
             })
     }
+
+    /// # Safety
+    ///
+    /// - The raw instance handle returned must not be manually destroyed.
+    pub unsafe fn as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
+        self.raw(A::VARIANT).map(|instance| {
+            instance
+                .as_any()
+                .downcast_ref()
+                // This should be impossible. It would mean that backend instance and enum type are mismatching.
+                .expect("Stored instance is not of the correct type")
+        })
+    }
 }
 
 pub struct Surface {
@@ -463,11 +476,8 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface_metal");
 
-        let instance = self
-            .instance
-            .raw(Backend::Metal)
+        let instance = unsafe { self.instance.as_hal::<hal::api::Metal>() }
             .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
-        let instance_metal: &hal::metal::Instance = instance.as_any().downcast_ref().unwrap();
 
         let layer = layer.cast();
         // SAFETY: We do this cast and deref. (rather than using `metal` to get the
@@ -483,7 +493,7 @@ impl Global {
         //   lexical scope.
         let layer = unsafe { &*layer };
         let raw_surface: Box<dyn hal::DynSurface> =
-            Box::new(instance_metal.create_surface_from_layer(layer));
+            Box::new(instance.create_surface_from_layer(layer));
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
@@ -500,12 +510,9 @@ impl Global {
         id_in: Option<SurfaceId>,
         create_surface_func: impl FnOnce(&hal::dx12::Instance) -> hal::dx12::Surface,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        let instance = self
-            .instance
-            .raw(Backend::Dx12)
+        let instance = unsafe { self.instance.as_hal::<hal::api::Dx12>() }
             .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Dx12))?;
-        let instance_dx12 = instance.as_any().downcast_ref().unwrap();
-        let surface: Box<dyn hal::DynSurface> = Box::new(create_surface_func(instance_dx12));
+        let surface: Box<dyn hal::DynSurface> = Box::new(create_surface_func(instance));
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
