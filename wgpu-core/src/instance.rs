@@ -134,6 +134,81 @@ impl Instance {
                 .expect("Stored instance is not of the correct type")
         })
     }
+
+    pub fn request_adapter(
+        &self,
+        desc: &wgt::RequestAdapterOptions<&Surface>,
+        backends: Backends,
+    ) -> Result<Adapter, RequestAdapterError> {
+        profiling::scope!("Instance::request_adapter");
+        api_log!("Instance::request_adapter");
+
+        let mut adapters = Vec::new();
+
+        for (backend, instance) in self
+            .instance_per_backend
+            .iter()
+            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
+        {
+            let compatible_hal_surface = desc
+                .compatible_surface
+                .and_then(|surface| surface.raw(*backend));
+            let mut backend_adapters =
+                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
+            if desc.force_fallback_adapter {
+                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
+            }
+            if let Some(surface) = desc.compatible_surface {
+                backend_adapters
+                    .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
+            }
+            adapters.extend(backend_adapters);
+        }
+
+        match desc.power_preference {
+            PowerPreference::LowPower => {
+                sort(&mut adapters, true);
+            }
+            PowerPreference::HighPerformance => {
+                sort(&mut adapters, false);
+            }
+            PowerPreference::None => {}
+        };
+
+        fn sort(adapters: &mut [hal::DynExposedAdapter], prefer_integrated_gpu: bool) {
+            adapters.sort_by(|a, b| {
+                get_order(a.info.device_type, prefer_integrated_gpu)
+                    .cmp(&get_order(b.info.device_type, prefer_integrated_gpu))
+            });
+        }
+
+        fn get_order(device_type: wgt::DeviceType, prefer_integrated_gpu: bool) -> u8 {
+            // Since devices of type "Other" might really be "Unknown" and come
+            // from APIs like OpenGL that don't specify device type, Prefer more
+            // Specific types over Other.
+            //
+            // This means that backends which do provide accurate device types
+            // will be preferred if their device type indicates an actual
+            // hardware GPU (integrated or discrete).
+            match device_type {
+                wgt::DeviceType::DiscreteGpu if prefer_integrated_gpu => 2,
+                wgt::DeviceType::IntegratedGpu if prefer_integrated_gpu => 1,
+                wgt::DeviceType::DiscreteGpu => 1,
+                wgt::DeviceType::IntegratedGpu => 2,
+                wgt::DeviceType::Other => 3,
+                wgt::DeviceType::VirtualGpu => 4,
+                wgt::DeviceType::Cpu => 5,
+            }
+        }
+
+        if let Some(adapter) = adapters.into_iter().next() {
+            log::info!("Adapter {:?}", adapter.info);
+            let adapter = Adapter::new(adapter);
+            Ok(adapter)
+        } else {
+            Err(RequestAdapterError::NotFound)
+        }
+    }
 }
 
 pub struct Surface {
@@ -617,80 +692,15 @@ impl Global {
         backends: Backends,
         id_in: Option<AdapterId>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        profiling::scope!("Instance::request_adapter");
-        api_log!("Instance::request_adapter");
-
         let compatible_surface = desc.compatible_surface.map(|id| self.surfaces.get(id));
-        let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
-        let mut adapters = Vec::new();
-
-        for (backend, instance) in self
-            .instance
-            .instance_per_backend
-            .iter()
-            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
-        {
-            let compatible_hal_surface =
-                compatible_surface.and_then(|surface| surface.raw(*backend));
-            let mut backend_adapters =
-                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
-            if desc.force_fallback_adapter {
-                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
-            }
-            if let Some(surface) = compatible_surface {
-                backend_adapters
-                    .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
-            }
-            adapters.extend(backend_adapters);
-        }
-
-        match desc.power_preference {
-            PowerPreference::LowPower => {
-                sort(&mut adapters, true);
-            }
-            PowerPreference::HighPerformance => {
-                sort(&mut adapters, false);
-            }
-            PowerPreference::None => {}
+        let desc = wgt::RequestAdapterOptions {
+            power_preference: desc.power_preference,
+            force_fallback_adapter: desc.force_fallback_adapter,
+            compatible_surface: compatible_surface.as_deref(),
         };
-
-        fn sort(adapters: &mut [hal::DynExposedAdapter], prefer_integrated_gpu: bool) {
-            adapters.sort_by(|a, b| {
-                get_order(a.info.device_type, prefer_integrated_gpu)
-                    .cmp(&get_order(b.info.device_type, prefer_integrated_gpu))
-            });
-        }
-
-        fn get_order(device_type: wgt::DeviceType, prefer_integrated_gpu: bool) -> u8 {
-            // Since devices of type "Other" might really be "Unknown" and come
-            // from APIs like OpenGL that don't specify device type, Prefer more
-            // Specific types over Other.
-            //
-            // This means that backends which do provide accurate device types
-            // will be preferred if their device type indicates an actual
-            // hardware GPU (integrated or discrete).
-            match device_type {
-                wgt::DeviceType::DiscreteGpu if prefer_integrated_gpu => 2,
-                wgt::DeviceType::IntegratedGpu if prefer_integrated_gpu => 1,
-                wgt::DeviceType::DiscreteGpu => 1,
-                wgt::DeviceType::IntegratedGpu => 2,
-                wgt::DeviceType::Other => 3,
-                wgt::DeviceType::VirtualGpu => 4,
-                wgt::DeviceType::Cpu => 5,
-            }
-        }
-
-        if let Some(adapter) = adapters.into_iter().next() {
-            log::info!("Adapter {:?}", adapter.info);
-            let id = self
-                .hub
-                .adapters
-                .prepare(id_in)
-                .assign(Arc::new(Adapter::new(adapter)));
-            Ok(id)
-        } else {
-            Err(RequestAdapterError::NotFound)
-        }
+        let adapter = self.instance.request_adapter(&desc, backends)?;
+        let id = self.hub.adapters.prepare(id_in).assign(Arc::new(adapter));
+        Ok(id)
     }
 
     /// # Safety
