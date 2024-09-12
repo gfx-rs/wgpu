@@ -352,11 +352,7 @@ impl GlobalPlay for wgc::global::Global {
                 let (encoder, error) = self.device_create_command_encoder(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    Some(
-                        comb_manager
-                            .process(device.backend())
-                            .into_command_encoder_id(),
-                    ),
+                    Some(comb_manager.process().into_command_encoder_id()),
                 );
                 if let Some(e) = error {
                     panic!("{e}");

@@ -131,7 +131,7 @@ impl Global {
             return Err(SurfaceError::NotConfigured);
         };
 
-        let fid = hub.textures.prepare(device.backend(), texture_id_in);
+        let fid = hub.textures.prepare(texture_id_in);
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {

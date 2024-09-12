@@ -70,18 +70,14 @@ impl<T: StorageItem> FutureId<'_, T> {
 }
 
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn prepare(
-        &self,
-        backend: wgt::Backend,
-        id_in: Option<Id<T::Marker>>,
-    ) -> FutureId<T> {
+    pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<T> {
         FutureId {
             id: match id_in {
                 Some(id_in) => {
                     self.identity.mark_as_used(id_in);
                     id_in
                 }
-                None => self.identity.process(backend),
+                None => self.identity.process(),
             },
             data: &self.storage,
         }
@@ -154,7 +150,7 @@ mod tests {
                 s.spawn(|| {
                     for _ in 0..1000 {
                         let value = Arc::new(TestData);
-                        let new_id = registry.prepare(wgt::Backend::Empty, None);
+                        let new_id = registry.prepare(None);
                         let id = new_id.assign(value);
                         registry.remove(id);
                     }

@@ -444,7 +444,7 @@ impl Global {
         let staging_buffer = StagingBuffer::new(device, buffer_size)?;
         let ptr = unsafe { staging_buffer.ptr() };
 
-        let fid = hub.staging_buffers.prepare(queue_id.backend(), id_in);
+        let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(staging_buffer);
         resource_log!("Queue::create_staging_buffer {id:?}");
 

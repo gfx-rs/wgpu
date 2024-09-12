@@ -105,9 +105,8 @@ impl Test<'_> {
         adapter: wgc::id::AdapterId,
         test_num: u32,
     ) {
-        let backend = adapter.backend();
-        let device_id = wgc::id::Id::zip(test_num, 0, backend);
-        let queue_id = wgc::id::Id::zip(test_num, 0, backend);
+        let device_id = wgc::id::Id::zip(test_num, 1);
+        let queue_id = wgc::id::Id::zip(test_num, 1);
         let res = global.adapter_request_device(
             adapter,
             &wgt::DeviceDescriptor {
@@ -137,7 +136,7 @@ impl Test<'_> {
         }
         println!("\t\t\tMapping...");
         for expect in &self.expectations {
-            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch, backend);
+            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch);
             global
                 .buffer_map_async(
                     buffer,
@@ -160,7 +159,7 @@ impl Test<'_> {
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
-            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch, backend);
+            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch);
             let (ptr, size) = global
                 .buffer_get_mapped_range(
                     buffer,
@@ -237,7 +236,8 @@ impl Corpus {
                         force_fallback_adapter: false,
                         compatible_surface: None,
                     },
-                    wgc::instance::AdapterInputs::IdSet(&[wgc::id::Id::zip(0, 0, backend)]),
+                    wgt::Backends::from(backend),
+                    Some(wgc::id::Id::zip(0, 1)),
                 ) {
                     Ok(adapter) => adapter,
                     Err(_) => continue,
@@ -247,7 +247,7 @@ impl Corpus {
                 let supported_features = global.adapter_features(adapter);
                 let downlevel_caps = global.adapter_downlevel_capabilities(adapter);
 
-                let test = Test::load(dir.join(test_path), adapter.backend());
+                let test = Test::load(dir.join(test_path), backend);
                 if !supported_features.contains(test.features) {
                     println!(
                         "\t\tSkipped due to missing features {:?}",

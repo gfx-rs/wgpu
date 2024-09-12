@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use wgt::Backend;
-
 use crate::id::{Id, Marker};
 use crate::resource::ResourceType;
 use crate::{Epoch, Index};
@@ -75,7 +73,7 @@ where
     T: StorageItem,
 {
     pub(crate) fn insert(&mut self, id: Id<T::Marker>, value: T) {
-        let (index, epoch, _) = id.unzip();
+        let (index, epoch) = id.unzip();
         let index = index as usize;
         if index >= self.map.len() {
             self.map.resize_with(index + 1, || Element::Vacant);
@@ -94,7 +92,7 @@ where
     }
 
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> T {
-        let (index, epoch, _) = id.unzip();
+        let (index, epoch) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
@@ -104,13 +102,13 @@ where
         }
     }
 
-    pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (Id<T::Marker>, &T)> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (Id<T::Marker>, &T)> {
         self.map
             .iter()
             .enumerate()
             .filter_map(move |(index, x)| match *x {
                 Element::Occupied(ref value, storage_epoch) => {
-                    Some((Id::zip(index as Index, storage_epoch, backend), value))
+                    Some((Id::zip(index as Index, storage_epoch), value))
                 }
                 _ => None,
             })
@@ -128,7 +126,7 @@ where
     /// Get an owned reference to an item.
     /// Panics if there is an epoch mismatch, the entry is empty or in error.
     pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
-        let (index, epoch, _) = id.unzip();
+        let (index, epoch) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (v.clone(), epoch),
             None | Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),

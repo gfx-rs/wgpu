@@ -20,7 +20,7 @@
         )
     ],
     actions: [
-        CreateTexture(Id(0, 1, Empty), (
+        CreateTexture(Id(0, 1), (
             label: Some("Output Texture"),
             size: (
                 width: 64,
@@ -36,7 +36,7 @@
         // First fill the texture to ensure it wasn't just zero initialized or "happened" to be zero.
         WriteTexture(
             to: (
-                texture: Id(0, 1, Empty),
+                texture: Id(0, 1),
                 mip_level: 0,
                 array_layer: 0,
             ),
@@ -52,7 +52,7 @@
             ),
         ),
         CreateBuffer(
-            Id(0, 1, Empty),
+            Id(0, 1),
             (
                 label: Some("Output Buffer"),
                 size: 16384,
@@ -62,7 +62,7 @@
         ),
 
         CreateBuffer(
-            Id(1, 1, Empty),
+            Id(1, 1),
             (
                 label: Some("Buffer to be cleared"),
                 size: 16,
@@ -72,7 +72,7 @@
         ),
         // Make sure there is something in the buffer, otherwise it might be just zero init!
         WriteBuffer(
-            id: Id(1, 1, Empty),
+            id: Id(1, 1),
             data: "data1.bin",
             range: (
                 start: 0,
@@ -82,7 +82,7 @@
         ),
         Submit(1, [
             ClearTexture(
-                dst: Id(0, 1, Empty),
+                dst: Id(0, 1),
                 subresource_range: ImageSubresourceRange(
                     aspect: all,
                     baseMipLevel: 0,
@@ -93,12 +93,12 @@
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(0, 1, Empty),
+                    texture: Id(0, 1),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(0, 1, Empty),
+                    buffer: Id(0, 1),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),
@@ -112,7 +112,7 @@
             ),
             // Partial clear to prove
             ClearBuffer(
-                dst: Id(1, 1, Empty),
+                dst: Id(1, 1),
                 offset: 4,
                 size: Some(8),
             )
