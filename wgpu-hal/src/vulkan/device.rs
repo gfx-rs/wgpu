@@ -15,6 +15,13 @@ use std::{
 };
 
 impl super::DeviceShared {
+    /// Set the name of `object` to `name`.
+    ///
+    /// If `name` contains an interior null byte, then the name set will be truncated to that byte.
+    ///
+    /// # Safety
+    ///
+    /// It must be valid to set `object`'s debug name
     pub(super) unsafe fn set_object_name(&self, object: impl vk::Handle, name: &str) {
         let Some(extension) = self.extension_fns.debug_utils.as_ref() else {
             return;
@@ -44,7 +51,7 @@ impl super::DeviceShared {
             &buffer_vec
         };
 
-        let name = unsafe { CStr::from_bytes_with_nul_unchecked(name_bytes) };
+        let name = CStr::from_bytes_until_nul(name_bytes).expect("We have added a null byte");
 
         let _result = unsafe {
             extension.set_debug_utils_object_name(
