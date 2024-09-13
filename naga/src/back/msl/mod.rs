@@ -136,6 +136,8 @@ pub enum Error {
     UnsupportedAttribute(String),
     #[error("function '{0}' is not supported for target MSL version")]
     UnsupportedFunction(String),
+    #[error("scalar {0:?} is not supported for target MSL version")]
+    UnsupportedScalar(crate::Scalar),
     #[error("can not use writeable storage buffers in fragment stage prior to MSL 1.2")]
     UnsupportedWriteableStorageBuffer,
     #[error("can not use writeable storage textures in {0:?} stage prior to MSL 1.2")]

@@ -85,6 +85,10 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely with the `VULKAN_GOOGLE_DISPLAY_TIMING` feature. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149)
 
+#### Metal
+
+- Implement `atomicCompareExchangeWeak`. By @AsherJingkongChen in [#6264](https://github.com/gfx-rs/wgpu/pull/6264)
+
 ### Bug Fixes
 
 - Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
