@@ -87,7 +87,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### Metal
 
-- Implement `atomicCompareExchangeWeak`. By @AsherJingkongChen in [#6264](https://github.com/gfx-rs/wgpu/pull/6264)
+- Implement `atomicCompareExchangeWeak`. By @AsherJingkongChen in [#6265](https://github.com/gfx-rs/wgpu/pull/6265)
 
 ### Bug Fixes
 
