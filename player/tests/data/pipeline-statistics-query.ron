@@ -9,13 +9,13 @@
         ),
     ],
     actions: [
-        CreatePipelineLayout(Id(0, 1, Empty), (
+        CreatePipelineLayout(Id(0, 1), (
             label: Some("empty"),
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
         CreateShaderModule(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             desc: (
                 label: None,
                 flags: (bits: 3),
@@ -23,12 +23,12 @@
             data: "empty.wgsl",
         ),
         CreateComputePipeline(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             desc: (
                 label: None,
-                layout: Some(Id(0, 1, Empty)),
+                layout: Some(Id(0, 1)),
                 stage: (
-                    module: Id(0, 1, Empty),
+                    module: Id(0, 1),
                     entry_point: None,
                     constants: {},
                     zero_initialize_workgroup_memory: true,
@@ -37,7 +37,7 @@
             ),
         ),
         CreateQuerySet(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             desc: (
                 label: Some("Compute Invocation QuerySet"),
                 count: 2,
@@ -45,7 +45,7 @@
             ),
         ),
         CreateBuffer(
-            Id(0, 1, Empty),
+            Id(0, 1),
             (
                 label: Some("Compute Invocation Result Buffer"),
                 size: 16,
@@ -57,9 +57,9 @@
             RunComputePass(
                 base: (
                     commands: [
-                        SetPipeline(Id(0, 1, Empty)),
+                        SetPipeline(Id(0, 1)),
                         BeginPipelineStatisticsQuery(
-                            query_set_id: Id(0, 1, Empty),
+                            query_set_id: Id(0, 1),
                             query_index: 0,
                         ),
                         Dispatch((2, 3, 7,)),
@@ -71,10 +71,10 @@
                 ),
             ),
             ResolveQuerySet(
-                query_set_id: Id(0, 1, Empty),
+                query_set_id: Id(0, 1),
                 start_query: 0,
                 query_count: 1,
-                destination: Id(0, 1, Empty),
+                destination: Id(0, 1),
                 destination_offset: 0,
             )
         ]),

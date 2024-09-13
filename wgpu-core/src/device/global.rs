@@ -104,7 +104,7 @@ impl Global {
         profiling::scope!("Device::create_buffer");
 
         let hub = &self.hub;
-        let fid = hub.buffers.prepare(device_id.backend(), id_in);
+        let fid = hub.buffers.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -175,21 +175,19 @@ impl Global {
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
     pub fn create_buffer_error(
         &self,
-        backend: wgt::Backend,
         id_in: Option<id::BufferId>,
         desc: &resource::BufferDescriptor,
     ) {
-        let fid = self.hub.buffers.prepare(backend, id_in);
+        let fid = self.hub.buffers.prepare(id_in);
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
     pub fn create_render_bundle_error(
         &self,
-        backend: wgt::Backend,
         id_in: Option<id::RenderBundleId>,
         desc: &command::RenderBundleDescriptor,
     ) {
-        let fid = self.hub.render_bundles.prepare(backend, id_in);
+        let fid = self.hub.render_bundles.prepare(id_in);
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
@@ -198,11 +196,10 @@ impl Global {
     /// See `create_buffer_error` for more context and explanation.
     pub fn create_texture_error(
         &self,
-        backend: wgt::Backend,
         id_in: Option<id::TextureId>,
         desc: &resource::TextureDescriptor,
     ) {
-        let fid = self.hub.textures.prepare(backend, id_in);
+        let fid = self.hub.textures.prepare(id_in);
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
@@ -311,7 +308,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.textures.prepare(device_id.backend(), id_in);
+        let fid = hub.textures.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -354,7 +351,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.textures.prepare(device_id.backend(), id_in);
+        let fid = hub.textures.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -398,7 +395,7 @@ impl Global {
         profiling::scope!("Device::create_buffer");
 
         let hub = &self.hub;
-        let fid = hub.buffers.prepare(A::VARIANT, id_in);
+        let fid = hub.buffers.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
 
@@ -458,7 +455,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.texture_views.prepare(texture_id.backend(), id_in);
+        let fid = hub.texture_views.prepare(id_in);
 
         let error = 'error: {
             let texture = match hub.textures.get(texture_id).get() {
@@ -522,7 +519,7 @@ impl Global {
         profiling::scope!("Device::create_sampler");
 
         let hub = &self.hub;
-        let fid = hub.samplers.prepare(device_id.backend(), id_in);
+        let fid = hub.samplers.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -575,7 +572,7 @@ impl Global {
         profiling::scope!("Device::create_bind_group_layout");
 
         let hub = &self.hub;
-        let fid = hub.bind_group_layouts.prepare(device_id.backend(), id_in);
+        let fid = hub.bind_group_layouts.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -647,7 +644,7 @@ impl Global {
         profiling::scope!("Device::create_pipeline_layout");
 
         let hub = &self.hub;
-        let fid = hub.pipeline_layouts.prepare(device_id.backend(), id_in);
+        let fid = hub.pipeline_layouts.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -715,7 +712,7 @@ impl Global {
         profiling::scope!("Device::create_bind_group");
 
         let hub = &self.hub;
-        let fid = hub.bind_groups.prepare(device_id.backend(), id_in);
+        let fid = hub.bind_groups.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -877,7 +874,7 @@ impl Global {
         profiling::scope!("Device::create_shader_module");
 
         let hub = &self.hub;
-        let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
+        let fid = hub.shader_modules.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -949,7 +946,7 @@ impl Global {
         profiling::scope!("Device::create_shader_module");
 
         let hub = &self.hub;
-        let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
+        let fid = hub.shader_modules.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -1006,10 +1003,9 @@ impl Global {
         profiling::scope!("Device::create_command_encoder");
 
         let hub = &self.hub;
-        let fid = hub.command_buffers.prepare(
-            device_id.backend(),
-            id_in.map(|id| id.into_command_buffer_id()),
-        );
+        let fid = hub
+            .command_buffers
+            .prepare(id_in.map(|id| id.into_command_buffer_id()));
 
         let device = self.hub.devices.get(device_id);
 
@@ -1072,9 +1068,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub
-            .render_bundles
-            .prepare(bundle_encoder.parent().backend(), id_in);
+        let fid = hub.render_bundles.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(bundle_encoder.parent());
@@ -1133,7 +1127,7 @@ impl Global {
         profiling::scope!("Device::create_query_set");
 
         let hub = &self.hub;
-        let fid = hub.query_sets.prepare(device_id.backend(), id_in);
+        let fid = hub.query_sets.prepare(id_in);
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
@@ -1194,7 +1188,7 @@ impl Global {
         let missing_implicit_pipeline_ids =
             desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
 
-        let fid = hub.render_pipelines.prepare(device_id.backend(), id_in);
+        let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let error = 'error: {
@@ -1378,7 +1372,7 @@ impl Global {
     ) {
         let hub = &self.hub;
 
-        let fid = hub.bind_group_layouts.prepare(pipeline_id.backend(), id_in);
+        let fid = hub.bind_group_layouts.prepare(id_in);
 
         let error = 'error: {
             let pipeline = match hub.render_pipelines.get(pipeline_id).get() {
@@ -1431,7 +1425,7 @@ impl Global {
         let missing_implicit_pipeline_ids =
             desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
 
-        let fid = hub.compute_pipelines.prepare(device_id.backend(), id_in);
+        let fid = hub.compute_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let error = 'error: {
@@ -1562,7 +1556,7 @@ impl Global {
     ) {
         let hub = &self.hub;
 
-        let fid = hub.bind_group_layouts.prepare(pipeline_id.backend(), id_in);
+        let fid = hub.bind_group_layouts.prepare(id_in);
 
         let error = 'error: {
             let pipeline = match hub.compute_pipelines.get(pipeline_id).get() {
@@ -1616,7 +1610,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.pipeline_caches.prepare(device_id.backend(), id_in);
+        let fid = hub.pipeline_caches.prepare(id_in);
         let error: pipeline::CreatePipelineCacheError = 'error: {
             let device = self.hub.devices.get(device_id);
 
@@ -1881,7 +1875,7 @@ impl Global {
                 //
                 // https://github.com/gfx-rs/wgpu/issues/4105
 
-                let surface_raw = surface.raw(device_id.backend()).unwrap();
+                let surface_raw = surface.raw(device.backend()).unwrap();
                 match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
                     Ok(()) => (),
                     Err(error) => {
@@ -1963,7 +1957,6 @@ impl Global {
     /// submissions still in flight.
     fn poll_all_devices_of_api(
         &self,
-        backend: wgt::Backend,
         force_wait: bool,
         closures: &mut UserClosures,
     ) -> Result<bool, WaitIdleError> {
@@ -1974,7 +1967,7 @@ impl Global {
         {
             let device_guard = hub.devices.read();
 
-            for (_id, device) in device_guard.iter(backend) {
+            for (_id, device) in device_guard.iter() {
                 let maintain = if force_wait {
                     wgt::Maintain::Wait
                 } else {
@@ -2004,28 +1997,7 @@ impl Global {
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<bool, WaitIdleError> {
         api_log!("poll_all_devices");
         let mut closures = UserClosures::default();
-        let mut all_queue_empty = true;
-
-        #[cfg(vulkan)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Vulkan, force_wait, &mut closures)?;
-        }
-        #[cfg(metal)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Metal, force_wait, &mut closures)?;
-        }
-        #[cfg(dx12)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Dx12, force_wait, &mut closures)?;
-        }
-        #[cfg(gles)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Gl, force_wait, &mut closures)?;
-        }
+        let all_queue_empty = self.poll_all_devices_of_api(force_wait, &mut closures)?;
 
         closures.fire();
 

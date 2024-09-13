@@ -61,8 +61,7 @@ impl ContextWgpuCore {
 
     #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
-        self.0
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| None))
+        self.0.enumerate_adapters(backends)
     }
 
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
@@ -589,7 +588,8 @@ impl crate::Context for ContextWgpuCore {
                     surface.id
                 }),
             },
-            wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| None),
+            wgt::Backends::all(),
+            None,
         );
         ready(id.ok())
     }
