@@ -568,7 +568,7 @@ bitflags::bitflags! {
         /// may also create uniform arrays of storage textures.
         ///
         /// ex.
-        /// - `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)
+        /// - `var textures: array<texture_storage_2d<r32float, write>, 10>` (WGSL)
         /// - `uniform image2D textures[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
@@ -6543,7 +6543,7 @@ pub enum StorageTextureAccess {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var my_storage_image: texture_storage_2d<f32, write>;
+    /// var my_storage_image: texture_storage_2d<r32float, write>;
     /// ```
     ///
     /// Example GLSL syntax:
@@ -6560,7 +6560,7 @@ pub enum StorageTextureAccess {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var my_storage_image: texture_storage_2d<f32, read>;
+    /// var my_storage_image: texture_storage_2d<r32float, read>;
     /// ```
     ///
     /// Example GLSL syntax:
@@ -6577,7 +6577,7 @@ pub enum StorageTextureAccess {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var my_storage_image: texture_storage_2d<f32, read_write>;
+    /// var my_storage_image: texture_storage_2d<r32float, read_write>;
     /// ```
     ///
     /// Example GLSL syntax:
