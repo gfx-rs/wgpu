@@ -111,7 +111,7 @@ void test_textureStore_1d(
     metal::float4 value,
     metal::texture1d<float, metal::access::write> image_storage_1d
 ) {
-    image_storage_1d.write(value, metal::min(uint(coords_10), image_storage_1d.get_width() - 1));
+    image_storage_1d.write(value, uint(coords_10));
     return;
 }
 
@@ -120,7 +120,7 @@ void test_textureStore_2d(
     metal::float4 value_1,
     metal::texture2d<float, metal::access::write> image_storage_2d
 ) {
-    image_storage_2d.write(value_1, metal::min(metal::uint2(coords_11), metal::uint2(image_storage_2d.get_width(), image_storage_2d.get_height()) - 1));
+    image_storage_2d.write(value_1, metal::uint2(coords_11));
     return;
 }
 
@@ -130,7 +130,7 @@ void test_textureStore_2d_array_u(
     metal::float4 value_2,
     metal::texture2d_array<float, metal::access::write> image_storage_2d_array
 ) {
-    image_storage_2d_array.write(value_2, metal::min(metal::uint2(coords_12), metal::uint2(image_storage_2d_array.get_width(), image_storage_2d_array.get_height()) - 1), metal::min(uint(array_index), image_storage_2d_array.get_array_size() - 1));
+    image_storage_2d_array.write(value_2, metal::uint2(coords_12), array_index);
     return;
 }
 
@@ -140,7 +140,7 @@ void test_textureStore_2d_array_s(
     metal::float4 value_3,
     metal::texture2d_array<float, metal::access::write> image_storage_2d_array
 ) {
-    image_storage_2d_array.write(value_3, metal::min(metal::uint2(coords_13), metal::uint2(image_storage_2d_array.get_width(), image_storage_2d_array.get_height()) - 1), metal::min(uint(array_index_1), image_storage_2d_array.get_array_size() - 1));
+    image_storage_2d_array.write(value_3, metal::uint2(coords_13), array_index_1);
     return;
 }
 
@@ -149,7 +149,7 @@ void test_textureStore_3d(
     metal::float4 value_4,
     metal::texture3d<float, metal::access::write> image_storage_3d
 ) {
-    image_storage_3d.write(value_4, metal::min(metal::uint3(coords_14), metal::uint3(image_storage_3d.get_width(), image_storage_3d.get_height(), image_storage_3d.get_depth()) - 1));
+    image_storage_3d.write(value_4, metal::uint3(coords_14));
     return;
 }
 

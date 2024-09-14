@@ -14,9 +14,9 @@ void main(uint3 __local_invocation_id : SV_GroupThreadID)
         w_mem = (WStruct)0;
     }
     GroupMemoryBarrierWithGroupSync();
-    uint _expr3[512] = w_mem.arr;
+    uint _e3[512] = w_mem.arr;
     {
-        uint _value2[512] = _expr3;
+        uint _value2[512] = _e3;
         output.Store(0, asuint(_value2[0]));
         output.Store(4, asuint(_value2[1]));
         output.Store(8, asuint(_value2[2]));

@@ -68,7 +68,7 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
             label: None,
             layout: Some(&pipeline_layout),
             module: &cs_module,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -90,7 +90,7 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&compute_pipeline);
-            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.set_bind_group(0, Some(&bind_group), &[]);
             cpass.dispatch_workgroups(1, 1, 1);
         }
 

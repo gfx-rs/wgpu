@@ -21,7 +21,8 @@ const NEEDS_MAPPABLE_PRIMARY_BUFFERS: &[Bu; 7] = &[
     Bu::MAP_WRITE.union(Bu::MAP_READ),
     Bu::MAP_READ.union(Bu::COPY_DST.union(Bu::STORAGE)),
     Bu::MAP_WRITE.union(Bu::COPY_SRC.union(Bu::STORAGE)),
-    Bu::all(),
+    // these two require acceleration_structures feature
+    Bu::all().intersection(Bu::BLAS_INPUT.union(Bu::TLAS_INPUT).complement()),
 ];
 const INVALID_BITS: Bu = Bu::from_bits_retain(0b1111111111111);
 const ALWAYS_FAIL: &[Bu; 2] = &[Bu::empty(), INVALID_BITS];

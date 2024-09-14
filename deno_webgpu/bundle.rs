@@ -30,7 +30,7 @@ impl Resource for WebGpuRenderBundle {
     }
 
     fn close(self: Rc<Self>) {
-        gfx_select!(self.1 => self.0.render_bundle_drop(self.1));
+        self.0.render_bundle_drop(self.1);
     }
 }
 
@@ -108,7 +108,7 @@ pub fn op_webgpu_render_bundle_encoder_finish(
         .into_inner();
     let instance = state.borrow::<super::Instance>();
 
-    gfx_put!(render_bundle_encoder.parent() => instance.render_bundle_encoder_finish(
+    gfx_put!(instance.render_bundle_encoder_finish(
     render_bundle_encoder,
     &wgpu_core::command::RenderBundleDescriptor {
       label: Some(label),
@@ -150,7 +150,7 @@ pub fn op_webgpu_render_bundle_encoder_set_bind_group(
         wgpu_core::command::bundle_ffi::wgpu_render_bundle_set_bind_group(
             &mut render_bundle_encoder_resource.0.borrow_mut(),
             index,
-            bind_group_resource.1,
+            Some(bind_group_resource.1),
             dynamic_offsets_data.as_ptr(),
             dynamic_offsets_data.len(),
         );

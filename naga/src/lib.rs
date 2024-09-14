@@ -34,25 +34,6 @@ with optional span info, representing a series of statements executed in order. 
 `EntryPoint`s or `Function` is a `Block`, and `Statement` has a
 [`Block`][Statement::Block] variant.
 
-## Arenas
-
-To improve translator performance and reduce memory usage, most structures are
-stored in an [`Arena`]. An `Arena<T>` stores a series of `T` values, indexed by
-[`Handle<T>`](Handle) values, which are just wrappers around integer indexes.
-For example, a `Function`'s expressions are stored in an `Arena<Expression>`,
-and compound expressions refer to their sub-expressions via `Handle<Expression>`
-values. (When examining the serialized form of a `Module`, note that the first
-element of an `Arena` has an index of 1, not 0.)
-
-A [`UniqueArena`] is just like an `Arena`, except that it stores only a single
-instance of each value. The value type must implement `Eq` and `Hash`. Like an
-`Arena`, inserting a value into a `UniqueArena` returns a `Handle` which can be
-used to efficiently access the value, without a hash lookup. Inserting a value
-multiple times returns the same `Handle`.
-
-If the `span` feature is enabled, both `Arena` and `UniqueArena` can associate a
-source code span with each element.
-
 ## Function Calls
 
 Naga's representation of function calls is unusual. Most languages treat
@@ -277,6 +258,7 @@ pub mod compact;
 pub mod error;
 pub mod front;
 pub mod keywords;
+mod non_max_u32;
 pub mod proc;
 mod span;
 pub mod valid;
@@ -548,6 +530,13 @@ pub enum Sampling {
     /// Interpolate the value at each sample location. In multisampling, invoke
     /// the fragment shader once per sample.
     Sample,
+
+    /// Use the value provided by the first vertex of the current primitive.
+    First,
+
+    /// Use the value provided by the first or last vertex of the current primitive. The exact
+    /// choice is implementation-dependent.
+    Either,
 }
 
 /// Member of a user-defined structure.
@@ -633,7 +622,7 @@ pub enum StorageFormat {
     // Packed 32-bit formats
     Rgb10a2Uint,
     Rgb10a2Unorm,
-    Rg11b10Float,
+    Rg11b10Ufloat,
 
     // 64-bit formats
     Rg32Uint,
@@ -891,7 +880,7 @@ pub enum Literal {
 }
 
 /// Pipeline-overridable constant.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -909,7 +898,7 @@ pub struct Override {
 }
 
 /// Constant value.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -1215,8 +1204,8 @@ pub enum MathFunction {
     ReverseBits,
     ExtractBits,
     InsertBits,
-    FindLsb,
-    FindMsb,
+    FirstTrailingBit,
+    FirstLeadingBit,
     // data packing
     Pack4x8snorm,
     Pack4x8unorm,
@@ -1354,7 +1343,7 @@ bitflags::bitflags! {
         const STORAGE = 1 << 0;
         /// Barrier affects all [`AddressSpace::WorkGroup`] accesses.
         const WORK_GROUP = 1 << 1;
-        /// Barrier synchronizes execution across all invocations within a subgroup that exectue this instruction.
+        /// Barrier synchronizes execution across all invocations within a subgroup that execute this instruction.
         const SUB_GROUP = 1 << 2;
     }
 }

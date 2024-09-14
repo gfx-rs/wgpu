@@ -18,12 +18,10 @@ pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     };
     let llvm_cov_nextest_flags: &[_] = if llvm_cov {
         &["llvm-cov", "--no-cfg-coverage", "--no-report", "nextest"]
+    } else if list {
+        &["nextest", "list"]
     } else {
-        if list {
-            &["nextest", "list"]
-        } else {
-            &["nextest", "run"]
-        }
+        &["nextest", "run"]
     };
 
     log::info!("Generating .gpuconfig file based on gpus on the system");

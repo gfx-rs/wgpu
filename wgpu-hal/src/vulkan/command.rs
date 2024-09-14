@@ -3,7 +3,11 @@ use super::conv;
 use arrayvec::ArrayVec;
 use ash::vk;
 
-use std::{mem, ops::Range, slice};
+use std::{
+    mem::{self, size_of},
+    ops::Range,
+    slice,
+};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -62,7 +66,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let vk_info = vk::CommandBufferAllocateInfo::default()
                 .command_pool(self.raw)
                 .command_buffer_count(ALLOCATION_GRANULARITY);
-            let cmd_buf_vec = unsafe { self.device.raw.allocate_command_buffers(&vk_info)? };
+            let cmd_buf_vec = unsafe {
+                self.device
+                    .raw
+                    .allocate_command_buffers(&vk_info)
+                    .map_err(super::map_host_device_oom_err)?
+            };
             self.free.extend(cmd_buf_vec);
         }
         let raw = self.free.pop().unwrap();
@@ -76,7 +85,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         let vk_info = vk::CommandBufferBeginInfo::default()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-        unsafe { self.device.raw.begin_command_buffer(raw, &vk_info) }?;
+        unsafe { self.device.raw.begin_command_buffer(raw, &vk_info) }
+            .map_err(super::map_host_device_oom_err)?;
         self.active = raw;
 
         Ok(())
@@ -85,7 +95,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         let raw = self.active;
         self.active = vk::CommandBuffer::null();
-        unsafe { self.device.raw.end_command_buffer(raw) }?;
+        unsafe { self.device.raw.end_command_buffer(raw) }.map_err(map_err)?;
+        fn map_err(err: vk::Result) -> crate::DeviceError {
+            // We don't use VK_KHR_video_encode_queue
+            // VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR
+            super::map_host_device_oom_err(err)
+        }
         Ok(super::CommandBuffer { raw })
     }
 
@@ -116,7 +131,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::BufferBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::BufferBarrier<'a, super::Buffer>>,
     {
         //Note: this is done so that we never end up with empty stage flags
         let mut src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
@@ -156,7 +171,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
     where
-        T: Iterator<Item = crate::TextureBarrier<'a, super::Api>>,
+        T: Iterator<Item = crate::TextureBarrier<'a, super::Texture>>,
     {
         let mut src_stages = vk::PipelineStageFlags::empty();
         let mut dst_stages = vk::PipelineStageFlags::empty();
@@ -408,7 +423,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(&mut self, descriptor_count: u32, descriptors: T)
     where
         super::Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+        T: IntoIterator<
+            Item = crate::BuildAccelerationStructureDescriptor<
+                'a,
+                super::Buffer,
+                super::AccelerationStructure,
+            >,
+        >,
     {
         const CAPACITY_OUTER: usize = 8;
         const CAPACITY_INNER: usize = 1;
@@ -644,7 +665,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
+    ) {
         let mut vk_clear_values =
             ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
         let mut vk_image_views = ArrayVec::<vk::ImageView, { super::MAX_TOTAL_ATTACHMENTS }>::new();
@@ -833,7 +857,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 layout.raw,
                 conv::map_shader_stage(stages),
                 offset_bytes,
-                slice::from_raw_parts(data.as_ptr() as _, data.len() * 4),
+                slice::from_raw_parts(data.as_ptr().cast(), data.len() * 4),
             )
         };
     }
@@ -870,7 +894,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_index_buffer<'a>(
         &mut self,
-        binding: crate::BufferBinding<'a, super::Api>,
+        binding: crate::BufferBinding<'a, super::Buffer>,
         format: wgt::IndexFormat,
     ) {
         unsafe {
@@ -885,7 +909,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
         index: u32,
-        binding: crate::BufferBinding<'a, super::Api>,
+        binding: crate::BufferBinding<'a, super::Buffer>,
     ) {
         let vk_buffers = [binding.buffer.raw];
         let vk_offsets = [binding.offset];
@@ -992,7 +1016,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 buffer.raw,
                 offset,
                 draw_count,
-                mem::size_of::<wgt::DrawIndirectArgs>() as u32,
+                size_of::<wgt::DrawIndirectArgs>() as u32,
             )
         };
     }
@@ -1008,7 +1032,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 buffer.raw,
                 offset,
                 draw_count,
-                mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
             )
         };
     }
@@ -1020,7 +1044,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        let stride = mem::size_of::<wgt::DrawIndirectArgs>() as u32;
+        let stride = size_of::<wgt::DrawIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
             Some(ref t) => {
                 unsafe {
@@ -1046,7 +1070,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         count_offset: wgt::BufferAddress,
         max_count: u32,
     ) {
-        let stride = mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32;
+        let stride = size_of::<wgt::DrawIndexedIndirectArgs>() as u32;
         match self.device.extension_fns.draw_indirect_count {
             Some(ref t) => {
                 unsafe {
@@ -1067,7 +1091,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<'_, super::Api>) {
+    unsafe fn begin_compute_pass(
+        &mut self,
+        desc: &crate::ComputePassDescriptor<'_, super::QuerySet>,
+    ) {
         self.bind_point = vk::PipelineBindPoint::COMPUTE;
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };

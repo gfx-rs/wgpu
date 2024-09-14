@@ -38,13 +38,6 @@ struct Args {
     #[argh(option)]
     image_load_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
-    /// what policy to use for texture stores bounds checking.
-    ///
-    /// Possible values are the same as for `index-bounds-check-policy`. If
-    /// omitted, defaults to the index bounds check policy.
-    #[argh(option)]
-    image_store_bounds_check_policy: Option<BoundsCheckPolicyArg>,
-
     /// directory to dump the SPIR-V block context dump to
     #[argh(option)]
     block_ctx_dir: Option<String>,
@@ -132,6 +125,10 @@ struct Args {
     /// In bulk validation mode, these are all input files to be validated.
     #[argh(positional)]
     files: Vec<String>,
+
+    /// defines to be passed to the parser (only glsl is supported)
+    #[argh(option, short = 'D')]
+    defines: Vec<Defines>,
 }
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
@@ -285,6 +282,27 @@ impl FromStr for Overrides {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Defines {
+    pairs: Vec<(String, String)>,
+}
+
+impl FromStr for Defines {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut pairs = vec![];
+        for pair in s.split(',') {
+            let (name, value) = match pair.split_once('=') {
+                Some((name, value)) => (name, value),
+                None => (pair, ""), // Default to an empty string if no '=' is found
+            };
+            pairs.push((name.trim().to_string(), value.trim().to_string()));
+        }
+        Ok(Defines { pairs })
+    }
+}
+
 #[derive(Default)]
 struct Parameters<'a> {
     validation_flags: naga::valid::ValidationFlags,
@@ -300,6 +318,7 @@ struct Parameters<'a> {
     hlsl: naga::back::hlsl::Options,
     input_kind: Option<InputKind>,
     shader_stage: Option<ShaderStage>,
+    defines: FastHashMap<String, String>,
 }
 
 trait PrettyResult {
@@ -307,6 +326,8 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
+#[cold]
+#[inline(never)]
 fn print_err(error: &dyn Error) {
     eprint!("{error}");
 
@@ -383,16 +404,20 @@ fn run() -> anyhow::Result<()> {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
-    params.bounds_check_policies.image_store = match args.image_store_bounds_check_policy {
-        Some(arg) => arg.0,
-        None => params.bounds_check_policies.index,
-    };
     params.overrides = args
         .overrides
         .iter()
         .flat_map(|o| &o.pairs)
         .cloned()
         .collect();
+
+    params.defines = args
+        .defines
+        .iter()
+        .flat_map(|o| &o.pairs)
+        .cloned()
+        .collect();
+
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
@@ -440,6 +465,7 @@ fn run() -> anyhow::Result<()> {
     let Parsed {
         mut module,
         input_text,
+        language,
     } = parse_input(input_path, input, &params)?;
 
     // Include debugging information if requested.
@@ -452,6 +478,7 @@ fn run() -> anyhow::Result<()> {
             params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
                 source_code: input_text,
                 file_name: input_path,
+                language,
             })
         } else {
             eprintln!(
@@ -554,6 +581,7 @@ fn run() -> anyhow::Result<()> {
 struct Parsed {
     module: naga::Module,
     input_text: Option<String>,
+    language: naga::back::spv::SourceLanguage,
 }
 
 fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow::Result<Parsed> {
@@ -568,16 +596,26 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
             .context("Unable to determine --input-kind from filename")?,
     };
 
-    let (module, input_text) = match input_kind {
-        InputKind::Bincode => (bincode::deserialize(&input)?, None),
-        InputKind::SpirV => {
-            naga::front::spv::parse_u8_slice(&input, &params.spv_in).map(|m| (m, None))?
-        }
+    Ok(match input_kind {
+        InputKind::Bincode => Parsed {
+            module: bincode::deserialize(&input)?,
+            input_text: None,
+            language: naga::back::spv::SourceLanguage::Unknown,
+        },
+        InputKind::SpirV => Parsed {
+            module: naga::front::spv::parse_u8_slice(&input, &params.spv_in)?,
+            input_text: None,
+            language: naga::back::spv::SourceLanguage::Unknown,
+        },
         InputKind::Wgsl => {
             let input = String::from_utf8(input)?;
             let result = naga::front::wgsl::parse_str(&input);
             match result {
-                Ok(v) => (v, Some(input)),
+                Ok(v) => Parsed {
+                    module: v,
+                    input_text: Some(input),
+                    language: naga::back::spv::SourceLanguage::WGSL,
+                },
                 Err(ref e) => {
                     let message = anyhow!(
                         "Could not parse WGSL:\n{}",
@@ -606,12 +644,12 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
             };
             let input = String::from_utf8(input)?;
             let mut parser = naga::front::glsl::Frontend::default();
-            (
-                parser
+            Parsed {
+                module: parser
                     .parse(
                         &naga::front::glsl::Options {
                             stage: shader_stage.0,
-                            defines: Default::default(),
+                            defines: params.defines.clone(),
                         },
                         &input,
                     )
@@ -624,12 +662,11 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                         error.emit_to_writer_with_path(&mut writer, &input, filename);
                         std::process::exit(1);
                     }),
-                Some(input),
-            )
+                input_text: Some(input),
+                language: naga::back::spv::SourceLanguage::GLSL,
+            }
         }
-    };
-
-    Ok(Parsed { module, input_text })
+    })
 }
 
 fn write_output(
@@ -777,7 +814,7 @@ fn write_output(
 
             let mut buffer = String::new();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-            writer.write(&module, &info).unwrap_pretty();
+            writer.write(&module, &info, None).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
         "wgsl" => {
@@ -808,7 +845,11 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
         let path = Path::new(&input_path);
         let input = fs::read(path)?;
 
-        let Parsed { module, input_text } = match parse_input(path, input, params) {
+        let Parsed {
+            module,
+            input_text,
+            language: _,
+        } = match parse_input(path, input, params) {
             Ok(parsed) => parsed,
             Err(error) => {
                 invalid.push(input_path.clone());
@@ -859,7 +900,7 @@ use codespan_reporting::{
         termcolor::{ColorChoice, StandardStream},
     },
 };
-use naga::WithSpan;
+use naga::{FastHashMap, WithSpan};
 
 pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, source: &str) {
     let files = SimpleFile::new(filename, source);

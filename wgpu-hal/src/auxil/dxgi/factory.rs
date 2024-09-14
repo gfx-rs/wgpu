@@ -1,20 +1,13 @@
-use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, winerror},
-    Interface,
-};
+use std::ops::Deref;
 
-use super::result::HResult as _;
+use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DxgiFactoryType {
-    Factory2,
-    Factory4,
-    Factory6,
-}
+use crate::dx12::DxgiLib;
 
-fn should_keep_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
-    let mut desc = unsafe { std::mem::zeroed() };
-    unsafe { adapter.GetDesc1(&mut desc) };
+// We can rely on the presence of DXGI 1.4 since D3D12 requires WDDM 2.0, Windows 10 (1507), and so does DXGI 1.4.
+
+fn should_keep_adapter(adapter: &Dxgi::IDXGIAdapter1) -> bool {
+    let desc = unsafe { adapter.GetDesc1() }.unwrap();
 
     // The Intel Haswell family of iGPUs had support for the D3D12 API but it was later
     // removed due to a security vulnerability.
@@ -40,8 +33,10 @@ fn should_keep_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
     // which is lying about being an integrated card. This is so that programs
     // that ignore software adapters will actually run on headless/gpu-less machines.
     //
-    // We don't want that and discorage that kind of filtering anyway, so we skip the integrated WARP.
-    if desc.VendorId == 5140 && (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) == 0 {
+    // We don't want that and discourage that kind of filtering anyway, so we skip the integrated WARP.
+    if desc.VendorId == 5140
+        && Dxgi::DXGI_ADAPTER_FLAG(desc.Flags as i32).contains(Dxgi::DXGI_ADAPTER_FLAG_SOFTWARE)
+    {
         let adapter_name = super::conv::map_adapter_name(desc.Description);
         if adapter_name.contains("Microsoft Basic Render Driver") {
             return false;
@@ -51,211 +46,123 @@ fn should_keep_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
     true
 }
 
-pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter> {
+pub enum DxgiAdapter {
+    /// Provided by DXGI 1.4
+    Adapter3(Dxgi::IDXGIAdapter3),
+    /// Provided by DXGI 1.6
+    Adapter4(Dxgi::IDXGIAdapter4),
+}
+
+impl Deref for DxgiAdapter {
+    type Target = Dxgi::IDXGIAdapter3;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            DxgiAdapter::Adapter3(a) => a,
+            DxgiAdapter::Adapter4(a) => a,
+        }
+    }
+}
+
+pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
     let mut adapters = Vec::with_capacity(8);
 
     for cur_index in 0.. {
-        if let Some(factory6) = factory.as_factory6() {
-            profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
-            // We're already at dxgi1.6, we can grab IDXGIAdapter4 directly
-            let mut adapter4 = d3d12::ComPtr::<dxgi1_6::IDXGIAdapter4>::null();
-            let hr = unsafe {
-                factory6.EnumAdapterByGpuPreference(
-                    cur_index,
-                    dxgi1_6::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-                    &dxgi1_6::IDXGIAdapter4::uuidof(),
-                    adapter4.mut_void(),
-                )
-            };
-
-            if hr == winerror::DXGI_ERROR_NOT_FOUND {
-                break;
-            }
-            if let Err(err) = hr.into_result() {
-                log::error!("Failed enumerating adapters: {}", err);
-                break;
-            }
-
-            if !should_keep_adapter(&adapter4) {
-                continue;
-            }
-
-            adapters.push(d3d12::DxgiAdapter::Adapter4(adapter4));
-            continue;
-        }
-
         profiling::scope!("IDXGIFactory1::EnumAdapters1");
-        let mut adapter1 = d3d12::ComPtr::<dxgi::IDXGIAdapter1>::null();
-        let hr = unsafe { factory.EnumAdapters1(cur_index, adapter1.mut_self()) };
-
-        if hr == winerror::DXGI_ERROR_NOT_FOUND {
-            break;
-        }
-        if let Err(err) = hr.into_result() {
-            log::error!("Failed enumerating adapters: {}", err);
-            break;
-        }
+        let adapter1: Dxgi::IDXGIAdapter1 = match unsafe { factory.EnumAdapters1(cur_index) } {
+            Ok(a) => a,
+            Err(e) if e.code() == Dxgi::DXGI_ERROR_NOT_FOUND => break,
+            Err(e) => {
+                log::error!("Failed enumerating adapters: {}", e);
+                break;
+            }
+        };
 
         if !should_keep_adapter(&adapter1) {
             continue;
         }
 
-        // Do the most aggressive casts first, skipping Adapter4 as we definitely don't have dxgi1_6.
-
-        // Adapter1 -> Adapter3
-        unsafe {
-            match adapter1.cast::<dxgi1_4::IDXGIAdapter3>().into_result() {
-                Ok(adapter3) => {
-                    adapters.push(d3d12::DxgiAdapter::Adapter3(adapter3));
-                    continue;
-                }
-                Err(err) => {
-                    log::warn!("Failed casting Adapter1 to Adapter3: {}", err);
-                }
-            }
+        if let Ok(adapter4) = adapter1.cast::<Dxgi::IDXGIAdapter4>() {
+            adapters.push(DxgiAdapter::Adapter4(adapter4));
+        } else {
+            let adapter3 = adapter1.cast::<Dxgi::IDXGIAdapter3>().unwrap();
+            adapters.push(DxgiAdapter::Adapter3(adapter3));
         }
-
-        // Adapter1 -> Adapter2
-        unsafe {
-            match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().into_result() {
-                Ok(adapter2) => {
-                    adapters.push(d3d12::DxgiAdapter::Adapter2(adapter2));
-                    continue;
-                }
-                Err(err) => {
-                    log::warn!("Failed casting Adapter1 to Adapter2: {}", err);
-                }
-            }
-        }
-
-        adapters.push(d3d12::DxgiAdapter::Adapter1(adapter1));
     }
 
     adapters
 }
 
-/// Tries to create a IDXGIFactory6, then a IDXGIFactory4, then a IDXGIFactory2, then a IDXGIFactory1,
-/// returning the one that succeeds, or if the required_factory_type fails to be
-/// created.
+#[derive(Clone, Debug)]
+pub enum DxgiFactory {
+    /// Provided by DXGI 1.4
+    Factory4(Dxgi::IDXGIFactory4),
+    /// Provided by DXGI 1.5
+    Factory5(Dxgi::IDXGIFactory5),
+    /// Provided by DXGI 1.6
+    Factory6(Dxgi::IDXGIFactory6),
+}
+
+impl Deref for DxgiFactory {
+    type Target = Dxgi::IDXGIFactory4;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            DxgiFactory::Factory4(f) => f,
+            DxgiFactory::Factory5(f) => f,
+            DxgiFactory::Factory6(f) => f,
+        }
+    }
+}
+
+impl DxgiFactory {
+    pub fn as_factory5(&self) -> Option<&Dxgi::IDXGIFactory5> {
+        match self {
+            Self::Factory4(_) => None,
+            Self::Factory5(f) => Some(f),
+            Self::Factory6(f) => Some(f),
+        }
+    }
+}
+
 pub fn create_factory(
-    required_factory_type: DxgiFactoryType,
     instance_flags: wgt::InstanceFlags,
-) -> Result<(d3d12::DxgiLib, d3d12::DxgiFactory), crate::InstanceError> {
-    let lib_dxgi = d3d12::DxgiLib::new().map_err(|e| {
+) -> Result<(DxgiLib, DxgiFactory), crate::InstanceError> {
+    let lib_dxgi = DxgiLib::new().map_err(|e| {
         crate::InstanceError::with_source(String::from("failed to load dxgi.dll"), e)
     })?;
 
-    let mut factory_flags = d3d12::FactoryCreationFlags::empty();
+    let mut factory_flags = Dxgi::DXGI_CREATE_FACTORY_FLAGS::default();
 
     if instance_flags.contains(wgt::InstanceFlags::VALIDATION) {
         // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.
-        match lib_dxgi.get_debug_interface1() {
-            Ok(pair) => match pair.into_result() {
-                Ok(_debug_controller) => {
-                    factory_flags |= d3d12::FactoryCreationFlags::DEBUG;
-                }
-                Err(err) => {
-                    log::warn!("Unable to enable DXGI debug interface: {}", err);
-                }
-            },
-            Err(err) => {
-                log::warn!("Debug interface function for DXGI not found: {:?}", err);
-            }
+        if let Ok(Some(_)) = lib_dxgi.debug_interface1() {
+            factory_flags |= Dxgi::DXGI_CREATE_FACTORY_DEBUG;
         }
 
         // Intercept `OutputDebugString` calls
         super::exception::register_exception_handler();
     }
 
-    // Try to create IDXGIFactory4
-    let factory4 = match lib_dxgi.create_factory2(factory_flags) {
-        Ok(pair) => match pair.into_result() {
-            Ok(factory) => Some(factory),
-            // We hard error here as we _should have_ been able to make a factory4 but couldn't.
-            Err(err) => {
-                // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to create IDXGIFactory4: {err:?}"
-                )));
-            }
-        },
-        // If we require factory4, hard error.
-        Err(err) if required_factory_type == DxgiFactoryType::Factory4 => {
-            return Err(crate::InstanceError::with_source(
-                String::from("IDXGIFactory1 creation function not found"),
-                err,
-            ));
-        }
-        // If we don't print it to warn as all win7 will hit this case.
-        Err(err) => {
-            log::warn!("IDXGIFactory1 creation function not found: {err:?}");
-            None
-        }
-    };
-
-    if let Some(factory4) = factory4 {
-        //  Try to cast the IDXGIFactory4 into IDXGIFactory6
-        let factory6 = unsafe { factory4.cast::<dxgi1_6::IDXGIFactory6>().into_result() };
-        match factory6 {
-            Ok(factory6) => {
-                return Ok((lib_dxgi, d3d12::DxgiFactory::Factory6(factory6)));
-            }
-            // If we require factory6, hard error.
-            Err(err) if required_factory_type == DxgiFactoryType::Factory6 => {
-                // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}"
-                )));
-            }
-            // If we don't print it to warn.
-            Err(err) => {
-                log::warn!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
-                return Ok((lib_dxgi, d3d12::DxgiFactory::Factory4(factory4)));
-            }
-        }
-    }
-
-    // Try to create IDXGIFactory1
-    let factory1 = match lib_dxgi.create_factory1() {
-        Ok(pair) => match pair.into_result() {
-            Ok(factory) => factory,
-            Err(err) => {
-                // err is a Cow<str>, not an Error implementor
-                return Err(crate::InstanceError::new(format!(
-                    "failed to create IDXGIFactory1: {err:?}"
-                )));
-            }
-        },
-        // We always require at least factory1, so hard error
+    let factory4 = match lib_dxgi.create_factory4(factory_flags) {
+        Ok(factory) => factory,
         Err(err) => {
             return Err(crate::InstanceError::with_source(
-                String::from("IDXGIFactory1 creation function not found"),
+                String::from("IDXGIFactory4 creation failed"),
                 err,
             ));
         }
     };
 
-    // Try to cast the IDXGIFactory1 into IDXGIFactory2
-    let factory2 = unsafe { factory1.cast::<dxgi1_2::IDXGIFactory2>().into_result() };
-    match factory2 {
-        Ok(factory2) => {
-            return Ok((lib_dxgi, d3d12::DxgiFactory::Factory2(factory2)));
-        }
-        // If we require factory2, hard error.
-        Err(err) if required_factory_type == DxgiFactoryType::Factory2 => {
-            // err is a Cow<str>, not an Error implementor
-            return Err(crate::InstanceError::new(format!(
-                "failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}"
-            )));
-        }
-        // If we don't print it to warn.
-        Err(err) => {
-            log::warn!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
-        }
+    if let Ok(factory6) = factory4.cast::<Dxgi::IDXGIFactory6>() {
+        return Ok((lib_dxgi, DxgiFactory::Factory6(factory6)));
     }
 
-    // We tried to create 4 and 2, but only succeeded with 1.
-    Ok((lib_dxgi, d3d12::DxgiFactory::Factory1(factory1)))
+    if let Ok(factory5) = factory4.cast::<Dxgi::IDXGIFactory5>() {
+        return Ok((lib_dxgi, DxgiFactory::Factory5(factory5)));
+    }
+
+    Ok((lib_dxgi, DxgiFactory::Factory4(factory4)))
 }

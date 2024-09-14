@@ -2,7 +2,7 @@
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, mem::size_of};
 use wgpu::util::DeviceExt;
 
 // number of boid particles to simulate
@@ -82,7 +82,7 @@ impl crate::framework::Example for Example {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new(
-                                (sim_param_data.len() * mem::size_of::<f32>()) as _,
+                                (sim_param_data.len() * size_of::<f32>()) as _,
                             ),
                         },
                         count: None,
@@ -131,7 +131,7 @@ impl crate::framework::Example for Example {
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &draw_shader,
-                entry_point: "main_vs",
+                entry_point: Some("main_vs"),
                 compilation_options: Default::default(),
                 buffers: &[
                     wgpu::VertexBufferLayout {
@@ -148,7 +148,7 @@ impl crate::framework::Example for Example {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
-                entry_point: "main_fs",
+                entry_point: Some("main_fs"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
@@ -165,7 +165,7 @@ impl crate::framework::Example for Example {
             label: Some("Compute pipeline"),
             layout: Some(&compute_pipeline_layout),
             module: &compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -298,7 +298,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
+            cpass.set_bind_group(0, Some(&self.particle_bind_groups[self.frame_num % 2]), &[]);
             cpass.dispatch_workgroups(self.work_group_count, 1, 1);
         }
         command_encoder.pop_debug_group();

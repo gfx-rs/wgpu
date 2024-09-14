@@ -260,3 +260,239 @@ fn emit_workgroup_uniform_load_result() {
     variant(true).expect("module should validate");
     assert!(variant(false).is_err());
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn bad_cross_builtin_args() {
+    // NOTE: Things we expect to actually compile are in the `cross` snapshot test.
+    let cases = [
+        (
+            "vec2(0., 1.)",
+            "\
+error: Entry point main at Compute is invalid
+  ┌─ wgsl:3:13
+  │
+3 │     let a = cross(vec2(0., 1.), vec2(0., 1.));
+  │             ^^^^^ naga::Expression [6]
+  │
+  = Expression [6] is invalid
+  = Argument [0] to Cross as expression [2] has an invalid type.
+
+",
+        ),
+        (
+            "vec4(0., 1., 2., 3.)",
+            "\
+error: Entry point main at Compute is invalid
+  ┌─ wgsl:3:13
+  │
+3 │     let a = cross(vec4(0., 1., 2., 3.), vec4(0., 1., 2., 3.));
+  │             ^^^^^ naga::Expression [10]
+  │
+  = Expression [10] is invalid
+  = Argument [0] to Cross as expression [4] has an invalid type.
+
+",
+        ),
+    ];
+
+    for (invalid_arg, expected_err) in cases {
+        let source = format!(
+            "\
+@compute @workgroup_size(1)
+fn main() {{
+    let a = cross({invalid_arg}, {invalid_arg});
+}}
+"
+        );
+        let module = naga::front::wgsl::parse_str(&source).unwrap();
+        let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+            .validate_no_overrides(&module)
+            .expect_err("module should be invalid");
+        assert_eq!(err.emit_to_string(&source), expected_err);
+    }
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn incompatible_interpolation_and_sampling_types() {
+    use dummy_interpolation_shader::DummyInterpolationShader;
+
+    // NOTE: Things we expect to actually compile are in the `interpolate` snapshot test.
+    use itertools::Itertools;
+
+    let invalid_shader_module = |interpolation_and_sampling| {
+        let (interpolation, sampling) = interpolation_and_sampling;
+
+        let valid = matches!(
+            (interpolation, sampling),
+            (_, None)
+                | (
+                    naga::Interpolation::Perspective | naga::Interpolation::Linear,
+                    Some(
+                        naga::Sampling::Center | naga::Sampling::Centroid | naga::Sampling::Sample
+                    ),
+                )
+                | (
+                    naga::Interpolation::Flat,
+                    Some(naga::Sampling::First | naga::Sampling::Either)
+                )
+        );
+
+        if valid {
+            None
+        } else {
+            let DummyInterpolationShader {
+                source,
+                module,
+                interpolate_attr,
+                entry_point: _,
+            } = DummyInterpolationShader::new(interpolation, sampling);
+            Some((
+                source,
+                module,
+                interpolation,
+                sampling.expect("default interpolation sampling should be valid"),
+                interpolate_attr,
+            ))
+        }
+    };
+
+    let invalid_cases = [
+        naga::Interpolation::Flat,
+        naga::Interpolation::Linear,
+        naga::Interpolation::Perspective,
+    ]
+    .into_iter()
+    .cartesian_product(
+        [
+            naga::Sampling::Either,
+            naga::Sampling::First,
+            naga::Sampling::Sample,
+            naga::Sampling::Center,
+            naga::Sampling::Centroid,
+        ]
+        .into_iter()
+        .map(Some)
+        .chain([None]),
+    )
+    .filter_map(invalid_shader_module);
+
+    for (invalid_source, invalid_module, interpolation, sampling, interpolate_attr) in invalid_cases
+    {
+        let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+            .validate_no_overrides(&invalid_module)
+            .expect_err(&format!(
+                "module should be invalid for {interpolate_attr:?}"
+            ));
+        assert!(dbg!(err.emit_to_string(&invalid_source)).contains(&dbg!(
+            naga::valid::VaryingError::InvalidInterpolationSamplingCombination {
+                interpolation,
+                sampling,
+            }
+            .to_string()
+        )),);
+    }
+}
+
+#[cfg(all(feature = "wgsl-in", feature = "glsl-out"))]
+#[test]
+fn no_flat_first_in_glsl() {
+    use dummy_interpolation_shader::DummyInterpolationShader;
+
+    let DummyInterpolationShader {
+        source: _,
+        module,
+        interpolate_attr,
+        entry_point,
+    } = DummyInterpolationShader::new(naga::Interpolation::Flat, Some(naga::Sampling::First));
+
+    let mut validator = naga::valid::Validator::new(Default::default(), Default::default());
+    let module_info = validator.validate(&module).unwrap();
+
+    let options = Default::default();
+    let pipeline_options = naga::back::glsl::PipelineOptions {
+        shader_stage: naga::ShaderStage::Fragment,
+        entry_point: entry_point.to_owned(),
+        multiview: None,
+    };
+    let mut glsl_writer = naga::back::glsl::Writer::new(
+        String::new(),
+        &module,
+        &module_info,
+        &options,
+        &pipeline_options,
+        Default::default(),
+    )
+    .unwrap();
+
+    let err = glsl_writer.write().expect_err(&format!(
+        "`{interpolate_attr}` should fail backend validation"
+    ));
+
+    assert!(matches!(
+        err,
+        naga::back::glsl::Error::FirstSamplingNotSupported
+    ));
+}
+
+#[cfg(all(test, feature = "wgsl-in"))]
+mod dummy_interpolation_shader {
+    pub struct DummyInterpolationShader {
+        pub source: String,
+        pub module: naga::Module,
+        pub interpolate_attr: String,
+        pub entry_point: &'static str,
+    }
+
+    impl DummyInterpolationShader {
+        pub fn new(interpolation: naga::Interpolation, sampling: Option<naga::Sampling>) -> Self {
+            // NOTE: If you have to add variants below, make sure to add them to the
+            // `cartesian_product`'d combinations in tests around here!
+            let interpolation_str = match interpolation {
+                naga::Interpolation::Flat => "flat",
+                naga::Interpolation::Linear => "linear",
+                naga::Interpolation::Perspective => "perspective",
+            };
+            let sampling_str = match sampling {
+                None => String::new(),
+                Some(sampling) => format!(
+                    ", {}",
+                    match sampling {
+                        naga::Sampling::First => "first",
+                        naga::Sampling::Either => "either",
+                        naga::Sampling::Center => "center",
+                        naga::Sampling::Centroid => "centroid",
+                        naga::Sampling::Sample => "sample",
+                    }
+                ),
+            };
+            let member_type = match interpolation {
+                naga::Interpolation::Perspective | naga::Interpolation::Linear => "f32",
+                naga::Interpolation::Flat => "u32",
+            };
+
+            let interpolate_attr = format!("@interpolate({interpolation_str}{sampling_str})");
+            let source = format!(
+                "\
+                struct VertexOutput {{
+    @location(0) {interpolate_attr} member: {member_type},
+}}
+
+@fragment
+fn main(input: VertexOutput) {{
+    // ...
+}}
+"
+            );
+            let module = naga::front::wgsl::parse_str(&source).unwrap();
+
+            Self {
+                source,
+                module,
+                interpolate_attr,
+                entry_point: "main",
+            }
+        }
+    }
+}

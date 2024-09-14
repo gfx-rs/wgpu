@@ -10,9 +10,7 @@ use std::cell::RefCell;
 
 use super::error::WebGpuResult;
 
-pub(crate) struct WebGpuComputePass(
-    pub(crate) RefCell<Box<dyn wgpu_core::command::DynComputePass>>,
-);
+pub(crate) struct WebGpuComputePass(pub(crate) RefCell<wgpu_core::command::ComputePass>);
 impl Resource for WebGpuComputePass {
     fn name(&self) -> Cow<str> {
         "webGPUComputePass".into()
@@ -33,10 +31,12 @@ pub fn op_webgpu_compute_pass_set_pipeline(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource
-        .0
-        .borrow_mut()
-        .set_pipeline(state.borrow(), compute_pipeline_resource.1)?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_set_pipeline(
+            &mut compute_pass_resource.0.borrow_mut(),
+            compute_pipeline_resource.1,
+        )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -54,10 +54,9 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource
-        .0
-        .borrow_mut()
-        .dispatch_workgroups(state.borrow(), x, y, z)?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_dispatch_workgroups(&mut compute_pass_resource.0.borrow_mut(), x, y, z)?;
 
     Ok(WebGpuResult::empty())
 }
@@ -77,10 +76,13 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups_indirect(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource
-        .0
-        .borrow_mut()
-        .dispatch_workgroups_indirect(state.borrow(), buffer_resource.1, indirect_offset)?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_dispatch_workgroups_indirect(
+            &mut compute_pass_resource.0.borrow_mut(),
+            buffer_resource.1,
+            indirect_offset,
+        )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -95,7 +97,9 @@ pub fn op_webgpu_compute_pass_end(
         .resource_table
         .take::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource.0.borrow_mut().end(state.borrow())?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_end(&mut compute_pass_resource.0.borrow_mut())?;
 
     Ok(WebGpuResult::empty())
 }
@@ -127,12 +131,14 @@ pub fn op_webgpu_compute_pass_set_bind_group(
 
     let dynamic_offsets_data: &[u32] = &dynamic_offsets_data[start..start + len];
 
-    compute_pass_resource.0.borrow_mut().set_bind_group(
-        state.borrow(),
-        index,
-        bind_group_resource.1,
-        dynamic_offsets_data,
-    )?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_set_bind_group(
+            &mut compute_pass_resource.0.borrow_mut(),
+            index,
+            Some(bind_group_resource.1),
+            dynamic_offsets_data,
+        )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -148,11 +154,13 @@ pub fn op_webgpu_compute_pass_push_debug_group(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource.0.borrow_mut().push_debug_group(
-        state.borrow(),
-        group_label,
-        0, // wgpu#975
-    )?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_push_debug_group(
+            &mut compute_pass_resource.0.borrow_mut(),
+            group_label,
+            0, // wgpu#975
+        )?;
 
     Ok(WebGpuResult::empty())
 }
@@ -167,10 +175,9 @@ pub fn op_webgpu_compute_pass_pop_debug_group(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource
-        .0
-        .borrow_mut()
-        .pop_debug_group(state.borrow())?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_pop_debug_group(&mut compute_pass_resource.0.borrow_mut())?;
 
     Ok(WebGpuResult::empty())
 }
@@ -186,11 +193,13 @@ pub fn op_webgpu_compute_pass_insert_debug_marker(
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
-    compute_pass_resource.0.borrow_mut().insert_debug_marker(
-        state.borrow(),
-        marker_label,
-        0, // wgpu#975
-    )?;
+    state
+        .borrow::<wgpu_core::global::Global>()
+        .compute_pass_insert_debug_marker(
+            &mut compute_pass_resource.0.borrow_mut(),
+            marker_label,
+            0, // wgpu#975
+        )?;
 
     Ok(WebGpuResult::empty())
 }

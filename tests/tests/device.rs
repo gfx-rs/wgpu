@@ -1,6 +1,8 @@
 use std::sync::atomic::AtomicBool;
 
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{
+    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+};
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -34,32 +36,23 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
 #[gpu_test]
 static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
-    .run_sync(|_| {
-        use pollster::FutureExt as _;
+    .run_sync(|ctx| {
+        ctx.instance.poll_all(false);
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
-            dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
-            gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
-            flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
-        });
+        let pre_report = ctx.instance.generate_report().unwrap();
 
-        let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
-            .block_on()
-            .expect("failed to create adapter");
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
-            .block_on()
-            .expect("failed to create device");
-
-        instance.poll_all(false);
-
-        let pre_report = instance.generate_report().unwrap();
+        let TestingContext {
+            instance,
+            device,
+            queue,
+            ..
+        } = ctx;
 
         drop(queue);
         drop(device);
+
         let post_report = instance.generate_report().unwrap();
+
         assert_ne!(
             pre_report, post_report,
             "Queue and Device has not been dropped as expected"
@@ -70,29 +63,16 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
 #[gpu_test]
 static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
-    .run_sync(|_| {
+    .run_sync(|ctx| {
         use pollster::FutureExt as _;
-
-        fn create_device_and_queue() -> (wgpu::Device, wgpu::Queue) {
-            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-                backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
-                dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env()
-                    .unwrap_or_default(),
-                gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
-                flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
-            });
-
-            let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
-                .block_on()
-                .expect("failed to create adapter");
-
-            adapter
-                .request_device(&wgpu::DeviceDescriptor::default(), None)
-                .block_on()
-                .expect("failed to create device")
-        }
-
-        let _ = vec![create_device_and_queue(), create_device_and_queue()];
+        ctx.adapter
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .block_on()
+            .expect("failed to create device");
+        ctx.adapter
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .block_on()
+            .expect("failed to create device");
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
@@ -107,7 +87,7 @@ static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything
-    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0).await;
+    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0, false).await;
 
     let device_error = adapter
         .request_device(
@@ -147,14 +127,6 @@ async fn request_device_error_message() {
 
 // This is a test of device behavior after device.destroy. Specifically, all operations
 // should trigger errors since the device is lost.
-//
-// On DX12 this test fails with a validation error in the very artificial actions taken
-// after lose the device. The error is "ID3D12CommandAllocator::Reset: The command
-// allocator cannot be reset because a command list is currently being recorded with the
-// allocator." That may indicate that DX12 doesn't like opened command buffers staying
-// open even after they return an error. For now, this test is skipped on DX12.
-//
-// The DX12 issue may be related to https://github.com/gfx-rs/wgpu/issues/3193.
 #[gpu_test]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
@@ -301,31 +273,32 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a buffer should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                let _ = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                     label: None,
                     size: 256,
                     usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
                     mapped_at_creation: false,
                 });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a texture should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device.create_texture(&wgpu::TextureDescriptor {
+                let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
                     label: None,
                     size: wgpu::Extent3d {
                         width: 512,
@@ -340,7 +313,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     view_formats: &[],
                 });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Texture clear should fail.
@@ -358,7 +331,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     },
                 );
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a compute pass should fail.
@@ -370,7 +343,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     timestamp_writes: None,
                 });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a render pass should fail.
@@ -389,7 +362,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     occlusion_query_set: None,
                 });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Copying a buffer to a buffer should fail.
@@ -404,7 +377,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     256,
                 );
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Copying a buffer to a texture should fail.
@@ -424,7 +397,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     texture_extent,
                 );
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Copying a texture to a buffer should fail.
@@ -444,7 +417,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     texture_extent,
                 );
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Copying a texture to a texture should fail.
@@ -457,27 +430,28 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     texture_extent,
                 );
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a bind group layout should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: None,
                         entries: &[],
                     });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a bind group should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: None,
                     layout: &bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
@@ -488,60 +462,64 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     }],
                 });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a pipeline layout should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: None,
                         bind_group_layouts: &[],
                         push_constant_ranges: &[],
                     });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a shader module should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_shader_module(wgpu::ShaderModuleDescriptor {
                         label: None,
                         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
                     });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a shader module spirv should fail.
         fail(
             &ctx.device,
             || unsafe {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
                         label: None,
                         source: std::borrow::Cow::Borrowed(&[]),
                     });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a render pipeline should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                         label: None,
                         layout: None,
                         vertex: wgpu::VertexState {
                             module: &shader_module,
-                            entry_point: "",
+                            entry_point: Some(""),
                             compilation_options: Default::default(),
                             buffers: &[],
                         },
@@ -553,41 +531,43 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                         cache: None,
                     });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a compute pipeline should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                         label: None,
                         layout: None,
                         module: &shader_module,
-                        entry_point: "",
+                        entry_point: None,
                         compilation_options: Default::default(),
                         cache: None,
                     });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Creating a compute pipeline should fail.
         fail(
             &ctx.device,
             || {
-                ctx.device
+                let _ = ctx
+                    .device
                     .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                         label: None,
                         layout: None,
                         module: &shader_module,
-                        entry_point: "",
+                        entry_point: None,
                         compilation_options: Default::default(),
                         cache: None,
                     });
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Buffer map should fail.
@@ -598,7 +578,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     .slice(..)
                     .map_async(wgpu::MapMode::Write, |_| ());
             },
-            None,
+            Some("device with '' label is invalid"),
         );
 
         // Buffer unmap should fail.
@@ -607,7 +587,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             || {
                 buffer_for_unmap.unmap();
             },
-            None,
+            Some("device with '' label is invalid"),
         );
     });
 
@@ -664,33 +644,6 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
 
         // Drop the device.
         drop(ctx.device);
-
-        assert!(
-            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
-
-#[gpu_test]
-static DEVICE_INVALID_THEN_SET_LOST_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|ctx| {
-        // This test checks that when the device is invalid, a subsequent call
-        // to set the device lost callback will immediately call the callback.
-        // Invalidating the device is done via a testing-only method. Fails on
-        // webgl because webgl doesn't implement make_invalid.
-
-        // Make the device invalid.
-        ctx.device.make_invalid();
-
-        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
-
-        // Set a LoseDeviceCallback on the device.
-        let callback = Box::new(|reason, _m| {
-            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert_eq!(reason, wgt::DeviceLostReason::DeviceInvalid);
-        });
-        ctx.device.set_device_lost_callback(callback);
 
         assert!(
             WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
@@ -831,7 +784,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 fragment: Some(wgpu::FragmentState {
                     module: &trivial_shaders_with_some_reversed_bindings,
-                    entry_point: "fs_main",
+                    entry_point: Some("fs_main"),
                     compilation_options: Default::default(),
                     targets: &[Some(wgt::ColorTargetState {
                         format: wgt::TextureFormat::Bgra8Unorm,
@@ -845,7 +798,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
                 label: None,
                 vertex: wgpu::VertexState {
                     module: &trivial_shaders_with_some_reversed_bindings,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
@@ -858,7 +811,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
 
         // fail(&ctx.device, || {
         // }, "");
-        ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &render_pipeline.get_bind_group_layout(0),
             entries: &[
@@ -915,4 +868,27 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
 
         // Poll the device, which should try to clean up its resources.
         ctx.instance.poll_all(true);
+    });
+
+#[gpu_test]
+static DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_async(|ctx| async move {
+        let TestingContext {
+            adapter,
+            device_features,
+            device_limits,
+            device,
+            queue,
+            ..
+        } = ctx;
+
+        drop(device);
+
+        let (device2, queue2) =
+            wgpu_test::initialize_device(&adapter, device_features, device_limits).await;
+
+        drop(queue);
+        drop(device2);
+        drop(queue2); // this would previously panic since we would try to use the Device ID to drop the Queue
     });

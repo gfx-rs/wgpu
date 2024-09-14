@@ -6,17 +6,17 @@
 //! 4. the bind group layout is attached to the pipeline layout.
 //! 5. the uniform buffer and the bind group are stored alongside the pipeline.
 //! 6. an instance of `AppState` is created. This variable will be modified
-//! to change parameters in the shader and modified by app events to preform and save
-//! those changes.
+//!    to change parameters in the shader and modified by app events to preform and save
+//!    those changes.
 //! 7. (7a and 7b) the `state` variable created at (6) is modified by commands such
-//! as pressing the arrow keys or zooming in or out.
+//!    as pressing the arrow keys or zooming in or out.
 //! 8. the contents of the `AppState` are loaded into the uniform buffer in preparation.
 //! 9. the bind group with the uniform buffer is attached to the render pass.
 //!
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
-use std::sync::Arc;
+use std::{mem::size_of, sync::Arc};
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated WGPU storage buffers.
 use encase::ShaderType;
@@ -115,6 +115,7 @@ impl WgpuContext {
                     label: None,
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 None,
             )
@@ -131,7 +132,7 @@ impl WgpuContext {
         // (2)
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: std::mem::size_of::<AppState>() as u64,
+            size: size_of::<AppState>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -178,13 +179,13 @@ impl WgpuContext {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(swapchain_format.into())],
             }),
@@ -326,7 +327,11 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                     });
                                 render_pass.set_pipeline(&wgpu_context_ref.pipeline);
                                 // (9)
-                                render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]);
+                                render_pass.set_bind_group(
+                                    0,
+                                    Some(&wgpu_context_ref.bind_group),
+                                    &[],
+                                );
                                 render_pass.draw(0..3, 0..1);
                             }
                             wgpu_context_ref.queue.submit(Some(encoder.finish()));

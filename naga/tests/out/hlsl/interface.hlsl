@@ -89,6 +89,6 @@ precise float4 vertex_two_structs(Input1_ in1_, Input2_ in2_) : SV_Position
 {
     uint index = 2u;
 
-    uint _expr8 = index;
-    return float4(float((_NagaConstants.first_vertex + in1_.index)), float((_NagaConstants.first_instance + in2_.index)), float(_expr8), 0.0);
+    uint _e8 = index;
+    return float4(float((_NagaConstants.first_vertex + in1_.index)), float((_NagaConstants.first_instance + in2_.index)), float(_e8), 0.0);
 }

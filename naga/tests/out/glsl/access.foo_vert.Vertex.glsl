@@ -28,7 +28,7 @@ layout(std430) buffer Bar_block_0Vertex {
 
 uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
 
-layout(std430) buffer type_12_block_2Vertex { ivec2 _group_0_binding_2_vs; };
+layout(std430) buffer type_13_block_2Vertex { ivec2 _group_0_binding_2_vs; };
 
 uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
 

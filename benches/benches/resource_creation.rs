@@ -17,7 +17,7 @@ fn run_bench(ctx: &mut Criterion) {
     for threads in [1, 2, 4, 8] {
         let resources_per_thread = RESOURCES_TO_CREATE / threads;
         group.bench_function(
-            &format!("{threads} threads x {resources_per_thread} resource"),
+            format!("{threads} threads x {resources_per_thread} resource"),
             |b| {
                 Lazy::force(&state);
 

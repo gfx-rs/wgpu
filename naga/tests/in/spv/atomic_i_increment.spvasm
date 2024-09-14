@@ -1,0 +1,62 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 37
+; Schema: 0
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %1 "stage::test_atomic_i_increment" %2 %3
+               OpExecutionMode %1 LocalSize 32 1 1
+               OpDecorate %_struct_6 Block
+               OpMemberDecorate %_struct_6 0 Offset 0
+               OpDecorate %2 Binding 0
+               OpDecorate %2 DescriptorSet 0
+               OpDecorate %3 NonWritable
+               OpDecorate %3 Binding 1
+               OpDecorate %3 DescriptorSet 0
+       %uint = OpTypeInt 32 0
+       %void = OpTypeVoid
+          %9 = OpTypeFunction %void
+       %bool = OpTypeBool
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+      %false = OpConstantFalse %bool
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+     %uint_1 = OpConstant %uint 1
+       %true = OpConstantTrue %bool
+  %_struct_6 = OpTypeStruct %uint
+%_ptr_StorageBuffer__struct_6 = OpTypePointer StorageBuffer %_struct_6
+          %2 = OpVariable %_ptr_StorageBuffer__struct_6 StorageBuffer
+          %3 = OpVariable %_ptr_StorageBuffer__struct_6 StorageBuffer
+         %18 = OpUndef %uint
+          %1 = OpFunction %void None %9
+         %19 = OpLabel
+         %20 = OpAccessChain %_ptr_StorageBuffer_uint %2 %uint_0
+         %21 = OpAccessChain %_ptr_StorageBuffer_uint %3 %uint_0
+               OpBranch %22
+         %22 = OpLabel
+         %23 = OpPhi %uint %uint_0 %19 %24 %25
+               OpLoopMerge %26 %25 None
+               OpBranch %27
+         %27 = OpLabel
+         %28 = OpLoad %uint %21
+         %29 = OpUGreaterThanEqual %bool %23 %28
+               OpSelectionMerge %30 None
+               OpBranchConditional %29 %31 %32
+         %31 = OpLabel
+               OpBranch %30
+         %32 = OpLabel
+         %33 = OpAtomicIIncrement %uint %20 %uint_2 %uint_0
+         %34 = OpIAdd %uint %23 %uint_1
+               OpBranch %30
+         %30 = OpLabel
+         %24 = OpPhi %uint %18 %31 %34 %32
+         %36 = OpSelect %bool %29 %false %true
+               OpBranch %25
+         %25 = OpLabel
+               OpBranchConditional %36 %22 %26
+         %26 = OpLabel
+               OpReturn
+               OpFunctionEnd
+

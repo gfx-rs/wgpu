@@ -393,7 +393,7 @@ impl<'a> Context<'a> {
     /// # Panics
     ///
     /// - If more than one [`StmtContext`] are active at the same time or if the
-    /// previous call didn't use it in lowering.
+    ///   previous call didn't use it in lowering.
     #[must_use]
     pub fn stmt_ctx(&mut self) -> StmtContext {
         self.stmt_ctx.take().unwrap()

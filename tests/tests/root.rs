@@ -3,10 +3,14 @@ mod regression {
     mod issue_3457;
     mod issue_4024;
     mod issue_4122;
+    mod issue_4485;
+    mod issue_4514;
+    mod issue_5553;
 }
 
 mod bgra8unorm_storage;
 mod bind_group_layout_dedup;
+mod bind_groups;
 mod buffer;
 mod buffer_copy;
 mod buffer_usages;
@@ -30,7 +34,7 @@ mod push_constants;
 mod query_set;
 mod queue_transfer;
 mod ray_tracing;
-mod ray_tracing_use_after_free;
+mod render_pass_ownership;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod scissor_tests;
@@ -41,6 +45,7 @@ mod subgroup_operations;
 mod texture_bounds;
 mod texture_view_creation;
 mod transfer;
+mod vertex_formats;
 mod vertex_indices;
 mod write_texture;
 mod zero_init_texture_after_discard;

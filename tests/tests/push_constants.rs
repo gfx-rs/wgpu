@@ -102,7 +102,7 @@ async fn partial_update_test(ctx: TestingContext) {
             label: Some("pipeline"),
             layout: Some(&pipeline_layout),
             module: &sm,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -119,7 +119,7 @@ async fn partial_update_test(ctx: TestingContext) {
             timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(0, Some(&bind_group), &[]);
 
         // -- Dispatch 0 --
 

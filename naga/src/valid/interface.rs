@@ -50,6 +50,11 @@ pub enum VaryingError {
     NotIOShareableType(Handle<crate::Type>),
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
+    #[error("Cannot combine {interpolation:?} interpolation with the {sampling:?} sample type")]
+    InvalidInterpolationSamplingCombination {
+        interpolation: crate::Interpolation,
+        sampling: crate::Sampling,
+    },
     #[error("Interpolation must be specified on vertex shader outputs and fragment shader inputs")]
     MissingInterpolation,
     #[error("Built-in {0:?} is not available at this stage")]
@@ -336,6 +341,31 @@ impl VaryingContext<'_> {
                 } else if !self.location_mask.insert(location as usize) {
                     if self.flags.contains(super::ValidationFlags::BINDINGS) {
                         return Err(VaryingError::BindingCollision { location });
+                    }
+                }
+
+                if let Some(interpolation) = interpolation {
+                    let invalid_sampling = match (interpolation, sampling) {
+                        (_, None)
+                        | (
+                            crate::Interpolation::Perspective | crate::Interpolation::Linear,
+                            Some(
+                                crate::Sampling::Center
+                                | crate::Sampling::Centroid
+                                | crate::Sampling::Sample,
+                            ),
+                        )
+                        | (
+                            crate::Interpolation::Flat,
+                            Some(crate::Sampling::First | crate::Sampling::Either),
+                        ) => None,
+                        (_, Some(invalid_sampling)) => Some(invalid_sampling),
+                    };
+                    if let Some(sampling) = invalid_sampling {
+                        return Err(VaryingError::InvalidInterpolationSamplingCombination {
+                            interpolation,
+                            sampling,
+                        });
                     }
                 }
 
@@ -678,7 +708,7 @@ impl super::Validator {
         }
 
         {
-            let used_push_constants = module
+            let mut used_push_constants = module
                 .global_variables
                 .iter()
                 .filter(|&(_, var)| var.space == crate::AddressSpace::PushConstant)
@@ -686,8 +716,7 @@ impl super::Validator {
                 .filter(|&handle| !info[handle].is_empty());
             // Check if there is more than one push constant, and error if so.
             // Use a loop for when returning multiple errors is supported.
-            #[allow(clippy::never_loop)]
-            for handle in used_push_constants.skip(1) {
+            if let Some(handle) = used_push_constants.nth(1) {
                 return Err(EntryPointError::MoreThanOnePushConstantUsed
                     .with_span_handle(handle, &module.global_variables));
             }

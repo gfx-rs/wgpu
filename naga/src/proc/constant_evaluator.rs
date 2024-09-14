@@ -3,7 +3,7 @@ use std::iter;
 use arrayvec::ArrayVec;
 
 use crate::{
-    arena::{Arena, Handle, UniqueArena},
+    arena::{Arena, Handle, HandleVec, UniqueArena},
     ArraySize, BinaryOperator, Constant, Expression, Literal, Override, ScalarKind, Span, Type,
     TypeInner, UnaryOperator,
 };
@@ -27,6 +27,8 @@ macro_rules! gen_component_wise_extractor {
         scalar_kinds: [$( $scalar_kind:ident ),* $(,)?],
     ) => {
         /// A subset of [`Literal`]s intended to be used for implementing numeric built-ins.
+        #[derive(Debug)]
+        #[cfg_attr(test, derive(PartialEq))]
         enum $target<const N: usize> {
             $(
                 #[doc = concat!(
@@ -315,7 +317,7 @@ pub struct ConstantEvaluator<'a> {
 #[derive(Debug)]
 enum WgslRestrictions<'a> {
     /// - const-expressions will be evaluated and inserted in the arena
-    Const,
+    Const(Option<FunctionLocalData<'a>>),
     /// - const-expressions will be evaluated and inserted in the arena
     /// - override-expressions will be inserted in the arena
     Override,
@@ -345,6 +347,8 @@ struct FunctionLocalData<'a> {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum ExpressionKind {
+    /// If const is also implemented as const
+    ImplConst,
     Const,
     Override,
     Runtime,
@@ -352,56 +356,69 @@ pub enum ExpressionKind {
 
 #[derive(Debug)]
 pub struct ExpressionKindTracker {
-    inner: Vec<ExpressionKind>,
+    inner: HandleVec<Expression, ExpressionKind>,
 }
 
 impl ExpressionKindTracker {
     pub const fn new() -> Self {
-        Self { inner: Vec::new() }
+        Self {
+            inner: HandleVec::new(),
+        }
     }
 
     /// Forces the the expression to not be const
     pub fn force_non_const(&mut self, value: Handle<Expression>) {
-        self.inner[value.index()] = ExpressionKind::Runtime;
+        self.inner[value] = ExpressionKind::Runtime;
     }
 
     pub fn insert(&mut self, value: Handle<Expression>, expr_type: ExpressionKind) {
-        assert_eq!(self.inner.len(), value.index());
-        self.inner.push(expr_type);
+        self.inner.insert(value, expr_type);
     }
+
     pub fn is_const(&self, h: Handle<Expression>) -> bool {
-        matches!(self.type_of(h), ExpressionKind::Const)
+        matches!(
+            self.type_of(h),
+            ExpressionKind::Const | ExpressionKind::ImplConst
+        )
+    }
+
+    /// Returns `true` if naga can also evaluate expression as const
+    pub fn is_impl_const(&self, h: Handle<Expression>) -> bool {
+        matches!(self.type_of(h), ExpressionKind::ImplConst)
     }
 
     pub fn is_const_or_override(&self, h: Handle<Expression>) -> bool {
         matches!(
             self.type_of(h),
-            ExpressionKind::Const | ExpressionKind::Override
+            ExpressionKind::Const | ExpressionKind::Override | ExpressionKind::ImplConst
         )
     }
 
     fn type_of(&self, value: Handle<Expression>) -> ExpressionKind {
-        self.inner[value.index()]
+        self.inner[value]
     }
 
     pub fn from_arena(arena: &Arena<Expression>) -> Self {
         let mut tracker = Self {
-            inner: Vec::with_capacity(arena.len()),
+            inner: HandleVec::with_capacity(arena.len()),
         };
-        for (_, expr) in arena.iter() {
-            tracker.inner.push(tracker.type_of_with_expr(expr));
+        for (handle, expr) in arena.iter() {
+            tracker
+                .inner
+                .insert(handle, tracker.type_of_with_expr(expr));
         }
         tracker
     }
 
     fn type_of_with_expr(&self, expr: &Expression) -> ExpressionKind {
+        use crate::MathFunction as Mf;
         match *expr {
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
-                ExpressionKind::Const
+                ExpressionKind::ImplConst
             }
             Expression::Override(_) => ExpressionKind::Override,
             Expression::Compose { ref components, .. } => {
-                let mut expr_type = ExpressionKind::Const;
+                let mut expr_type = ExpressionKind::ImplConst;
                 for component in components {
                     expr_type = expr_type.max(self.type_of(*component))
                 }
@@ -412,13 +429,16 @@ impl ExpressionKindTracker {
             Expression::Access { base, index } => self.type_of(base).max(self.type_of(index)),
             Expression::Swizzle { vector, .. } => self.type_of(vector),
             Expression::Unary { expr, .. } => self.type_of(expr),
-            Expression::Binary { left, right, .. } => self.type_of(left).max(self.type_of(right)),
+            Expression::Binary { left, right, .. } => self
+                .type_of(left)
+                .max(self.type_of(right))
+                .max(ExpressionKind::Const),
             Expression::Math {
+                fun,
                 arg,
                 arg1,
                 arg2,
                 arg3,
-                ..
             } => self
                 .type_of(arg)
                 .max(
@@ -432,8 +452,34 @@ impl ExpressionKindTracker {
                 .max(
                     arg3.map(|arg| self.type_of(arg))
                         .unwrap_or(ExpressionKind::Const),
+                )
+                .max(
+                    if matches!(
+                        fun,
+                        Mf::Dot
+                            | Mf::Outer
+                            | Mf::Cross
+                            | Mf::Distance
+                            | Mf::Length
+                            | Mf::Normalize
+                            | Mf::FaceForward
+                            | Mf::Reflect
+                            | Mf::Refract
+                            | Mf::Ldexp
+                            | Mf::Modf
+                            | Mf::Mix
+                            | Mf::Frexp
+                    ) {
+                        ExpressionKind::Const
+                    } else {
+                        ExpressionKind::ImplConst
+                    },
                 ),
-            Expression::As { expr, .. } => self.type_of(expr),
+            Expression::As { convert, expr, .. } => self.type_of(expr).max(if convert.is_some() {
+                ExpressionKind::ImplConst
+            } else {
+                ExpressionKind::Const
+            }),
             Expression::Select {
                 condition,
                 accept,
@@ -441,7 +487,8 @@ impl ExpressionKindTracker {
             } => self
                 .type_of(condition)
                 .max(self.type_of(accept))
-                .max(self.type_of(reject)),
+                .max(self.type_of(reject))
+                .max(ExpressionKind::Const),
             Expression::Relational { argument, .. } => self.type_of(argument),
             Expression::ArrayLength(expr) => self.type_of(expr),
             _ => ExpressionKind::Runtime,
@@ -551,7 +598,7 @@ impl<'a> ConstantEvaluator<'a> {
             Behavior::Wgsl(if in_override_ctx {
                 WgslRestrictions::Override
             } else {
-                WgslRestrictions::Const
+                WgslRestrictions::Const(None)
             }),
             module,
             global_expression_kind_tracker,
@@ -598,13 +645,19 @@ impl<'a> ConstantEvaluator<'a> {
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
+        is_const: bool,
     ) -> Self {
+        let local_data = FunctionLocalData {
+            global_expressions: &module.global_expressions,
+            emitter,
+            block,
+        };
         Self {
-            behavior: Behavior::Wgsl(WgslRestrictions::Runtime(FunctionLocalData {
-                global_expressions: &module.global_expressions,
-                emitter,
-                block,
-            })),
+            behavior: Behavior::Wgsl(if is_const {
+                WgslRestrictions::Const(Some(local_data))
+            } else {
+                WgslRestrictions::Runtime(local_data)
+            }),
             types: &mut module.types,
             constants: &module.constants,
             overrides: &module.overrides,
@@ -713,6 +766,7 @@ impl<'a> ConstantEvaluator<'a> {
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         match self.expression_kind_tracker.type_of_with_expr(&expr) {
+            ExpressionKind::ImplConst => self.try_eval_and_append_impl(&expr, span),
             ExpressionKind::Const => {
                 let eval_result = self.try_eval_and_append_impl(&expr, span);
                 // We should be able to evaluate `Const` expressions at this
@@ -735,7 +789,7 @@ impl<'a> ConstantEvaluator<'a> {
                 Behavior::Wgsl(WgslRestrictions::Override | WgslRestrictions::Runtime(_)) => {
                     Ok(self.append_expr(expr, span, ExpressionKind::Override))
                 }
-                Behavior::Wgsl(WgslRestrictions::Const) => {
+                Behavior::Wgsl(WgslRestrictions::Const(_)) => {
                     Err(ConstantEvaluatorError::OverrideExpr)
                 }
                 Behavior::Glsl(_) => {
@@ -756,14 +810,17 @@ impl<'a> ConstantEvaluator<'a> {
     const fn is_global_arena(&self) -> bool {
         matches!(
             self.behavior,
-            Behavior::Wgsl(WgslRestrictions::Const | WgslRestrictions::Override)
+            Behavior::Wgsl(WgslRestrictions::Const(None) | WgslRestrictions::Override)
                 | Behavior::Glsl(GlslRestrictions::Const)
         )
     }
 
     const fn function_local_data(&self) -> Option<&FunctionLocalData<'a>> {
         match self.behavior {
-            Behavior::Wgsl(WgslRestrictions::Runtime(ref function_local_data))
+            Behavior::Wgsl(
+                WgslRestrictions::Runtime(ref function_local_data)
+                | WgslRestrictions::Const(Some(ref function_local_data)),
+            )
             | Behavior::Glsl(GlslRestrictions::Runtime(ref function_local_data)) => {
                 Some(function_local_data)
             }
@@ -1227,6 +1284,12 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::ReverseBits => {
                 component_wise_concrete_int!(self, span, [arg], |e| { Ok([e.reverse_bits()]) })
+            }
+            crate::MathFunction::FirstTrailingBit => {
+                component_wise_concrete_int(self, span, [arg], |ci| Ok(first_trailing_bit(ci)))
+            }
+            crate::MathFunction::FirstLeadingBit => {
+                component_wise_concrete_int(self, span, [arg], |ci| Ok(first_leading_bit(ci)))
             }
 
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
@@ -1768,9 +1831,13 @@ impl<'a> ConstantEvaluator<'a> {
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::I32(a), Literal::U32(b)) => Literal::I32(match op {
-                            BinaryOperator::ShiftLeft => a
-                                .checked_shl(b)
-                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                            BinaryOperator::ShiftLeft => {
+                                if (if a.is_negative() { !a } else { a }).leading_zeros() <= b {
+                                    return Err(ConstantEvaluatorError::Overflow("<<".to_string()));
+                                }
+                                a.checked_shl(b)
+                                    .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?
+                            }
                             BinaryOperator::ShiftRight => a
                                 .checked_shr(b)
                                 .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
@@ -1796,8 +1863,11 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
                             BinaryOperator::ShiftLeft => a
-                                .checked_shl(b)
-                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                                .checked_mul(
+                                    1u32.checked_shl(b)
+                                        .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                                )
+                                .ok_or(ConstantEvaluatorError::Overflow("<<".to_string()))?,
                             BinaryOperator::ShiftRight => a
                                 .checked_shr(b)
                                 .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
@@ -2046,7 +2116,10 @@ impl<'a> ConstantEvaluator<'a> {
         expr_type: ExpressionKind,
     ) -> Handle<Expression> {
         let h = match self.behavior {
-            Behavior::Wgsl(WgslRestrictions::Runtime(ref mut function_local_data))
+            Behavior::Wgsl(
+                WgslRestrictions::Runtime(ref mut function_local_data)
+                | WgslRestrictions::Const(Some(ref mut function_local_data)),
+            )
             | Behavior::Glsl(GlslRestrictions::Runtime(ref mut function_local_data)) => {
                 let is_running = function_local_data.emitter.is_running();
                 let needs_pre_emit = expr.needs_pre_emit();
@@ -2090,6 +2163,174 @@ impl<'a> ConstantEvaluator<'a> {
         };
 
         Ok(resolution)
+    }
+}
+
+fn first_trailing_bit(concrete_int: ConcreteInt<1>) -> ConcreteInt<1> {
+    // NOTE: Bit indices for this built-in start at 0 at the "right" (or LSB). For example, a value
+    // of 1 means the least significant bit is set. Therefore, an input of `0x[80 00…]` would
+    // return a right-to-left bit index of 0.
+    let trailing_zeros_to_bit_idx = |e: u32| -> u32 {
+        match e {
+            idx @ 0..=31 => idx,
+            32 => u32::MAX,
+            _ => unreachable!(),
+        }
+    };
+    match concrete_int {
+        ConcreteInt::U32([e]) => ConcreteInt::U32([trailing_zeros_to_bit_idx(e.trailing_zeros())]),
+        ConcreteInt::I32([e]) => {
+            ConcreteInt::I32([trailing_zeros_to_bit_idx(e.trailing_zeros()) as i32])
+        }
+    }
+}
+
+#[test]
+fn first_trailing_bit_smoke() {
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([0])),
+        ConcreteInt::I32([-1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([1])),
+        ConcreteInt::I32([0])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([2])),
+        ConcreteInt::I32([1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([-1])),
+        ConcreteInt::I32([0]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([i32::MIN])),
+        ConcreteInt::I32([31]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::I32([i32::MAX])),
+        ConcreteInt::I32([0]),
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_trailing_bit(ConcreteInt::I32([1 << idx])),
+            ConcreteInt::I32([idx])
+        )
+    }
+
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([0])),
+        ConcreteInt::U32([u32::MAX])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([1])),
+        ConcreteInt::U32([0])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([2])),
+        ConcreteInt::U32([1])
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([1 << 31])),
+        ConcreteInt::U32([31]),
+    );
+    assert_eq!(
+        first_trailing_bit(ConcreteInt::U32([u32::MAX])),
+        ConcreteInt::U32([0]),
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_trailing_bit(ConcreteInt::U32([1 << idx])),
+            ConcreteInt::U32([idx])
+        )
+    }
+}
+
+fn first_leading_bit(concrete_int: ConcreteInt<1>) -> ConcreteInt<1> {
+    // NOTE: Bit indices for this built-in start at 0 at the "right" (or LSB). For example, 1 means
+    // the least significant bit is set. Therefore, an input of 1 would return a right-to-left bit
+    // index of 0.
+    let rtl_to_ltr_bit_idx = |e: u32| -> u32 {
+        match e {
+            idx @ 0..=31 => 31 - idx,
+            32 => u32::MAX,
+            _ => unreachable!(),
+        }
+    };
+    match concrete_int {
+        ConcreteInt::I32([e]) => ConcreteInt::I32([{
+            let rtl_bit_index = if e.is_negative() {
+                e.leading_ones()
+            } else {
+                e.leading_zeros()
+            };
+            rtl_to_ltr_bit_idx(rtl_bit_index) as i32
+        }]),
+        ConcreteInt::U32([e]) => ConcreteInt::U32([rtl_to_ltr_bit_idx(e.leading_zeros())]),
+    }
+}
+
+#[test]
+fn first_leading_bit_smoke() {
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([-1])),
+        ConcreteInt::I32([-1])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([0])),
+        ConcreteInt::I32([-1])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([1])),
+        ConcreteInt::I32([0])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([-2])),
+        ConcreteInt::I32([0])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([1234 + 4567])),
+        ConcreteInt::I32([12])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([i32::MAX])),
+        ConcreteInt::I32([30])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::I32([i32::MIN])),
+        ConcreteInt::I32([30])
+    );
+    // NOTE: Ignore the sign bit, which is a separate (above) case.
+    for idx in 0..(32 - 1) {
+        assert_eq!(
+            first_leading_bit(ConcreteInt::I32([1 << idx])),
+            ConcreteInt::I32([idx])
+        );
+    }
+    for idx in 1..(32 - 1) {
+        assert_eq!(
+            first_leading_bit(ConcreteInt::I32([-(1 << idx)])),
+            ConcreteInt::I32([idx - 1])
+        );
+    }
+
+    assert_eq!(
+        first_leading_bit(ConcreteInt::U32([0])),
+        ConcreteInt::U32([u32::MAX])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::U32([1])),
+        ConcreteInt::U32([0])
+    );
+    assert_eq!(
+        first_leading_bit(ConcreteInt::U32([u32::MAX])),
+        ConcreteInt::U32([31])
+    );
+    for idx in 0..32 {
+        assert_eq!(
+            first_leading_bit(ConcreteInt::U32([1 << idx])),
+            ConcreteInt::U32([idx])
+        )
     }
 }
 
@@ -2301,7 +2542,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2387,7 +2628,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2505,7 +2746,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2598,7 +2839,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,
@@ -2680,7 +2921,7 @@ mod tests {
 
         let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
         let mut solver = ConstantEvaluator {
-            behavior: Behavior::Wgsl(WgslRestrictions::Const),
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
             types: &mut types,
             constants: &constants,
             overrides: &overrides,

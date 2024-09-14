@@ -92,13 +92,14 @@ async fn reinterpret(
             layout: None,
             vertex: wgpu::VertexState {
                 module: shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
+
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(src_format.into())],
             }),
@@ -147,7 +148,7 @@ async fn reinterpret(
         occlusion_query_set: None,
     });
     rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, &bind_group, &[]);
+    rpass.set_bind_group(0, Some(&bind_group), &[]);
     rpass.draw(0..3, 0..1);
     drop(rpass);
     ctx.queue.submit(Some(encoder.finish()));

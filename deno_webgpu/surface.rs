@@ -63,7 +63,7 @@ pub fn op_webgpu_surface_configure(
         desired_maximum_frame_latency: 2,
     };
 
-    let err = gfx_select!(device => instance.surface_configure(surface, device, &conf));
+    let err = instance.surface_configure(surface, device, &conf);
 
     Ok(WebGpuResult::maybe_err(err))
 }
@@ -72,18 +72,14 @@ pub fn op_webgpu_surface_configure(
 #[serde]
 pub fn op_webgpu_surface_get_current_texture(
     state: &mut OpState,
-    #[smi] device_rid: ResourceId,
+    #[smi] _device_rid: ResourceId,
     #[smi] surface_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
-    let device_resource = state
-        .resource_table
-        .get::<super::WebGpuDevice>(device_rid)?;
-    let device = device_resource.1;
     let surface_resource = state.resource_table.get::<WebGpuSurface>(surface_rid)?;
     let surface = surface_resource.1;
 
-    let output = gfx_select!(device => instance.surface_get_current_texture(surface, None))?;
+    let output = instance.surface_get_current_texture(surface, None)?;
 
     match output.status {
         SurfaceStatus::Good | SurfaceStatus::Suboptimal => {
@@ -102,18 +98,14 @@ pub fn op_webgpu_surface_get_current_texture(
 #[op2(fast)]
 pub fn op_webgpu_surface_present(
     state: &mut OpState,
-    #[smi] device_rid: ResourceId,
+    #[smi] _device_rid: ResourceId,
     #[smi] surface_rid: ResourceId,
 ) -> Result<(), AnyError> {
     let instance = state.borrow::<super::Instance>();
-    let device_resource = state
-        .resource_table
-        .get::<super::WebGpuDevice>(device_rid)?;
-    let device = device_resource.1;
     let surface_resource = state.resource_table.get::<WebGpuSurface>(surface_rid)?;
     let surface = surface_resource.1;
 
-    let _ = gfx_select!(device => instance.surface_present(surface))?;
+    instance.surface_present(surface)?;
 
     Ok(())
 }

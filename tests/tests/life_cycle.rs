@@ -4,7 +4,7 @@ use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 static BUFFER_DESTROY: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|ctx| async move {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
+            label: Some("buffer"),
             size: 256,
             usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
@@ -25,7 +25,7 @@ static BUFFER_DESTROY: GpuTestConfiguration =
                     .slice(..)
                     .map_async(wgpu::MapMode::Write, move |_| {});
             },
-            None,
+            Some("buffer with 'buffer' label has been destroyed"),
         );
 
         buffer.destroy();

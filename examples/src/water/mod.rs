@@ -3,7 +3,7 @@ mod point_gen;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, f32::consts, iter, mem};
+use std::{borrow::Cow, f32::consts, iter, mem::size_of};
 use wgpu::util::DeviceExt;
 
 ///
@@ -273,12 +273,12 @@ impl crate::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         // Size of one water vertex
-        let water_vertex_size = mem::size_of::<point_gen::WaterVertexAttributes>();
+        let water_vertex_size = size_of::<point_gen::WaterVertexAttributes>();
 
         let water_vertices = point_gen::HexWaterMesh::generate(SIZE).generate_points();
 
         // Size of one terrain vertex
-        let terrain_vertex_size = mem::size_of::<point_gen::TerrainVertexAttributes>();
+        let terrain_vertex_size = size_of::<point_gen::TerrainVertexAttributes>();
 
         // Noise generation
         let terrain_noise = noise::OpenSimplex::default();
@@ -359,7 +359,7 @@ impl crate::framework::Example for Example {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new(
-                                mem::size_of::<WaterUniforms>() as _,
+                                size_of::<WaterUniforms>() as _,
                             ),
                         },
                         count: None,
@@ -415,7 +415,7 @@ impl crate::framework::Example for Example {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new(
-                                mem::size_of::<TerrainUniforms>() as _,
+                                size_of::<TerrainUniforms>() as _
                             ),
                         },
                         count: None,
@@ -440,21 +440,21 @@ impl crate::framework::Example for Example {
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Water Uniforms"),
-            size: mem::size_of::<WaterUniforms>() as _,
+            size: size_of::<WaterUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_normal_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Normal Terrain Uniforms"),
-            size: mem::size_of::<TerrainUniforms>() as _,
+            size: size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_flipped_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Flipped Terrain Uniforms"),
-            size: mem::size_of::<TerrainUniforms>() as _,
+            size: size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -511,7 +511,7 @@ impl crate::framework::Example for Example {
             // Vertex shader and input buffers
             vertex: wgpu::VertexState {
                 module: &water_module,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 // Layout of our vertices. This should match the structs
                 // which are uploaded to the GPU. This should also be
@@ -527,7 +527,7 @@ impl crate::framework::Example for Example {
             // Fragment shader and output targets
             fragment: Some(wgpu::FragmentState {
                 module: &water_module,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 // Describes how the colour will be interpolated
                 // and assigned to the output attachment.
@@ -584,7 +584,7 @@ impl crate::framework::Example for Example {
             layout: Some(&terrain_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &terrain_module,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: terrain_vertex_size as wgpu::BufferAddress,
@@ -594,7 +594,7 @@ impl crate::framework::Example for Example {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &terrain_module,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
@@ -630,7 +630,7 @@ impl crate::framework::Example for Example {
                     multiview: None,
                 });
             encoder.set_pipeline(&terrain_pipeline);
-            encoder.set_bind_group(0, &terrain_flipped_bind_group, &[]);
+            encoder.set_bind_group(0, Some(&terrain_flipped_bind_group), &[]);
             encoder.set_vertex_buffer(0, terrain_vertex_buf.slice(..));
             encoder.draw(0..terrain_vertices.len() as u32, 0..1);
             encoder.finish(&wgpu::RenderBundleDescriptor::default())
@@ -712,7 +712,7 @@ impl crate::framework::Example for Example {
         let (water_sin, water_cos) = ((self.current_frame as f32) / 600.0).sin_cos();
         queue.write_buffer(
             &self.water_uniform_buf,
-            mem::size_of::<[f32; 16]>() as wgpu::BufferAddress * 2,
+            size_of::<[f32; 16]>() as wgpu::BufferAddress * 2,
             bytemuck::cast_slice(&[water_sin, water_cos]),
         );
 
@@ -784,7 +784,7 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
-            rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.terrain_normal_bind_group), &[]);
             rpass.set_vertex_buffer(0, self.terrain_vertex_buf.slice(..));
             rpass.draw(0..self.terrain_vertex_count as u32, 0..1);
         }
@@ -811,7 +811,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.water_pipeline);
-            rpass.set_bind_group(0, &self.water_bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.water_bind_group), &[]);
             rpass.set_vertex_buffer(0, self.water_vertex_buf.slice(..));
             rpass.draw(0..self.water_vertex_count as u32, 0..1);
         }

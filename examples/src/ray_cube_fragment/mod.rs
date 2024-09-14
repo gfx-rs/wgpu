@@ -166,7 +166,7 @@ impl crate::framework::Example for Example {
         });
 
         let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
-            vertex_format: wgpu::VertexFormat::Float32x4,
+            vertex_format: wgpu::VertexFormat::Float32x3,
             vertex_count: vertex_data.len() as u32,
             index_format: Some(wgpu::IndexFormat::Uint16),
             index_count: Some(index_data.len() as u32),
@@ -201,13 +201,13 @@ impl crate::framework::Example for Example {
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.format.into())],
             }),
@@ -365,7 +365,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
             rpass.draw(0..3, 0..1);
         }
 
@@ -388,6 +388,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     base_test_parameters: wgpu_test::TestParameters {
         required_features: <Example as crate::framework::Example>::required_features(),
         required_limits: <Example as crate::framework::Example>::required_limits(),
+        force_fxc: false,
         skips: vec![],
         failures: Vec::new(),
         required_downlevel_caps:

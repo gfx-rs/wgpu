@@ -1,6 +1,4 @@
-use crate::hal_api::HalApi;
 use crate::resource_log;
-use hal::Device as _;
 
 use crate::lock::{rank, Mutex};
 
@@ -14,11 +12,11 @@ use crate::lock::{rank, Mutex};
 /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
 /// [ce]: hal::CommandEncoder
 /// [cb]: hal::Api::CommandBuffer
-pub(crate) struct CommandAllocator<A: HalApi> {
-    free_encoders: Mutex<Vec<A::CommandEncoder>>,
+pub(crate) struct CommandAllocator {
+    free_encoders: Mutex<Vec<Box<dyn hal::DynCommandEncoder>>>,
 }
 
-impl<A: HalApi> CommandAllocator<A> {
+impl CommandAllocator {
     pub(crate) fn new() -> Self {
         Self {
             free_encoders: Mutex::new(rank::COMMAND_ALLOCATOR_FREE_ENCODERS, Vec::new()),
@@ -33,9 +31,9 @@ impl<A: HalApi> CommandAllocator<A> {
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     pub(crate) fn acquire_encoder(
         &self,
-        device: &A::Device,
-        queue: &A::Queue,
-    ) -> Result<A::CommandEncoder, hal::DeviceError> {
+        device: &dyn hal::DynDevice,
+        queue: &dyn hal::DynQueue,
+    ) -> Result<Box<dyn hal::DynCommandEncoder>, hal::DeviceError> {
         let mut free_encoders = self.free_encoders.lock();
         match free_encoders.pop() {
             Some(encoder) => Ok(encoder),
@@ -47,7 +45,7 @@ impl<A: HalApi> CommandAllocator<A> {
     }
 
     /// Add `encoder` back to the free pool.
-    pub(crate) fn release_encoder(&self, encoder: A::CommandEncoder) {
+    pub(crate) fn release_encoder(&self, encoder: Box<dyn hal::DynCommandEncoder>) {
         let mut free_encoders = self.free_encoders.lock();
         free_encoders.push(encoder);
     }
@@ -55,7 +53,7 @@ impl<A: HalApi> CommandAllocator<A> {
     /// Free the pool of command encoders.
     ///
     /// This is only called when the `Device` is dropped.
-    pub(crate) fn dispose(&self, device: &A::Device) {
+    pub(crate) fn dispose(&self, device: &dyn hal::DynDevice) {
         let mut free_encoders = self.free_encoders.lock();
         resource_log!("CommandAllocator::dispose encoders {}", free_encoders.len());
         for cmd_encoder in free_encoders.drain(..) {

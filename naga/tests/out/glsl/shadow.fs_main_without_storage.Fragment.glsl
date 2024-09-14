@@ -28,7 +28,7 @@ uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
 
 uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
 
-uniform type_7_block_2Fragment { Light _group_0_binding_1_fs[10]; };
+uniform type_9_block_2Fragment { Light _group_0_binding_1_fs[10]; };
 
 uniform highp sampler2DArrayShadow _group_0_binding_2_fs;
 

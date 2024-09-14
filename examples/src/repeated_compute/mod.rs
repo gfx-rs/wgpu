@@ -59,7 +59,7 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
             timestamp_writes: None,
         });
         compute_pass.set_pipeline(&context.pipeline);
-        compute_pass.set_bind_group(0, &context.bind_group, &[]);
+        compute_pass.set_bind_group(0, Some(&context.bind_group), &[]);
         compute_pass.dispatch_workgroups(local_buffer.len() as u32, 1, 1);
     }
     // We finish the compute pass by dropping it.
@@ -172,6 +172,7 @@ impl WgpuContext {
                     label: None,
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults(),
+                    memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
             )
@@ -244,7 +245,7 @@ impl WgpuContext {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });

@@ -63,9 +63,7 @@ use std::{cell::Cell, panic::Location};
 /// This is just a wrapper around a [`parking_lot::Mutex`], along with
 /// its rank in the `wgpu_core` lock ordering.
 ///
-/// For details, see [the module documentation][mod].
-///
-/// [mod]: crate::lock::ranked
+/// For details, see [the module documentation][self].
 pub struct Mutex<T> {
     inner: parking_lot::Mutex<T>,
     rank: LockRank,
@@ -76,9 +74,7 @@ pub struct Mutex<T> {
 /// This is just a wrapper around a [`parking_lot::MutexGuard`], along
 /// with the state needed to track lock acquisition.
 ///
-/// For details, see [the module documentation][mod].
-///
-/// [mod]: crate::lock::ranked
+/// For details, see [the module documentation][self].
 pub struct MutexGuard<'a, T> {
     inner: parking_lot::MutexGuard<'a, T>,
     saved: LockStateGuard,
@@ -144,12 +140,12 @@ fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> LockStat
              last locked {:<35} at {}\n\
              now locking {:<35} at {}\n\
              Locking {} after locking {} is not permitted.",
-            last_rank.bit.name(),
+            last_rank.bit.member_name(),
             last_location,
-            new_rank.bit.name(),
+            new_rank.bit.member_name(),
             location,
-            new_rank.bit.name(),
-            last_rank.bit.name(),
+            new_rank.bit.member_name(),
+            last_rank.bit.member_name(),
         );
     }
     LOCK_STATE.set(LockState {
@@ -220,9 +216,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Mutex<T> {
 /// This is just a wrapper around a [`parking_lot::RwLock`], along with
 /// its rank in the `wgpu_core` lock ordering.
 ///
-/// For details, see [the module documentation][mod].
-///
-/// [mod]: crate::lock::ranked
+/// For details, see [the module documentation][self].
 pub struct RwLock<T> {
     inner: parking_lot::RwLock<T>,
     rank: LockRank,
@@ -233,9 +227,7 @@ pub struct RwLock<T> {
 /// This is just a wrapper around a [`parking_lot::RwLockReadGuard`], along with
 /// the state needed to track lock acquisition.
 ///
-/// For details, see [the module documentation][mod].
-///
-/// [mod]: crate::lock::ranked
+/// For details, see [the module documentation][self].
 pub struct RwLockReadGuard<'a, T> {
     inner: parking_lot::RwLockReadGuard<'a, T>,
     saved: LockStateGuard,
@@ -246,9 +238,7 @@ pub struct RwLockReadGuard<'a, T> {
 /// This is just a wrapper around a [`parking_lot::RwLockWriteGuard`], along
 /// with the state needed to track lock acquisition.
 ///
-/// For details, see [the module documentation][mod].
-///
-/// [mod]: crate::lock::ranked
+/// For details, see [the module documentation][self].
 pub struct RwLockWriteGuard<'a, T> {
     inner: parking_lot::RwLockWriteGuard<'a, T>,
     saved: LockStateGuard,

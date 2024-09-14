@@ -2,13 +2,10 @@ use std::sync::Arc;
 
 use crate::{
     binding_model::BindGroup,
-    hal_api::HalApi,
     id,
     pipeline::ComputePipeline,
     resource::{Buffer, QuerySet},
 };
-
-use super::{ComputePassError, ComputePassErrorInner, PassErrorScope};
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -16,7 +13,7 @@ pub enum ComputeCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
     },
 
     SetPipeline(id::ComputePipelineId),
@@ -72,43 +69,56 @@ pub enum ComputeCommand {
 
 impl ComputeCommand {
     /// Resolves all ids in a list of commands into the corresponding resource Arc.
-    ///
-    // TODO: Once resolving is done on-the-fly during recording, this function should be only needed with the replay feature:
-    // #[cfg(feature = "replay")]
-    pub fn resolve_compute_command_ids<A: HalApi>(
-        hub: &crate::hub::Hub<A>,
+    #[cfg(any(feature = "serde", feature = "replay"))]
+    pub fn resolve_compute_command_ids(
+        hub: &crate::hub::Hub,
         commands: &[ComputeCommand],
-    ) -> Result<Vec<ArcComputeCommand<A>>, ComputePassError> {
+    ) -> Result<Vec<ArcComputeCommand>, super::ComputePassError> {
+        use super::{ComputePassError, PassErrorScope};
+
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
         let query_set_guard = hub.query_sets.read();
         let pipelines_guard = hub.compute_pipelines.read();
 
-        let resolved_commands: Vec<ArcComputeCommand<A>> = commands
+        let resolved_commands: Vec<ArcComputeCommand> = commands
             .iter()
-            .map(|c| -> Result<ArcComputeCommand<A>, ComputePassError> {
+            .map(|c| -> Result<ArcComputeCommand, ComputePassError> {
                 Ok(match *c {
                     ComputeCommand::SetBindGroup {
                         index,
                         num_dynamic_offsets,
                         bind_group_id,
-                    } => ArcComputeCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group: bind_group_guard.get_owned(bind_group_id).map_err(|_| {
-                            ComputePassError {
-                                scope: PassErrorScope::SetBindGroup(bind_group_id),
-                                inner: ComputePassErrorInner::InvalidBindGroup(index),
-                            }
-                        })?,
-                    },
+                    } => {
+                        if bind_group_id.is_none() {
+                            return Ok(ArcComputeCommand::SetBindGroup {
+                                index,
+                                num_dynamic_offsets,
+                                bind_group: None,
+                            });
+                        }
 
+                        let bind_group_id = bind_group_id.unwrap();
+                        let bg = bind_group_guard.get(bind_group_id).get().map_err(|e| {
+                            ComputePassError {
+                                scope: PassErrorScope::SetBindGroup,
+                                inner: e.into(),
+                            }
+                        })?;
+
+                        ArcComputeCommand::SetBindGroup {
+                            index,
+                            num_dynamic_offsets,
+                            bind_group: Some(bg),
+                        }
+                    }
                     ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
                         pipelines_guard
-                            .get_owned(pipeline_id)
-                            .map_err(|_| ComputePassError {
-                                scope: PassErrorScope::SetPipelineCompute(pipeline_id),
-                                inner: ComputePassErrorInner::InvalidPipeline(pipeline_id),
+                            .get(pipeline_id)
+                            .get()
+                            .map_err(|e| ComputePassError {
+                                scope: PassErrorScope::SetPipelineCompute,
+                                inner: e.into(),
                             })?,
                     ),
 
@@ -126,13 +136,10 @@ impl ComputeCommand {
 
                     ComputeCommand::DispatchIndirect { buffer_id, offset } => {
                         ArcComputeCommand::DispatchIndirect {
-                            buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                            buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
                                 ComputePassError {
-                                    scope: PassErrorScope::Dispatch {
-                                        indirect: true,
-                                        pipeline: None, // TODO: not used right now, but once we do the resolve during recording we can use this again.
-                                    },
-                                    inner: ComputePassErrorInner::InvalidBuffer(buffer_id),
+                                    scope: PassErrorScope::Dispatch { indirect: true },
+                                    inner: e.into(),
                                 }
                             })?,
                             offset,
@@ -153,10 +160,10 @@ impl ComputeCommand {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::WriteTimestamp {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
+                        query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
                             ComputePassError {
                                 scope: PassErrorScope::WriteTimestamp,
-                                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
+                                inner: e.into(),
                             }
                         })?,
                         query_index,
@@ -166,10 +173,10 @@ impl ComputeCommand {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::BeginPipelineStatisticsQuery {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
+                        query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
                             ComputePassError {
                                 scope: PassErrorScope::BeginPipelineStatisticsQuery,
-                                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
+                                inner: e.into(),
                             }
                         })?,
                         query_index,
@@ -187,14 +194,14 @@ impl ComputeCommand {
 
 /// Equivalent to `ComputeCommand` but the Ids resolved into resource Arcs.
 #[derive(Clone, Debug)]
-pub enum ArcComputeCommand<A: HalApi> {
+pub enum ArcComputeCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group: Arc<BindGroup<A>>,
+        bind_group: Option<Arc<BindGroup>>,
     },
 
-    SetPipeline(Arc<ComputePipeline<A>>),
+    SetPipeline(Arc<ComputePipeline>),
 
     /// Set a range of push constants to values stored in `push_constant_data`.
     SetPushConstant {
@@ -216,11 +223,12 @@ pub enum ArcComputeCommand<A: HalApi> {
     Dispatch([u32; 3]),
 
     DispatchIndirect {
-        buffer: Arc<Buffer<A>>,
+        buffer: Arc<Buffer>,
         offset: wgt::BufferAddress,
     },
 
     PushDebugGroup {
+        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
         color: u32,
         len: usize,
     },
@@ -228,95 +236,20 @@ pub enum ArcComputeCommand<A: HalApi> {
     PopDebugGroup,
 
     InsertDebugMarker {
+        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
         color: u32,
         len: usize,
     },
 
     WriteTimestamp {
-        query_set: Arc<QuerySet<A>>,
+        query_set: Arc<QuerySet>,
         query_index: u32,
     },
 
     BeginPipelineStatisticsQuery {
-        query_set: Arc<QuerySet<A>>,
+        query_set: Arc<QuerySet>,
         query_index: u32,
     },
 
     EndPipelineStatisticsQuery,
-}
-
-#[cfg(feature = "trace")]
-impl<A: HalApi> From<&ArcComputeCommand<A>> for ComputeCommand {
-    fn from(value: &ArcComputeCommand<A>) -> Self {
-        use crate::resource::Resource as _;
-
-        match value {
-            ArcComputeCommand::SetBindGroup {
-                index,
-                num_dynamic_offsets,
-                bind_group,
-            } => ComputeCommand::SetBindGroup {
-                index: *index,
-                num_dynamic_offsets: *num_dynamic_offsets,
-                bind_group_id: bind_group.as_info().id(),
-            },
-
-            ArcComputeCommand::SetPipeline(pipeline) => {
-                ComputeCommand::SetPipeline(pipeline.as_info().id())
-            }
-
-            ArcComputeCommand::SetPushConstant {
-                offset,
-                size_bytes,
-                values_offset,
-            } => ComputeCommand::SetPushConstant {
-                offset: *offset,
-                size_bytes: *size_bytes,
-                values_offset: *values_offset,
-            },
-
-            ArcComputeCommand::Dispatch(dim) => ComputeCommand::Dispatch(*dim),
-
-            ArcComputeCommand::DispatchIndirect { buffer, offset } => {
-                ComputeCommand::DispatchIndirect {
-                    buffer_id: buffer.as_info().id(),
-                    offset: *offset,
-                }
-            }
-
-            ArcComputeCommand::PushDebugGroup { color, len } => ComputeCommand::PushDebugGroup {
-                color: *color,
-                len: *len,
-            },
-
-            ArcComputeCommand::PopDebugGroup => ComputeCommand::PopDebugGroup,
-
-            ArcComputeCommand::InsertDebugMarker { color, len } => {
-                ComputeCommand::InsertDebugMarker {
-                    color: *color,
-                    len: *len,
-                }
-            }
-
-            ArcComputeCommand::WriteTimestamp {
-                query_set,
-                query_index,
-            } => ComputeCommand::WriteTimestamp {
-                query_set_id: query_set.as_info().id(),
-                query_index: *query_index,
-            },
-
-            ArcComputeCommand::BeginPipelineStatisticsQuery {
-                query_set,
-                query_index,
-            } => ComputeCommand::BeginPipelineStatisticsQuery {
-                query_set_id: query_set.as_info().id(),
-                query_index: *query_index,
-            },
-
-            ArcComputeCommand::EndPipelineStatisticsQuery => {
-                ComputeCommand::EndPipelineStatisticsQuery
-            }
-        }
-    }
 }

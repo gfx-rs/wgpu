@@ -355,7 +355,7 @@ impl crate::framework::Example for Example {
         });
 
         let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
-            vertex_format: wgpu::VertexFormat::Float32x4,
+            vertex_format: wgpu::VertexFormat::Float32x3,
             vertex_count: vertex_data.len() as u32,
             index_format: Some(wgpu::IndexFormat::Uint16),
             index_count: Some(index_data.len() as u32),
@@ -394,7 +394,7 @@ impl crate::framework::Example for Example {
             label: Some("rt"),
             layout: None,
             module: &shader,
-            entry_point: "main",
+            entry_point: Some("main"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -425,13 +425,13 @@ impl crate::framework::Example for Example {
             layout: None,
             vertex: wgpu::VertexState {
                 module: &blit_shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &blit_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.format.into())],
             }),
@@ -577,7 +577,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, &self.compute_bind_group, &[]);
+            cpass.set_bind_group(0, Some(&self.compute_bind_group), &[]);
             cpass.dispatch_workgroups(self.rt_target.width() / 8, self.rt_target.height() / 8, 1);
         }
 
@@ -598,7 +598,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.blit_pipeline);
-            rpass.set_bind_group(0, &self.blit_bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.blit_bind_group), &[]);
             rpass.draw(0..3, 0..1);
         }
 
@@ -621,6 +621,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     base_test_parameters: wgpu_test::TestParameters {
         required_features: <Example as crate::framework::Example>::required_features(),
         required_limits: <Example as crate::framework::Example>::required_limits(),
+        force_fxc: false,
         skips: vec![],
         failures: Vec::new(),
         required_downlevel_caps:

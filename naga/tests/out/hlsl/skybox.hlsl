@@ -43,15 +43,15 @@ VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
 
     tmp1_ = (int((_NagaConstants.first_vertex + vertex_index)) / 2);
     tmp2_ = (int((_NagaConstants.first_vertex + vertex_index)) & 1);
-    int _expr9 = tmp1_;
-    int _expr15 = tmp2_;
-    float4 pos = float4(((float(_expr9) * 4.0) - 1.0), ((float(_expr15) * 4.0) - 1.0), 0.0, 1.0);
-    float4 _expr27 = r_data.view[0];
-    float4 _expr32 = r_data.view[1];
-    float4 _expr37 = r_data.view[2];
-    float3x3 inv_model_view = transpose(float3x3(_expr27.xyz, _expr32.xyz, _expr37.xyz));
-    float4x4 _expr43 = r_data.proj_inv;
-    float4 unprojected = mul(pos, _expr43);
+    int _e9 = tmp1_;
+    int _e15 = tmp2_;
+    float4 pos = float4(((float(_e9) * 4.0) - 1.0), ((float(_e15) * 4.0) - 1.0), 0.0, 1.0);
+    float4 _e27 = r_data.view[0];
+    float4 _e32 = r_data.view[1];
+    float4 _e37 = r_data.view[2];
+    float3x3 inv_model_view = transpose(float3x3(_e27.xyz, _e32.xyz, _e37.xyz));
+    float4x4 _e43 = r_data.proj_inv;
+    float4 unprojected = mul(pos, _e43);
     const VertexOutput vertexoutput = ConstructVertexOutput(pos, mul(unprojected.xyz, inv_model_view));
     const VertexOutput_vs_main vertexoutput_1 = { vertexoutput.uv, vertexoutput.position };
     return vertexoutput_1;
@@ -60,6 +60,6 @@ VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
     VertexOutput in_ = { fragmentinput_fs_main.position_1, fragmentinput_fs_main.uv_1 };
-    float4 _expr4 = r_texture.Sample(r_sampler, in_.uv);
-    return _expr4;
+    float4 _e4 = r_texture.Sample(r_sampler, in_.uv);
+    return _e4;
 }
