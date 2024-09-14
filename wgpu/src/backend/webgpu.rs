@@ -26,9 +26,10 @@ use crate::{
 // implement `Send` and `Sync` to match native.
 //
 // SAFETY: All webgpu handle types in wasm32 are internally a `JsValue`, and `JsValue` is neither
-// Send nor Sync.  Currently, wasm32 has no threading support so implementing `Send` or `Sync` for a
-// type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
-// is integrated (or not integrated) with values like those in webgpu, this may become unsound.
+// Send nor Sync.  Currently, wasm32 has no threading support by default, so implementing `Send` or
+// `Sync` for a type is harmless. However, nightly Rust supports compiling wasm with experimental
+// threading support via `--target-features`. If `wgpu` is being compiled with those features, we do
+// not implement `Send` and `Sync` on the webgpu handle types.
 
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
