@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 
+mod defined_non_null_js_value;
 mod ext_bindings;
 mod webgpu_sys;
 
@@ -22,6 +23,8 @@ use crate::{
     CompilationInfo, SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
 
+use defined_non_null_js_value::DefinedNonNullJsValue;
+
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
 // implement `Send` and `Sync` to match native.
 //
@@ -38,9 +41,7 @@ unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 pub(crate) struct ContextWebGpu {
-    // Invariant: `Some(gpu)` implies that `gpu`` is not `undefined` (i.e., the
-    // browser advertises support for WebGPU).
-    gpu: Option<webgpu_sys::Gpu>,
+    gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
 }
 #[cfg(send_sync)]
 unsafe impl Send for ContextWebGpu {}
@@ -1156,8 +1157,9 @@ impl crate::context::Context for ContextWebGpu {
             );
         };
 
-        let gpu = if !gpu.is_undefined() { Some(gpu) } else { None };
-        ContextWebGpu { gpu }
+        ContextWebGpu {
+            gpu: DefinedNonNullJsValue::new(gpu),
+        }
     }
 
     unsafe fn instance_create_surface(
@@ -1234,6 +1236,7 @@ impl crate::context::Context for ContextWebGpu {
                 future_request_adapter,
             ))
         } else {
+            // Gpu is undfined; WebGPU is not supported in this browser.
             OptionFuture::none()
         }
     }
