@@ -528,6 +528,7 @@ By @atlv24 and @cwfitzgerald in [#5154](https://github.com/gfx-rs/wgpu/pull/5154
 - Document and tweak precise behaviour of `SourceLocation`. By @stefnotch in [#5386](https://github.com/gfx-rs/wgpu/pull/5386) and [#5410](https://github.com/gfx-rs/wgpu/pull/5410)
 - Give short example of WGSL `push_constant` syntax. By @waywardmonkeys in [#5393](https://github.com/gfx-rs/wgpu/pull/5393)
 - Fix incorrect documentation of `Limits::max_compute_workgroup_storage_size` default value. By @atlv24 in [#5601](https://github.com/gfx-rs/wgpu/pull/5601)
+- Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271)
 
 ### Bug Fixes
 
