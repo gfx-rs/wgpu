@@ -1,7 +1,7 @@
 //! Tests that compute passes take ownership of resources that are associated with.
 //! I.e. once a resource is passed in to a compute pass, it can be dropped.
 
-use std::num::NonZeroU64;
+use std::{mem::size_of, num::NonZeroU64};
 
 use wgpu::util::DeviceExt as _;
 use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
@@ -45,7 +45,7 @@ async fn compute_pass_resource_ownership(ctx: TestingContext) {
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(0, Some(&bind_group), &[]);
         cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
 
         // Now drop all resources we set. Then do a device poll to make sure the resources are really not dropped too early, no matter what.
@@ -95,7 +95,7 @@ async fn compute_pass_query_set_ownership_pipeline_statistics(ctx: TestingContex
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(0, Some(&bind_group), &[]);
         cpass.begin_pipeline_statistics_query(&query_set, 0);
         cpass.dispatch_workgroups(1, 1, 1);
         cpass.end_pipeline_statistics_query();
@@ -153,7 +153,7 @@ async fn compute_pass_query_set_ownership_timestamps(ctx: TestingContext) {
             }),
         });
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(0, Some(&bind_group), &[]);
         cpass.write_timestamp(&query_set_write_timestamp, 0);
         cpass.dispatch_workgroups(1, 1, 1);
 
@@ -203,7 +203,7 @@ async fn compute_pass_keep_encoder_alive(ctx: TestingContext) {
 
     // Record some draw commands.
     cpass.set_pipeline(&pipeline);
-    cpass.set_bind_group(0, &bind_group, &[]);
+    cpass.set_bind_group(0, Some(&bind_group), &[]);
     cpass.dispatch_workgroups_indirect(&indirect_buffer, 0);
 
     // Dropping the pass will still execute the pass, even though there's no way to submit it.
@@ -253,7 +253,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
         });
 
-    let buffer_size = 4 * std::mem::size_of::<f32>() as u64;
+    let buffer_size = 4 * size_of::<f32>() as u64;
 
     let bgl = ctx
         .device

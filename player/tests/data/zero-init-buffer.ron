@@ -39,7 +39,7 @@
     ],
     actions: [
         CreateBuffer(
-            Id(0, 1, Empty),
+            Id(0, 1),
             (
                 label: Some("mapped_at_creation: false, with MAP_WRITE"),
                 size: 16,
@@ -48,7 +48,7 @@
             ),
         ),
         CreateBuffer(
-            Id(1, 1, Empty),
+            Id(1, 1),
             (
                 label: Some("mapped_at_creation: false, without MAP_WRITE"),
                 size: 16,
@@ -57,7 +57,7 @@
             ),
         ),
         CreateBuffer(
-            Id(2, 1, Empty),
+            Id(2, 1),
             (
                 label: Some("partially written"),
                 size: 24,
@@ -66,7 +66,7 @@
             ),
         ),
         WriteBuffer(
-            id: Id(2, 1, Empty),
+            id: Id(2, 1),
             data: "data1.bin",
             range: (
                 start: 4,
@@ -75,20 +75,20 @@
             queued: true,
         ),
         CreateShaderModule(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             desc: (
                 label: None,
                 flags: (bits: 3),
             ),
             data: "zero-init-buffer-for-binding.wgsl",
         ),
-        CreateBuffer(Id(3, 1, Empty), (
+        CreateBuffer(Id(3, 1), (
             label: Some("used in binding"),
             size: 16,
             usage: 129, // STORAGE + MAP_READ
             mapped_at_creation: false,
         )),
-        CreateBindGroupLayout(Id(0, 1, Empty), (
+        CreateBindGroupLayout(Id(0, 1), (
             label: None,
             entries: [
                 (
@@ -105,34 +105,34 @@
                 ),
             ],
         )),
-        CreateBindGroup(Id(0, 1, Empty), (
+        CreateBindGroup(Id(0, 1), (
             label: None,
-            layout: Id(0, 1, Empty),
+            layout: Id(0, 1),
             entries: [
                 (
                     binding: 0,
                     resource: Buffer((
-                        buffer_id: Id(3, 1, Empty),
+                        buffer_id: Id(3, 1),
                         offset: 0,
                         size: Some(16),
                     )),
                 ),
             ],
         )),
-        CreatePipelineLayout(Id(0, 1, Empty), (
+        CreatePipelineLayout(Id(0, 1), (
             label: None,
             bind_group_layouts: [
-                Id(0, 1, Empty),
+                Id(0, 1),
             ],
             push_constant_ranges: [],
         )),
         CreateComputePipeline(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             desc: (
                 label: None,
-                layout: Some(Id(0, 1, Empty)),
+                layout: Some(Id(0, 1)),
                 stage: (
-                    module: Id(0, 1, Empty),
+                    module: Id(0, 1),
                     entry_point: None,
                     constants: {},
                     zero_initialize_workgroup_memory: true,
@@ -145,11 +145,11 @@
                 base: (
                     label: None,
                     commands: [
-                        SetPipeline(Id(0, 1, Empty)),
+                        SetPipeline(Id(0, 1)),
                         SetBindGroup(
                             index: 0,
                             num_dynamic_offsets: 0,
-                            bind_group_id: Id(0, 1, Empty),
+                            bind_group_id: Some(Id(0, 1)),
                         ),
                         Dispatch((4, 1, 1)),
                     ],

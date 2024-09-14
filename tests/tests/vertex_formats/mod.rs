@@ -1,6 +1,6 @@
 //! Tests that vertex formats pass through to vertex shaders accurately.
 
-use std::num::NonZeroU64;
+use std::{mem::size_of_val, num::NonZeroU64};
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
@@ -273,7 +273,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
         let expected = test.checksums;
-        let buffer_size = (std::mem::size_of_val(&expected[0]) * expected.len()) as u64;
+        let buffer_size = (size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size,
@@ -315,7 +315,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
 
         rpass.set_vertex_buffer(0, buffer_input.slice(..));
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bg, &[]);
+        rpass.set_bind_group(0, Some(&bg), &[]);
 
         // Draw three vertices and no instance, which is enough to generate the
         // checksums.

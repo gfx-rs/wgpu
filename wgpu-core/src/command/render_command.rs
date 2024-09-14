@@ -17,7 +17,7 @@ pub enum RenderCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
     },
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
@@ -129,9 +129,7 @@ impl RenderCommand {
         hub: &crate::hub::Hub,
         commands: &[RenderCommand],
     ) -> Result<Vec<ArcRenderCommand>, super::RenderPassError> {
-        use super::{
-            DrawKind, PassErrorScope, RenderCommandError, RenderPassError, RenderPassErrorInner,
-        };
+        use super::{DrawKind, PassErrorScope, RenderPassError};
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -139,240 +137,253 @@ impl RenderCommand {
         let pipelines_guard = hub.render_pipelines.read();
         let render_bundles_guard = hub.render_bundles.read();
 
-        let resolved_commands: Vec<ArcRenderCommand> = commands
-            .iter()
-            .map(|c| -> Result<ArcRenderCommand, RenderPassError> {
-                Ok(match *c {
-                    RenderCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group_id,
-                    } => ArcRenderCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group: bind_group_guard.get_owned(bind_group_id).map_err(|_| {
-                            RenderPassError {
-                                scope: PassErrorScope::SetBindGroup,
-                                inner: RenderPassErrorInner::InvalidBindGroup(index),
+        let resolved_commands: Vec<ArcRenderCommand> =
+            commands
+                .iter()
+                .map(|c| -> Result<ArcRenderCommand, RenderPassError> {
+                    Ok(match *c {
+                        RenderCommand::SetBindGroup {
+                            index,
+                            num_dynamic_offsets,
+                            bind_group_id,
+                        } => {
+                            if bind_group_id.is_none() {
+                                return Ok(ArcRenderCommand::SetBindGroup {
+                                    index,
+                                    num_dynamic_offsets,
+                                    bind_group: None,
+                                });
                             }
-                        })?,
-                    },
 
-                    RenderCommand::SetPipeline(pipeline_id) => ArcRenderCommand::SetPipeline(
-                        pipelines_guard
-                            .get_owned(pipeline_id)
-                            .map_err(|_| RenderPassError {
-                                scope: PassErrorScope::SetPipelineRender,
-                                inner: RenderCommandError::InvalidPipelineId(pipeline_id).into(),
-                            })?,
-                    ),
-
-                    RenderCommand::SetPushConstant {
-                        offset,
-                        size_bytes,
-                        values_offset,
-                        stages,
-                    } => ArcRenderCommand::SetPushConstant {
-                        offset,
-                        size_bytes,
-                        values_offset,
-                        stages,
-                    },
-
-                    RenderCommand::PushDebugGroup { color, len } => {
-                        ArcRenderCommand::PushDebugGroup { color, len }
-                    }
-
-                    RenderCommand::PopDebugGroup => ArcRenderCommand::PopDebugGroup,
-
-                    RenderCommand::InsertDebugMarker { color, len } => {
-                        ArcRenderCommand::InsertDebugMarker { color, len }
-                    }
-
-                    RenderCommand::WriteTimestamp {
-                        query_set_id,
-                        query_index,
-                    } => ArcRenderCommand::WriteTimestamp {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
-                            RenderPassError {
-                                scope: PassErrorScope::WriteTimestamp,
-                                inner: RenderPassErrorInner::InvalidQuerySet(query_set_id),
-                            }
-                        })?,
-                        query_index,
-                    },
-
-                    RenderCommand::BeginPipelineStatisticsQuery {
-                        query_set_id,
-                        query_index,
-                    } => ArcRenderCommand::BeginPipelineStatisticsQuery {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
-                            RenderPassError {
-                                scope: PassErrorScope::BeginPipelineStatisticsQuery,
-                                inner: RenderPassErrorInner::InvalidQuerySet(query_set_id),
-                            }
-                        })?,
-                        query_index,
-                    },
-
-                    RenderCommand::EndPipelineStatisticsQuery => {
-                        ArcRenderCommand::EndPipelineStatisticsQuery
-                    }
-
-                    RenderCommand::SetIndexBuffer {
-                        buffer_id,
-                        index_format,
-                        offset,
-                        size,
-                    } => ArcRenderCommand::SetIndexBuffer {
-                        buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
-                            RenderPassError {
-                                scope: PassErrorScope::SetIndexBuffer,
-                                inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
-                            }
-                        })?,
-                        index_format,
-                        offset,
-                        size,
-                    },
-
-                    RenderCommand::SetVertexBuffer {
-                        slot,
-                        buffer_id,
-                        offset,
-                        size,
-                    } => ArcRenderCommand::SetVertexBuffer {
-                        slot,
-                        buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
-                            RenderPassError {
-                                scope: PassErrorScope::SetVertexBuffer,
-                                inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
-                            }
-                        })?,
-                        offset,
-                        size,
-                    },
-
-                    RenderCommand::SetBlendConstant(color) => {
-                        ArcRenderCommand::SetBlendConstant(color)
-                    }
-
-                    RenderCommand::SetStencilReference(reference) => {
-                        ArcRenderCommand::SetStencilReference(reference)
-                    }
-
-                    RenderCommand::SetViewport {
-                        rect,
-                        depth_min,
-                        depth_max,
-                    } => ArcRenderCommand::SetViewport {
-                        rect,
-                        depth_min,
-                        depth_max,
-                    },
-
-                    RenderCommand::SetScissor(scissor) => ArcRenderCommand::SetScissor(scissor),
-
-                    RenderCommand::Draw {
-                        vertex_count,
-                        instance_count,
-                        first_vertex,
-                        first_instance,
-                    } => ArcRenderCommand::Draw {
-                        vertex_count,
-                        instance_count,
-                        first_vertex,
-                        first_instance,
-                    },
-
-                    RenderCommand::DrawIndexed {
-                        index_count,
-                        instance_count,
-                        first_index,
-                        base_vertex,
-                        first_instance,
-                    } => ArcRenderCommand::DrawIndexed {
-                        index_count,
-                        instance_count,
-                        first_index,
-                        base_vertex,
-                        first_instance,
-                    },
-
-                    RenderCommand::MultiDrawIndirect {
-                        buffer_id,
-                        offset,
-                        count,
-                        indexed,
-                    } => ArcRenderCommand::MultiDrawIndirect {
-                        buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
-                            RenderPassError {
-                                scope: PassErrorScope::Draw {
-                                    kind: if count.is_some() {
-                                        DrawKind::MultiDrawIndirect
-                                    } else {
-                                        DrawKind::DrawIndirect
-                                    },
-                                    indexed,
-                                },
-                                inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
-                            }
-                        })?,
-                        offset,
-                        count,
-                        indexed,
-                    },
-
-                    RenderCommand::MultiDrawIndirectCount {
-                        buffer_id,
-                        offset,
-                        count_buffer_id,
-                        count_buffer_offset,
-                        max_count,
-                        indexed,
-                    } => {
-                        let scope = PassErrorScope::Draw {
-                            kind: DrawKind::MultiDrawIndirectCount,
-                            indexed,
-                        };
-                        ArcRenderCommand::MultiDrawIndirectCount {
-                            buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                            let bind_group_id = bind_group_id.unwrap();
+                            let bg = bind_group_guard.get(bind_group_id).get().map_err(|e| {
                                 RenderPassError {
-                                    scope,
-                                    inner: RenderCommandError::InvalidBufferId(buffer_id).into(),
+                                    scope: PassErrorScope::SetBindGroup,
+                                    inner: e.into(),
+                                }
+                            })?;
+
+                            ArcRenderCommand::SetBindGroup {
+                                index,
+                                num_dynamic_offsets,
+                                bind_group: Some(bg),
+                            }
+                        }
+
+                        RenderCommand::SetPipeline(pipeline_id) => ArcRenderCommand::SetPipeline(
+                            pipelines_guard.get(pipeline_id).get().map_err(|e| {
+                                RenderPassError {
+                                    scope: PassErrorScope::SetPipelineRender,
+                                    inner: e.into(),
+                                }
+                            })?,
+                        ),
+
+                        RenderCommand::SetPushConstant {
+                            offset,
+                            size_bytes,
+                            values_offset,
+                            stages,
+                        } => ArcRenderCommand::SetPushConstant {
+                            offset,
+                            size_bytes,
+                            values_offset,
+                            stages,
+                        },
+
+                        RenderCommand::PushDebugGroup { color, len } => {
+                            ArcRenderCommand::PushDebugGroup { color, len }
+                        }
+
+                        RenderCommand::PopDebugGroup => ArcRenderCommand::PopDebugGroup,
+
+                        RenderCommand::InsertDebugMarker { color, len } => {
+                            ArcRenderCommand::InsertDebugMarker { color, len }
+                        }
+
+                        RenderCommand::WriteTimestamp {
+                            query_set_id,
+                            query_index,
+                        } => ArcRenderCommand::WriteTimestamp {
+                            query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
+                                RenderPassError {
+                                    scope: PassErrorScope::WriteTimestamp,
+                                    inner: e.into(),
+                                }
+                            })?,
+                            query_index,
+                        },
+
+                        RenderCommand::BeginPipelineStatisticsQuery {
+                            query_set_id,
+                            query_index,
+                        } => ArcRenderCommand::BeginPipelineStatisticsQuery {
+                            query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
+                                RenderPassError {
+                                    scope: PassErrorScope::BeginPipelineStatisticsQuery,
+                                    inner: e.into(),
+                                }
+                            })?,
+                            query_index,
+                        },
+
+                        RenderCommand::EndPipelineStatisticsQuery => {
+                            ArcRenderCommand::EndPipelineStatisticsQuery
+                        }
+
+                        RenderCommand::SetIndexBuffer {
+                            buffer_id,
+                            index_format,
+                            offset,
+                            size,
+                        } => ArcRenderCommand::SetIndexBuffer {
+                            buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
+                                RenderPassError {
+                                    scope: PassErrorScope::SetIndexBuffer,
+                                    inner: e.into(),
+                                }
+                            })?,
+                            index_format,
+                            offset,
+                            size,
+                        },
+
+                        RenderCommand::SetVertexBuffer {
+                            slot,
+                            buffer_id,
+                            offset,
+                            size,
+                        } => ArcRenderCommand::SetVertexBuffer {
+                            slot,
+                            buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
+                                RenderPassError {
+                                    scope: PassErrorScope::SetVertexBuffer,
+                                    inner: e.into(),
                                 }
                             })?,
                             offset,
-                            count_buffer: buffers_guard.get_owned(count_buffer_id).map_err(
-                                |_| RenderPassError {
-                                    scope,
-                                    inner: RenderCommandError::InvalidBufferId(count_buffer_id)
-                                        .into(),
-                                },
-                            )?,
+                            size,
+                        },
+
+                        RenderCommand::SetBlendConstant(color) => {
+                            ArcRenderCommand::SetBlendConstant(color)
+                        }
+
+                        RenderCommand::SetStencilReference(reference) => {
+                            ArcRenderCommand::SetStencilReference(reference)
+                        }
+
+                        RenderCommand::SetViewport {
+                            rect,
+                            depth_min,
+                            depth_max,
+                        } => ArcRenderCommand::SetViewport {
+                            rect,
+                            depth_min,
+                            depth_max,
+                        },
+
+                        RenderCommand::SetScissor(scissor) => ArcRenderCommand::SetScissor(scissor),
+
+                        RenderCommand::Draw {
+                            vertex_count,
+                            instance_count,
+                            first_vertex,
+                            first_instance,
+                        } => ArcRenderCommand::Draw {
+                            vertex_count,
+                            instance_count,
+                            first_vertex,
+                            first_instance,
+                        },
+
+                        RenderCommand::DrawIndexed {
+                            index_count,
+                            instance_count,
+                            first_index,
+                            base_vertex,
+                            first_instance,
+                        } => ArcRenderCommand::DrawIndexed {
+                            index_count,
+                            instance_count,
+                            first_index,
+                            base_vertex,
+                            first_instance,
+                        },
+
+                        RenderCommand::MultiDrawIndirect {
+                            buffer_id,
+                            offset,
+                            count,
+                            indexed,
+                        } => ArcRenderCommand::MultiDrawIndirect {
+                            buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
+                                RenderPassError {
+                                    scope: PassErrorScope::Draw {
+                                        kind: if count.is_some() {
+                                            DrawKind::MultiDrawIndirect
+                                        } else {
+                                            DrawKind::DrawIndirect
+                                        },
+                                        indexed,
+                                    },
+                                    inner: e.into(),
+                                }
+                            })?,
+                            offset,
+                            count,
+                            indexed,
+                        },
+
+                        RenderCommand::MultiDrawIndirectCount {
+                            buffer_id,
+                            offset,
+                            count_buffer_id,
                             count_buffer_offset,
                             max_count,
                             indexed,
+                        } => {
+                            let scope = PassErrorScope::Draw {
+                                kind: DrawKind::MultiDrawIndirectCount,
+                                indexed,
+                            };
+                            ArcRenderCommand::MultiDrawIndirectCount {
+                                buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
+                                    RenderPassError {
+                                        scope,
+                                        inner: e.into(),
+                                    }
+                                })?,
+                                offset,
+                                count_buffer: buffers_guard.get(count_buffer_id).get().map_err(
+                                    |e| RenderPassError {
+                                        scope,
+                                        inner: e.into(),
+                                    },
+                                )?,
+                                count_buffer_offset,
+                                max_count,
+                                indexed,
+                            }
                         }
-                    }
 
-                    RenderCommand::BeginOcclusionQuery { query_index } => {
-                        ArcRenderCommand::BeginOcclusionQuery { query_index }
-                    }
+                        RenderCommand::BeginOcclusionQuery { query_index } => {
+                            ArcRenderCommand::BeginOcclusionQuery { query_index }
+                        }
 
-                    RenderCommand::EndOcclusionQuery => ArcRenderCommand::EndOcclusionQuery,
+                        RenderCommand::EndOcclusionQuery => ArcRenderCommand::EndOcclusionQuery,
 
-                    RenderCommand::ExecuteBundle(bundle) => ArcRenderCommand::ExecuteBundle(
-                        render_bundles_guard
-                            .get_owned(bundle)
-                            .map_err(|_| RenderPassError {
-                                scope: PassErrorScope::ExecuteBundle,
-                                inner: RenderCommandError::InvalidRenderBundle(bundle).into(),
+                        RenderCommand::ExecuteBundle(bundle) => ArcRenderCommand::ExecuteBundle(
+                            render_bundles_guard.get(bundle).get().map_err(|e| {
+                                RenderPassError {
+                                    scope: PassErrorScope::ExecuteBundle,
+                                    inner: e.into(),
+                                }
                             })?,
-                    ),
+                        ),
+                    })
                 })
-            })
-            .collect::<Result<Vec<_>, RenderPassError>>()?;
+                .collect::<Result<Vec<_>, RenderPassError>>()?;
         Ok(resolved_commands)
     }
 }
@@ -384,7 +395,7 @@ pub enum ArcRenderCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: usize,
-        bind_group: Arc<BindGroup>,
+        bind_group: Option<Arc<BindGroup>>,
     },
     SetPipeline(Arc<RenderPipeline>),
     SetIndexBuffer {
@@ -464,11 +475,13 @@ pub enum ArcRenderCommand {
         indexed: bool,
     },
     PushDebugGroup {
+        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
         color: u32,
         len: usize,
     },
     PopDebugGroup,
     InsertDebugMarker {
+        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
         color: u32,
         len: usize,
     },

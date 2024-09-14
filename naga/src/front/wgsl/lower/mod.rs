@@ -286,7 +286,7 @@ pub enum ExpressionContextType<'temp, 'out> {
     /// We are lowering to an arbitrary runtime expression, to be
     /// included in a function's body.
     ///
-    /// The given [`RuntimeExpressionContext`] holds information about local
+    /// The given [`LocalExpressionContext`] holds information about local
     /// variables, arguments, and other definitions available only to runtime
     /// expressions, not constant or override expressions.
     Runtime(LocalExpressionContext<'temp, 'out>),
@@ -907,7 +907,13 @@ impl Components {
             *comp = Self::letter_component(ch).ok_or(Error::BadAccessor(name_span))?;
         }
 
-        Ok(Components::Swizzle { size, pattern })
+        if name.chars().all(|c| matches!(c, 'x' | 'y' | 'z' | 'w'))
+            || name.chars().all(|c| matches!(c, 'r' | 'g' | 'b' | 'a'))
+        {
+            Ok(Components::Swizzle { size, pattern })
+        } else {
+            Err(Error::BadAccessor(name_span))
+        }
     }
 }
 
@@ -1028,16 +1034,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.globals.insert(f.name.name, lowered_decl);
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
-                    let ty = self.resolve_ast_type(v.ty, &mut ctx)?;
+                    let explicit_ty =
+                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx))
+                            .transpose()?;
 
-                    let init;
-                    if let Some(init_ast) = v.init {
-                        let mut ectx = ctx.as_override();
-                        let lowered = self.expression_for_abstract(init_ast, &mut ectx)?;
-                        let ty_res = crate::proc::TypeResolution::Handle(ty);
-                        let converted = ectx
-                            .try_automatic_conversions(lowered, &ty_res, v.name.span)
-                            .map_err(|error| match error {
+                    let mut ectx = ctx.as_override();
+
+                    let ty;
+                    let initializer;
+                    match (v.init, explicit_ty) {
+                        (Some(init), Some(explicit_ty)) => {
+                            let init = self.expression_for_abstract(init, &mut ectx)?;
+                            let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
+                            let init = ectx
+                                .try_automatic_conversions(init, &ty_res, v.name.span)
+                                .map_err(|error| match error {
                                 Error::AutoConversion(e) => Error::InitializationTypeMismatch {
                                     name: v.name.span,
                                     expected: e.dest_type,
@@ -1045,9 +1056,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 },
                                 other => other,
                             })?;
-                        init = Some(converted);
-                    } else {
-                        init = None;
+                            ty = explicit_ty;
+                            initializer = Some(init);
+                        }
+                        (Some(init), None) => {
+                            let concretized = self.expression(init, &mut ectx)?;
+                            ty = ectx.register_type(concretized)?;
+                            initializer = Some(concretized);
+                        }
+                        (None, Some(explicit_ty)) => {
+                            ty = explicit_ty;
+                            initializer = None;
+                        }
+                        (None, None) => return Err(Error::DeclMissingTypeAndInit(v.name.span)),
                     }
 
                     let binding = if let Some(ref binding) = v.binding {
@@ -1065,7 +1086,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             space: v.space,
                             binding,
                             ty,
-                            init,
+                            init: initializer,
                         },
                         span,
                     );
@@ -1182,6 +1203,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     )?;
                     ctx.globals
                         .insert(alias.name.name, LoweredGlobalDecl::Type(ty));
+                }
+                ast::GlobalDeclKind::ConstAssert(condition) => {
+                    let condition = self.expression(condition, &mut ctx.as_const())?;
+
+                    let span = ctx.module.global_expressions.get_span(condition);
+                    match ctx
+                        .module
+                        .to_ctx()
+                        .eval_expr_to_bool_from(condition, &ctx.module.global_expressions)
+                    {
+                        Some(true) => Ok(()),
+                        Some(false) => Err(Error::ConstAssertFailed(span)),
+                        _ => Err(Error::NotBool(span)),
+                    }?;
                 }
             }
         }
@@ -1720,6 +1755,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     pointer: target_handle,
                     value,
                 }
+            }
+            ast::StatementKind::ConstAssert(condition) => {
+                let mut emitter = Emitter::default();
+                emitter.start(&ctx.function.expressions);
+
+                let condition =
+                    self.expression(condition, &mut ctx.as_const(block, &mut emitter))?;
+
+                let span = ctx.function.expressions.get_span(condition);
+                match ctx
+                    .module
+                    .to_ctx()
+                    .eval_expr_to_bool_from(condition, &ctx.function.expressions)
+                {
+                    Some(true) => Ok(()),
+                    Some(false) => Err(Error::ConstAssertFailed(span)),
+                    _ => Err(Error::NotBool(span)),
+                }?;
+
+                block.extend(emitter.finish(&ctx.function.expressions));
+
+                return Ok(());
             }
             ast::StatementKind::Ignore(expr) => {
                 let mut emitter = Emitter::default();
@@ -2959,16 +3016,34 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
             ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
-            ast::Type::Vector { size, scalar } => scalar.to_inner_vector(size),
+            ast::Type::Vector { size, ty, ty_span } => {
+                let ty = self.resolve_ast_type(ty, ctx)?;
+                let scalar = match ctx.module.types[ty].inner {
+                    crate::TypeInner::Scalar(sc) => sc,
+                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                };
+                crate::TypeInner::Vector { size, scalar }
+            }
             ast::Type::Matrix {
                 rows,
                 columns,
-                width,
-            } => crate::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar: crate::Scalar::float(width),
-            },
+                ty,
+                ty_span,
+            } => {
+                let ty = self.resolve_ast_type(ty, ctx)?;
+                let scalar = match ctx.module.types[ty].inner {
+                    crate::TypeInner::Scalar(sc) => sc,
+                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                };
+                match scalar.kind {
+                    crate::ScalarKind::Float => crate::TypeInner::Matrix {
+                        columns,
+                        rows,
+                        scalar,
+                    },
+                    _ => return Err(Error::BadMatrixScalarKind(ty_span, scalar)),
+                }
+            }
             ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),
             ast::Type::Pointer { base, space } => {
                 let base = self.resolve_ast_type(base, ctx)?;

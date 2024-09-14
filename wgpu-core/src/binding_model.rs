@@ -6,8 +6,8 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
-        Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ResourceErrorIdent, Sampler, TextureView, TrackingData,
+        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -80,16 +80,6 @@ pub enum CreateBindGroupLayoutError {
 pub enum CreateBindGroupError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Bind group layout is invalid")]
-    InvalidLayout,
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(BufferId),
-    #[error("TextureViewId {0:?} is invalid")]
-    InvalidTextureViewId(TextureViewId),
-    #[error("SamplerId {0:?} is invalid")]
-    InvalidSamplerId(SamplerId),
-    #[error("TlasId {0:?} is invalid or destroyed")]
-    InvalidTlasId(TlasId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(
@@ -191,6 +181,8 @@ pub enum CreateBindGroupError {
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -551,8 +543,6 @@ impl BindGroupLayout {
 pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("BindGroupLayoutId {0:?} is invalid")]
-    InvalidBindGroupLayoutId(BindGroupLayoutId),
     #[error(
         "Push constant at index {index} has range bound {bound} not aligned to {}",
         wgt::PUSH_CONSTANT_ALIGNMENT
@@ -576,6 +566,8 @@ pub enum CreatePipelineLayoutError {
     TooManyBindings(BindingTypeMaxCountError),
     #[error("Bind group layout count {actual} exceeds device bind group limit {max}")]
     TooManyGroups { actual: usize, max: usize },
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -892,6 +884,16 @@ pub(crate) fn buffer_binding_type_alignment(
     }
 }
 
+pub(crate) fn buffer_binding_type_bounds_check_alignment(
+    alignments: &hal::Alignments,
+    binding_type: wgt::BufferBindingType,
+) -> wgt::BufferAddress {
+    match binding_type {
+        wgt::BufferBindingType::Uniform => alignments.uniform_bounds_check_alignment.get(),
+        wgt::BufferBindingType::Storage { .. } => wgt::COPY_BUFFER_ALIGNMENT,
+    }
+}
+
 #[derive(Debug)]
 pub struct BindGroup {
     pub(crate) raw: Snatchable<Box<dyn hal::DynBindGroup>>,
@@ -1001,10 +1003,10 @@ crate::impl_trackable!(BindGroup);
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum GetBindGroupLayoutError {
-    #[error("Pipeline is invalid")]
-    InvalidPipeline,
     #[error("Invalid group index {0}")]
     InvalidGroupIndex(u32),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]

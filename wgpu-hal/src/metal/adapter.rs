@@ -178,7 +178,7 @@ impl crate::Adapter for super::Adapter {
                 flags.set(Tfc::STORAGE, pc.format_rgb10a2_unorm_all);
                 flags
             }
-            Tf::Rg11b10UFloat => {
+            Tf::Rg11b10Ufloat => {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
                 flags
@@ -997,6 +997,10 @@ impl super::PrivateCapabilities {
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),
                 buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),
+                // This backend has Naga incorporate bounds checks into the
+                // Metal Shading Language it generates, so from `wgpu_hal`'s
+                // users' point of view, references are tightly checked.
+                uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
             },
             downlevel,
         }
@@ -1036,7 +1040,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba8Sint => RGBA8Sint,
             Tf::Rgb10a2Uint => RGB10A2Uint,
             Tf::Rgb10a2Unorm => RGB10A2Unorm,
-            Tf::Rg11b10UFloat => RG11B10Float,
+            Tf::Rg11b10Ufloat => RG11B10Float,
             Tf::Rg32Uint => RG32Uint,
             Tf::Rg32Sint => RG32Sint,
             Tf::Rg32Float => RG32Float,

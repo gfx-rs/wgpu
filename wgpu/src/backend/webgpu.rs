@@ -225,7 +225,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
             unimplemented!("Current version of web_sys is missing {texture_format:?}")
         }
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
-        TextureFormat::Rg11b10UFloat => tf::Rg11b10ufloat,
+        TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
@@ -1405,14 +1405,6 @@ impl crate::context::Context for ContextWebGpu {
         map_wgt_limits(device_data.0.limits())
     }
 
-    fn device_downlevel_properties(
-        &self,
-        _device_data: &Self::DeviceData,
-    ) -> wgt::DownlevelCapabilities {
-        // WebGPU is assumed to be fully compliant
-        wgt::DownlevelCapabilities::default()
-    }
-
     #[cfg_attr(
         not(any(
             feature = "spirv",
@@ -2025,23 +2017,12 @@ impl crate::context::Context for ContextWebGpu {
         Sendable(device_data.0.create_render_bundle_encoder(&mapped_desc))
     }
 
-    #[doc(hidden)]
-    fn device_make_invalid(&self, _device_data: &Self::DeviceData) {
-        // Unimplemented
-    }
-
     fn device_drop(&self, _device_data: &Self::DeviceData) {
         // Device is dropped automatically
     }
 
     fn device_destroy(&self, device_data: &Self::DeviceData) {
         device_data.0.destroy();
-    }
-
-    fn device_mark_lost(&self, _device_data: &Self::DeviceData, _message: &str) {
-        // TODO: figure out the GPUDevice implementation of this, including resolving
-        // the device.lost promise, which will require a different invocation pattern
-        // with a callback.
     }
 
     fn queue_drop(&self, _queue_data: &Self::QueueData) {
@@ -2776,9 +2757,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         pass_data: &mut Self::ComputePassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
@@ -2888,9 +2874,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             encoder_data
                 .0
@@ -3028,52 +3019,6 @@ impl crate::context::Context for ContextWebGpu {
             .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indexed_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!(
-            "MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indirect_count"
-        )
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
-    }
-
     fn render_pass_set_pipeline(
         &self,
         pass_data: &mut Self::RenderPassData,
@@ -3086,9 +3031,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {

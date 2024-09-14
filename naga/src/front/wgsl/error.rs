@@ -263,6 +263,8 @@ pub(crate) enum Error<'a> {
         limit: u8,
     },
     PipelineConstantIDValue(Span),
+    NotBool(Span),
+    ConstAssertFailed(Span),
 }
 
 #[derive(Clone, Debug)]
@@ -812,6 +814,22 @@ impl<'a> Error<'a> {
                 labels: vec![(
                     span,
                     "must be between 0 and 65535 inclusive".into(),
+                )],
+                notes: vec![],
+            },
+            Error::NotBool(span) => ParseError {
+                message: "must be a const-expression that resolves to a bool".to_string(),
+                labels: vec![(
+                    span,
+                    "must resolve to bool".into(),
+                )],
+                notes: vec![],
+            },
+            Error::ConstAssertFailed(span) => ParseError {
+                message: "const_assert failure".to_string(),
+                labels: vec![(
+                    span,
+                    "evaluates to false".into(),
                 )],
                 notes: vec![],
             },

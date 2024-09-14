@@ -70,13 +70,13 @@ path = "./naga"
 version = "22.0.0"
 
 [workspace.dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.87"
 argh = "0.1.5"
 arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.6"
-bytemuck = { version = "1.17", features = ["derive"] }
+bytemuck = { version = "1.18", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -120,7 +120,7 @@ renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.125"
+serde_json = "1.0.128"
 smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
@@ -149,7 +149,6 @@ gpu-descriptor = "0.3"
 bit-set = "0.8"
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
-hassle-rs = "0.11.0"
 windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
@@ -179,7 +178,7 @@ deno_url = "0.143.0"
 deno_web = "0.174.0"
 deno_webidl = "0.143.0"
 deno_webgpu = { version = "0.118.0", path = "./deno_webgpu" }
-tokio = "1.39.3"
+tokio = "1.40.0"
 termcolor = "1.4.1"
 
 # android dependencies

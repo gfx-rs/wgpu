@@ -6,7 +6,8 @@ use crate::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
-    command, conv,
+    command::{self, CommandBuffer},
+    conv,
     device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
     global::Global,
     hal_api::HalApi,
@@ -19,14 +20,19 @@ use crate::{
     present,
     resource::{
         self, BufferAccessError, BufferAccessResult, BufferMapOperation, CreateBufferError,
+        Fallible,
     },
     storage::Storage,
-    Label,
+    Label, LabelHelpers,
 };
 
 use wgt::{BufferAddress, TextureFormat};
 
-use std::{borrow::Cow, ptr::NonNull, sync::atomic::Ordering};
+use std::{
+    borrow::Cow,
+    ptr::NonNull,
+    sync::{atomic::Ordering, Arc},
+};
 
 use super::{ImplicitPipelineIds, UserClosures};
 
@@ -35,18 +41,10 @@ impl Global {
         &self,
         adapter_id: AdapterId,
         surface_id: SurfaceId,
-    ) -> Result<bool, instance::IsSurfaceSupportedError> {
-        let hub = &self.hub;
-
-        let surface_guard = self.surfaces.read();
-        let adapter_guard = hub.adapters.read();
-        let adapter = adapter_guard
-            .get(adapter_id)
-            .map_err(|_| instance::IsSurfaceSupportedError::InvalidAdapter)?;
-        let surface = surface_guard
-            .get(surface_id)
-            .map_err(|_| instance::IsSurfaceSupportedError::InvalidSurface)?;
-        Ok(adapter.is_surface_supported(surface))
+    ) -> bool {
+        let surface = self.surfaces.get(surface_id);
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.is_surface_supported(&surface)
     }
 
     pub fn surface_get_capabilities(
@@ -71,63 +69,30 @@ impl Global {
         })
     }
 
-    fn fetch_adapter_and_surface<
-        F: FnOnce(&Adapter, &Surface) -> Result<B, instance::GetSurfaceSupportError>,
-        B,
-    >(
+    fn fetch_adapter_and_surface<F: FnOnce(&Adapter, &Surface) -> B, B>(
         &self,
         surface_id: SurfaceId,
         adapter_id: AdapterId,
         get_supported_callback: F,
-    ) -> Result<B, instance::GetSurfaceSupportError> {
-        let hub = &self.hub;
-
-        let surface_guard = self.surfaces.read();
-        let adapter_guard = hub.adapters.read();
-        let adapter = adapter_guard
-            .get(adapter_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidAdapter)?;
-        let surface = surface_guard
-            .get(surface_id)
-            .map_err(|_| instance::GetSurfaceSupportError::InvalidSurface)?;
-
-        get_supported_callback(adapter, surface)
+    ) -> B {
+        let surface = self.surfaces.get(surface_id);
+        let adapter = self.hub.adapters.get(adapter_id);
+        get_supported_callback(&adapter, &surface)
     }
 
-    pub fn device_features(&self, device_id: DeviceId) -> Result<wgt::Features, DeviceError> {
-        let hub = &self.hub;
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        Ok(device.features)
+    pub fn device_features(&self, device_id: DeviceId) -> wgt::Features {
+        let device = self.hub.devices.get(device_id);
+        device.features
     }
 
-    pub fn device_limits(&self, device_id: DeviceId) -> Result<wgt::Limits, DeviceError> {
-        let hub = &self.hub;
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        Ok(device.limits.clone())
+    pub fn device_limits(&self, device_id: DeviceId) -> wgt::Limits {
+        let device = self.hub.devices.get(device_id);
+        device.limits.clone()
     }
 
-    pub fn device_downlevel_properties(
-        &self,
-        device_id: DeviceId,
-    ) -> Result<wgt::DownlevelCapabilities, DeviceError> {
-        let hub = &self.hub;
-
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
-
-        Ok(device.downlevel.clone())
+    pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
+        let device = self.hub.devices.get(device_id);
+        device.downlevel.clone()
     }
 
     pub fn device_create_buffer(
@@ -139,15 +104,10 @@ impl Global {
         profiling::scope!("Device::create_buffer");
 
         let hub = &self.hub;
-        let fid = hub.buffers.prepare(device_id.backend(), id_in);
+        let fid = hub.buffers.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => {
-                    break 'error DeviceError::InvalidDeviceId.into();
-                }
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -166,7 +126,7 @@ impl Global {
                 }
             };
 
-            let id = fid.assign(buffer);
+            let id = fid.assign(Fallible::Valid(buffer));
 
             api_log!(
                 "Device::create_buffer({:?}{}) -> {id:?}",
@@ -181,7 +141,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -213,32 +173,34 @@ impl Global {
     /// [`device_create_buffer`]: Global::device_create_buffer
     /// [`usage`]: https://www.w3.org/TR/webgpu/#dom-gputexturedescriptor-usage
     /// [`wgpu_types::BufferUsages`]: wgt::BufferUsages
-    pub fn create_buffer_error(&self, backend: wgt::Backend, id_in: Option<id::BufferId>) {
-        let hub = &self.hub;
-        let fid = hub.buffers.prepare(backend, id_in);
-
-        fid.assign_error();
+    pub fn create_buffer_error(
+        &self,
+        id_in: Option<id::BufferId>,
+        desc: &resource::BufferDescriptor,
+    ) {
+        let fid = self.hub.buffers.prepare(id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
     pub fn create_render_bundle_error(
         &self,
-        backend: wgt::Backend,
         id_in: Option<id::RenderBundleId>,
+        desc: &command::RenderBundleDescriptor,
     ) {
-        let hub = &self.hub;
-        let fid = hub.render_bundles.prepare(backend, id_in);
-
-        fid.assign_error();
+        let fid = self.hub.render_bundles.prepare(id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
     /// Assign `id_in` an error with the given `label`.
     ///
     /// See `create_buffer_error` for more context and explanation.
-    pub fn create_texture_error(&self, backend: wgt::Backend, id_in: Option<id::TextureId>) {
-        let hub = &self.hub;
-        let fid = hub.textures.prepare(backend, id_in);
-
-        fid.assign_error();
+    pub fn create_texture_error(
+        &self,
+        id_in: Option<id::TextureId>,
+        desc: &resource::TextureDescriptor,
+    ) {
+        let fid = self.hub.textures.prepare(id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
     #[cfg(feature = "replay")]
@@ -250,10 +212,7 @@ impl Global {
     ) -> BufferAccessResult {
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         let device = &buffer.device;
 
@@ -270,20 +229,26 @@ impl Global {
 
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = buffer.try_raw(&snatch_guard)?;
-        unsafe {
-            let mapping = device
+
+        let mapping = unsafe {
+            device
                 .raw()
                 .map_buffer(raw_buf, offset..offset + data.len() as u64)
-                .map_err(DeviceError::from)?;
-            std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
-            if !mapping.is_coherent {
-                #[allow(clippy::single_range_in_vec_init)]
+        }
+        .map_err(|e| device.handle_hal_error(e))?;
+
+        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
+
+        if !mapping.is_coherent {
+            #[allow(clippy::single_range_in_vec_init)]
+            unsafe {
                 device
                     .raw()
-                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64]);
-            }
-            device.raw().unmap_buffer(raw_buf);
+                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64])
+            };
         }
+
+        unsafe { device.raw().unmap_buffer(raw_buf) };
 
         Ok(())
     }
@@ -294,10 +259,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
@@ -318,9 +280,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = match hub.buffers.unregister(buffer_id) {
-            Some(buffer) => buffer,
-            None => {
+        let buffer = match hub.buffers.remove(buffer_id).get() {
+            Ok(buffer) => buffer,
+            Err(_) => {
                 return;
             }
         };
@@ -346,13 +308,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.textures.prepare(device_id.backend(), id_in);
+        let fid = hub.textures.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -364,7 +323,7 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let id = fid.assign(texture);
+            let id = fid.assign(Fallible::Valid(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             return (id, None);
@@ -372,7 +331,7 @@ impl Global {
 
         log::error!("Device::create_texture error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -392,13 +351,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.textures.prepare(device_id.backend(), id_in);
+        let fid = hub.textures.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -412,7 +368,7 @@ impl Global {
                 Err(error) => break 'error error,
             };
 
-            let id = fid.assign(texture);
+            let id = fid.assign(Fallible::Valid(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             return (id, None);
@@ -420,7 +376,7 @@ impl Global {
 
         log::error!("Device::create_texture error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -439,33 +395,23 @@ impl Global {
         profiling::scope!("Device::create_buffer");
 
         let hub = &self.hub;
-        let fid = hub.buffers.prepare(A::VARIANT, id_in);
+        let fid = hub.buffers.prepare(id_in);
 
-        let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+        let device = self.hub.devices.get(device_id);
 
-            // NB: Any change done through the raw buffer handle will not be
-            // recorded in the replay
-            #[cfg(feature = "trace")]
-            if let Some(trace) = device.trace.lock().as_mut() {
-                trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
-            }
+        // NB: Any change done through the raw buffer handle will not be
+        // recorded in the replay
+        #[cfg(feature = "trace")]
+        if let Some(trace) = device.trace.lock().as_mut() {
+            trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
+        }
 
-            let buffer = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
+        let buffer = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
 
-            let id = fid.assign(buffer);
-            api_log!("Device::create_buffer -> {id:?}");
+        let id = fid.assign(buffer);
+        api_log!("Device::create_buffer -> {id:?}");
 
-            return (id, None);
-        };
-
-        log::error!("Device::create_buffer error: {error}");
-
-        let id = fid.assign_error();
-        (id, Some(error))
+        (id, None)
     }
 
     pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
@@ -474,10 +420,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let texture = hub
-            .textures
-            .get(texture_id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+        let texture = hub.textures.get(texture_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
@@ -493,9 +436,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_texture) = hub.textures.unregister(texture_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _texture.device.trace.lock().as_mut() {
+        let _texture = hub.textures.remove(texture_id);
+        #[cfg(feature = "trace")]
+        if let Ok(texture) = _texture.get() {
+            if let Some(t) = texture.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTexture(texture_id));
             }
         }
@@ -511,14 +455,12 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.texture_views.prepare(texture_id.backend(), id_in);
+        let fid = hub.texture_views.prepare(id_in);
 
         let error = 'error: {
-            let texture = match hub.textures.get(texture_id) {
+            let texture = match hub.textures.get(texture_id).get() {
                 Ok(texture) => texture,
-                Err(_) => {
-                    break 'error resource::CreateTextureViewError::InvalidTextureId(texture_id)
-                }
+                Err(e) => break 'error e.into(),
             };
             let device = &texture.device;
 
@@ -536,7 +478,7 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(view);
+            let id = fid.assign(Fallible::Valid(view));
 
             api_log!("Texture::create_view({texture_id:?}) -> {id:?}");
 
@@ -544,7 +486,7 @@ impl Global {
         };
 
         log::error!("Texture::create_view({texture_id:?}) error: {error}");
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -557,9 +499,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_view) = hub.texture_views.unregister(texture_view_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _view.device.trace.lock().as_mut() {
+        let _view = hub.texture_views.remove(texture_view_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(view) = _view.get() {
+            if let Some(t) = view.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTextureView(texture_view_id));
             }
         }
@@ -575,13 +519,10 @@ impl Global {
         profiling::scope!("Device::create_sampler");
 
         let hub = &self.hub;
-        let fid = hub.samplers.prepare(device_id.backend(), id_in);
+        let fid = hub.samplers.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -593,13 +534,13 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(sampler);
+            let id = fid.assign(Fallible::Valid(sampler));
             api_log!("Device::create_sampler -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -609,9 +550,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_sampler) = hub.samplers.unregister(sampler_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _sampler.device.trace.lock().as_mut() {
+        let _sampler = hub.samplers.remove(sampler_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(sampler) = _sampler.get() {
+            if let Some(t) = sampler.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroySampler(sampler_id));
             }
         }
@@ -629,13 +572,10 @@ impl Global {
         profiling::scope!("Device::create_bind_group_layout");
 
         let hub = &self.hub;
-        let fid = hub.bind_group_layouts.prepare(device_id.backend(), id_in);
+        let fid = hub.bind_group_layouts.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -666,14 +606,13 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(layout.clone());
+            let id = fid.assign(Fallible::Valid(layout.clone()));
 
             api_log!("Device::create_bind_group_layout -> {id:?}");
             return (id, None);
         };
 
-        let fid = hub.bind_group_layouts.prepare(device_id.backend(), id_in);
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -683,9 +622,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_layout) = hub.bind_group_layouts.unregister(bind_group_layout_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _layout.device.trace.lock().as_mut() {
+        let _layout = hub.bind_group_layouts.remove(bind_group_layout_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(layout) = _layout.get() {
+            if let Some(t) = layout.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyBindGroupLayout(bind_group_layout_id));
             }
         }
@@ -703,13 +644,10 @@ impl Global {
         profiling::scope!("Device::create_pipeline_layout");
 
         let hub = &self.hub;
-        let fid = hub.pipeline_layouts.prepare(device_id.backend(), id_in);
+        let fid = hub.pipeline_layouts.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -720,19 +658,13 @@ impl Global {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
                     .iter()
-                    .map(|bgl_id| {
-                        bind_group_layouts_guard.get_owned(*bgl_id).map_err(|_| {
-                            binding_model::CreatePipelineLayoutError::InvalidBindGroupLayoutId(
-                                *bgl_id,
-                            )
-                        })
-                    })
+                    .map(|bgl_id| bind_group_layouts_guard.get(*bgl_id).get())
                     .collect::<Result<Vec<_>, _>>()
             };
 
             let bind_group_layouts = match bind_group_layouts {
                 Ok(bind_group_layouts) => bind_group_layouts,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let desc = binding_model::ResolvedPipelineLayoutDescriptor {
@@ -746,12 +678,12 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(layout);
+            let id = fid.assign(Fallible::Valid(layout));
             api_log!("Device::create_pipeline_layout -> {id:?}");
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -760,9 +692,12 @@ impl Global {
         api_log!("PipelineLayout::drop {pipeline_layout_id:?}");
 
         let hub = &self.hub;
-        if let Some(_layout) = hub.pipeline_layouts.unregister(pipeline_layout_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _layout.device.trace.lock().as_mut() {
+
+        let _layout = hub.pipeline_layouts.remove(pipeline_layout_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(layout) = _layout.get() {
+            if let Some(t) = layout.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyPipelineLayout(pipeline_layout_id));
             }
         }
@@ -777,53 +712,51 @@ impl Global {
         profiling::scope!("Device::create_bind_group");
 
         let hub = &self.hub;
-        let fid = hub.bind_groups.prepare(device_id.backend(), id_in);
+        let fid = hub.bind_groups.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let layout = match hub.bind_group_layouts.get(desc.layout) {
+            let layout = match hub.bind_group_layouts.get(desc.layout).get() {
                 Ok(layout) => layout,
-                Err(..) => break 'error binding_model::CreateBindGroupError::InvalidLayout,
+                Err(e) => break 'error e.into(),
             };
 
-            fn map_entry<'a>(
+            fn resolve_entry<'a>(
                 e: &BindGroupEntry<'a>,
-                buffer_storage: &Storage<resource::Buffer>,
-                sampler_storage: &Storage<resource::Sampler>,
-                texture_view_storage: &Storage<resource::TextureView>,
-                tlas_storage: &Storage<resource::Tlas>,
+                buffer_storage: &Storage<Fallible<resource::Buffer>>,
+                sampler_storage: &Storage<Fallible<resource::Sampler>>,
+                texture_view_storage: &Storage<Fallible<resource::TextureView>>,
+                tlas_storage: &Storage<Fallible<resource::Tlas>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
-                let map_buffer = |bb: &BufferBinding| {
+                let resolve_buffer = |bb: &BufferBinding| {
                     buffer_storage
-                        .get_owned(bb.buffer_id)
+                        .get(bb.buffer_id)
+                        .get()
                         .map(|buffer| ResolvedBufferBinding {
                             buffer,
                             offset: bb.offset,
                             size: bb.size,
                         })
-                        .map_err(|_| {
-                            binding_model::CreateBindGroupError::InvalidBufferId(bb.buffer_id)
-                        })
+                        .map_err(binding_model::CreateBindGroupError::from)
                 };
-                let map_sampler = |id: &id::SamplerId| {
+                let resolve_sampler = |id: &id::SamplerId| {
                     sampler_storage
-                        .get_owned(*id)
-                        .map_err(|_| binding_model::CreateBindGroupError::InvalidSamplerId(*id))
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
                 };
-                let map_view = |id: &id::TextureViewId| {
+                let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
-                        .get_owned(*id)
-                        .map_err(|_| binding_model::CreateBindGroupError::InvalidTextureViewId(*id))
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
                 };
                 let map_tlas = |id: &id::TlasId| {
                     tlas_storage
@@ -832,30 +765,33 @@ impl Global {
                 };
                 let resource = match e.resource {
                     BindingResource::Buffer(ref buffer) => {
-                        ResolvedBindingResource::Buffer(map_buffer(buffer)?)
+                        ResolvedBindingResource::Buffer(resolve_buffer(buffer)?)
                     }
                     BindingResource::BufferArray(ref buffers) => {
                         let buffers = buffers
                             .iter()
-                            .map(map_buffer)
+                            .map(resolve_buffer)
                             .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::BufferArray(Cow::Owned(buffers))
                     }
                     BindingResource::Sampler(ref sampler) => {
-                        ResolvedBindingResource::Sampler(map_sampler(sampler)?)
+                        ResolvedBindingResource::Sampler(resolve_sampler(sampler)?)
                     }
                     BindingResource::SamplerArray(ref samplers) => {
                         let samplers = samplers
                             .iter()
-                            .map(map_sampler)
+                            .map(resolve_sampler)
                             .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::SamplerArray(Cow::Owned(samplers))
                     }
                     BindingResource::TextureView(ref view) => {
-                        ResolvedBindingResource::TextureView(map_view(view)?)
+                        ResolvedBindingResource::TextureView(resolve_view(view)?)
                     }
                     BindingResource::TextureViewArray(ref views) => {
-                        let views = views.iter().map(map_view).collect::<Result<Vec<_>, _>>()?;
+                        let views = views
+                            .iter()
+                            .map(resolve_view)
+                            .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
                     BindingResource::AccelerationStructure(ref tlas) => {
@@ -875,15 +811,7 @@ impl Global {
                 let tlas_guard = hub.tlas_s.read();
                 desc.entries
                     .iter()
-                    .map(|e| {
-                        map_entry(
-                            e,
-                            &buffer_guard,
-                            &sampler_guard,
-                            &texture_view_guard,
-                            &tlas_guard,
-                        )
-                    })
+                    .map(|e| resolve_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard, &tlas_guard))
                     .collect::<Result<Vec<_>, _>>()
             };
             let entries = match entries {
@@ -902,14 +830,14 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(bind_group);
+            let id = fid.assign(Fallible::Valid(bind_group));
 
             api_log!("Device::create_bind_group -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -919,8 +847,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_bind_group) = hub.bind_groups.unregister(bind_group_id) {
-            #[cfg(feature = "trace")]
+        let _bind_group = hub.bind_groups.remove(bind_group_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(_bind_group) = _bind_group.get() {
             if let Some(t) = _bind_group.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyBindGroup(bind_group_id));
             }
@@ -954,13 +884,10 @@ impl Global {
         profiling::scope!("Device::create_shader_module");
 
         let hub = &self.hub;
-        let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
+        let fid = hub.shader_modules.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -999,14 +926,14 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(shader);
+            let id = fid.assign(Fallible::Valid(shader));
             api_log!("Device::create_shader_module -> {id:?}");
             return (id, None);
         };
 
         log::error!("Device::create_shader_module error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -1029,13 +956,10 @@ impl Global {
         profiling::scope!("Device::create_shader_module");
 
         let hub = &self.hub;
-        let fid = hub.shader_modules.prepare(device_id.backend(), id_in);
+        let fid = hub.shader_modules.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1053,14 +977,14 @@ impl Global {
                 Ok(shader) => shader,
                 Err(e) => break 'error e,
             };
-            let id = fid.assign(shader);
+            let id = fid.assign(Fallible::Valid(shader));
             api_log!("Device::create_shader_module_spirv -> {id:?}");
             return (id, None);
         };
 
         log::error!("Device::create_shader_module_spirv error: {error}");
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -1070,12 +994,13 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(shader_module) = hub.shader_modules.unregister(shader_module_id) {
-            #[cfg(feature = "trace")]
+        let _shader_module = hub.shader_modules.remove(shader_module_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(shader_module) = _shader_module.get() {
             if let Some(t) = shader_module.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyShaderModule(shader_module_id));
             }
-            drop(shader_module)
         }
     }
 
@@ -1088,17 +1013,13 @@ impl Global {
         profiling::scope!("Device::create_command_encoder");
 
         let hub = &self.hub;
-        let fid = hub.command_buffers.prepare(
-            device_id.backend(),
-            id_in.map(|id| id.into_command_buffer_id()),
-        );
+        let fid = hub
+            .command_buffers
+            .prepare(id_in.map(|id| id.into_command_buffer_id()));
+
+        let device = self.hub.devices.get(device_id);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId,
-            };
-
             let command_buffer = match device.create_command_encoder(&desc.label) {
                 Ok(command_buffer) => command_buffer,
                 Err(e) => break 'error e,
@@ -1109,7 +1030,7 @@ impl Global {
             return (id.into_command_encoder_id(), None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(&device, &desc.label)));
         (id.into_command_encoder_id(), Some(error))
     }
 
@@ -1119,12 +1040,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(cmd_buf) = hub
+        let _cmd_buf = hub
             .command_buffers
-            .unregister(command_encoder_id.into_command_buffer_id())
-        {
-            cmd_buf.data.lock().as_mut().unwrap().encoder.discard();
-        }
+            .remove(command_encoder_id.into_command_buffer_id());
     }
 
     pub fn command_buffer_drop(&self, command_buffer_id: id::CommandBufferId) {
@@ -1160,19 +1078,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub
-            .render_bundles
-            .prepare(bundle_encoder.parent().backend(), id_in);
+        let fid = hub.render_bundles.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(bundle_encoder.parent()) {
-                Ok(device) => device,
-                Err(_) => {
-                    break 'error command::RenderBundleError::from_device_error(
-                        DeviceError::InvalidDeviceId,
-                    );
-                }
-            };
+            let device = self.hub.devices.get(bundle_encoder.parent());
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1193,13 +1102,13 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(render_bundle);
+            let id = fid.assign(Fallible::Valid(render_bundle));
             api_log!("RenderBundleEncoder::finish -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -1209,9 +1118,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_bundle) = hub.render_bundles.unregister(render_bundle_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _bundle.device.trace.lock().as_mut() {
+        let _bundle = hub.render_bundles.remove(render_bundle_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(bundle) = _bundle.get() {
+            if let Some(t) = bundle.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyRenderBundle(render_bundle_id));
             }
         }
@@ -1226,13 +1137,10 @@ impl Global {
         profiling::scope!("Device::create_query_set");
 
         let hub = &self.hub;
-        let fid = hub.query_sets.prepare(device_id.backend(), id_in);
+        let fid = hub.query_sets.prepare(id_in);
 
         let error = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1247,13 +1155,13 @@ impl Global {
                 Err(err) => break 'error err,
             };
 
-            let id = fid.assign(query_set);
+            let id = fid.assign(Fallible::Valid(query_set));
             api_log!("Device::create_query_set -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
@@ -1263,9 +1171,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_query_set) = hub.query_sets.unregister(query_set_id) {
-            #[cfg(feature = "trace")]
-            if let Some(trace) = _query_set.device.trace.lock().as_mut() {
+        let _query_set = hub.query_sets.remove(query_set_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(query_set) = _query_set.get() {
+            if let Some(trace) = query_set.device.trace.lock().as_mut() {
                 trace.add(trace::Action::DestroyQuerySet(query_set_id));
             }
         }
@@ -1288,7 +1198,7 @@ impl Global {
         let missing_implicit_pipeline_ids =
             desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
 
-        let fid = hub.render_pipelines.prepare(device_id.backend(), id_in);
+        let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let error = 'error: {
@@ -1297,10 +1207,7 @@ impl Global {
                 break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
             }
 
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1313,37 +1220,30 @@ impl Global {
 
             let layout = desc
                 .layout
-                .map(|layout| {
-                    hub.pipeline_layouts
-                        .get(layout)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)
-                })
+                .map(|layout| hub.pipeline_layouts.get(layout).get())
                 .transpose();
             let layout = match layout {
                 Ok(layout) => layout,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let cache = desc
                 .cache
-                .map(|cache| {
-                    hub.pipeline_caches
-                        .get(cache)
-                        .map_err(|_| pipeline::CreateRenderPipelineError::InvalidCache)
-                })
+                .map(|cache| hub.pipeline_caches.get(cache).get())
                 .transpose();
             let cache = match cache {
                 Ok(cache) => cache,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let vertex = {
                 let module = hub
                     .shader_modules
                     .get(desc.vertex.stage.module)
-                    .map_err(|_| pipeline::CreateRenderPipelineError::Stage {
+                    .get()
+                    .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
                         stage: wgt::ShaderStages::VERTEX,
-                        error: crate::validation::StageError::InvalidModule,
+                        error: e.into(),
                     });
                 let module = match module {
                     Ok(module) => module,
@@ -1365,12 +1265,14 @@ impl Global {
             };
 
             let fragment = if let Some(ref state) = desc.fragment {
-                let module = hub.shader_modules.get(state.stage.module).map_err(|_| {
-                    pipeline::CreateRenderPipelineError::Stage {
+                let module = hub
+                    .shader_modules
+                    .get(state.stage.module)
+                    .get()
+                    .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
                         stage: wgt::ShaderStages::FRAGMENT,
-                        error: crate::validation::StageError::InvalidModule,
-                    }
-                });
+                        error: e.into(),
+                    });
                 let module = match module {
                     Ok(module) => module,
                     Err(e) => break 'error e,
@@ -1424,7 +1326,7 @@ impl Global {
 
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
-                pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
+                pipeline_layout_guard.insert(ids.root_id, Fallible::Valid(pipeline.layout.clone()));
                 let mut group_ids = ids.group_ids.iter();
                 // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
                 // the first iterator before realizing that the second iterator has finished.
@@ -1436,29 +1338,29 @@ impl Global {
                     .iter()
                     .zip(&mut group_ids)
                 {
-                    bgl_guard.insert(*bgl_id, bgl.clone());
+                    bgl_guard.insert(*bgl_id, Fallible::Valid(bgl.clone()));
                 }
                 for bgl_id in group_ids {
-                    bgl_guard.insert_error(*bgl_id);
+                    bgl_guard.insert(*bgl_id, Fallible::Invalid(Arc::new(String::new())));
                 }
             }
 
-            let id = fid.assign(pipeline);
+            let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_render_pipeline -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
 
         // We also need to assign errors to the implicit pipeline layout and the
         // implicit bind group layouts.
         if let Some(ids) = implicit_context {
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id);
+            pipeline_layout_guard.insert(ids.root_id, Fallible::Invalid(Arc::new(String::new())));
             for bgl_id in ids.group_ids {
-                bgl_guard.insert_error(bgl_id);
+                bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
             }
         }
 
@@ -1480,16 +1382,15 @@ impl Global {
     ) {
         let hub = &self.hub;
 
+        let fid = hub.bind_group_layouts.prepare(id_in);
+
         let error = 'error: {
-            let pipeline = match hub.render_pipelines.get(pipeline_id) {
+            let pipeline = match hub.render_pipelines.get(pipeline_id).get() {
                 Ok(pipeline) => pipeline,
-                Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                Err(e) => break 'error e.into(),
             };
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub
-                    .bind_group_layouts
-                    .prepare(pipeline_id.backend(), id_in)
-                    .assign(bg.clone()),
+                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
                 None => {
                     break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
                 }
@@ -1497,10 +1398,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(pipeline_id.backend(), id_in)
-            .assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
         (id, Some(error))
     }
 
@@ -1510,9 +1408,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_pipeline) = hub.render_pipelines.unregister(render_pipeline_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _pipeline.device.trace.lock().as_mut() {
+        let _pipeline = hub.render_pipelines.remove(render_pipeline_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(pipeline) = _pipeline.get() {
+            if let Some(t) = pipeline.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyRenderPipeline(render_pipeline_id));
             }
         }
@@ -1535,7 +1435,7 @@ impl Global {
         let missing_implicit_pipeline_ids =
             desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
 
-        let fid = hub.compute_pipelines.prepare(device_id.backend(), id_in);
+        let fid = hub.compute_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let error = 'error: {
@@ -1544,10 +1444,7 @@ impl Global {
                 break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
             }
 
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1560,34 +1457,23 @@ impl Global {
 
             let layout = desc
                 .layout
-                .map(|layout| {
-                    hub.pipeline_layouts
-                        .get(layout)
-                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)
-                })
+                .map(|layout| hub.pipeline_layouts.get(layout).get())
                 .transpose();
             let layout = match layout {
                 Ok(layout) => layout,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
             let cache = desc
                 .cache
-                .map(|cache| {
-                    hub.pipeline_caches
-                        .get(cache)
-                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidCache)
-                })
+                .map(|cache| hub.pipeline_caches.get(cache).get())
                 .transpose();
             let cache = match cache {
                 Ok(cache) => cache,
-                Err(e) => break 'error e,
+                Err(e) => break 'error e.into(),
             };
 
-            let module = hub
-                .shader_modules
-                .get(desc.stage.module)
-                .map_err(|_| crate::validation::StageError::InvalidModule);
+            let module = hub.shader_modules.get(desc.stage.module).get();
             let module = match module {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
@@ -1626,7 +1512,7 @@ impl Global {
 
                 let mut pipeline_layout_guard = hub.pipeline_layouts.write();
                 let mut bgl_guard = hub.bind_group_layouts.write();
-                pipeline_layout_guard.insert(ids.root_id, pipeline.layout.clone());
+                pipeline_layout_guard.insert(ids.root_id, Fallible::Valid(pipeline.layout.clone()));
                 let mut group_ids = ids.group_ids.iter();
                 // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
                 // the first iterator before realizing that the second iterator has finished.
@@ -1638,29 +1524,29 @@ impl Global {
                     .iter()
                     .zip(&mut group_ids)
                 {
-                    bgl_guard.insert(*bgl_id, bgl.clone());
+                    bgl_guard.insert(*bgl_id, Fallible::Valid(bgl.clone()));
                 }
                 for bgl_id in group_ids {
-                    bgl_guard.insert_error(*bgl_id);
+                    bgl_guard.insert(*bgl_id, Fallible::Invalid(Arc::new(String::new())));
                 }
             }
 
-            let id = fid.assign(pipeline);
+            let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_compute_pipeline -> {id:?}");
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
 
         // We also need to assign errors to the implicit pipeline layout and the
         // implicit bind group layouts.
         if let Some(ids) = implicit_context {
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id);
+            pipeline_layout_guard.insert(ids.root_id, Fallible::Invalid(Arc::new(String::new())));
             for bgl_id in ids.group_ids {
-                bgl_guard.insert_error(bgl_id);
+                bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
             }
         }
 
@@ -1680,17 +1566,16 @@ impl Global {
     ) {
         let hub = &self.hub;
 
+        let fid = hub.bind_group_layouts.prepare(id_in);
+
         let error = 'error: {
-            let pipeline = match hub.compute_pipelines.get(pipeline_id) {
+            let pipeline = match hub.compute_pipelines.get(pipeline_id).get() {
                 Ok(pipeline) => pipeline,
-                Err(_) => break 'error binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                Err(e) => break 'error e.into(),
             };
 
             let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => hub
-                    .bind_group_layouts
-                    .prepare(pipeline_id.backend(), id_in)
-                    .assign(bg.clone()),
+                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
                 None => {
                     break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
                 }
@@ -1699,10 +1584,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = hub
-            .bind_group_layouts
-            .prepare(pipeline_id.backend(), id_in)
-            .assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
         (id, Some(error))
     }
 
@@ -1712,9 +1594,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(_pipeline) = hub.compute_pipelines.unregister(compute_pipeline_id) {
-            #[cfg(feature = "trace")]
-            if let Some(t) = _pipeline.device.trace.lock().as_mut() {
+        let _pipeline = hub.compute_pipelines.remove(compute_pipeline_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(pipeline) = _pipeline.get() {
+            if let Some(t) = pipeline.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyComputePipeline(compute_pipeline_id));
             }
         }
@@ -1736,13 +1620,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let fid = hub.pipeline_caches.prepare(device_id.backend(), id_in);
+        let fid = hub.pipeline_caches.prepare(id_in);
         let error: pipeline::CreatePipelineCacheError = 'error: {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                // TODO: Handle error properly
-                Err(crate::storage::InvalidId) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
@@ -1755,7 +1635,7 @@ impl Global {
             let cache = unsafe { device.create_pipeline_cache(desc) };
             match cache {
                 Ok(cache) => {
-                    let id = fid.assign(cache);
+                    let id = fid.assign(Fallible::Valid(cache));
                     api_log!("Device::create_pipeline_cache -> {id:?}");
                     return (id, None);
                 }
@@ -1763,7 +1643,7 @@ impl Global {
             }
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
 
         (id, Some(error))
     }
@@ -1774,12 +1654,13 @@ impl Global {
 
         let hub = &self.hub;
 
-        if let Some(cache) = hub.pipeline_caches.unregister(pipeline_cache_id) {
-            #[cfg(feature = "trace")]
+        let _cache = hub.pipeline_caches.remove(pipeline_cache_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(cache) = _cache.get() {
             if let Some(t) = cache.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyPipelineCache(pipeline_cache_id));
             }
-            drop(cache)
         }
     }
 
@@ -1910,13 +1791,7 @@ impl Global {
             // User callbacks must not be called while we are holding locks.
             let user_callbacks;
             {
-                let hub = &self.hub;
-                let surface_guard = self.surfaces.read();
-
-                let device = match hub.devices.get(device_id) {
-                    Ok(device) => device,
-                    Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-                };
+                let device = self.hub.devices.get(device_id);
 
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
@@ -1927,10 +1802,7 @@ impl Global {
                     break 'error e.into();
                 }
 
-                let surface = match surface_guard.get(surface_id) {
-                    Ok(surface) => surface,
-                    Err(_) => break 'error E::InvalidSurface,
-                };
+                let surface = self.surfaces.get(surface_id);
 
                 let caps = match surface.get_capabilities(&device.adapter) {
                     Ok(caps) => caps,
@@ -2013,7 +1885,7 @@ impl Global {
                 //
                 // https://github.com/gfx-rs/wgpu/issues/4105
 
-                let surface_raw = surface.raw(device_id.backend()).unwrap();
+                let surface_raw = surface.raw(device.backend()).unwrap();
                 match unsafe { surface_raw.configure(device.raw(), &hal_config) } {
                     Ok(()) => (),
                     Err(error) => {
@@ -2021,7 +1893,9 @@ impl Global {
                             hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
                                 E::InvalidSurface
                             }
-                            hal::SurfaceError::Device(error) => E::Device(error.into()),
+                            hal::SurfaceError::Device(error) => {
+                                E::Device(device.handle_hal_error(error))
+                            }
                             hal::SurfaceError::Other(message) => {
                                 log::error!("surface configuration failed: {}", message);
                                 E::InvalidSurface
@@ -2055,11 +1929,7 @@ impl Global {
     ) -> Result<bool, WaitIdleError> {
         api_log!("Device::poll {maintain:?}");
 
-        let hub = &self.hub;
-        let device = hub
-            .devices
-            .get(device_id)
-            .map_err(|_| DeviceError::InvalidDeviceId)?;
+        let device = self.hub.devices.get(device_id);
 
         let DevicePoll {
             closures,
@@ -2097,7 +1967,6 @@ impl Global {
     /// submissions still in flight.
     fn poll_all_devices_of_api(
         &self,
-        backend: wgt::Backend,
         force_wait: bool,
         closures: &mut UserClosures,
     ) -> Result<bool, WaitIdleError> {
@@ -2108,7 +1977,7 @@ impl Global {
         {
             let device_guard = hub.devices.read();
 
-            for (_id, device) in device_guard.iter(backend) {
+            for (_id, device) in device_guard.iter() {
                 let maintain = if force_wait {
                     wgt::Maintain::Wait
                 } else {
@@ -2138,66 +2007,33 @@ impl Global {
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<bool, WaitIdleError> {
         api_log!("poll_all_devices");
         let mut closures = UserClosures::default();
-        let mut all_queue_empty = true;
-
-        #[cfg(vulkan)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Vulkan, force_wait, &mut closures)?;
-        }
-        #[cfg(metal)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Metal, force_wait, &mut closures)?;
-        }
-        #[cfg(dx12)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Dx12, force_wait, &mut closures)?;
-        }
-        #[cfg(gles)]
-        {
-            all_queue_empty &=
-                self.poll_all_devices_of_api(wgt::Backend::Gl, force_wait, &mut closures)?;
-        }
+        let all_queue_empty = self.poll_all_devices_of_api(force_wait, &mut closures)?;
 
         closures.fire();
 
         Ok(all_queue_empty)
     }
 
-    pub fn device_start_capture(&self, id: DeviceId) {
+    pub fn device_start_capture(&self, device_id: DeviceId) {
         api_log!("Device::start_capture");
 
-        let hub = &self.hub;
+        let device = self.hub.devices.get(device_id);
 
-        if let Ok(device) = hub.devices.get(id) {
-            if !device.is_valid() {
-                return;
-            }
-            unsafe { device.raw().start_capture() };
+        if !device.is_valid() {
+            return;
         }
+        unsafe { device.raw().start_capture() };
     }
 
-    pub fn device_stop_capture(&self, id: DeviceId) {
+    pub fn device_stop_capture(&self, device_id: DeviceId) {
         api_log!("Device::stop_capture");
 
-        let hub = &self.hub;
+        let device = self.hub.devices.get(device_id);
 
-        if let Ok(device) = hub.devices.get(id) {
-            if !device.is_valid() {
-                return;
-            }
-            unsafe { device.raw().stop_capture() };
+        if !device.is_valid() {
+            return;
         }
-    }
-
-    // This is a test-only function to force the device into an
-    // invalid state by inserting an error value in its place in
-    // the registry.
-    pub fn device_make_invalid(&self, device_id: DeviceId) {
-        let hub = &self.hub;
-        hub.devices.force_replace_with_error(device_id);
+        unsafe { device.raw().stop_capture() };
     }
 
     pub fn pipeline_cache_get_data(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
@@ -2205,7 +2041,7 @@ impl Global {
         api_log!("PipelineCache::get_data");
         let hub = &self.hub;
 
-        if let Ok(cache) = hub.pipeline_caches.get(id) {
+        if let Ok(cache) = hub.pipeline_caches.get(id).get() {
             // TODO: Is this check needed?
             if !cache.device.is_valid() {
                 return None;
@@ -2233,22 +2069,20 @@ impl Global {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {device_id:?}");
 
-        let hub = &self.hub;
-        if let Some(device) = hub.devices.unregister(device_id) {
-            let device_lost_closure = device.lock_life().device_lost_closure.take();
-            if let Some(closure) = device_lost_closure {
-                closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
-            }
-
-            // The things `Device::prepare_to_die` takes care are mostly
-            // unnecessary here. We know our queue is empty, so we don't
-            // need to wait for submissions or triage them. We know we were
-            // just polled, so `life_tracker.free_resources` is empty.
-            debug_assert!(device.lock_life().queue_empty());
-            device.pending_writes.lock().deactivate();
-
-            drop(device);
+        let device = self.hub.devices.remove(device_id);
+        let device_lost_closure = device.lock_life().device_lost_closure.take();
+        if let Some(closure) = device_lost_closure {
+            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
         }
+
+        // The things `Device::prepare_to_die` takes care are mostly
+        // unnecessary here. We know our queue is empty, so we don't
+        // need to wait for submissions or triage them. We know we were
+        // just polled, so `life_tracker.free_resources` is empty.
+        debug_assert!(device.lock_life().queue_empty());
+        device.pending_writes.lock().deactivate();
+
+        drop(device);
     }
 
     // This closure will be called exactly once during "lose the device",
@@ -2258,71 +2092,47 @@ impl Global {
         device_id: DeviceId,
         device_lost_closure: DeviceLostClosure,
     ) {
-        let hub = &self.hub;
+        let device = self.hub.devices.get(device_id);
 
-        if let Ok(device) = hub.devices.get(device_id) {
-            let mut life_tracker = device.lock_life();
-            if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
-                // It's important to not hold the lock while calling the closure.
-                drop(life_tracker);
-                existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-                life_tracker = device.lock_life();
-            }
-            life_tracker.device_lost_closure = Some(device_lost_closure);
-        } else {
-            // No device? Okay. Just like we have to call any existing closure
-            // before we drop it, we need to call this closure before we exit
-            // this function, because there's no device that is ever going to
-            // call it.
-            device_lost_closure.call(DeviceLostReason::DeviceInvalid, "".to_string());
+        let mut life_tracker = device.lock_life();
+        if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
+            // It's important to not hold the lock while calling the closure.
+            drop(life_tracker);
+            existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
+            life_tracker = device.lock_life();
         }
+        life_tracker.device_lost_closure = Some(device_lost_closure);
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {
         api_log!("Device::destroy {device_id:?}");
 
-        let hub = &self.hub;
+        let device = self.hub.devices.get(device_id);
 
-        if let Ok(device) = hub.devices.get(device_id) {
-            // Follow the steps at
-            // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
-            // It's legal to call destroy multiple times, but if the device
-            // is already invalid, there's nothing more to do. There's also
-            // no need to return an error.
-            if !device.is_valid() {
-                return;
-            }
-
-            // The last part of destroy is to lose the device. The spec says
-            // delay that until all "currently-enqueued operations on any
-            // queue on this device are completed." This is accomplished by
-            // setting valid to false, and then relying upon maintain to
-            // check for empty queues and a DeviceLostClosure. At that time,
-            // the DeviceLostClosure will be called with "destroyed" as the
-            // reason.
-            device.valid.store(false, Ordering::Relaxed);
+        // Follow the steps at
+        // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
+        // It's legal to call destroy multiple times, but if the device
+        // is already invalid, there's nothing more to do. There's also
+        // no need to return an error.
+        if !device.is_valid() {
+            return;
         }
-    }
 
-    pub fn device_mark_lost(&self, device_id: DeviceId, message: &str) {
-        api_log!("Device::mark_lost {device_id:?}");
-
-        let hub = &self.hub;
-
-        if let Ok(device) = hub.devices.get(device_id) {
-            device.lose(message);
-        }
+        // The last part of destroy is to lose the device. The spec says
+        // delay that until all "currently-enqueued operations on any
+        // queue on this device are completed." This is accomplished by
+        // setting valid to false, and then relying upon maintain to
+        // check for empty queues and a DeviceLostClosure. At that time,
+        // the DeviceLostClosure will be called with "destroyed" as the
+        // reason.
+        device.valid.store(false, Ordering::Release);
     }
 
     pub fn device_get_internal_counters(&self, device_id: DeviceId) -> wgt::InternalCounters {
-        let hub = &self.hub;
-        if let Ok(device) = hub.devices.get(device_id) {
-            wgt::InternalCounters {
-                hal: device.get_hal_counters(),
-                core: wgt::CoreCounters {},
-            }
-        } else {
-            Default::default()
+        let device = self.hub.devices.get(device_id);
+        wgt::InternalCounters {
+            hal: device.get_hal_counters(),
+            core: wgt::CoreCounters {},
         }
     }
 
@@ -2330,21 +2140,15 @@ impl Global {
         &self,
         device_id: DeviceId,
     ) -> Option<wgt::AllocatorReport> {
-        let hub = &self.hub;
-        hub.devices
-            .get(device_id)
-            .ok()
-            .and_then(|device| device.generate_allocator_report())
+        let device = self.hub.devices.get(device_id);
+        device.generate_allocator_report()
     }
 
     pub fn queue_drop(&self, queue_id: QueueId) {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {queue_id:?}");
 
-        let hub = &self.hub;
-        if let Some(queue) = hub.queues.unregister(queue_id) {
-            drop(queue);
-        }
+        self.hub.queues.remove(queue_id);
     }
 
     pub fn buffer_map_async(
@@ -2360,9 +2164,9 @@ impl Global {
         let hub = &self.hub;
 
         let op_and_err = 'error: {
-            let buffer = match hub.buffers.get(buffer_id) {
+            let buffer = match hub.buffers.get(buffer_id).get() {
                 Ok(buffer) => buffer,
-                Err(_) => break 'error Some((op, BufferAccessError::InvalidBufferId(buffer_id))),
+                Err(e) => break 'error Some((op, e.into())),
             };
 
             buffer.map_async(offset, size, op).err()
@@ -2393,10 +2197,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         {
             let snatch_guard = buffer.device.snatchable_lock.read();
@@ -2469,10 +2270,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| BufferAccessError::InvalidBufferId(buffer_id))?;
+        let buffer = hub.buffers.get(buffer_id).get()?;
 
         let snatch_guard = buffer.device.snatchable_lock.read();
         buffer.check_destroyed(&snatch_guard)?;

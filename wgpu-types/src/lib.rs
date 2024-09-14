@@ -13,6 +13,7 @@ use serde::Deserialize;
 #[cfg(any(feature = "serde", test))]
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
+use std::mem::size_of;
 use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
@@ -401,7 +402,7 @@ bitflags::bitflags! {
         const SHADER_F16 = 1 << 8;
 
 
-        /// Allows for usage of textures of format [`TextureFormat::Rg11b10UFloat`] as a render target
+        /// Allows for usage of textures of format [`TextureFormat::Rg11b10Ufloat`] as a render target
         ///
         /// Supported platforms:
         /// - Vulkan
@@ -2553,7 +2554,7 @@ pub enum TextureFormat {
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
     Rgb10a2Unorm,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
-    Rg11b10UFloat,
+    Rg11b10Ufloat,
 
     // Normal 64 bit formats
     /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
@@ -2841,7 +2842,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "bgra8unorm-srgb" => TextureFormat::Bgra8UnormSrgb,
                     "rgb10a2uint" => TextureFormat::Rgb10a2Uint,
                     "rgb10a2unorm" => TextureFormat::Rgb10a2Unorm,
-                    "rg11b10ufloat" => TextureFormat::Rg11b10UFloat,
+                    "rg11b10ufloat" => TextureFormat::Rg11b10Ufloat,
                     "rg32uint" => TextureFormat::Rg32Uint,
                     "rg32sint" => TextureFormat::Rg32Sint,
                     "rg32float" => TextureFormat::Rg32Float,
@@ -2969,7 +2970,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Bgra8UnormSrgb => "bgra8unorm-srgb",
             TextureFormat::Rgb10a2Uint => "rgb10a2uint",
             TextureFormat::Rgb10a2Unorm => "rgb10a2unorm",
-            TextureFormat::Rg11b10UFloat => "rg11b10ufloat",
+            TextureFormat::Rg11b10Ufloat => "rg11b10ufloat",
             TextureFormat::Rg32Uint => "rg32uint",
             TextureFormat::Rg32Sint => "rg32sint",
             TextureFormat::Rg32Float => "rg32float",
@@ -3211,7 +3212,7 @@ impl TextureFormat {
             | Self::Rgb9e5Ufloat
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
-            | Self::Rg11b10UFloat
+            | Self::Rg11b10Ufloat
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -3319,7 +3320,7 @@ impl TextureFormat {
             | Self::Rgb9e5Ufloat
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
-            | Self::Rg11b10UFloat
+            | Self::Rg11b10Ufloat
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -3438,7 +3439,7 @@ impl TextureFormat {
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
-            Self::Rg11b10UFloat =>        (        msaa,   rg11b10f),
+            Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
             Self::Rg32Uint =>             (        noaa,  all_flags),
             Self::Rg32Sint =>             (        noaa,  all_flags),
             Self::Rg32Float =>            (        noaa,  all_flags),
@@ -3549,7 +3550,7 @@ impl TextureFormat {
             | Self::Rg16Float
             | Self::Rgba16Float
             | Self::Rgb10a2Unorm
-            | Self::Rg11b10UFloat => Some(float),
+            | Self::Rg11b10Ufloat => Some(float),
 
             Self::R32Float | Self::Rg32Float | Self::Rgba32Float => Some(float32_sample_type),
 
@@ -3681,7 +3682,7 @@ impl TextureFormat {
             | Self::Rg16Sint
             | Self::Rg16Float => Some(4),
             Self::R32Uint | Self::R32Sint | Self::R32Float => Some(4),
-            Self::Rgb9e5Ufloat | Self::Rgb10a2Uint | Self::Rgb10a2Unorm | Self::Rg11b10UFloat => {
+            Self::Rgb9e5Ufloat | Self::Rgb10a2Uint | Self::Rgb10a2Unorm | Self::Rg11b10Ufloat => {
                 Some(4)
             }
 
@@ -3784,7 +3785,7 @@ impl TextureFormat {
             | Self::Rg32Float
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
-            | Self::Rg11b10UFloat => Some(8),
+            | Self::Rg11b10Ufloat => Some(8),
             Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
             Self::Stencil8
             | Self::Depth16Unorm
@@ -3867,7 +3868,7 @@ impl TextureFormat {
             | Self::Rgba32Float
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
-            | Self::Rg11b10UFloat => Some(4),
+            | Self::Rg11b10Ufloat => Some(4),
             Self::Stencil8
             | Self::Depth16Unorm
             | Self::Depth24Plus
@@ -3958,7 +3959,7 @@ impl TextureFormat {
             | Self::Rgba32Sint
             | Self::Rgba32Float => 4,
 
-            Self::Rgb9e5Ufloat | Self::Rg11b10UFloat => 3,
+            Self::Rgb9e5Ufloat | Self::Rg11b10Ufloat => 3,
             Self::Rgb10a2Uint | Self::Rgb10a2Unorm => 4,
 
             Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
@@ -4176,7 +4177,7 @@ fn texture_format_serialize() {
         "\"rgb10a2unorm\"".to_string()
     );
     assert_eq!(
-        serde_json::to_string(&TextureFormat::Rg11b10UFloat).unwrap(),
+        serde_json::to_string(&TextureFormat::Rg11b10Ufloat).unwrap(),
         "\"rg11b10ufloat\"".to_string()
     );
     assert_eq!(
@@ -4473,7 +4474,7 @@ fn texture_format_deserialize() {
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rg11b10ufloat\"").unwrap(),
-        TextureFormat::Rg11b10UFloat
+        TextureFormat::Rg11b10Ufloat
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rg32uint\"").unwrap(),
@@ -5550,8 +5551,18 @@ pub struct SurfaceConfiguration<V> {
     /// `Bgra8Unorm` and `Bgra8UnormSrgb`
     pub format: TextureFormat,
     /// Width of the swap chain. Must be the same size as the surface, and nonzero.
+    ///
+    /// If this is not the same size as the underlying surface (e.g. if it is
+    /// set once, and the window is later resized), the behaviour is defined
+    /// but platform-specific, and may change in the future (currently macOS
+    /// scales the surface, other platforms may do something else).
     pub width: u32,
     /// Height of the swap chain. Must be the same size as the surface, and nonzero.
+    ///
+    /// If this is not the same size as the underlying surface (e.g. if it is
+    /// set once, and the window is later resized), the behaviour is defined
+    /// but platform-specific, and may change in the future (currently macOS
+    /// scales the surface, other platforms may do something else).
     pub height: u32,
     /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
     /// FifoRelaxed, Immediate, and Mailbox will crash if unsupported, while AutoVsync and
@@ -7232,7 +7243,7 @@ impl DrawIndirectArgs {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
                 std::ptr::from_ref(self).cast::<u8>(),
-                std::mem::size_of::<Self>(),
+                size_of::<Self>(),
             ))
         }
     }
@@ -7263,7 +7274,7 @@ impl DrawIndexedIndirectArgs {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
                 std::ptr::from_ref(self).cast::<u8>(),
-                std::mem::size_of::<Self>(),
+                size_of::<Self>(),
             ))
         }
     }
@@ -7288,7 +7299,7 @@ impl DispatchIndirectArgs {
         unsafe {
             std::mem::transmute(std::slice::from_raw_parts(
                 std::ptr::from_ref(self).cast::<u8>(),
-                std::mem::size_of::<Self>(),
+                size_of::<Self>(),
             ))
         }
     }
@@ -7313,8 +7324,15 @@ impl ShaderBoundChecks {
     /// Creates a new configuration where the shader isn't bound checked.
     ///
     /// # Safety
-    /// The caller MUST ensure that all shaders built with this configuration don't perform any
-    /// out of bounds reads or writes.
+    ///
+    /// The caller MUST ensure that all shaders built with this configuration
+    /// don't perform any out of bounds reads or writes.
+    ///
+    /// Note that `wgpu_core`, in particular, initializes only those portions of
+    /// buffers that it expects might be read, and it does not expect contents
+    /// outside the ranges bound in bindgroups to be accessible, so using this
+    /// configuration with ill-behaved shaders could expose uninitialized GPU
+    /// memory contents to the application.
     #[must_use]
     pub unsafe fn unchecked() -> Self {
         ShaderBoundChecks {
@@ -7337,10 +7355,6 @@ impl Default for ShaderBoundChecks {
 
 /// Selects which DX12 shader compiler to use.
 ///
-/// If the `wgpu-hal/dx12-shader-compiler` feature isn't enabled then this will fall back
-/// to the Fxc compiler at runtime and log an error.
-/// This feature is always enabled when using `wgpu`.
-///
 /// If the `Dxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
 /// then this will fall back to the Fxc compiler at runtime and log an error.
 ///
@@ -7357,6 +7371,10 @@ pub enum Dx12Compiler {
     ///
     /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
     /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
+    ///
+    /// Minimum supported version: [v1.5.2010](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.5.2010)
+    ///
+    /// It also requires WDDM 2.1 (Windows 10 version 1607).
     Dxc {
         /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
@@ -7635,10 +7653,4 @@ pub enum DeviceLostReason {
     /// exactly once before it is dropped, which helps with managing the
     /// memory owned by the callback.
     ReplacedCallback = 3,
-    /// When setting the callback, but the device is already invalid
-    ///
-    /// As above, when the callback is provided, wgpu guarantees that it
-    /// will eventually be called. If the device is already invalid, wgpu
-    /// will call the callback immediately, with this reason.
-    DeviceInvalid = 4,
 }

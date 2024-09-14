@@ -377,7 +377,7 @@ fn copy_via_compute(
         let mut pass = encoder.begin_compute_pass(&ComputePassDescriptor::default());
 
         pass.set_pipeline(&pipeline_copy);
-        pass.set_bind_group(0, &bg, &[]);
+        pass.set_bind_group(0, Some(&bg), &[]);
         pass.dispatch_workgroups(1, 1, 1);
     }
 

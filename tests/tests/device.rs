@@ -36,32 +36,23 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
 #[gpu_test]
 static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
-    .run_sync(|_| {
-        use pollster::FutureExt as _;
+    .run_sync(|ctx| {
+        ctx.instance.poll_all(false);
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
-            dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
-            gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
-            flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
-        });
+        let pre_report = ctx.instance.generate_report().unwrap();
 
-        let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
-            .block_on()
-            .expect("failed to create adapter");
-
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
-            .block_on()
-            .expect("failed to create device");
-
-        instance.poll_all(false);
-
-        let pre_report = instance.generate_report().unwrap();
+        let TestingContext {
+            instance,
+            device,
+            queue,
+            ..
+        } = ctx;
 
         drop(queue);
         drop(device);
+
         let post_report = instance.generate_report().unwrap();
+
         assert_ne!(
             pre_report, post_report,
             "Queue and Device has not been dropped as expected"
@@ -72,29 +63,16 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
 #[gpu_test]
 static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
-    .run_sync(|_| {
+    .run_sync(|ctx| {
         use pollster::FutureExt as _;
-
-        fn create_device_and_queue() -> (wgpu::Device, wgpu::Queue) {
-            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-                backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
-                dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env()
-                    .unwrap_or_default(),
-                gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
-                flags: wgpu::InstanceFlags::advanced_debugging().with_env(),
-            });
-
-            let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
-                .block_on()
-                .expect("failed to create adapter");
-
-            adapter
-                .request_device(&wgpu::DeviceDescriptor::default(), None)
-                .block_on()
-                .expect("failed to create device")
-        }
-
-        let _ = vec![create_device_and_queue(), create_device_and_queue()];
+        ctx.adapter
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .block_on()
+            .expect("failed to create device");
+        ctx.adapter
+            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .block_on()
+            .expect("failed to create device");
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
@@ -666,33 +644,6 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
 
         // Drop the device.
         drop(ctx.device);
-
-        assert!(
-            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
-
-#[gpu_test]
-static DEVICE_INVALID_THEN_SET_LOST_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|ctx| {
-        // This test checks that when the device is invalid, a subsequent call
-        // to set the device lost callback will immediately call the callback.
-        // Invalidating the device is done via a testing-only method. Fails on
-        // webgl because webgl doesn't implement make_invalid.
-
-        // Make the device invalid.
-        ctx.device.make_invalid();
-
-        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
-
-        // Set a LoseDeviceCallback on the device.
-        let callback = Box::new(|reason, _m| {
-            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert_eq!(reason, wgt::DeviceLostReason::DeviceInvalid);
-        });
-        ctx.device.set_device_lost_callback(callback);
 
         assert!(
             WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),

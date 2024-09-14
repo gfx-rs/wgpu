@@ -4,7 +4,7 @@ use crate::{
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{Labeled, TrackingData},
+    resource::{InvalidResourceError, Labeled, TrackingData},
     resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -222,10 +222,6 @@ pub struct ResolvedComputePipelineDescriptor<'a> {
 pub enum CreateComputePipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Pipeline layout is invalid")]
-    InvalidLayout,
-    #[error("Cache is invalid")]
-    InvalidCache,
     #[error("Unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
     #[error("Error matching shader requirements against the pipeline")]
@@ -236,6 +232,8 @@ pub enum CreateComputePipelineError {
     PipelineConstants(String),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 #[derive(Debug)]
@@ -284,16 +282,6 @@ pub enum CreatePipelineCacheError {
     MissingFeatures(#[from] MissingFeatures),
     #[error("Internal error: {0}")]
     Internal(String),
-}
-
-impl From<hal::PipelineCacheError> for CreatePipelineCacheError {
-    fn from(value: hal::PipelineCacheError) -> Self {
-        match value {
-            hal::PipelineCacheError::Device(device) => {
-                CreatePipelineCacheError::Device(device.into())
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -477,10 +465,6 @@ pub enum CreateRenderPipelineError {
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Pipeline layout is invalid")]
-    InvalidLayout,
-    #[error("Pipeline cache is invalid")]
-    InvalidCache,
     #[error("Unable to derive an implicit layout")]
     Implicit(#[from] ImplicitLayoutError),
     #[error("Color state [{0}] is invalid")]
@@ -550,6 +534,8 @@ pub enum CreateRenderPipelineError {
         "but no render target for the pipeline was specified."
     ))]
     NoTargetSpecified,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 bitflags::bitflags! {

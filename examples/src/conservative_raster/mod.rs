@@ -305,7 +305,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.pipeline_upscale);
-            rpass.set_bind_group(0, &self.bind_group_upscale, &[]);
+            rpass.set_bind_group(0, Some(&self.bind_group_upscale), &[]);
             rpass.draw(0..3, 0..1);
 
             if let Some(pipeline_lines) = &self.pipeline_lines {

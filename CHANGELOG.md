@@ -65,6 +65,15 @@ traits that have now been implemented for `wgpu` resources.
 
 By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
+#### `set_bind_group` now takes an `Option` for the bind group argument.
+
+https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup
+is nullable. This change is the start of implementing this part of the spec. Callers that
+specify a `Some()` value should have unchanged behavior. Handling of `None` values still
+needs to be implemented by backends.
+
+By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
+
 ### New Features
 
 #### Naga
@@ -83,6 +92,7 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 #### Naga
 
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
+- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256)
 
 #### General
 
@@ -96,16 +106,21 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 - Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
 - Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
 - Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170)
+- Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201)
 
 #### GLES / OpenGL
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
 
+#### Vulkan
+
+- Vulkan debug labels assumed no interior nul byte. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257)
+
 ### Changes
 
 - `wgpu_hal::gles::Adapter::new_external` now requires the context to be current when dropping the adapter and related objects. By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
 - Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
-- `Rg11b10Float` is renamed to `Rg11b10UFloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
+- `Rg11b10Float` is renamed to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
 
 #### HAL
 
@@ -117,6 +132,7 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 - Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006)
 - Update `glutin` to `0.31` with `glutin-winit` crate. By @MarijnS95 in [#6150](https://github.com/gfx-rs/wgpu/pull/6150) and [#6176](https://github.com/gfx-rs/wgpu/pull/6176)
+- Implement `Adapter::new_external()` for WGL (just like EGL) to import an external OpenGL ES context. By @MarijnS95 in [#6152](https://github.com/gfx-rs/wgpu/pull/6152)
 
 #### DX12
 
