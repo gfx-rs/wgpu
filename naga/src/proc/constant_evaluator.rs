@@ -257,6 +257,7 @@ gen_component_wise_extractor! {
 /// Vector for each [`Literal`] type
 ///
 /// This type ensures that all elements have same type
+#[derive(Debug)]
 enum LiteralVector {
     F64(ArrayVec<f64, { crate::VectorSize::MAX }>),
     F32(ArrayVec<f32, { crate::VectorSize::MAX }>),
