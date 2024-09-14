@@ -79,6 +79,7 @@ pub(crate) struct BlasShared {
     pub(crate) context: Arc<C>,
     pub(crate) data: Box<Data>,
 }
+static_assertions::assert_impl_all!(BlasShared: WasmNotSendSync);
 
 #[derive(Debug)]
 /// Bottom level acceleration structure.
@@ -367,6 +368,7 @@ impl DeviceRayTracing for Device {
             DynContext::device_create_blas(&*self.context, self.data.as_ref(), desc, sizes);
 
         Blas {
+            #[allow(clippy::arc_with_non_send_sync)]
             shared: Arc::new(BlasShared {
                 context: Arc::clone(&self.context),
                 data,
