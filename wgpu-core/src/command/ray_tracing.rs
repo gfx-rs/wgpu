@@ -271,23 +271,22 @@ impl Global {
             .iter()
             .map(|storage| map_blas(storage, scratch_buffer.raw()));
 
-        let tlas_descriptors =
-            tlas_storage
-                .iter()
-                .map(|(tlas, entries, scratch_buffer_offset)| {
-                    if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
-                        log::info!("only rebuild implemented")
-                    }
-                    hal::BuildAccelerationStructureDescriptor {
-                        entries,
-                        mode: hal::AccelerationStructureBuildMode::Build,
-                        flags: tlas.flags,
-                        source_acceleration_structure: None,
-                        destination_acceleration_structure: tlas.raw(),
-                        scratch_buffer: scratch_buffer.raw(),
-                        scratch_buffer_offset: *scratch_buffer_offset,
-                    }
-                });
+        let tlas_descriptors = tlas_storage
+            .iter()
+            .map(|(tlas, entries, scratch_buffer_offset)| {
+                if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
+                    log::info!("only rebuild implemented")
+                }
+                hal::BuildAccelerationStructureDescriptor {
+                    entries,
+                    mode: hal::AccelerationStructureBuildMode::Build,
+                    flags: tlas.flags,
+                    source_acceleration_structure: None,
+                    destination_acceleration_structure: tlas.raw(),
+                    scratch_buffer: scratch_buffer.raw(),
+                    scratch_buffer_offset: *scratch_buffer_offset,
+                }
+            });
 
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
@@ -895,7 +894,7 @@ fn iter_blas<'a>(
     Ok(())
 }
 
-/// Iterates over the buffers generated [iter_blas] and convert the barriers into hal barriers, and the triangles into hal [AccelerationStructureEntries] (and also some validation).
+/// Iterates over the buffers generated [iter_blas] and convert the barriers into hal barriers, and the triangles into [hal::AccelerationStructureEntries] (and also some validation).
 fn iter_buffers<'a, 'b>(
     buf_storage: &'a mut BufferStorage<'b>,
     snatch_guard: &'a SnatchGuard,
