@@ -107,7 +107,9 @@ use crate::{
     instance::{Adapter, Surface},
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
-    resource::{Blas, Buffer, Fallible, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas},
+    resource::{
+        Blas, Buffer, Fallible, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
+    },
     storage::{Element, Storage},
 };
 use std::{fmt::Debug, sync::Arc};

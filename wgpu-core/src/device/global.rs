@@ -758,10 +758,11 @@ impl Global {
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
                 };
-                let map_tlas = |id: &id::TlasId| {
+                let resolve_tlas = |id: &id::TlasId| {
                     tlas_storage
-                        .get_owned(*id)
-                        .map_err(|_| binding_model::CreateBindGroupError::InvalidTlasId(*id))
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
                 };
                 let resource = match e.resource {
                     BindingResource::Buffer(ref buffer) => {
@@ -795,7 +796,7 @@ impl Global {
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
                     BindingResource::AccelerationStructure(ref tlas) => {
-                        ResolvedBindingResource::AccelerationStructure(map_tlas(tlas)?)
+                        ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
                     }
                 };
                 Ok(ResolvedBindGroupEntry {
@@ -811,7 +812,15 @@ impl Global {
                 let tlas_guard = hub.tlas_s.read();
                 desc.entries
                     .iter()
-                    .map(|e| resolve_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard, &tlas_guard))
+                    .map(|e| {
+                        resolve_entry(
+                            e,
+                            &buffer_guard,
+                            &sampler_guard,
+                            &texture_view_guard,
+                            &tlas_guard,
+                        )
+                    })
                     .collect::<Result<Vec<_>, _>>()
             };
             let entries = match entries {

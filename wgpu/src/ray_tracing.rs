@@ -75,12 +75,17 @@ pub struct BlasBuildEntry<'a> {
 static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 
 #[derive(Debug)]
+pub(crate) struct BlasShared {
+    pub(crate) context: Arc<C>,
+    pub(crate) data: Box<Data>,
+}
+
+#[derive(Debug)]
 /// Bottom level acceleration structure.
 /// Used to represent a collection of geometries for ray tracing inside a top level acceleration structure.
 pub struct Blas {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
     pub(crate) handle: Option<u64>,
+    pub(crate) shared: Arc<BlasShared>,
 }
 static_assertions::assert_impl_all!(Blas: WasmNotSendSync);
 
@@ -91,11 +96,11 @@ impl Blas {
     }
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::blas_destroy(&*self.context, self.data.as_ref());
+        DynContext::blas_destroy(&*self.shared.context, self.shared.data.as_ref());
     }
 }
 
-impl Drop for Blas {
+impl Drop for BlasShared {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.blas_drop(self.data.as_ref());
@@ -142,7 +147,7 @@ static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
 /// Safe instance for a top level acceleration structure.
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
-    pub(crate) blas: ObjectId,
+    pub(crate) blas: Arc<BlasShared>,
     /// Affine transform matrix 3x4 (rows x columns, row mayor order).
     pub transform: [f32; 12],
     /// Custom index for the instance used inside the shader (max 24 bits).
@@ -159,7 +164,7 @@ impl TlasInstance {
     /// - mask: Mask for the instance used inside the shader to filter instances
     pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
         Self {
-            blas: blas.id,
+            blas: blas.shared.clone(),
             transform,
             custom_index,
             mask,
@@ -168,7 +173,7 @@ impl TlasInstance {
 
     /// Set the bottom level acceleration structure.
     pub fn set_blas(&mut self, blas: &Blas) {
-        self.blas = blas.id;
+        self.blas = blas.shared.clone();
     }
 }
 
@@ -358,23 +363,20 @@ impl DeviceRayTracing for Device {
         desc: &CreateBlasDescriptor<'_>,
         sizes: BlasGeometrySizeDescriptors,
     ) -> Blas {
-        let (handle, data) = DynContext::device_create_blas(
-            &*self.context,
-            self.data.as_ref(),
-            desc,
-            sizes,
-        );
+        let (handle, data) =
+            DynContext::device_create_blas(&*self.context, self.data.as_ref(), desc, sizes);
 
         Blas {
-            context: Arc::clone(&self.context),
-            data,
+            shared: Arc::new(BlasShared {
+                context: Arc::clone(&self.context),
+                data,
+            }),
             handle,
         }
     }
 
     fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
-        let data =
-            DynContext::device_create_tlas(&*self.context, self.data.as_ref(), desc);
+        let data = DynContext::device_create_tlas(&*self.context, self.data.as_ref(), desc);
 
         Tlas {
             context: Arc::clone(&self.context),
@@ -442,7 +444,9 @@ impl CommandEncoderRayTracing for CommandEncoder {
                                 size: tg.size,
                                 vertex_buffer: tg.vertex_buffer.data.as_ref(),
 
-                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.data.as_ref()),
+                                index_buffer: tg
+                                    .index_buffer
+                                    .map(|index_buffer| index_buffer.data.as_ref()),
 
                                 transform_buffer: tg
                                     .transform_buffer
@@ -458,7 +462,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
                 }
             };
             DynContextBlasBuildEntry {
-                blas_data: e.blas.data.as_ref(),
+                blas_data: e.blas.shared.data.as_ref(),
                 geometries,
             }
         });
@@ -466,7 +470,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
         let mut tlas = tlas.into_iter().map(|e: &TlasPackage| {
             let instances = e.instances.iter().map(|instance: &Option<TlasInstance>| {
                 instance.as_ref().map(|instance| DynContextTlasInstance {
-                    blas: instance.blas,
+                    blas: instance.blas.data.as_ref(),
                     transform: &instance.transform,
                     custom_index: instance.custom_index,
                     mask: instance.mask,
@@ -502,7 +506,9 @@ impl CommandEncoderRayTracing for CommandEncoder {
                                 size: tg.size,
                                 vertex_buffer: tg.vertex_buffer.data.as_ref(),
 
-                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.data.as_ref()),
+                                index_buffer: tg
+                                    .index_buffer
+                                    .map(|index_buffer| index_buffer.data.as_ref()),
 
                                 transform_buffer: tg
                                     .transform_buffer
@@ -518,7 +524,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
                 }
             };
             DynContextBlasBuildEntry {
-                blas_data: e.blas.data.as_ref(),
+                blas_data: e.blas.shared.data.as_ref(),
                 geometries,
             }
         });

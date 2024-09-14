@@ -579,7 +579,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, &self.compute_bind_group, &[]);
+            cpass.set_bind_group(0, Some(&self.compute_bind_group), &[]);
             cpass.dispatch_workgroups(self.rt_target.width() / 8, self.rt_target.height() / 8, 1);
         }
 
@@ -600,7 +600,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.blit_pipeline);
-            rpass.set_bind_group(0, &self.blit_bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.blit_bind_group), &[]);
             rpass.draw(0..3, 0..1);
         }
 

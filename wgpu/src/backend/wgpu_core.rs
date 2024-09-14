@@ -986,7 +986,9 @@ impl crate::Context for ContextWgpuCore {
                         bm::BindingResource::TextureViewArray(Borrowed(slice))
                     }
                     BindingResource::AccelerationStructure(acceleration_structure) => {
-                        bm::BindingResource::AccelerationStructure(downcast_tlas(acceleration_structure).id)
+                        bm::BindingResource::AccelerationStructure(
+                            downcast_tlas(acceleration_structure).id,
+                        )
                     }
                 },
             })
@@ -2980,8 +2982,12 @@ impl crate::Context for ContextWgpuCore {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, Self::BlasData) {
         let global = &self.0;
-        let (id, handle, error) =
-            global.device_create_blas(device_data.id, &desc.map_label(|l| l.map(Borrowed)), sizes, None);
+        let (id, handle, error) = global.device_create_blas(
+            device_data.id,
+            &desc.map_label(|l| l.map(Borrowed)),
+            sizes,
+            None,
+        );
         if let Some(cause) = error {
             self.handle_error(
                 &device_data.error_sink,
@@ -3065,9 +3071,11 @@ impl crate::Context for ContextWgpuCore {
             },
         );
 
-        if let Err(cause) =
-            global.command_encoder_build_acceleration_structures_unsafe_tlas(encoder_data.id, blas, tlas)
-        {
+        if let Err(cause) = global.command_encoder_build_acceleration_structures_unsafe_tlas(
+            encoder_data.id,
+            blas,
+            tlas,
+        ) {
             self.handle_error_nolabel(
                 &encoder_data.error_sink,
                 cause,

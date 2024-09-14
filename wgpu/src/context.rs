@@ -2747,8 +2747,7 @@ where
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, Box<crate::Data>) {
         let device_data = downcast_ref(device_data);
-        let (handle, data) =
-            Context::device_create_blas(self, device_data, desc, sizes);
+        let (handle, data) = Context::device_create_blas(self, device_data, desc, sizes);
         (handle, Box::new(data) as _)
     }
 
@@ -2870,12 +2869,7 @@ where
                 }
             });
 
-        Context::command_encoder_build_acceleration_structures(
-            self,
-            encoder_data,
-            blas,
-            tlas,
-        )
+        Context::command_encoder_build_acceleration_structures(self, encoder_data, blas, tlas)
     }
 
     fn blas_destroy(&self, blas_data: &crate::Data) {

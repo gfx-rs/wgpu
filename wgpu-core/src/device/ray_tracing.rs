@@ -6,7 +6,7 @@ use hal::AccelerationStructureTriangleIndices;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::rank;
-use crate::resource::TrackingData;
+use crate::resource::{Fallible, TrackingData};
 use crate::{
     device::{queue::TempResource, Device, DeviceError},
     global::Global,
@@ -72,7 +72,7 @@ impl Device {
                     format: hal::AccelerationStructureFormat::BottomLevel,
                 })
         }
-        .map_err(DeviceError::from)?;
+        .map_err(DeviceError::from_hal)?;
 
         let handle = unsafe {
             self.raw()
@@ -120,7 +120,7 @@ impl Device {
                     format: hal::AccelerationStructureFormat::TopLevel,
                 })
         }
-        .map_err(DeviceError::from)?;
+        .map_err(DeviceError::from_hal)?;
 
         let instance_buffer_size = get_raw_tlas_instance_size(self.backend())
             * std::cmp::max(desc.max_instances, 1) as usize;
@@ -133,7 +133,7 @@ impl Device {
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
             })
         }
-        .map_err(DeviceError::from)?;
+        .map_err(DeviceError::from_hal)?;
 
         Ok(Arc::new(resource::Tlas {
             raw: ManuallyDrop::new(raw),
@@ -162,17 +162,15 @@ impl Global {
         profiling::scope!("Device::create_blas");
 
         let hub = &self.hub;
-        let fid = hub.blas_s.prepare(device_id.backend(), id_in);
+        let fid = hub.blas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
         let error = 'error: {
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
+            let device = device_guard.get(device_id);
+            match device.check_is_valid() {
+                Ok(_) => {}
+                Err(err) => break 'error CreateBlasError::Device(err),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
-            }
 
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
@@ -189,13 +187,13 @@ impl Global {
             };
             let handle = blas.handle;
 
-            let id = fid.assign(blas.clone());
+            let id = fid.assign(Fallible::Valid(blas.clone()));
             log::info!("Created blas {:?} with {:?}", id, desc);
 
             return (id, Some(handle), None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
         (id, None, Some(error))
     }
 
@@ -208,14 +206,15 @@ impl Global {
         profiling::scope!("Device::create_tlas");
 
         let hub = &self.hub;
-        let fid = hub.tlas_s.prepare(device_id.backend(), id_in);
+        let fid = hub.tlas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
         let error = 'error: {
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = device_guard.get(device_id);
+            match device.check_is_valid() {
+                Ok(_) => {}
+                Err(e) => break 'error CreateTlasError::Device(e),
+            }
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
                 trace.add(trace::Action::CreateTlas {
@@ -229,13 +228,13 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(tlas.clone());
+            let id = fid.assign(Fallible::Valid(tlas));
             log::info!("Created tlas {:?} with {:?}", id, desc);
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
         (id, Some(error))
     }
 
@@ -248,7 +247,8 @@ impl Global {
         let blas_guard = hub.blas_s.write();
         let blas = blas_guard
             .get(blas_id)
-            .map_err(|_| resource::DestroyError::Invalid)?
+            .get()
+            .map_err(resource::DestroyError::InvalidResource)?
             .clone();
         drop(blas_guard);
         let device = &blas.device;
@@ -276,9 +276,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _blas = match hub.blas_s.unregister(blas_id) {
-            Some(blas) => blas,
-            None => {
+        let _blas = match hub.blas_s.remove(blas_id).get() {
+            Ok(blas) => blas,
+            Err(_) => {
                 return;
             }
         };
@@ -302,7 +302,8 @@ impl Global {
         let tlas_guard = hub.tlas_s.write();
         let tlas = tlas_guard
             .get(tlas_id)
-            .map_err(|_| resource::DestroyError::Invalid)?
+            .get()
+            .map_err(resource::DestroyError::InvalidResource)?
             .clone();
         drop(tlas_guard);
 
@@ -331,9 +332,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _tlas = match hub.tlas_s.unregister(tlas_id) {
-            Some(tlas) => tlas,
-            None => {
+        let _tlas = match hub.tlas_s.remove(tlas_id).get() {
+            Ok(tlas) => tlas,
+            Err(_) => {
                 return;
             }
         };

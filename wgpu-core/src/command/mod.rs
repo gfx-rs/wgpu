@@ -382,6 +382,8 @@ impl CommandBufferMutable {
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
+            blas_actions: self.blas_actions,
+            tlas_actions: self.tlas_actions,
         }
     }
 

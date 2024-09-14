@@ -15,10 +15,10 @@ use crate::{
 
 use wgt::{math::align_to, BufferAddress, BufferUsages};
 
-use super::{BakedCommands, CommandBufferMutable, CommandEncoderError};
+use super::{BakedCommands, CommandBufferMutable};
 use crate::ray_tracing::BlasTriangleGeometry;
 use crate::resource::{
-    AccelerationStructure, Buffer, Labeled, ScratchBuffer, StagingBuffer, Trackable,
+    AccelerationStructure, Buffer, Fallible, Labeled, ScratchBuffer, StagingBuffer, Trackable,
 };
 use crate::snatch::SnatchGuard;
 use crate::storage::Storage;
@@ -57,14 +57,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
+            .get(command_encoder_id.into_command_buffer_id());
 
         let buffer_guard = hub.buffers.read();
         let blas_guard = hub.blas_s.read();
@@ -181,7 +176,7 @@ impl Global {
 
         let mut scratch_buffer_tlas_size = 0;
         let mut tlas_storage = Vec::<(
-            &Tlas,
+            Arc<Tlas>,
             hal::AccelerationStructureEntries<dyn hal::DynBuffer>,
             u64,
         )>::new();
@@ -192,14 +187,14 @@ impl Global {
         )>::new();
 
         for entry in tlas_iter {
-            let instance_buffer = match buffer_guard.get(entry.instance_buffer_id) {
+            let instance_buffer = match buffer_guard.get(entry.instance_buffer_id).get() {
                 Ok(buffer) => buffer,
                 Err(_) => {
                     return Err(BuildAccelerationStructureError::InvalidBufferId);
                 }
             };
             let data = cmd_buf_data.trackers.buffers.set_single(
-                instance_buffer,
+                &instance_buffer,
                 BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
             );
             tlas_buf_storage.push((instance_buffer.clone(), data, entry.clone()));
@@ -228,6 +223,7 @@ impl Global {
 
             let tlas = tlas_guard
                 .get(entry.tlas_id)
+                .get()
                 .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
             cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
 
@@ -278,7 +274,7 @@ impl Global {
         let tlas_descriptors =
             tlas_storage
                 .iter()
-                .map(|&(tlas, ref entries, ref scratch_buffer_offset)| {
+                .map(|(tlas, entries, scratch_buffer_offset)| {
                     if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                         log::info!("only rebuild implemented")
                     }
@@ -296,7 +292,7 @@ impl Global {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
 
         build_blas(
             cmd_buf_raw,
@@ -338,14 +334,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
+            .get(command_encoder_id.into_command_buffer_id());
 
         let buffer_guard = hub.buffers.read();
         let blas_guard = hub.blas_s.read();
@@ -490,16 +481,16 @@ impl Global {
             &mut scratch_buffer_blas_size,
             &mut blas_storage,
         )?;
-        let mut tlas_lock_store =
-            Vec::<(&dyn hal::DynBuffer, Option<TlasPackage>, Arc<Tlas>)>::new();
+        let mut tlas_lock_store = Vec::<(Option<TlasPackage>, Arc<Tlas>)>::new();
 
         for package in tlas_iter {
             let tlas = tlas_guard
                 .get(package.tlas_id)
+                .get()
                 .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
 
             cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
-            tlas_lock_store.push((tlas.instance_buffer.as_ref(), Some(package), tlas.clone()))
+            tlas_lock_store.push((Some(package), tlas.clone()))
         }
 
         let mut scratch_buffer_tlas_size = 0;
@@ -511,9 +502,8 @@ impl Global {
         )>::new();
         let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-        for entry in &mut tlas_lock_store {
-            let package = entry.1.take().unwrap();
-            let tlas = &entry.2;
+        for (package, tlas) in &mut tlas_lock_store {
+            let package = package.take().unwrap();
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
             scratch_buffer_tlas_size += align_to(
@@ -534,6 +524,7 @@ impl Global {
                 }
                 let blas = blas_guard
                     .get(instance.blas_id)
+                    .get()
                     .map_err(|_| BuildAccelerationStructureError::InvalidBlasIdForInstance)?
                     .clone();
 
@@ -574,7 +565,7 @@ impl Global {
             tlas_storage.push((
                 tlas,
                 hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                    buffer: Some(entry.0),
+                    buffer: Some(tlas.instance_buffer.as_ref()),
                     offset: 0,
                     count: instance_count,
                 }),
@@ -623,7 +614,7 @@ impl Global {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
 
         build_blas(
             cmd_buf_raw,
@@ -789,13 +780,14 @@ fn iter_blas<'a>(
     blas_iter: impl Iterator<Item = BlasBuildEntry<'a>>,
     cmd_buf_data: &mut CommandBufferMutable,
     build_command_index: NonZeroU64,
-    buffer_guard: &RwLockReadGuard<Storage<Buffer>>,
-    blas_guard: &RwLockReadGuard<Storage<Blas>>,
+    buffer_guard: &RwLockReadGuard<Storage<Fallible<Buffer>>>,
+    blas_guard: &RwLockReadGuard<Storage<Fallible<Blas>>>,
     buf_storage: &mut BufferStorage<'a>,
 ) -> Result<(), BuildAccelerationStructureError> {
     for entry in blas_iter {
         let blas = blas_guard
             .get(entry.blas_id)
+            .get()
             .map_err(|_| BuildAccelerationStructureError::InvalidBlasId)?;
         cmd_buf_data.trackers.blas_s.set_single(blas.clone());
 
@@ -837,16 +829,16 @@ fn iter_blas<'a>(
                             blas.error_ident(),
                         ));
                     }
-                    let vertex_buffer = match buffer_guard.get(mesh.vertex_buffer) {
+                    let vertex_buffer = match buffer_guard.get(mesh.vertex_buffer).get() {
                         Ok(buffer) => buffer,
                         Err(_) => return Err(BuildAccelerationStructureError::InvalidBufferId),
                     };
                     let vertex_pending = cmd_buf_data.trackers.buffers.set_single(
-                        vertex_buffer,
+                        &vertex_buffer,
                         BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     );
                     let index_data = if let Some(index_id) = mesh.index_buffer {
-                        let index_buffer = match buffer_guard.get(index_id) {
+                        let index_buffer = match buffer_guard.get(index_id).get() {
                             Ok(buffer) => buffer,
                             Err(_) => return Err(BuildAccelerationStructureError::InvalidBufferId),
                         };
@@ -859,7 +851,7 @@ fn iter_blas<'a>(
                             ));
                         }
                         let data = cmd_buf_data.trackers.buffers.set_single(
-                            index_buffer,
+                            &index_buffer,
                             hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
                         Some((index_buffer.clone(), data))
@@ -867,7 +859,7 @@ fn iter_blas<'a>(
                         None
                     };
                     let transform_data = if let Some(transform_id) = mesh.transform_buffer {
-                        let transform_buffer = match buffer_guard.get(transform_id) {
+                        let transform_buffer = match buffer_guard.get(transform_id).get() {
                             Ok(buffer) => buffer,
                             Err(_) => return Err(BuildAccelerationStructureError::InvalidBufferId),
                         };
@@ -877,10 +869,10 @@ fn iter_blas<'a>(
                             ));
                         }
                         let data = cmd_buf_data.trackers.buffers.set_single(
-                            transform_buffer,
+                            &transform_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
-                        Some((transform_buffer.clone(), data))
+                        Some((transform_buffer, data))
                     } else {
                         None
                     };
@@ -909,7 +901,7 @@ fn iter_buffers<'a, 'b>(
     snatch_guard: &'a SnatchGuard,
     input_barriers: &mut Vec<hal::BufferBarrier<'a, dyn hal::DynBuffer>>,
     cmd_buf_data: &mut CommandBufferMutable,
-    buffer_guard: &RwLockReadGuard<Storage<Buffer>>,
+    buffer_guard: &RwLockReadGuard<Storage<Fallible<Buffer>>>,
     scratch_buffer_blas_size: &mut u64,
     blas_storage: &mut BlasStorage<'a>,
 ) -> Result<(), BuildAccelerationStructureError> {
@@ -946,7 +938,10 @@ fn iter_buffers<'a, 'b>(
             let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
             cmd_buf_data.buffer_memory_init_actions.extend(
                 vertex_buffer.initialization_status.read().create_action(
-                    buffer_guard.get(mesh.vertex_buffer).unwrap(),
+                    &buffer_guard
+                        .get(mesh.vertex_buffer)
+                        .get()
+                        .map_err(|_| BuildAccelerationStructureError::InvalidBufferId)?,
                     vertex_buffer_offset
                         ..(vertex_buffer_offset
                             + mesh.size.vertex_count as u64 * mesh.vertex_stride),

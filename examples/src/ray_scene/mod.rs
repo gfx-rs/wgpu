@@ -541,7 +541,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
             rpass.draw(0..3, 0..1);
         }
 
