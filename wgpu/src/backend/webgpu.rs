@@ -1359,11 +1359,13 @@ impl crate::context::Context for ContextWebGpu {
         let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
-        if let Some(gpu) = &self.gpu {
-            let preferred_format = gpu.get_preferred_canvas_format();
-            if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
-                formats.swap(0, index);
-            }
+        let gpu = self
+            .gpu
+            .as_ref()
+            .expect("Caller could not have created an adapter if gpu is undefined.");
+        let preferred_format = gpu.get_preferred_canvas_format();
+        if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
+            formats.swap(0, index);
         }
 
         wgt::SurfaceCapabilities {
