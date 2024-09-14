@@ -166,7 +166,7 @@ impl crate::framework::Example for Example {
         });
 
         let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
-            vertex_format: wgpu::VertexFormat::Float32x4,
+            vertex_format: wgpu::VertexFormat::Float32x3,
             vertex_count: vertex_data.len() as u32,
             index_format: Some(wgpu::IndexFormat::Uint16),
             index_count: Some(index_data.len() as u32),
