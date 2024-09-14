@@ -1080,27 +1080,34 @@ pub enum Canvas {
     Offscreen(web_sys::OffscreenCanvas),
 }
 
-/// Returns the browsers gpu object or `None` if the current context is neither the main thread nor a dedicated worker.
+#[derive(Debug, Clone, Copy)]
+pub struct BrowserGpuPropertyInaccessible;
+
+/// Returns the browser's gpu object or `Err(BrowserGpuPropertyInaccessible)` if
+/// the current context is neither the main thread nor a dedicated worker.
 ///
-/// If WebGPU is not supported, the Gpu property is `undefined` (but *not* necessarily `None`).
+/// If WebGPU is not supported, the Gpu property is `undefined`, and so this
+/// function will return `Ok(None)`.
 ///
 /// See:
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/WorkerNavigator/gpu>
-pub fn get_browser_gpu_property() -> Option<webgpu_sys::Gpu> {
+pub fn get_browser_gpu_property(
+) -> Result<Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>, BrowserGpuPropertyInaccessible> {
     let global: Global = js_sys::global().unchecked_into();
 
-    if !global.window().is_undefined() {
+    let maybe_undefined_gpu: webgpu_sys::Gpu = if !global.window().is_undefined() {
         let navigator = global.unchecked_into::<web_sys::Window>().navigator();
-        Some(ext_bindings::NavigatorGpu::gpu(&navigator))
+        ext_bindings::NavigatorGpu::gpu(&navigator)
     } else if !global.worker().is_undefined() {
         let navigator = global
             .unchecked_into::<web_sys::WorkerGlobalScope>()
             .navigator();
-        Some(ext_bindings::NavigatorGpu::gpu(&navigator))
+        ext_bindings::NavigatorGpu::gpu(&navigator)
     } else {
-        None
-    }
+        return Err(BrowserGpuPropertyInaccessible);
+    };
+    Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
 impl crate::context::Context for ContextWebGpu {
@@ -1151,15 +1158,13 @@ impl crate::context::Context for ContextWebGpu {
     >;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
-        let Some(gpu) = get_browser_gpu_property() else {
+        let Ok(gpu) = get_browser_gpu_property() else {
             panic!(
                 "Accessing the GPU is only supported on the main thread or from a dedicated worker"
             );
         };
 
-        ContextWebGpu {
-            gpu: DefinedNonNullJsValue::new(gpu),
-        }
+        ContextWebGpu { gpu }
     }
 
     unsafe fn instance_create_surface(

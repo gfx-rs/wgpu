@@ -118,8 +118,9 @@ impl Instance {
         {
             let is_only_available_backend = !cfg!(wgpu_core);
             let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
-            let support_webgpu =
-                crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined());
+            let support_webgpu = crate::backend::get_browser_gpu_property()
+                .map(|maybe_gpu| maybe_gpu.is_some())
+                .unwrap_or(false);
 
             if is_only_available_backend || (requested_webgpu && support_webgpu) {
                 return Self {
