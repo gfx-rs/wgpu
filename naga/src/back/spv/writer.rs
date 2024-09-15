@@ -1688,7 +1688,13 @@ impl Writer {
         }
 
         let storage_access = match global_variable.space {
-            crate::AddressSpace::Storage { access } => Some(access),
+            crate::AddressSpace::Storage { access, coherent } => {
+                if coherent {
+                    self.decorate(id, Decoration::Coherent, &[]);
+                }
+
+                Some(access)
+            }
             _ => match ir_module.types[global_variable.ty].inner {
                 crate::TypeInner::Image {
                     class: crate::ImageClass::Storage { access, .. },

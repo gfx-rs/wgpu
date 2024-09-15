@@ -377,7 +377,10 @@ pub enum AddressSpace {
     /// Uniform buffer data.
     Uniform,
     /// Storage buffer data, potentially mutable.
-    Storage { access: StorageAccess },
+    Storage {
+        access: StorageAccess,
+        coherent: bool,
+    },
     /// Opaque handles, such as samplers and images.
     Handle,
     /// Push constants.

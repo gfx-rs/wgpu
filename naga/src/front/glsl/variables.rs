@@ -487,7 +487,7 @@ impl Frontend {
             }
             StorageQualifier::AddressSpace(mut space) => {
                 match space {
-                    AddressSpace::Storage { ref mut access } => {
+                    AddressSpace::Storage { ref mut access, .. } => {
                         if let Some((allowed_access, _)) = qualifiers.storage_access.take() {
                             *access = allowed_access;
                         }

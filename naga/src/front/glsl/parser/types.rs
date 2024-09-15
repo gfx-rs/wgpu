@@ -229,6 +229,7 @@ impl<'source> ParsingContext<'source> {
                         TokenValue::Buffer => {
                             StorageQualifier::AddressSpace(AddressSpace::Storage {
                                 access: crate::StorageAccess::all(),
+                                coherent: false,
                             })
                         }
                         _ => unreachable!(),

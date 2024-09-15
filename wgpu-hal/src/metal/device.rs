@@ -229,7 +229,7 @@ impl super::Device {
                         None => continue,
                     };
                     let storage_access_store = match var.space {
-                        naga::AddressSpace::Storage { access } => {
+                        naga::AddressSpace::Storage { access, .. } => {
                             access.contains(naga::StorageAccess::STORE)
                         }
                         _ => false,

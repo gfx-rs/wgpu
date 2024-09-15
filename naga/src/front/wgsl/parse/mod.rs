@@ -985,7 +985,19 @@ impl Parser {
                         // defaulting to `read`
                         crate::StorageAccess::LOAD
                     };
-                    crate::AddressSpace::Storage { access }
+
+                    let coherent = if lexer.skip(Token::Separator(',')) {
+                        let (ident, span) = self.next_ident_with_span()?;
+                        if ident == "coherent" {
+                            Ok(true)
+                        } else {
+                            Err(Error::UnexpectedComponents(span)) // TODO
+                        }
+                    } else {
+                        Ok(false)
+                    }?;
+
+                    crate::AddressSpace::Storage { access, coherent }
                 }
                 _ => conv::map_address_space(class_str, span)?,
             };
@@ -1275,12 +1287,27 @@ impl Parser {
                 let mut space = conv::map_address_space(ident, span)?;
                 lexer.expect(Token::Separator(','))?;
                 let base = self.type_decl(lexer, ctx)?;
-                if let crate::AddressSpace::Storage { ref mut access } = space {
+                if let crate::AddressSpace::Storage {
+                    ref mut access,
+                    ref mut coherent,
+                } = space
+                {
                     *access = if lexer.skip(Token::Separator(',')) {
                         lexer.next_storage_access()?
                     } else {
                         crate::StorageAccess::LOAD
                     };
+
+                    *coherent = if lexer.skip(Token::Separator(',')) {
+                        let (ident, span) = self.next_ident_with_span()?;
+                        if ident == "coherent" {
+                            Ok(true)
+                        } else {
+                            Err(Error::UnexpectedComponents(span)) // TODO
+                        }
+                    } else {
+                        Ok(false)
+                    }?;
                 }
                 lexer.expect_generic_paren('>')?;
                 ast::Type::Pointer { base, space }

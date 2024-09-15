@@ -1166,8 +1166,12 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        if let crate::AddressSpace::Storage { access } = global.space {
+        if let crate::AddressSpace::Storage { access, coherent } = global.space {
             self.write_storage_access(access)?;
+
+            if coherent {
+                write!(self.out, "coherent ")?;
+            }
         }
 
         if let Some(storage_qualifier) = glsl_storage_qualifier(global.space) {

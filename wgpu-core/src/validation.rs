@@ -370,6 +370,7 @@ impl Resource {
                                 naga_access.set(naga::StorageAccess::STORE, !read_only);
                                 naga::AddressSpace::Storage {
                                     access: naga_access,
+                                    coherent: false,
                                 }
                             }
                         };
@@ -500,7 +501,7 @@ impl Resource {
             ResourceType::Buffer { size } => BindingType::Buffer {
                 ty: match self.class {
                     naga::AddressSpace::Uniform => wgt::BufferBindingType::Uniform,
-                    naga::AddressSpace::Storage { access } => wgt::BufferBindingType::Storage {
+                    naga::AddressSpace::Storage { access, .. } => wgt::BufferBindingType::Storage {
                         read_only: access == naga::StorageAccess::LOAD,
                     },
                     _ => return Err(BindingError::WrongType),

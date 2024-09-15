@@ -307,7 +307,7 @@ impl<'a> TypedGlobalVariable<'a> {
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
 
         let storage_access = match var.space {
-            crate::AddressSpace::Storage { access } => access,
+            crate::AddressSpace::Storage { access, .. } => access,
             _ => match self.module.types[var.ty].inner {
                 crate::TypeInner::Image {
                     class: crate::ImageClass::Storage { access, .. },
@@ -5138,7 +5138,7 @@ impl<W: Write> Writer<W> {
                         // supporting MSL 1.2.
                         //
                         // [what's new]: https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
-                        crate::AddressSpace::Storage { access }
+                        crate::AddressSpace::Storage { access, .. }
                             if access.contains(crate::StorageAccess::STORE)
                                 && ep.stage == crate::ShaderStage::Fragment =>
                         {

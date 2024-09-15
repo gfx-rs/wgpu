@@ -4825,6 +4825,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         {
             crate::AddressSpace::Storage {
                 access: crate::StorageAccess::default(),
+                coherent: false,
             }
         } else {
             match map_storage_class(storage_class)? {
@@ -5489,13 +5490,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         }
 
         let ext_class = match self.lookup_storage_buffer_types.get(&ty) {
-            Some(&access) => ExtendedClass::Global(crate::AddressSpace::Storage { access }),
+            Some(&access) => ExtendedClass::Global(crate::AddressSpace::Storage {
+                access,
+                coherent: false,
+            }),
             None => map_storage_class(storage_class)?,
         };
 
         let (inner, var) = match ext_class {
             ExtendedClass::Global(mut space) => {
-                if let crate::AddressSpace::Storage { ref mut access } = space {
+                if let crate::AddressSpace::Storage { ref mut access, .. } = space {
                     *access &= dec.flags.to_storage_access();
                 }
                 let var = crate::GlobalVariable {

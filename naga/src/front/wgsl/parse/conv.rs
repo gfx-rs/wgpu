@@ -9,6 +9,7 @@ pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, 
         "uniform" => Ok(crate::AddressSpace::Uniform),
         "storage" => Ok(crate::AddressSpace::Storage {
             access: crate::StorageAccess::default(),
+            coherent: false,
         }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),

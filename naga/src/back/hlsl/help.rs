@@ -1052,7 +1052,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         }
                     };
                     let storage_access = match global_var.space {
-                        crate::AddressSpace::Storage { access } => access,
+                        crate::AddressSpace::Storage { access, .. } => access,
                         _ => crate::StorageAccess::default(),
                     };
                     let wal = WrappedArrayLength {

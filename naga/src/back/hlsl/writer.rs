@@ -829,13 +829,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "cbuffer")?;
                 "b"
             }
-            crate::AddressSpace::Storage { access } => {
+            crate::AddressSpace::Storage { access, coherent } => {
+                let globallycoherent = if coherent { "globallycoherent " } else { "" };
                 let (prefix, register) = if access.contains(crate::StorageAccess::STORE) {
                     ("RW", "u")
                 } else {
                     ("", "t")
                 };
-                write!(self.out, "{prefix}ByteAddressBuffer")?;
+                write!(self.out, "{globallycoherent}{prefix}ByteAddressBuffer")?;
                 register
             }
             crate::AddressSpace::Handle => {
@@ -3463,7 +3464,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 };
 
                 let storage_access = match var.space {
-                    crate::AddressSpace::Storage { access } => access,
+                    crate::AddressSpace::Storage { access, .. } => access,
                     _ => crate::StorageAccess::default(),
                 };
                 let wrapped_array_length = WrappedArrayLength {
