@@ -3,7 +3,7 @@ use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
 use crate::front::SymbolTable;
-use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span};
+use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span, StorageAccess};
 
 pub mod ast;
 pub mod conv;
@@ -986,7 +986,9 @@ impl Parser {
                         crate::StorageAccess::LOAD
                     };
 
-                    let coherent = if lexer.skip(Token::Separator(',')) {
+                    let coherent = if access.contains(StorageAccess::LOAD | StorageAccess::STORE)
+                        && lexer.skip(Token::Separator(','))
+                    {
                         let (ident, span) = self.next_ident_with_span()?;
                         if ident == "coherent" {
                             Ok(true)
