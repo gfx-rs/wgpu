@@ -24,9 +24,6 @@ impl ComputePipeline {
     /// If this pipeline was created with a [default layout][ComputePipelineDescriptor::layout],
     /// then bind groups created with the returned `BindGroupLayout` can only be used with this
     /// pipeline.
-    ///
-    /// # Panics
-    /// - There is no bind group layout at the given `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
         let context = Arc::clone(&self.context);
         let data = self
@@ -56,8 +53,8 @@ pub struct ComputePipelineDescriptor<'a> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     ///
-    /// If this is set, then `wgpu` will validate that the layout matches what the shader module(s)
-    /// expect, otherwise [`Device::create_compute_pipeline`] will cause a validation error.
+    /// If this is set, then [`Device::create_compute_pipeline`] will raise a validation error if
+    /// the layout doesn't match what the shader module(s) expect.
     ///
     /// Using the same [`PipelineLayout`] for many [`RenderPipeline`] or [`ComputePipeline`]
     /// pipelines guarantees that you don't have to rebind any resources when switching between
