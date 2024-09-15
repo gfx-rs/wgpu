@@ -1242,7 +1242,7 @@ impl crate::context::Context for ContextWebGpu {
                 future_request_adapter,
             ))
         } else {
-            // Gpu is undfined; WebGPU is not supported in this browser.
+            // Gpu is undefined; WebGPU is not supported in this browser.
             OptionFuture::none()
         }
     }
