@@ -57,7 +57,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// The layout of bind groups for this pipeline.
     ///
     /// If this is set, then `wgpu` will validate that the layout matches what the shader module(s)
-    /// expect, otherwise [`Device::create_compute_pipeline`] will panic.
+    /// expect, otherwise [`Device::create_compute_pipeline`] will cause a validation error.
     ///
     /// Using the same [`PipelineLayout`] for many [`RenderPipeline`] or [`ComputePipeline`]
     /// pipelines guarantees that you don't have to rebind any resources when switching between
