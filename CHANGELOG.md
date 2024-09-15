@@ -88,6 +88,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 ### Bug Fixes
 
 - Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
+- Fix JS `TypeError` exception in `Instance::request_adapter` when browser doesn't support WebGPU but `wgpu` not compiled with `webgl` support. By @bgr360 in [#6197](https://github.com/gfx-rs/wgpu/pull/6197).
 
 #### Naga
 
