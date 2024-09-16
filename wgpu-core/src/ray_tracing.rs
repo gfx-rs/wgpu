@@ -82,7 +82,11 @@ pub enum BuildAccelerationStructureError {
     IncompatibleBlasBuildSizes(ResourceErrorIdent),
 
     #[error("Blas {0:?} flags are different, creation flags: {1:?}, provided: {2:?}")]
-    IncompatibleBlasFlags(ResourceErrorIdent, AccelerationStructureGeometryFlags, AccelerationStructureGeometryFlags),
+    IncompatibleBlasFlags(
+        ResourceErrorIdent,
+        AccelerationStructureGeometryFlags,
+        AccelerationStructureGeometryFlags,
+    ),
 
     #[error("Blas {0:?} build vertex count is greater than creation count (needs to be less than or equal to), creation: {1:?}, build: {2:?}")]
     IncompatibleBlasVertexCount(ResourceErrorIdent, u32, u32),

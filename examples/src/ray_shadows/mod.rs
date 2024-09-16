@@ -5,7 +5,10 @@ use glam::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;
-use wgpu::{BindGroupLayoutDescriptor, BufferBindingType, IndexFormat, ray_tracing as rt, ShaderStages, vertex_attr_array, VertexBufferLayout};
+use wgpu::{
+    ray_tracing as rt, vertex_attr_array, BindGroupLayoutDescriptor, BufferBindingType,
+    IndexFormat, ShaderStages, VertexBufferLayout,
+};
 
 // from cube
 #[repr(C)]
@@ -30,10 +33,10 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
         vertex([1.0, 0.0, -1.0], [0.0, 1.0, 0.0]),
         vertex([1.0, 0.0, 1.0], [0.0, 1.0, 0.0]),
         //shadow caster
-        vertex([-(1.0/3.0), 0.0, 1.0], [0.0, 0.0, 1.0]),
-        vertex([-(1.0/3.0), 2.0/3.0, 1.0], [0.0, 0.0, 1.0]),
-        vertex([1.0/3.0, 0.0, 1.0], [0.0, 0.0, 1.0]),
-        vertex([1.0/3.0, 2.0/3.0, 1.0], [0.0, 0.0, 1.0]),
+        vertex([-(1.0 / 3.0), 0.0, 1.0], [0.0, 0.0, 1.0]),
+        vertex([-(1.0 / 3.0), 2.0 / 3.0, 1.0], [0.0, 0.0, 1.0]),
+        vertex([1.0 / 3.0, 0.0, 1.0], [0.0, 0.0, 1.0]),
+        vertex([1.0 / 3.0, 2.0 / 3.0, 1.0], [0.0, 0.0, 1.0]),
     ];
 
     let index_data: &[u16] = &[
@@ -90,7 +93,9 @@ struct Example {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE | wgpu::Features::PUSH_CONSTANTS
+        wgpu::Features::RAY_QUERY
+            | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+            | wgpu::Features::PUSH_CONSTANTS
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -200,15 +205,11 @@ impl crate::framework::Example for Example {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[
-                &bind_group_layout
-            ],
-            push_constant_ranges: &[
-                wgpu::PushConstantRange {
-                    stages: ShaderStages::FRAGMENT,
-                    range: 0..12,
-                }
-            ],
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[wgpu::PushConstantRange {
+                stages: ShaderStages::FRAGMENT,
+                range: 0..12,
+            }],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -369,7 +370,7 @@ impl crate::framework::Example for Example {
             rpass.set_push_constants(ShaderStages::FRAGMENT, 8, &sin.to_ne_bytes());
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.set_index_buffer(self.index_buf.slice(..), IndexFormat::Uint16);
-            rpass.draw_indexed(0..12, 0,0..1);
+            rpass.draw_indexed(0..12, 0, 0..1);
         }
         device.poll(wgpu::Maintain::Wait);
         queue.submit(Some(encoder.finish()));
@@ -394,7 +395,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         skips: vec![],
         failures: Vec::new(),
         required_downlevel_caps:
-        <Example as crate::framework::Example>::required_downlevel_capabilities(),
+            <Example as crate::framework::Example>::required_downlevel_capabilities(),
         force_fxc: false,
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],

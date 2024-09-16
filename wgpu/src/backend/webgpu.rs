@@ -3404,23 +3404,6 @@ impl crate::context::Context for ContextWebGpu {
         unimplemented!("Raytracing not implemented for web");
     }
 
-    fn create_tlas_instance(
-        &self,
-        _blas: &Self::BlasId,
-        _blas_data: &Self::BlasData,
-    ) -> Self::TlasInstanceId {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn tlas_instance_set_blas(
-        &self,
-        _tlas_instance: &Self::TlasInstanceId,
-        _blas: &Self::BlasId,
-        _blas_data: &Self::BlasData,
-    ) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &'a self,
         _encoder_data: &Self::CommandEncoderData,
@@ -3452,9 +3435,6 @@ impl crate::context::Context for ContextWebGpu {
     }
 
     fn tlas_drop(&self, _tlas_data: &Self::TlasData) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-    fn tlas_instance_drop(&self, _tlas_instance: &Self::TlasInstanceId) {
         unimplemented!("Raytracing not implemented for web");
     }
 }

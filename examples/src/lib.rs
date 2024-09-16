@@ -18,6 +18,7 @@ pub mod msaa_line;
 pub mod ray_cube_compute;
 pub mod ray_cube_fragment;
 pub mod ray_scene;
+pub mod ray_shadows;
 pub mod render_to_texture;
 pub mod repeated_compute;
 pub mod shadow;
@@ -29,7 +30,6 @@ pub mod texture_arrays;
 pub mod timestamp_queries;
 pub mod uniform_values;
 pub mod water;
-pub mod ray_shadows;
 
 #[cfg(test)]
 wgpu_test::gpu_test_main!();

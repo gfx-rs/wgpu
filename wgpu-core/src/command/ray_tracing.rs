@@ -813,15 +813,17 @@ fn iter_blas<'a>(
                             blas.error_ident(),
                             size_desc.flags,
                             mesh.size.flags,
-                        ))
+                        ));
                     }
 
                     if size_desc.vertex_count < mesh.size.vertex_count {
-                        return Err(BuildAccelerationStructureError::IncompatibleBlasVertexCount(
-                            blas.error_ident(),
-                            size_desc.vertex_count,
-                            mesh.size.vertex_count,
-                        ))
+                        return Err(
+                            BuildAccelerationStructureError::IncompatibleBlasVertexCount(
+                                blas.error_ident(),
+                                size_desc.vertex_count,
+                                mesh.size.vertex_count,
+                            ),
+                        );
                     }
 
                     if size_desc.vertex_format != mesh.size.vertex_format {
@@ -829,12 +831,26 @@ fn iter_blas<'a>(
                             blas.error_ident(),
                             size_desc.vertex_format,
                             mesh.size.vertex_format,
-                        ))
+                        ));
                     }
 
                     match (size_desc.index_count, mesh.size.index_count) {
-                        (Some(_), None) | (None, Some(_)) => return Err(BuildAccelerationStructureError::BlasIndexCountProvidedMismatch(blas.error_ident())),
-                        (Some(create), Some(build)) if create < build => return Err(BuildAccelerationStructureError::IncompatibleBlasIndexCount(blas.error_ident(), create, build)),
+                        (Some(_), None) | (None, Some(_)) => {
+                            return Err(
+                                BuildAccelerationStructureError::BlasIndexCountProvidedMismatch(
+                                    blas.error_ident(),
+                                ),
+                            )
+                        }
+                        (Some(create), Some(build)) if create < build => {
+                            return Err(
+                                BuildAccelerationStructureError::IncompatibleBlasIndexCount(
+                                    blas.error_ident(),
+                                    create,
+                                    build,
+                                ),
+                            )
+                        }
                         _ => {}
                     }
 
@@ -843,7 +859,7 @@ fn iter_blas<'a>(
                             blas.error_ident(),
                             size_desc.index_format,
                             mesh.size.index_format,
-                        ))
+                        ));
                     }
 
                     if size_desc.index_count.is_some() && mesh.index_buffer.is_none() {
