@@ -205,7 +205,7 @@ struct Example<A: hal::Api> {
     uniform_buffer: A::Buffer,
     pipeline_layout: A::PipelineLayout,
     vertices_buffer: A::Buffer,
-    indices_buffer: A::Buffer,
+    indices_buffer: Option<A::Buffer>,
     texture: A::Texture,
     instances: [AccelerationStructureInstance; 3],
     instances_buffer: A::Buffer,
@@ -217,6 +217,14 @@ struct Example<A: hal::Api> {
 
 impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut index_buffer = false;
+
+        for arg in std::env::args() {
+            if arg == "index_buffer" {
+                index_buffer = true;
+            }
+        }
+
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgt::InstanceFlags::default(),
@@ -395,6 +403,7 @@ impl<A: hal::Api> Example<A> {
 
         let indices_size_in_bytes = indices.len() * 4;
 
+
         let vertices_buffer = unsafe {
             let vertices_buffer = device
                 .create_buffer(&hal::BufferDescriptor {
@@ -420,29 +429,33 @@ impl<A: hal::Api> Example<A> {
             vertices_buffer
         };
 
-        let indices_buffer = unsafe {
-            let indices_buffer = device
-                .create_buffer(&hal::BufferDescriptor {
-                    label: Some("indices buffer"),
-                    size: indices_size_in_bytes as u64,
-                    usage: hal::BufferUses::MAP_WRITE
-                        | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                    memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
-                })
-                .unwrap();
+        let indices_buffer = if index_buffer {
+            unsafe {
+                let indices_buffer = device
+                    .create_buffer(&hal::BufferDescriptor {
+                        label: Some("indices buffer"),
+                        size: indices_size_in_bytes as u64,
+                        usage: hal::BufferUses::MAP_WRITE
+                            | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+                    })
+                    .unwrap();
 
-            let mapping = device
-                .map_buffer(&indices_buffer, 0..indices_size_in_bytes as u64)
-                .unwrap();
-            ptr::copy_nonoverlapping(
-                indices.as_ptr() as *const u8,
-                mapping.ptr.as_ptr(),
-                indices_size_in_bytes,
-            );
-            device.unmap_buffer(&indices_buffer);
-            assert!(mapping.is_coherent);
+                let mapping = device
+                    .map_buffer(&indices_buffer, 0..indices_size_in_bytes as u64)
+                    .unwrap();
+                ptr::copy_nonoverlapping(
+                    indices.as_ptr() as *const u8,
+                    mapping.ptr.as_ptr(),
+                    indices_size_in_bytes,
+                );
+                device.unmap_buffer(&indices_buffer);
+                assert!(mapping.is_coherent);
 
-            indices_buffer
+                Some((indices_buffer, indices.len()))
+            }
+        } else {
+            None
         };
 
         let blas_triangles = vec![hal::AccelerationStructureTriangles {
@@ -451,12 +464,15 @@ impl<A: hal::Api> Example<A> {
             vertex_format: wgt::VertexFormat::Float32x3,
             vertex_count: vertices.len() as u32,
             vertex_stride: 3 * 4,
-            indices: Some(hal::AccelerationStructureTriangleIndices {
-                buffer: Some(&indices_buffer),
-                format: wgt::IndexFormat::Uint32,
-                offset: 0,
-                count: indices.len() as u32,
+            indices: indices_buffer.as_ref().map(|(buf, len)| {
+                hal::AccelerationStructureTriangleIndices {
+                    buffer: Some(&buf),
+                    format: wgt::IndexFormat::Uint32,
+                    offset: 0,
+                    count: *len as u32,
+                }
             }),
+
             transform: None,
             flags: hal::AccelerationStructureGeometryFlags::OPAQUE,
         }];
@@ -800,7 +816,7 @@ impl<A: hal::Api> Example<A> {
             tlas,
             scratch_buffer,
             time: 0.0,
-            indices_buffer,
+            indices_buffer: indices_buffer.map(|(buf, _)| buf),
             vertices_buffer,
             uniform_buffer,
             texture_view,
@@ -1026,7 +1042,9 @@ impl<A: hal::Api> Example<A> {
             self.device.destroy_bind_group(self.bind_group);
             self.device.destroy_buffer(self.scratch_buffer);
             self.device.destroy_buffer(self.instances_buffer);
-            self.device.destroy_buffer(self.indices_buffer);
+            if let Some(buffer) = self.indices_buffer {
+                self.device.destroy_buffer(buffer);
+            }
             self.device.destroy_buffer(self.vertices_buffer);
             self.device.destroy_buffer(self.uniform_buffer);
             self.device.destroy_acceleration_structure(self.tlas);
