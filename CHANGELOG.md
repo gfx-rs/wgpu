@@ -88,6 +88,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 ### Bug Fixes
 
 - Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
+- Fix JS `TypeError` exception in `Instance::request_adapter` when browser doesn't support WebGPU but `wgpu` not compiled with `webgl` support. By @bgr360 in [#6197](https://github.com/gfx-rs/wgpu/pull/6197).
 
 #### Naga
 
@@ -125,6 +126,10 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### HAL
 
 - Change the inconsistent `DropGuard` based API on Vulkan and GLES to a consistent, callback-based one. By @jerzywilczek in [#6164](https://github.com/gfx-rs/wgpu/pull/6164)
+
+### Documentation
+
+- Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271)
 
 ### Dependency Updates
 
