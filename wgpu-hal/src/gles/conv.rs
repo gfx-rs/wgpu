@@ -45,7 +45,7 @@ impl super::AdapterShared {
                 glow::RGBA,
                 glow::UNSIGNED_INT_2_10_10_10_REV,
             ),
-            Tf::Rg11b10UFloat => (
+            Tf::Rg11b10Ufloat => (
                 glow::R11F_G11F_B10F,
                 glow::RGB,
                 glow::UNSIGNED_INT_10F_11F_11F_REV,

@@ -148,7 +148,7 @@ async fn reinterpret(
         occlusion_query_set: None,
     });
     rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, &bind_group, &[]);
+    rpass.set_bind_group(0, Some(&bind_group), &[]);
     rpass.draw(0..3, 0..1);
     drop(rpass);
     ctx.queue.submit(Some(encoder.finish()));

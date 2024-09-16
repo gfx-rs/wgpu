@@ -7,7 +7,8 @@ use crate::{
     id,
     init_tracker::MemoryInitKind,
     resource::{
-        DestroyedResourceError, MissingBufferUsageError, ParentDevice, QuerySet, Trackable,
+        DestroyedResourceError, InvalidResourceError, MissingBufferUsageError, ParentDevice,
+        QuerySet, Trackable,
     },
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
@@ -100,12 +101,10 @@ pub enum QueryError {
     Use(#[from] QueryUseError),
     #[error("Error encountered while trying to resolve a query")]
     Resolve(#[from] ResolveError),
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(id::BufferId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("QuerySetId {0:?} is invalid or destroyed")]
-    InvalidQuerySetId(id::QuerySetId),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 /// Error encountered while trying to use queries
@@ -319,21 +318,15 @@ impl Global {
     ) -> Result<(), QueryError> {
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
+            .get(command_encoder_id.into_command_buffer_id());
+        let mut cmd_buf_data = cmd_buf.try_get()?;
+        cmd_buf_data.check_recording()?;
 
         cmd_buf
             .device
             .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -343,19 +336,13 @@ impl Global {
             });
         }
 
-        let encoder = &mut cmd_buf_data.encoder;
-        let tracker = &mut cmd_buf_data.trackers;
+        let raw_encoder = cmd_buf_data.encoder.open(&cmd_buf.device)?;
 
-        let raw_encoder = encoder.open()?;
-
-        let query_set = hub
-            .query_sets
-            .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
-
-        let query_set = tracker.query_sets.insert_single(query_set);
+        let query_set = hub.query_sets.get(query_set_id).get()?;
 
         query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
+
+        cmd_buf_data.trackers.query_sets.insert_single(query_set);
 
         Ok(())
     }
@@ -371,17 +358,11 @@ impl Global {
     ) -> Result<(), QueryError> {
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            .get(command_encoder_id.into_command_buffer_id());
+        let mut cmd_buf_data = cmd_buf.try_get()?;
+        cmd_buf_data.check_recording()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -394,32 +375,20 @@ impl Global {
             });
         }
 
-        let encoder = &mut cmd_buf_data.encoder;
-        let tracker = &mut cmd_buf_data.trackers;
-        let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
-        let raw_encoder = encoder.open()?;
-
         if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
             return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
         }
 
-        let query_set = hub
-            .query_sets
-            .get(query_set_id)
-            .map_err(|_| QueryError::InvalidQuerySetId(query_set_id))?;
-
-        let query_set = tracker.query_sets.insert_single(query_set);
+        let query_set = hub.query_sets.get(query_set_id).get()?;
 
         query_set.same_device_as(cmd_buf.as_ref())?;
 
-        let dst_buffer = hub
-            .buffers
-            .get(destination)
-            .map_err(|_| QueryError::InvalidBufferId(destination))?;
+        let dst_buffer = hub.buffers.get(destination).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
-        let dst_pending = tracker
+        let dst_pending = cmd_buf_data
+            .trackers
             .buffers
             .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
 
@@ -465,14 +434,16 @@ impl Global {
         }
 
         // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
-        buffer_memory_init_actions.extend(dst_buffer.initialization_status.read().create_action(
-            &dst_buffer,
-            buffer_start_offset..buffer_end_offset,
-            MemoryInitKind::ImplicitlyInitialized,
-        ));
+        cmd_buf_data.buffer_memory_init_actions.extend(
+            dst_buffer.initialization_status.read().create_action(
+                &dst_buffer,
+                buffer_start_offset..buffer_end_offset,
+                MemoryInitKind::ImplicitlyInitialized,
+            ),
+        );
 
         let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
-
+        let raw_encoder = cmd_buf_data.encoder.open(&cmd_buf.device)?;
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.as_slice());
             raw_encoder.copy_query_results(
@@ -483,6 +454,8 @@ impl Global {
                 wgt::BufferSize::new_unchecked(stride as u64),
             );
         }
+
+        cmd_buf_data.trackers.query_sets.insert_single(query_set);
 
         Ok(())
     }

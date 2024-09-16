@@ -65,6 +65,15 @@ traits that have now been implemented for `wgpu` resources.
 
 By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
+#### `set_bind_group` now takes an `Option` for the bind group argument.
+
+https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup
+is nullable. This change is the start of implementing this part of the spec. Callers that
+specify a `Some()` value should have unchanged behavior. Handling of `None` values still
+needs to be implemented by backends.
+
+By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
+
 ### New Features
 
 #### Naga
@@ -79,10 +88,12 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 ### Bug Fixes
 
 - Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
+- Fix JS `TypeError` exception in `Instance::request_adapter` when browser doesn't support WebGPU but `wgpu` not compiled with `webgl` support. By @bgr360 in [#6197](https://github.com/gfx-rs/wgpu/pull/6197).
 
 #### Naga
 
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
+- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256)
 
 #### General
 
@@ -102,19 +113,24 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
 
+#### Vulkan
+
+- Vulkan debug labels assumed no interior nul byte. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257)
+- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282)
+
 ### Changes
 
 - `wgpu_hal::gles::Adapter::new_external` now requires the context to be current when dropping the adapter and related objects. By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
 - Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
-- `Rg11b10Float` is renamed to `Rg11b10UFloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
+- `Rg11b10Float` is renamed to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
 
 #### HAL
 
 - Change the inconsistent `DropGuard` based API on Vulkan and GLES to a consistent, callback-based one. By @jerzywilczek in [#6164](https://github.com/gfx-rs/wgpu/pull/6164)
 
-#### Vulkan
+### Documentation
 
-- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282)
+- Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271)
 
 ### Dependency Updates
 

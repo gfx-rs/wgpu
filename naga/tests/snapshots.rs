@@ -14,8 +14,12 @@ const BASE_DIR_OUT: &str = "tests/out";
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
     struct Targets: u32 {
+        /// A serialization of the `naga::Module`, in RON format.
         const IR = 1;
+
+        /// A serialization of the `naga::valid::ModuleInfo`, in RON format.
         const ANALYSIS = 1 << 1;
+
         const SPIRV = 1 << 2;
         const METAL = 1 << 3;
         const GLSL = 1 << 4;
@@ -354,6 +358,10 @@ fn check_targets(
         let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
             source_code: code,
             file_name: name.as_ref(),
+            // wgpu#6266: we technically know all the information here to
+            // produce the valid language but it's not too important for
+            // validation purposes
+            language: naga::back::spv::SourceLanguage::Unknown,
         });
 
         if targets.contains(Targets::SPIRV) {

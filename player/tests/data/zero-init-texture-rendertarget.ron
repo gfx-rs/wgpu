@@ -10,7 +10,7 @@
         // MISSING: Partial view.
     ],
     actions: [
-        CreateTexture(Id(0, 1, Empty), (
+        CreateTexture(Id(0, 1), (
             label: Some("Render Target Texture"),
             size: (
                 width: 64,
@@ -24,12 +24,12 @@
             view_formats: [],
         )),
         CreateTextureView(
-            id: Id(0, 1, Empty),
-            parent_id: Id(0, 1, Empty),
+            id: Id(0, 1),
+            parent_id: Id(0, 1),
             desc: (),
         ),
         CreateBuffer(
-            Id(0, 1, Empty),
+            Id(0, 1),
             (
                 label: Some("Render Target Buffer"),
                 size: 16384,
@@ -48,7 +48,7 @@
                 ),
                 target_colors: [
                     Some((
-                        view: Id(0, 1, Empty),
+                        view: Id(0, 1),
                         resolve_target: None,
                         channel: (
                             load_op: load,
@@ -64,12 +64,12 @@
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(0, 1, Empty),
+                    texture: Id(0, 1),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(0, 1, Empty),
+                    buffer: Id(0, 1),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),

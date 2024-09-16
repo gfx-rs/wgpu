@@ -10,7 +10,7 @@
         // MISSING: Partial copies
     ],
     actions: [
-        CreateTexture(Id(0, 1, Empty), (
+        CreateTexture(Id(0, 1), (
             label: Some("Copy To Buffer Texture"),
             size: (
                 width: 64,
@@ -24,7 +24,7 @@
             view_formats: [],
         )),
         CreateBuffer(
-            Id(0, 1, Empty),
+            Id(0, 1),
             (
                 label: Some("Copy to Buffer Buffer"),
                 size: 16384,
@@ -35,12 +35,12 @@
         Submit(1, [
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(0, 1, Empty),
+                    texture: Id(0, 1),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(0, 1, Empty),
+                    buffer: Id(0, 1),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),
