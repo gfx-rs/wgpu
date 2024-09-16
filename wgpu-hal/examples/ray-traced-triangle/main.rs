@@ -225,6 +225,10 @@ impl<A: hal::Api> Example<A> {
             }
         }
 
+        if index_buffer {
+            log::info!("using index buffer")
+        }
+
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgt::InstanceFlags::default(),
@@ -466,7 +470,7 @@ impl<A: hal::Api> Example<A> {
             vertex_stride: 3 * 4,
             indices: indices_buffer.as_ref().map(|(buf, len)| {
                 hal::AccelerationStructureTriangleIndices {
-                    buffer: Some(&buf),
+                    buffer: Some(buf),
                     format: wgt::IndexFormat::Uint32,
                     offset: 0,
                     count: *len as u32,
