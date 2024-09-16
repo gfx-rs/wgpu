@@ -1363,13 +1363,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     ) -> Result<(), Error> {
         inst.expect(7)?;
         let start = self.data_offset;
-        let span = self.span_from_with_op(start);
         let result_type_id = self.next()?;
         let result_id = self.next()?;
         let pointer_id = self.next()?;
         let _scope_id = self.next()?;
         let _memory_semantics_id = self.next()?;
         let value_id = self.next()?;
+        let span = self.span_from_with_op(start);
 
         let (p_lexp_handle, p_base_ty_handle) =
             self.get_exp_and_base_ty_handles(pointer_id, ctx, emitter, block, body_idx)?;
@@ -4078,12 +4078,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::AtomicLoad => {
                     inst.expect(6)?;
                     let start = self.data_offset;
-                    let span = self.span_from_with_op(start);
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
                     let _scope_id = self.next()?;
                     let _memory_semantics_id = self.next()?;
+                    let span = self.span_from_with_op(start);
 
                     log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
                     let p_lexp_handle =
@@ -4110,11 +4110,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::AtomicStore => {
                     inst.expect(5)?;
                     let start = self.data_offset;
-                    let span = self.span_from_with_op(start);
                     let pointer_id = self.next()?;
                     let _scope_id = self.next()?;
                     let _memory_semantics_id = self.next()?;
                     let value_id = self.next()?;
+                    let span = self.span_from_with_op(start);
 
                     log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
                     let p_lexp_handle =
@@ -4140,12 +4140,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::AtomicIIncrement | Op::AtomicIDecrement => {
                     inst.expect(6)?;
                     let start = self.data_offset;
-                    let span = self.span_from_with_op(start);
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
                     let _scope_id = self.next()?;
                     let _memory_semantics_id = self.next()?;
+                    let span = self.span_from_with_op(start);
 
                     let (p_exp_h, p_base_ty_h) = self.get_exp_and_base_ty_handles(
                         pointer_id,
@@ -4236,12 +4236,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     // literal "true"
                     inst.expect(6)?;
                     let start = self.data_offset;
-                    let span = self.span_from_with_op(start);
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let pointer_id = self.next()?;
                     let _scope_id = self.next()?;
                     let _memory_semantics_id = self.next()?;
+                    let span = self.span_from_with_op(start);
 
                     let (pointer, pointer_ty) = self.get_exp_and_base_ty_handles(
                         pointer_id,
@@ -4288,10 +4288,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     // Atomic flag clear is essentially an atomic store of a literal "false"
                     inst.expect(4)?;
                     let start = self.data_offset;
-                    let span = self.span_from_with_op(start);
                     let pointer_id = self.next()?;
                     let _scope_id = self.next()?;
                     let _memory_id = self.next()?;
+                    let span = self.span_from_with_op(start);
 
                     let pointer =
                         get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
