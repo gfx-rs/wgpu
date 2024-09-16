@@ -565,6 +565,10 @@ impl<'a> BlockContext<'a> {
     /// Descend into the expression with the given handle, locating a contained
     /// global variable.
     ///
+    /// If the expression doesn't actually refer to something in a global
+    /// variable, we can't upgrade its type in a way that Naga validation would
+    /// pass, so reject the input instead.
+    ///
     /// This is used to track atomic upgrades.
     fn get_contained_global_variable(
         &self,
@@ -1325,6 +1329,19 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         ))
     }
 
+    /// Return the Naga [`Expression`] for `pointer_id`, and its referent [`Type`].
+    ///
+    /// Return a [`Handle`] for a Naga [`Expression`] that holds the value of
+    /// the SPIR-V instruction `pointer_id`, along with the [`Type`] to which it
+    /// is a pointer.
+    ///
+    /// This may entail spilling `pointer_id`'s value to a temporary:
+    /// see [`get_expr_handle`]'s documentation.
+    ///
+    /// [`Expression`]: crate::Expression
+    /// [`Type`]: crate::Type
+    /// [`Handle`]: crate::Handle
+    /// [`get_expr_handle`]: Frontend::get_expr_handle
     fn get_exp_and_base_ty_handles(
         &self,
         pointer_id: spirv::Word,
@@ -1334,10 +1351,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         body_idx: usize,
     ) -> Result<(Handle<crate::Expression>, Handle<crate::Type>), Error> {
         log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
-        let (p_lexp_handle, p_lexp_ty_id) = {
+        let p_lexp_handle;
+        let p_lexp_ty_id;
+        {
             let lexp = self.lookup_expression.lookup(pointer_id)?;
-            let handle = self.get_expr_handle(pointer_id, lexp, ctx, emitter, block, body_idx);
-            (handle, lexp.type_id)
+            p_lexp_handle = self.get_expr_handle(pointer_id, lexp, ctx, emitter, block, body_idx);
+            p_lexp_ty_id = lexp.type_id;
         };
 
         log::trace!("\t\t\tlooking up pointer type {pointer_id:?}");
