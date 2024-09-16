@@ -376,6 +376,11 @@ pub struct Writer<W> {
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+
+    /// Name of the loop reachability macro.
+    ///
+    /// See `emit_loop_reachable_macro` for details.
+    loop_reachable_macro_name: String,
 }
 
 impl crate::Scalar {
@@ -665,6 +670,7 @@ impl<W: Write> Writer<W> {
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
+            loop_reachable_macro_name: String::default(),
         }
     }
 
@@ -673,6 +679,125 @@ impl<W: Write> Writer<W> {
     #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
+    }
+
+    /// Define a macro to invoke before loops, to defeat MSL infinite loop
+    /// reasoning.
+    ///
+    /// If we haven't done so already, emit the definition of a preprocessor
+    /// macro to be invoked before each loop in the generated MSL, to ensure
+    /// that the MSL compiler's optimizations do not remove bounds checks.
+    ///
+    /// Only the first call to this function for a given module actually causes
+    /// the macro definition to be written. Subsequent loops can simply use the
+    /// prior macro definition, since macros aren't block-scoped.
+    ///
+    /// # What is this trying to solve?
+    ///
+    /// In Metal Shading Language, an infinite loop has undefined behavior.
+    /// (This rule is inherited from C++14.) This means that, if the MSL
+    /// compiler determines that a given loop will never exit, it may assume
+    /// that it is never reached. It may thus assume that any conditions
+    /// sufficient to cause the loop to be reached must be false. Like many
+    /// optimizing compilers, MSL uses this kind of analysis to establish limits
+    /// on the range of values variables involved in those conditions might
+    /// hold.
+    ///
+    /// For example, suppose the MSL compiler sees the code:
+    ///
+    /// ```ignore
+    /// if (i >= 10) {
+    ///     while (true) { }
+    /// }
+    /// ```
+    ///
+    /// It will recognize that the `while` loop will never terminate, conclude
+    /// that it must be unreachable, and thus infer that, if this code is
+    /// reached, then `i < 10` at that point.
+    ///
+    /// Now suppose that, at some point where `i` has the same value as above,
+    /// the compiler sees the code:
+    ///
+    /// ```ignore
+    /// if (i < 10) {
+    ///     a[i] = 1;
+    /// }
+    /// ```
+    ///
+    /// Because the compiler is confident that `i < 10`, it will make the
+    /// assignment to `a[i]` unconditional, rewriting this code as, simply:
+    ///
+    /// ```ignore
+    /// a[i] = 1;
+    /// ```
+    ///
+    /// If that `if` condition was injected by Naga to implement a bounds check,
+    /// the MSL compiler's optimizations could allow out-of-bounds array
+    /// accesses to occur.
+    ///
+    /// Naga cannot feasibly anticipate whether the MSL compiler will determine
+    /// that a loop is infinite, so an attacker could craft a Naga module
+    /// containing an infinite loop protected by conditions that cause the Metal
+    /// compiler to remove bounds checks that Naga injected elsewhere in the
+    /// function.
+    ///
+    /// This rewrite could occur even if the conditional assignment appears
+    /// *before* the `while` loop, as long as `i < 10` by the time the loop is
+    /// reached. This would allow the attacker to save the results of
+    /// unauthorized reads somewhere accessible before entering the infinite
+    /// loop. But even worse, the MSL compiler has been observed to simply
+    /// delete the infinite loop entirely, so that even code dominated by the
+    /// loop becomes reachable. This would make the attack even more flexible,
+    /// since shaders that would appear to never terminate would actually exit
+    /// nicely, after having stolen data from elsewhere in the GPU address
+    /// space.
+    ///
+    /// Ideally, Naga would prevent UB entirely via some means that persuades
+    /// the MSL compiler that no loop Naga generates is infinite. One approach
+    /// would be to add inline assembly to each loop that is annotated as
+    /// potentially branching out of the loop, but which in fact generates no
+    /// instructions. Unfortunately, inline assembly is not handled correctly by
+    /// some Metal device drivers. Further experimentation hasn't produced a
+    /// satisfactory approach.
+    ///
+    /// Instead, we accept that the MSL compiler may determine that some loops
+    /// are infinite, and focus instead on preventing the range analysis from
+    /// being affected. We transform *every* loop into something like this:
+    ///
+    /// ```ignore
+    /// if (volatile bool unpredictable = true; unpredictable)
+    ///     while (true) { }
+    /// ```
+    ///
+    /// Since the `volatile` qualifier prevents the compiler from assuming that
+    /// the `if` condition is true, it cannot be sure the infinite loop is
+    /// reached, and thus it cannot assume the entire structure is unreachable.
+    /// This prevents the range analysis impact described above.
+    ///
+    /// Unfortunately, what makes this a kludge, not a hack, is that this
+    /// solution leaves the GPU executing a pointless conditional branch, at
+    /// runtime, before each loop. There's no part of the system that has a
+    /// global enough view to be sure that `unpredictable` is true, and remove
+    /// it from the code.
+    ///
+    /// To make our output a bit more legible, we pull the condition out into a
+    /// preprocessor macro defined at the top of the module.
+    fn emit_loop_reachable_macro(&mut self) -> BackendResult {
+        if !self.loop_reachable_macro_name.is_empty() {
+            return Ok(());
+        }
+
+        self.loop_reachable_macro_name = self.namer.call("LOOP_IS_REACHABLE");
+        let loop_reachable_volatile_name = self.namer.call("unpredictable_jump_over_loop");
+        writeln!(
+            self.out,
+            "#define {} if (volatile bool {} = true; {})",
+            self.loop_reachable_macro_name,
+            loop_reachable_volatile_name,
+            loop_reachable_volatile_name,
+        )?;
+
+        Ok(())
     }
 
     fn put_call_parameters(
@@ -2924,10 +3049,15 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                     break_if,
                 } => {
+                    self.emit_loop_reachable_macro()?;
                     if !continuing.is_empty() || break_if.is_some() {
                         let gate_name = self.namer.call("loop_init");
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                        writeln!(self.out, "{level}while(true) {{")?;
+                        writeln!(
+                            self.out,
+                            "{level}{} while(true) {{",
+                            self.loop_reachable_macro_name,
+                        )?;
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
@@ -2942,7 +3072,11 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
                     } else {
-                        writeln!(self.out, "{level}while(true) {{")?;
+                        writeln!(
+                            self.out,
+                            "{level}{} while(true) {{",
+                            self.loop_reachable_macro_name,
+                        )?;
                     }
                     self.put_block(level.next(), body, context)?;
                     writeln!(self.out, "{level}}}")?;
@@ -3379,6 +3513,7 @@ impl<W: Write> Writer<W> {
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
+        self.loop_reachable_macro_name.clear();
         self.struct_member_pads.clear();
 
         writeln!(
