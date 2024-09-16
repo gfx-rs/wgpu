@@ -407,7 +407,6 @@ impl<A: hal::Api> Example<A> {
 
         let indices_size_in_bytes = indices.len() * 4;
 
-
         let vertices_buffer = unsafe {
             let vertices_buffer = device
                 .create_buffer(&hal::BufferDescriptor {
@@ -441,7 +440,8 @@ impl<A: hal::Api> Example<A> {
                         size: indices_size_in_bytes as u64,
                         usage: hal::BufferUses::MAP_WRITE
                             | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                        memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+                        memory_flags: hal::MemoryFlags::TRANSIENT
+                            | hal::MemoryFlags::PREFER_COHERENT,
                     })
                     .unwrap();
 
