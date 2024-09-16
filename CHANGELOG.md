@@ -112,6 +112,10 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 - Change the inconsistent `DropGuard` based API on Vulkan and GLES to a consistent, callback-based one. By @jerzywilczek in [#6164](https://github.com/gfx-rs/wgpu/pull/6164)
 
+#### Vulkan
+
+- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282)
+
 ### Dependency Updates
 
 #### GLES
