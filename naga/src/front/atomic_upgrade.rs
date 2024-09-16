@@ -44,6 +44,8 @@ pub enum Error {
     MultiMemberStruct,
     #[error("encountered unsupported global initializer in an atomic variable")]
     GlobalInitUnsupported,
+    #[error("expected to find a global variable")]
+    GlobalVariableMissing,
 }
 
 impl From<Error> for crate::front::spv::Error {
