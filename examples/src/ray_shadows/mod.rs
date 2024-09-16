@@ -1,11 +1,11 @@
 use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;
-use wgpu::{BindGroupLayoutDescriptor, BufferBindingType, IndexFormat, ray_tracing as rt, ShaderStages, vertex_attr_array, VertexAttribute, VertexBufferLayout};
+use wgpu::{BindGroupLayoutDescriptor, BufferBindingType, IndexFormat, ray_tracing as rt, ShaderStages, vertex_attr_array, VertexBufferLayout};
 
 // from cube
 #[repr(C)]
@@ -216,7 +216,7 @@ impl crate::framework::Example for Example {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[VertexBufferLayout {
                     array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
@@ -226,7 +226,7 @@ impl crate::framework::Example for Example {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.format.into())],
             }),
@@ -363,7 +363,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
             rpass.set_push_constants(ShaderStages::FRAGMENT, 0, &0.0_f32.to_ne_bytes());
             rpass.set_push_constants(ShaderStages::FRAGMENT, 4, &cos.to_ne_bytes());
             rpass.set_push_constants(ShaderStages::FRAGMENT, 8, &sin.to_ne_bytes());
@@ -395,6 +395,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         failures: Vec::new(),
         required_downlevel_caps:
         <Example as crate::framework::Example>::required_downlevel_capabilities(),
+        force_fxc: false,
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,

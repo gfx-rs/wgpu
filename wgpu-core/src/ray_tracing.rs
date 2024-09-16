@@ -17,7 +17,7 @@ use std::{num::NonZeroU64, slice};
 
 use crate::resource::{Blas, ResourceErrorIdent, Tlas};
 use thiserror::Error;
-use wgt::BufferAddress;
+use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {
@@ -80,6 +80,24 @@ pub enum BuildAccelerationStructureError {
         "Blas {0:?} build sizes to may be greater than the descriptor at build time specified"
     )]
     IncompatibleBlasBuildSizes(ResourceErrorIdent),
+
+    #[error("Blas {0:?} flags are different, creation flags: {1:?}, provided: {2:?}")]
+    IncompatibleBlasFlags(ResourceErrorIdent, AccelerationStructureGeometryFlags, AccelerationStructureGeometryFlags),
+
+    #[error("Blas {0:?} build vertex count is greater than creation count (needs to be less than or equal to), creation: {1:?}, build: {2:?}")]
+    IncompatibleBlasVertexCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} vertex formats are different, creation format: {1:?}, provided: {2:?}")]
+    DifferentBlasVertexFormats(ResourceErrorIdent, VertexFormat, VertexFormat),
+
+    #[error("Blas {0:?} index count was provided at creation or building, but not the other")]
+    BlasIndexCountProvidedMismatch(ResourceErrorIdent),
+
+    #[error("Blas {0:?} build index count is greater than creation count (needs to be less than or equal to), creation: {1:?}, build: {2:?}")]
+    IncompatibleBlasIndexCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} index formats are different, creation format: {1:?}, provided: {2:?}")]
+    DifferentBlasIndexFormats(ResourceErrorIdent, Option<IndexFormat>, Option<IndexFormat>),
 
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),

@@ -100,7 +100,6 @@ flagged as errors as well.
 
 */
 
-use crate::resource::TlasInstance;
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},

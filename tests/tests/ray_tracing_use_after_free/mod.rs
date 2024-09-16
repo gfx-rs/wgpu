@@ -91,8 +91,9 @@ fn execute(ctx: TestingContext) {
             label: None,
             layout: None,
             module: &shader,
-            entry_point: "comp_main",
-            constants: &Default::default(),
+            entry_point: Some("comp_main"),
+            compilation_options: Default::default(),
+            cache: None,
         });
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
@@ -111,7 +112,7 @@ fn execute(ctx: TestingContext) {
             timestamp_writes: None,
         });
         pass.set_pipeline(&compute_pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, Some(&bind_group), &[]);
         pass.dispatch_workgroups(1, 1, 1)
     }
     ctx.queue.submit(Some(encoder.finish()));

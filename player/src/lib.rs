@@ -189,7 +189,7 @@ impl GlobalPlay for wgc::global::Global {
                             instance
                                 .as_ref()
                                 .map(|instance| wgc::ray_tracing::TlasInstance {
-                                    tlas_instance_id: instance.tlas_instance_id,
+                                    blas_id: instance.blas_id,
                                     transform: &instance.transform,
                                     custom_index: instance.custom_index,
                                     mask: instance.mask,

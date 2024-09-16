@@ -51,7 +51,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     type BlasData: ContextData;
     type TlasData: ContextData;
-    type TlasInstanceId: ContextId + WasmNotSendSync;
 
     type SurfaceOutputDetail: WasmNotSendSync + 'static;
     type SubmissionIndexData: ContextData + Copy;
@@ -2760,25 +2759,6 @@ where
         let device_data = downcast_ref(device_data);
         let data = Context::device_create_tlas(self, device_data, desc);
         Box::new(data) as _
-    }
-
-    fn create_tlas_instance(&self, blas: &ObjectId, blas_data: &crate::Data) -> ObjectId {
-        let blas = <T::BlasId>::from(*blas);
-        let blas_data = downcast_ref(blas_data);
-        let tlas_instance = Context::create_tlas_instance(self, &blas, blas_data);
-        tlas_instance.into()
-    }
-
-    fn tlas_instance_set_blas(
-        &self,
-        tlas_instance: &ObjectId,
-        blas: &ObjectId,
-        blas_data: &crate::Data,
-    ) {
-        let blas = <T::BlasId>::from(*blas);
-        let blas_data = downcast_ref(blas_data);
-        let tlas_instance = <T::TlasInstanceId>::from(*tlas_instance);
-        Context::tlas_instance_set_blas(self, &tlas_instance, &blas, blas_data)
     }
 
     fn command_encoder_build_acceleration_structures_unsafe_tlas(
