@@ -144,6 +144,10 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956) and [#6173](https://github.com/gfx-rs/wgpu/pull/6173)
 
+#### HAL
+
+- Update `parking_lot` to `0.12`. By @mahkoh in [#6287](https://github.com/gfx-rs/wgpu/pull/6287)
+
 ## 22.0.0 (2024-07-17)
 
 ### Overview
