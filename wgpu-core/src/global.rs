@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     hal_api::HalApi,
     hub::{Hub, HubReport},
@@ -23,7 +25,7 @@ impl GlobalReport {
 
 pub struct Global {
     pub instance: Instance,
-    pub(crate) surfaces: Registry<Surface>,
+    pub(crate) surfaces: Registry<Arc<Surface>>,
     pub(crate) hub: Hub,
 }
 

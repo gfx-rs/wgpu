@@ -358,6 +358,10 @@ fn check_targets(
         let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
             source_code: code,
             file_name: name.as_ref(),
+            // wgpu#6266: we technically know all the information here to
+            // produce the valid language but it's not too important for
+            // validation purposes
+            language: naga::back::spv::SourceLanguage::Unknown,
         });
 
         if targets.contains(Targets::SPIRV) {

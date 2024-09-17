@@ -61,8 +61,7 @@ impl ContextWgpuCore {
 
     #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
-        self.0
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| None))
+        self.0.enumerate_adapters(backends)
     }
 
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
@@ -108,7 +107,7 @@ impl ContextWgpuCore {
         if trace_dir.is_some() {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
-        let (device_id, queue_id, error) = unsafe {
+        let (device_id, queue_id) = unsafe {
             self.0.create_device_from_hal(
                 *adapter,
                 hal_device.into(),
@@ -117,10 +116,7 @@ impl ContextWgpuCore {
                 None,
                 None,
             )
-        };
-        if let Some(err) = error {
-            self.handle_error_fatal(err, "Adapter::create_device_from_hal");
-        }
+        }?;
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
@@ -592,7 +588,8 @@ impl crate::Context for ContextWgpuCore {
                     surface.id
                 }),
             },
-            wgc::instance::AdapterInputs::Mask(wgt::Backends::all(), |_| None),
+            wgt::Backends::all(),
+            None,
         );
         ready(id.ok())
     }
@@ -606,16 +603,19 @@ impl crate::Context for ContextWgpuCore {
         if trace_dir.is_some() {
             log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
         }
-        let (device_id, queue_id, error) = self.0.adapter_request_device(
+        let res = self.0.adapter_request_device(
             *adapter_data,
             &desc.map_label(|l| l.map(Borrowed)),
             None,
             None,
             None,
         );
-        if let Some(err) = error {
-            return ready(Err(err.into()));
-        }
+        let (device_id, queue_id) = match res {
+            Ok(ids) => ids,
+            Err(err) => {
+                return ready(Err(err.into()));
+            }
+        };
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
             id: device_id,
@@ -641,44 +641,27 @@ impl crate::Context for ContextWgpuCore {
         adapter_data: &Self::AdapterData,
         surface_data: &Self::SurfaceData,
     ) -> bool {
-        match self
-            .0
+        self.0
             .adapter_is_surface_supported(*adapter_data, surface_data.id)
-        {
-            Ok(result) => result,
-            Err(err) => self.handle_error_fatal(err, "Adapter::is_surface_supported"),
-        }
     }
 
     fn adapter_features(&self, adapter_data: &Self::AdapterData) -> Features {
-        match self.0.adapter_features(*adapter_data) {
-            Ok(features) => features,
-            Err(err) => self.handle_error_fatal(err, "Adapter::features"),
-        }
+        self.0.adapter_features(*adapter_data)
     }
 
     fn adapter_limits(&self, adapter_data: &Self::AdapterData) -> Limits {
-        match self.0.adapter_limits(*adapter_data) {
-            Ok(limits) => limits,
-            Err(err) => self.handle_error_fatal(err, "Adapter::limits"),
-        }
+        self.0.adapter_limits(*adapter_data)
     }
 
     fn adapter_downlevel_capabilities(
         &self,
         adapter_data: &Self::AdapterData,
     ) -> DownlevelCapabilities {
-        match self.0.adapter_downlevel_capabilities(*adapter_data) {
-            Ok(downlevel) => downlevel,
-            Err(err) => self.handle_error_fatal(err, "Adapter::downlevel_properties"),
-        }
+        self.0.adapter_downlevel_capabilities(*adapter_data)
     }
 
     fn adapter_get_info(&self, adapter_data: &Self::AdapterData) -> AdapterInfo {
-        match self.0.adapter_get_info(*adapter_data) {
-            Ok(info) => info,
-            Err(err) => self.handle_error_fatal(err, "Adapter::get_info"),
-        }
+        self.0.adapter_get_info(*adapter_data)
     }
 
     fn adapter_get_texture_format_features(
@@ -686,23 +669,15 @@ impl crate::Context for ContextWgpuCore {
         adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        match self
-            .0
+        self.0
             .adapter_get_texture_format_features(*adapter_data, format)
-        {
-            Ok(info) => info,
-            Err(err) => self.handle_error_fatal(err, "Adapter::get_texture_format_features"),
-        }
     }
 
     fn adapter_get_presentation_timestamp(
         &self,
         adapter_data: &Self::AdapterData,
     ) -> wgt::PresentationTimestamp {
-        match self.0.adapter_get_presentation_timestamp(*adapter_data) {
-            Ok(timestamp) => timestamp,
-            Err(err) => self.handle_error_fatal(err, "Adapter::correlate_presentation_timestamp"),
-        }
+        self.0.adapter_get_presentation_timestamp(*adapter_data)
     }
 
     fn surface_get_capabilities(
@@ -780,17 +755,11 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn device_features(&self, device_data: &Self::DeviceData) -> Features {
-        match self.0.device_features(device_data.id) {
-            Ok(features) => features,
-            Err(err) => self.handle_error_fatal(err, "Device::features"),
-        }
+        self.0.device_features(device_data.id)
     }
 
     fn device_limits(&self, device_data: &Self::DeviceData) -> Limits {
-        match self.0.device_limits(device_data.id) {
-            Ok(limits) => limits,
-            Err(err) => self.handle_error_fatal(err, "Device::limits"),
-        }
+        self.0.device_limits(device_data.id)
     }
 
     #[cfg_attr(
@@ -1336,10 +1305,6 @@ impl crate::Context for ContextWgpuCore {
             Ok(encoder) => encoder,
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         }
-    }
-    #[doc(hidden)]
-    fn device_make_invalid(&self, device_data: &Self::DeviceData) {
-        self.0.device_make_invalid(device_data.id);
     }
     #[cfg_attr(not(any(native, Emscripten)), allow(unused))]
     fn device_drop(&self, device_data: &Self::DeviceData) {
@@ -2094,13 +2059,7 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn queue_get_timestamp_period(&self, queue_data: &Self::QueueData) -> f32 {
-        let res = self.0.queue_get_timestamp_period(queue_data.id);
-        match res {
-            Ok(v) => v,
-            Err(cause) => {
-                self.handle_error_fatal(cause, "Queue::get_timestamp_period");
-            }
-        }
+        self.0.queue_get_timestamp_period(queue_data.id)
     }
 
     fn queue_on_submitted_work_done(
@@ -2109,11 +2068,7 @@ impl crate::Context for ContextWgpuCore {
         callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
-
-        let res = self.0.queue_on_submitted_work_done(queue_data.id, closure);
-        if let Err(cause) = res {
-            self.handle_error_fatal(cause, "Queue::on_submitted_work_done");
-        }
+        self.0.queue_on_submitted_work_done(queue_data.id, closure);
     }
 
     fn device_start_capture(&self, device_data: &Self::DeviceData) {

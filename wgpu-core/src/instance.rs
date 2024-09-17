@@ -1,13 +1,12 @@
 use std::sync::Arc;
 use std::{borrow::Cow, collections::HashMap};
 
-use crate::hub::Hub;
 use crate::{
     api_log,
-    device::{queue::Queue, resource::Device, DeviceDescriptor},
+    device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
     hal_api::HalApi,
-    id::{markers, AdapterId, DeviceId, Id, Marker, QueueId, SurfaceId},
+    id::{markers, AdapterId, DeviceId, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
     resource::ResourceType,
@@ -272,20 +271,19 @@ impl Adapter {
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        if let Ok(device) = Device::new(
+        let device = Device::new(
             hal_device.device,
             hal_device.queue.as_ref(),
             self,
             desc,
             trace_path,
             instance_flags,
-        ) {
-            let device = Arc::new(device);
-            let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
-            device.set_queue(&queue);
-            return Ok((device, queue));
-        }
-        Err(RequestDeviceError::OutOfMemory)
+        )?;
+
+        let device = Arc::new(device);
+        let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
+        device.set_queue(&queue);
+        Ok((device, queue))
     }
 
     #[allow(clippy::type_complexity)]
@@ -338,12 +336,7 @@ impl Adapter {
                 &desc.memory_hints,
             )
         }
-        .map_err(|err| match err {
-            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
-            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
-            hal::DeviceError::Unexpected => RequestDeviceError::DeviceLost,
-        })?;
+        .map_err(DeviceError::from_hal)?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
     }
@@ -354,20 +347,7 @@ crate::impl_storage_item!(Adapter);
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
-pub enum IsSurfaceSupportedError {
-    #[error("Invalid adapter")]
-    InvalidAdapter,
-    #[error("Invalid surface")]
-    InvalidSurface,
-}
-
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
 pub enum GetSurfaceSupportError {
-    #[error("Invalid adapter")]
-    InvalidAdapter,
-    #[error("Invalid surface")]
-    InvalidSurface,
     #[error("Surface is not supported by the adapter")]
     Unsupported,
 }
@@ -377,45 +357,15 @@ pub enum GetSurfaceSupportError {
 /// Error when requesting a device from the adaptor
 #[non_exhaustive]
 pub enum RequestDeviceError {
-    #[error("Parent adapter is invalid")]
-    InvalidAdapter,
-    #[error("Connection to device was lost during initialization")]
-    DeviceLost,
-    #[error("Device initialization failed due to implementation specific errors")]
-    Internal,
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
     #[error("Device has no queue supporting graphics")]
     NoGraphicsQueue,
-    #[error("Not enough memory left to request device")]
-    OutOfMemory,
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }
-
-pub enum AdapterInputs<'a, M: Marker> {
-    IdSet(&'a [Id<M>]),
-    Mask(Backends, fn(Backend) -> Option<Id<M>>),
-}
-
-impl<M: Marker> AdapterInputs<'_, M> {
-    fn find(&self, b: Backend) -> Option<Option<Id<M>>> {
-        match *self {
-            Self::IdSet(ids) => Some(Some(ids.iter().find(|id| id.backend() == b).copied()?)),
-            Self::Mask(bits, ref fun) => {
-                if bits.contains(b.into()) {
-                    Some(fun(b))
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug, Error)]
-#[error("Adapter is invalid")]
-pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -423,8 +373,6 @@ pub struct InvalidAdapter;
 pub enum RequestAdapterError {
     #[error("No suitable adapter found")]
     NotFound,
-    #[error("Surface {0:?} is invalid")]
-    InvalidSurface(SurfaceId),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -498,7 +446,7 @@ impl Global {
 
             let id = self
                 .surfaces
-                .prepare(Backend::Empty, id_in) // No specific backend for Surface, since it's not specific.
+                .prepare(id_in) // No specific backend for Surface, since it's not specific.
                 .assign(Arc::new(surface));
             Ok(id)
         }
@@ -542,10 +490,7 @@ impl Global {
             surface_per_backend: std::iter::once((Backend::Metal, raw_surface)).collect(),
         };
 
-        let id = self
-            .surfaces
-            .prepare(Backend::Metal, id_in)
-            .assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
 
@@ -567,10 +512,7 @@ impl Global {
             surface_per_backend: std::iter::once((Backend::Dx12, surface)).collect(),
         };
 
-        let id = self
-            .surfaces
-            .prepare(Backend::Dx12, id_in)
-            .assign(Arc::new(surface));
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
 
@@ -624,9 +566,9 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        let surface = self.surfaces.unregister(id);
-        let surface = Arc::into_inner(surface.unwrap())
-            .expect("Surface cannot be destroyed because is still in use");
+        let surface = self.surfaces.remove(id);
+        let surface =
+            Arc::into_inner(surface).expect("Surface cannot be destroyed because is still in use");
 
         if let Some(present) = surface.presentation.lock().take() {
             for (&backend, surface) in &surface.surface_per_backend {
@@ -638,185 +580,81 @@ impl Global {
         drop(surface)
     }
 
-    pub fn enumerate_adapters(&self, inputs: AdapterInputs<markers::Adapter>) -> Vec<AdapterId> {
+    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<AdapterId> {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
 
-        fn enumerate(
-            hub: &Hub,
-            backend: Backend,
-            instance: &dyn hal::DynInstance,
-            inputs: &AdapterInputs<markers::Adapter>,
-            list: &mut Vec<AdapterId>,
-        ) {
-            let Some(id_backend) = inputs.find(backend) else {
-                return;
-            };
-
+        let mut adapters = Vec::new();
+        for (_, instance) in self
+            .instance
+            .instance_per_backend
+            .iter()
+            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
+        {
             profiling::scope!("enumerating", &*format!("{:?}", backend));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
                 let adapter = Adapter::new(raw);
                 log::info!("Adapter {:?}", adapter.raw.info);
-                let id = hub
-                    .adapters
-                    .prepare(backend, id_backend)
-                    .assign(Arc::new(adapter));
-                list.push(id);
+                let id = self.hub.adapters.prepare(None).assign(Arc::new(adapter));
+                adapters.push(id);
             }
-        }
-
-        let mut adapters = Vec::new();
-        for (backend, instance) in &self.instance.instance_per_backend {
-            enumerate(
-                &self.hub,
-                *backend,
-                instance.as_ref(),
-                &inputs,
-                &mut adapters,
-            );
         }
         adapters
-    }
-
-    fn select(
-        &self,
-        backend: Backend,
-        selected: &mut usize,
-        new_id: Option<AdapterId>,
-        mut list: Vec<hal::DynExposedAdapter>,
-    ) -> Option<AdapterId> {
-        match selected.checked_sub(list.len()) {
-            Some(left) => {
-                *selected = left;
-                None
-            }
-            None => {
-                let adapter = Adapter::new(list.swap_remove(*selected));
-                log::info!("Adapter {:?}", adapter.raw.info);
-                let id = self
-                    .hub
-                    .adapters
-                    .prepare(backend, new_id)
-                    .assign(Arc::new(adapter));
-                Some(id)
-            }
-        }
     }
 
     pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
-        inputs: AdapterInputs<markers::Adapter>,
+        backends: Backends,
+        id_in: Option<AdapterId>,
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("Instance::request_adapter");
         api_log!("Instance::request_adapter");
 
-        fn gather(
-            backend: Backend,
-            instance: &Instance,
-            inputs: &AdapterInputs<markers::Adapter>,
-            compatible_surface: Option<&Surface>,
-            force_software: bool,
-            device_types: &mut Vec<wgt::DeviceType>,
-        ) -> (Option<Id<markers::Adapter>>, Vec<hal::DynExposedAdapter>) {
-            let id = inputs.find(backend);
-            match (id, instance.raw(backend)) {
-                (Some(id), Some(inst)) => {
-                    let compatible_hal_surface =
-                        compatible_surface.and_then(|surface| surface.raw(backend));
-                    let mut adapters = unsafe { inst.enumerate_adapters(compatible_hal_surface) };
-                    if force_software {
-                        adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
-                    }
-                    if let Some(surface) = compatible_surface {
-                        adapters
-                            .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
-                    }
-                    device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
-                    (id, adapters)
-                }
-                _ => (None, Vec::new()),
-            }
-        }
-
-        let compatible_surface = desc
-            .compatible_surface
-            .map(|id| {
-                self.surfaces
-                    .get(id)
-                    .map_err(|_| RequestAdapterError::InvalidSurface(id))
-            })
-            .transpose()?;
+        let compatible_surface = desc.compatible_surface.map(|id| self.surfaces.get(id));
         let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
-        let mut device_types = Vec::new();
+        let mut adapters = Vec::new();
 
-        #[cfg(vulkan)]
-        let (id_vulkan, adapters_vk) = gather(
-            Backend::Vulkan,
-            &self.instance,
-            &inputs,
-            compatible_surface,
-            desc.force_fallback_adapter,
-            &mut device_types,
-        );
-        #[cfg(metal)]
-        let (id_metal, adapters_metal) = gather(
-            Backend::Metal,
-            &self.instance,
-            &inputs,
-            compatible_surface,
-            desc.force_fallback_adapter,
-            &mut device_types,
-        );
-        #[cfg(dx12)]
-        let (id_dx12, adapters_dx12) = gather(
-            Backend::Dx12,
-            &self.instance,
-            &inputs,
-            compatible_surface,
-            desc.force_fallback_adapter,
-            &mut device_types,
-        );
-        #[cfg(gles)]
-        let (id_gl, adapters_gl) = gather(
-            Backend::Gl,
-            &self.instance,
-            &inputs,
-            compatible_surface,
-            desc.force_fallback_adapter,
-            &mut device_types,
-        );
-
-        if device_types.is_empty() {
-            return Err(RequestAdapterError::NotFound);
-        }
-
-        let (mut integrated, mut discrete, mut virt, mut cpu, mut other) =
-            (None, None, None, None, None);
-
-        for (i, ty) in device_types.into_iter().enumerate() {
-            match ty {
-                wgt::DeviceType::IntegratedGpu => {
-                    integrated = integrated.or(Some(i));
-                }
-                wgt::DeviceType::DiscreteGpu => {
-                    discrete = discrete.or(Some(i));
-                }
-                wgt::DeviceType::VirtualGpu => {
-                    virt = virt.or(Some(i));
-                }
-                wgt::DeviceType::Cpu => {
-                    cpu = cpu.or(Some(i));
-                }
-                wgt::DeviceType::Other => {
-                    other = other.or(Some(i));
-                }
+        for (backend, instance) in self
+            .instance
+            .instance_per_backend
+            .iter()
+            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
+        {
+            let compatible_hal_surface =
+                compatible_surface.and_then(|surface| surface.raw(*backend));
+            let mut backend_adapters =
+                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
+            if desc.force_fallback_adapter {
+                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
             }
+            if let Some(surface) = compatible_surface {
+                backend_adapters
+                    .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
+            }
+            adapters.extend(backend_adapters);
         }
 
-        let preferred_gpu = match desc.power_preference {
+        match desc.power_preference {
+            PowerPreference::LowPower => {
+                sort(&mut adapters, true);
+            }
+            PowerPreference::HighPerformance => {
+                sort(&mut adapters, false);
+            }
+            PowerPreference::None => {}
+        };
+
+        fn sort(adapters: &mut [hal::DynExposedAdapter], prefer_integrated_gpu: bool) {
+            adapters.sort_by(|a, b| {
+                get_order(a.info.device_type, prefer_integrated_gpu)
+                    .cmp(&get_order(b.info.device_type, prefer_integrated_gpu))
+            });
+        }
+
+        fn get_order(device_type: wgt::DeviceType, prefer_integrated_gpu: bool) -> u8 {
             // Since devices of type "Other" might really be "Unknown" and come
             // from APIs like OpenGL that don't specify device type, Prefer more
             // Specific types over Other.
@@ -824,42 +662,28 @@ impl Global {
             // This means that backends which do provide accurate device types
             // will be preferred if their device type indicates an actual
             // hardware GPU (integrated or discrete).
-            PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
-            PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
-            PowerPreference::None => {
-                let option_min = |a: Option<usize>, b: Option<usize>| {
-                    if let (Some(a), Some(b)) = (a, b) {
-                        Some(a.min(b))
-                    } else {
-                        a.or(b)
-                    }
-                };
-                // Pick the lowest id of these types
-                option_min(option_min(discrete, integrated), other)
+            match device_type {
+                wgt::DeviceType::DiscreteGpu if prefer_integrated_gpu => 2,
+                wgt::DeviceType::IntegratedGpu if prefer_integrated_gpu => 1,
+                wgt::DeviceType::DiscreteGpu => 1,
+                wgt::DeviceType::IntegratedGpu => 2,
+                wgt::DeviceType::Other => 3,
+                wgt::DeviceType::VirtualGpu => 4,
+                wgt::DeviceType::Cpu => 5,
             }
-        };
+        }
 
-        let mut selected = preferred_gpu.unwrap_or(0);
-        #[cfg(vulkan)]
-        if let Some(id) = self.select(Backend::Vulkan, &mut selected, id_vulkan, adapters_vk) {
-            return Ok(id);
+        if let Some(adapter) = adapters.into_iter().next() {
+            log::info!("Adapter {:?}", adapter.info);
+            let id = self
+                .hub
+                .adapters
+                .prepare(id_in)
+                .assign(Arc::new(Adapter::new(adapter)));
+            Ok(id)
+        } else {
+            Err(RequestAdapterError::NotFound)
         }
-        #[cfg(metal)]
-        if let Some(id) = self.select(Backend::Metal, &mut selected, id_metal, adapters_metal) {
-            return Ok(id);
-        }
-        #[cfg(dx12)]
-        if let Some(id) = self.select(Backend::Dx12, &mut selected, id_dx12, adapters_dx12) {
-            return Ok(id);
-        }
-        #[cfg(gles)]
-        if let Some(id) = self.select(Backend::Gl, &mut selected, id_gl, adapters_gl) {
-            return Ok(id);
-        }
-        let _ = selected;
-
-        log::warn!("Some adapters are present, but enumerating them failed!");
-        Err(RequestAdapterError::NotFound)
     }
 
     /// # Safety
@@ -872,80 +696,58 @@ impl Global {
     ) -> AdapterId {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let fid = self.hub.adapters.prepare(hal_adapter.backend(), input);
+        let fid = self.hub.adapters.prepare(input);
         let id = fid.assign(Arc::new(Adapter::new(hal_adapter)));
 
         resource_log!("Created Adapter {:?}", id);
         id
     }
 
-    pub fn adapter_get_info(
-        &self,
-        adapter_id: AdapterId,
-    ) -> Result<wgt::AdapterInfo, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.info.clone())
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.info.clone()
     }
 
     pub fn adapter_get_texture_format_features(
         &self,
         adapter_id: AdapterId,
         format: wgt::TextureFormat,
-    ) -> Result<wgt::TextureFormatFeatures, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.get_texture_format_features(format))
-            .map_err(|_| InvalidAdapter)
+    ) -> wgt::TextureFormatFeatures {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.get_texture_format_features(format)
     }
 
-    pub fn adapter_features(&self, adapter_id: AdapterId) -> Result<wgt::Features, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.features)
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_features(&self, adapter_id: AdapterId) -> wgt::Features {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.features
     }
 
-    pub fn adapter_limits(&self, adapter_id: AdapterId) -> Result<wgt::Limits, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.limits.clone())
-            .map_err(|_| InvalidAdapter)
+    pub fn adapter_limits(&self, adapter_id: AdapterId) -> wgt::Limits {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.capabilities.limits.clone()
     }
 
     pub fn adapter_downlevel_capabilities(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<wgt::DownlevelCapabilities, InvalidAdapter> {
-        self.hub
-            .adapters
-            .get(adapter_id)
-            .map(|adapter| adapter.raw.capabilities.downlevel.clone())
-            .map_err(|_| InvalidAdapter)
+    ) -> wgt::DownlevelCapabilities {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.raw.capabilities.downlevel.clone()
     }
 
     pub fn adapter_get_presentation_timestamp(
         &self,
         adapter_id: AdapterId,
-    ) -> Result<wgt::PresentationTimestamp, InvalidAdapter> {
-        let hub = &self.hub;
-
-        let adapter = hub.adapters.get(adapter_id).map_err(|_| InvalidAdapter)?;
-
-        Ok(unsafe { adapter.raw.adapter.get_presentation_timestamp() })
+    ) -> wgt::PresentationTimestamp {
+        let adapter = self.hub.adapters.get(adapter_id);
+        unsafe { adapter.raw.adapter.get_presentation_timestamp() }
     }
 
     pub fn adapter_drop(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
         api_log!("Adapter::drop {adapter_id:?}");
 
-        let hub = &self.hub;
-        hub.adapters.unregister(adapter_id);
+        self.hub.adapters.remove(adapter_id);
     }
 }
 
@@ -957,37 +759,24 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
-    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
+    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
-        let backend = adapter_id.backend();
-        let device_fid = self.hub.devices.prepare(backend, device_id_in);
-        let queue_fid = self.hub.queues.prepare(backend, queue_id_in);
+        let device_fid = self.hub.devices.prepare(device_id_in);
+        let queue_fid = self.hub.queues.prepare(queue_id_in);
 
-        let error = 'error: {
-            let adapter = match self.hub.adapters.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
-            };
-            let (device, queue) =
-                match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
-                    Ok((device, queue)) => (device, queue),
-                    Err(e) => break 'error e,
-                };
+        let adapter = self.hub.adapters.get(adapter_id);
+        let (device, queue) =
+            adapter.create_device_and_queue(desc, self.instance.flags, trace_path)?;
 
-            let device_id = device_fid.assign(device);
-            resource_log!("Created Device {:?}", device_id);
+        let device_id = device_fid.assign(device);
+        resource_log!("Created Device {:?}", device_id);
 
-            let queue_id = queue_fid.assign(queue);
-            resource_log!("Created Queue {:?}", queue_id);
+        let queue_id = queue_fid.assign(queue);
+        resource_log!("Created Queue {:?}", queue_id);
 
-            return (device_id, queue_id, None);
-        };
-
-        let device_id = device_fid.assign_error();
-        let queue_id = queue_fid.assign_error();
-        (device_id, queue_id, Some(error))
+        Ok((device_id, queue_id))
     }
 
     /// # Safety
@@ -1002,40 +791,27 @@ impl Global {
         trace_path: Option<&std::path::Path>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
-    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
+    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
         profiling::scope!("Global::create_device_from_hal");
 
-        let backend = adapter_id.backend();
-        let devices_fid = self.hub.devices.prepare(backend, device_id_in);
-        let queues_fid = self.hub.queues.prepare(backend, queue_id_in);
+        let devices_fid = self.hub.devices.prepare(device_id_in);
+        let queues_fid = self.hub.queues.prepare(queue_id_in);
 
-        let error = 'error: {
-            let adapter = match self.hub.adapters.get(adapter_id) {
-                Ok(adapter) => adapter,
-                Err(_) => break 'error RequestDeviceError::InvalidAdapter,
-            };
-            let (device, queue) = match adapter.create_device_and_queue_from_hal(
-                hal_device,
-                desc,
-                self.instance.flags,
-                trace_path,
-            ) {
-                Ok(device) => device,
-                Err(e) => break 'error e,
-            };
+        let adapter = self.hub.adapters.get(adapter_id);
+        let (device, queue) = adapter.create_device_and_queue_from_hal(
+            hal_device,
+            desc,
+            self.instance.flags,
+            trace_path,
+        )?;
 
-            let device_id = devices_fid.assign(device);
-            resource_log!("Created Device {:?}", device_id);
+        let device_id = devices_fid.assign(device);
+        resource_log!("Created Device {:?}", device_id);
 
-            let queue_id = queues_fid.assign(queue);
-            resource_log!("Created Queue {:?}", queue_id);
+        let queue_id = queues_fid.assign(queue);
+        resource_log!("Created Queue {:?}", queue_id);
 
-            return (device_id, queue_id, None);
-        };
-
-        let device_id = devices_fid.assign_error();
-        let queue_id = queues_fid.assign_error();
-        (device_id, queue_id, Some(error))
+        Ok((device_id, queue_id))
     }
 }
 

@@ -4,18 +4,25 @@ use std::{
     fmt::{self, Debug},
     hash::Hash,
     marker::PhantomData,
+    num::NonZeroU64,
 };
-use wgt::{Backend, WasmNotSendSync};
+use wgt::WasmNotSendSync;
 
-type IdType = u64;
-type ZippedIndex = Index;
-type NonZeroId = std::num::NonZeroU64;
-
-const INDEX_BITS: usize = ZippedIndex::BITS as usize;
-const EPOCH_BITS: usize = INDEX_BITS - BACKEND_BITS;
-const BACKEND_BITS: usize = 3;
-const BACKEND_SHIFT: usize = INDEX_BITS * 2 - BACKEND_BITS;
-pub const EPOCH_MASK: u32 = (1 << (EPOCH_BITS)) - 1;
+const _: () = {
+    if std::mem::size_of::<Index>() != 4 {
+        panic!()
+    }
+};
+const _: () = {
+    if std::mem::size_of::<Epoch>() != 4 {
+        panic!()
+    }
+};
+const _: () = {
+    if std::mem::size_of::<RawId>() != 8 {
+        panic!()
+    }
+};
 
 /// The raw underlying representation of an identifier.
 #[repr(transparent)]
@@ -30,50 +37,18 @@ pub const EPOCH_MASK: u32 = (1 << (EPOCH_BITS)) - 1;
     serde(from = "SerialId")
 )]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RawId(NonZeroId);
+pub struct RawId(NonZeroU64);
 
 impl RawId {
-    #[doc(hidden)]
-    #[inline]
-    pub fn from_non_zero(non_zero: NonZeroId) -> Self {
-        Self(non_zero)
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    pub fn into_non_zero(self) -> NonZeroId {
-        self.0
-    }
-
     /// Zip together an identifier and return its raw underlying representation.
-    pub fn zip(index: Index, epoch: Epoch, backend: Backend) -> RawId {
-        assert_eq!(0, epoch >> EPOCH_BITS);
-        assert_eq!(0, (index as IdType) >> INDEX_BITS);
-        let v = index as IdType
-            | ((epoch as IdType) << INDEX_BITS)
-            | ((backend as IdType) << BACKEND_SHIFT);
-        Self(NonZeroId::new(v).unwrap())
+    pub fn zip(index: Index, epoch: Epoch) -> RawId {
+        let v = (index as u64) | ((epoch as u64) << 32);
+        Self(NonZeroU64::new(v).unwrap())
     }
 
     /// Unzip a raw identifier into its components.
-    #[allow(trivial_numeric_casts)]
-    pub fn unzip(self) -> (Index, Epoch, Backend) {
-        (
-            (self.0.get() as ZippedIndex) as Index,
-            (((self.0.get() >> INDEX_BITS) as ZippedIndex) & (EPOCH_MASK as ZippedIndex)) as Index,
-            self.backend(),
-        )
-    }
-
-    pub fn backend(self) -> Backend {
-        match self.0.get() >> (BACKEND_SHIFT) as u8 {
-            0 => Backend::Empty,
-            1 => Backend::Vulkan,
-            2 => Backend::Metal,
-            3 => Backend::Dx12,
-            4 => Backend::Gl,
-            _ => unreachable!(),
-        }
+    pub fn unzip(self) -> (Index, Epoch) {
+        (self.0.get() as Index, (self.0.get() >> 32) as Epoch)
     }
 }
 
@@ -116,20 +91,20 @@ pub struct Id<T: Marker>(RawId, PhantomData<T>);
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum SerialId {
     // The only variant forces RON to not ignore "Id"
-    Id(Index, Epoch, Backend),
+    Id(Index, Epoch),
 }
 
 impl From<RawId> for SerialId {
     fn from(id: RawId) -> Self {
-        let (index, epoch, backend) = id.unzip();
-        Self::Id(index, epoch, backend)
+        let (index, epoch) = id.unzip();
+        Self::Id(index, epoch)
     }
 }
 
 impl From<SerialId> for RawId {
     fn from(id: SerialId) -> Self {
         match id {
-            SerialId::Id(index, epoch, backend) => RawId::zip(index, epoch, backend),
+            SerialId::Id(index, epoch) => RawId::zip(index, epoch),
         }
     }
 }
@@ -150,29 +125,13 @@ where
         self.0
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn dummy(index: u32) -> Self {
-        Id::zip(index, 1, Backend::Empty)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn is_valid(&self) -> bool {
-        self.backend() != Backend::Empty
-    }
-
-    /// Get the backend this identifier corresponds to.
     #[inline]
-    pub fn backend(self) -> Backend {
-        self.0.backend()
+    pub fn zip(index: Index, epoch: Epoch) -> Self {
+        Id(RawId::zip(index, epoch), PhantomData)
     }
 
     #[inline]
-    pub fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
-        Id(RawId::zip(index, epoch, backend), PhantomData)
-    }
-
-    #[inline]
-    pub fn unzip(self) -> (Index, Epoch, Backend) {
+    pub fn unzip(self) -> (Index, Epoch) {
         self.0.unzip()
     }
 }
@@ -194,16 +153,8 @@ where
     T: Marker,
 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        let (index, epoch, backend) = self.unzip();
-        let backend = match backend {
-            Backend::Empty => "_",
-            Backend::Vulkan => "vk",
-            Backend::Metal => "mtl",
-            Backend::Dx12 => "d3d12",
-            Backend::Gl => "gl",
-            Backend::BrowserWebGpu => "webgpu",
-        };
-        write!(formatter, "Id({index},{epoch},{backend})")?;
+        let (index, epoch) = self.unzip();
+        write!(formatter, "Id({index},{epoch})")?;
         Ok(())
     }
 }
@@ -327,42 +278,15 @@ impl CommandBufferId {
 }
 
 #[test]
-fn test_id_backend() {
-    for &b in &[
-        Backend::Empty,
-        Backend::Vulkan,
-        Backend::Metal,
-        Backend::Dx12,
-        Backend::Gl,
-    ] {
-        let id = Id::<()>::zip(1, 0, b);
-        let (_id, _epoch, backend) = id.unzip();
-        assert_eq!(id.backend(), b);
-        assert_eq!(backend, b);
-    }
-}
-
-#[test]
 fn test_id() {
-    let last_index = ((1u64 << INDEX_BITS) - 1) as Index;
-    let indexes = [1, last_index / 2 - 1, last_index / 2 + 1, last_index];
-    let epochs = [1, EPOCH_MASK / 2 - 1, EPOCH_MASK / 2 + 1, EPOCH_MASK];
-    let backends = [
-        Backend::Empty,
-        Backend::Vulkan,
-        Backend::Metal,
-        Backend::Dx12,
-        Backend::Gl,
-    ];
+    let indexes = [0, Index::MAX / 2 - 1, Index::MAX / 2 + 1, Index::MAX];
+    let epochs = [1, Epoch::MAX / 2 - 1, Epoch::MAX / 2 + 1, Epoch::MAX];
     for &i in &indexes {
         for &e in &epochs {
-            for &b in &backends {
-                let id = Id::<()>::zip(i, e, b);
-                let (index, epoch, backend) = id.unzip();
-                assert_eq!(index, i);
-                assert_eq!(epoch, e);
-                assert_eq!(backend, b);
-            }
+            let id = Id::<()>::zip(i, e);
+            let (index, epoch) = id.unzip();
+            assert_eq!(index, i);
+            assert_eq!(epoch, e);
         }
     }
 }
