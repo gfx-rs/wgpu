@@ -91,6 +91,8 @@ struct Example {
     blas_geo_size_desc: rt::BlasTriangleGeometrySizeDescriptor,
 }
 
+const CAM_LOOK_AT: Vec3 = Vec3::new(0.0, 1.0, -1.5);
+
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::RAY_QUERY
@@ -115,7 +117,7 @@ impl crate::framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let uniforms = {
-            let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
+            let view = Mat4::look_at_rh(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
             let proj = Mat4::perspective_rh(
                 59.0_f32.to_radians(),
                 config.width as f32 / config.height as f32,
@@ -316,7 +318,7 @@ impl crate::framework::Example for Example {
         _device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
-        let view = Mat4::look_at_rh(Vec3::new(0.0, 1.0, -1.5), Vec3::ZERO, Vec3::Y);
+        let view = Mat4::look_at_rh(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
         let proj = Mat4::perspective_rh(
             59.0_f32.to_radians(),
             config.width as f32 / config.height as f32,

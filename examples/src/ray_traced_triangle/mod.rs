@@ -1,9 +1,14 @@
-use std::{env, mem};
-use std::time::Instant;
 use glam::{Affine3A, Mat4, Vec3};
-use wgpu::{BufferUsages, include_wgsl, SamplerDescriptor};
-use wgpu::ray_tracing::{AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, CommandEncoderRayTracing, CreateBlasDescriptor, CreateTlasDescriptor, DeviceRayTracing, TlasInstance, TlasPackage};
+use std::time::Instant;
+use std::{env, mem};
+use wgpu::ray_tracing::{
+    AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries,
+    BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
+    CommandEncoderRayTracing, CreateBlasDescriptor, CreateTlasDescriptor, DeviceRayTracing,
+    TlasInstance, TlasPackage,
+};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{include_wgsl, BufferUsages, SamplerDescriptor};
 
 struct Example {
     tlas_package: TlasPackage,
@@ -28,7 +33,12 @@ impl crate::framework::Example for Example {
         wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE | wgpu::Features::RAY_QUERY
     }
 
-    fn init(config: &wgpu::SurfaceConfiguration, adapter: &wgpu::Adapter, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+    fn init(
+        config: &wgpu::SurfaceConfiguration,
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> Self {
         let mut index_buffer = false;
 
         for arg in env::args() {
@@ -130,11 +140,16 @@ impl crate::framework::Example for Example {
             flags: wgpu::ray_tracing::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
-        let blas = device.create_blas(&CreateBlasDescriptor {
-            label: None,
-            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
-        }, BlasGeometrySizeDescriptors::Triangles { desc: vec![blas_size_desc] });
+        let blas = device.create_blas(
+            &CreateBlasDescriptor {
+                label: None,
+                flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: AccelerationStructureUpdateMode::Build,
+            },
+            BlasGeometrySizeDescriptors::Triangles {
+                desc: vec![blas_size_desc],
+            },
+        );
 
         let tlas = device.create_tlas(&CreateTlasDescriptor {
             label: None,
@@ -151,7 +166,8 @@ impl crate::framework::Example for Example {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
-            }).to_cols_array(),
+            })
+            .to_cols_array(),
             0,
             0xff,
         );
@@ -162,7 +178,8 @@ impl crate::framework::Example for Example {
                 x: -1.0,
                 y: -1.0,
                 z: -2.0,
-            }).to_cols_array(),
+            })
+            .to_cols_array(),
             0,
             0xff,
         );
@@ -173,7 +190,8 @@ impl crate::framework::Example for Example {
                 x: 1.0,
                 y: -1.0,
                 z: -2.0,
-            }).to_cols_array(),
+            })
+            .to_cols_array(),
             0,
             0xff,
         );
@@ -197,28 +215,20 @@ impl crate::framework::Example for Example {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         encoder.build_acceleration_structures(
-            Some(
-                &BlasBuildEntry {
-                    blas: &blas,
-                    geometry: BlasGeometries::TriangleGeometries(
-                        vec![
-                            BlasTriangleGeometry {
-                                size: &blas_size_desc,
-                                vertex_buffer: &vertex_buffer,
-                                first_vertex: 0,
-                                vertex_stride: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                                index_buffer: index_buffer.as_ref(),
-                                index_buffer_offset: index_buffer.as_ref().map(|_| 0),
-                                transform_buffer: None,
-                                transform_buffer_offset: None,
-                            }
-                        ],
-                    ),
-                }
-            ),
-            Some(
-                &tlas_package
-            )
+            Some(&BlasBuildEntry {
+                blas: &blas,
+                geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                    size: &blas_size_desc,
+                    vertex_buffer: &vertex_buffer,
+                    first_vertex: 0,
+                    vertex_stride: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    index_buffer: index_buffer.as_ref(),
+                    index_buffer_offset: index_buffer.as_ref().map(|_| 0),
+                    transform_buffer: None,
+                    transform_buffer_offset: None,
+                }]),
+            }),
+            Some(&tlas_package),
         );
 
         queue.submit(Some(encoder.finish()));
@@ -253,11 +263,12 @@ impl crate::framework::Example for Example {
             border_color: None,
         });
 
-        let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pipeline layout for shader.wgsl"),
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
-        });
+        let compute_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("pipeline layout for shader.wgsl"),
+                bind_group_layouts: &[&bgl],
+                push_constant_ranges: &[],
+            });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("pipeline for shader.wgsl"),
@@ -286,18 +297,16 @@ impl crate::framework::Example for Example {
             primitive: Default::default(),
             depth_stencil: None,
             multisample: Default::default(),
-            fragment: Some(
-                wgpu::FragmentState {
-                    module: &blit_shader,
-                    entry_point: None,
-                    compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: config.format,
-                        blend: None,
-                        write_mask: Default::default(),
-                    })],
-                }
-            ),
+            fragment: Some(wgpu::FragmentState {
+                module: &blit_shader,
+                entry_point: None,
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: None,
+                    write_mask: Default::default(),
+                })],
+            }),
             multiview: None,
             cache: None,
         });
@@ -312,7 +321,9 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&storage_tex.create_view(&wgpu::TextureViewDescriptor::default())),
+                    resource: wgpu::BindingResource::TextureView(
+                        &storage_tex.create_view(&wgpu::TextureViewDescriptor::default()),
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -327,7 +338,9 @@ impl crate::framework::Example for Example {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&storage_tex.create_view(&wgpu::TextureViewDescriptor::default())),
+                    resource: wgpu::BindingResource::TextureView(
+                        &storage_tex.create_view(&wgpu::TextureViewDescriptor::default()),
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -347,13 +360,24 @@ impl crate::framework::Example for Example {
         }
     }
 
-    fn resize(&mut self, _config: &wgpu::SurfaceConfiguration, _device: &wgpu::Device, _queue: &wgpu::Queue) {}
+    fn resize(
+        &mut self,
+        _config: &wgpu::SurfaceConfiguration,
+        _device: &wgpu::Device,
+        _queue: &wgpu::Queue,
+    ) {
+    }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-
-        self.tlas_package.get_mut_single(0).unwrap().as_mut().unwrap().transform = Affine3A::from_rotation_y(self.start.elapsed().as_secs_f32() * 1000.0).to_cols_array();
+        self.tlas_package
+            .get_mut_single(0)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .transform =
+            Affine3A::from_rotation_y(self.start.elapsed().as_secs_f32() * 1000.0).to_cols_array();
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -367,7 +391,11 @@ impl crate::framework::Example for Example {
             });
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, Some(&self.bind_group), &[]);
-            cpass.dispatch_workgroups(self.storage_texture.width() / 8, self.storage_texture.height() / 8, 1);
+            cpass.dispatch_workgroups(
+                self.storage_texture.width() / 8,
+                self.storage_texture.height() / 8,
+                1,
+            );
         }
 
         {
@@ -414,7 +442,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         skips: vec![],
         failures: Vec::new(),
         required_downlevel_caps:
-        <Example as crate::framework::Example>::required_downlevel_capabilities(),
+            <Example as crate::framework::Example>::required_downlevel_capabilities(),
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
