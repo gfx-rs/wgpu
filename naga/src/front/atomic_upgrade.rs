@@ -48,12 +48,6 @@ pub enum Error {
     GlobalVariableMissing,
 }
 
-impl From<Error> for crate::front::spv::Error {
-    fn from(source: Error) -> Self {
-        crate::front::spv::Error::AtomicUpgradeError(source)
-    }
-}
-
 #[derive(Clone, Default)]
 struct Padding(Arc<AtomicUsize>);
 
