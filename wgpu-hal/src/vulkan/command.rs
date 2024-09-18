@@ -503,6 +503,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     for triangles in in_geometries {
                         let mut triangle_data =
                             vk::AccelerationStructureGeometryTrianglesDataKHR::default()
+                                // IndexType::NONE_KHR is not set by default (due to being provided by VK_KHR_acceleration_structure) but unless there is an
+                                // index buffer we need to have IndexType::NONE_KHR as our index type.
+                                .index_type(vk::IndexType::NONE_KHR)
                                 .vertex_data(vk::DeviceOrHostAddressConstKHR {
                                     device_address: get_device_address(triangles.vertex_buffer),
                                 })
