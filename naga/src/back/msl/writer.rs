@@ -782,6 +782,9 @@ impl<W: Write> Writer<W> {
     ///
     /// To make our output a bit more legible, we pull the condition out into a
     /// preprocessor macro defined at the top of the module.
+    ///
+    /// This approach is also used by Chromium WebGPU's Dawn shader compiler, as of
+    /// <https://github.com/google/dawn/commit/ffd485c685040edb1e678165dcbf0e841cfa0298>.
     fn emit_loop_reachable_macro(&mut self) -> BackendResult {
         if !self.loop_reachable_macro_name.is_empty() {
             return Ok(());
