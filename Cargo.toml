@@ -70,7 +70,7 @@ path = "./naga"
 version = "22.0.0"
 
 [workspace.dependencies]
-anyhow = "1.0.87"
+anyhow = "1.0.89"
 argh = "0.1.5"
 arrayvec = "0.7"
 bincode = "1"
@@ -153,7 +153,7 @@ windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.14.0"
+glow = "0.14.1"
 glutin = { version = "0.31", default-features = false }
 glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"
