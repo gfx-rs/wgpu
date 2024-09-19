@@ -1,0 +1,51 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 30
+; Schema: 0
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %1 "stage::test_atomic_i_add_sub" %2 %3
+               OpExecutionMode %1 LocalSize 32 1 1
+               OpDecorate %_runtimearr_uint ArrayStride 4
+               OpDecorate %_struct_7 Block
+               OpMemberDecorate %_struct_7 0 Offset 0
+               OpDecorate %_struct_8 Block
+               OpMemberDecorate %_struct_8 0 Offset 0
+               OpDecorate %2 Binding 0
+               OpDecorate %2 DescriptorSet 0
+               OpDecorate %3 Binding 1
+               OpDecorate %3 DescriptorSet 0
+       %uint = OpTypeInt 32 0
+       %void = OpTypeVoid
+         %11 = OpTypeFunction %void
+       %bool = OpTypeBool
+%_runtimearr_uint = OpTypeRuntimeArray %uint
+  %_struct_7 = OpTypeStruct %_runtimearr_uint
+%_ptr_StorageBuffer__struct_7 = OpTypePointer StorageBuffer %_struct_7
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+  %_struct_8 = OpTypeStruct %uint
+%_ptr_StorageBuffer__struct_8 = OpTypePointer StorageBuffer %_struct_8
+          %2 = OpVariable %_ptr_StorageBuffer__struct_8 StorageBuffer
+          %3 = OpVariable %_ptr_StorageBuffer__struct_7 StorageBuffer
+          %1 = OpFunction %void None %11
+         %19 = OpLabel
+         %20 = OpAccessChain %_ptr_StorageBuffer_uint %2 %uint_0
+         %22 = OpArrayLength %uint %3 0
+         %23 = OpAtomicIAdd %uint %20 %uint_2 %uint_0 %uint_2
+         %24 = OpAtomicISub %uint %20 %uint_2 %uint_0 %23
+         %25 = OpULessThan %bool %23 %22
+               OpSelectionMerge %26 None
+               OpBranchConditional %25 %27 %28
+         %27 = OpLabel
+         %29 = OpAccessChain %_ptr_StorageBuffer_uint %3 %uint_0 %23
+               OpStore %29 %24
+               OpBranch %26
+         %28 = OpLabel
+               OpBranch %26
+         %26 = OpLabel
+               OpReturn
+               OpFunctionEnd

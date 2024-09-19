@@ -80,6 +80,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
 - Add `first` and `either` sampling types for `@interpolate(flat, …)` in WGSL. By @ErichDonGubler in [#6181](https://github.com/gfx-rs/wgpu/pull/6181).
+- Support for more atomic ops in the SPIR-V frontend. By @schell in [#5824](https://github.com/gfx-rs/wgpu/pull/5824).
 
 #### Vulkan
 
@@ -116,6 +117,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### Vulkan
 
 - Vulkan debug labels assumed no interior nul byte. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257)
+- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` in the raytraced triangle example to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282)
 
 ### Changes
 
@@ -142,6 +144,10 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### DX12
 
 - Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956) and [#6173](https://github.com/gfx-rs/wgpu/pull/6173)
+
+#### HAL
+
+- Update `parking_lot` to `0.12`. By @mahkoh in [#6287](https://github.com/gfx-rs/wgpu/pull/6287)
 
 ## 22.0.0 (2024-07-17)
 
