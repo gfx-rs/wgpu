@@ -7431,7 +7431,9 @@ impl Default for InstanceDescriptor {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for all size definiing attributes of a single triangle geometry inside a bottom level acceleration structure.
 pub struct BlasTriangleGeometrySizeDescriptor {
-    /// Format of a vertex position.
+    /// Format of a vertex position, must be [VertexFormat::Float32x3]
+    /// with just [Features::RAY_TRACING_ACCELERATION_STRUCTURE]
+    /// but later features may add more formats.
     pub vertex_format: VertexFormat,
     /// Number of vertices.
     pub vertex_count: u32,
