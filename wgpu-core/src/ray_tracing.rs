@@ -29,6 +29,8 @@ pub enum CreateBlasError {
         "Only one of 'index_count' and 'index_format' was provided (either provide both or none)"
     )]
     MissingIndexData,
+    #[error("Provided format was not within allowed formats. Provided format: {0:?}. Allowed formats: {1:?}")]
+    InvalidVertexFormat(VertexFormat, Vec<VertexFormat>),
 }
 
 #[derive(Clone, Debug, Error)]

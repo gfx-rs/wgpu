@@ -42,6 +42,16 @@ impl Device {
                                 offset: 0,
                                 count,
                             });
+                    if !self
+                        .features
+                        .allowed_vertex_formats_for_blas()
+                        .contains(&x.vertex_format)
+                    {
+                        return Err(CreateBlasError::InvalidVertexFormat(
+                            x.vertex_format,
+                            self.features.allowed_vertex_formats_for_blas(),
+                        ));
+                    }
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
                         vertex_buffer: None,
                         vertex_format: x.vertex_format,
