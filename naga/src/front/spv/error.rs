@@ -159,3 +159,9 @@ impl Error {
         String::from_utf8(writer.into_inner()).unwrap()
     }
 }
+
+impl From<atomic_upgrade::Error> for Error {
+    fn from(source: atomic_upgrade::Error) -> Self {
+        crate::front::spv::Error::AtomicUpgradeError(source)
+    }
+}

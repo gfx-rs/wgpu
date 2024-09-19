@@ -4,22 +4,23 @@ use std::{
     fmt::{self, Debug},
     hash::Hash,
     marker::PhantomData,
+    mem::size_of,
     num::NonZeroU64,
 };
 use wgt::WasmNotSendSync;
 
 const _: () = {
-    if std::mem::size_of::<Index>() != 4 {
+    if size_of::<Index>() != 4 {
         panic!()
     }
 };
 const _: () = {
-    if std::mem::size_of::<Epoch>() != 4 {
+    if size_of::<Epoch>() != 4 {
         panic!()
     }
 };
 const _: () = {
-    if std::mem::size_of::<RawId>() != 8 {
+    if size_of::<RawId>() != 8 {
         panic!()
     }
 };
