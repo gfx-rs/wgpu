@@ -10,4 +10,4 @@ cargo run --bin wgpu-examples ray_shadows
 
 ## Screenshots
 
-![Shadow example](Screenshot.png)
+![Shadow example](screenshot.png)

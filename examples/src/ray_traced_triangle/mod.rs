@@ -1,4 +1,4 @@
-use glam::{Affine3A, Mat4, Vec3};
+use glam::{Mat4, Vec3};
 use std::time::Instant;
 use std::{env, mem};
 use wgpu::ray_tracing::{
@@ -16,7 +16,7 @@ struct Example {
     blit_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     blit_bind_group: wgpu::BindGroup,
-    storage_texture: Texture,
+    storage_texture: wgpu::Texture,
     start: Instant,
 }
 
@@ -24,8 +24,8 @@ struct Example {
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy, Debug)]
 struct Uniforms {
-    view_inverse: Mat4,
-    proj_inverse: Mat4,
+    view_inverse: [[f32; 4]; 4],
+    proj_inverse: [[f32; 4]; 4],
 }
 
 impl crate::framework::Example for Example {
@@ -33,9 +33,13 @@ impl crate::framework::Example for Example {
         wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE | wgpu::Features::RAY_QUERY
     }
 
+    fn required_limits() -> wgpu::Limits {
+        wgpu::Limits::default()
+    }
+
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        adapter: &wgpu::Adapter,
+        _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
@@ -44,8 +48,7 @@ impl crate::framework::Example for Example {
         for arg in env::args() {
             if arg == "index_buffer" {
                 index_buffer = true;
-            } else {
-                log::warn!("unknown arg {arg}")
+                log::info!("using index buffer")
             }
         }
 
@@ -90,7 +93,7 @@ impl crate::framework::Example for Example {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: false },
                         view_dimension: wgpu::TextureViewDimension::D2,
@@ -100,7 +103,7 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                     count: None,
                 },
@@ -109,11 +112,7 @@ impl crate::framework::Example for Example {
 
         let vertices: [f32; 9] = [1.0, 1.0, 0.0, -1.0, 1.0, 0.0, 0.0, -1.0, 0.0];
 
-        let vertices_size_in_bytes = vertices.len() * 4;
-
         let indices: [u32; 3] = [0, 1, 2];
-
-        let indices_size_in_bytes = indices.len() * 4;
 
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("vertex buffer"),
@@ -147,7 +146,7 @@ impl crate::framework::Example for Example {
                 update_mode: AccelerationStructureUpdateMode::Build,
             },
             BlasGeometrySizeDescriptors::Triangles {
-                desc: vec![blas_size_desc],
+                desc: vec![blas_size_desc.clone()],
             },
         );
 
@@ -160,55 +159,64 @@ impl crate::framework::Example for Example {
 
         let mut tlas_package = TlasPackage::new(tlas, 3);
 
-        *tlas_package.get_mut_single(0) = TlasInstance::new(
+        *tlas_package.get_mut_single(0).unwrap() = Some(TlasInstance::new(
             &blas,
-            Affine3A::from_translation(Vec3 {
+            Mat4::from_translation(Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
             })
-            .to_cols_array(),
+            .transpose()
+            .to_cols_array()[..12]
+                .try_into()
+                .unwrap(),
             0,
             0xff,
-        );
+        ));
 
-        *tlas_package.get_mut_single(2) = TlasInstance::new(
+        *tlas_package.get_mut_single(1).unwrap() = Some(TlasInstance::new(
             &blas,
-            Affine3A::from_translation(Vec3 {
+            Mat4::from_translation(Vec3 {
                 x: -1.0,
                 y: -1.0,
                 z: -2.0,
             })
-            .to_cols_array(),
+            .transpose()
+            .to_cols_array()[..12]
+                .try_into()
+                .unwrap(),
             0,
             0xff,
-        );
+        ));
 
-        *tlas_package.get_mut_single(2) = TlasInstance::new(
+        *tlas_package.get_mut_single(2).unwrap() = Some(TlasInstance::new(
             &blas,
-            Affine3A::from_translation(Vec3 {
+            Mat4::from_translation(Vec3 {
                 x: 1.0,
                 y: -1.0,
                 z: -2.0,
             })
-            .to_cols_array(),
+            .transpose()
+            .to_cols_array()[..12]
+                .try_into()
+                .unwrap(),
             0,
             0xff,
-        );
+        ));
 
         let uniforms = {
             let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
             let proj = Mat4::perspective_rh(59.0_f32.to_radians(), 1.0, 0.001, 1000.0);
 
             Uniforms {
-                view_inverse: view.inverse(),
-                proj_inverse: proj.inverse(),
+                view_inverse: view.inverse().to_cols_array_2d(),
+                proj_inverse: proj.inverse().to_cols_array_2d(),
             }
         };
 
         let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_ref(&uniforms),
+            contents: bytemuck::cast_slice(&[uniforms]),
             usage: BufferUsages::UNIFORM,
         });
 
@@ -281,7 +289,7 @@ impl crate::framework::Example for Example {
 
         let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline layout for blit.wgsl"),
-            bind_group_layouts: &[&bgl],
+            bind_group_layouts: &[&blit_bgl],
             push_constant_ranges: &[],
         });
 
@@ -376,8 +384,11 @@ impl crate::framework::Example for Example {
             .unwrap()
             .as_mut()
             .unwrap()
-            .transform =
-            Affine3A::from_rotation_y(self.start.elapsed().as_secs_f32() * 1000.0).to_cols_array();
+            .transform = Mat4::from_rotation_y(self.start.elapsed().as_secs_f32())
+            .transpose()
+            .to_cols_array()[..12]
+            .try_into()
+            .unwrap();
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

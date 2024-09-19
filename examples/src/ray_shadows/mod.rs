@@ -93,6 +93,22 @@ struct Example {
 
 const CAM_LOOK_AT: Vec3 = Vec3::new(0.0, 1.0, -1.5);
 
+fn create_matrix(config: &wgpu::SurfaceConfiguration) -> Uniforms {
+    let view = Mat4::look_at_rh(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
+    let proj = Mat4::perspective_rh(
+        59.0_f32.to_radians(),
+        config.width as f32 / config.height as f32,
+        0.1,
+        1000.0,
+    );
+
+    Uniforms {
+        view_inverse: view.inverse().to_cols_array_2d(),
+        proj_inverse: proj.inverse().to_cols_array_2d(),
+        vertex: (proj * view).to_cols_array_2d(),
+    }
+}
+
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::RAY_QUERY
@@ -116,21 +132,7 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let uniforms = {
-            let view = Mat4::look_at_rh(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
-            let proj = Mat4::perspective_rh(
-                59.0_f32.to_radians(),
-                config.width as f32 / config.height as f32,
-                0.001,
-                1000.0,
-            );
-
-            Uniforms {
-                view_inverse: view.inverse().to_cols_array_2d(),
-                proj_inverse: proj.inverse().to_cols_array_2d(),
-                vertex: (view * proj).to_cols_array_2d(),
-            }
-        };
+        let uniforms = create_matrix(config);
 
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
@@ -269,13 +271,8 @@ impl crate::framework::Example for Example {
                     transform_buffer_offset: None,
                 }]),
             }),
-            //iter::empty(),
             iter::once(&tlas_package),
         );
-        /*encoder.build_acceleration_structures(
-            iter::empty(),
-            iter::once(&tlas_package),
-        );*/
 
         queue.submit(Some(encoder.finish()));
 
@@ -318,17 +315,7 @@ impl crate::framework::Example for Example {
         _device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
-        let view = Mat4::look_at_rh(CAM_LOOK_AT, Vec3::ZERO, Vec3::Y);
-        let proj = Mat4::perspective_rh(
-            59.0_f32.to_radians(),
-            config.width as f32 / config.height as f32,
-            0.1,
-            1000.0,
-        );
-
-        self.uniforms.proj_inverse = proj.inverse().to_cols_array_2d();
-        self.uniforms.vertex = (proj * view).to_cols_array_2d();
-        self.uniforms.view_inverse = view.inverse().to_cols_array_2d();
+        self.uniforms = create_matrix(config);
 
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(&[self.uniforms]));
         queue.submit(None);
@@ -337,9 +324,12 @@ impl crate::framework::Example for Example {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         //device.push_error_scope(wgpu::ErrorFilter::Validation);
         const LIGHT_DISTANCE: f32 = 5.0;
-        const TIME_SCALE: f32 = 0.2;
-        let cos = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE).cos() * LIGHT_DISTANCE;
-        let sin = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE).sin() * LIGHT_DISTANCE;
+        const TIME_SCALE: f32 = -0.2;
+        const INITIAL_TIME: f32 = 1.0;
+        let cos = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE + INITIAL_TIME).cos()
+            * LIGHT_DISTANCE;
+        let sin = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE + INITIAL_TIME).sin()
+            * LIGHT_DISTANCE;
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -374,8 +364,8 @@ impl crate::framework::Example for Example {
             rpass.set_index_buffer(self.index_buf.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..12, 0, 0..1);
         }
-        device.poll(wgpu::Maintain::Wait);
         queue.submit(Some(encoder.finish()));
+        device.poll(wgpu::Maintain::Wait);
     }
 }
 
