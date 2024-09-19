@@ -76,6 +76,10 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 ### New Features
 
+#### Wgpu
+
+- Added initial acceleration structure and ray query support into wgpu. By @expenses @daniel-keitel @Vecvec @JMS55 @atlv24 in [#6291](https://github.com/gfx-rs/wgpu/pull/6291)
+
 #### Naga
 
 - Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
