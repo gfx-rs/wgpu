@@ -1027,11 +1027,13 @@ impl Global {
         &self,
         queue_id: QueueId,
         command_buffer_ids: &[id::CommandBufferId],
-    ) -> Result<SubmissionIndex, QueueSubmitError> {
+    ) -> Result<SubmissionIndex, (SubmissionIndex, QueueSubmitError)> {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit {queue_id:?}");
 
-        let (submit_index, callbacks) = {
+        let submit_index;
+
+        let res = 'error: {
             let hub = &self.hub;
 
             let queue = hub.queues.get(queue_id);
@@ -1042,7 +1044,7 @@ impl Global {
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
             let mut fence = device.fence.write();
-            let submit_index = device
+            submit_index = device
                 .active_submission_index
                 .fetch_add(1, Ordering::SeqCst)
                 + 1;
@@ -1119,18 +1121,29 @@ impl Global {
                         }
 
                         // execute resource transitions
-                        unsafe {
+                        if let Err(e) = unsafe {
                             baked.encoder.begin_encoding(hal_label(
                                 Some("(wgpu internal) Transit"),
                                 device.instance_flags,
                             ))
                         }
-                        .map_err(|e| device.handle_hal_error(e))?;
+                        .map_err(|e| device.handle_hal_error(e))
+                        {
+                            break 'error Err(e.into());
+                        }
 
                         //Note: locking the trackers has to be done after the storages
                         let mut trackers = device.trackers.lock();
-                        baked.initialize_buffer_memory(&mut trackers, &snatch_guard)?;
-                        baked.initialize_texture_memory(&mut trackers, device, &snatch_guard)?;
+                        if let Err(e) = baked.initialize_buffer_memory(&mut trackers, &snatch_guard)
+                        {
+                            break 'error Err(e.into());
+                        }
+                        if let Err(e) =
+                            baked.initialize_texture_memory(&mut trackers, device, &snatch_guard)
+                        {
+                            break 'error Err(e.into());
+                        }
+
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_device_tracker(
@@ -1147,13 +1160,16 @@ impl Global {
                         // Note: we could technically do it after all of the command buffers,
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
-                            unsafe {
+                            if let Err(e) = unsafe {
                                 baked.encoder.begin_encoding(hal_label(
                                     Some("(wgpu internal) Present"),
                                     device.instance_flags,
                                 ))
                             }
-                            .map_err(|e| device.handle_hal_error(e))?;
+                            .map_err(|e| device.handle_hal_error(e))
+                            {
+                                break 'error Err(e.into());
+                            }
                             let texture_barriers = trackers
                                 .textures
                                 .set_from_usage_scope_and_drain_transitions(
@@ -1180,7 +1196,7 @@ impl Global {
                     }
 
                     if let Some(first_error) = first_error {
-                        return Err(first_error);
+                        break 'error Err(first_error);
                     }
                 }
             }
@@ -1190,9 +1206,9 @@ impl Global {
             {
                 used_surface_textures.set_size(hub.textures.read().len());
                 for texture in pending_writes.dst_textures.values() {
-                    match texture.try_inner(&snatch_guard)? {
-                        TextureInner::Native { .. } => {}
-                        TextureInner::Surface { .. } => {
+                    match texture.try_inner(&snatch_guard) {
+                        Ok(TextureInner::Native { .. }) => {}
+                        Ok(TextureInner::Surface { .. }) => {
                             // Compare the Arcs by pointer as Textures don't implement Eq
                             submit_surface_textures_owned
                                 .insert(Arc::as_ptr(texture), texture.clone());
@@ -1203,6 +1219,7 @@ impl Global {
                                     .unwrap()
                             };
                         }
+                        Err(e) => break 'error Err(e.into()),
                     }
                 }
 
@@ -1224,10 +1241,12 @@ impl Global {
                 }
             }
 
-            if let Some(pending_execution) =
-                pending_writes.pre_submit(&device.command_allocator, device, &queue)?
-            {
-                active_executions.insert(0, pending_execution);
+            match pending_writes.pre_submit(&device.command_allocator, device, &queue) {
+                Ok(Some(pending_execution)) => {
+                    active_executions.insert(0, pending_execution);
+                }
+                Ok(None) => {}
+                Err(e) => break 'error Err(e.into()),
             }
 
             let hal_command_buffers = active_executions
@@ -1249,14 +1268,17 @@ impl Global {
                     submit_surface_textures.push(raw);
                 }
 
-                unsafe {
+                if let Err(e) = unsafe {
                     queue.raw().submit(
                         &hal_command_buffers,
                         &submit_surface_textures,
                         (fence.as_mut(), submit_index),
                     )
                 }
-                .map_err(|e| device.handle_hal_error(e))?;
+                .map_err(|e| device.handle_hal_error(e))
+                {
+                    break 'error Err(e.into());
+                }
 
                 // Advance the successful submission index.
                 device
@@ -1280,12 +1302,19 @@ impl Global {
             let (closures, _) =
                 match device.maintain(fence_guard, wgt::Maintain::Poll, snatch_guard) {
                     Ok(closures) => closures,
-                    Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
-                    Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
+                    Err(WaitIdleError::Device(err)) => {
+                        break 'error Err(QueueSubmitError::Queue(err))
+                    }
+                    Err(WaitIdleError::StuckGpu) => break 'error Err(QueueSubmitError::StuckGpu),
                     Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
                 };
 
-            (submit_index, closures)
+            Ok(closures)
+        };
+
+        let callbacks = match res {
+            Ok(ok) => ok,
+            Err(e) => return Err((submit_index, e)),
         };
 
         // the closures should execute with nothing locked!
