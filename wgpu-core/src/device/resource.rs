@@ -38,7 +38,6 @@ use arrayvec::ArrayVec;
 use once_cell::sync::OnceCell;
 
 use smallvec::SmallVec;
-use thiserror::Error;
 use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
@@ -185,14 +184,6 @@ impl Drop for Device {
             raw.exit(queue);
         }
     }
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum CreateDeviceError {
-    #[error("Not enough memory left to create device")]
-    OutOfMemory,
-    #[error("Failed to create internal buffer for initializing textures")]
-    FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
 impl Device {
