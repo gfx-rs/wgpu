@@ -1,7 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 #[cfg(feature = "trace")]
-use crate::ray_tracing::TraceBlasGeometries;
+use crate::ray_tracing::{TraceBlasGeometries, TraceTlasPackage, TraceBlasBuildEntry};
 use crate::{
     device::queue::TempResource,
     global::Global,
@@ -87,11 +87,11 @@ impl Global {
         .unwrap();
 
         #[cfg(feature = "trace")]
-        let trace_blas: Vec<crate::ray_tracing::TraceBlasBuildEntry> = blas_iter
-            .map(|x| {
-                let geometries = match x.geometries {
+        let trace_blas: Vec<TraceBlasBuildEntry> = blas_iter
+            .map(|blas_entry| {
+                let geometries = match blas_entry.geometries {
                     BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                        crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                        TraceBlasGeometries::TriangleGeometries(
                             triangle_geometries
                                 .map(|tg| crate::ray_tracing::TraceBlasTriangleGeometry {
                                     size: tg.size.clone(),
@@ -107,8 +107,8 @@ impl Global {
                         )
                     }
                 };
-                crate::ray_tracing::TraceBlasBuildEntry {
-                    blas_id: x.blas_id,
+                TraceBlasBuildEntry {
+                    blas_id: blas_entry.blas_id,
                     geometries,
                 }
             })
@@ -128,8 +128,8 @@ impl Global {
         }
 
         #[cfg(feature = "trace")]
-        let blas_iter = trace_blas.iter().map(|x| {
-            let geometries = match &x.geometries {
+        let blas_iter = trace_blas.iter().map(|blas_entry| {
+            let geometries = match &blas_entry.geometries {
                 TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.iter().map(|tg| BlasTriangleGeometry {
                         size: &tg.size,
@@ -145,7 +145,7 @@ impl Global {
                 }
             };
             BlasBuildEntry {
-                blas_id: x.blas_id,
+                blas_id: blas_entry.blas_id,
                 geometries,
             }
         });
@@ -366,11 +366,11 @@ impl Global {
         .unwrap();
 
         #[cfg(feature = "trace")]
-        let trace_blas: Vec<crate::ray_tracing::TraceBlasBuildEntry> = blas_iter
-            .map(|x| {
-                let geometries = match x.geometries {
+        let trace_blas: Vec<TraceBlasBuildEntry> = blas_iter
+            .map(|blas_entry| {
+                let geometries = match blas_entry.geometries {
                     BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                        crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                        TraceBlasGeometries::TriangleGeometries(
                             triangle_geometries
                                 .map(|tg| crate::ray_tracing::TraceBlasTriangleGeometry {
                                     size: tg.size.clone(),
@@ -386,17 +386,17 @@ impl Global {
                         )
                     }
                 };
-                crate::ray_tracing::TraceBlasBuildEntry {
-                    blas_id: x.blas_id,
+                TraceBlasBuildEntry {
+                    blas_id: blas_entry.blas_id,
                     geometries,
                 }
             })
             .collect();
 
         #[cfg(feature = "trace")]
-        let trace_tlas: Vec<crate::ray_tracing::TraceTlasPackage> = tlas_iter
-            .map(|x: TlasPackage| {
-                let instances = x
+        let trace_tlas: Vec<TraceTlasPackage> = tlas_iter
+            .map(|package: TlasPackage| {
+                let instances = package
                     .instances
                     .map(|instance| {
                         instance.map(|instance| crate::ray_tracing::TraceTlasInstance {
@@ -407,10 +407,10 @@ impl Global {
                         })
                     })
                     .collect();
-                crate::ray_tracing::TraceTlasPackage {
-                    tlas_id: x.tlas_id,
+                TraceTlasPackage {
+                    tlas_id: package.tlas_id,
                     instances,
-                    lowest_unmodified: x.lowest_unmodified,
+                    lowest_unmodified: package.lowest_unmodified,
                 }
             })
             .collect();
@@ -424,8 +424,8 @@ impl Global {
         }
 
         #[cfg(feature = "trace")]
-        let blas_iter = trace_blas.iter().map(|x| {
-            let geometries = match &x.geometries {
+        let blas_iter = trace_blas.iter().map(|blas_entry| {
+            let geometries = match &blas_entry.geometries {
                 TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.iter().map(|tg| BlasTriangleGeometry {
                         size: &tg.size,
@@ -441,14 +441,14 @@ impl Global {
                 }
             };
             BlasBuildEntry {
-                blas_id: x.blas_id,
+                blas_id: blas_entry.blas_id,
                 geometries,
             }
         });
 
         #[cfg(feature = "trace")]
-        let tlas_iter = trace_tlas.iter().map(|x| {
-            let instances = x.instances.iter().map(|instance| {
+        let tlas_iter = trace_tlas.iter().map(|tlas_package| {
+            let instances = tlas_package.instances.iter().map(|instance| {
                 instance
                     .as_ref()
                     .map(|instance| crate::ray_tracing::TlasInstance {
@@ -459,9 +459,9 @@ impl Global {
                     })
             });
             TlasPackage {
-                tlas_id: x.tlas_id,
+                tlas_id: tlas_package.tlas_id,
                 instances: Box::new(instances),
-                lowest_unmodified: x.lowest_unmodified,
+                lowest_unmodified: tlas_package.lowest_unmodified,
             }
         });
 
