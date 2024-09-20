@@ -23,21 +23,21 @@ impl Device {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         let size_info = match &sizes {
-            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => {
+            wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
                 let mut entries =
                     Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::with_capacity(
-                        desc.len(),
+                        descriptors.len(),
                     );
-                for x in desc {
-                    if x.index_count.is_some() != x.index_format.is_some() {
+                for desc in descriptors {
+                    if desc.index_count.is_some() != desc.index_format.is_some() {
                         return Err(CreateBlasError::MissingIndexData);
                     }
                     let indices =
-                        x.index_count
+                        desc.index_count
                             .map(|count| AccelerationStructureTriangleIndices::<
                                 dyn hal::DynBuffer,
                             > {
-                                format: x.index_format.unwrap(),
+                                format: desc.index_format.unwrap(),
                                 buffer: None,
                                 offset: 0,
                                 count,
@@ -45,22 +45,22 @@ impl Device {
                     if !self
                         .features
                         .allowed_vertex_formats_for_blas()
-                        .contains(&x.vertex_format)
+                        .contains(&desc.vertex_format)
                     {
                         return Err(CreateBlasError::InvalidVertexFormat(
-                            x.vertex_format,
+                            desc.vertex_format,
                             self.features.allowed_vertex_formats_for_blas(),
                         ));
                     }
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
                         vertex_buffer: None,
-                        vertex_format: x.vertex_format,
+                        vertex_format: desc.vertex_format,
                         first_vertex: 0,
-                        vertex_count: x.vertex_count,
+                        vertex_count: desc.vertex_count,
                         vertex_stride: 0,
                         indices,
                         transform: None,
-                        flags: x.flags,
+                        flags: desc.flags,
                     });
                 }
                 unsafe {

@@ -245,7 +245,7 @@ fn upload_scene_components(
                     update_mode: rt::AccelerationStructureUpdateMode::Build,
                 },
                 rt::BlasGeometrySizeDescriptors::Triangles {
-                    desc: size_desc.clone(),
+                    descriptors: size_desc.clone(),
                 },
             );
             (size_desc, blas)

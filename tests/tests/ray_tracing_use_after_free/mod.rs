@@ -35,7 +35,7 @@ fn execute(ctx: TestingContext) {
             update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {
-            desc: vec![blas_size.clone()],
+            descriptors: vec![blas_size.clone()],
         },
     );
     let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {

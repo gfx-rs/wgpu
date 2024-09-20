@@ -1,3 +1,12 @@
+// Ray tracing
+// Major missing optimizations (no api surface changes needed):
+// - use custom tracker to track build state
+// - no forced rebuilt (build mode deduction)
+// - lazy instance buffer allocation
+// - maybe share scratch and instance staging buffer allocation
+// - partial instance buffer uploads (api surface already designed with this in mind)
+// - ([non performance] extract function in build (rust function extraction with guards is a pain))
+
 use crate::{
     command::CommandEncoderError,
     device::DeviceError,
@@ -5,14 +14,6 @@ use crate::{
     resource::CreateBufferError,
 };
 use std::sync::Arc;
-/// Ray tracing
-/// Major missing optimizations (no api surface changes needed):
-/// - use custom tracker to track build state
-/// - no forced rebuilt (build mode deduction)
-/// - lazy instance buffer allocation
-/// - maybe share scratch and instance staging buffer allocation
-/// - partial instance buffer uploads (api surface already designed with this in mind)
-/// - ([non performance] extract function in build (rust function extraction with guards is a pain))
 use std::{num::NonZeroU64, slice};
 
 use crate::resource::{Blas, ResourceErrorIdent, Tlas};

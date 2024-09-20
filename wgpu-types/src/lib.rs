@@ -7464,7 +7464,7 @@ pub enum BlasGeometrySizeDescriptors {
     /// Triangle geometry version.
     Triangles {
         /// Descriptor for each triangle geometry.
-        desc: Vec<BlasTriangleGeometrySizeDescriptor>,
+        descriptors: Vec<BlasTriangleGeometrySizeDescriptor>,
     },
 }
 

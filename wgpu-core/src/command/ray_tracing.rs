@@ -1,3 +1,7 @@
+#[cfg(feature = "trace")]
+use crate::device::trace;
+#[cfg(feature = "trace")]
+use crate::ray_tracing::TraceBlasGeometries;
 use crate::{
     device::queue::TempResource,
     global::Global,
@@ -114,12 +118,10 @@ impl Global {
         let trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
-            list.push(
-                crate::device::trace::Command::BuildAccelerationStructuresUnsafeTlas {
-                    blas: trace_blas.clone(),
-                    tlas: trace_tlas.clone(),
-                },
-            );
+            list.push(trace::Command::BuildAccelerationStructuresUnsafeTlas {
+                blas: trace_blas.clone(),
+                tlas: trace_tlas.clone(),
+            });
             if !trace_tlas.is_empty() {
                 log::warn!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable!");
             }
@@ -128,9 +130,7 @@ impl Global {
         #[cfg(feature = "trace")]
         let blas_iter = trace_blas.iter().map(|x| {
             let geometries = match &x.geometries {
-                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
+                TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.iter().map(|tg| BlasTriangleGeometry {
                         size: &tg.size,
                         vertex_buffer: tg.vertex_buffer,
@@ -417,7 +417,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
-            list.push(crate::device::trace::Command::BuildAccelerationStructures {
+            list.push(trace::Command::BuildAccelerationStructures {
                 blas: trace_blas.clone(),
                 tlas: trace_tlas.clone(),
             });
@@ -426,9 +426,7 @@ impl Global {
         #[cfg(feature = "trace")]
         let blas_iter = trace_blas.iter().map(|x| {
             let geometries = match &x.geometries {
-                crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
+                TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.iter().map(|tg| BlasTriangleGeometry {
                         size: &tg.size,
                         vertex_buffer: tg.vertex_buffer,
@@ -813,7 +811,7 @@ fn iter_blas<'a>(
             BlasGeometries::TriangleGeometries(triangle_geometries) => {
                 for (i, mesh) in triangle_geometries.enumerate() {
                     let size_desc = match &blas.sizes {
-                        wgt::BlasGeometrySizeDescriptors::Triangles { desc } => desc,
+                        wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => descriptors,
                     };
                     if i >= size_desc.len() {
                         return Err(BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
@@ -947,7 +945,7 @@ fn iter_blas<'a>(
     Ok(())
 }
 
-/// Iterates over the buffers generated [iter_blas] and convert the barriers into hal barriers, and the triangles into [hal::AccelerationStructureEntries] (and also some validation).
+/// Iterates over the buffers generated in [iter_blas], convert the barriers into hal barriers, and the triangles into [hal::AccelerationStructureEntries] (and also some validation).
 fn iter_buffers<'a, 'b>(
     buf_storage: &'a mut BufferStorage<'b>,
     snatch_guard: &'a SnatchGuard,

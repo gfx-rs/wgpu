@@ -146,7 +146,7 @@ impl crate::framework::Example for Example {
                 update_mode: AccelerationStructureUpdateMode::Build,
             },
             BlasGeometrySizeDescriptors::Triangles {
-                desc: vec![blas_size_desc.clone()],
+                descriptors: vec![blas_size_desc.clone()],
             },
         );
 
