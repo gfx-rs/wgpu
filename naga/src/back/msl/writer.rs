@@ -3021,11 +3021,11 @@ impl<W: Write> Writer<W> {
                         let res_name = Baked(result).to_string();
                         self.start_baking_expression(result, context, &res_name)?;
                         self.named_expressions.insert(result, res_name);
-                        fun.to_msl()?
+                        fun.to_msl()
                     } else if context.resolve_type(value).scalar_width() == Some(8) {
                         fun.to_msl_64_bit()?
                     } else {
-                        fun.to_msl()?
+                        fun.to_msl()
                     };
 
                     // If the pointer we're passing to the atomic operation needs to be conditional
@@ -5970,8 +5970,8 @@ fn test_stack_size() {
 }
 
 impl crate::AtomicFunction {
-    fn to_msl(self) -> Result<&'static str, Error> {
-        Ok(match self {
+    const fn to_msl(self) -> &'static str {
+        match self {
             Self::Add => "fetch_add",
             Self::Subtract => "fetch_sub",
             Self::And => "fetch_and",
@@ -5981,7 +5981,7 @@ impl crate::AtomicFunction {
             Self::Max => "fetch_max",
             Self::Exchange { compare: None } => "exchange",
             Self::Exchange { compare: Some(_) } => ATOMIC_COMP_EXCH_FUNCTION_KEY,
-        })
+        }
     }
 
     fn to_msl_64_bit(self) -> Result<&'static str, Error> {
