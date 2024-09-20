@@ -115,6 +115,7 @@ impl Drop for BlasShared {
 pub struct Tlas {
     pub(crate) context: Arc<C>,
     pub(crate) data: Box<Data>,
+    pub(crate) max_instances: u32,
 }
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
@@ -205,8 +206,8 @@ static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
 impl TlasPackage {
     /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
     /// (max_instances needs to fit into tlas)
-    pub fn new(tlas: Tlas, max_instances: u32) -> Self {
-        Self::new_with_instances(tlas, vec![None; max_instances as usize])
+    pub fn new(tlas: Tlas) -> Self {
+        Self::new_with_instances(tlas, vec![None; tlas.max_instances as usize])
     }
 
     /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
@@ -383,6 +384,7 @@ impl DeviceRayTracing for Device {
         Tlas {
             context: Arc::clone(&self.context),
             data,
+            max_instances: desc.max_instances,
         }
     }
 }
