@@ -2,8 +2,8 @@
 use crate::device::trace;
 #[cfg(feature = "trace")]
 use crate::ray_tracing::{
-    TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
-    TraceTlasPackage,
+    TlasInstance, TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry,
+    TraceTlasInstance, TraceTlasPackage,
 };
 use crate::{
     device::queue::TempResource,
@@ -13,7 +13,7 @@ use crate::{
     lock::RwLockReadGuard,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
-        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
+        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasPackage,
         ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
