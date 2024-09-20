@@ -53,7 +53,7 @@ fn execute(ctx: TestingContext) {
             update_mode: rt::AccelerationStructureUpdateMode::Build,
         },
         rt::BlasGeometrySizeDescriptors::Triangles {
-            desc: vec![blas_geo_size_desc.clone()],
+            descriptors: vec![blas_geo_size_desc.clone()],
         },
     );
 
