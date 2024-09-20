@@ -1,7 +1,10 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 #[cfg(feature = "trace")]
-use crate::ray_tracing::{TraceBlasBuildEntry, TraceBlasGeometries, TraceTlasPackage};
+use crate::ray_tracing::{
+    TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
+    TraceTlasPackage,
+};
 use crate::{
     device::queue::TempResource,
     global::Global,
@@ -10,7 +13,7 @@ use crate::{
     lock::RwLockReadGuard,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
-        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasPackage,
+        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
         ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
@@ -93,7 +96,7 @@ impl Global {
                     BlasGeometries::TriangleGeometries(triangle_geometries) => {
                         TraceBlasGeometries::TriangleGeometries(
                             triangle_geometries
-                                .map(|tg| crate::ray_tracing::TraceBlasTriangleGeometry {
+                                .map(|tg| TraceBlasTriangleGeometry {
                                     size: tg.size.clone(),
                                     vertex_buffer: tg.vertex_buffer,
                                     index_buffer: tg.index_buffer,
@@ -372,7 +375,7 @@ impl Global {
                     BlasGeometries::TriangleGeometries(triangle_geometries) => {
                         TraceBlasGeometries::TriangleGeometries(
                             triangle_geometries
-                                .map(|tg| crate::ray_tracing::TraceBlasTriangleGeometry {
+                                .map(|tg| TraceBlasTriangleGeometry {
                                     size: tg.size.clone(),
                                     vertex_buffer: tg.vertex_buffer,
                                     index_buffer: tg.index_buffer,
@@ -399,7 +402,7 @@ impl Global {
                 let instances = package
                     .instances
                     .map(|instance| {
-                        instance.map(|instance| crate::ray_tracing::TraceTlasInstance {
+                        instance.map(|instance| TraceTlasInstance {
                             blas_id: instance.blas_id,
                             transform: *instance.transform,
                             custom_index: instance.custom_index,
@@ -449,14 +452,12 @@ impl Global {
         #[cfg(feature = "trace")]
         let tlas_iter = trace_tlas.iter().map(|tlas_package| {
             let instances = tlas_package.instances.iter().map(|instance| {
-                instance
-                    .as_ref()
-                    .map(|instance| crate::ray_tracing::TlasInstance {
-                        blas_id: instance.blas_id,
-                        transform: &instance.transform,
-                        custom_index: instance.custom_index,
-                        mask: instance.mask,
-                    })
+                instance.as_ref().map(|instance| TlasInstance {
+                    blas_id: instance.blas_id,
+                    transform: &instance.transform,
+                    custom_index: instance.custom_index,
+                    mask: instance.mask,
+                })
             });
             TlasPackage {
                 tlas_id: tlas_package.tlas_id,
