@@ -1,7 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 #[cfg(feature = "trace")]
-use crate::ray_tracing::{TraceBlasGeometries, TraceTlasPackage, TraceBlasBuildEntry};
+use crate::ray_tracing::{TraceBlasBuildEntry, TraceBlasGeometries, TraceTlasPackage};
 use crate::{
     device::queue::TempResource,
     global::Global,
