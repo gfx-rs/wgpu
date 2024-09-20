@@ -1,8 +1,6 @@
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use hal::AccelerationStructureTriangleIndices;
-
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::rank;
@@ -15,6 +13,8 @@ use crate::{
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
+use hal::AccelerationStructureTriangleIndices;
+use wgt::Features;
 
 impl Device {
     fn create_blas(
@@ -182,6 +182,13 @@ impl Global {
                 Err(err) => break 'error CreateBlasError::Device(err),
             };
 
+            if !device
+                .features
+                .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+            {
+                break 'error CreateBlasError::MissingFeature;
+            }
+
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
                 trace.add(trace::Action::CreateBlas {
@@ -225,6 +232,14 @@ impl Global {
                 Ok(_) => {}
                 Err(e) => break 'error CreateTlasError::Device(e),
             }
+
+            if !device
+                .features
+                .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+            {
+                break 'error CreateTlasError::MissingFeature;
+            }
+
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
                 trace.add(trace::Action::CreateTlas {

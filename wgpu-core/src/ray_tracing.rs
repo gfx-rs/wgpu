@@ -31,6 +31,8 @@ pub enum CreateBlasError {
     MissingIndexData,
     #[error("Provided format was not within allowed formats. Provided format: {0:?}. Allowed formats: {1:?}")]
     InvalidVertexFormat(VertexFormat, Vec<VertexFormat>),
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -39,6 +41,8 @@ pub enum CreateTlasError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     CreateBufferError(#[from] CreateBufferError),
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
     #[error("Unimplemented Tlas error: this error is not yet implemented")]
     Unimplemented,
 }
@@ -135,6 +139,9 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(ResourceErrorIdent),
+
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
 
     #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
     MissingTlasInputUsageFlag(ResourceErrorIdent),

@@ -13,7 +13,7 @@ use crate::{
     FastHashSet,
 };
 
-use wgt::{math::align_to, BufferAddress, BufferUsages};
+use wgt::{math::align_to, BufferAddress, BufferUsages, Features};
 
 use super::{BakedCommands, CommandBufferMutable};
 use crate::ray_tracing::BlasTriangleGeometry;
@@ -66,6 +66,13 @@ impl Global {
         let tlas_guard = hub.tlas_s.read();
 
         let device = &cmd_buf.device;
+
+        if !device
+            .features
+            .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+        {
+            return Err(BuildAccelerationStructureError::MissingFeature);
+        }
 
         let build_command_index = NonZeroU64::new(
             device
@@ -342,6 +349,13 @@ impl Global {
         let tlas_guard = hub.tlas_s.read();
 
         let device = &cmd_buf.device;
+
+        if !device
+            .features
+            .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+        {
+            return Err(BuildAccelerationStructureError::MissingFeature);
+        }
 
         let build_command_index = NonZeroU64::new(
             device
