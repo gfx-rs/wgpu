@@ -49,7 +49,7 @@ fn execute(ctx: TestingContext) {
         contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
         usage: BufferUsages::BLAS_INPUT,
     });
-    let mut tlas_package = TlasPackage::new(tlas, 1);
+    let mut tlas_package = TlasPackage::new(tlas);
     *tlas_package.get_mut_single(0).unwrap() = Some(TlasInstance::new(
         &blas,
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],

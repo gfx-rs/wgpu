@@ -64,7 +64,7 @@ fn execute(ctx: TestingContext) {
         max_instances,
     });
 
-    let mut tlas_package = rt::TlasPackage::new(tlas, max_instances);
+    let mut tlas_package = rt::TlasPackage::new(tlas);
 
     for i in 0..2500 {
         eprintln!("Setting TlasInstances in loop {}", i);
