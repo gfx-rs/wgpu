@@ -157,7 +157,7 @@ impl crate::framework::Example for Example {
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        let mut tlas_package = TlasPackage::new(tlas, 3);
+        let mut tlas_package = TlasPackage::new(tlas);
 
         *tlas_package.get_mut_single(0).unwrap() = Some(TlasInstance::new(
             &blas,

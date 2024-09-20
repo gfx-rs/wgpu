@@ -462,7 +462,7 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let mut tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
+        let mut tlas_package = rt::TlasPackage::new(tlas);
 
         let dist = 3.0;
 

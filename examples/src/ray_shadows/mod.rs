@@ -245,7 +245,7 @@ impl crate::framework::Example for Example {
             cache: None,
         });
 
-        let mut tlas_package = rt::TlasPackage::new(tlas, 1);
+        let mut tlas_package = rt::TlasPackage::new(tlas);
 
         *tlas_package.get_mut_single(0).unwrap() = Some(rt::TlasInstance::new(
             &blas,

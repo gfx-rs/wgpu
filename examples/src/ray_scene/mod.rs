@@ -366,7 +366,7 @@ impl crate::framework::Example for Example {
             max_instances: side_count * side_count,
         });
 
-        let tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
+        let tlas_package = rt::TlasPackage::new(tlas);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,

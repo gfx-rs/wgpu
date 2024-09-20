@@ -238,7 +238,7 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
+        let tlas_package = rt::TlasPackage::new(tlas);
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
