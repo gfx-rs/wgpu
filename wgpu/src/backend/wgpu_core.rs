@@ -474,6 +474,18 @@ pub struct Queue {
 }
 
 #[derive(Debug)]
+pub struct ComputePipeline {
+    id: wgc::id::ComputePipelineId,
+    error_sink: ErrorSink,
+}
+
+#[derive(Debug)]
+pub struct RenderPipeline {
+    id: wgc::id::RenderPipelineId,
+    error_sink: ErrorSink,
+}
+
+#[derive(Debug)]
 pub struct ComputePass {
     pass: wgc::command::ComputePass,
     error_sink: ErrorSink,
@@ -517,8 +529,8 @@ impl crate::Context for ContextWgpuCore {
     type TextureData = Texture;
     type QuerySetData = wgc::id::QuerySetId;
     type PipelineLayoutData = wgc::id::PipelineLayoutId;
-    type RenderPipelineData = wgc::id::RenderPipelineId;
-    type ComputePipelineData = wgc::id::ComputePipelineId;
+    type RenderPipelineData = RenderPipeline;
+    type ComputePipelineData = ComputePipeline;
     type PipelineCacheData = wgc::id::PipelineCacheId;
     type CommandEncoderData = CommandEncoder;
     type ComputePassData = ComputePass;
@@ -1116,7 +1128,10 @@ impl crate::Context for ContextWgpuCore {
                 "Device::create_render_pipeline",
             );
         }
-        id
+        RenderPipeline {
+            id,
+            error_sink: Arc::clone(&device_data.error_sink),
+        }
     }
     fn device_create_compute_pipeline(
         &self,
@@ -1158,7 +1173,10 @@ impl crate::Context for ContextWgpuCore {
                 "Device::create_compute_pipeline",
             );
         }
-        id
+        ComputePipeline {
+            id,
+            error_sink: Arc::clone(&device_data.error_sink),
+        }
     }
 
     unsafe fn device_create_pipeline_cache(
@@ -1550,11 +1568,11 @@ impl crate::Context for ContextWgpuCore {
     }
 
     fn compute_pipeline_drop(&self, pipeline_data: &Self::ComputePipelineData) {
-        self.0.compute_pipeline_drop(*pipeline_data)
+        self.0.compute_pipeline_drop(pipeline_data.id)
     }
 
     fn render_pipeline_drop(&self, pipeline_data: &Self::RenderPipelineData) {
-        self.0.render_pipeline_drop(*pipeline_data)
+        self.0.render_pipeline_drop(pipeline_data.id)
     }
 
     fn pipeline_cache_drop(&self, cache_data: &Self::PipelineCacheData) {
@@ -1568,9 +1586,13 @@ impl crate::Context for ContextWgpuCore {
     ) -> Self::BindGroupLayoutData {
         let (id, error) =
             self.0
-                .compute_pipeline_get_bind_group_layout(*pipeline_data, index, None);
+                .compute_pipeline_get_bind_group_layout(pipeline_data.id, index, None);
         if let Some(err) = error {
-            panic!("Error reflecting bind group {index}: {err}");
+            self.handle_error_nolabel(
+                &pipeline_data.error_sink,
+                err,
+                "ComputePipeline::get_bind_group_layout",
+            )
         }
         id
     }
@@ -1580,11 +1602,15 @@ impl crate::Context for ContextWgpuCore {
         pipeline_data: &Self::RenderPipelineData,
         index: u32,
     ) -> Self::BindGroupLayoutData {
-        let (id, error) = self
-            .0
-            .render_pipeline_get_bind_group_layout(*pipeline_data, index, None);
+        let (id, error) =
+            self.0
+                .render_pipeline_get_bind_group_layout(pipeline_data.id, index, None);
         if let Some(err) = error {
-            panic!("Error reflecting bind group {index}: {err}");
+            self.handle_error_nolabel(
+                &pipeline_data.error_sink,
+                err,
+                "RenderPipeline::get_bind_group_layout",
+            )
         }
         id
     }
@@ -2127,7 +2153,7 @@ impl crate::Context for ContextWgpuCore {
     ) {
         if let Err(cause) = self
             .0
-            .compute_pass_set_pipeline(&mut pass_data.pass, *pipeline_data)
+            .compute_pass_set_pipeline(&mut pass_data.pass, pipeline_data.id)
         {
             self.handle_error(
                 &pass_data.error_sink,
@@ -2330,7 +2356,7 @@ impl crate::Context for ContextWgpuCore {
         encoder_data: &mut Self::RenderBundleEncoderData,
         pipeline_data: &Self::RenderPipelineData,
     ) {
-        wgpu_render_bundle_set_pipeline(encoder_data, *pipeline_data)
+        wgpu_render_bundle_set_pipeline(encoder_data, pipeline_data.id)
     }
 
     fn render_bundle_encoder_set_bind_group(
@@ -2453,7 +2479,7 @@ impl crate::Context for ContextWgpuCore {
     ) {
         if let Err(cause) = self
             .0
-            .render_pass_set_pipeline(&mut pass_data.pass, *pipeline_data)
+            .render_pass_set_pipeline(&mut pass_data.pass, pipeline_data.id)
         {
             self.handle_error(
                 &pass_data.error_sink,
