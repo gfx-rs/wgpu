@@ -37,7 +37,7 @@ static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 #[derive(Debug)]
 /// Definition for a triangle geometry.
 /// The size must match the rest of the structures fields, otherwise the build will fail.
-/// (e.g. if a index count is present in the size, the index buffer must be present as well.)
+/// (e.g. if index count is present in the size, the index buffer must be present as well.)
 pub struct BlasTriangleGeometry<'a> {
     /// Sub descriptor for the size defining attributes of a triangle geometry.
     pub size: &'a BlasTriangleGeometrySizeDescriptor,
@@ -135,7 +135,7 @@ impl Drop for Tlas {
 }
 
 /// Entry for a top level acceleration structure build.
-/// Used with raw instance buffers for a unvalidated builds.
+/// Used with raw instance buffers for an unvalidated builds.
 pub struct TlasBuildEntry<'a> {
     /// Reference to the acceleration structure.
     pub tlas: &'a Tlas,
@@ -150,11 +150,12 @@ static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     pub(crate) blas: Arc<BlasShared>,
-    /// Affine transform matrix 3x4 (rows x columns, row mayor order).
+    /// Affine transform matrix 3x4 (rows x columns, row major order).
     pub transform: [f32; 12],
     /// Custom index for the instance used inside the shader (max 24 bits).
     pub custom_index: u32,
     /// Mask for the instance used inside the shader to filter instances.
+    /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
 }
 
@@ -164,6 +165,11 @@ impl TlasInstance {
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
     /// - custom_index: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
+    /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
+    /// but it can still be destroyed. Destroying a BLAS that is referenced by one or more
+    /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
+    /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
+    /// generate a validation error.
     pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
         Self {
             blas: blas.shared.clone(),
@@ -174,6 +180,8 @@ impl TlasInstance {
     }
 
     /// Set the bottom level acceleration structure.
+    /// See the note on [TlasInstance::new] about the
+    /// guarantees of keeping a BLAS alive.
     pub fn set_blas(&mut self, blas: &Blas) {
         self.blas = blas.shared.clone();
     }
@@ -211,7 +219,8 @@ impl TlasPackage {
     }
 
     /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
-    /// This constructor moves the instances into the package (the number of instances needs to fit into tlas).
+    /// This constructor moves the instances into the package (the number of instances needs to fit into tlas,
+    /// otherwise when building a validation error will be raised).
     pub fn new_with_instances(tlas: Tlas, instances: Vec<Option<TlasInstance>>) -> Self {
         Self {
             tlas,
@@ -242,7 +251,9 @@ impl TlasPackage {
     /// Get a single mutable reference to an instance.
     /// Returns None if the range is out of bounds.
     /// All elements from the lowest accessed index up are marked as modified.
-    /// For better performance it is recommended to reduce access to low elements.
+    // this recommendation is not useful yet, but is likely to be when ability to update arrives or possible optimisations for building get implemented.
+    /// For best performance it is recommended to prefer access to low elements and modify higher elements as little as possible.
+    /// This can be done by ordering instances from the most to the least used
     pub fn get_mut_single(&mut self, index: usize) -> Option<&mut Option<TlasInstance>> {
         if index >= self.instances.len() {
             return None;
@@ -392,14 +403,22 @@ impl DeviceRayTracing for Device {
 /// Trait to add ray tracing functions to a [`CommandEncoder`].
 pub trait CommandEncoderRayTracing {
     /// Build bottom and top level acceleration structures.
-    /// - blas: Iterator of bottom level acceleration structure entries to build
-    ///     For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at bottom level acceleration structure creation:
+    /// Builds the BLASes then the TLASes, but does ***not*** build the BLASes into the TLASes,
+    /// that must be done by setting a TLAS instance in the TLAS package to one that contains the BLAS (and with an appropriate transform)
+    ///
+    /// # Validation
+    ///
+    /// - blas: Iterator of bottom level acceleration structure entries to build.
+    ///     For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at BLAS creation, this means:
     ///     - Less or equal number of geometries
     ///     - Same kind of geometry (with index buffer or without) (same vertex/index format)
     ///     - Same flags
     ///     - Less or equal number of vertices
     ///     - Less or equal number of indices (if applicable)
     /// - tlas: iterator of top level acceleration structure packages to build
+    ///     For each entry:
+    ///     - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
+    ///     - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
     ///
     /// A bottom level acceleration structure may be build and used as a reference in a top level acceleration structure in the same invocation of this function.
     ///
