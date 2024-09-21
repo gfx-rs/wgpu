@@ -723,6 +723,9 @@ pub trait Device: WasmNotSendSync {
     /// - The given `buffer` must not currently be mapped.
     unsafe fn destroy_buffer(&self, buffer: <Self::A as Api>::Buffer);
 
+    /// A hook for when a wgpu-core buffer is created from a raw wgpu-hal buffer.
+    unsafe fn add_raw_buffer(&self, buffer: &<Self::A as Api>::Buffer);
+
     /// Return a pointer to CPU memory mapping the contents of `buffer`.
     ///
     /// Buffer mappings are persistent: the buffer may remain mapped on the CPU
@@ -814,6 +817,10 @@ pub trait Device: WasmNotSendSync {
         desc: &TextureDescriptor,
     ) -> Result<<Self::A as Api>::Texture, DeviceError>;
     unsafe fn destroy_texture(&self, texture: <Self::A as Api>::Texture);
+
+    /// A hook for when a wgpu-core texture is created from a raw wgpu-hal texture.
+    unsafe fn add_raw_texture(&self, texture: &<Self::A as Api>::Texture);
+
     unsafe fn create_texture_view(
         &self,
         texture: &<Self::A as Api>::Texture,

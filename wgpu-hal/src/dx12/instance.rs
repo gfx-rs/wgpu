@@ -34,7 +34,7 @@ impl crate::Instance for super::Instance {
             .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION)
         {
             // Enable debug layer
-            if let Ok(debug_controller) = lib_main.debug_interface() {
+            if let Ok(Some(debug_controller)) = lib_main.debug_interface() {
                 if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
                     unsafe { debug_controller.EnableDebugLayer() }
                 }

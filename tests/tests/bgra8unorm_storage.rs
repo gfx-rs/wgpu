@@ -110,7 +110,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
                 timestamp_writes: None,
             });
 
-            pass.set_bind_group(0, &bg, &[]);
+            pass.set_bind_group(0, Some(&bg), &[]);
             pass.set_pipeline(&pipeline);
             pass.dispatch_workgroups(256, 256, 1);
         }

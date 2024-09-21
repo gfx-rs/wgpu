@@ -20,6 +20,12 @@ super::impl_partialeq_eq_hash!(ComputePipeline);
 
 impl ComputePipeline {
     /// Get an object representing the bind group layout at a given index.
+    ///
+    /// If this pipeline was created with a [default layout][ComputePipelineDescriptor::layout],
+    /// then bind groups created with the returned `BindGroupLayout` can only be used with this
+    /// pipeline.
+    ///
+    /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
         let context = Arc::clone(&self.context);
         let data = self
@@ -48,6 +54,25 @@ pub struct ComputePipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
+    ///
+    /// If this is set, then [`Device::create_compute_pipeline`] will raise a validation error if
+    /// the layout doesn't match what the shader module(s) expect.
+    ///
+    /// Using the same [`PipelineLayout`] for many [`RenderPipeline`] or [`ComputePipeline`]
+    /// pipelines guarantees that you don't have to rebind any resources when switching between
+    /// those pipelines.
+    ///
+    /// ## Default pipeline layout
+    ///
+    /// If `layout` is `None`, then the pipeline has a [default layout] created and used instead.
+    /// The default layout is deduced from the shader modules.
+    ///
+    /// You can use [`ComputePipeline::get_bind_group_layout`] to create bind groups for use with
+    /// the default layout. However, these bind groups cannot be used with any other pipelines. This
+    /// is convenient for simple pipelines, but using an explicit layout is recommended in most
+    /// cases.
+    ///
+    /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,

@@ -92,7 +92,10 @@ use crate::{
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
-    resource::{Buffer, DestroyedResourceError, Labeled, ParentDevice, TrackingData},
+    resource::{
+        Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
+        TrackingData,
+    },
     resource_log,
     snatch::SnatchGuard,
     track::RenderBundleScope,
@@ -578,15 +581,20 @@ impl RenderBundleEncoder {
 
 fn set_bind_group(
     state: &mut State,
-    bind_group_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<BindGroup>>,
+    bind_group_guard: &crate::storage::Storage<Fallible<BindGroup>>,
     dynamic_offsets: &[u32],
     index: u32,
     num_dynamic_offsets: usize,
-    bind_group_id: id::Id<id::markers::BindGroup>,
+    bind_group_id: Option<id::Id<id::markers::BindGroup>>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let bind_group = bind_group_guard
-        .get_owned(bind_group_id)
-        .map_err(|_| RenderCommandError::InvalidBindGroupId(bind_group_id))?;
+    if bind_group_id.is_none() {
+        // TODO: do appropriate cleanup for null bind_group.
+        return Ok(());
+    }
+
+    let bind_group_id = bind_group_id.unwrap();
+
+    let bind_group = bind_group_guard.get(bind_group_id).get()?;
 
     bind_group.same_device(&state.device)?;
 
@@ -623,15 +631,13 @@ fn set_bind_group(
 
 fn set_pipeline(
     state: &mut State,
-    pipeline_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<RenderPipeline>>,
+    pipeline_guard: &crate::storage::Storage<Fallible<RenderPipeline>>,
     context: &RenderPassContext,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
     pipeline_id: id::Id<id::markers::RenderPipeline>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let pipeline = pipeline_guard
-        .get_owned(pipeline_id)
-        .map_err(|_| RenderCommandError::InvalidPipelineId(pipeline_id))?;
+    let pipeline = pipeline_guard.get(pipeline_id).get()?;
 
     pipeline.same_device(&state.device)?;
 
@@ -666,15 +672,13 @@ fn set_pipeline(
 
 fn set_index_buffer(
     state: &mut State,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
+    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
     size: Option<std::num::NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
-    let buffer = buffer_guard
-        .get_owned(buffer_id)
-        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
+    let buffer = buffer_guard.get(buffer_id).get()?;
 
     state
         .trackers
@@ -701,7 +705,7 @@ fn set_index_buffer(
 
 fn set_vertex_buffer(
     state: &mut State,
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
+    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
@@ -716,9 +720,7 @@ fn set_vertex_buffer(
         .into());
     }
 
-    let buffer = buffer_guard
-        .get_owned(buffer_id)
-        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
+    let buffer = buffer_guard.get(buffer_id).get()?;
 
     state
         .trackers
@@ -845,7 +847,7 @@ fn draw_indexed(
 fn multi_draw_indirect(
     state: &mut State,
     dynamic_offsets: &[u32],
-    buffer_guard: &crate::lock::RwLockReadGuard<crate::storage::Storage<Buffer>>,
+    buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
     indexed: bool,
@@ -857,9 +859,7 @@ fn multi_draw_indirect(
     let pipeline = state.pipeline()?;
     let used_bind_groups = pipeline.used_bind_groups;
 
-    let buffer = buffer_guard
-        .get_owned(buffer_id)
-        .map_err(|_| RenderCommandError::InvalidBufferId(buffer_id))?;
+    let buffer = buffer_guard.get(buffer_id).get()?;
 
     state
         .trackers
@@ -981,12 +981,17 @@ impl RenderBundle {
                     num_dynamic_offsets,
                     bind_group,
                 } => {
-                    let raw_bg = bind_group.try_raw(snatch_guard)?;
+                    let mut bg = None;
+                    if bind_group.is_some() {
+                        let bind_group = bind_group.as_ref().unwrap();
+                        let raw_bg = bind_group.try_raw(snatch_guard)?;
+                        bg = Some(raw_bg);
+                    }
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
                             *index,
-                            raw_bg,
+                            bg,
                             &offsets[..*num_dynamic_offsets],
                         )
                     };
@@ -1501,7 +1506,7 @@ impl State {
                         let offsets = &contents.dynamic_offsets;
                         return Some(ArcRenderCommand::SetBindGroup {
                             index: i.try_into().unwrap(),
-                            bind_group: contents.bind_group.clone(),
+                            bind_group: Some(contents.bind_group.clone()),
                             num_dynamic_offsets: offsets.end - offsets.start,
                         });
                     }
@@ -1526,6 +1531,8 @@ pub(super) enum RenderBundleErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
     Bind(#[from] BindError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl<T> From<T> for RenderBundleErrorInner
@@ -1581,7 +1588,7 @@ pub mod bundle_ffi {
     pub unsafe extern "C" fn wgpu_render_bundle_set_bind_group(
         bundle: &mut RenderBundleEncoder,
         index: u32,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {

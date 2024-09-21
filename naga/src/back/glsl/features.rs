@@ -399,7 +399,7 @@ impl<'a, W> Writer<'a, W> {
                             | StorageFormat::Rg16Float
                             | StorageFormat::Rgb10a2Uint
                             | StorageFormat::Rgb10a2Unorm
-                            | StorageFormat::Rg11b10UFloat
+                            | StorageFormat::Rg11b10Ufloat
                             | StorageFormat::Rg32Uint
                             | StorageFormat::Rg32Sint
                             | StorageFormat::Rg32Float => {

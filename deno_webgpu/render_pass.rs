@@ -231,7 +231,7 @@ pub fn op_webgpu_render_pass_set_bind_group(
         .render_pass_set_bind_group(
             &mut render_pass_resource.0.borrow_mut(),
             index,
-            bind_group_resource.1,
+            Some(bind_group_resource.1),
             dynamic_offsets_data,
         )?;
 

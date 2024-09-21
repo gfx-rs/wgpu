@@ -16,7 +16,7 @@ mod selection;
 mod subgroup;
 mod writer;
 
-pub use spirv::Capability;
+pub use spirv::{Capability, SourceLanguage};
 
 use crate::arena::{Handle, HandleVec};
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
@@ -89,6 +89,7 @@ impl IdGenerator {
 pub struct DebugInfo<'a> {
     pub source_code: &'a str,
     pub file_name: &'a std::path::Path,
+    pub language: SourceLanguage,
 }
 
 /// A SPIR-V block to which we are still adding instructions.

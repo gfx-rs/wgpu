@@ -286,7 +286,7 @@ pub enum ExpressionContextType<'temp, 'out> {
     /// We are lowering to an arbitrary runtime expression, to be
     /// included in a function's body.
     ///
-    /// The given [`RuntimeExpressionContext`] holds information about local
+    /// The given [`LocalExpressionContext`] holds information about local
     /// variables, arguments, and other definitions available only to runtime
     /// expressions, not constant or override expressions.
     Runtime(LocalExpressionContext<'temp, 'out>),

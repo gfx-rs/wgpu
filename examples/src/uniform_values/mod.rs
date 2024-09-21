@@ -327,7 +327,11 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                     });
                                 render_pass.set_pipeline(&wgpu_context_ref.pipeline);
                                 // (9)
-                                render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]);
+                                render_pass.set_bind_group(
+                                    0,
+                                    Some(&wgpu_context_ref.bind_group),
+                                    &[],
+                                );
                                 render_pass.draw(0..3, 0..1);
                             }
                             wgpu_context_ref.queue.submit(Some(encoder.finish()));

@@ -1,4 +1,4 @@
-use crate::{device::bgl, FastHashMap, FastHashSet};
+use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 use arrayvec::ArrayVec;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
@@ -200,8 +200,6 @@ pub enum InputError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum StageError {
-    #[error("Shader module is invalid")]
-    InvalidModule,
     #[error(
         "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension limit {limit:?} and the total invocation limit {total}"
     )]
@@ -241,6 +239,8 @@ pub enum StageError {
         but no entry point was specified"
     )]
     MultipleEntryPointsFound,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -275,7 +275,7 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
 
         Tf::Rgb10a2Uint => Sf::Rgb10a2Uint,
         Tf::Rgb10a2Unorm => Sf::Rgb10a2Unorm,
-        Tf::Rg11b10UFloat => Sf::Rg11b10UFloat,
+        Tf::Rg11b10Ufloat => Sf::Rg11b10Ufloat,
 
         Tf::Rg32Uint => Sf::Rg32Uint,
         Tf::Rg32Sint => Sf::Rg32Sint,
@@ -331,7 +331,7 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
 
         Sf::Rgb10a2Uint => Tf::Rgb10a2Uint,
         Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
-        Sf::Rg11b10UFloat => Tf::Rg11b10UFloat,
+        Sf::Rg11b10Ufloat => Tf::Rg11b10Ufloat,
 
         Sf::Rg32Uint => Tf::Rg32Uint,
         Sf::Rg32Sint => Tf::Rg32Sint,
@@ -658,7 +658,7 @@ impl NumericType {
             Tf::Rgba8Sint | Tf::Rgba16Sint | Tf::Rgba32Sint => {
                 (NumericDimension::Vector(Vs::Quad), Scalar::I32)
             }
-            Tf::Rg11b10UFloat => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
+            Tf::Rg11b10Ufloat => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
             Tf::Stencil8
             | Tf::Depth16Unorm
             | Tf::Depth32Float

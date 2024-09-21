@@ -1,6 +1,5 @@
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
-    id,
     resource::{
         DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError,
         ResourceErrorIdent,
@@ -68,22 +67,12 @@ pub enum DrawError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum RenderCommandError {
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(id::BufferId),
-    #[error("BindGroupId {0:?} is invalid")]
-    InvalidBindGroupId(id::BindGroupId),
-    #[error("Render bundle {0:?} is invalid")]
-    InvalidRenderBundle(id::RenderBundleId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Vertex buffer index {index} is greater than the device's requested `max_vertex_buffers` limit {max}")]
     VertexBufferIndexOutOfRange { index: u32, max: u32 },
     #[error("Dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(u64, &'static str, u32),
-    #[error("RenderPipelineId {0:?} is invalid")]
-    InvalidPipelineId(id::RenderPipelineId),
-    #[error("QuerySet {0:?} is invalid")]
-    InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline targets are incompatible with render pass")]
     IncompatiblePipelineTargets(#[from] crate::device::RenderPassCompatibilityError),
     #[error("{0} writes to depth, while the pass has read-only depth access")]

@@ -21,6 +21,7 @@ use crate::{
 /// Meta trait for an data associated with an id tracked by a context.
 ///
 /// There is no need to manually implement this trait since there is a blanket implementation for this trait.
+#[cfg_attr(target_os = "emscripten", allow(dead_code))]
 pub trait ContextData: Debug + WasmNotSendSync + 'static {}
 impl<T: Debug + WasmNotSendSync + 'static> ContextData for T {}
 
@@ -59,6 +60,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     type CompilationInfoFuture: Future<Output = CompilationInfo> + WasmNotSend + 'static;
 
+    #[cfg(not(target_os = "emscripten"))]
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     unsafe fn instance_create_surface(
         &self,
@@ -122,7 +124,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     fn device_features(&self, device_data: &Self::DeviceData) -> Features;
     fn device_limits(&self, device_data: &Self::DeviceData) -> Limits;
-    fn device_downlevel_properties(&self, device_data: &Self::DeviceData) -> DownlevelCapabilities;
     fn device_create_shader_module(
         &self,
         device_data: &Self::DeviceData,
@@ -194,8 +195,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &RenderBundleEncoderDescriptor<'_>,
     ) -> Self::RenderBundleEncoderData;
-    #[doc(hidden)]
-    fn device_make_invalid(&self, device_data: &Self::DeviceData);
     fn device_drop(&self, device_data: &Self::DeviceData);
     fn device_set_device_lost_callback(
         &self,
@@ -203,7 +202,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_lost_callback: DeviceLostCallback,
     );
     fn device_destroy(&self, device_data: &Self::DeviceData);
-    fn device_mark_lost(&self, device_data: &Self::DeviceData, message: &str);
     fn queue_drop(&self, queue_data: &Self::QueueData);
     fn device_poll(&self, device_data: &Self::DeviceData, maintain: Maintain) -> MaintainResult;
     fn device_on_uncaptured_error(
@@ -441,7 +439,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         pass_data: &mut Self::ComputePassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[DynamicOffset],
     );
     fn compute_pass_set_push_constants(
@@ -494,7 +492,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -547,40 +545,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: BufferAddress,
     );
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        encoder_data: &mut Self::RenderBundleEncoderData,
-        indirect_buffer_data: &Self::BufferData,
-        indirect_offset: BufferAddress,
-        count: u32,
-    );
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        encoder_data: &mut Self::RenderBundleEncoderData,
-        indirect_buffer_data: &Self::BufferData,
-        indirect_offset: BufferAddress,
-        count: u32,
-    );
-    #[allow(clippy::too_many_arguments)]
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        encoder_data: &mut Self::RenderBundleEncoderData,
-        indirect_buffer_data: &Self::BufferData,
-        indirect_offset: BufferAddress,
-        count_buffer_data: &Self::BufferData,
-        count_buffer_offset: BufferAddress,
-        max_count: u32,
-    );
-    #[allow(clippy::too_many_arguments)]
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        encoder_data: &mut Self::RenderBundleEncoderData,
-        indirect_buffer_data: &Self::BufferData,
-        indirect_offset: BufferAddress,
-        count_buffer_data: &Self::BufferData,
-        count_buffer_offset: BufferAddress,
-        max_count: u32,
-    );
 
     fn render_pass_set_pipeline(
         &self,
@@ -591,7 +555,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -788,6 +752,7 @@ pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
 pub(crate) trait DynContext: Debug + WasmNotSendSync {
+    #[cfg(not(target_os = "emscripten"))]
     fn as_any(&self) -> &dyn Any;
 
     unsafe fn instance_create_surface(
@@ -850,7 +815,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
 
     fn device_features(&self, device_data: &crate::Data) -> Features;
     fn device_limits(&self, device_data: &crate::Data) -> Limits;
-    fn device_downlevel_properties(&self, device_data: &crate::Data) -> DownlevelCapabilities;
     fn device_create_shader_module(
         &self,
         device_data: &crate::Data,
@@ -922,8 +886,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &RenderBundleEncoderDescriptor<'_>,
     ) -> Box<crate::Data>;
-    #[doc(hidden)]
-    fn device_make_invalid(&self, device_data: &crate::Data);
     fn device_drop(&self, device_data: &crate::Data);
     fn device_set_device_lost_callback(
         &self,
@@ -931,7 +893,6 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_lost_callback: DeviceLostCallback,
     );
     fn device_destroy(&self, device_data: &crate::Data);
-    fn device_mark_lost(&self, device_data: &crate::Data, message: &str);
     fn queue_drop(&self, queue_data: &crate::Data);
     fn device_poll(&self, device_data: &crate::Data, maintain: Maintain) -> MaintainResult;
     fn device_on_uncaptured_error(
@@ -1147,7 +1108,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     );
     fn compute_pass_set_push_constants(
@@ -1190,7 +1151,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         encoder_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -1243,47 +1204,13 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         indirect_buffer_data: &crate::Data,
         indirect_offset: BufferAddress,
     );
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        count: u32,
-    );
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        count: u32,
-    );
-    #[allow(clippy::too_many_arguments)]
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        count_buffer_data: &crate::Data,
-        count_buffer_offset: BufferAddress,
-        max_count: u32,
-    );
-    #[allow(clippy::too_many_arguments)]
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        command_buffer_data: &crate::Data,
-        count_buffer_offset: BufferAddress,
-        max_count: u32,
-    );
 
     fn render_pass_set_pipeline(&self, pass_data: &mut crate::Data, pipeline_data: &crate::Data);
     fn render_pass_set_bind_group(
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     );
     #[allow(clippy::too_many_arguments)]
@@ -1422,6 +1349,7 @@ impl<T> DynContext for T
 where
     T: Context + 'static,
 {
+    #[cfg(not(target_os = "emscripten"))]
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -1562,11 +1490,6 @@ where
     fn device_limits(&self, device_data: &crate::Data) -> Limits {
         let device_data = downcast_ref(device_data);
         Context::device_limits(self, device_data)
-    }
-
-    fn device_downlevel_properties(&self, device_data: &crate::Data) -> DownlevelCapabilities {
-        let device_data = downcast_ref(device_data);
-        Context::device_downlevel_properties(self, device_data)
     }
 
     fn device_create_shader_module(
@@ -1711,12 +1634,6 @@ where
         Box::new(data) as _
     }
 
-    #[doc(hidden)]
-    fn device_make_invalid(&self, device_data: &crate::Data) {
-        let device_data = downcast_ref(device_data);
-        Context::device_make_invalid(self, device_data)
-    }
-
     fn device_drop(&self, device_data: &crate::Data) {
         let device_data = downcast_ref(device_data);
         Context::device_drop(self, device_data)
@@ -1734,11 +1651,6 @@ where
     fn device_destroy(&self, device_data: &crate::Data) {
         let device_data = downcast_ref(device_data);
         Context::device_destroy(self, device_data)
-    }
-
-    fn device_mark_lost(&self, device_data: &crate::Data, message: &str) {
-        let device_data = downcast_ref(device_data);
-        Context::device_mark_lost(self, device_data, message)
     }
 
     fn queue_drop(&self, queue_data: &crate::Data) {
@@ -2239,12 +2151,12 @@ where
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     ) {
         let pass_data = downcast_mut::<T::ComputePassData>(pass_data);
-        let bind_group_data = downcast_ref(bind_group_data);
-        Context::compute_pass_set_bind_group(self, pass_data, index, bind_group_data, offsets)
+        let bg = bind_group_data.map(downcast_ref);
+        Context::compute_pass_set_bind_group(self, pass_data, index, bg, offsets)
     }
 
     fn compute_pass_set_push_constants(
@@ -2350,18 +2262,12 @@ where
         &self,
         encoder_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     ) {
         let encoder_data = downcast_mut::<T::RenderBundleEncoderData>(encoder_data);
-        let bind_group_data = downcast_ref(bind_group_data);
-        Context::render_bundle_encoder_set_bind_group(
-            self,
-            encoder_data,
-            index,
-            bind_group_data,
-            offsets,
-        )
+        let bg = bind_group_data.map(downcast_ref);
+        Context::render_bundle_encoder_set_bind_group(self, encoder_data, index, bg, offsets)
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -2474,88 +2380,6 @@ where
         )
     }
 
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        count: u32,
-    ) {
-        let encoder_data = downcast_mut::<T::RenderBundleEncoderData>(encoder_data);
-        let indirect_buffer_data = downcast_ref(indirect_buffer_data);
-        Context::render_bundle_encoder_multi_draw_indirect(
-            self,
-            encoder_data,
-            indirect_buffer_data,
-            indirect_offset,
-            count,
-        )
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        count: u32,
-    ) {
-        let encoder_data = downcast_mut::<T::RenderBundleEncoderData>(encoder_data);
-        let indirect_buffer_data = downcast_ref(indirect_buffer_data);
-        Context::render_bundle_encoder_multi_draw_indexed_indirect(
-            self,
-            encoder_data,
-            indirect_buffer_data,
-            indirect_offset,
-            count,
-        )
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        count_buffer_data: &crate::Data,
-        count_buffer_offset: BufferAddress,
-        max_count: u32,
-    ) {
-        let encoder_data = downcast_mut::<T::RenderBundleEncoderData>(encoder_data);
-        let indirect_buffer_data = downcast_ref(indirect_buffer_data);
-        let count_buffer_data = downcast_ref(count_buffer_data);
-        Context::render_bundle_encoder_multi_draw_indirect_count(
-            self,
-            encoder_data,
-            indirect_buffer_data,
-            indirect_offset,
-            count_buffer_data,
-            count_buffer_offset,
-            max_count,
-        )
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        encoder_data: &mut crate::Data,
-        indirect_buffer_data: &crate::Data,
-        indirect_offset: BufferAddress,
-        count_buffer_data: &crate::Data,
-        count_buffer_offset: BufferAddress,
-        max_count: u32,
-    ) {
-        let encoder_data = downcast_mut::<T::RenderBundleEncoderData>(encoder_data);
-        let indirect_buffer_data = downcast_ref(indirect_buffer_data);
-        let count_buffer_data = downcast_ref(count_buffer_data);
-        Context::render_bundle_encoder_multi_draw_indexed_indirect_count(
-            self,
-            encoder_data,
-            indirect_buffer_data,
-            indirect_offset,
-            count_buffer_data,
-            count_buffer_offset,
-            max_count,
-        )
-    }
-
     fn render_pass_set_pipeline(&self, pass_data: &mut crate::Data, pipeline_data: &crate::Data) {
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
         let pipeline_data = downcast_ref(pipeline_data);
@@ -2566,12 +2390,12 @@ where
         &self,
         pass_data: &mut crate::Data,
         index: u32,
-        bind_group_data: &crate::Data,
+        bind_group_data: Option<&crate::Data>,
         offsets: &[DynamicOffset],
     ) {
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let bind_group_data = downcast_ref(bind_group_data);
-        Context::render_pass_set_bind_group(self, pass_data, index, bind_group_data, offsets)
+        let bg = bind_group_data.map(downcast_ref);
+        Context::render_pass_set_bind_group(self, pass_data, index, bg, offsets)
     }
 
     fn render_pass_set_index_buffer(
@@ -2864,6 +2688,7 @@ pub trait QueueWriteBuffer: WasmNotSendSync + Debug {
 
     fn slice_mut(&mut self) -> &mut [u8];
 
+    #[cfg(not(target_os = "emscripten"))]
     fn as_any(&self) -> &dyn Any;
 }
 

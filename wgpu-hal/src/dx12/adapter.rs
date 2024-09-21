@@ -66,7 +66,7 @@ impl super::Adapter {
             profiling::scope!("ID3D12Device::create_device");
             library
                 .create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
-                .ok()?
+                .ok()??
         };
 
         profiling::scope!("feature queries");

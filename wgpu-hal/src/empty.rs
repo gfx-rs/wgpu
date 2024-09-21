@@ -168,6 +168,8 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_buffer(&self, buffer: Resource) {}
+    unsafe fn add_raw_buffer(&self, _buffer: &Resource) {}
+
     unsafe fn map_buffer(
         &self,
         buffer: &Resource,
@@ -183,6 +185,8 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_texture(&self, texture: Resource) {}
+    unsafe fn add_raw_texture(&self, _texture: &Resource) {}
+
     unsafe fn create_texture_view(
         &self,
         texture: &Resource,

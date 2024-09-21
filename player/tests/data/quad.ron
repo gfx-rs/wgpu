@@ -10,14 +10,14 @@
     ],
     actions: [
         CreateShaderModule(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             desc: (
                 label: None,
                 flags: (bits: 3),
             ),
             data: "quad.wgsl",
         ),
-        CreateTexture(Id(0, 1, Empty), (
+        CreateTexture(Id(0, 1), (
             label: Some("Output Texture"),
             size: (
                 width: 64,
@@ -31,12 +31,12 @@
             view_formats: [],
         )),
         CreateTextureView(
-            id: Id(0, 1, Empty),
-            parent_id: Id(0, 1, Empty),
+            id: Id(0, 1),
+            parent_id: Id(0, 1),
             desc: (),
         ),
         CreateBuffer(
-            Id(0, 1, Empty),
+            Id(0, 1),
             (
                 label: Some("Output Buffer"),
                 size: 16384,
@@ -44,19 +44,19 @@
                 mapped_at_creation: false,
             ),
         ),
-        CreatePipelineLayout(Id(0, 1, Empty), (
+        CreatePipelineLayout(Id(0, 1), (
             label: None,
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
         CreateRenderPipeline(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             desc: (
                 label: None,
-                layout: Some(Id(0, 1, Empty)),
+                layout: Some(Id(0, 1)),
                 vertex: (
                     stage: (
-                        module: Id(0, 1, Empty),
+                        module: Id(0, 1),
                         entry_point: None,
                         constants: {},
                         zero_initialize_workgroup_memory: true,
@@ -66,7 +66,7 @@
                 ),
                 fragment: Some((
                     stage: (
-                        module: Id(0, 1, Empty),
+                        module: Id(0, 1),
                         entry_point: None,
                         constants: {},
                         zero_initialize_workgroup_memory: true,
@@ -84,7 +84,7 @@
             RunRenderPass(
                 base: (
                     commands: [
-                        SetPipeline(Id(0, 1, Empty)),
+                        SetPipeline(Id(0, 1)),
                         Draw(
                             vertex_count: 3,
                             instance_count: 1,
@@ -98,7 +98,7 @@
                 ),
                 target_colors: [
                     Some((
-                        view: Id(0, 1, Empty),
+                        view: Id(0, 1),
                         resolve_target: None,
                         channel: (
                             load_op: clear,
@@ -117,12 +117,12 @@
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(0, 1, Empty),
+                    texture: Id(0, 1),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(0, 1, Empty),
+                    buffer: Id(0, 1),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),

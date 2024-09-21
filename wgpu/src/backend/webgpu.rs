@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 
+mod defined_non_null_js_value;
 mod ext_bindings;
 mod webgpu_sys;
 
@@ -22,13 +23,16 @@ use crate::{
     CompilationInfo, SurfaceTargetUnsafe, UncapturedErrorHandler,
 };
 
+use defined_non_null_js_value::DefinedNonNullJsValue;
+
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
 // implement `Send` and `Sync` to match native.
 //
 // SAFETY: All webgpu handle types in wasm32 are internally a `JsValue`, and `JsValue` is neither
-// Send nor Sync.  Currently, wasm32 has no threading support so implementing `Send` or `Sync` for a
-// type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
-// is integrated (or not integrated) with values like those in webgpu, this may become unsound.
+// Send nor Sync.  Currently, wasm32 has no threading support by default, so implementing `Send` or
+// `Sync` for a type is harmless. However, nightly Rust supports compiling wasm with experimental
+// threading support via `--target-features`. If `wgpu` is being compiled with those features, we do
+// not implement `Send` and `Sync` on the webgpu handle types.
 
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
@@ -37,7 +41,10 @@ unsafe impl<T> Send for Sendable<T> {}
 #[cfg(send_sync)]
 unsafe impl<T> Sync for Sendable<T> {}
 
-pub(crate) struct ContextWebGpu(webgpu_sys::Gpu);
+pub(crate) struct ContextWebGpu {
+    /// `None` if browser does not advertise support for WebGPU.
+    gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
+}
 #[cfg(send_sync)]
 unsafe impl Send for ContextWebGpu {}
 #[cfg(send_sync)]
@@ -188,6 +195,36 @@ impl<F, M> MakeSendFuture<F, M> {
 #[cfg(send_sync)]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
+/// Wraps a future that returns `Option<T>` and adds the ability to immediately
+/// return None.
+pub(crate) struct OptionFuture<F>(Option<F>);
+
+impl<F: Future<Output = Option<T>>, T> Future for OptionFuture<F> {
+    type Output = Option<T>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        // This is safe because we have no Drop implementation to violate the Pin requirements and
+        // do not provide any means of moving the inner future.
+        unsafe {
+            let this = self.get_unchecked_mut();
+            match &mut this.0 {
+                Some(future) => Pin::new_unchecked(future).poll(cx),
+                None => task::Poll::Ready(None),
+            }
+        }
+    }
+}
+
+impl<F> OptionFuture<F> {
+    fn some(future: F) -> Self {
+        Self(Some(future))
+    }
+
+    fn none() -> Self {
+        Self(None)
+    }
+}
+
 fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuTextureFormat {
     use webgpu_sys::GpuTextureFormat as tf;
     use wgt::TextureFormat;
@@ -225,7 +262,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
             unimplemented!("Current version of web_sys is missing {texture_format:?}")
         }
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
-        TextureFormat::Rg11b10UFloat => tf::Rg11b10ufloat,
+        TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
@@ -1045,27 +1082,34 @@ pub enum Canvas {
     Offscreen(web_sys::OffscreenCanvas),
 }
 
-/// Returns the browsers gpu object or `None` if the current context is neither the main thread nor a dedicated worker.
+#[derive(Debug, Clone, Copy)]
+pub struct BrowserGpuPropertyInaccessible;
+
+/// Returns the browser's gpu object or `Err(BrowserGpuPropertyInaccessible)` if
+/// the current context is neither the main thread nor a dedicated worker.
 ///
-/// If WebGPU is not supported, the Gpu property is `undefined` (but *not* necessarily `None`).
+/// If WebGPU is not supported, the Gpu property is `undefined`, and so this
+/// function will return `Ok(None)`.
 ///
 /// See:
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/WorkerNavigator/gpu>
-pub fn get_browser_gpu_property() -> Option<webgpu_sys::Gpu> {
+pub fn get_browser_gpu_property(
+) -> Result<Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>, BrowserGpuPropertyInaccessible> {
     let global: Global = js_sys::global().unchecked_into();
 
-    if !global.window().is_undefined() {
+    let maybe_undefined_gpu: webgpu_sys::Gpu = if !global.window().is_undefined() {
         let navigator = global.unchecked_into::<web_sys::Window>().navigator();
-        Some(ext_bindings::NavigatorGpu::gpu(&navigator))
+        ext_bindings::NavigatorGpu::gpu(&navigator)
     } else if !global.worker().is_undefined() {
         let navigator = global
             .unchecked_into::<web_sys::WorkerGlobalScope>()
             .navigator();
-        Some(ext_bindings::NavigatorGpu::gpu(&navigator))
+        ext_bindings::NavigatorGpu::gpu(&navigator)
     } else {
-        None
-    }
+        return Err(BrowserGpuPropertyInaccessible);
+    };
+    Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
 impl crate::context::Context for ContextWebGpu {
@@ -1095,9 +1139,11 @@ impl crate::context::Context for ContextWebGpu {
     type SubmissionIndexData = ();
     type PipelineCacheData = ();
 
-    type RequestAdapterFuture = MakeSendFuture<
-        wasm_bindgen_futures::JsFuture,
-        fn(JsFutureResult) -> Option<Self::AdapterData>,
+    type RequestAdapterFuture = OptionFuture<
+        MakeSendFuture<
+            wasm_bindgen_futures::JsFuture,
+            fn(JsFutureResult) -> Option<Self::AdapterData>,
+        >,
     >;
     type RequestDeviceFuture = MakeSendFuture<
         wasm_bindgen_futures::JsFuture,
@@ -1114,12 +1160,13 @@ impl crate::context::Context for ContextWebGpu {
     >;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
-        let Some(gpu) = get_browser_gpu_property() else {
+        let Ok(gpu) = get_browser_gpu_property() else {
             panic!(
                 "Accessing the GPU is only supported on the main thread or from a dedicated worker"
             );
         };
-        ContextWebGpu(gpu)
+
+        ContextWebGpu { gpu }
     }
 
     unsafe fn instance_create_surface(
@@ -1189,12 +1236,16 @@ impl crate::context::Context for ContextWebGpu {
         if let Some(mapped_pref) = mapped_power_preference {
             mapped_options.power_preference(mapped_pref);
         }
-        let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
-
-        MakeSendFuture::new(
-            wasm_bindgen_futures::JsFuture::from(adapter_promise),
-            future_request_adapter,
-        )
+        if let Some(gpu) = &self.gpu {
+            let adapter_promise = gpu.request_adapter_with_options(&mapped_options);
+            OptionFuture::some(MakeSendFuture::new(
+                wasm_bindgen_futures::JsFuture::from(adapter_promise),
+                future_request_adapter,
+            ))
+        } else {
+            // Gpu is undefined; WebGPU is not supported in this browser.
+            OptionFuture::none()
+        }
     }
 
     fn adapter_request_device(
@@ -1315,7 +1366,11 @@ impl crate::context::Context for ContextWebGpu {
         let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
-        let preferred_format = self.0.get_preferred_canvas_format();
+        let gpu = self
+            .gpu
+            .as_ref()
+            .expect("Caller could not have created an adapter if gpu is undefined.");
+        let preferred_format = gpu.get_preferred_canvas_format();
         if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
             formats.swap(0, index);
         }
@@ -1401,14 +1456,6 @@ impl crate::context::Context for ContextWebGpu {
 
     fn device_limits(&self, device_data: &Self::DeviceData) -> wgt::Limits {
         map_wgt_limits(device_data.0.limits())
-    }
-
-    fn device_downlevel_properties(
-        &self,
-        _device_data: &Self::DeviceData,
-    ) -> wgt::DownlevelCapabilities {
-        // WebGPU is assumed to be fully compliant
-        wgt::DownlevelCapabilities::default()
     }
 
     #[cfg_attr(
@@ -2020,23 +2067,12 @@ impl crate::context::Context for ContextWebGpu {
         Sendable(device_data.0.create_render_bundle_encoder(&mapped_desc))
     }
 
-    #[doc(hidden)]
-    fn device_make_invalid(&self, _device_data: &Self::DeviceData) {
-        // Unimplemented
-    }
-
     fn device_drop(&self, _device_data: &Self::DeviceData) {
         // Device is dropped automatically
     }
 
     fn device_destroy(&self, device_data: &Self::DeviceData) {
         device_data.0.destroy();
-    }
-
-    fn device_mark_lost(&self, _device_data: &Self::DeviceData, _message: &str) {
-        // TODO: figure out the GPUDevice implementation of this, including resolving
-        // the device.lost promise, which will require a different invocation pattern
-        // with a callback.
     }
 
     fn queue_drop(&self, _queue_data: &Self::QueueData) {
@@ -2771,9 +2807,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         pass_data: &mut Self::ComputePassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
@@ -2883,9 +2924,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         encoder_data: &mut Self::RenderBundleEncoderData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             encoder_data
                 .0
@@ -3023,52 +3069,6 @@ impl crate::context::Context for ContextWebGpu {
             .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
-    fn render_bundle_encoder_multi_draw_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indexed_indirect")
-    }
-
-    fn render_bundle_encoder_multi_draw_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!(
-            "MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indirect_count"
-        )
-    }
-
-    fn render_bundle_encoder_multi_draw_indexed_indirect_count(
-        &self,
-        _encoder_data: &mut Self::RenderBundleEncoderData,
-        _indirect_buffer_data: &Self::BufferData,
-        _indirect_offset: wgt::BufferAddress,
-        _count_buffer_data: &Self::BufferData,
-        _count_buffer_offset: wgt::BufferAddress,
-        _max_count: u32,
-    ) {
-        panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
-    }
-
     fn render_pass_set_pipeline(
         &self,
         pass_data: &mut Self::RenderPassData,
@@ -3081,9 +3081,14 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         pass_data: &mut Self::RenderPassData,
         index: u32,
-        bind_group_data: &Self::BindGroupData,
+        bind_group_data: Option<&Self::BindGroupData>,
         offsets: &[wgt::DynamicOffset],
     ) {
+        if bind_group_data.is_none() {
+            // TODO: Handle the None case.
+            return;
+        }
+        let bind_group_data = bind_group_data.unwrap();
         if offsets.is_empty() {
             pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {

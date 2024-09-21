@@ -464,12 +464,6 @@ impl Device {
         )
     }
 
-    /// Test-only function to make this device invalid.
-    #[doc(hidden)]
-    pub fn make_invalid(&self) {
-        DynContext::device_make_invalid(&*self.context, self.data.as_ref())
-    }
-
     /// Create a [`PipelineCache`] with initial data
     ///
     /// This can be passed to [`Device::create_compute_pipeline`]

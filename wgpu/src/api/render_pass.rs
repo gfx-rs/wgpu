@@ -77,14 +77,15 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &BindGroup,
+        bind_group: Option<&BindGroup>,
         offsets: &[DynamicOffset],
     ) {
+        let bg = bind_group.map(|x| x.data.as_ref());
         DynContext::render_pass_set_bind_group(
             &*self.inner.context,
             self.inner.data.as_mut(),
             index,
-            bind_group.data.as_ref(),
+            bg,
             offsets,
         )
     }

@@ -24,6 +24,7 @@ pub trait DynDevice: DynResource {
     ) -> Result<Box<dyn DynBuffer>, DeviceError>;
 
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>);
+    unsafe fn add_raw_buffer(&self, buffer: &dyn DynBuffer);
 
     unsafe fn map_buffer(
         &self,
@@ -41,6 +42,8 @@ pub trait DynDevice: DynResource {
         desc: &TextureDescriptor,
     ) -> Result<Box<dyn DynTexture>, DeviceError>;
     unsafe fn destroy_texture(&self, texture: Box<dyn DynTexture>);
+    unsafe fn add_raw_texture(&self, texture: &dyn DynTexture);
+
     unsafe fn create_texture_view(
         &self,
         texture: &dyn DynTexture,
@@ -177,6 +180,10 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>) {
         unsafe { D::destroy_buffer(self, buffer.unbox()) };
     }
+    unsafe fn add_raw_buffer(&self, buffer: &dyn DynBuffer) {
+        let buffer = buffer.expect_downcast_ref();
+        unsafe { D::add_raw_buffer(self, buffer) };
+    }
 
     unsafe fn map_buffer(
         &self,
@@ -215,6 +222,11 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_texture(&self, texture: Box<dyn DynTexture>) {
         unsafe { D::destroy_texture(self, texture.unbox()) };
+    }
+
+    unsafe fn add_raw_texture(&self, texture: &dyn DynTexture) {
+        let texture = texture.expect_downcast_ref();
+        unsafe { D::add_raw_texture(self, texture) };
     }
 
     unsafe fn create_texture_view(

@@ -514,7 +514,7 @@ impl super::Instance {
     #[cfg(metal)]
     fn create_surface_from_view(
         &self,
-        view: *mut c_void,
+        view: std::ptr::NonNull<c_void>,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::metal_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
@@ -522,16 +522,17 @@ impl super::Instance {
             )));
         }
 
-        let layer = unsafe {
-            crate::metal::Surface::get_metal_layer(view.cast::<objc::runtime::Object>(), None)
-        };
+        let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast()) };
+        // NOTE: The layer is retained by Vulkan's `vkCreateMetalSurfaceEXT`,
+        // so no need to retain it beyond the scope of this function.
+        let layer_ptr = (*layer).cast();
 
         let surface = {
             let metal_loader =
                 ext::metal_surface::Instance::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::default()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
-                .layer(layer.cast());
+                .layer(layer_ptr);
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
@@ -554,10 +555,9 @@ impl Drop for super::InstanceShared {
     fn drop(&mut self) {
         unsafe {
             // Keep du alive since destroy_instance may also log
-            let _du = self.debug_utils.take().map(|du| {
+            let _du = self.debug_utils.take().inspect(|du| {
                 du.extension
                     .destroy_debug_utils_messenger(du.messenger, None);
-                du
             });
             if self.drop_guard.is_none() {
                 self.raw.destroy_instance(None);
@@ -874,13 +874,13 @@ impl crate::Instance for super::Instance {
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ns_view.as_ptr())
+                self.create_surface_from_view(handle.ns_view)
             }
             #[cfg(all(target_os = "ios", feature = "metal"))]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ui_view.as_ptr())
+                self.create_surface_from_view(handle.ui_view)
             }
             (_, _) => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Vulkan-compatible handle"
