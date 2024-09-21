@@ -205,7 +205,6 @@ static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
 
 impl TlasPackage {
     /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
-    /// (max_instances needs to fit into tlas)
     pub fn new(tlas: Tlas) -> Self {
         let max_instances = tlas.max_instances;
         Self::new_with_instances(tlas, vec![None; max_instances as usize])
