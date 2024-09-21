@@ -82,6 +82,10 @@ impl StatementGraph {
             let mut merge_id = id;
 
             self.nodes[id] = match *statement {
+                S::Phony(expr) => {
+                    self.emits.push((id, expr));
+                    "Emit"
+                }
                 S::Emit(ref range) => {
                     for handle in range.clone() {
                         self.emits.push((id, handle));

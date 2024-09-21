@@ -833,6 +833,26 @@ impl FunctionInfo {
         let mut combined_uniformity = FunctionUniformity::new();
         for statement in statements {
             let uniformity = match *statement {
+                S::Phony(expr) => {
+                    let req = self.expressions[expr.index()].uniformity.requirements;
+                    if self
+                        .flags
+                        .contains(ValidationFlags::CONTROL_FLOW_UNIFORMITY)
+                        && !req.is_empty()
+                    {
+                        if let Some(cause) = disruptor {
+                            return Err(FunctionError::NonUniformControlFlow(req, expr, cause)
+                                .with_span_handle(expr, expression_arena));
+                        }
+                    }
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: None,
+                            requirements: req,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
+                }
                 S::Emit(ref range) => {
                     let mut requirements = UniformityRequirements::empty();
                     for expr in range.clone() {

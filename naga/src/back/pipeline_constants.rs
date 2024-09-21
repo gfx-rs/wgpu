@@ -544,6 +544,7 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
         *expr = new_pos[*expr];
     };
     match *stmt {
+        Statement::Phony(ref mut expr) => adjust(expr),
         Statement::Emit(ref mut range) => {
             if let Some((mut first, mut last)) = range.first_and_last() {
                 adjust(&mut first);

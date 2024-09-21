@@ -623,6 +623,11 @@ impl<W: Write> Writer<W> {
         use crate::{Expression, Statement};
 
         match *stmt {
+            Statement::Phony(expr) => {
+                write!(self.out, "{level}_ = ")?;
+                self.write_expr(module, expr, func_ctx)?;
+                writeln!(self.out, ";")?;
+            }
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
                     let info = &func_ctx.info[handle];

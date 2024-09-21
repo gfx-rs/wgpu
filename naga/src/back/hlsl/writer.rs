@@ -1602,6 +1602,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         use crate::Statement;
 
         match *stmt {
+            Statement::Phony(expr) => {
+                write!(self.out, "{level}")?;
+                self.write_named_expr(
+                    module,
+                    expr,
+                    format!("_phony_{}", expr.index()),
+                    expr,
+                    func_ctx,
+                )?;
+            }
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
                     let ptr_class = func_ctx.resolve_type(handle, &module.types).pointer_space();

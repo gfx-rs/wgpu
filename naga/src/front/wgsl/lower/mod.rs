@@ -1782,9 +1782,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
-                let _ = self.expression(expr, &mut ctx.as_expression(block, &mut emitter))?;
+                let expr = self.expression(expr, &mut ctx.as_expression(block, &mut emitter))?;
                 block.extend(emitter.finish(&ctx.function.expressions));
-                return Ok(());
+                crate::Statement::Phony(expr)
             }
         };
 

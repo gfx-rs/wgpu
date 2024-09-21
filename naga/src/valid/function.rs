@@ -681,6 +681,7 @@ impl super::Validator {
                     .with_span_static(span, "instructions after return"));
             }
             match *statement {
+                S::Phony(_expr) => {}
                 S::Emit(ref range) => {
                     for handle in range.clone() {
                         use crate::Expression as Ex;

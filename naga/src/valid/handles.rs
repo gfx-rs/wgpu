@@ -452,6 +452,7 @@ impl super::Validator {
         };
 
         block.iter().try_for_each(|stmt| match *stmt {
+            crate::Statement::Phony(expr) => validate_expr(expr),
             crate::Statement::Emit(ref expr_range) => {
                 expr_range.check_valid_for(expressions)?;
                 Ok(())

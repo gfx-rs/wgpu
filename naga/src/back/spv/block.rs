@@ -2067,6 +2067,7 @@ impl<'w> BlockContext<'w> {
                 ));
             };
             match *statement {
+                Statement::Phony(_) => {}
                 Statement::Emit(ref range) => {
                     for handle in range.clone() {
                         // omit const expressions as we've already cached those

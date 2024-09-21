@@ -1975,6 +1975,10 @@ impl<'a, W: Write> Writer<'a, W> {
         use crate::Statement;
 
         match *sta {
+            Statement::Phony(expr) => {
+                write!(self.out, "{level}")?;
+                self.write_named_expr(expr, format!("_phony_{}", expr.index()), expr, ctx)?;
+            }
             // This is where we can generate intermediate constants for some expression types.
             Statement::Emit(ref range) => {
                 for handle in range.clone() {

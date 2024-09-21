@@ -2927,6 +2927,13 @@ impl<W: Write> Writer<W> {
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
             match *statement {
+                crate::Statement::Phony(expr) => {
+                    write!(self.out, "{level}")?;
+                    let name = format!("_phony_{}", expr.index());
+                    self.start_baking_expression(expr, &context.expression, &name)?;
+                    self.put_expression(expr, &context.expression, true)?;
+                    writeln!(self.out, ";")?;
+                }
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
                         // `ImageLoad` expressions covered by the `Restrict` bounds check policy

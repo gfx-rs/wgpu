@@ -1774,6 +1774,8 @@ pub enum Statement {
     ///
     /// [emit]: index.html#expression-evaluation-time
     Emit(Range<Expression>),
+    /// Emits a phony assignment
+    Phony(Handle<Expression>),
     /// A block containing more statements, to be executed sequentially.
     Block(Block),
     /// Conditionally executes one of two blocks, based on the value of the condition.

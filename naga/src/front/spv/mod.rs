@@ -4341,7 +4341,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let mut i = 0usize;
         while i < statements.len() {
             match statements[i] {
-                S::Emit(_) => {}
+                S::Phony(_) | S::Emit(_) => {}
                 S::Block(ref mut block) => {
                     self.patch_statements(block, expressions, fun_parameter_sampling)?;
                 }

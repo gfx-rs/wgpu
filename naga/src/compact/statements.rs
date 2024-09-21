@@ -9,6 +9,9 @@ impl FunctionTracer<'_> {
             for stmt in last {
                 use crate::Statement as St;
                 match *stmt {
+                    St::Phony(expr) => {
+                        self.expressions_used.insert(expr);
+                    }
                     St::Emit(ref _range) => {
                         // If we come across a statement that actually uses an
                         // expression in this range, it'll get traced from
@@ -192,6 +195,7 @@ impl FunctionMap {
             for stmt in last {
                 use crate::Statement as St;
                 match *stmt {
+                    St::Phony(ref mut expr) => adjust(expr),
                     St::Emit(ref mut range) => {
                         self.expressions.adjust_range(range, &function.expressions);
                     }
