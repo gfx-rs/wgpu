@@ -18,6 +18,7 @@ layout(location = 2) in float _p2vs_location2;
 
 void main() {
     NeedsPadding input_3 = NeedsPadding(_p2vs_location0, _p2vs_location1, _p2vs_location2);
+    NeedsPadding _phony_0 = input_3;
     gl_Position = vec4(0.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;

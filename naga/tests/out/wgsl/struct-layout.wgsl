@@ -20,11 +20,13 @@ var<storage, read_write> needs_padding_storage: NeedsPadding;
 
 @fragment 
 fn no_padding_frag(input: NoPadding) -> @location(0) vec4<f32> {
+    _ = input;
     return vec4(0f);
 }
 
 @vertex 
 fn no_padding_vert(input_1: NoPadding) -> @builtin(position) vec4<f32> {
+    _ = input_1;
     return vec4(0f);
 }
 
@@ -41,11 +43,13 @@ fn no_padding_comp() {
 
 @fragment 
 fn needs_padding_frag(input_2: NeedsPadding) -> @location(0) vec4<f32> {
+    _ = input_2;
     return vec4(0f);
 }
 
 @vertex 
 fn needs_padding_vert(input_3: NeedsPadding) -> @builtin(position) vec4<f32> {
+    _ = input_3;
     return vec4(0f);
 }
 

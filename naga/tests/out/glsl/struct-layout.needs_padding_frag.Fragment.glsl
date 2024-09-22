@@ -19,6 +19,7 @@ layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {
     NeedsPadding input_2 = NeedsPadding(_vs2fs_location0, _vs2fs_location1, _vs2fs_location2);
+    NeedsPadding _phony_0 = input_2;
     _fs2p_location0 = vec4(0.0);
     return;
 }

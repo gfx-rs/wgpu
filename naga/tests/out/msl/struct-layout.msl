@@ -26,6 +26,7 @@ fragment no_padding_fragOutput no_padding_frag(
   no_padding_fragInput varyings [[stage_in]]
 ) {
     const NoPadding input = { varyings.v3_, varyings.f3_ };
+    NoPadding _phony_0 = input;
     return no_padding_fragOutput { metal::float4(0.0) };
 }
 
@@ -41,6 +42,7 @@ vertex no_padding_vertOutput no_padding_vert(
   no_padding_vertInput varyings_1 [[stage_in]]
 ) {
     const NoPadding input_1 = { varyings_1.v3_, varyings_1.f3_ };
+    NoPadding _phony_0 = input_1;
     return no_padding_vertOutput { metal::float4(0.0) };
 }
 
@@ -70,6 +72,7 @@ fragment needs_padding_fragOutput needs_padding_frag(
   needs_padding_fragInput varyings_3 [[stage_in]]
 ) {
     const NeedsPadding input_2 = { varyings_3.f3_forces_padding, {}, varyings_3.v3_needs_padding, varyings_3.f3_ };
+    NeedsPadding _phony_0 = input_2;
     return needs_padding_fragOutput { metal::float4(0.0) };
 }
 
@@ -86,6 +89,7 @@ vertex needs_padding_vertOutput needs_padding_vert(
   needs_padding_vertInput varyings_4 [[stage_in]]
 ) {
     const NeedsPadding input_3 = { varyings_4.f3_forces_padding, {}, varyings_4.v3_needs_padding, varyings_4.f3_ };
+    NeedsPadding _phony_0 = input_3;
     return needs_padding_vertOutput { metal::float4(0.0) };
 }
 
