@@ -460,13 +460,13 @@ impl Device {
 
         // If necessary, wait for that submission to complete.
         if maintain.is_wait() {
+            log::trace!("Device::maintain: waiting for submission index {submission_index}");
             unsafe {
                 self.raw()
                     .wait(fence.as_ref(), submission_index, CLEANUP_WAIT_MS)
             }
             .map_err(|e| self.handle_hal_error(e))?;
         }
-        log::trace!("Device::maintain: waiting for submission index {submission_index}");
 
         let mut life_tracker = self.lock_life();
         let submission_closures =

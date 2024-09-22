@@ -117,6 +117,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
 - Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201)
 - Raise validation error instead of panicking in `{Render,Compute}Pipeline::get_bind_group_layout` on native / WebGL. By @bgr360 in [#6280](https://github.com/gfx-rs/wgpu/pull/6280).
+- **BREAKING**: Remove the last exposed C symbols in project, located in `wgpu_core::render::bundle::bundle_ffi`, to allow multiple versions of WGPU to compile together. By @ErichDonGubler in [#6272](https://github.com/gfx-rs/wgpu/pull/6272).
 
 #### GLES / OpenGL
 
