@@ -151,18 +151,16 @@ pub struct TlasBuildEntry<'a> {
 }
 static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
 
-/// Safe instance for a [TLAS].
+/// Safe instance for a [Tlas].
 /// A TlasInstance may be made invalid, if a TlasInstance is invalid, any attempt to build a [TlasPackage] containing an
 /// invalid TlasInstance will generate a validation error
 /// Each one contains:
-/// - A reference BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
+/// - A reference to a BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
 /// TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
 /// using [Blas::destroy]) the TlasInstance becomes invalid
 /// - A user accessible transformation matrix
 /// - A user accessible mask
 /// - A user accessible custom index
-///
-/// [TLAS]: Tlas
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     pub(crate) blas: Arc<BlasShared>,
@@ -183,6 +181,7 @@ impl TlasInstance {
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
     /// - custom_index: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
+    ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
     /// but it can still be destroyed. Destroying a BLAS that is referenced by one or more
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
@@ -198,7 +197,7 @@ impl TlasInstance {
     }
 
     /// Set the bottom level acceleration structure.
-    /// See the note on [TlasInstance::new] about the
+    /// See the note on [TlasInstance] about the
     /// guarantees of keeping a BLAS alive.
     pub fn set_blas(&mut self, blas: &Blas) {
         self.blas = blas.shared.clone();
@@ -230,13 +229,13 @@ pub struct TlasPackage {
 static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
 
 impl TlasPackage {
-    /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
+    /// Construct [TlasPackage] consuming the [Tlas] (prevents modification of the [Tlas] without using this package).
     pub fn new(tlas: Tlas) -> Self {
         let max_instances = tlas.max_instances;
         Self::new_with_instances(tlas, vec![None; max_instances as usize])
     }
 
-    /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
+    /// Construct [TlasPackage] consuming the [Tlas] (prevents modification of the Tlas without using this package).
     /// This constructor moves the instances into the package (the number of instances needs to fit into tlas,
     /// otherwise when building a validation error will be raised).
     pub fn new_with_instances(tlas: Tlas, instances: Vec<Option<TlasInstance>>) -> Self {
@@ -255,7 +254,9 @@ impl TlasPackage {
     /// Get a mutable slice to a range of instances.
     /// Returns None if the range is out of bounds.
     /// All elements from the lowest accessed index up are marked as modified.
-    /// For better performance it is recommended to reduce access to low elements.
+    // this recommendation is not useful yet, but is likely to be when ability to update arrives or possible optimisations for building get implemented.
+    /// For best performance it is recommended to prefer access to low elements and modify higher elements as little as possible.
+    /// This can be done by ordering instances from the most to the least used.
     pub fn get_mut_slice(&mut self, range: Range<usize>) -> Option<&mut [Option<TlasInstance>]> {
         if range.end > self.instances.len() {
             return None;
@@ -271,7 +272,7 @@ impl TlasPackage {
     /// All elements from the lowest accessed index up are marked as modified.
     // this recommendation is not useful yet, but is likely to be when ability to update arrives or possible optimisations for building get implemented.
     /// For best performance it is recommended to prefer access to low elements and modify higher elements as little as possible.
-    /// This can be done by ordering instances from the most to the least used
+    /// This can be done by ordering instances from the most to the least used.
     pub fn get_mut_single(&mut self, index: usize) -> Option<&mut Option<TlasInstance>> {
         if index >= self.instances.len() {
             return None;
@@ -282,12 +283,12 @@ impl TlasPackage {
         Some(&mut self.instances[index])
     }
 
-    /// Get the binding resource for the underling acceleration structure, to be used in a
+    /// Get the binding resource for the underling acceleration structure, to be used when creating a [BindGroup]
     pub fn as_binding(&self) -> BindingResource<'_> {
         BindingResource::AccelerationStructure(&self.tlas)
     }
 
-    /// Get a reference to the underling top level acceleration structure.
+    /// Get a reference to the underling [Tlas].
     pub fn tlas(&self) -> &Tlas {
         &self.tlas
     }
@@ -325,7 +326,7 @@ pub(crate) struct DynContextTlasPackage<'a> {
     pub(crate) lowest_unmodified: u32,
 }
 
-/// [Context version] see `BlasTriangleGeometry`.
+/// Context version of [BlasTriangleGeometry].
 #[allow(dead_code)]
 pub struct ContextBlasTriangleGeometry<'a, T: Context> {
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
@@ -338,20 +339,20 @@ pub struct ContextBlasTriangleGeometry<'a, T: Context> {
     pub(crate) transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 
-/// [Context version] see `BlasGeometries`.
+/// Context version of [BlasGeometries].
 pub enum ContextBlasGeometries<'a, T: Context> {
     /// Triangle geometries.
     TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a, T>> + 'a>),
 }
 
-/// [Context version] see `BlasBuildEntry`.
+/// Context version see [BlasBuildEntry].
 #[allow(dead_code)]
 pub struct ContextBlasBuildEntry<'a, T: Context> {
     pub(crate) blas_data: &'a T::BlasData,
     pub(crate) geometries: ContextBlasGeometries<'a, T>,
 }
 
-/// [Context version] see `TlasBuildEntry`.
+/// Context version see [TlasBuildEntry].
 #[allow(dead_code)]
 pub struct ContextTlasBuildEntry<'a, T: Context> {
     pub(crate) tlas_data: &'a T::TlasData,
@@ -359,7 +360,7 @@ pub struct ContextTlasBuildEntry<'a, T: Context> {
     pub(crate) instance_count: u32,
 }
 
-/// [Context version] see `TlasPackage`.
+/// Context version see [TlasPackage].
 #[allow(dead_code)]
 pub struct ContextTlasPackage<'a, T: Context> {
     pub(crate) tlas_data: &'a T::TlasData,
