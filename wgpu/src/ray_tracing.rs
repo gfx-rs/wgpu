@@ -82,8 +82,9 @@ pub(crate) struct BlasShared {
 static_assertions::assert_impl_all!(BlasShared: WasmNotSendSync);
 
 #[derive(Debug)]
-/// Bottom level acceleration structure.
-/// Used to represent a collection of geometries for ray tracing inside a top level acceleration structure.
+/// Bottom level acceleration structure or BLAS for short.
+/// A BLAS contains geometry in a device readable format, you can't interact directly with this,
+/// instead you have to build the BLAS with the buffers containing triangles or AABB.
 pub struct Blas {
     pub(crate) handle: Option<u64>,
     pub(crate) shared: Arc<BlasShared>,
@@ -110,8 +111,11 @@ impl Drop for BlasShared {
 }
 
 #[derive(Debug)]
-/// Top level acceleration structure.
-/// Used to represent a collection of bottom level acceleration structure instances for ray tracing.
+/// Top level acceleration structure or TLAS for short.
+/// A TLAS contains TLAS instances in a device readable form, you cant interact
+/// directly with these, instead you have to build the TLAS with [TLAS instances].
+///
+/// [TLAS instances]: TlasInstance
 pub struct Tlas {
     pub(crate) context: Arc<C>,
     pub(crate) data: Box<Data>,
@@ -136,23 +140,37 @@ impl Drop for Tlas {
 
 /// Entry for a top level acceleration structure build.
 /// Used with raw instance buffers for an unvalidated builds.
+/// See [TlasPackage] for the safe version.
 pub struct TlasBuildEntry<'a> {
     /// Reference to the acceleration structure.
     pub tlas: &'a Tlas,
-    /// Reference to the raw instance buffer.
+    /// Reference to the raw instance buffer, each instance is similar to [TlasInstance] but contains a handle to the BLAS.
     pub instance_buffer: &'a Buffer,
     /// Number of instances in the instance buffer.
     pub instance_count: u32,
 }
 static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
 
-/// Safe instance for a top level acceleration structure.
+/// Safe instance for a [TLAS].
+/// A TlasInstance may be made invalid, if a TlasInstance is invalid, any attempt to build a [TlasPackage] containing an
+/// invalid TlasInstance will generate a validation error
+/// Each one contains:
+/// - A reference BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
+/// TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
+/// using [Blas::destroy]) the TlasInstance becomes invalid
+/// - A user accessible transformation matrix
+/// - A user accessible mask
+/// - A user accessible custom index
+///
+/// [TLAS]: Tlas
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     pub(crate) blas: Arc<BlasShared>,
     /// Affine transform matrix 3x4 (rows x columns, row major order).
     pub transform: [f32; 12],
-    /// Custom index for the instance used inside the shader (max 24 bits).
+    /// Custom index for the instance used inside the shader.
+    /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes
+    /// invalid and generates a validation error when built
     pub custom_index: u32,
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
