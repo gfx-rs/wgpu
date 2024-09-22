@@ -1,7 +1,7 @@
-use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
-use std::f32::consts::PI;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
+use std::f32::consts::PI;
+use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;

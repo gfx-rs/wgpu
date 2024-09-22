@@ -132,8 +132,8 @@ impl Device {
         }
         .map_err(DeviceError::from_hal)?;
 
-        let instance_buffer_size = get_raw_tlas_instance_size(self.backend())
-            * desc.max_instances.max(1) as usize;
+        let instance_buffer_size =
+            get_raw_tlas_instance_size(self.backend()) * desc.max_instances.max(1) as usize;
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),

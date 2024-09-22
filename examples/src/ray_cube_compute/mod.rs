@@ -349,16 +349,14 @@ impl crate::framework::Example for Example {
                     .get_mut_single((x + y * side_count) as usize)
                     .unwrap() = Some(rt::TlasInstance::new(
                     &blas,
-                    affine_to_rows(
-                        &Affine3A::from_rotation_translation(
-                            Quat::from_rotation_y(45.9_f32.to_radians()),
-                            Vec3 {
-                                x: x as f32 * dist,
-                                y: y as f32 * dist,
-                                z: -30.0,
-                            },
-                        ),
-                    ),
+                    affine_to_rows(&Affine3A::from_rotation_translation(
+                        Quat::from_rotation_y(45.9_f32.to_radians()),
+                        Vec3 {
+                            x: x as f32 * dist,
+                            y: y as f32 * dist,
+                            z: -30.0,
+                        },
+                    )),
                     0,
                     0xff,
                 ));
@@ -427,20 +425,19 @@ impl crate::framework::Example for Example {
             .unwrap()
             .as_mut()
             .unwrap()
-            .transform =
-            affine_to_rows(&Affine3A::from_rotation_translation(
-                Quat::from_euler(
-                    glam::EulerRot::XYZ,
-                    anim_time * 0.342,
-                    anim_time * 0.254,
-                    anim_time * 0.832,
-                ),
-                Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: -6.0,
-                },
-            ));
+            .transform = affine_to_rows(&Affine3A::from_rotation_translation(
+            Quat::from_euler(
+                glam::EulerRot::XYZ,
+                anim_time * 0.342,
+                anim_time * 0.254,
+                anim_time * 0.832,
+            ),
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -6.0,
+            },
+        ));
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
