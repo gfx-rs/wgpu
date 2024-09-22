@@ -27,7 +27,8 @@ use crate::{
 
 use smallvec::SmallVec;
 
-use crate::resource::{Blas, ScratchBuffer, Tlas};
+use crate::resource::{Blas, Tlas};
+use crate::scratch::ScratchBuffer;
 use std::{
     iter,
     mem::{self, ManuallyDrop},

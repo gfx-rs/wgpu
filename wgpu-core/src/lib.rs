@@ -85,6 +85,7 @@ mod track;
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
 // made private again.
 pub mod validation;
+mod scratch;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 pub use naga;
