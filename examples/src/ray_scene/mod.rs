@@ -1,5 +1,5 @@
 use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
-
+use std::f32::consts::PI;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
@@ -496,7 +496,7 @@ impl crate::framework::Example for Example {
                             glam::EulerRot::XYZ,
                             anim_time * 0.5 * 0.342,
                             anim_time * 0.5 * 0.254,
-                            anim_time * 0.5 * 0.832,
+                            anim_time * 0.5 * 0.832 + PI,
                         ),
                         Vec3 {
                             x: x * dist,
