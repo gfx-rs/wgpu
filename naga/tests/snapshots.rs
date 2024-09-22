@@ -913,7 +913,8 @@ fn convert_wgsl() {
                 | Targets::SPIRV
                 | Targets::METAL
                 | Targets::HLSL
-                | Targets::GLSL,
+                | Targets::GLSL
+                | Targets::WGSL,
         ),
         (
             "overrides-atomicCompareExchangeWeak",
