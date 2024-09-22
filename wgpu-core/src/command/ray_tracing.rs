@@ -24,9 +24,7 @@ use wgt::{math::align_to, BufferAddress, BufferUsages, Features};
 
 use super::{BakedCommands, CommandBufferMutable};
 use crate::ray_tracing::BlasTriangleGeometry;
-use crate::resource::{
-    AccelerationStructure, Buffer, Fallible, Labeled, StagingBuffer, Trackable,
-};
+use crate::resource::{AccelerationStructure, Buffer, Fallible, Labeled, StagingBuffer, Trackable};
 use crate::scratch::ScratchBuffer;
 use crate::snatch::SnatchGuard;
 use crate::storage::Storage;
