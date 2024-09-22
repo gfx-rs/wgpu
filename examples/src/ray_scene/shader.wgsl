@@ -83,9 +83,9 @@ struct Instance {
 };
 
 struct Material{
-    r: f32,
-    m: f32,
-    s: f32,
+    roughness_exponent: f32,
+    metalness: f32,
+    specularity: f32,
     albedo: vec3<f32>
 }
 
