@@ -84,7 +84,7 @@ impl StatementGraph {
             self.nodes[id] = match *statement {
                 S::Phony(expr) => {
                     self.emits.push((id, expr));
-                    "Emit"
+                    "Phony"
                 }
                 S::Emit(ref range) => {
                     for handle in range.clone() {
