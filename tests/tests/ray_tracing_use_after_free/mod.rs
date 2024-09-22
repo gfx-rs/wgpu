@@ -73,6 +73,7 @@ fn execute(ctx: TestingContext) {
     );
     ctx.queue.submit(Some(encoder.finish()));
     drop(blas);
+    ctx.device.poll(Maintain::Wait);
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
