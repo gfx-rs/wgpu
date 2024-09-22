@@ -1286,6 +1286,12 @@ impl<W: Write> Writer<W> {
                 write_expression(self, value)?;
                 write!(self.out, ")")?;
             }
+            Expression::Unary { op, expr } => {
+                self.write_unary_expression(op, expr, write_expression)?
+            }
+            Expression::Binary { op, left, right } => {
+                self.write_binary_expression(op, left, right, write_expression)?
+            }
             _ => unreachable!(),
         }
 
@@ -1336,18 +1342,18 @@ impl<W: Write> Writer<W> {
                     |writer, expr| writer.write_expr(module, expr, func_ctx),
                 )?;
             }
-            Expression::Override(_) => unreachable!(),
+            Expression::Override(handle) => {
+                write!(self.out, "{}", self.names[&NameKey::Override(handle)])?;
+            }
             Expression::FunctionArgument(pos) => {
                 let name_key = func_ctx.argument_key(pos);
                 let name = &self.names[&name_key];
                 write!(self.out, "{name}")?;
             }
             Expression::Binary { op, left, right } => {
-                write!(self.out, "(")?;
-                self.write_expr(module, left, func_ctx)?;
-                write!(self.out, " {} ", back::binary_operation_str(op))?;
-                self.write_expr(module, right, func_ctx)?;
-                write!(self.out, ")")?;
+                self.write_binary_expression(op, left, right, |writer, expr| {
+                    writer.write_expr(module, expr, func_ctx)
+                })?
             }
             Expression::Access { base, index } => {
                 self.write_expr_with_indirection(module, base, func_ctx, indirection)?;
@@ -1771,16 +1777,9 @@ impl<W: Write> Writer<W> {
                 }
             }
             Expression::Unary { op, expr } => {
-                let unary = match op {
-                    crate::UnaryOperator::Negate => "-",
-                    crate::UnaryOperator::LogicalNot => "!",
-                    crate::UnaryOperator::BitwiseNot => "~",
-                };
-
-                write!(self.out, "{unary}(")?;
-                self.write_expr(module, expr, func_ctx)?;
-
-                write!(self.out, ")")?
+                self.write_unary_expression(op, expr, |writer, expr| {
+                    writer.write_expr(module, expr, func_ctx)
+                })?
             }
 
             Expression::Select {
@@ -1837,6 +1836,49 @@ impl<W: Write> Writer<W> {
             | Expression::SubgroupOperationResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. } => {}
         }
+
+        Ok(())
+    }
+
+    /// Helper method used to write unary expressions
+    fn write_unary_expression<E>(
+        &mut self,
+        op: crate::UnaryOperator,
+        expr: Handle<crate::Expression>,
+        write_expression: E,
+    ) -> BackendResult
+    where
+        E: Fn(&mut Self, Handle<crate::Expression>) -> BackendResult,
+    {
+        let unary = match op {
+            crate::UnaryOperator::Negate => "-",
+            crate::UnaryOperator::LogicalNot => "!",
+            crate::UnaryOperator::BitwiseNot => "~",
+        };
+
+        write!(self.out, "{unary}(")?;
+        write_expression(self, expr)?;
+        write!(self.out, ")")?;
+
+        Ok(())
+    }
+
+    /// Helper method used to write binary expressions
+    fn write_binary_expression<E>(
+        &mut self,
+        op: crate::BinaryOperator,
+        left: Handle<crate::Expression>,
+        right: Handle<crate::Expression>,
+        write_expression: E,
+    ) -> BackendResult
+    where
+        E: Fn(&mut Self, Handle<crate::Expression>) -> BackendResult,
+    {
+        write!(self.out, "(")?;
+        write_expression(self, left)?;
+        write!(self.out, " {} ", back::binary_operation_str(op))?;
+        write_expression(self, right)?;
+        write!(self.out, ")")?;
 
         Ok(())
     }
