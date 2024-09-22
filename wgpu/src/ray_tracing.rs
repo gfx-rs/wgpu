@@ -375,8 +375,21 @@ pub mod traits {
 /// Trait to add ray tracing functions to a [`Device`].
 pub trait DeviceRayTracing {
     /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
-    /// - desc: The descriptor of the acceleration structure.
-    /// - sizes: Size descriptor limiting what can be built into the acceleration structure.
+    /// - `desc`: The descriptor of the acceleration structure.
+    /// - `sizes`: Size descriptor limiting what can be built into the acceleration structure.
+    ///
+    /// # Validation
+    /// If any of the following is not satisfied a validation error is generated
+    ///
+    /// The device ***must*** have [Features::RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
+    /// if `sizes` is [BlasGeometrySizeDescriptors::Triangles] then the following must be satisfied
+    /// - For every geometry descriptor (for the purposes this is called `geo_desc`) of `sizes.descriptors` the following must be satisfied:
+    ///     - `geo_desc.vertex_format` must be within allowed formats (allowed formats for a given feature set
+    /// may be queried with [Features::allowed_vertex_formats_for_blas]).
+    ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
+    ///
+    /// [Features::RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [Features::allowed_vertex_formats_for_blas]: wgt::Features::allowed_vertex_formats_for_blas
     fn create_blas(
         &self,
         desc: &CreateBlasDescriptor<'_>,
@@ -384,7 +397,14 @@ pub trait DeviceRayTracing {
     ) -> Blas;
 
     /// Create a top level acceleration structure, used for ray tracing.
-    /// - desc: The descriptor of the acceleration structure.
+    /// - `desc`: The descriptor of the acceleration structure.
+    ///
+    /// # Validation
+    /// If any of the following is not satisfied a validation error is generated
+    ///
+    /// The device ***must*** have [Features::RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
+    ///
+    /// [Features::RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
     fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas;
 }
 
@@ -438,6 +458,8 @@ pub trait CommandEncoderRayTracing {
     ///     - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
     ///     - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
     ///
+    /// If the device the command encoder is created from does not have [Features::RAY_TRACING_ACCELERATION_STRUCTURE] enabled then a validation error is generated
+    ///
     /// A bottom level acceleration structure may be build and used as a reference in a top level acceleration structure in the same invocation of this function.
     ///
     /// # Bind group usage
@@ -446,6 +468,8 @@ pub trait CommandEncoderRayTracing {
     ///    - The top level acceleration structure is valid and has been built.
     ///    - All the bottom level acceleration structures referenced by the top level acceleration structure are valid and have been built prior,
     ///      or at same time as the containing top level acceleration structure.
+    ///
+    /// [Features::RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
     fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
@@ -453,7 +477,8 @@ pub trait CommandEncoderRayTracing {
     );
 
     /// Build bottom and top level acceleration structures.
-    /// See [`CommandEncoderRayTracing::build_acceleration_structures`] for the safe version and more details.
+    /// See [`CommandEncoderRayTracing::build_acceleration_structures`] for the safe version and more details. All validation in [`CommandEncoderRayTracing::build_acceleration_structures`] except that
+    /// listed under tlas applies here as well.
     ///
     /// # Safety
     ///
