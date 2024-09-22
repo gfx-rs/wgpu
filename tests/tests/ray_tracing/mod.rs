@@ -103,7 +103,6 @@ fn execute(ctx: TestingContext) {
                     transform_buffer_offset: None,
                 }]),
             }),
-            // iter::empty(),
             iter::once(&tlas_package),
         );
 

@@ -10,11 +10,7 @@ use wgpu::{
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::{
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BlasGeometrySizeDescriptors,
-    BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
-    CreateBlasDescriptor, CreateTlasDescriptor, VertexFormat,
-};
+use wgt::{AccelerationStructureFlags, AccelerationStructureGeometryFlags, BlasGeometrySizeDescriptors, BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor, CreateBlasDescriptor, CreateTlasDescriptor, Maintain, VertexFormat};
 
 fn required_features() -> wgpu::Features {
     wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
