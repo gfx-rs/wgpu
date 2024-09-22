@@ -56,7 +56,6 @@ struct RawSceneComponents {
     instances: Vec<(Range<usize>, Range<usize>)>, // vertex range, geometry range
 }
 
-#[allow(dead_code)]
 struct SceneComponents {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
@@ -305,7 +304,6 @@ fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
     upload_scene_components(device, queue, &scene)
 }
 
-#[allow(dead_code)]
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,

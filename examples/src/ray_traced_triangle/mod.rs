@@ -20,7 +20,6 @@ struct Example {
     start: Instant,
 }
 
-#[allow(dead_code)]
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy, Debug)]
 struct Uniforms {

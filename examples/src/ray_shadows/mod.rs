@@ -77,18 +77,14 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
     }
 }
 
-#[allow(dead_code)]
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    blas: rt::Blas,
-    tlas_package: rt::TlasPackage,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     start_inst: Instant,
-    blas_geo_size_desc: rt::BlasTriangleGeometrySizeDescriptor,
 }
 
 const CAM_LOOK_AT: Vec3 = Vec3::new(0.0, 1.0, -1.5);
@@ -298,12 +294,9 @@ impl crate::framework::Example for Example {
             uniform_buf,
             vertex_buf,
             index_buf,
-            blas,
-            tlas_package,
             pipeline,
             bind_group,
             start_inst,
-            blas_geo_size_desc,
         }
     }
 
