@@ -284,6 +284,8 @@ impl TlasPackage {
     }
 
     /// Get the binding resource for the underling acceleration structure, to be used when creating a [BindGroup]
+    ///
+    /// [BindGroup]: super::BindGroup
     pub fn as_binding(&self) -> BindingResource<'_> {
         BindingResource::AccelerationStructure(&self.tlas)
     }
