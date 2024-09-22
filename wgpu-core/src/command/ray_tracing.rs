@@ -50,7 +50,7 @@ type BlasStorage<'a> = Vec<(
     u64,
 )>;
 
-// This should be queried from the device, maybe the the hal api should pre aline it, since I am unsure how else we can idiomatically get this value.
+// TODO: Get this from the device (e.g. VkPhysicalDeviceAccelerationStructurePropertiesKHR.minAccelerationStructureScratchOffsetAlignment) this is currently the largest possible some devices have 0, 64, 128 (lower limits) so this could create excess allocation (Note: dx12 has 256).
 const SCRATCH_BUFFER_ALIGNMENT: u32 = 256;
 
 impl Global {

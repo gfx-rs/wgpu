@@ -212,7 +212,7 @@ pub(crate) struct DynContextTlasInstance<'a> {
     pub(crate) mask: u8,
 }
 
-/// [Context version] see `TlasInstance`.
+/// Context version of [TlasInstance].
 #[allow(dead_code)]
 pub struct ContextTlasInstance<'a, T: Context> {
     pub(crate) blas_data: &'a T::BlasData,
