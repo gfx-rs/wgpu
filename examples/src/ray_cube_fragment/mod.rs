@@ -1,7 +1,7 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
-use std::ops::IndexMut;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
+use std::ops::IndexMut;
+use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;
@@ -306,9 +306,7 @@ impl crate::framework::Example for Example {
 
             for x in 0..side_count {
                 for y in 0..side_count {
-                    let instance = self
-                        .tlas_package
-                        .index_mut((x + y * side_count) as usize);
+                    let instance = self.tlas_package.index_mut((x + y * side_count) as usize);
 
                     let x = x as f32 / (side_count - 1) as f32;
                     let y = y as f32 / (side_count - 1) as f32;

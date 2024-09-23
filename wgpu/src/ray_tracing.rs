@@ -1,5 +1,5 @@
-use std::{fmt::Debug, ops::Range, sync::Arc, thread};
 use std::ops::{Index, IndexMut};
+use std::{fmt::Debug, ops::Range, sync::Arc, thread};
 use wgt::WasmNotSendSync;
 
 use crate::{
