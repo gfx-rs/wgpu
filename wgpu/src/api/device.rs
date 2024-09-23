@@ -379,7 +379,7 @@ impl Device {
     }
 
     /// Pop an error scope.
-    pub fn pop_error_scope(&self) -> impl Future<Output=Option<Error>> + WasmNotSend {
+    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.context.device_pop_error_scope(self.data.as_ref())
     }
 
