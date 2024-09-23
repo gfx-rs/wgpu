@@ -87,7 +87,7 @@ static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything
-    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0, false).await;
+    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(None, false).await;
 
     let device_error = adapter
         .request_device(
