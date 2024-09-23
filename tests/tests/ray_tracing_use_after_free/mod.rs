@@ -1,11 +1,12 @@
 use std::{iter, mem};
-use wgpu::{
-    AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry, TlasInstance, TlasPackage,
-};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, ComputePassDescriptor,
     ComputePipelineDescriptor,
+};
+use wgpu::{
+    AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
+    TlasInstance, TlasPackage,
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
@@ -56,7 +57,7 @@ fn execute(ctx: TestingContext) {
     });
     let mut tlas_package = TlasPackage::new(tlas);
     // place blas in tlas instance, then put tlas instance in a tlas package
-    *tlas_package.get_mut_single(0).unwrap() = Some(TlasInstance::new(
+    tlas_package[0] = Some(TlasInstance::new(
         &blas,
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,

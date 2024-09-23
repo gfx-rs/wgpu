@@ -344,9 +344,7 @@ impl crate::framework::Example for Example {
 
         for x in 0..side_count {
             for y in 0..side_count {
-                *tlas_package
-                    .get_mut_single((x + y * side_count) as usize)
-                    .unwrap() = Some(wgpu::TlasInstance::new(
+                tlas_package[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
                     &blas,
                     affine_to_rows(&Affine3A::from_rotation_translation(
                         Quat::from_rotation_y(45.9_f32.to_radians()),
@@ -368,16 +366,18 @@ impl crate::framework::Example for Example {
         encoder.build_acceleration_structures(
             iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
-                    size: &blas_geo_size_desc,
-                    vertex_buffer: &vertex_buf,
-                    first_vertex: 0,
-                    vertex_stride: mem::size_of::<Vertex>() as u64,
-                    index_buffer: Some(&index_buf),
-                    index_buffer_offset: Some(0),
-                    transform_buffer: None,
-                    transform_buffer_offset: None,
-                }]),
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
+                    wgpu::BlasTriangleGeometry {
+                        size: &blas_geo_size_desc,
+                        vertex_buffer: &vertex_buf,
+                        first_vertex: 0,
+                        vertex_stride: mem::size_of::<Vertex>() as u64,
+                        index_buffer: Some(&index_buf),
+                        index_buffer_offset: Some(0),
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    },
+                ]),
             }),
             iter::once(&tlas_package),
         );
@@ -419,24 +419,20 @@ impl crate::framework::Example for Example {
 
         let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
 
-        self.tlas_package
-            .get_mut_single(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .transform = affine_to_rows(&Affine3A::from_rotation_translation(
-            Quat::from_euler(
-                glam::EulerRot::XYZ,
-                anim_time * 0.342,
-                anim_time * 0.254,
-                anim_time * 0.832,
-            ),
-            Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: -6.0,
-            },
-        ));
+        self.tlas_package[0].as_mut().unwrap().transform =
+            affine_to_rows(&Affine3A::from_rotation_translation(
+                Quat::from_euler(
+                    glam::EulerRot::XYZ,
+                    anim_time * 0.342,
+                    anim_time * 0.254,
+                    anim_time * 0.832,
+                ),
+                Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: -6.0,
+                },
+            ));
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

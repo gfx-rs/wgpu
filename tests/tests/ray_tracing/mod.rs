@@ -78,7 +78,7 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
     for i in 0..2500 {
         eprintln!("Setting TlasInstances in loop {}", i);
         for j in 0..max_instances {
-            *tlas_package.get_mut_single(0).unwrap() = Some(wgpu::TlasInstance::new(
+            *tlas_package[0] = Some(wgpu::TlasInstance::new(
                 &blas,
                 AccelerationStructureInstance::affine_to_rows(
                     &Affine3A::from_rotation_translation(
@@ -101,16 +101,18 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
         encoder.build_acceleration_structures(
             iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
-                    size: &blas_geo_size_desc,
-                    vertex_buffer: &vertex_buf,
-                    first_vertex: 0,
-                    vertex_stride: mem::size_of::<Vertex>() as u64,
-                    index_buffer: index_buf.as_ref(),
-                    index_buffer_offset: index_offset,
-                    transform_buffer: None,
-                    transform_buffer_offset: None,
-                }]),
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
+                    wgpu::BlasTriangleGeometry {
+                        size: &blas_geo_size_desc,
+                        vertex_buffer: &vertex_buf,
+                        first_vertex: 0,
+                        vertex_stride: mem::size_of::<Vertex>() as u64,
+                        index_buffer: index_buf.as_ref(),
+                        index_buffer_offset: index_offset,
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    },
+                ]),
             }),
             iter::once(&tlas_package),
         );

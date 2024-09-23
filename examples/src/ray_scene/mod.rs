@@ -1,6 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use std::f32::consts::PI;
+use std::ops::IndexMut;
 use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
 use wgpu::util::DeviceExt;
 
@@ -472,10 +473,7 @@ impl crate::framework::Example for Example {
 
             for x in 0..side_count {
                 for y in 0..side_count {
-                    let instance = self
-                        .tlas_package
-                        .get_mut_single(x + y * side_count)
-                        .unwrap();
+                    let instance = self.tlas_package.index_mut(x + y * side_count);
 
                     let blas_index = (x + y)
                         % self

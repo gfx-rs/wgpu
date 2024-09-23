@@ -1,10 +1,10 @@
+use crate::api::blas::{ContextTlasInstance, DynContextTlasInstance, TlasInstance};
+use crate::context::{Context, DynContext};
+use crate::{BindingResource, Buffer, Data, Label, C};
 use std::ops::{Index, IndexMut, Range};
 use std::sync::Arc;
 use std::thread;
 use wgt::WasmNotSendSync;
-use crate::{BindingResource, Buffer, C, Data, Label};
-use crate::api::blas::{ContextTlasInstance, DynContextTlasInstance, TlasInstance};
-use crate::context::{Context, DynContext};
 
 /// Descriptor to create top level acceleration structures.
 pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
@@ -87,7 +87,8 @@ impl TlasPackage {
     /// All elements from the lowest accessed index up are marked as modified.
     // this recommendation is not useful yet, but is likely to be when ability to update arrives or possible optimisations for building get implemented.
     /// For best performance it is recommended to prefer access to low elements and modify higher elements as little as possible.
-    /// This can be done by ordering instances from the most to the least used.
+    /// This can be done by ordering instances from the most to the least used. It is recommended
+    /// to use [Self::index_mut] unless the option if out of bounds is required
     pub fn get_mut_slice(&mut self, range: Range<usize>) -> Option<&mut [Option<TlasInstance>]> {
         if range.end > self.instances.len() {
             return None;
@@ -103,7 +104,8 @@ impl TlasPackage {
     /// All elements from the lowest accessed index up are marked as modified.
     // this recommendation is not useful yet, but is likely to be when ability to update arrives or possible optimisations for building get implemented.
     /// For best performance it is recommended to prefer access to low elements and modify higher elements as little as possible.
-    /// This can be done by ordering instances from the most to the least used.
+    /// This can be done by ordering instances from the most to the least used. It is recommended
+    /// to use [Self::index_mut] unless the option if out of bounds is required
     pub fn get_mut_single(&mut self, index: usize) -> Option<&mut Option<TlasInstance>> {
         if index >= self.instances.len() {
             return None;

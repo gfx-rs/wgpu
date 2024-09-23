@@ -3,7 +3,7 @@ use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant}
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
-use wgpu::{IndexFormat, vertex_attr_array, VertexBufferLayout};
+use wgpu::{vertex_attr_array, IndexFormat, VertexBufferLayout};
 
 // from cube
 #[repr(C)]
@@ -238,7 +238,7 @@ impl crate::framework::Example for Example {
 
         let mut tlas_package = wgpu::TlasPackage::new(tlas);
 
-        *tlas_package.get_mut_single(0).unwrap() = Some(wgpu::TlasInstance::new(
+        tlas_package[0] = Some(wgpu::TlasInstance::new(
             &blas,
             [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             0,
@@ -251,16 +251,18 @@ impl crate::framework::Example for Example {
         encoder.build_acceleration_structures(
             iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
-                    size: &blas_geo_size_desc,
-                    vertex_buffer: &vertex_buf,
-                    first_vertex: 0,
-                    vertex_stride: mem::size_of::<Vertex>() as u64,
-                    index_buffer: Some(&index_buf),
-                    index_buffer_offset: Some(0),
-                    transform_buffer: None,
-                    transform_buffer_offset: None,
-                }]),
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
+                    wgpu::BlasTriangleGeometry {
+                        size: &blas_geo_size_desc,
+                        vertex_buffer: &vertex_buf,
+                        first_vertex: 0,
+                        vertex_stride: mem::size_of::<Vertex>() as u64,
+                        index_buffer: Some(&index_buf),
+                        index_buffer_offset: Some(0),
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    },
+                ]),
             }),
             iter::once(&tlas_package),
         );

@@ -1,14 +1,13 @@
 use glam::{Mat4, Vec3};
 use std::mem;
 use std::time::Instant;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{include_wgsl, BufferUsages, IndexFormat, SamplerDescriptor};
 use wgpu::{
     AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries,
     BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
-    CreateBlasDescriptor, CreateTlasDescriptor,
-    TlasInstance, TlasPackage,
+    CreateBlasDescriptor, CreateTlasDescriptor, TlasInstance, TlasPackage,
 };
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{include_wgsl, BufferUsages, IndexFormat, SamplerDescriptor};
 
 struct Example {
     tlas_package: TlasPackage,
@@ -145,7 +144,7 @@ impl crate::framework::Example for Example {
 
         let mut tlas_package = TlasPackage::new(tlas);
 
-        *tlas_package.get_mut_single(0).unwrap() = Some(TlasInstance::new(
+        tlas_package[0] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: 0.0,
@@ -160,7 +159,7 @@ impl crate::framework::Example for Example {
             0xff,
         ));
 
-        *tlas_package.get_mut_single(1).unwrap() = Some(TlasInstance::new(
+        tlas_package[0] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: -1.0,
@@ -175,7 +174,7 @@ impl crate::framework::Example for Example {
             0xff,
         ));
 
-        *tlas_package.get_mut_single(2).unwrap() = Some(TlasInstance::new(
+        tlas_package[0] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: 1.0,
@@ -366,16 +365,12 @@ impl crate::framework::Example for Example {
     fn update(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        self.tlas_package
-            .get_mut_single(0)
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .transform = Mat4::from_rotation_y(self.start.elapsed().as_secs_f32())
-            .transpose()
-            .to_cols_array()[..12]
-            .try_into()
-            .unwrap();
+        self.tlas_package[0].as_mut().unwrap().transform =
+            Mat4::from_rotation_y(self.start.elapsed().as_secs_f32())
+                .transpose()
+                .to_cols_array()[..12]
+                .try_into()
+                .unwrap();
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
