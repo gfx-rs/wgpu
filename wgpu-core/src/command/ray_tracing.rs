@@ -69,6 +69,9 @@ struct TlasBufferStore {
 const SCRATCH_BUFFER_ALIGNMENT: u32 = 256;
 
 impl Global {
+    // Currently this function is very similar to its safe counterpart, however it is certain parts of it are very different,
+    // making for the two to be implemented differently, the main difference is this function has separate buffers for each
+    // of the TLAS instances while the other has one large buffer
     pub fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &self,
         command_encoder_id: CommandEncoderId,
