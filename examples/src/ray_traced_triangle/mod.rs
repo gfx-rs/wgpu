@@ -121,7 +121,7 @@ impl crate::framework::Example for Example {
             // 3 coordinates per vertex
             vertex_count: (vertices.len() / 3) as u32,
             index_format: Some(IndexFormat::Uint32),
-            index_count: Some(0),
+            index_count: Some(indices.len() as u32),
             flags: wgpu::ray_tracing::AccelerationStructureGeometryFlags::OPAQUE,
         };
 

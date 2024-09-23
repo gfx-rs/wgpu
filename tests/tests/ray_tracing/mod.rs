@@ -32,7 +32,7 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
-    let (index_buf, index_offset) = if USE_INDEX_BUFFER {
+    let (index_buf, index_offset, index_format, index_count) = if USE_INDEX_BUFFER {
         (
             Some(
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -42,16 +42,18 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
                 }),
             ),
             Some(0),
+            Some(wgpu::IndexFormat::Uint16),
+            Some(index_data.len() as u32)
         )
     } else {
-        (None, None)
+        (None, None, None, None)
     };
 
     let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
         vertex_format: wgpu::VertexFormat::Float32x3,
         vertex_count: vertex_data.len() as u32,
-        index_format: Some(wgpu::IndexFormat::Uint16),
-        index_count: Some(index_data.len() as u32),
+        index_format,
+        index_count,
         flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
     };
 
