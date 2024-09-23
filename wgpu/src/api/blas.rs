@@ -1,8 +1,8 @@
+use crate::context::{Context, DynContext};
+use crate::{Buffer, Data, Label, C};
 use std::sync::Arc;
 use std::thread;
 use wgt::WasmNotSendSync;
-use crate::{Buffer, C, Data, Label};
-use crate::context::{Context, DynContext};
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;

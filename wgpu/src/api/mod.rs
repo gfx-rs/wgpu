@@ -28,6 +28,7 @@ mod buffer;
 mod command_buffer;
 mod command_encoder;
 // Not a root type, but common descriptor types for pipelines.
+mod blas;
 mod common_pipeline;
 mod compute_pass;
 mod compute_pipeline;
@@ -47,12 +48,12 @@ mod surface;
 mod surface_texture;
 mod texture;
 mod texture_view;
-mod blas;
 mod tlas;
 
 pub use adapter::*;
 pub use bind_group::*;
 pub use bind_group_layout::*;
+pub use blas::*;
 pub use buffer::*;
 pub use command_buffer::*;
 pub use command_encoder::*;
@@ -75,7 +76,6 @@ pub use surface::*;
 pub use surface_texture::*;
 pub use texture::*;
 pub use texture_view::*;
-pub use blas::*;
 pub use tlas::*;
 
 /// Object debugging label.

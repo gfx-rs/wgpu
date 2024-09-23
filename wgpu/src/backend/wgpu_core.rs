@@ -3063,9 +3063,7 @@ impl crate::Context for ContextWgpuCore {
 
         let blas = blas.map(|e: crate::ContextBlasBuildEntry<'_, Self>| {
             let geometries = match e.geometries {
-                crate::ContextBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
+                crate::ContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         wgc::ray_tracing::BlasTriangleGeometry {
                             vertex_buffer: tg.vertex_buffer.id,
@@ -3087,15 +3085,15 @@ impl crate::Context for ContextWgpuCore {
             }
         });
 
-        let tlas = tlas.into_iter().map(
-            |e: crate::ContextTlasBuildEntry<'a, ContextWgpuCore>| {
+        let tlas = tlas
+            .into_iter()
+            .map(|e: crate::ContextTlasBuildEntry<'a, ContextWgpuCore>| {
                 wgc::ray_tracing::TlasBuildEntry {
                     tlas_id: e.tlas_data.id,
                     instance_buffer_id: e.instance_buffer_data.id,
                     instance_count: e.instance_count,
                 }
-            },
-        );
+            });
 
         if let Err(cause) = global.command_encoder_build_acceleration_structures_unsafe_tlas(
             encoder_data.id,
@@ -3120,9 +3118,7 @@ impl crate::Context for ContextWgpuCore {
 
         let blas = blas.map(|e: crate::ContextBlasBuildEntry<'_, Self>| {
             let geometries = match e.geometries {
-                crate::ContextBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
+                crate::ContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         wgc::ray_tracing::BlasTriangleGeometry {
                             vertex_buffer: tg.vertex_buffer.id,
@@ -3145,16 +3141,16 @@ impl crate::Context for ContextWgpuCore {
         });
 
         let tlas = tlas.into_iter().map(|e| {
-            let instances = e.instances.map(
-                |instance: Option<crate::ContextTlasInstance<'_, _>>| {
-                    instance.map(|instance| wgc::ray_tracing::TlasInstance {
-                        blas_id: instance.blas_data.id,
-                        transform: instance.transform,
-                        custom_index: instance.custom_index,
-                        mask: instance.mask,
-                    })
-                },
-            );
+            let instances =
+                e.instances
+                    .map(|instance: Option<crate::ContextTlasInstance<'_, _>>| {
+                        instance.map(|instance| wgc::ray_tracing::TlasInstance {
+                            blas_id: instance.blas_data.id,
+                            transform: instance.transform,
+                            custom_index: instance.custom_index,
+                            mask: instance.mask,
+                        })
+                    });
             wgc::ray_tracing::TlasPackage {
                 tlas_id: e.tlas_data.id,
                 instances: Box::new(instances),
@@ -3353,9 +3349,7 @@ fn downcast_texture_view(
 ) -> &<ContextWgpuCore as crate::Context>::TextureViewData {
     downcast_ref(texture_view.data.as_ref())
 }
-fn downcast_tlas(
-    tlas: &crate::Tlas,
-) -> &<ContextWgpuCore as crate::Context>::TlasData {
+fn downcast_tlas(tlas: &crate::Tlas) -> &<ContextWgpuCore as crate::Context>::TlasData {
     downcast_ref(tlas.data.as_ref())
 }
 fn downcast_sampler(sampler: &crate::Sampler) -> &<ContextWgpuCore as crate::Context>::SamplerData {

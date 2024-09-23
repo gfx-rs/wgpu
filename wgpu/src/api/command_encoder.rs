@@ -55,9 +55,14 @@ pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 
+use crate::api::blas::{
+    BlasBuildEntry, BlasGeometries, BlasTriangleGeometry, DynContextBlasBuildEntry,
+    DynContextBlasGeometries, DynContextBlasTriangleGeometry, DynContextTlasInstance, TlasInstance,
+};
+use crate::api::tlas::{
+    DynContextTlasBuildEntry, DynContextTlasPackage, TlasBuildEntry, TlasPackage,
+};
 pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
-use crate::api::blas::{BlasBuildEntry, BlasGeometries, BlasTriangleGeometry, DynContextBlasBuildEntry, DynContextBlasGeometries, DynContextBlasTriangleGeometry, DynContextTlasInstance, TlasInstance};
-use crate::api::tlas::{DynContextTlasBuildEntry, DynContextTlasPackage, TlasBuildEntry, TlasPackage};
 
 /// View of a texture which can be used to copy to a texture, including
 /// color space and alpha premultiplication information.

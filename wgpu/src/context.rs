@@ -2771,9 +2771,7 @@ where
 
         let blas = blas.into_iter().map(|e| {
             let geometries = match e.geometries {
-                crate::DynContextBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
+                crate::DynContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         crate::ContextBlasTriangleGeometry {
                             vertex_buffer: downcast_ref(tg.vertex_buffer),
@@ -2798,13 +2796,13 @@ where
 
         let tlas = tlas
             .into_iter()
-            .map(|e: crate::DynContextTlasBuildEntry<'_>| {
-                crate::ContextTlasBuildEntry {
+            .map(
+                |e: crate::DynContextTlasBuildEntry<'_>| crate::ContextTlasBuildEntry {
                     tlas_data: downcast_ref(e.tlas_data),
                     instance_buffer_data: downcast_ref(e.instance_buffer_data),
                     instance_count: e.instance_count,
-                }
-            });
+                },
+            );
 
         Context::command_encoder_build_acceleration_structures_unsafe_tlas(
             self,
@@ -2824,9 +2822,7 @@ where
 
         let blas = blas.into_iter().map(|e| {
             let geometries = match e.geometries {
-                crate::DynContextBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
+                crate::DynContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         crate::ContextBlasTriangleGeometry {
                             vertex_buffer: downcast_ref(tg.vertex_buffer),
@@ -2849,25 +2845,23 @@ where
             }
         });
 
-        let tlas = tlas
-            .into_iter()
-            .map(|e: crate::DynContextTlasPackage<'_>| {
-                let instances = e.instances.map(
-                    |instance: Option<crate::DynContextTlasInstance<'_>>| {
+        let tlas = tlas.into_iter().map(|e: crate::DynContextTlasPackage<'_>| {
+            let instances =
+                e.instances
+                    .map(|instance: Option<crate::DynContextTlasInstance<'_>>| {
                         instance.map(|instance| crate::ContextTlasInstance {
                             blas_data: downcast_ref(instance.blas),
                             transform: instance.transform,
                             custom_index: instance.custom_index,
                             mask: instance.mask,
                         })
-                    },
-                );
-                crate::ContextTlasPackage {
-                    tlas_data: downcast_ref(e.tlas_data),
-                    instances: Box::new(instances),
-                    lowest_unmodified: e.lowest_unmodified,
-                }
-            });
+                    });
+            crate::ContextTlasPackage {
+                tlas_data: downcast_ref(e.tlas_data),
+                instances: Box::new(instances),
+                lowest_unmodified: e.lowest_unmodified,
+            }
+        });
 
         Context::command_encoder_build_acceleration_structures(self, encoder_data, blas, tlas)
     }

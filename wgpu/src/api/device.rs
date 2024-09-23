@@ -2,10 +2,10 @@ use std::{error, fmt, future::Future, sync::Arc, thread};
 
 use parking_lot::Mutex;
 
-use crate::context::DynContext;
-use crate::*;
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, BlasShared, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
+use crate::context::DynContext;
+use crate::*;
 
 /// Open connection to a graphics and/or compute device.
 ///
