@@ -20,7 +20,7 @@ use crate::{
     FastHashSet,
 };
 
-use wgt::{math::align_to, BufferAddress, BufferUsages, Features};
+use wgt::{math::align_to, BufferUsages, Features};
 
 use super::{BakedCommands, CommandBufferMutable};
 use crate::ray_tracing::BlasTriangleGeometry;
@@ -34,20 +34,37 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::{cmp::max, num::NonZeroU64, ops::Range};
 
-type BufferStorage<'a> = Vec<(
-    Arc<Buffer>,
-    Option<PendingTransition<BufferUses>>,
-    Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
-    Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
-    BlasTriangleGeometry<'a>,
-    Option<Arc<Blas>>,
-)>;
+struct TriangleBufferStore<'a> {
+    vertex_buffer: Arc<Buffer>,
+    vertex_transition: Option<PendingTransition<BufferUses>>,
+    index_buffer_transition: Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
+    transform_buffer_transition: Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
+    geometry: BlasTriangleGeometry<'a>,
+    ending_blas: Option<Arc<Blas>>,
+}
 
-type BlasStorage<'a> = Vec<(
-    Arc<Blas>,
-    hal::AccelerationStructureEntries<'a, dyn hal::DynBuffer>,
-    u64,
-)>;
+struct BlasStore<'a> {
+    blas: Arc<Blas>,
+    entries: hal::AccelerationStructureEntries<'a, dyn hal::DynBuffer>,
+    scratch_buffer_offset: u64,
+}
+
+struct UnsafeTlasStore<'a> {
+    tlas: Arc<Tlas>,
+    entries: hal::AccelerationStructureEntries<'a, dyn hal::DynBuffer>,
+    scratch_buffer_offset: u64,
+}
+
+struct TlasStore<'a> {
+    internal: UnsafeTlasStore<'a>,
+    range: Range<usize>,
+}
+
+struct TlasBufferStore {
+    buffer: Arc<Buffer>,
+    transition: Option<PendingTransition<BufferUses>>,
+    entry: TlasBuildEntry,
+}
 
 // TODO: Get this from the device (e.g. VkPhysicalDeviceAccelerationStructurePropertiesKHR.minAccelerationStructureScratchOffsetAlignment) this is currently the largest possible some devices have 0, 64, 128 (lower limits) so this could create excess allocation (Note: dx12 has 256).
 const SCRATCH_BUFFER_ALIGNMENT: u32 = 256;
@@ -156,10 +173,10 @@ impl Global {
         let tlas_iter = trace_tlas.iter();
 
         let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
-        let mut buf_storage = BufferStorage::new();
+        let mut buf_storage = Vec::new();
 
         let mut scratch_buffer_blas_size = 0;
-        let mut blas_storage = BlasStorage::new();
+        let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -184,16 +201,8 @@ impl Global {
         )?;
 
         let mut scratch_buffer_tlas_size = 0;
-        let mut tlas_storage = Vec::<(
-            Arc<Tlas>,
-            hal::AccelerationStructureEntries<dyn hal::DynBuffer>,
-            u64,
-        )>::new();
-        let mut tlas_buf_storage = Vec::<(
-            Arc<Buffer>,
-            Option<PendingTransition<BufferUses>>,
-            TlasBuildEntry,
-        )>::new();
+        let mut tlas_storage = Vec::<UnsafeTlasStore>::new();
+        let mut tlas_buf_storage = Vec::new();
 
         for entry in tlas_iter {
             let instance_buffer = match buffer_guard.get(entry.instance_buffer_id).get() {
@@ -206,13 +215,18 @@ impl Global {
                 &instance_buffer,
                 BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
             );
-            tlas_buf_storage.push((instance_buffer.clone(), data, entry.clone()));
+            tlas_buf_storage.push(TlasBufferStore {
+                buffer: instance_buffer.clone(),
+                transition: data,
+                entry: entry.clone(),
+            });
         }
 
         for tlas_buf in &mut tlas_buf_storage {
-            let entry = &tlas_buf.2;
+            let entry = &tlas_buf.entry;
             let instance_buffer = {
-                let (instance_buffer, instance_pending) = (&mut tlas_buf.0, &mut tlas_buf.1);
+                let (instance_buffer, instance_pending) =
+                    (&mut tlas_buf.buffer, &mut tlas_buf.transition);
                 let instance_raw = instance_buffer.raw.get(&snatch_guard).ok_or(
                     BuildAccelerationStructureError::InvalidBuffer(instance_buffer.error_ident()),
                 )?;
@@ -250,15 +264,17 @@ impl Global {
                 SCRATCH_BUFFER_ALIGNMENT,
             ) as u64;
 
-            tlas_storage.push((
+            tlas_storage.push(UnsafeTlasStore {
                 tlas,
-                hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                    buffer: Some(instance_buffer.as_ref()),
-                    offset: 0,
-                    count: entry.instance_count,
-                }),
+                entries: hal::AccelerationStructureEntries::Instances(
+                    hal::AccelerationStructureInstances {
+                        buffer: Some(instance_buffer.as_ref()),
+                        offset: 0,
+                        count: entry.instance_count,
+                    },
+                ),
                 scratch_buffer_offset,
-            ));
+            });
         }
 
         let scratch_size =
@@ -280,9 +296,12 @@ impl Global {
             .iter()
             .map(|storage| map_blas(storage, scratch_buffer.raw()));
 
-        let tlas_descriptors = tlas_storage
-            .iter()
-            .map(|(tlas, entries, scratch_buffer_offset)| {
+        let tlas_descriptors = tlas_storage.iter().map(
+            |UnsafeTlasStore {
+                 tlas,
+                 entries,
+                 scratch_buffer_offset,
+             }| {
                 if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                     log::info!("only rebuild implemented")
                 }
@@ -295,7 +314,8 @@ impl Global {
                     scratch_buffer: scratch_buffer.raw(),
                     scratch_buffer_offset: *scratch_buffer_offset,
                 }
-            });
+            },
+        );
 
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
@@ -466,10 +486,10 @@ impl Global {
         });
 
         let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
-        let mut buf_storage = BufferStorage::new();
+        let mut buf_storage = Vec::new();
 
         let mut scratch_buffer_blas_size = 0;
-        let mut blas_storage = BlasStorage::new();
+        let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -505,12 +525,7 @@ impl Global {
         }
 
         let mut scratch_buffer_tlas_size = 0;
-        let mut tlas_storage = Vec::<(
-            &Tlas,
-            hal::AccelerationStructureEntries<dyn hal::DynBuffer>,
-            u64,
-            Range<usize>,
-        )>::new();
+        let mut tlas_storage = Vec::<TlasStore>::new();
         let mut instance_buffer_staging_source = Vec::<u8>::new();
 
         for (package, tlas) in &mut tlas_lock_store {
@@ -573,16 +588,20 @@ impl Global {
                 ));
             }
 
-            tlas_storage.push((
-                tlas,
-                hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                    buffer: Some(tlas.instance_buffer.as_ref()),
-                    offset: 0,
-                    count: instance_count,
-                }),
-                scratch_buffer_offset,
-                first_byte_index..instance_buffer_staging_source.len(),
-            ));
+            tlas_storage.push(TlasStore {
+                internal: UnsafeTlasStore {
+                    tlas: tlas.clone(),
+                    entries: hal::AccelerationStructureEntries::Instances(
+                        hal::AccelerationStructureInstances {
+                            buffer: Some(tlas.instance_buffer.as_ref()),
+                            offset: 0,
+                            count: instance_count,
+                        },
+                    ),
+                    scratch_buffer_offset,
+                },
+                range: first_byte_index..instance_buffer_staging_source.len(),
+            });
         }
 
         let scratch_size =
@@ -607,7 +626,16 @@ impl Global {
 
         let mut tlas_descriptors = Vec::with_capacity(tlas_storage.len());
 
-        for &(tlas, ref entries, ref scratch_buffer_offset, _) in &tlas_storage {
+        for &TlasStore {
+            internal:
+                UnsafeTlasStore {
+                    ref tlas,
+                    ref entries,
+                    ref scratch_buffer_offset,
+                },
+            ..
+        } in &tlas_storage
+        {
             if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                 log::info!("only rebuild implemented")
             }
@@ -660,7 +688,11 @@ impl Global {
             }
 
             let mut instance_buffer_barriers = Vec::new();
-            for &(tlas, _, _, ref range) in &tlas_storage {
+            for &TlasStore {
+                internal: UnsafeTlasStore { ref tlas, .. },
+                ref range,
+            } in &tlas_storage
+            {
                 let size = match wgt::BufferSize::new((range.end - range.start) as u64) {
                     None => continue,
                     Some(size) => size,
@@ -793,8 +825,9 @@ fn iter_blas<'a>(
     build_command_index: NonZeroU64,
     buffer_guard: &RwLockReadGuard<Storage<Fallible<Buffer>>>,
     blas_guard: &RwLockReadGuard<Storage<Fallible<Blas>>>,
-    buf_storage: &mut BufferStorage<'a>,
+    buf_storage: &mut Vec<TriangleBufferStore<'a>>,
 ) -> Result<(), BuildAccelerationStructureError> {
+    let mut temp_buffer = Vec::new();
     for entry in blas_iter {
         let blas = blas_guard
             .get(entry.blas_id)
@@ -926,18 +959,19 @@ fn iter_blas<'a>(
                     } else {
                         None
                     };
-                    buf_storage.push((
-                        vertex_buffer.clone(),
-                        vertex_pending,
-                        index_data,
-                        transform_data,
-                        mesh,
-                        None,
-                    ));
+                    temp_buffer.push(TriangleBufferStore {
+                        vertex_buffer: vertex_buffer.clone(),
+                        vertex_transition: vertex_pending,
+                        index_buffer_transition: index_data,
+                        transform_buffer_transition: transform_data,
+                        geometry: mesh,
+                        ending_blas: None,
+                    });
                 }
 
-                if let Some(last) = buf_storage.last_mut() {
-                    last.5 = Some(blas.clone());
+                if let Some(last) = temp_buffer.last_mut() {
+                    last.ending_blas = Some(blas.clone());
+                    buf_storage.append(&mut temp_buffer);
                 }
             }
         }
@@ -947,20 +981,20 @@ fn iter_blas<'a>(
 
 /// Iterates over the buffers generated in [iter_blas], convert the barriers into hal barriers, and the triangles into [hal::AccelerationStructureEntries] (and also some validation).
 fn iter_buffers<'a, 'b>(
-    buf_storage: &'a mut BufferStorage<'b>,
+    buf_storage: &'a mut Vec<TriangleBufferStore<'b>>,
     snatch_guard: &'a SnatchGuard,
     input_barriers: &mut Vec<hal::BufferBarrier<'a, dyn hal::DynBuffer>>,
     cmd_buf_data: &mut CommandBufferMutable,
     buffer_guard: &RwLockReadGuard<Storage<Fallible<Buffer>>>,
     scratch_buffer_blas_size: &mut u64,
-    blas_storage: &mut BlasStorage<'a>,
+    blas_storage: &mut Vec<BlasStore<'a>>,
 ) -> Result<(), BuildAccelerationStructureError> {
     let mut triangle_entries =
         Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
     for buf in buf_storage {
-        let mesh = &buf.4;
+        let mesh = &buf.geometry;
         let vertex_buffer = {
-            let vertex_buffer = buf.0.as_ref();
+            let vertex_buffer = buf.vertex_buffer.as_ref();
             let vertex_raw = vertex_buffer.raw.get(snatch_guard).ok_or(
                 BuildAccelerationStructureError::InvalidBuffer(vertex_buffer.error_ident()),
             )?;
@@ -970,7 +1004,7 @@ fn iter_buffers<'a, 'b>(
                 ));
             }
             if let Some(barrier) = buf
-                .1
+                .vertex_transition
                 .take()
                 .map(|pending| pending.into_hal(vertex_buffer, snatch_guard))
             {
@@ -1000,7 +1034,9 @@ fn iter_buffers<'a, 'b>(
             );
             vertex_raw
         };
-        let index_buffer = if let Some((ref mut index_buffer, ref mut index_pending)) = buf.2 {
+        let index_buffer = if let Some((ref mut index_buffer, ref mut index_pending)) =
+            buf.index_buffer_transition
+        {
             let index_raw = index_buffer.raw.get(snatch_guard).ok_or(
                 BuildAccelerationStructureError::InvalidBuffer(index_buffer.error_ident()),
             )?;
@@ -1057,7 +1093,7 @@ fn iter_buffers<'a, 'b>(
             None
         };
         let transform_buffer = if let Some((ref mut transform_buffer, ref mut transform_pending)) =
-            buf.3
+            buf.transform_buffer_transition
         {
             if mesh.transform_buffer_offset.is_none() {
                 return Err(BuildAccelerationStructureError::MissingAssociatedData(
@@ -1127,18 +1163,18 @@ fn iter_buffers<'a, 'b>(
             flags: mesh.size.flags,
         };
         triangle_entries.push(triangles);
-        if let Some(blas) = buf.5.take() {
+        if let Some(blas) = buf.ending_blas.take() {
             let scratch_buffer_offset = *scratch_buffer_blas_size;
             *scratch_buffer_blas_size += align_to(
                 blas.size_info.build_scratch_size as u32,
                 SCRATCH_BUFFER_ALIGNMENT,
             ) as u64;
 
-            blas_storage.push((
+            blas_storage.push(BlasStore {
                 blas,
-                hal::AccelerationStructureEntries::Triangles(triangle_entries),
+                entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
                 scratch_buffer_offset,
-            ));
+            });
             triangle_entries = Vec::new();
         }
     }
@@ -1146,18 +1182,18 @@ fn iter_buffers<'a, 'b>(
 }
 
 fn map_blas<'a>(
-    storage: &'a (
-        Arc<Blas>,
-        hal::AccelerationStructureEntries<dyn hal::DynBuffer>,
-        BufferAddress,
-    ),
+    storage: &'a BlasStore<'_>,
     scratch_buffer: &'a dyn hal::DynBuffer,
 ) -> hal::BuildAccelerationStructureDescriptor<
     'a,
     dyn hal::DynBuffer,
     dyn hal::DynAccelerationStructure,
 > {
-    let (blas, entries, scratch_buffer_offset) = storage;
+    let BlasStore {
+        blas,
+        entries,
+        scratch_buffer_offset,
+    } = storage;
     if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
         log::info!("only rebuild implemented")
     }
