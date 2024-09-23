@@ -22,6 +22,7 @@ use crate::{
 use wgt::{math::align_to, BufferUsages, Features};
 
 use super::{BakedCommands, CommandBufferMutable};
+use crate::hub::Hub;
 use crate::ray_tracing::BlasTriangleGeometry;
 use crate::resource::{AccelerationStructure, Buffer, Labeled, StagingBuffer, Trackable};
 use crate::scratch::ScratchBuffer;
@@ -31,7 +32,6 @@ use hal::BufferUses;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::{cmp::max, num::NonZeroU64, ops::Range};
-use crate::hub::Hub;
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -360,7 +360,6 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-
 
         let device = &cmd_buf.device;
 
@@ -980,7 +979,7 @@ fn iter_buffers<'a, 'b>(
     cmd_buf_data: &mut CommandBufferMutable,
     scratch_buffer_blas_size: &mut u64,
     blas_storage: &mut Vec<BlasStore<'a>>,
-    hub: &Hub
+    hub: &Hub,
 ) -> Result<(), BuildAccelerationStructureError> {
     let mut triangle_entries =
         Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
@@ -1015,8 +1014,7 @@ fn iter_buffers<'a, 'b>(
             let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
             cmd_buf_data.buffer_memory_init_actions.extend(
                 vertex_buffer.initialization_status.read().create_action(
-                    &hub
-                        .buffers
+                    &hub.buffers
                         .get(mesh.vertex_buffer)
                         .get()
                         .map_err(|_| BuildAccelerationStructureError::InvalidBufferId)?,
