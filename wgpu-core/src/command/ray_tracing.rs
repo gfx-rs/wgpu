@@ -10,7 +10,6 @@ use crate::{
     global::Global,
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
-    lock::RwLockReadGuard,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
         BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasPackage,
@@ -24,15 +23,15 @@ use wgt::{math::align_to, BufferUsages, Features};
 
 use super::{BakedCommands, CommandBufferMutable};
 use crate::ray_tracing::BlasTriangleGeometry;
-use crate::resource::{AccelerationStructure, Buffer, Fallible, Labeled, StagingBuffer, Trackable};
+use crate::resource::{AccelerationStructure, Buffer, Labeled, StagingBuffer, Trackable};
 use crate::scratch::ScratchBuffer;
 use crate::snatch::SnatchGuard;
-use crate::storage::Storage;
 use crate::track::PendingTransition;
 use hal::BufferUses;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::{cmp::max, num::NonZeroU64, ops::Range};
+use crate::hub::Hub;
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -83,10 +82,6 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-
-        let buffer_guard = hub.buffers.read();
-        let blas_guard = hub.blas_s.read();
-        let tlas_guard = hub.tlas_s.read();
 
         let device = &cmd_buf.device;
 
@@ -184,9 +179,8 @@ impl Global {
             blas_iter,
             cmd_buf_data,
             build_command_index,
-            &buffer_guard,
-            &blas_guard,
             &mut buf_storage,
+            hub,
         )?;
 
         let snatch_guard = device.snatchable_lock.read();
@@ -195,9 +189,9 @@ impl Global {
             &snatch_guard,
             &mut input_barriers,
             cmd_buf_data,
-            &buffer_guard,
             &mut scratch_buffer_blas_size,
             &mut blas_storage,
+            hub,
         )?;
 
         let mut scratch_buffer_tlas_size = 0;
@@ -205,7 +199,7 @@ impl Global {
         let mut tlas_buf_storage = Vec::new();
 
         for entry in tlas_iter {
-            let instance_buffer = match buffer_guard.get(entry.instance_buffer_id).get() {
+            let instance_buffer = match hub.buffers.get(entry.instance_buffer_id).get() {
                 Ok(buffer) => buffer,
                 Err(_) => {
                     return Err(BuildAccelerationStructureError::InvalidBufferId);
@@ -244,7 +238,8 @@ impl Global {
                 instance_raw
             };
 
-            let tlas = tlas_guard
+            let tlas = hub
+                .tlas_s
                 .get(entry.tlas_id)
                 .get()
                 .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
@@ -366,9 +361,6 @@ impl Global {
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
 
-        let buffer_guard = hub.buffers.read();
-        let blas_guard = hub.blas_s.read();
-        let tlas_guard = hub.tlas_s.read();
 
         let device = &cmd_buf.device;
 
@@ -497,9 +489,8 @@ impl Global {
             blas_iter,
             cmd_buf_data,
             build_command_index,
-            &buffer_guard,
-            &blas_guard,
             &mut buf_storage,
+            hub,
         )?;
 
         let snatch_guard = device.snatchable_lock.read();
@@ -508,14 +499,15 @@ impl Global {
             &snatch_guard,
             &mut input_barriers,
             cmd_buf_data,
-            &buffer_guard,
             &mut scratch_buffer_blas_size,
             &mut blas_storage,
+            hub,
         )?;
         let mut tlas_lock_store = Vec::<(Option<TlasPackage>, Arc<Tlas>)>::new();
 
         for package in tlas_iter {
-            let tlas = tlas_guard
+            let tlas = hub
+                .tlas_s
                 .get(package.tlas_id)
                 .get()
                 .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
@@ -548,7 +540,8 @@ impl Global {
                         tlas.error_ident(),
                     ));
                 }
-                let blas = blas_guard
+                let blas = hub
+                    .blas_s
                     .get(instance.blas_id)
                     .get()
                     .map_err(|_| BuildAccelerationStructureError::InvalidBlasIdForInstance)?
@@ -823,13 +816,13 @@ fn iter_blas<'a>(
     blas_iter: impl Iterator<Item = BlasBuildEntry<'a>>,
     cmd_buf_data: &mut CommandBufferMutable,
     build_command_index: NonZeroU64,
-    buffer_guard: &RwLockReadGuard<Storage<Fallible<Buffer>>>,
-    blas_guard: &RwLockReadGuard<Storage<Fallible<Blas>>>,
     buf_storage: &mut Vec<TriangleBufferStore<'a>>,
+    hub: &Hub,
 ) -> Result<(), BuildAccelerationStructureError> {
     let mut temp_buffer = Vec::new();
     for entry in blas_iter {
-        let blas = blas_guard
+        let blas = hub
+            .blas_s
             .get(entry.blas_id)
             .get()
             .map_err(|_| BuildAccelerationStructureError::InvalidBlasId)?;
@@ -912,7 +905,7 @@ fn iter_blas<'a>(
                             blas.error_ident(),
                         ));
                     }
-                    let vertex_buffer = match buffer_guard.get(mesh.vertex_buffer).get() {
+                    let vertex_buffer = match hub.buffers.get(mesh.vertex_buffer).get() {
                         Ok(buffer) => buffer,
                         Err(_) => return Err(BuildAccelerationStructureError::InvalidBufferId),
                     };
@@ -921,7 +914,7 @@ fn iter_blas<'a>(
                         BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     );
                     let index_data = if let Some(index_id) = mesh.index_buffer {
-                        let index_buffer = match buffer_guard.get(index_id).get() {
+                        let index_buffer = match hub.buffers.get(index_id).get() {
                             Ok(buffer) => buffer,
                             Err(_) => return Err(BuildAccelerationStructureError::InvalidBufferId),
                         };
@@ -942,7 +935,7 @@ fn iter_blas<'a>(
                         None
                     };
                     let transform_data = if let Some(transform_id) = mesh.transform_buffer {
-                        let transform_buffer = match buffer_guard.get(transform_id).get() {
+                        let transform_buffer = match hub.buffers.get(transform_id).get() {
                             Ok(buffer) => buffer,
                             Err(_) => return Err(BuildAccelerationStructureError::InvalidBufferId),
                         };
@@ -985,9 +978,9 @@ fn iter_buffers<'a, 'b>(
     snatch_guard: &'a SnatchGuard,
     input_barriers: &mut Vec<hal::BufferBarrier<'a, dyn hal::DynBuffer>>,
     cmd_buf_data: &mut CommandBufferMutable,
-    buffer_guard: &RwLockReadGuard<Storage<Fallible<Buffer>>>,
     scratch_buffer_blas_size: &mut u64,
     blas_storage: &mut Vec<BlasStore<'a>>,
+    hub: &Hub
 ) -> Result<(), BuildAccelerationStructureError> {
     let mut triangle_entries =
         Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
@@ -1022,7 +1015,8 @@ fn iter_buffers<'a, 'b>(
             let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
             cmd_buf_data.buffer_memory_init_actions.extend(
                 vertex_buffer.initialization_status.read().create_action(
-                    &buffer_guard
+                    &hub
+                        .buffers
                         .get(mesh.vertex_buffer)
                         .get()
                         .map_err(|_| BuildAccelerationStructureError::InvalidBufferId)?,
