@@ -1,7 +1,7 @@
 * @gfx-rs/wgpu
 
-/cts_runner/    @gfx-rs/deno @gfx-rs/wgpu
-/deno_webgpu/   @gfx-rs/deno @gfx-rs/wgpu
+/cts_runner/    @crowlkats @gfx-rs/wgpu
+/deno_webgpu/   @crowlkats @gfx-rs/wgpu
 /naga/          @gfx-rs/naga
 /naga-cli/      @gfx-rs/naga
 
