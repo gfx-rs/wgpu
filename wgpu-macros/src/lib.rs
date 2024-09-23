@@ -37,7 +37,7 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
             // Allow any type that can be converted to a GpuTestConfiguration
             let test_config = ::wgpu_test::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower);
 
-            ::wgpu_test::execute_test(test_config, None, 0).await;
+            ::wgpu_test::execute_test(None, test_config, None).await;
         }
     }
     .into()
