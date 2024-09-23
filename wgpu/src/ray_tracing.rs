@@ -1,4 +1,5 @@
 use std::{fmt::Debug, ops::Range, sync::Arc, thread};
+use std::ops::{Index, IndexMut};
 use wgt::WasmNotSendSync;
 
 use crate::{
@@ -293,6 +294,42 @@ impl TlasPackage {
     /// Get a reference to the underling [Tlas].
     pub fn tlas(&self) -> &Tlas {
         &self.tlas
+    }
+}
+
+impl Index<usize> for TlasPackage {
+    type Output = Option<TlasInstance>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.instances.index(index)
+    }
+}
+
+impl Index<Range<usize>> for TlasPackage {
+    type Output = [Option<TlasInstance>];
+
+    fn index(&self, index: Range<usize>) -> &Self::Output {
+        self.instances.index(index)
+    }
+}
+
+impl IndexMut<usize> for TlasPackage {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        let idx = self.instances.index_mut(index);
+        if index as u32 + 1 > self.lowest_unmodified {
+            self.lowest_unmodified = index as u32 + 1;
+        }
+        idx
+    }
+}
+
+impl IndexMut<Range<usize>> for TlasPackage {
+    fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
+        let idx = self.instances.index_mut(index.clone());
+        if index.end > self.lowest_unmodified as usize {
+            self.lowest_unmodified = index.end as u32;
+        }
+        idx
     }
 }
 
