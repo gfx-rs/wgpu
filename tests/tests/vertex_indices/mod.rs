@@ -472,8 +472,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         );
         if data != expected {
             eprintln!(
-                "Failed: Got: {:?} Expected: {:?} - {case_name}",
-                data, expected,
+                "Failed: Got: {data:?} Expected: {expected:?} - {case_name}",
             );
             failed = true;
         } else {

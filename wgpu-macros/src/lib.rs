@@ -14,8 +14,8 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let ident_str = ident.to_string();
     let ident_lower = ident_str.to_snake_case();
 
-    let register_test_name = Ident::new(&format!("{}_initializer", ident_lower), ident.span());
-    let test_name_webgl = Ident::new(&format!("{}_webgl", ident_lower), ident.span());
+    let register_test_name = Ident::new(&format!("{ident_lower}_initializer"), ident.span());
+    let test_name_webgl = Ident::new(&format!("{ident_lower}_webgl"), ident.span());
 
     quote! {
         #[cfg(not(target_arch = "wasm32"))]
