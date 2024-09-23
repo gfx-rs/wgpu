@@ -78,7 +78,7 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
     for i in 0..2500 {
         eprintln!("Setting TlasInstances in loop {}", i);
         for j in 0..max_instances {
-            *tlas_package[0] = Some(wgpu::TlasInstance::new(
+            tlas_package[0] = Some(wgpu::TlasInstance::new(
                 &blas,
                 AccelerationStructureInstance::affine_to_rows(
                     &Affine3A::from_rotation_translation(
