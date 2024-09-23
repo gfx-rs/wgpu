@@ -1,7 +1,6 @@
 use std::{iter, mem};
-use wgpu::ray_tracing::{
-    AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
-    CommandEncoderRayTracing, DeviceRayTracing, TlasInstance, TlasPackage,
+use wgpu::{
+    AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry, TlasInstance, TlasPackage,
 };
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{

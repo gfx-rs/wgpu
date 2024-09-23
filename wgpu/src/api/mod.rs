@@ -47,6 +47,8 @@ mod surface;
 mod surface_texture;
 mod texture;
 mod texture_view;
+mod blas;
+mod tlas;
 
 pub use adapter::*;
 pub use bind_group::*;
@@ -73,6 +75,8 @@ pub use surface::*;
 pub use surface_texture::*;
 pub use texture::*;
 pub use texture_view::*;
+pub use blas::*;
+pub use tlas::*;
 
 /// Object debugging label.
 pub type Label<'a> = Option<&'a str>;

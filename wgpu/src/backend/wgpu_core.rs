@@ -3004,7 +3004,7 @@ impl crate::Context for ContextWgpuCore {
     fn device_create_blas(
         &self,
         device_data: &Self::DeviceData,
-        desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
+        desc: &crate::CreateBlasDescriptor<'_>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, Self::BlasData) {
         let global = &self.0;
@@ -3034,7 +3034,7 @@ impl crate::Context for ContextWgpuCore {
     fn device_create_tlas(
         &self,
         device_data: &Self::DeviceData,
-        desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
+        desc: &crate::CreateTlasDescriptor<'_>,
     ) -> Self::TlasData {
         let global = &self.0;
         let (id, error) =
@@ -3056,14 +3056,14 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &'a self,
         encoder_data: &Self::CommandEncoderData,
-        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<'a, Self>>,
+        blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<'a, Self>>,
     ) {
         let global = &self.0;
 
-        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<'_, Self>| {
+        let blas = blas.map(|e: crate::ContextBlasBuildEntry<'_, Self>| {
             let geometries = match e.geometries {
-                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
+                crate::ContextBlasGeometries::TriangleGeometries(
                     triangle_geometries,
                 ) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
@@ -3088,7 +3088,7 @@ impl crate::Context for ContextWgpuCore {
         });
 
         let tlas = tlas.into_iter().map(
-            |e: crate::ray_tracing::ContextTlasBuildEntry<'a, ContextWgpuCore>| {
+            |e: crate::ContextTlasBuildEntry<'a, ContextWgpuCore>| {
                 wgc::ray_tracing::TlasBuildEntry {
                     tlas_id: e.tlas_data.id,
                     instance_buffer_id: e.instance_buffer_data.id,
@@ -3113,14 +3113,14 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_build_acceleration_structures<'a>(
         &'a self,
         encoder_data: &Self::CommandEncoderData,
-        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
+        blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ContextTlasPackage<'a, Self>>,
     ) {
         let global = &self.0;
 
-        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<'_, Self>| {
+        let blas = blas.map(|e: crate::ContextBlasBuildEntry<'_, Self>| {
             let geometries = match e.geometries {
-                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
+                crate::ContextBlasGeometries::TriangleGeometries(
                     triangle_geometries,
                 ) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
@@ -3146,7 +3146,7 @@ impl crate::Context for ContextWgpuCore {
 
         let tlas = tlas.into_iter().map(|e| {
             let instances = e.instances.map(
-                |instance: Option<crate::ray_tracing::ContextTlasInstance<'_, _>>| {
+                |instance: Option<crate::ContextTlasInstance<'_, _>>| {
                     instance.map(|instance| wgc::ray_tracing::TlasInstance {
                         blas_id: instance.blas_data.id,
                         transform: instance.transform,
@@ -3354,7 +3354,7 @@ fn downcast_texture_view(
     downcast_ref(texture_view.data.as_ref())
 }
 fn downcast_tlas(
-    tlas: &crate::ray_tracing::Tlas,
+    tlas: &crate::Tlas,
 ) -> &<ContextWgpuCore as crate::Context>::TlasData {
     downcast_ref(tlas.data.as_ref())
 }

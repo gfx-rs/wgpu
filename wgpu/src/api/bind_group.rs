@@ -81,7 +81,7 @@ pub enum BindingResource<'a> {
     /// - All BLASes that were built into the TLAS must be built before the TLAS, if this was not satisfied and TLAS was
     /// built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
     /// safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
-    AccelerationStructure(&'a ray_tracing::Tlas),
+    AccelerationStructure(&'a Tlas),
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);

@@ -3,12 +3,7 @@ use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant}
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
-
-use rt::traits::*;
-use wgpu::{
-    ray_tracing as rt, vertex_attr_array, BindGroupLayoutDescriptor, BufferBindingType,
-    IndexFormat, ShaderStages, VertexBufferLayout,
-};
+use wgpu::{IndexFormat, vertex_attr_array, VertexBufferLayout};
 
 // from cube
 #[repr(C)]
@@ -150,29 +145,29 @@ impl crate::framework::Example for Example {
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
         });
 
-        let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
+        let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
             vertex_format: wgpu::VertexFormat::Float32x3,
             vertex_count: vertex_data.len() as u32,
             index_format: Some(wgpu::IndexFormat::Uint16),
             index_count: Some(index_data.len() as u32),
-            flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
         let blas = device.create_blas(
-            &rt::CreateBlasDescriptor {
+            &wgpu::CreateBlasDescriptor {
                 label: None,
-                flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: rt::AccelerationStructureUpdateMode::Build,
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
-            rt::BlasGeometrySizeDescriptors::Triangles {
+            wgpu::BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_geo_size_desc.clone()],
             },
         );
 
-        let tlas = device.create_tlas(&rt::CreateTlasDescriptor {
+        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
-            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: rt::AccelerationStructureUpdateMode::Build,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: 1,
         });
 
@@ -181,14 +176,14 @@ impl crate::framework::Example for Example {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
-        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -196,7 +191,7 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::AccelerationStructure,
                     count: None,
                 },
@@ -207,7 +202,7 @@ impl crate::framework::Example for Example {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[wgpu::PushConstantRange {
-                stages: ShaderStages::FRAGMENT,
+                stages: wgpu::ShaderStages::FRAGMENT,
                 range: 0..12,
             }],
         });
@@ -241,9 +236,9 @@ impl crate::framework::Example for Example {
             cache: None,
         });
 
-        let mut tlas_package = rt::TlasPackage::new(tlas);
+        let mut tlas_package = wgpu::TlasPackage::new(tlas);
 
-        *tlas_package.get_mut_single(0).unwrap() = Some(rt::TlasInstance::new(
+        *tlas_package.get_mut_single(0).unwrap() = Some(wgpu::TlasInstance::new(
             &blas,
             [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             0,
@@ -254,9 +249,9 @@ impl crate::framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         encoder.build_acceleration_structures(
-            iter::once(&rt::BlasBuildEntry {
+            iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: rt::BlasGeometries::TriangleGeometries(vec![rt::BlasTriangleGeometry {
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
                     size: &blas_geo_size_desc,
                     vertex_buffer: &vertex_buf,
                     first_vertex: 0,
@@ -350,9 +345,9 @@ impl crate::framework::Example for Example {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, Some(&self.bind_group), &[]);
-            rpass.set_push_constants(ShaderStages::FRAGMENT, 0, &0.0_f32.to_ne_bytes());
-            rpass.set_push_constants(ShaderStages::FRAGMENT, 4, &cos.to_ne_bytes());
-            rpass.set_push_constants(ShaderStages::FRAGMENT, 8, &sin.to_ne_bytes());
+            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, &0.0_f32.to_ne_bytes());
+            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 4, &cos.to_ne_bytes());
+            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 8, &sin.to_ne_bytes());
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.set_index_buffer(self.index_buf.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..12, 0, 0..1);

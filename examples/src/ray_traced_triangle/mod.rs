@@ -1,14 +1,14 @@
 use glam::{Mat4, Vec3};
-use std::time::Instant;
 use std::mem;
-use wgpu::ray_tracing::{
+use std::time::Instant;
+use wgpu::{
     AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries,
     BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
-    CommandEncoderRayTracing, CreateBlasDescriptor, CreateTlasDescriptor, DeviceRayTracing,
+    CreateBlasDescriptor, CreateTlasDescriptor,
     TlasInstance, TlasPackage,
 };
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{include_wgsl, BufferUsages, SamplerDescriptor, IndexFormat};
+use wgpu::{include_wgsl, BufferUsages, IndexFormat, SamplerDescriptor};
 
 struct Example {
     tlas_package: TlasPackage,
@@ -122,7 +122,7 @@ impl crate::framework::Example for Example {
             vertex_count: (vertices.len() / 3) as u32,
             index_format: Some(IndexFormat::Uint32),
             index_count: Some(indices.len() as u32),
-            flags: wgpu::ray_tracing::AccelerationStructureGeometryFlags::OPAQUE,
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
         let blas = device.create_blas(

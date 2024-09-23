@@ -2,8 +2,6 @@ use std::{iter, mem};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
-use rt::traits::*;
-use wgpu::ray_tracing as rt;
 use wgpu::util::DeviceExt;
 
 use glam::{Affine3A, Quat, Vec3};
@@ -43,44 +41,44 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
             ),
             Some(0),
             Some(wgpu::IndexFormat::Uint16),
-            Some(index_data.len() as u32)
+            Some(index_data.len() as u32),
         )
     } else {
         (None, None, None, None)
     };
 
-    let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
+    let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
         vertex_format: wgpu::VertexFormat::Float32x3,
         vertex_count: vertex_data.len() as u32,
         index_format,
         index_count,
-        flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
+        flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
     };
 
     let blas = device.create_blas(
-        &rt::CreateBlasDescriptor {
+        &wgpu::CreateBlasDescriptor {
             label: None,
-            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: rt::AccelerationStructureUpdateMode::Build,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         },
-        rt::BlasGeometrySizeDescriptors::Triangles {
+        wgpu::BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_geo_size_desc.clone()],
         },
     );
 
-    let tlas = device.create_tlas(&rt::CreateTlasDescriptor {
+    let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
         label: None,
-        flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-        update_mode: rt::AccelerationStructureUpdateMode::Build,
+        flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         max_instances,
     });
 
-    let mut tlas_package = rt::TlasPackage::new(tlas);
+    let mut tlas_package = wgpu::TlasPackage::new(tlas);
 
     for i in 0..2500 {
         eprintln!("Setting TlasInstances in loop {}", i);
         for j in 0..max_instances {
-            *tlas_package.get_mut_single(0).unwrap() = Some(rt::TlasInstance::new(
+            *tlas_package.get_mut_single(0).unwrap() = Some(wgpu::TlasInstance::new(
                 &blas,
                 AccelerationStructureInstance::affine_to_rows(
                     &Affine3A::from_rotation_translation(
@@ -101,9 +99,9 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         encoder.build_acceleration_structures(
-            iter::once(&rt::BlasBuildEntry {
+            iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: rt::BlasGeometries::TriangleGeometries(vec![rt::BlasTriangleGeometry {
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
                     size: &blas_geo_size_desc,
                     vertex_buffer: &vertex_buf,
                     first_vertex: 0,
