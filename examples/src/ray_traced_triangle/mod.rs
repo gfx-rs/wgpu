@@ -1,6 +1,6 @@
 use glam::{Mat4, Vec3};
 use std::time::Instant;
-use std::{env, mem};
+use std::mem;
 use wgpu::ray_tracing::{
     AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries,
     BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
@@ -8,7 +8,7 @@ use wgpu::ray_tracing::{
     TlasInstance, TlasPackage,
 };
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{include_wgsl, BufferUsages, SamplerDescriptor};
+use wgpu::{include_wgsl, BufferUsages, SamplerDescriptor, IndexFormat};
 
 struct Example {
     tlas_package: TlasPackage,
@@ -120,8 +120,8 @@ impl crate::framework::Example for Example {
             vertex_format: wgpu::VertexFormat::Float32x3,
             // 3 coordinates per vertex
             vertex_count: (vertices.len() / 3) as u32,
-            index_format: index_buffer.as_ref().map(|_| wgpu::IndexFormat::Uint32),
-            index_count: index_buffer.as_ref().map(|_| indices.len() as u32),
+            index_format: Some(IndexFormat::Uint32),
+            index_count: Some(0),
             flags: wgpu::ray_tracing::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
