@@ -18,7 +18,7 @@ fn required_features() -> wgpu::Features {
         | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
 }
 
-fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
+fn execute(ctx: &TestingContext, use_index_buffer: bool) {
     let max_instances = 1000;
     let device = &ctx.device;
 
@@ -30,7 +30,7 @@ fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
-    let (index_buf, index_offset, index_format, index_count) = if USE_INDEX_BUFFER {
+    let (index_buf, index_offset, index_format, index_count) = if use_index_buffer {
         (
             Some(
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -130,4 +130,8 @@ static RAY_TRACING: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(required_features()),
     )
-    .run_sync(execute::<false>);
+    .run_sync(|ctx| {
+        for value in [false, true] {
+            execute(&ctx, value);
+        }
+    });

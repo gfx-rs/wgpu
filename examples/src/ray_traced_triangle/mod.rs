@@ -159,7 +159,7 @@ impl crate::framework::Example for Example {
             0xff,
         ));
 
-        tlas_package[0] = Some(TlasInstance::new(
+        tlas_package[1] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: -1.0,
@@ -174,7 +174,7 @@ impl crate::framework::Example for Example {
             0xff,
         ));
 
-        tlas_package[0] = Some(TlasInstance::new(
+        tlas_package[2] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: 1.0,
