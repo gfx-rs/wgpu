@@ -38,6 +38,9 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 /// - A user accessible transformation matrix
 /// - A user accessible mask
 /// - A user accessible custom index
+///
+/// [Tlas]: crate::Tlas
+/// [TlasPackage]: crate::TlasPackage
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     pub(crate) blas: Arc<BlasShared>,
