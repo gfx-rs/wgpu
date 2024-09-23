@@ -3390,7 +3390,7 @@ impl crate::context::Context for ContextWebGpu {
     fn device_create_blas(
         &self,
         _device_data: &Self::DeviceData,
-        _desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
+        _desc: &crate::CreateBlasDescriptor<'_>,
         _sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, Self::BlasData) {
         unimplemented!("Raytracing not implemented for web");
@@ -3399,7 +3399,7 @@ impl crate::context::Context for ContextWebGpu {
     fn device_create_tlas(
         &self,
         _device_data: &Self::DeviceData,
-        _desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
+        _desc: &crate::CreateTlasDescriptor<'_>,
     ) -> Self::TlasData {
         unimplemented!("Raytracing not implemented for web");
     }
@@ -3407,8 +3407,8 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &'a self,
         _encoder_data: &Self::CommandEncoderData,
-        _blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        _tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<'a, Self>>,
+        _blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        _tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<'a, Self>>,
     ) {
         unimplemented!("Raytracing not implemented for web");
     }
@@ -3416,8 +3416,8 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_build_acceleration_structures<'a>(
         &'a self,
         _encoder_data: &Self::CommandEncoderData,
-        _blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        _tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
+        _blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        _tlas: impl Iterator<Item = crate::ContextTlasPackage<'a, Self>>,
     ) {
         unimplemented!("Raytracing not implemented for web");
     }
