@@ -379,7 +379,7 @@ impl Device {
     }
 
     /// Pop an error scope.
-    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
+    pub fn pop_error_scope(&self) -> impl Future<Output=Option<Error>> + WasmNotSend {
         self.context.device_pop_error_scope(self.data.as_ref())
     }
 
@@ -516,7 +516,10 @@ impl Device {
             data,
         }
     }
+}
 
+/// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
+impl Device {
     /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
     /// - `desc`: The descriptor of the acceleration structure.
     /// - `sizes`: Size descriptor limiting what can be built into the acceleration structure.
