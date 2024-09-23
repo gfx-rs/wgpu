@@ -20,7 +20,7 @@ fn required_features() -> wgpu::Features {
         | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
 }
 
-fn execute(ctx: TestingContext) {
+fn execute<const USE_INDEX_BUFFER: bool>(ctx: TestingContext) {
     let max_instances = 1000;
     let device = &ctx.device;
 
@@ -32,11 +32,20 @@ fn execute(ctx: TestingContext) {
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
-    let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: bytemuck::cast_slice(&index_data),
-        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
-    });
+    let (index_buf, index_offset) = if USE_INDEX_BUFFER {
+        (
+            Some(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&index_data),
+                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
+                }),
+            ),
+            Some(0),
+        )
+    } else {
+        (None, None)
+    };
 
     let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
         vertex_format: wgpu::VertexFormat::Float32x3,
@@ -97,8 +106,8 @@ fn execute(ctx: TestingContext) {
                     vertex_buffer: &vertex_buf,
                     first_vertex: 0,
                     vertex_stride: mem::size_of::<Vertex>() as u64,
-                    index_buffer: Some(&index_buf),
-                    index_buffer_offset: Some(0),
+                    index_buffer: index_buf.as_ref(),
+                    index_buffer_offset: index_offset,
                     transform_buffer: None,
                     transform_buffer_offset: None,
                 }]),
@@ -119,4 +128,4 @@ static RAY_TRACING: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(required_features()),
     )
-    .run_sync(execute);
+    .run_sync(execute::<false>);

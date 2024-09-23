@@ -42,15 +42,6 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut index_buffer = false;
-
-        for arg in env::args() {
-            if arg == "index_buffer" {
-                index_buffer = true;
-                log::info!("using index buffer")
-            }
-        }
-
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
 
         let blit_shader = device.create_shader_module(include_wgsl!("blit.wgsl"));
@@ -119,15 +110,11 @@ impl crate::framework::Example for Example {
             usage: BufferUsages::BLAS_INPUT,
         });
 
-        let index_buffer = if index_buffer {
-            Some(device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("vertex buffer"),
-                contents: bytemuck::cast_slice(&indices),
-                usage: BufferUsages::BLAS_INPUT,
-            }))
-        } else {
-            None
-        };
+        let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("vertex buffer"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: BufferUsages::BLAS_INPUT,
+        });
 
         let blas_size_desc = BlasTriangleGeometrySizeDescriptor {
             vertex_format: wgpu::VertexFormat::Float32x3,
@@ -229,8 +216,9 @@ impl crate::framework::Example for Example {
                     vertex_buffer: &vertex_buffer,
                     first_vertex: 0,
                     vertex_stride: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    index_buffer: index_buffer.as_ref(),
-                    index_buffer_offset: index_buffer.as_ref().map(|_| 0),
+                    // in this case since one triangle gets no compression from an index buffer `index_buffer` and `index_buffer_offset` could be `None`.
+                    index_buffer: Some(&index_buffer),
+                    index_buffer_offset: Some(0),
                     transform_buffer: None,
                     transform_buffer_offset: None,
                 }]),
