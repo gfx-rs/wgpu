@@ -776,7 +776,7 @@ impl BakedCommands {
         Ok(())
     }
 
-    // makes sure a tlas is build before it is used
+    // makes sure a tlas is built before it is used
     pub(crate) fn validate_tlas_actions(&mut self) -> Result<(), ValidateTlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
         for action in self.tlas_actions.drain(..) {
