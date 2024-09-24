@@ -31,6 +31,8 @@ impl RenderPipeline {
     ///
     /// If this pipeline was created with a [default layout][RenderPipelineDescriptor::layout], then
     /// bind groups created with the returned `BindGroupLayout` can only be used with this pipeline.
+    ///
+    /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
         let context = Arc::clone(&self.context);
         let data = self
