@@ -70,8 +70,8 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniforms {
-    view_inverse: [[f32; 4]; 4],
-    proj_inverse: [[f32; 4]; 4],
+    view_inverse: Mat4,
+    proj_inverse: Mat4,
 }
 
 #[inline]
@@ -205,8 +205,8 @@ impl crate::framework::Example for Example {
             );
 
             Uniforms {
-                view_inverse: view.inverse().to_cols_array_2d(),
-                proj_inverse: proj.inverse().to_cols_array_2d(),
+                view_inverse: view.inverse(),
+                proj_inverse: proj.inverse(),
             }
         };
 

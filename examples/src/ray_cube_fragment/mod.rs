@@ -68,8 +68,8 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniforms {
-    view_inverse: [[f32; 4]; 4],
-    proj_inverse: [[f32; 4]; 4],
+    view_inverse: Mat4,
+    proj_inverse: Mat4,
 }
 
 /// A wrapper for `pop_error_scope` futures that panics if an error occurs.
@@ -134,8 +134,8 @@ impl crate::framework::Example for Example {
             );
 
             Uniforms {
-                view_inverse: view.inverse().to_cols_array_2d(),
-                proj_inverse: proj.inverse().to_cols_array_2d(),
+                view_inverse: view.inverse(),
+                proj_inverse: proj.inverse(),
             }
         };
 
@@ -287,7 +287,7 @@ impl crate::framework::Example for Example {
             1000.0,
         );
 
-        self.uniforms.proj_inverse = proj.inverse().to_cols_array_2d();
+        self.uniforms.proj_inverse = proj.inverse();
 
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(&[self.uniforms]));
     }
