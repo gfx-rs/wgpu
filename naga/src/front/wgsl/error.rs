@@ -790,11 +790,11 @@ impl<'a> Error<'a> {
             Error::ConcretizationFailed(ref error) => {
                 let ConcretizationFailedError { expr_span, ref expr_type, ref scalar, ref inner } = **error;
                 ParseError {
-                    message: format!("failed to convert expression to a concrete type: {}", inner),
+                    message: format!("failed to convert expression to a concrete type: {inner}"),
                     labels: vec![
                         (
                             expr_span,
-                            format!("this expression has type {}", expr_type).into(),
+                            format!("this expression has type {expr_type}").into(),
                         )
                     ],
                     notes: vec![

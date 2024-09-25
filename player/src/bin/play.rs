@@ -91,7 +91,7 @@ fn main() {
                 Some(queue_id),
             );
             if let Err(e) = res {
-                panic!("{:?}", e);
+                panic!("{e:?}");
             }
             (device_id, queue_id)
         }

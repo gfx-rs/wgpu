@@ -188,11 +188,10 @@ pub async fn compare_image_output(
         sanitize_for_path(&adapter_info.driver)
     );
     // Determine the paths to write out the various intermediate files
-    let actual_path = Path::new(&path).with_file_name(
-        OsString::from_str(&format!("{}-{}-actual.png", file_stem, renderer)).unwrap(),
-    );
+    let actual_path = Path::new(&path)
+        .with_file_name(OsString::from_str(&format!("{file_stem}-{renderer}-actual.png")).unwrap());
     let difference_path = Path::new(&path).with_file_name(
-        OsString::from_str(&format!("{}-{}-difference.png", file_stem, renderer,)).unwrap(),
+        OsString::from_str(&format!("{file_stem}-{renderer}-difference.png",)).unwrap(),
     );
 
     let mut all_passed;

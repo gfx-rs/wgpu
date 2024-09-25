@@ -2531,8 +2531,7 @@ impl super::DeviceShared {
                         }
                         None => {
                             crate::hal_usage_error(format!(
-                                "no signals reached value {}",
-                                wait_value
+                                "no signals reached value {wait_value}"
                             ));
                         }
                     }
