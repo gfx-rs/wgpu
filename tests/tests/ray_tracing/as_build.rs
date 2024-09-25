@@ -118,6 +118,15 @@ static OUT_OF_ORDER_AS_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_sync(out_of_order_as_build);
 
+#[gpu_test]
+static OUT_OF_ORDER_AS_BUILD_USE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE | wgpu::Features::RAY_QUERY),
+    )
+    .run_sync(out_of_order_as_build_use);
+
 fn out_of_order_as_build(ctx: TestingContext) {
     let as_ctx = AsBuildContext::new(&ctx);
 
@@ -144,6 +153,14 @@ fn out_of_order_as_build(ctx: TestingContext) {
     ctx.queue
         .submit([encoder_blas.finish(), encoder_tlas.finish()]);
 
+    drop(as_ctx);
+
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(&ctx);
+
     //
     // Encode the BLAS build before the TLAS build, but submit them in the wrong order.
     //
@@ -169,6 +186,97 @@ fn out_of_order_as_build(ctx: TestingContext) {
         || {
             ctx.queue
                 .submit([encoder_tlas.finish(), encoder_blas.finish()]);
+        },
+        None,
+    );
+}
+
+fn out_of_order_as_build_use(ctx: TestingContext) {
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(&ctx);
+
+    //
+    // Build in the right order, then rebuild the BLAS so the TLAS is invalid, then use the TLAS.
+    //
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 3"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    let mut encoder_tlas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("TLAS 3"),
+        });
+
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 4"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    ctx.queue
+        .submit([encoder_blas.finish(), encoder_tlas.finish()]);
+
+    //
+    // Create shader to use tlas with
+    //
+
+    let shader = ctx
+        .device
+        .create_shader_module(include_wgsl!("shader.wgsl"));
+    let compute_pipeline = ctx
+        .device
+        .create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &shader,
+            entry_point: Some("comp_main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &compute_pipeline.get_bind_group_layout(0),
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+        }],
+    });
+
+    //
+    // Use TLAS
+    //
+
+    let mut encoder_compute = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    {
+        let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&compute_pipeline);
+        pass.set_bind_group(0, Some(&bind_group), &[]);
+        pass.dispatch_workgroups(1, 1, 1)
+    }
+
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit(Some(encoder_compute.finish()));
         },
         None,
     );
