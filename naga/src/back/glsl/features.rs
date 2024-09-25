@@ -579,7 +579,7 @@ impl<'a, W> Writer<'a, W> {
                             crate::BuiltIn::ViewIndex => {
                                 self.features.request(Features::MULTI_VIEW)
                             }
-                            crate::BuiltIn::InstanceIndex => {
+                            crate::BuiltIn::InstanceIndex | crate::BuiltIn::DrawID => {
                                 self.features.request(Features::INSTANCE_INDEX)
                             }
                             _ => {}
