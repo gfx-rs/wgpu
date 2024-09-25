@@ -204,7 +204,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("BLAS 3"),
+            label: Some("BLAS 1"),
         });
 
     encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
@@ -212,7 +212,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_tlas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("TLAS 3"),
+            label: Some("TLAS 1"),
         });
 
     encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
@@ -220,7 +220,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     let mut encoder_blas = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("BLAS 4"),
+            label: Some("BLAS 2"),
         });
 
     encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
