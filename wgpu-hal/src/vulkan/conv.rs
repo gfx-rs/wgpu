@@ -943,6 +943,7 @@ pub fn map_acceleration_structure_geometry_flags(
 
 pub fn map_acceleration_structure_usage_to_barrier(
     usage: crate::AccelerationStructureUses,
+    features: wgt::Features,
 ) -> (vk::PipelineStageFlags, vk::AccessFlags) {
     let mut stages = vk::PipelineStageFlags::empty();
     let mut access = vk::AccessFlags::empty();
@@ -956,10 +957,12 @@ pub fn map_acceleration_structure_usage_to_barrier(
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
     }
     if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT) {
-        stages |= vk::PipelineStageFlags::VERTEX_SHADER
-            | vk::PipelineStageFlags::FRAGMENT_SHADER
-            | vk::PipelineStageFlags::COMPUTE_SHADER;
-        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+        if features.contains(wgt::Features::RAY_QUERY) {
+            stages |= vk::PipelineStageFlags::VERTEX_SHADER
+                | vk::PipelineStageFlags::FRAGMENT_SHADER
+                | vk::PipelineStageFlags::COMPUTE_SHADER;
+            access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+        }
     }
 
     (stages, access)

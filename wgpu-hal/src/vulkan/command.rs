@@ -648,9 +648,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         barrier: crate::AccelerationStructureBarrier,
     ) {
         let (src_stage, src_access) =
-            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.start);
+            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.start, self.device.features);
         let (dst_stage, dst_access) =
-            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.end);
+            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.end, self.device.features);
 
         unsafe {
             self.device.raw.cmd_pipeline_barrier(
