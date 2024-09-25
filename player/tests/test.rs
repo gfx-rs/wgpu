@@ -58,7 +58,7 @@ struct Test<'a> {
 
 fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
     if let Err(e) = status {
-        panic!("Buffer map error: {}", e);
+        panic!("Buffer map error: {e}");
     }
 }
 
@@ -88,7 +88,7 @@ impl Test<'_> {
             .iter()
             .map(|feature| {
                 wgt::Features::from_name(feature)
-                    .unwrap_or_else(|| panic!("Invalid feature flag {}", feature))
+                    .unwrap_or_else(|| panic!("Invalid feature flag {feature}"))
             })
             .fold(wgt::Features::empty(), |a, b| a | b);
         Test {
@@ -120,7 +120,7 @@ impl Test<'_> {
             Some(queue_id),
         );
         if let Err(e) = res {
-            panic!("{:?}", e);
+            panic!("{e:?}");
         }
 
         let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
@@ -186,8 +186,7 @@ impl Test<'_> {
 
             if &expected_data[..] != contents {
                 panic!(
-                    "Test expectation is not met!\nBuffer content was:\n{:?}\nbut expected:\n{:?}",
-                    contents, expected_data
+                    "Test expectation is not met!\nBuffer content was:\n{contents:?}\nbut expected:\n{expected_data:?}"
                 );
             }
         }
@@ -209,7 +208,7 @@ const BACKENDS: &[wgt::Backend] = &[
 
 impl Corpus {
     fn run_from(path: PathBuf) {
-        println!("Corpus {:?}", path);
+        println!("Corpus {path:?}");
         let dir = path.parent().unwrap();
         let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
@@ -219,7 +218,7 @@ impl Corpus {
             }
             let mut test_num = 0;
             for test_path in &corpus.tests {
-                println!("\t\tTest '{:?}'", test_path);
+                println!("\t\tTest '{test_path:?}'");
 
                 let global = wgc::global::Global::new(
                     "test",
@@ -243,7 +242,7 @@ impl Corpus {
                     Err(_) => continue,
                 };
 
-                println!("\tBackend {:?}", backend);
+                println!("\tBackend {backend:?}");
                 let supported_features = global.adapter_features(adapter);
                 let downlevel_caps = global.adapter_downlevel_capabilities(adapter);
 

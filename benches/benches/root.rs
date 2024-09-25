@@ -39,7 +39,7 @@ impl DeviceState {
 
         let adapter_info = adapter.get_info();
 
-        eprintln!("{:?}", adapter_info);
+        eprintln!("{adapter_info:?}");
 
         let (device, queue) = block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {

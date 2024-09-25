@@ -227,7 +227,7 @@ async fn run() {
 
     let queries = submit_render_and_compute_pass_with_queries(&device, &queue);
     let raw_results = queries.wait_for_results(&device);
-    println!("Raw timestamp buffer contents: {:?}", raw_results);
+    println!("Raw timestamp buffer contents: {raw_results:?}");
     QueryResults::from_raw_results(raw_results, timestamps_inside_passes).print(&queue);
 }
 
