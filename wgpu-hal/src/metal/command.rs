@@ -490,7 +490,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             wgt::QueryType::Timestamp => {
                 encoder.resolve_counters(
                     set.counter_sample_buffer.as_ref().unwrap(),
-                    metal::NSRange::new(range.start as u64, range.end as u64),
+                    metal::NSRange::new(range.start as u64, (range.end - range.start) as u64),
                     &buffer.raw,
                     offset,
                 );
