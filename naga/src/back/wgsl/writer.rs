@@ -1221,31 +1221,31 @@ impl<W: Write> Writer<W> {
 
         match expressions[expr] {
             Expression::Literal(literal) => match literal {
-                crate::Literal::F32(value) => write!(self.out, "{}f", value)?,
-                crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
+                crate::Literal::F32(value) => write!(self.out, "{value}f")?,
+                crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 crate::Literal::I32(value) => {
                     // `-2147483648i` is not valid WGSL. The most negative `i32`
                     // value can only be expressed in WGSL using AbstractInt and
                     // a unary negation operator.
                     if value == i32::MIN {
-                        write!(self.out, "i32({})", value)?;
+                        write!(self.out, "i32({value})")?;
                     } else {
-                        write!(self.out, "{}i", value)?;
+                        write!(self.out, "{value}i")?;
                     }
                 }
-                crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
-                crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
+                crate::Literal::Bool(value) => write!(self.out, "{value}")?,
+                crate::Literal::F64(value) => write!(self.out, "{value:?}lf")?,
                 crate::Literal::I64(value) => {
                     // `-9223372036854775808li` is not valid WGSL. The most negative `i64`
                     // value can only be expressed in WGSL using AbstractInt and
                     // a unary negation operator.
                     if value == i64::MIN {
-                        write!(self.out, "i64({})", value)?;
+                        write!(self.out, "i64({value})")?;
                     } else {
-                        write!(self.out, "{}li", value)?;
+                        write!(self.out, "{value}li")?;
                     }
                 }
-                crate::Literal::U64(value) => write!(self.out, "{:?}lu", value)?,
+                crate::Literal::U64(value) => write!(self.out, "{value:?}lu")?,
                 crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
                     return Err(Error::Custom(
                         "Abstract types should not appear in IR presented to backends".into(),

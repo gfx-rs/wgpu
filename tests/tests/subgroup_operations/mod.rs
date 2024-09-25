@@ -123,10 +123,10 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                         .enumerate()
                         .filter(|(_, (r, e))| *r != e)
                     {
-                        write!(&mut msg, "thread {} failed tests:", thread).unwrap();
+                        write!(&mut msg, "thread {thread} failed tests:").unwrap();
                         let difference = result ^ expected;
                         for i in (0..u32::BITS).filter(|i| (difference & (1 << i)) != 0) {
-                            write!(&mut msg, " {},", i).unwrap();
+                            write!(&mut msg, " {i},").unwrap();
                         }
                         writeln!(&mut msg).unwrap();
                     }

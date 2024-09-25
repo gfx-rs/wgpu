@@ -359,7 +359,7 @@ impl ContextWgpuCore {
 
         print_tree(&mut output, &mut level, err);
 
-        format!("Validation Error\n\nCaused by:\n{}", output)
+        format!("Validation Error\n\nCaused by:\n{output}")
     }
 }
 
