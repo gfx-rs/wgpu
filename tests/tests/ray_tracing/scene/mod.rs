@@ -6,19 +6,9 @@ use wgpu::util::DeviceExt;
 
 use glam::{Affine3A, Quat, Vec3};
 
-use mesh_gen::{AccelerationStructureInstance, Vertex};
-
 mod mesh_gen;
 
-fn required_features() -> wgpu::Features {
-    wgpu::Features::TEXTURE_BINDING_ARRAY
-        | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
-        | wgpu::Features::VERTEX_WRITABLE_STORAGE
-        | wgpu::Features::RAY_QUERY
-        | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
-}
-
-fn execute(ctx: &TestingContext, use_index_buffer: bool) {
+fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     let max_instances = 1000;
     let device = &ctx.device;
 
@@ -30,28 +20,20 @@ fn execute(ctx: &TestingContext, use_index_buffer: bool) {
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
-    let (index_buf, index_offset, index_format, index_count) = if use_index_buffer {
-        (
-            Some(
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Index Buffer"),
-                    contents: bytemuck::cast_slice(&index_data),
-                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
-                }),
-            ),
-            Some(0),
-            Some(wgpu::IndexFormat::Uint16),
-            Some(index_data.len() as u32),
-        )
-    } else {
-        (None, None, None, None)
-    };
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Index Buffer"),
+        contents: bytemuck::cast_slice(&index_data),
+        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
+    });
+
+    let index_format = wgpu::IndexFormat::Uint16;
+    let index_count = index_data.len() as u32;
 
     let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
         vertex_format: wgpu::VertexFormat::Float32x3,
         vertex_count: vertex_data.len() as u32,
-        index_format,
-        index_count,
+        index_format: use_index_buffer.then_some(index_format),
+        index_count: use_index_buffer.then_some(index_count),
         flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
     };
 
@@ -75,63 +57,65 @@ fn execute(ctx: &TestingContext, use_index_buffer: bool) {
 
     let mut tlas_package = wgpu::TlasPackage::new(tlas);
 
-    for i in 0..2500 {
-        eprintln!("Setting TlasInstances in loop {}", i);
-        for j in 0..max_instances {
-            tlas_package[0] = Some(wgpu::TlasInstance::new(
-                &blas,
-                AccelerationStructureInstance::affine_to_rows(
-                    &Affine3A::from_rotation_translation(
-                        Quat::from_rotation_y(45.9_f32.to_radians()),
-                        Vec3 {
-                            x: j as f32,
-                            y: i as f32,
-                            z: 0.0,
-                        },
-                    ),
-                ),
-                0,
-                0xff,
-            ));
-        }
-
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        encoder.build_acceleration_structures(
-            iter::once(&wgpu::BlasBuildEntry {
-                blas: &blas,
-                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
-                    wgpu::BlasTriangleGeometry {
-                        size: &blas_geo_size_desc,
-                        vertex_buffer: &vertex_buf,
-                        first_vertex: 0,
-                        vertex_stride: mem::size_of::<Vertex>() as u64,
-                        index_buffer: index_buf.as_ref(),
-                        index_buffer_offset: index_offset,
-                        transform_buffer: None,
-                        transform_buffer_offset: None,
-                    },
-                ]),
-            }),
-            iter::once(&tlas_package),
-        );
-
-        ctx.queue.submit(Some(encoder.finish()));
+    for j in 0..max_instances {
+        tlas_package[j as usize] = Some(wgpu::TlasInstance::new(
+            &blas,
+            mesh_gen::affine_to_rows(&Affine3A::from_rotation_translation(
+                Quat::from_rotation_y(45.9_f32.to_radians()),
+                Vec3 {
+                    x: j as f32,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            )),
+            0,
+            0xff,
+        ));
     }
+
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    encoder.build_acceleration_structures(
+        iter::once(&wgpu::BlasBuildEntry {
+            blas: &blas,
+            geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
+                size: &blas_geo_size_desc,
+                vertex_buffer: &vertex_buf,
+                first_vertex: 0,
+                vertex_stride: mem::size_of::<mesh_gen::Vertex>() as u64,
+                index_buffer: use_index_buffer.then_some(&index_buffer),
+                index_buffer_offset: use_index_buffer.then_some(0),
+                transform_buffer: None,
+                transform_buffer_offset: None,
+            }]),
+        }),
+        iter::once(&tlas_package),
+    );
+
+    ctx.queue.submit(Some(encoder.finish()));
 
     ctx.device.poll(wgpu::Maintain::Wait);
 }
 
 #[gpu_test]
-static RAY_TRACING: GpuTestConfiguration = GpuTestConfiguration::new()
+static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(required_features()),
+            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(|ctx| {
-        for value in [false, true] {
-            execute(&ctx, value);
-        }
+        acceleration_structure_build(&ctx, false);
+    });
+
+#[gpu_test]
+static ACCELERATION_STRUCTURE_BUILD_WITH_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
+    )
+    .run_sync(|ctx| {
+        acceleration_structure_build(&ctx, true);
     });

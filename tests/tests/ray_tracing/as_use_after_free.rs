@@ -1,20 +1,16 @@
 use std::{iter, mem};
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, ComputePassDescriptor,
-    ComputePipelineDescriptor,
-};
-use wgpu::{
-    AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
-    TlasInstance, TlasPackage,
+    include_wgsl,
+    util::{BufferInitDescriptor, DeviceExt},
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags,
+    AccelerationStructureUpdateMode, BindGroupDescriptor, BindGroupEntry, BindingResource,
+    BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors, BlasTriangleGeometry,
+    BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
+    ComputePassDescriptor, ComputePipelineDescriptor, CreateBlasDescriptor, CreateTlasDescriptor,
+    Maintain, TlasInstance, TlasPackage, VertexFormat,
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::{
-    AccelerationStructureFlags, AccelerationStructureGeometryFlags, BlasGeometrySizeDescriptors,
-    BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
-    CreateBlasDescriptor, CreateTlasDescriptor, Maintain, VertexFormat,
-};
 
 fn required_features() -> wgpu::Features {
     wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
@@ -24,7 +20,15 @@ fn required_features() -> wgpu::Features {
 /// drops the blas, and ensures it gets kept alive by the tlas instance. Then it uses the built
 /// package in a bindgroup, drops it, and checks that it is kept alive by the bindgroup by
 /// executing a shader using that bindgroup.
-fn execute(ctx: TestingContext) {
+fn acceleration_structure_use_after_free(ctx: TestingContext) {
+    // Dummy vertex buffer.
+    let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
+        usage: BufferUsages::BLAS_INPUT,
+    });
+
+    // Create a BLAS with a single triangle.
     let blas_size = BlasTriangleGeometrySizeDescriptor {
         vertex_format: VertexFormat::Float32x3,
         vertex_count: 3,
@@ -32,7 +36,7 @@ fn execute(ctx: TestingContext) {
         index_count: None,
         flags: AccelerationStructureGeometryFlags::empty(),
     };
-    // create the blas
+
     let blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
             label: Some("blas use after free"),
@@ -43,30 +47,27 @@ fn execute(ctx: TestingContext) {
             descriptors: vec![blas_size.clone()],
         },
     );
-    // create the tlas and put it in a package
+    // Create the TLAS
     let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
         label: Some("tlas use after free"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
     });
-    let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
-        usage: BufferUsages::BLAS_INPUT,
-    });
+
+    // Put an unbuilt BLAS in the tlas package.
     let mut tlas_package = TlasPackage::new(tlas);
-    // place blas in tlas instance, then put tlas instance in a tlas package
     tlas_package[0] = Some(TlasInstance::new(
         &blas,
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
         0xFF,
     ));
+
+    // Actually build the BLAS.
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
-    // build blas to make sure tlas doesn't error when building it
     encoder.build_acceleration_structures(
         iter::once(&BlasBuildEntry {
             blas: &blas,
@@ -84,16 +85,19 @@ fn execute(ctx: TestingContext) {
         iter::empty(),
     );
     ctx.queue.submit(Some(encoder.finish()));
-    // drop the blas
+
+    // Drop the blas and ensure that if it was going to die, it is dead.
     drop(blas);
     ctx.device.poll(Maintain::Wait);
+
     // build the tlas package to ensure the blas is dropped
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
     encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
     ctx.queue.submit(Some(encoder.finish()));
-    // create shader to execute
+
+    // Create a compute shader that uses an AS.
     let shader = ctx
         .device
         .create_shader_module(include_wgsl!("shader.wgsl"));
@@ -107,6 +111,7 @@ fn execute(ctx: TestingContext) {
             compilation_options: Default::default(),
             cache: None,
         });
+
     let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
         layout: &compute_pipeline.get_bind_group_layout(0),
@@ -115,10 +120,12 @@ fn execute(ctx: TestingContext) {
             resource: BindingResource::AccelerationStructure(tlas_package.tlas()),
         }],
     });
-    // drop tlas_package
+
+    // Drop the TLAS package and ensure that if it was going to die, it is dead.
     drop(tlas_package);
     ctx.device.poll(Maintain::Wait);
-    // run pass with bindgroup to ensure the tlas was kept alive
+
+    // Run the pass with the bind group that references the TLAS package.
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
@@ -135,10 +142,10 @@ fn execute(ctx: TestingContext) {
 }
 
 #[gpu_test]
-static RAY_TRACING_USE_AFTER_FREE: GpuTestConfiguration = GpuTestConfiguration::new()
+static ACCELERATION_STRUCTURE_USE_AFTER_FREE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
             .features(required_features()),
     )
-    .run_sync(execute);
+    .run_sync(acceleration_structure_use_after_free);
