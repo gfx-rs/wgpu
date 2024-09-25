@@ -244,6 +244,8 @@ impl CommandEncoder {
     }
 }
 
+/// Look at the documentation for [`CommandBufferMutable`] for an explanation of
+/// the fields in this struct. This is the "built" counterpart to that type.
 pub(crate) struct BakedCommands {
     pub(crate) encoder: Box<dyn hal::DynCommandEncoder>,
     pub(crate) list: Vec<Box<dyn hal::DynCommandBuffer>>,
@@ -278,8 +280,10 @@ pub struct CommandBufferMutable {
     texture_memory_actions: CommandBufferTextureMemoryActions,
 
     pub(crate) pending_query_resets: QueryResetMap,
+
     blas_actions: Vec<BlasAction>,
     tlas_actions: Vec<TlasAction>,
+
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }

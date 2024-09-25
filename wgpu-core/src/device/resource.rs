@@ -319,7 +319,8 @@ impl Device {
             ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            last_acceleration_structure_build_command_index: AtomicU64::new(0),
+            // By starting at one, we can put the result in a NonZeroU64.
+            last_acceleration_structure_build_command_index: AtomicU64::new(1),
         })
     }
 

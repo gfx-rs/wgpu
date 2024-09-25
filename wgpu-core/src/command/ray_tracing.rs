@@ -1,37 +1,32 @@
-#[cfg(feature = "trace")]
-use crate::device::trace;
-#[cfg(feature = "trace")]
-use crate::ray_tracing::{
-    TlasInstance, TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry,
-    TraceTlasInstance, TraceTlasPackage,
-};
 use crate::{
     device::queue::TempResource,
     global::Global,
+    hub::Hub,
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
     ray_tracing::{
-        tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
-        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasPackage,
-        ValidateBlasActionsError, ValidateTlasActionsError,
+        tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
+        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
+        TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
+        TraceTlasPackage, ValidateBlasActionsError, ValidateTlasActionsError,
     },
-    resource::{Blas, Tlas},
+    resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas, Trackable},
+    scratch::ScratchBuffer,
+    snatch::SnatchGuard,
+    track::PendingTransition,
     FastHashSet,
 };
 
 use wgt::{math::align_to, BufferUsages, Features};
 
 use super::{BakedCommands, CommandBufferMutable};
-use crate::hub::Hub;
-use crate::ray_tracing::BlasTriangleGeometry;
-use crate::resource::{AccelerationStructure, Buffer, Labeled, StagingBuffer, Trackable};
-use crate::scratch::ScratchBuffer;
-use crate::snatch::SnatchGuard;
-use crate::track::PendingTransition;
 use hal::BufferUses;
-use std::ops::Deref;
-use std::sync::Arc;
-use std::{cmp::max, num::NonZeroU64, ops::Range};
+use std::{
+    cmp::max,
+    num::NonZeroU64,
+    ops::{Deref, Range},
+    sync::{atomic::Ordering, Arc},
+};
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -99,8 +94,7 @@ impl Global {
         let build_command_index = NonZeroU64::new(
             device
                 .last_acceleration_structure_build_command_index
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                + 1,
+                .fetch_add(1, Ordering::Relaxed),
         )
         .unwrap();
 
@@ -136,10 +130,12 @@ impl Global {
         let trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
-            list.push(trace::Command::BuildAccelerationStructuresUnsafeTlas {
-                blas: trace_blas.clone(),
-                tlas: trace_tlas.clone(),
-            });
+            list.push(
+                crate::device::trace::Command::BuildAccelerationStructuresUnsafeTlas {
+                    blas: trace_blas.clone(),
+                    tlas: trace_tlas.clone(),
+                },
+            );
             if !trace_tlas.is_empty() {
                 log::warn!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable!");
             }
@@ -377,12 +373,10 @@ impl Global {
         let build_command_index = NonZeroU64::new(
             device
                 .last_acceleration_structure_build_command_index
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                + 1,
+                .fetch_add(1, Ordering::Relaxed),
         )
         .unwrap();
 
-        #[cfg(feature = "trace")]
         let trace_blas: Vec<TraceBlasBuildEntry> = blas_iter
             .map(|blas_entry| {
                 let geometries = match blas_entry.geometries {
@@ -410,7 +404,6 @@ impl Global {
             })
             .collect();
 
-        #[cfg(feature = "trace")]
         let trace_tlas: Vec<TraceTlasPackage> = tlas_iter
             .map(|package: TlasPackage| {
                 let instances = package
@@ -434,13 +427,12 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
-            list.push(trace::Command::BuildAccelerationStructures {
+            list.push(crate::device::trace::Command::BuildAccelerationStructures {
                 blas: trace_blas.clone(),
                 tlas: trace_tlas.clone(),
             });
         }
 
-        #[cfg(feature = "trace")]
         let blas_iter = trace_blas.iter().map(|blas_entry| {
             let geometries = match &blas_entry.geometries {
                 TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
@@ -463,7 +455,6 @@ impl Global {
             }
         });
 
-        #[cfg(feature = "trace")]
         let tlas_iter = trace_tlas.iter().map(|tlas_package| {
             let instances = tlas_package.instances.iter().map(|instance| {
                 instance.as_ref().map(|instance| TlasInstance {

@@ -7476,6 +7476,7 @@ pub enum AccelerationStructureUpdateMode {
     /// Always perform a full build.
     Build,
     /// If possible, perform an incremental update.
+    ///
     /// Not advised for major topology changes.
     /// (Useful for e.g. skinning)
     PreferUpdate,

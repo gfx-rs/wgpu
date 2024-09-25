@@ -352,6 +352,7 @@ impl CommandEncoder {
 /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
     /// Build bottom and top level acceleration structures.
+    ///
     /// Builds the BLASes then the TLASes, but does ***not*** build the BLASes into the TLASes,
     /// that must be done by setting a TLAS instance in the TLAS package to one that contains the BLAS (and with an appropriate transform)
     ///

@@ -153,7 +153,7 @@ pub enum ValidateBlasActionsError {
     #[error("BlasId is invalid or destroyed")]
     InvalidBlas,
 
-    #[error("Blas {0:?} is used before it is build")]
+    #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 }
 
@@ -162,10 +162,10 @@ pub enum ValidateTlasActionsError {
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(ResourceErrorIdent),
 
-    #[error("Tlas {0:?} is used before it is build")]
+    #[error("Tlas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 
-    #[error("Blas {0:?} is used before it is build (in Tlas {1:?})")]
+    #[error("Blas {0:?} is used before it is built (in Tlas {1:?})")]
     UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
 
     #[error("BlasId is invalid or destroyed (in Tlas {0:?})")]

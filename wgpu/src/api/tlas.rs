@@ -11,7 +11,11 @@ pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 
 #[derive(Debug)]
-/// Top level acceleration structure or TLAS for short.
+/// Top Level Acceleration Structure (TLAS).
+///
+/// A TLAS contains a series of [TLAS instances], which are a reference to
+/// a BLAS and a transformation matrix placing the geometry in the world.
+///
 /// A TLAS contains TLAS instances in a device readable form, you cant interact
 /// directly with these, instead you have to build the TLAS with [TLAS instances].
 ///

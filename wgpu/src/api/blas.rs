@@ -29,8 +29,10 @@ pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 
 /// Safe instance for a [Tlas].
+///
 /// A TlasInstance may be made invalid, if a TlasInstance is invalid, any attempt to build a [TlasPackage] containing an
 /// invalid TlasInstance will generate a validation error
+///
 /// Each one contains:
 /// - A reference to a BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
 /// TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
@@ -47,6 +49,7 @@ pub struct TlasInstance {
     /// Affine transform matrix 3x4 (rows x columns, row major order).
     pub transform: [f32; 12],
     /// Custom index for the instance used inside the shader.
+    ///
     /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes
     /// invalid and generates a validation error when built
     pub custom_index: u32,
@@ -77,6 +80,7 @@ impl TlasInstance {
     }
 
     /// Set the bottom level acceleration structure.
+    ///
     /// See the note on [TlasInstance] about the
     /// guarantees of keeping a BLAS alive.
     pub fn set_blas(&mut self, blas: &Blas) {
@@ -101,7 +105,8 @@ pub struct ContextTlasInstance<'a, T: Context> {
 }
 
 #[derive(Debug)]
-/// Definition for a triangle geometry.
+/// Definition for a triangle geometry for a Bottom Level Acceleration Structure (BLAS).
+///
 /// The size must match the rest of the structures fields, otherwise the build will fail.
 /// (e.g. if index count is present in the size, the index buffer must be present as well.)
 pub struct BlasTriangleGeometry<'a> {
@@ -124,14 +129,14 @@ pub struct BlasTriangleGeometry<'a> {
 }
 static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: WasmNotSendSync);
 
-/// Geometries for a bottom level acceleration structure.
+/// Contains the sets of geometry that go into a [Blas].
 pub enum BlasGeometries<'a> {
     /// Triangle geometry variant.
     TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
 }
 static_assertions::assert_impl_all!(BlasGeometries<'_>: WasmNotSendSync);
 
-/// Entry for a bottom level acceleration structure build.
+/// Builds the given sets of geometry into the given [Blas].
 pub struct BlasBuildEntry<'a> {
     /// Reference to the acceleration structure.
     pub blas: &'a Blas,
@@ -148,9 +153,13 @@ pub(crate) struct BlasShared {
 static_assertions::assert_impl_all!(BlasShared: WasmNotSendSync);
 
 #[derive(Debug)]
-/// Bottom level acceleration structure or BLAS for short.
-/// A BLAS contains geometry in a device readable format, you can't interact directly with this,
-/// instead you have to build the BLAS with the buffers containing triangles or AABB.
+/// Bottom Level Acceleration Structure (BLAS).
+///
+/// A BLAS is a device-specific raytracing acceleration structure that contains geometry data.
+///
+/// These BLASes are combined with transform in a [TlasInstance] to create a [Tlas].
+///
+/// [Tlas]: crate::Tlas
 pub struct Blas {
     pub(crate) handle: Option<u64>,
     pub(crate) shared: Arc<BlasShared>,
