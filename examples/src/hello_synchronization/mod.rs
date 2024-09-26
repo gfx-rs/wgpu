@@ -56,10 +56,7 @@ async fn execute(
     let mut local_patient_workgroup_results = vec![0u32; result_vec_size];
     let mut local_hasty_workgroup_results = local_patient_workgroup_results.clone();
 
-    let shaders_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shaders.wgsl"))),
-    });
+    let shaders_module = device.create_shader_module(wgpu::include_wgsl!("shaders.wgsl"));
 
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
