@@ -664,9 +664,6 @@ impl super::Validator {
                 )
             }
             Ti::BindingArray { base, size } => {
-                if base >= handle {
-                    return Err(TypeError::InvalidArrayBaseType(base));
-                }
                 let type_info_mask = match size {
                     crate::ArraySize::Constant(_) => TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
                     crate::ArraySize::Dynamic => {
