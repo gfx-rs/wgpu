@@ -122,12 +122,7 @@ impl WgpuContext {
             .await
             .unwrap();
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shader.wgsl"
-            ))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         // (2)
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
