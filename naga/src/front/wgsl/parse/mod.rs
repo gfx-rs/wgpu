@@ -1691,12 +1691,12 @@ impl Parser {
             (Token::Word(word), _) => {
                 let kind = match word {
                     "_" => {
-                        let _ = lexer.next();
+                        let (_, span) = lexer.next();
                         lexer.expect(Token::Operation('='))?;
                         let expr = self.general_expression(lexer, ctx)?;
                         lexer.expect(Token::Separator(';'))?;
 
-                        ast::StatementKind::Ignore(expr)
+                        ast::StatementKind::Phony(expr, span)
                     }
                     "let" => {
                         let _ = lexer.next();
