@@ -1785,7 +1785,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let value = self.expression(expr, &mut ctx.as_expression(block, &mut emitter))?;
                 block.extend(emitter.finish(&ctx.function.expressions));
                 ctx.named_expressions
-                    .insert(value, (format!("_naga_phony_{}", value.index()), stmt.span));
+                    .insert(value, ("phony".to_string(), stmt.span));
                 return Ok(());
             }
         };

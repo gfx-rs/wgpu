@@ -928,7 +928,10 @@ fn convert_wgsl() {
             "cross",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("phony_assignment", Targets::WGSL),
+        (
+            "phony_assignment",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

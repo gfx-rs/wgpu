@@ -627,12 +627,6 @@ impl<W: Write> Writer<W> {
                 for handle in range.clone() {
                     let info = &func_ctx.info[handle];
                     let expr_name = if let Some(name) = func_ctx.named_expressions.get(&handle) {
-                        if name.starts_with("_naga_phony") {
-                            write!(self.out, "{level}_ = ")?;
-                            self.write_expr(module, handle, func_ctx)?;
-                            writeln!(self.out, ";")?;
-                            continue;
-                        }
                         // Front end provides names for all variables at the start of writing.
                         // But we write them to step by step. We need to recache them
                         // Otherwise, we could accidentally write variable name instead of full expression.
