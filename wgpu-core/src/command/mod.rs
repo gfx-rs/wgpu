@@ -252,8 +252,6 @@ pub(crate) struct BakedCommands {
     pub(crate) trackers: Tracker,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
-    blas_actions: Vec<BlasAction>,
-    tlas_actions: Vec<TlasAction>,
 }
 
 /// The mutable state of a [`CommandBuffer`].
@@ -386,8 +384,6 @@ impl CommandBufferMutable {
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
-            blas_actions: self.blas_actions,
-            tlas_actions: self.tlas_actions,
         }
     }
 

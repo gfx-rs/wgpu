@@ -19,7 +19,7 @@ use crate::{
 
 use wgt::{math::align_to, BufferUsages, Features};
 
-use super::{BakedCommands, CommandBufferMutable};
+use super::CommandBufferMutable;
 use hal::BufferUses;
 use std::{
     cmp::max,
@@ -738,16 +738,16 @@ impl Global {
     }
 }
 
-impl BakedCommands {
+impl CommandBufferMutable {
     // makes sure a blas is build before it is used
-    pub(crate) fn validate_blas_actions(&mut self) -> Result<(), ValidateBlasActionsError> {
+    pub(crate) fn validate_blas_actions(&self) -> Result<(), ValidateBlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_blas_actions");
         let mut built = FastHashSet::default();
-        for action in self.blas_actions.drain(..) {
-            match action.kind {
+        for action in &self.blas_actions {
+            match &action.kind {
                 crate::ray_tracing::BlasActionKind::Build(id) => {
                     built.insert(action.blas.tracker_index());
-                    *action.blas.built_index.write() = Some(id);
+                    *action.blas.built_index.write() = Some(*id);
                 }
                 crate::ray_tracing::BlasActionKind::Use => {
                     if !built.contains(&action.blas.tracker_index())
@@ -764,16 +764,16 @@ impl BakedCommands {
     }
 
     // makes sure a tlas is built before it is used
-    pub(crate) fn validate_tlas_actions(&mut self) -> Result<(), ValidateTlasActionsError> {
+    pub(crate) fn validate_tlas_actions(&self) -> Result<(), ValidateTlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
-        for action in self.tlas_actions.drain(..) {
-            match action.kind {
+        for action in &self.tlas_actions {
+            match &action.kind {
                 crate::ray_tracing::TlasActionKind::Build {
                     build_index,
                     dependencies,
                 } => {
-                    *action.tlas.built_index.write() = Some(build_index);
-                    *action.tlas.dependencies.write() = dependencies;
+                    *action.tlas.built_index.write() = Some(*build_index);
+                    *action.tlas.dependencies.write() = dependencies.clone();
                 }
                 crate::ray_tracing::TlasActionKind::Use => {
                     let tlas_build_index = action.tlas.built_index.read();

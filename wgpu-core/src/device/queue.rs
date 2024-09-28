@@ -1152,12 +1152,6 @@ impl Global {
                         {
                             break 'error Err(e.into());
                         }
-                        if let Err(e) = baked.validate_blas_actions() {
-                            break 'error Err(e.into());
-                        }
-                        if let Err(e) = baked.validate_tlas_actions() {
-                            break 'error Err(e.into());
-                        }
 
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
@@ -1404,6 +1398,13 @@ fn validate_command_buffer(
                     };
                 }
             }
+        }
+
+        if let Err(e) = cmd_buf_data.validate_blas_actions() {
+            return Err(e.into());
+        }
+        if let Err(e) = cmd_buf_data.validate_tlas_actions() {
+            return Err(e.into());
         }
     }
     Ok(())
