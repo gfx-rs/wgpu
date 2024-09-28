@@ -38,98 +38,162 @@ impl<'w> BlockContext<'w> {
     ///
     /// Given `array`, an expression referring a runtime-sized array, return the
     /// instruction id for the array's length.
+    ///
+    /// Runtime-sized arrays may only appear in the values of global
+    /// variables, which must have one of the following Naga types:
+    ///
+    /// 1. A runtime-sized array.
+    /// 2. A struct whose last member is a runtime-sized array.
+    /// 3. A binding array of 2.
+    ///
+    /// Thus, the expression `array` has the form of:
+    ///
+    /// - An optional [`AccessIndex`], for case 2, applied to...
+    /// - An optional [`Access`] or [`AccessIndex`], for case 3, applied to...
+    /// - A [`GlobalVariable`].
+    ///
+    /// The SPIR-V generated takes into account wrapped globals; see
+    /// [`global_needs_wrapper`].
+    ///
+    /// [`GlobalVariable`]: crate::Expression::GlobalVariable
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    /// [`Access`]: crate::Expression::Access
+    /// [`base`]: crate::Expression::Access::base
     pub(super) fn write_runtime_array_length(
         &mut self,
         array: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<Word, Error> {
-        // Naga IR permits runtime-sized arrays as global variables, or as the
-        // final member of a struct that is a global variable, or one of these
-        // inside a buffer that is itself an element in a buffer bindings array.
-        // SPIR-V requires that runtime-sized arrays are wrapped in structs.
-        // See `helpers::global_needs_wrapper` and its uses.
-        let (opt_array_index_id, global_handle, opt_last_member_index) = match self
-            .ir_function
-            .expressions[array]
-        {
+        // The index into the binding array, if any.
+        let binding_array_index_id: Option<Word>;
+
+        // The handle to the Naga IR global we're referring to.
+        let global_handle: Handle<crate::GlobalVariable>;
+
+        // At the Naga type level, if the runtime-sized array is the final member of a
+        // struct, this is that member's index.
+        //
+        // This does not cover wrappers: if this backend wrapped the Naga global's
+        // type in a synthetic SPIR-V struct (see `global_needs_wrapper`), this is
+        // `None`.
+        let opt_last_member_index: Option<u32>;
+
+        // Inspect `array` and decide whether we have a binding array and/or an
+        // enclosing struct.
+        match self.ir_function.expressions[array] {
             crate::Expression::AccessIndex { base, index } => {
                 match self.ir_function.expressions[base] {
-                    // The global variable is an array of buffer bindings of structs,
-                    // we are accessing one of them with a static index,
-                    // and the last member of it.
                     crate::Expression::AccessIndex {
                         base: base_outer,
                         index: index_outer,
                     } => match self.ir_function.expressions[base_outer] {
+                        // An `AccessIndex` of an `AccessIndex` must be a
+                        // binding array holding structs whose last members are
+                        // runtime-sized arrays.
                         crate::Expression::GlobalVariable(handle) => {
                             let index_id = self.get_index_constant(index_outer);
-                            (Some(index_id), handle, Some(index))
+                            binding_array_index_id = Some(index_id);
+                            global_handle = handle;
+                            opt_last_member_index = Some(index);
                         }
-                        _ => return Err(Error::Validation("array length expression case-1a")),
+                        _ => {
+                            return Err(Error::Validation(
+                                "array length expression: AccessIndex(AccessIndex(Global))",
+                            ))
+                        }
                     },
-                    // The global variable is an array of buffer bindings of structs,
-                    // we are accessing one of them with a dynamic index,
-                    // and the last member of it.
                     crate::Expression::Access {
                         base: base_outer,
                         index: index_outer,
                     } => match self.ir_function.expressions[base_outer] {
+                        // Similarly, an `AccessIndex` of an `Access` must be a
+                        // binding array holding structs whose last members are
+                        // runtime-sized arrays.
                         crate::Expression::GlobalVariable(handle) => {
                             let index_id = self.cached[index_outer];
-                            (Some(index_id), handle, Some(index))
+                            binding_array_index_id = Some(index_id);
+                            global_handle = handle;
+                            opt_last_member_index = Some(index);
                         }
-                        _ => return Err(Error::Validation("array length expression case-1b")),
+                        _ => {
+                            return Err(Error::Validation(
+                                "array length expression: AccessIndex(Access(Global))",
+                            ))
+                        }
                     },
-                    // The global variable is a buffer, and we are accessing the last member.
                     crate::Expression::GlobalVariable(handle) => {
-                        let global = &self.ir_module.global_variables[handle];
-                        match self.ir_module.types[global.ty].inner {
-                            // The global variable is an array of buffer bindings of run-time arrays.
-                            crate::TypeInner::BindingArray { .. } => (Some(index), handle, None),
-                            // The global variable is a struct, and we are accessing the last member
-                            _ => (None, handle, Some(index)),
-                        }
+                        // An outer `AccessIndex` applied directly to a
+                        // `GlobalVariable`. Since binding arrays can only contain
+                        // structs, this must be referring to the last member of a
+                        // struct that is a runtime-sized array.
+                        binding_array_index_id = None;
+                        global_handle = handle;
+                        opt_last_member_index = Some(index);
                     }
-                    _ => return Err(Error::Validation("array length expression case-1c")),
+                    _ => {
+                        return Err(Error::Validation(
+                            "array length expression: AccessIndex(<unexpected>)",
+                        ))
+                    }
                 }
             }
-            // The global variable is an array of buffer bindings of arrays.
-            crate::Expression::Access { base, index } => match self.ir_function.expressions[base] {
-                crate::Expression::GlobalVariable(handle) => {
-                    let index_id = self.cached[index];
-                    let global = &self.ir_module.global_variables[handle];
-                    match self.ir_module.types[global.ty].inner {
-                        crate::TypeInner::BindingArray { .. } => (Some(index_id), handle, None),
-                        _ => return Err(Error::Validation("array length expression case-2a")),
-                    }
-                }
-                _ => return Err(Error::Validation("array length expression case-2b")),
-            },
-            // The global variable is a run-time array.
             crate::Expression::GlobalVariable(handle) => {
-                let global = &self.ir_module.global_variables[handle];
-                if !global_needs_wrapper(self.ir_module, global) {
-                    return Err(Error::Validation("array length expression case-3"));
-                }
-                (None, handle, None)
+                // A direct reference to a global variable. This must hold the
+                // runtime-sized array directly.
+                binding_array_index_id = None;
+                global_handle = handle;
+                opt_last_member_index = None;
             }
             _ => return Err(Error::Validation("array length expression case-4")),
         };
 
+        // The verifier should have checked this, but make sure the inspection above
+        // agrees with the type about whether a binding array is involved.
+        //
+        // Eventually we do want to support `binding_array<array<T>>`. This check
+        // ensures that whoever relaxes the validator will get an error message from
+        // us, not just bogus SPIR-V.
+        let global = &self.ir_module.global_variables[global_handle];
+        match (
+            &self.ir_module.types[global.ty].inner,
+            binding_array_index_id,
+        ) {
+            (&crate::TypeInner::BindingArray { .. }, Some(_)) => {}
+            (_, None) => {}
+            _ => {
+                return Err(Error::Validation(
+                    "array length expression: bad binding array inference",
+                ))
+            }
+        }
+
+        // SPIR-V allows runtime-sized arrays to appear only as the last member of a
+        // struct. Determine this member's index.
         let gvar = self.writer.global_variables[global_handle].clone();
         let global = &self.ir_module.global_variables[global_handle];
-        let (last_member_index, gvar_id) = match opt_last_member_index {
-            Some(index) => (index, gvar.access_id),
-            None => {
-                if !global_needs_wrapper(self.ir_module, global) {
-                    return Err(Error::Validation(
-                        "pointer to a global that is not a wrapped array",
-                    ));
-                }
+        let needs_wrapper = global_needs_wrapper(self.ir_module, global);
+        let (last_member_index, gvar_id) = match (opt_last_member_index, needs_wrapper) {
+            (Some(index), false) => {
+                // At the Naga type level, the runtime-sized array appears as the
+                // final member of a struct, whose index is `index`. We didn't need to
+                // wrap this, since the Naga type meets SPIR-V's requirements already.
+                (index, gvar.access_id)
+            }
+            (None, true) => {
+                // At the Naga type level, the runtime-sized array does not appear
+                // within a struct. We wrapped this in an OpTypeStruct with nothing
+                // else in it, so the index is zero. OpArrayLength wants the pointer
+                // to the wrapper struct, so use `gvar.var_id`.
                 (0, gvar.var_id)
             }
+            _ => {
+                return Err(Error::Validation(
+                    "array length expression: bad SPIR-V wrapper struct inference",
+                ));
+            }
         };
-        let structure_id = match opt_array_index_id {
+
+        let structure_id = match binding_array_index_id {
             // We are indexing inside a binding array, generate the access op.
             Some(index_id) => {
                 let element_type_id = match self.ir_module.types[global.ty].inner {
