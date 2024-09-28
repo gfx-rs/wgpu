@@ -144,8 +144,6 @@ fn out_of_order_as_build(ctx: TestingContext) {
     ctx.queue
         .submit([encoder_blas.finish(), encoder_tlas.finish()]);
 
-    ctx.device.poll(wgt::Maintain::Wait);
-
     drop(as_ctx);
 
     //
@@ -219,18 +217,19 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
 
     encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
 
-    let mut encoder_blas = ctx
+    let mut encoder_blas2 = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("BLAS 2"),
         });
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+    encoder_blas2.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
 
-    ctx.queue
-        .submit([encoder_blas.finish(), encoder_tlas.finish()]);
-
-    ctx.device.poll(wgt::Maintain::Wait);
+    ctx.queue.submit([
+        encoder_blas.finish(),
+        encoder_tlas.finish(),
+        encoder_blas2.finish(),
+    ]);
 
     //
     // Create shader to use tlas with
@@ -283,6 +282,4 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         },
         None,
     );
-
-    ctx.device.poll(wgt::Maintain::Wait);
 }

@@ -265,17 +265,11 @@ impl Global {
 
     pub fn blas_destroy(&self, blas_id: BlasId) -> Result<(), resource::DestroyError> {
         profiling::scope!("Blas::destroy");
+        log::info!("Blas::destroy {blas_id:?}");
 
         let hub = &self.hub;
 
-        log::info!("Blas {:?} is destroyed", blas_id);
-        let blas_guard = hub.blas_s.write();
-        let blas = blas_guard
-            .get(blas_id)
-            .get()
-            .map_err(resource::DestroyError::InvalidResource)?
-            .clone();
-        drop(blas_guard);
+        let blas = hub.blas_s.get(blas_id).get()?;
         let device = &blas.device;
 
         #[cfg(feature = "trace")]
