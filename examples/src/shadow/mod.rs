@@ -1,4 +1,4 @@
-use std::{borrow::Cow, f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
+use std::{f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{align_to, DeviceExt};
@@ -447,10 +447,7 @@ impl crate::framework::Example for Example {
             attributes: &vertex_attr,
         };
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let shadow_pass = {
             let uniform_size = size_of::<GlobalUniforms>() as wgpu::BufferAddress;

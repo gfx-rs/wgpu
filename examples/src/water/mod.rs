@@ -3,7 +3,7 @@ mod point_gen;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, f32::consts, iter, mem::size_of};
+use std::{f32::consts, iter, mem::size_of};
 use wgpu::util::DeviceExt;
 
 ///
@@ -493,14 +493,8 @@ impl crate::framework::Example for Example {
         });
 
         // Upload/compile them to GPU code.
-        let terrain_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("terrain"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
-        });
-        let water_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("water"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
-        });
+        let terrain_module = device.create_shader_module(wgpu::include_wgsl!("terrain.wgsl"));
+        let water_module = device.create_shader_module(wgpu::include_wgsl!("water.wgsl"));
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
