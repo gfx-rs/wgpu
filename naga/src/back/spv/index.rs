@@ -67,13 +67,14 @@ impl<'w> BlockContext<'w> {
     /// - An optional [`Access`] or [`AccessIndex`], for case 3, applied to...
     /// - A [`GlobalVariable`].
     ///
-    /// The SPIR-V generated takes into account wrapped globals; see
-    /// [`global_needs_wrapper`].
+    /// The generated SPIR-V takes into account wrapped globals; see
+    /// [`back::spv::GlobalVariable`] for details.
     ///
     /// [`GlobalVariable`]: crate::Expression::GlobalVariable
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Access`]: crate::Expression::Access
     /// [`base`]: crate::Expression::Access::base
+    /// [`back::spv::GlobalVariable`]: super::GlobalVariable
     pub(super) fn write_runtime_array_length(
         &mut self,
         array: Handle<crate::Expression>,
