@@ -144,6 +144,8 @@ fn out_of_order_as_build(ctx: TestingContext) {
     ctx.queue
         .submit([encoder_blas.finish(), encoder_tlas.finish()]);
 
+    ctx.device.poll(wgt::Maintain::Wait);
+
     drop(as_ctx);
 
     //
@@ -228,6 +230,8 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     ctx.queue
         .submit([encoder_blas.finish(), encoder_tlas.finish()]);
 
+    ctx.device.poll(wgt::Maintain::Wait);
+
     //
     // Create shader to use tlas with
     //
@@ -279,4 +283,6 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         },
         None,
     );
+
+    ctx.device.poll(wgt::Maintain::Wait);
 }
