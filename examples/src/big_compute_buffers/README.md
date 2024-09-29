@@ -1,3 +1,6 @@
+# WIP
+
+
 # big-compute-buffers
 
 This example assumes you're familiar with the other GP-GPU compute examples in this repository, if you're not you should go look at those first.
@@ -9,16 +12,17 @@ Showcases how to split larger datasets (things too big to fit into a single buff
 - Returns those `1.0` values as a back to the HOST.
 
 ## To Run
-As the maximum supported buffer size varies wildly per system, when you try to run this, then when it will likely fail, in-which-case read the error and update these `const`s accordingly:
+As the maximum supported buffer size varies wildly per system, you _should_ check the output of `wgpu::Limits` to ensure that the amount of data _you_ have defnitely doesn't fit into a single buffer.
+
+
 >`src/big_compute_buffers/mod.rs`
 ```rust
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
 const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
 ```
 
-It is recommended you enable the logger to see the code explain what it's doing.
 ```
- RUST_LOG=wgpu_examples::big_compute_buffers cargo run -r --bin wgpu-examples big_compute_buffers
+ cargo run -r --bin wgpu-examples big_compute_buffers
 ```
 
 ## Example Output
@@ -31,7 +35,7 @@ It is recommended you enable the logger to see the code explain what it's doing.
 ```
 
 </details>
- w
+
 ## FAQ
 
 ### How do I ascertain the max_*buffer_binding_size?
@@ -51,7 +55,3 @@ Caused by:
   In Device::create_bind_group, label = 'Combined Storage Bind Group'
     Buffer binding 0 range 268435456 exceeds `max_*_buffer_binding_size` limit 134217728
 ```
-
-
-### What's going on with the MAX_DISPATCH_SIZE, and the OFFSET etc in the shader?
-There is a limit to the maximum number of invocations you can spool up in `workgroup_size(x,y,z)`, this means there's a limit, on how 'high' a number we can get a global_index.xyz value to count up to, if this limit is less than the number of `0.0`s in our buffers we need a way to count 'higher'. 
