@@ -3820,12 +3820,11 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out)?;
                     writeln!(
                         self.out,
-                        "{} {defined_func_name}({arg_type_name} arg) {{
+                        "{struct_name} {defined_func_name}({arg_type_name} arg) {{
     {other_type_name} other;
     {arg_type_name} fract = {NAMESPACE}::{called_func_name}(arg, other);
-    return {}{{ fract, other }};
-}}",
-                        struct_name, struct_name
+    return {struct_name}{{ fract, other }};
+}}"
                     )?;
                 }
                 &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}

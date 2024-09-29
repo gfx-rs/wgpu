@@ -2645,15 +2645,15 @@ impl<'a, W: Write> Writer<'a, W> {
                 match literal {
                     // Floats are written using `Debug` instead of `Display` because it always appends the
                     // decimal part even it's zero which is needed for a valid glsl float constant
-                    crate::Literal::F64(value) => write!(self.out, "{:?}LF", value)?,
-                    crate::Literal::F32(value) => write!(self.out, "{:?}", value)?,
+                    crate::Literal::F64(value) => write!(self.out, "{value:?}LF")?,
+                    crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
                     // Unsigned integers need a `u` at the end
                     //
                     // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we
                     // always write it as the extra branch wouldn't have any benefit in readability
-                    crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
-                    crate::Literal::I32(value) => write!(self.out, "{}", value)?,
-                    crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::U32(value) => write!(self.out, "{value}u")?,
+                    crate::Literal::I32(value) => write!(self.out, "{value}")?,
+                    crate::Literal::Bool(value) => write!(self.out, "{value}")?,
                     crate::Literal::I64(_) => {
                         return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
                     }
@@ -4614,7 +4614,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 for i in 0..count.get() {
                     // Add the array accessor and recurse.
-                    segments.push(format!("[{}]", i));
+                    segments.push(format!("[{i}]"));
                     self.collect_push_constant_items(base, segments, layouter, offset, items);
                     segments.pop();
                 }

@@ -85,7 +85,7 @@ impl crate::AddressSpace {
 
 /// Return true if the global requires a type decorated with `Block`.
 ///
-/// Vulkan spec v1.3 §15.6.2, "Descriptor Set Interface", says:
+/// In the Vulkan spec 1.3.296, the section [Descriptor Set Interface][dsi] says:
 ///
 /// > Variables identified with the `Uniform` storage class are used to
 /// > access transparent buffer backed resources. Such variables must
@@ -98,6 +98,8 @@ impl crate::AddressSpace {
 /// > -   laid out explicitly using the `Offset`, `ArrayStride`, and
 /// >     `MatrixStride` decorations as specified in §15.6.4, "Offset
 /// >     and Stride Assignment."
+///
+/// [dsi]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#interfaces-resources-descset
 // See `back::spv::GlobalVariable::access_id` for details.
 pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariable) -> bool {
     match var.space {

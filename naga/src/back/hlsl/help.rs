@@ -1046,8 +1046,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
                         }
                         ref other => {
                             return Err(super::Error::Unimplemented(format!(
-                                "Array length of base {:?}",
-                                other
+                                "Array length of base {other:?}"
                             )))
                         }
                     };

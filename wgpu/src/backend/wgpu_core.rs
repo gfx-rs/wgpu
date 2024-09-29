@@ -359,7 +359,7 @@ impl ContextWgpuCore {
 
         print_tree(&mut output, &mut level, err);
 
-        format!("Validation Error\n\nCaused by:\n{}", output)
+        format!("Validation Error\n\nCaused by:\n{output}")
     }
 }
 
@@ -2074,7 +2074,10 @@ impl crate::Context for ContextWgpuCore {
 
         let index = match self.0.queue_submit(queue_data.id, &temp_command_buffers) {
             Ok(index) => index,
-            Err(err) => self.handle_error_fatal(err, "Queue::submit"),
+            Err((index, err)) => {
+                self.handle_error_nolabel(&queue_data.error_sink, err, "Queue::submit");
+                index
+            }
         };
 
         for cmdbuf in &temp_command_buffers {

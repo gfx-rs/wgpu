@@ -496,3 +496,113 @@ fn main(input: VertexOutput) {{
         }
     }
 }
+
+#[allow(dead_code)]
+struct BindingArrayFixture {
+    module: naga::Module,
+    span: naga::Span,
+    ty_u32: naga::Handle<naga::Type>,
+    ty_array: naga::Handle<naga::Type>,
+    ty_struct: naga::Handle<naga::Type>,
+    validator: naga::valid::Validator,
+}
+
+impl BindingArrayFixture {
+    fn new() -> Self {
+        let mut module = naga::Module::default();
+        let span = naga::Span::default();
+        let ty_u32 = module.types.insert(
+            naga::Type {
+                name: Some("u32".into()),
+                inner: naga::TypeInner::Scalar(naga::Scalar::U32),
+            },
+            span,
+        );
+        let ty_array = module.types.insert(
+            naga::Type {
+                name: Some("array<u32, 10>".into()),
+                inner: naga::TypeInner::Array {
+                    base: ty_u32,
+                    size: naga::ArraySize::Constant(std::num::NonZeroU32::new(10).unwrap()),
+                    stride: 4,
+                },
+            },
+            span,
+        );
+        let ty_struct = module.types.insert(
+            naga::Type {
+                name: Some("S".into()),
+                inner: naga::TypeInner::Struct {
+                    members: vec![naga::StructMember {
+                        name: Some("m".into()),
+                        ty: ty_u32,
+                        binding: None,
+                        offset: 0,
+                    }],
+                    span: 4,
+                },
+            },
+            span,
+        );
+        let validator = naga::valid::Validator::new(Default::default(), Default::default());
+        BindingArrayFixture {
+            module,
+            span,
+            ty_u32,
+            ty_array,
+            ty_struct,
+            validator,
+        }
+    }
+}
+
+#[test]
+fn binding_arrays_hold_structs() {
+    let mut t = BindingArrayFixture::new();
+    let _binding_array = t.module.types.insert(
+        naga::Type {
+            name: Some("binding_array_of_struct".into()),
+            inner: naga::TypeInner::BindingArray {
+                base: t.ty_struct,
+                size: naga::ArraySize::Dynamic,
+            },
+        },
+        t.span,
+    );
+
+    assert!(t.validator.validate(&t.module).is_ok());
+}
+
+#[test]
+fn binding_arrays_cannot_hold_arrays() {
+    let mut t = BindingArrayFixture::new();
+    let _binding_array = t.module.types.insert(
+        naga::Type {
+            name: Some("binding_array_of_array".into()),
+            inner: naga::TypeInner::BindingArray {
+                base: t.ty_array,
+                size: naga::ArraySize::Dynamic,
+            },
+        },
+        t.span,
+    );
+
+    assert!(t.validator.validate(&t.module).is_err());
+}
+
+#[test]
+fn binding_arrays_cannot_hold_scalars() {
+    let mut t = BindingArrayFixture::new();
+    let _binding_array = t.module.types.insert(
+        naga::Type {
+            name: Some("binding_array_of_scalar".into()),
+            inner: naga::TypeInner::BindingArray {
+                base: t.ty_u32,
+                size: naga::ArraySize::Dynamic,
+            },
+        },
+        t.span,
+    );
+
+    assert!(t.validator.validate(&t.module).is_err());
+}

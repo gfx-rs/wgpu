@@ -200,10 +200,7 @@ impl<'w> BlockContext<'w> {
     fn is_intermediate(&self, expr_handle: Handle<crate::Expression>) -> bool {
         match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
-                match self.ir_module.global_variables[handle].space {
-                    crate::AddressSpace::Handle => false,
-                    _ => true,
-                }
+                self.ir_module.global_variables[handle].space != crate::AddressSpace::Handle
             }
             crate::Expression::LocalVariable(_) => true,
             crate::Expression::FunctionArgument(index) => {

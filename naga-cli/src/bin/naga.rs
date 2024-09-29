@@ -853,7 +853,7 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
             Ok(parsed) => parsed,
             Err(error) => {
                 invalid.push(input_path.clone());
-                eprintln!("Error validating {}:", input_path);
+                eprintln!("Error validating {input_path}:");
                 eprintln!("{error}");
                 continue;
             }
@@ -866,7 +866,7 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
 
         if let Err(error) = validator.validate(&module) {
             invalid.push(input_path.clone());
-            eprintln!("Error validating {}:", input_path);
+            eprintln!("Error validating {input_path}:");
             if let Some(input) = &input_text {
                 let filename = path.file_name().and_then(std::ffi::OsStr::to_str);
                 emit_annotated_error(&error, filename.unwrap_or("input"), input);

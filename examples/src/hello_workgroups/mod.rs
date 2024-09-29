@@ -41,10 +41,7 @@ async fn run() {
         .await
         .unwrap();
 
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     let storage_buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,

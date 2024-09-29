@@ -230,7 +230,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     for format in TEXTURE_FORMAT_LIST {
         let features = texture_format_features[&format];
         let format_name = texture::texture_format_name(format);
-        write!(output, "\t\t{format_name:>0$}", max_format_name_size)?;
+        write!(output, "\t\t{format_name:>max_format_name_size$}")?;
         for bit in wgpu::TextureUsages::all().iter() {
             write!(output, " │ ")?;
             if features.allowed_usages.contains(bit) {
@@ -259,7 +259,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         let features = texture_format_features[&format];
         let format_name = texture::texture_format_name(format);
 
-        write!(output, "\t\t{format_name:>0$}", max_format_name_size)?;
+        write!(output, "\t\t{format_name:>max_format_name_size$}")?;
         for bit in wgpu::TextureFormatFeatureFlags::all().iter() {
             write!(output, " │ ")?;
             if features.flags.contains(bit) {

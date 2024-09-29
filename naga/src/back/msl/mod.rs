@@ -437,8 +437,7 @@ impl Options {
                     })
                 }
                 LocationMode::Uniform => Err(Error::GenericValidation(format!(
-                    "Unexpected Binding::Location({}) for the Uniform mode",
-                    location
+                    "Unexpected Binding::Location({location}) for the Uniform mode"
                 ))),
             },
         }
