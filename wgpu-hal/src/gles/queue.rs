@@ -1603,19 +1603,13 @@ impl super::Queue {
                 ref uniform,
                 offset,
             } => {
-                // T must be POD
-                //
-                // This function is absolutely sketchy and we really should be using bytemuck.
-                unsafe fn get_data<T, const COUNT: usize>(data: &[u8], offset: u32) -> &[T; COUNT] {
+                fn get_data<T, const COUNT: usize>(data: &[u8], offset: u32) -> [T; COUNT]
+                where
+                    [T; COUNT]: bytemuck::AnyBitPattern,
+                {
                     let data_required = size_of::<T>() * COUNT;
-
                     let raw = &data[(offset as usize)..][..data_required];
-
-                    debug_assert_eq!(data_required, raw.len());
-
-                    let slice: &[T] = unsafe { slice::from_raw_parts(raw.as_ptr().cast(), COUNT) };
-
-                    slice.try_into().unwrap()
+                    bytemuck::pod_read_unaligned(raw)
                 }
 
                 let location = Some(&uniform.location);
@@ -1625,28 +1619,28 @@ impl super::Queue {
                     // --- Float 1-4 Component ---
                     //
                     naga::TypeInner::Scalar(naga::Scalar::F32) => {
-                        let data = unsafe { get_data::<f32, 1>(data_bytes, offset)[0] };
+                        let data = get_data::<f32, 1>(data_bytes, offset)[0];
                         unsafe { gl.uniform_1_f32(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Bi,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 2>(data_bytes, offset) };
+                        let data = &get_data::<f32, 2>(data_bytes, offset);
                         unsafe { gl.uniform_2_f32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Tri,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 3>(data_bytes, offset) };
+                        let data = &get_data::<f32, 3>(data_bytes, offset);
                         unsafe { gl.uniform_3_f32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Quad,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
+                        let data = &get_data::<f32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_4_f32_slice(location, data) };
                     }
 
@@ -1654,28 +1648,28 @@ impl super::Queue {
                     // --- Int 1-4 Component ---
                     //
                     naga::TypeInner::Scalar(naga::Scalar::I32) => {
-                        let data = unsafe { get_data::<i32, 1>(data_bytes, offset)[0] };
+                        let data = get_data::<i32, 1>(data_bytes, offset)[0];
                         unsafe { gl.uniform_1_i32(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Bi,
                         scalar: naga::Scalar::I32,
                     } => {
-                        let data = unsafe { get_data::<i32, 2>(data_bytes, offset) };
+                        let data = &get_data::<i32, 2>(data_bytes, offset);
                         unsafe { gl.uniform_2_i32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Tri,
                         scalar: naga::Scalar::I32,
                     } => {
-                        let data = unsafe { get_data::<i32, 3>(data_bytes, offset) };
+                        let data = &get_data::<i32, 3>(data_bytes, offset);
                         unsafe { gl.uniform_3_i32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Quad,
                         scalar: naga::Scalar::I32,
                     } => {
-                        let data = unsafe { get_data::<i32, 4>(data_bytes, offset) };
+                        let data = &get_data::<i32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_4_i32_slice(location, data) };
                     }
 
@@ -1683,28 +1677,28 @@ impl super::Queue {
                     // --- Uint 1-4 Component ---
                     //
                     naga::TypeInner::Scalar(naga::Scalar::U32) => {
-                        let data = unsafe { get_data::<u32, 1>(data_bytes, offset)[0] };
+                        let data = get_data::<u32, 1>(data_bytes, offset)[0];
                         unsafe { gl.uniform_1_u32(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Bi,
                         scalar: naga::Scalar::U32,
                     } => {
-                        let data = unsafe { get_data::<u32, 2>(data_bytes, offset) };
+                        let data = &get_data::<u32, 2>(data_bytes, offset);
                         unsafe { gl.uniform_2_u32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Tri,
                         scalar: naga::Scalar::U32,
                     } => {
-                        let data = unsafe { get_data::<u32, 3>(data_bytes, offset) };
+                        let data = &get_data::<u32, 3>(data_bytes, offset);
                         unsafe { gl.uniform_3_u32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
                         size: naga::VectorSize::Quad,
                         scalar: naga::Scalar::U32,
                     } => {
-                        let data = unsafe { get_data::<u32, 4>(data_bytes, offset) };
+                        let data = &get_data::<u32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_4_u32_slice(location, data) };
                     }
 
@@ -1716,7 +1710,7 @@ impl super::Queue {
                         rows: naga::VectorSize::Bi,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
+                        let data = &get_data::<f32, 4>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_2_f32_slice(location, false, data) };
                     }
                     naga::TypeInner::Matrix {
@@ -1725,7 +1719,7 @@ impl super::Queue {
                         scalar: naga::Scalar::F32,
                     } => {
                         // repack 2 vec3s into 6 values.
-                        let unpacked_data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
+                        let unpacked_data = &get_data::<f32, 8>(data_bytes, offset);
                         #[rustfmt::skip]
                         let packed_data = [
                             unpacked_data[0], unpacked_data[1], unpacked_data[2],
@@ -1738,7 +1732,7 @@ impl super::Queue {
                         rows: naga::VectorSize::Quad,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
+                        let data = &get_data::<f32, 8>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_2x4_f32_slice(location, false, data) };
                     }
 
@@ -1750,7 +1744,7 @@ impl super::Queue {
                         rows: naga::VectorSize::Bi,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 6>(data_bytes, offset) };
+                        let data = &get_data::<f32, 6>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_3x2_f32_slice(location, false, data) };
                     }
                     naga::TypeInner::Matrix {
@@ -1759,7 +1753,7 @@ impl super::Queue {
                         scalar: naga::Scalar::F32,
                     } => {
                         // repack 3 vec3s into 9 values.
-                        let unpacked_data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
+                        let unpacked_data = &get_data::<f32, 12>(data_bytes, offset);
                         #[rustfmt::skip]
                         let packed_data = [
                             unpacked_data[0], unpacked_data[1], unpacked_data[2],
@@ -1773,7 +1767,7 @@ impl super::Queue {
                         rows: naga::VectorSize::Quad,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
+                        let data = &get_data::<f32, 12>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_3x4_f32_slice(location, false, data) };
                     }
 
@@ -1785,7 +1779,7 @@ impl super::Queue {
                         rows: naga::VectorSize::Bi,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
+                        let data = &get_data::<f32, 8>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_4x2_f32_slice(location, false, data) };
                     }
                     naga::TypeInner::Matrix {
@@ -1794,7 +1788,7 @@ impl super::Queue {
                         scalar: naga::Scalar::F32,
                     } => {
                         // repack 4 vec3s into 12 values.
-                        let unpacked_data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
+                        let unpacked_data = &get_data::<f32, 16>(data_bytes, offset);
                         #[rustfmt::skip]
                         let packed_data = [
                             unpacked_data[0], unpacked_data[1], unpacked_data[2],
@@ -1809,7 +1803,7 @@ impl super::Queue {
                         rows: naga::VectorSize::Quad,
                         scalar: naga::Scalar::F32,
                     } => {
-                        let data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
+                        let data = &get_data::<f32, 16>(data_bytes, offset);
                         unsafe { gl.uniform_matrix_4_f32_slice(location, false, data) };
                     }
                     _ => panic!("Unsupported uniform datatype: {:?}!", uniform.ty),

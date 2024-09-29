@@ -3681,6 +3681,7 @@ dependencies = [
  "bit-set",
  "bitflags 2.6.0",
  "block",
+ "bytemuck",
  "cfg-if",
  "cfg_aliases",
  "core-graphics-types",
