@@ -1900,7 +1900,7 @@ bitflags::bitflags! {
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpushaderstageflags).
     #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct ShaderStages: u32 {
+    pub struct ShaderStages: u64 {
         /// Binding is not visible from any shader stage.
         const NONE = 0;
         /// Binding is visible from the vertex shader of a render pipeline.
@@ -4653,7 +4653,7 @@ bitflags::bitflags! {
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
     #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct ColorWrites: u32 {
+    pub struct ColorWrites: u64 {
         /// Enable red channel writes
         const RED = 1 << 0;
         /// Enable green channel writes
@@ -5265,7 +5265,7 @@ bitflags::bitflags! {
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct BufferUsages: u32 {
+    pub struct BufferUsages: u64 {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
@@ -5484,7 +5484,7 @@ bitflags::bitflags! {
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gputextureusageflags).
     #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct TextureUsages: u32 {
+    pub struct TextureUsages: u64 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
         const COPY_SRC = 1 << 0;
