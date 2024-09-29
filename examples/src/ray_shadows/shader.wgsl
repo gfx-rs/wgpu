@@ -61,30 +61,10 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     let intersection = rayQueryGetCommittedIntersection(&rq);
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-        color = vec4<f32>(vec3<f32>(0.1), 1.0) * 0.5;
+        color = vec4<f32>(vec3<f32>(0.1) * SURFACE_BRIGHTNESS, 1.0);
     } else {
-        color = vec4<f32>(vec3<f32>(max(dot(direction, normal), 0.1)), 1.0) * 0.5;
+        color = vec4<f32>(vec3<f32>(max(dot(direction, normal), 0.1)) * SURFACE_BRIGHTNESS, 1.0);
     }
 
     return color;
-    //return vec4<f32>(normal, 1.0);
-
-    /*var color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-
-	let d = vertex.tex_coords * 2.0 - 1.0;
-
-	let origin = (uniforms.view_inv * vec4<f32>(0.0,0.0,0.0,1.0)).xyz;
-	let temp = uniforms.proj_inv * vec4<f32>(d.x, d.y, 1.0, 1.0);
-	let direction = (uniforms.view_inv * vec4<f32>(normalize(temp.xyz), 0.0)).xyz;
-
-    var rq: ray_query;
-    rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.1, 200.0, origin, direction));
-    rayQueryProceed(&rq);
-
-    let intersection = rayQueryGetCommittedIntersection(&rq);
-    if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-        color = vec4<f32>(intersection.barycentrics, 1.0 - intersection.barycentrics.x - intersection.barycentrics.y, 1.0);
-    }
-
-    return color; // vec4<f32>(vertex.tex_coords, 1.0, 1.0);*/
 }
