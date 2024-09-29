@@ -100,13 +100,13 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### Naga
 
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
-- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256)
+- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256).
 - Per-polygon and flat inputs should not be considered subgroup uniform. By @magcius in [#6276](https://github.com/gfx-rs/wgpu/pull/6276).
-- Validate that all swizzle components are either color (rgba) or dimension (xyzw) in wgsl. By @sagudev in [#6187](https://github.com/gfx-rs/wgpu/pull/6187).
-- Fix detection of shl overflows to detect aritmetic overflows. By @sagudev in [#6186](https://github.com/gfx-rs/wgpu/pull/6186).
+- Validate all swizzle components are either color (rgba) or dimension (xyzw) in WGSL. By @sagudev in [#6187](https://github.com/gfx-rs/wgpu/pull/6187).
+- Fix detection of shl overflows to detect arithmetic overflows. By @sagudev in [#6186](https://github.com/gfx-rs/wgpu/pull/6186).
 - Fix type parameters to vec/mat type constructors to also support aliases. By @sagudev in [#6189](https://github.com/gfx-rs/wgpu/pull/6189).
 - Accept global `var`s without explicit type. By @sagudev in [#6199](https://github.com/gfx-rs/wgpu/pull/6199).
-- Fix handling of phony statements, so they actually get emitted. By @sagudev in [#6328](https://github.com/gfx-rs/wgpu/pull/6328).
+- Fix handling of phony statements, so they are actually emitted. By @sagudev in [#6328](https://github.com/gfx-rs/wgpu/pull/6328).
 
 #### General
 
