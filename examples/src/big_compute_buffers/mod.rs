@@ -1,8 +1,6 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 use wgpu::{util::DeviceExt, Features};
 
-use crate::big_compute_buffers::helpers::make_test_data;
-
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
 const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1;
 
@@ -17,11 +15,9 @@ pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                required_features:
-                // We require at least these three features to achieve a _single_ binding representing all of our buffers shader-side
-                    Features::STORAGE_RESOURCE_BINDING_ARRAY |
+                required_features: Features::STORAGE_RESOURCE_BINDING_ARRAY |
+                        // These features are required to use `binding_array` in your wgsl.
                     Features::BUFFER_BINDING_ARRAY |
-                    //  Internal error: using NonUniformEXT requires at least one of the capabilities [ShaderNonUniform]...
                     Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
 
                 memory_hints: wgpu::MemoryHints::Performance,
@@ -265,36 +261,30 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
         .collect()
 }
 
-pub fn main() {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        env_logger::init();
-        pollster::block_on(run());
-    }
-}
-
 pub async fn run() {
-    let numbers = make_test_data(1.0);
+    let numbers = {
+        let bytes_per_gb = 1024 * 1024 * 1024;
+        let bytes_per_f32 = std::mem::size_of::<f32>();
+        let total_bytes = (1.0 * bytes_per_gb as f32) as usize;
+        let elements = total_bytes / bytes_per_f32;
+
+        vec![0.0; elements]
+    };
     assert!(numbers.iter().all(|n| *n == 0.0));
 
     let t1 = std::time::Instant::now();
     let results = execute_gpu(&numbers).await.unwrap();
-    log::debug!("GPU RUNTIME: {}ms", t1.elapsed().as_millis());
+    println!("GPU RUNTIME: {}ms", t1.elapsed().as_millis());
 
     assert_eq!(numbers.len(), results.len());
     assert!(results.iter().all(|n| *n == 1.0));
 }
 
-mod helpers {
-    /// Make `n` % of a GB worth of floats.
-    /// i.e `1.0` is `GB`, `0.25` is 250MB and so on..
-    pub(crate) fn make_test_data(n: f32) -> Vec<f32> {
-        let bytes_per_gb = 1024 * 1024 * 1024;
-        let bytes_per_f32 = std::mem::size_of::<f32>();
-        let total_bytes = (n * bytes_per_gb as f32) as usize;
-        let elements = total_bytes / bytes_per_f32;
-
-        vec![0.0; elements]
+pub fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_logger::init();
+        pollster::block_on(run());
     }
 }
 
