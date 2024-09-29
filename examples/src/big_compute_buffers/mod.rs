@@ -1,10 +1,10 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 use wgpu::{util::DeviceExt, Features};
 
-use crate::big_compute_buffers::helpers::{format_large_number, make_test_data};
+use crate::big_compute_buffers::helpers::make_test_data;
 
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
-const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
+const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1;
 
 pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
     let instance = wgpu::Instance::default();
@@ -53,14 +53,11 @@ async fn execute_gpu_inner(
             timestamp_writes: None,
         });
         cpass.set_pipeline(&compute_pipeline);
-        log::debug!("set_pipeline complete");
-        cpass.set_bind_group(0, &bind_group, &[]);
-        log::debug!("set_bind_group complete");
+        cpass.set_bind_group(0, Some(&bind_group), &[]);
 
         cpass.dispatch_workgroups(MAX_DISPATCH_SIZE.min(numbers.len() as u32), 1, 1);
     }
 
-    // we assume buffers of different lengths, in your own work you'll probably need to pad.
     storage_buffers.iter().zip(staging_buffers.iter()).for_each(
         |(storage_buffer, staging_buffer)| {
             let sb_size = storage_buffer.size();
@@ -78,10 +75,8 @@ async fn execute_gpu_inner(
             );
         },
     );
-    log::debug!("buffers created, submitting job to GPU");
 
     queue.submit(Some(encoder.finish()));
-    log::debug!("Job submission complete.");
 
     let mut buffer_slices = Vec::new();
     staging_buffers.iter().for_each(|sb| {
@@ -101,7 +96,6 @@ async fn execute_gpu_inner(
     device.poll(wgpu::Maintain::wait());
 
     if let Ok(Ok(())) = receiver.recv_async().await {
-        log::debug!("Getting results...");
         let data: Vec<f32> = buffer_slices
             .iter()
             .flat_map(|bs| {
@@ -137,13 +131,8 @@ fn setup(
 
     // Gets the size in bytes of the input.
     let input_size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
-    log::debug!("Size of input {}b", format_large_number(input_size));
-
     let staging_buffers = create_staging_buffers(device, numbers);
-    log::debug!("Created staging_buffer");
-
     let storage_buffers = create_storage_buffers(device, numbers, input_size);
-    log::debug!("Created storage_buffer");
 
     let (bind_group_layout, bind_group) = setup_binds(&storage_buffers, device);
 
@@ -184,16 +173,9 @@ fn setup_binds(
     let bind_group_entries: Vec<wgpu::BindGroupEntry> = storage_buffers
         .iter()
         .enumerate()
-        .map(|(bind_idx, buffer)| {
-            log::debug!(
-                "bind_idx:{} buffer is {}b",
-                bind_idx,
-                format_large_number(buffer.size())
-            );
-            wgpu::BindGroupEntry {
-                binding: bind_idx as u32,
-                resource: buffer.as_entire_binding(),
-            }
+        .map(|(bind_idx, buffer)| wgpu::BindGroupEntry {
+            binding: bind_idx as u32,
+            resource: buffer.as_entire_binding(),
         })
         .collect();
 
@@ -209,12 +191,6 @@ fn setup_binds(
             count: Some(NonZeroU32::new(1).unwrap()), // Increment this each time? ++1, or is it the index? idx/N?
         })
         .collect();
-
-    log::debug!(
-        "created {} BindGroupEntries with {} corresponding BindGroupEntryLayouts.",
-        bind_group_entries.len(),
-        bind_group_layout_entries.len()
-    );
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Custom Storage Bind Group Layout"),
@@ -240,16 +216,12 @@ fn create_storage_buffers(
     input_size: u64, // bytes..
 ) -> Vec<wgpu::Buffer> {
     if input_size > MAX_BUFFER_SIZE {
-        log::warn!("Supplied input is too large for a single storage buffer, splitting...");
-
         let chunks = calculate_chunks(numbers, MAX_BUFFER_SIZE);
 
         chunks
             .iter()
             .enumerate()
             .map(|(e, seg)| {
-                log::debug!("creating Storage Buffer {} of {}", e + 1, chunks.len());
-
                 let size = std::mem::size_of_val(*seg) as u64;
                 assert!(size % wgpu::COPY_BUFFER_ALIGNMENT == 0);
 
@@ -276,16 +248,12 @@ fn create_storage_buffers(
 }
 
 fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::Buffer> {
-    log::warn!("Supplied input is too large for a single staging buffer, splitting...");
-
     let chunks = calculate_chunks(numbers, MAX_BUFFER_SIZE);
 
-    log::debug!("num_chunks: {}", chunks.len());
     (0..chunks.len())
         .map(|e| {
             let size = std::mem::size_of_val(chunks[e]) as u64;
             assert!(size % wgpu::COPY_BUFFER_ALIGNMENT == 0);
-            log::debug!("creating staging buffer {} of {}", e + 1, chunks.len());
 
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(&format!("staging buffer-{}", e)),
@@ -315,8 +283,6 @@ pub async fn run() {
 
     assert_eq!(numbers.len(), results.len());
     assert!(results.iter().all(|n| *n == 1.0));
-
-    log::debug!("All numbers checked, previously 0.0 elements are now 1.0s");
 }
 
 mod helpers {
@@ -329,31 +295,6 @@ mod helpers {
         let elements = total_bytes / bytes_per_f32;
 
         vec![0.0; elements]
-    }
-
-    /// Delimits 3+ digit numbers with '_'s i.e 10_000 not 10000 and so on.
-    pub(crate) fn format_large_number<N: ToString>(num: N) -> String {
-        let num_str = num.to_string();
-        let num_digits = num_str.len();
-
-        if num_digits <= 3 {
-            return num_str;
-        }
-
-        let num_underscores = (num_digits - 1) / 3;
-
-        let capacity = num_digits + num_underscores;
-
-        let mut result = String::with_capacity(capacity);
-
-        for (i, c) in num_str.chars().rev().enumerate() {
-            if i > 0 && i % 3 == 0 {
-                result.push('_');
-            }
-            result.push(c);
-        }
-
-        result.chars().rev().collect()
     }
 }
 
