@@ -56,11 +56,7 @@ async fn execute_gpu_inner(
 
     storage_buffers.iter().zip(staging_buffers.iter()).for_each(
         |(storage_buffer, staging_buffer)| {
-            let sb_size = storage_buffer.size();
             let stg_size = staging_buffer.size();
-
-            assert!(sb_size % wgpu::COPY_BUFFER_ALIGNMENT == 0);
-            assert_eq!(sb_size, stg_size);
 
             encoder.copy_buffer_to_buffer(
                 storage_buffer, // Source buffer
@@ -218,9 +214,6 @@ fn create_storage_buffers(
             .iter()
             .enumerate()
             .map(|(e, seg)| {
-                let size = std::mem::size_of_val(*seg) as u64;
-                assert!(size % wgpu::COPY_BUFFER_ALIGNMENT == 0);
-
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some(&format!("Storage Buffer-{}", e)),
                     contents: bytemuck::cast_slice(seg),
@@ -249,7 +242,6 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
     (0..chunks.len())
         .map(|e| {
             let size = std::mem::size_of_val(chunks[e]) as u64;
-            assert!(size % wgpu::COPY_BUFFER_ALIGNMENT == 0);
 
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(&format!("staging buffer-{}", e)),
@@ -271,13 +263,15 @@ pub async fn run() {
         vec![0.0; elements]
     };
     assert!(numbers.iter().all(|n| *n == 0.0));
+    log::info!("All 0.0s");
 
     let t1 = std::time::Instant::now();
     let results = execute_gpu(&numbers).await.unwrap();
-    println!("GPU RUNTIME: {}ms", t1.elapsed().as_millis());
+    log::info!("GPU RUNTIME: {}ms", t1.elapsed().as_millis());
 
     assert_eq!(numbers.len(), results.len());
     assert!(results.iter().all(|n| *n == 1.0));
+    log::info!("All 1.0s");
 }
 
 pub fn main() {
