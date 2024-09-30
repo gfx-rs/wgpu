@@ -2,7 +2,7 @@ use crate::{Arena, Handle, UniqueArena};
 use std::{error::Error, fmt, ops::Range};
 
 /// A source code span, used for error reporting.
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Span {
     start: u32,
@@ -81,6 +81,12 @@ impl Span {
             line_position,
             offset: self.start,
             length: self.end - self.start,
+        }
+    }
+
+    pub fn contains(&self, other: &Self) -> bool {
+        self.is_defined() || {
+            other.is_defined() && self.start <= other.start && self.end >= other.end
         }
     }
 }
