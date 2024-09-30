@@ -1828,19 +1828,8 @@ impl<'w> BlockContext<'w> {
         let root_id = loop {
             expr_handle = match self.ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
-                    if let crate::Expression::GlobalVariable(var_handle) =
-                        self.ir_function.expressions[base]
-                    {
-                        // The access chain needs to be decorated as NonUniform
-                        // see VUID-RuntimeSpirv-NonUniform-06274
-                        let gvar = &self.ir_module.global_variables[var_handle];
-                        if let crate::TypeInner::BindingArray { .. } =
-                            self.ir_module.types[gvar.ty].inner
-                        {
-                            is_non_uniform_binding_array =
-                                self.fun_info[index].uniformity.non_uniform_result.is_some();
-                        }
-                    }
+                    is_non_uniform_binding_array |=
+                        self.is_nonuniform_binding_array_access(base, index);
 
                     let index_id = match self.write_bounds_check(base, index, block)? {
                         BoundsCheckResult::KnownInBounds(known_index) => {
@@ -1931,6 +1920,26 @@ impl<'w> BlockContext<'w> {
         }
 
         Ok(expr_pointer)
+    }
+
+    fn is_nonuniform_binding_array_access(
+        &mut self,
+        base: Handle<crate::Expression>,
+        index: Handle<crate::Expression>,
+    ) -> bool {
+        let crate::Expression::GlobalVariable(var_handle) = self.ir_function.expressions[base]
+        else {
+            return false;
+        };
+
+        // The access chain needs to be decorated as NonUniform
+        // see VUID-RuntimeSpirv-NonUniform-06274
+        let gvar = &self.ir_module.global_variables[var_handle];
+        let crate::TypeInner::BindingArray { .. } = self.ir_module.types[gvar.ty].inner else {
+            return false;
+        };
+
+        self.fun_info[index].uniformity.non_uniform_result.is_some()
     }
 
     /// Build the instructions for matrix - matrix column operations
