@@ -1833,7 +1833,7 @@ impl<'w> BlockContext<'w> {
 
                     let index_id = match self.write_bounds_check(base, index, block)? {
                         BoundsCheckResult::KnownInBounds(known_index) => {
-                            // Even if the index is known, `OpAccessIndex`
+                            // Even if the index is known, `OpAccessChain`
                             // requires expression operands, not literals.
                             let scalar = crate::Literal::U32(known_index);
                             self.writer.get_constant_scalar(scalar)
