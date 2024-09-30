@@ -1813,14 +1813,11 @@ impl<'w> BlockContext<'w> {
         };
         let result_type_id = self.get_type_id(result_lookup_ty);
 
-        // The id of the boolean `and` of all dynamic bounds checks up to this point. If
-        // `None`, then we haven't done any dynamic bounds checks yet.
+        // The id of the boolean `and` of all dynamic bounds checks up to this point.
         //
-        // When we have a chain of bounds checks, we combine them with `OpLogicalAnd`, not
-        // a short-circuit branch. This means we might do comparisons we don't need to,
-        // but we expect these checks to almost always succeed, and keeping branches to a
-        // minimum is essential.
+        // See `extend_bounds_check_condition_chain` for a full explanation.
         let mut accumulated_checks = None;
+
         // Is true if we are accessing into a binding array with a non-uniform index.
         let mut is_non_uniform_binding_array = false;
 
@@ -1840,25 +1837,13 @@ impl<'w> BlockContext<'w> {
                         }
                         BoundsCheckResult::Computed(computed_index_id) => computed_index_id,
                         BoundsCheckResult::Conditional(comparison_id) => {
-                            match accumulated_checks {
-                                Some(prior_checks) => {
-                                    let combined = self.gen_id();
-                                    block.body.push(Instruction::binary(
-                                        spirv::Op::LogicalAnd,
-                                        self.writer.get_bool_type_id(),
-                                        combined,
-                                        prior_checks,
-                                        comparison_id,
-                                    ));
-                                    accumulated_checks = Some(combined);
-                                }
-                                None => {
-                                    // Start a fresh chain of checks.
-                                    accumulated_checks = Some(comparison_id);
-                                }
-                            }
+                            self.extend_bounds_check_condition_chain(
+                                &mut accumulated_checks,
+                                comparison_id,
+                                block,
+                            );
 
-                            // Either way, the index to use is unchanged.
+                            // Use the index from the `Access` expression unchanged.
                             self.cached[index]
                         }
                     };
@@ -1940,6 +1925,49 @@ impl<'w> BlockContext<'w> {
         };
 
         self.fun_info[index].uniformity.non_uniform_result.is_some()
+    }
+
+    /// Add a condition to a chain of bounds checks.
+    ///
+    /// As we build an `OpAccessChain` instruction govered by
+    /// [`BoundsCheckPolicy::ReadZeroSkipWrite`], we accumulate a chain of
+    /// dynamic bounds checks, one for each index in the chain, which must all
+    /// be true for that `OpAccessChain`'s execution to be well-defined. This
+    /// function adds the boolean instruction id `comparison_id` to `chain`.
+    ///
+    /// If `chain` is `None`, that means there are no bounds checks in the chain
+    /// yet. If chain is `Some(id)`, then `id` is the conjunction of all the
+    /// bounds checks in the chain.
+    ///
+    /// When we have multiple bounds checks, we combine them with
+    /// `OpLogicalAnd`, not a short-circuit branch. This means we might do
+    /// comparisons we don't need to, but we expect these checks to almost
+    /// always succeed, and keeping branches to a minimum is essential.
+    ///
+    /// [`BoundsCheckPolicy::ReadZeroSkipWrite`]: crate::proc::BoundsCheckPolicy
+    fn extend_bounds_check_condition_chain(
+        &mut self,
+        chain: &mut Option<Word>,
+        comparison_id: Word,
+        block: &mut Block,
+    ) {
+        match *chain {
+            Some(ref mut prior_checks) => {
+                let combined = self.gen_id();
+                block.body.push(Instruction::binary(
+                    spirv::Op::LogicalAnd,
+                    self.writer.get_bool_type_id(),
+                    combined,
+                    *prior_checks,
+                    comparison_id,
+                ));
+                *prior_checks = combined;
+            }
+            None => {
+                // Start a fresh chain of checks.
+                *chain = Some(comparison_id);
+            }
+        }
     }
 
     /// Build the instructions for matrix - matrix column operations
