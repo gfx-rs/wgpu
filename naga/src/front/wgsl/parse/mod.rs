@@ -1,5 +1,5 @@
 use crate::diagnostic_filter::{
-    DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, DiagnosticTriggeringRule, Severity,
+    DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, DiagnosticTriggeringRule,
 };
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
@@ -2649,11 +2649,12 @@ impl Parser {
         lexer.expect(Token::Paren('('))?;
 
         let (severity_control_name, severity_control_name_span) = lexer.next_ident_with_span()?;
-        let new_severity = Severity::from_ident(severity_control_name).ok_or(
-            Error::DiagnosticInvalidSeverity {
-                severity_control_name_span,
-            },
-        )?;
+        let new_severity =
+            severity_control_name
+                .parse()
+                .map_err(|()| Error::DiagnosticInvalidSeverity {
+                    severity_control_name_span,
+                })?;
 
         lexer.expect(Token::Separator(','))?;
 

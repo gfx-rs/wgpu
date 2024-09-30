@@ -1,5 +1,7 @@
 //! [`DiagnosticFilter`]s and supporting functionality.
 
+use std::str::FromStr;
+
 use crate::{Handle, Span};
 
 #[cfg(feature = "arbitrary")]
@@ -37,6 +39,14 @@ impl Severity {
             Self::OFF => Self::Off,
             _ => return None,
         })
+    }
+}
+
+impl FromStr for Severity {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_ident(s).ok_or(())
     }
 }
 
