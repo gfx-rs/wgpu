@@ -2,6 +2,8 @@
 //!
 //! This functionality is typically used by front ends via [`DiagnosticFilterMap`].
 
+use std::str::FromStr;
+
 use crate::{Handle, Span};
 
 #[cfg(feature = "arbitrary")]
@@ -49,6 +51,14 @@ impl Severity {
             Self::Info => Self::INFO,
             Self::Off => Self::OFF,
         }
+    }
+}
+
+impl FromStr for Severity {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_ident(s).ok_or(())
     }
 }
 
