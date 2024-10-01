@@ -40,7 +40,13 @@ pub(super) enum BoundsCheckResult {
     ///
     /// This is returned when [`BoundsCheckPolicy::ReadZeroSkipWrite`]
     /// is in force.
-    Conditional(Word),
+    Conditional {
+        /// The access should only be permitted if this value is true.
+        condition_id: Word,
+
+        /// The access should use this index value.
+        index_id: Word,
+    },
 }
 
 /// A value that we either know at translation time, or need to compute at runtime.
@@ -431,7 +437,10 @@ impl<'w> BlockContext<'w> {
         ));
 
         // Indicate that we did generate the check.
-        Ok(BoundsCheckResult::Conditional(condition_id))
+        Ok(BoundsCheckResult::Conditional {
+            condition_id,
+            index_id,
+        })
     }
 
     /// Emit a conditional load for `BoundsCheckPolicy::ReadZeroSkipWrite`.
@@ -537,7 +546,6 @@ impl<'w> BlockContext<'w> {
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
 
         let base_id = self.cached[base];
-        let index_id = self.cached[index];
 
         let result_id = match self.write_bounds_check(base, index, block)? {
             BoundsCheckResult::KnownInBounds(known_index) => {
@@ -560,12 +568,15 @@ impl<'w> BlockContext<'w> {
                 ));
                 result_id
             }
-            BoundsCheckResult::Conditional(comparison_id) => {
+            BoundsCheckResult::Conditional {
+                condition_id,
+                index_id,
+            } => {
                 // Run-time bounds checks were required. Emit
                 // conditional load.
                 self.write_conditional_indexed_load(
                     result_type_id,
-                    comparison_id,
+                    condition_id,
                     block,
                     |id_gen, block| {
                         // The in-bounds path. Generate the access.
