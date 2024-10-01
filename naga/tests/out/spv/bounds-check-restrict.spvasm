@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 163
+; Bound: 174
 OpCapability Shader
 OpCapability Linkage
 OpExtension "SPV_KHR_storage_buffer_storage_class"
@@ -52,6 +52,7 @@ OpDecorate %12 Binding 0
 %129 = OpTypeFunction %2 %11 %7
 %138 = OpTypeFunction %2 %11 %11 %3
 %158 = OpTypeFunction %2 %3
+%166 = OpConstant  %6  1000
 %16 = OpFunction  %3  None %17
 %15 = OpFunctionParameter  %11
 %14 = OpLabel
@@ -231,5 +232,22 @@ OpStore %160 %156
 OpStore %161 %156
 %162 = OpAccessChain  %43  %12 %62 %62 %35
 OpStore %162 %156
+OpReturn
+OpFunctionEnd
+%164 = OpFunction  %3  None %91
+%163 = OpLabel
+OpBranch %165
+%165 = OpLabel
+%167 = OpAccessChain  %20  %12 %35 %166
+%168 = OpLoad  %3  %167
+OpReturnValue %168
+OpFunctionEnd
+%171 = OpFunction  %2  None %158
+%170 = OpFunctionParameter  %3
+%169 = OpLabel
+OpBranch %172
+%172 = OpLabel
+%173 = OpAccessChain  %20  %12 %35 %166
+OpStore %173 %170
 OpReturn
 OpFunctionEnd
