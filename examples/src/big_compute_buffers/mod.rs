@@ -180,7 +180,7 @@ fn setup_binds(
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
-            count: Some(NonZeroU32::new(1).unwrap()), // Increment this each time? ++1, or is it the index? idx/N?
+            count: Some(NonZeroU32::new(1).unwrap()),
         })
         .collect();
 
@@ -197,7 +197,7 @@ fn setup_binds(
     (bind_group_layout, bind_group)
 }
 
-pub fn calculate_chunks(numbers: &[f32], max_buffer_size: u64) -> Vec<&[f32]> {
+fn calculate_chunks(numbers: &[f32], max_buffer_size: u64) -> Vec<&[f32]> {
     let max_elements_per_chunk = max_buffer_size as usize / std::mem::size_of::<f32>(); // Calculate max f32 elements per buffer
     numbers.chunks(max_elements_per_chunk).collect()
 }
@@ -253,11 +253,11 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
         .collect()
 }
 
-pub async fn run() {
+async fn run() {
     let numbers = {
         let bytes_per_gb = 1024 * 1024 * 1024;
         let bytes_per_f32 = std::mem::size_of::<f32>();
-        let total_bytes = (1.0 * bytes_per_gb as f32) as usize;
+        let total_bytes = (0.25 * bytes_per_gb as f32) as usize;
         let elements = total_bytes / bytes_per_f32;
 
         vec![0.0; elements]

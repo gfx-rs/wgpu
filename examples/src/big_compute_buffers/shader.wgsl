@@ -1,6 +1,6 @@
 const OFFSET: u32 = 1u << 8u;
 const BUFF_LENGTH: u32 = 1u << 25u;
-const NUM_BUFFERS: u32 = 8u;
+const NUM_BUFFERS: u32 = 2u;
 const TOTAL_SIZE: u32 = BUFF_LENGTH * NUM_BUFFERS;
 
 
