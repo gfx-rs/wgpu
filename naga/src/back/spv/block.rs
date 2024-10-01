@@ -1828,6 +1828,7 @@ impl<'w> BlockContext<'w> {
                     is_non_uniform_binding_array |=
                         self.is_nonuniform_binding_array_access(base, index);
 
+                    let index = crate::proc::index::GuardedIndex::Expression(index);
                     let index_id =
                         self.write_access_chain_index(base, index, &mut accumulated_checks, block)?;
                     self.temp_list.push(index_id);
@@ -1835,8 +1836,30 @@ impl<'w> BlockContext<'w> {
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
-                    let const_id = self.get_index_constant(index);
-                    self.temp_list.push(const_id);
+                    // Decide whether we're indexing a struct (bounds checks
+                    // forbidden) or anything else (bounds checks required).
+                    let mut base_ty = self.fun_info[base].ty.inner_with(&self.ir_module.types);
+                    if let crate::TypeInner::Pointer { base, .. } = *base_ty {
+                        base_ty = &self.ir_module.types[base].inner;
+                    }
+                    let index_id = if let crate::TypeInner::Struct { .. } = *base_ty {
+                        self.get_index_constant(index)
+                    } else {
+                        // `index` is constant, so this can't possibly require
+                        // setting `is_nonuniform_binding_array_access`.
+
+                        // Even though the index value is statically known, `base`
+                        // may be a runtime-sized array, so we still need to go
+                        // through the bounds check process.
+                        self.write_access_chain_index(
+                            base,
+                            crate::proc::index::GuardedIndex::Known(index),
+                            &mut accumulated_checks,
+                            block,
+                        )?
+                    };
+
+                    self.temp_list.push(index_id);
                     base
                 }
                 crate::Expression::GlobalVariable(handle) => {
@@ -1923,7 +1946,7 @@ impl<'w> BlockContext<'w> {
     fn write_access_chain_index(
         &mut self,
         base: Handle<crate::Expression>,
-        index: Handle<crate::Expression>,
+        index: crate::proc::index::GuardedIndex,
         accumulated_checks: &mut Option<Word>,
         block: &mut Block,
     ) -> Result<Word, Error> {

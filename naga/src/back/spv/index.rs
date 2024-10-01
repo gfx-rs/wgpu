@@ -508,11 +508,10 @@ impl<'w> BlockContext<'w> {
     pub(super) fn write_bounds_check(
         &mut self,
         base: Handle<crate::Expression>,
-        index: Handle<crate::Expression>,
+        mut index: GuardedIndex,
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
         // If the value of `index` is known at compile time, find it now.
-        let mut index = GuardedIndex::Expression(index);
         index.try_resolve_to_constant(self.ir_function, self.ir_module);
 
         let policy = self.writer.bounds_check_policies.choose_policy(
@@ -546,6 +545,7 @@ impl<'w> BlockContext<'w> {
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
 
         let base_id = self.cached[base];
+        let index = GuardedIndex::Expression(index);
 
         let result_id = match self.write_bounds_check(base, index, block)? {
             BoundsCheckResult::KnownInBounds(known_index) => {
