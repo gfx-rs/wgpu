@@ -1894,10 +1894,8 @@ impl Parser {
                         let _ = lexer.next();
                         let mut body = ast::Block::default();
 
-                        let (condition, span) = lexer.capture_span(|lexer| {
-                            let condition = self.general_expression(lexer, ctx)?;
-                            Ok(condition)
-                        })?;
+                        let (condition, span) =
+                            lexer.capture_span(|lexer| self.general_expression(lexer, ctx))?;
                         let mut reject = ast::Block::default();
                         reject.stmts.push(ast::Statement {
                             kind: ast::StatementKind::Break,
@@ -1954,9 +1952,9 @@ impl Parser {
                         let mut body = ast::Block::default();
                         if !lexer.skip(Token::Separator(';')) {
                             let (condition, span) = lexer.capture_span(|lexer| {
-                                let condition = self.general_expression(lexer, ctx)?;
-                                lexer.expect(Token::Separator(';'))?;
-                                Ok(condition)
+                                self.general_expression(lexer, ctx).and_then(|condition| {
+                                    lexer.expect(Token::Separator(';')).map(|()| condition)
+                                })
                             })?;
                             let mut reject = ast::Block::default();
                             reject.stmts.push(ast::Statement {
