@@ -334,7 +334,11 @@ impl GuardedIndex {
     /// Make a `GuardedIndex::Known` from a `GuardedIndex::Expression` if possible.
     ///
     /// Return values that are already `Known` unchanged.
-    fn try_resolve_to_constant(&mut self, function: &crate::Function, module: &crate::Module) {
+    pub(crate) fn try_resolve_to_constant(
+        &mut self,
+        function: &crate::Function,
+        module: &crate::Module,
+    ) {
         if let GuardedIndex::Expression(expr) = *self {
             if let Ok(value) = module
                 .to_ctx()
