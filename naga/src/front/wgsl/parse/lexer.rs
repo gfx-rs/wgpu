@@ -350,27 +350,43 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
-            (Token::Word("_"), span) => Err(Error::InvalidIdentifierUnderscore(span)),
-            (Token::Word(word), span) if word.starts_with("__") => {
-                Err(Error::ReservedIdentifierPrefix(span))
-            }
-            (Token::Word(word), span) => Ok((word, span)),
+            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
             other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::front::wgsl) fn peek_ident_with_span(
+        &mut self,
+    ) -> Result<(&'a str, Span), Error<'a>> {
+        match self.peek() {
+            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
+            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+        }
+    }
+
+    fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+        match word {
+            "_" => Err(Error::InvalidIdentifierUnderscore(span)),
+            word if word.starts_with("__") => Err(Error::ReservedIdentifierPrefix(span)),
+            word => Ok((word, span)),
         }
     }
 
     pub(in crate::front::wgsl) fn next_ident(
         &mut self,
     ) -> Result<super::ast::Ident<'a>, Error<'a>> {
-        let ident = self
-            .next_ident_with_span()
-            .map(|(name, span)| super::ast::Ident { name, span })?;
+        self.next_ident_with_span()
+            .and_then(|(word, span)| Self::word_as_ident(word, span))
+            .map(|(name, span)| super::ast::Ident { name, span })
+    }
 
-        if crate::keywords::wgsl::RESERVED.contains(&ident.name) {
-            return Err(Error::ReservedKeyword(ident.span));
+    fn word_as_ident(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+        if crate::keywords::wgsl::RESERVED.contains(&word) {
+            Err(Error::ReservedKeyword(span))
+        } else {
+            Ok((word, span))
         }
-
-        Ok(ident)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
