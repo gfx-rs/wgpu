@@ -20,13 +20,13 @@ const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
 ```
 
 ## To Run
-```
+```sh
 RUST_LOG=wgpu_examples::big_compute_buffers=info cargo run -r --bin wgpu-examples -- big_compute_buffers
 ```
 
 ## Example Output
-```sh
-[2024-09-29T11:32:44Z INFO  wgpu_examples::big_compute_buffers] All 0.0s
-[2024-09-29T11:32:47Z INFO  wgpu_examples::big_compute_buffers] GPU RUNTIME: 3312ms
-[2024-09-29T11:32:47Z INFO  wgpu_examples::big_compute_buffers] All 1.0s
+```
+[2024-09-29T11:47:55Z INFO  wgpu_examples::big_compute_buffers] All 0.0s
+[2024-09-29T11:47:58Z INFO  wgpu_examples::big_compute_buffers] GPU RUNTIME: 3228ms
+[2024-09-29T11:47:58Z INFO  wgpu_examples::big_compute_buffers] All 1.0s
 ```

@@ -34,7 +34,7 @@ pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
     execute_gpu_inner(&device, &queue, numbers).await
 }
 
-async fn execute_gpu_inner(
+pub async fn execute_gpu_inner(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     numbers: &[f32],
