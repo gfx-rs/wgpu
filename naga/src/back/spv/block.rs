@@ -1828,26 +1828,10 @@ impl<'w> BlockContext<'w> {
                     is_non_uniform_binding_array |=
                         self.is_nonuniform_binding_array_access(base, index);
 
-                    let index_id = match self.write_bounds_check(base, index, block)? {
-                        BoundsCheckResult::KnownInBounds(known_index) => {
-                            // Even if the index is known, `OpAccessChain`
-                            // requires expression operands, not literals.
-                            let scalar = crate::Literal::U32(known_index);
-                            self.writer.get_constant_scalar(scalar)
-                        }
-                        BoundsCheckResult::Computed(computed_index_id) => computed_index_id,
-                        BoundsCheckResult::Conditional(comparison_id) => {
-                            self.extend_bounds_check_condition_chain(
-                                &mut accumulated_checks,
-                                comparison_id,
-                                block,
-                            );
-
-                            // Use the index from the `Access` expression unchanged.
-                            self.cached[index]
-                        }
-                    };
+                    let index_id =
+                        self.write_access_chain_index(base, index, &mut accumulated_checks, block)?;
                     self.temp_list.push(index_id);
+
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
@@ -1925,6 +1909,39 @@ impl<'w> BlockContext<'w> {
         };
 
         self.fun_info[index].uniformity.non_uniform_result.is_some()
+    }
+
+    /// Compute a single index operand to an `OpAccessChain` instruction.
+    ///
+    /// Given that we are indexing `base` with `index`, apply the appropriate
+    /// bounds check policies, emitting code to `block` to clamp `index` or
+    /// determine whether it's in bounds. Return the SPIR-V instruction id of
+    /// the index value we should actually use.
+    ///
+    /// Extend `accumulated_checks` to include the results of any needed bounds
+    /// checks. See [`BlockContext::extend_bounds_check_condition_chain`].
+    fn write_access_chain_index(
+        &mut self,
+        base: Handle<crate::Expression>,
+        index: Handle<crate::Expression>,
+        accumulated_checks: &mut Option<Word>,
+        block: &mut Block,
+    ) -> Result<Word, Error> {
+        match self.write_bounds_check(base, index, block)? {
+            BoundsCheckResult::KnownInBounds(known_index) => {
+                // Even if the index is known, `OpAccessChain`
+                // requires expression operands, not literals.
+                let scalar = crate::Literal::U32(known_index);
+                Ok(self.writer.get_constant_scalar(scalar))
+            }
+            BoundsCheckResult::Computed(computed_index_id) => Ok(computed_index_id),
+            BoundsCheckResult::Conditional(comparison_id) => {
+                self.extend_bounds_check_condition_chain(accumulated_checks, comparison_id, block);
+
+                // Use the index from the `Access` expression unchanged.
+                Ok(self.cached[index])
+            }
+        }
     }
 
     /// Add a condition to a chain of bounds checks.
