@@ -4,6 +4,7 @@ use indexmap::IndexMap;
 
 // TODO: docs
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub enum Severity {
     Off,
     Info,
@@ -25,6 +26,7 @@ impl Severity {
 
 // TODO: docs
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub enum DiagnosticTriggeringRule {
     DerivativeUniformity,
 }
@@ -86,4 +88,44 @@ pub(crate) struct ConflictingDiagnosticRuleError {
 pub struct DiagnosticFilterNode {
     pub inner: DiagnosticFilter,
     pub parent: Option<Handle<DiagnosticFilterNode>>,
+}
+
+#[cfg(test)]
+mod test {
+    use crate::front::wgsl::assert_parse_err;
+
+    use super::{DiagnosticTriggeringRule, Severity};
+
+    use itertools::Itertools as _;
+    use strum::IntoEnumIterator as _;
+
+    #[test]
+    fn basic() {}
+
+    #[test]
+    fn malformed() {}
+
+    #[test]
+    fn severities() {}
+
+    #[test]
+    fn invalid_severity() {}
+
+    #[test]
+    fn triggering_rules() {}
+
+    #[test]
+    fn invalid_triggering_rule() {
+        let cases = DiagnosticTriggeringRule::iter().cartesian_product(Severity::iter());
+
+        for (rule, severity) in cases {
+            let shader = "\
+";
+
+            assert_parse_err(
+                shader, "\
+    ",
+            );
+        }
+    }
 }
