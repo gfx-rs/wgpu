@@ -1244,7 +1244,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .arguments
             .iter()
             .enumerate()
-            .map(|(i, arg)| {
+            .map(|(i, arg)| -> Result<_, Error<'_>> {
                 let ty = self.resolve_ast_type(arg.ty, ctx)?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
@@ -1263,7 +1263,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let result = f
             .result
             .as_ref()
-            .map(|res| {
+            .map(|res| -> Result<_, Error<'_>> {
                 let ty = self.resolve_ast_type(res.ty, ctx)?;
                 Ok(crate::FunctionResult {
                     ty,
