@@ -29,6 +29,11 @@ targets = [
 # Cargo machete can't check build.rs dependencies. See https://github.com/bnjbvr/cargo-machete/issues/100
 ignored = ["cfg_aliases"]
 
+[lints.rust]
+# The `wgpu_validate_locks` config is supposed to be set via `RUSTFLAGS='--cfg wgpu_validate_locks'`
+# If set, `wgpu-core` uses the [`ranked`] module's locks. We hope to make this the default for debug builds soon.
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(wgpu_validate_locks)'] }
+
 [lib]
 
 [features]
