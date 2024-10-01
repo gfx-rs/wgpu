@@ -1935,11 +1935,14 @@ impl<'w> BlockContext<'w> {
                 Ok(self.writer.get_constant_scalar(scalar))
             }
             BoundsCheckResult::Computed(computed_index_id) => Ok(computed_index_id),
-            BoundsCheckResult::Conditional(comparison_id) => {
-                self.extend_bounds_check_condition_chain(accumulated_checks, comparison_id, block);
+            BoundsCheckResult::Conditional {
+                condition_id: condition,
+                index_id: index,
+            } => {
+                self.extend_bounds_check_condition_chain(accumulated_checks, condition, block);
 
                 // Use the index from the `Access` expression unchanged.
-                Ok(self.cached[index])
+                Ok(index)
             }
         }
     }
