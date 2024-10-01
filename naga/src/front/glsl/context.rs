@@ -630,7 +630,8 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
+                                        "Cannot apply operation to {:?} and {:?}",
+                                        left_inner, right_inner
                                     )
                                     .into(),
                                 ),
@@ -828,7 +829,8 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
+                                        "Cannot apply operation to {:?} and {:?}",
+                                        left_inner, right_inner
                                     )
                                     .into(),
                                 ),
@@ -908,7 +910,8 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
+                                        "Cannot apply operation to {:?} and {:?}",
+                                        left_inner, right_inner
                                     )
                                     .into(),
                                 ),
