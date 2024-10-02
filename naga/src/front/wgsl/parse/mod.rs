@@ -1502,6 +1502,10 @@ impl Parser {
                 kind: Float | Sint | Uint,
                 width: 4,
             } => Ok(()),
+            Scalar {
+                kind: Uint,
+                width: 8,
+            } => Ok(()),
             _ => Err(Error::BadTextureSampleType { span, scalar }),
         }
     }

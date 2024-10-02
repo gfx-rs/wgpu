@@ -773,6 +773,24 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ");")?
             }
+            Statement::ImageAtomic {
+                image,
+                coordinate,
+                sample: _,
+                ref fun,
+                value,
+            } => {
+                write!(self.out, "{level}")?;
+                let fun_str = fun.to_wgsl();
+                write!(self.out, "imageAtomic{fun_str}(")?;
+                self.write_expr(module, image, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, coordinate, func_ctx)?;
+                // We do not write sample because it is unsupported
+                write!(self.out, ", ")?;
+                self.write_expr(module, value, func_ctx)?;
+                writeln!(self.out, ");")?;
+            }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 write!(self.out, "{level}")?;
                 // TODO: Obey named expressions here.
