@@ -1,11 +1,8 @@
-# WIP
-
-
 # big-compute-buffers
 
 This example assumes you're familiar with the other GP-GPU compute examples in this repository, if you're not you should go look at those first.
 
-Showcases how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contiguous buffer on the GPU.
+Demonstrates how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contiguous buffer on the GPU.
 
 - Creates a large set of buffers totalling `1GB`, full of `0.0f32`.
 - Moves those buffers to the DEVICE.
@@ -18,6 +15,10 @@ This example uses the constants below, which are from the values that `wgpu` is 
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
 const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
 ```
+
+Note:
+- Large buffers can fail to allocate due to fragmentation issues.
+- Working with large buffers is not always ideal, you should also see the pagination example to see if that approach suits your needs better.
 
 ## To Run
 ```sh

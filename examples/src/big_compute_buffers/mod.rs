@@ -1,6 +1,7 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 use wgpu::{util::DeviceExt, Features};
 
+// These are set by the minimum required defaults for webgpu.
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
 const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1;
 
@@ -15,10 +16,11 @@ pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                required_features: Features::STORAGE_RESOURCE_BINDING_ARRAY |
-                        // These features are required to use `binding_array` in your wgsl.
-                    Features::BUFFER_BINDING_ARRAY |
-                    Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                // These features are required to use `binding_array` in your wgsl.
+                // Without them your shader may fail to compile.
+                required_features: Features::STORAGE_RESOURCE_BINDING_ARRAY
+                    | Features::BUFFER_BINDING_ARRAY
+                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
 
                 memory_hints: wgpu::MemoryHints::Performance,
                 required_limits: wgpu::Limits {
