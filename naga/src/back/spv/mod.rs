@@ -665,12 +665,6 @@ impl BlockContext<'_> {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-struct LoopContext {
-    continuing_id: Option<Word>,
-    break_id: Option<Word>,
-}
-
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,

@@ -4,8 +4,7 @@ Implementations for `BlockContext` methods.
 
 use super::{
     helpers, index::BoundsCheckResult, make_local, selection::Selection, Block, BlockContext,
-    Dimension, Error, Instruction, LocalType, LookupType, LoopContext, ResultMember, Writer,
-    WriterFlags,
+    Dimension, Error, Instruction, LocalType, LookupType, ResultMember, Writer, WriterFlags,
 };
 use crate::{arena::Handle, proc::TypeResolution, Statement};
 use spirv::Word;
@@ -39,7 +38,7 @@ enum ExpressionPointer {
 }
 
 /// The termination statement to be added to the end of the block
-pub enum BlockExit {
+enum BlockExit {
     /// Generates an OpReturn (void return)
     Return,
     /// Generates an OpBranch to the specified block
@@ -58,6 +57,12 @@ pub enum BlockExit {
         /// The loop header block id
         preamble_id: Word,
     },
+}
+
+#[derive(Clone, Copy, Default)]
+struct LoopContext {
+    continuing_id: Option<Word>,
+    break_id: Option<Word>,
 }
 
 #[derive(Debug)]
@@ -2060,7 +2065,7 @@ impl<'w> BlockContext<'w> {
         }
     }
 
-    pub(super) fn write_block(
+    fn write_block(
         &mut self,
         label_id: Word,
         naga_block: &crate::Block,
@@ -2719,6 +2724,22 @@ impl<'w> BlockContext<'w> {
         };
 
         self.function.consume(block, termination);
+        Ok(())
+    }
+
+    pub(super) fn write_function_body(
+        &mut self,
+        entry_id: Word,
+        debug_info: Option<&DebugInfoInner>,
+    ) -> Result<(), Error> {
+        self.write_block(
+            entry_id,
+            &self.ir_function.body,
+            super::block::BlockExit::Return,
+            LoopContext::default(),
+            debug_info,
+        )?;
+
         Ok(())
     }
 }
