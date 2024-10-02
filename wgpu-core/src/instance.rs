@@ -60,6 +60,41 @@ pub struct Instance {
     /// The ordering in this list implies prioritization and needs to be preserved.
     pub instance_per_backend: Vec<(Backend, Box<dyn hal::DynInstance>)>,
     pub flags: wgt::InstanceFlags,
+
+    // WIP Future mechanism
+    pub futures: FutureRegistry,
+}
+
+#[derive(Default)]
+pub struct Future {
+    completed: bool,
+}
+
+// A very simplistic Registry type that replaces wgc::Registry for now
+// for futures.
+// Test only: There should be a way not to store all completed futures for the
+// whole lifetime of the prorgam, and also this is not threadsafe.
+#[derive(Default)]
+struct FutureRegistry {
+    next_id: u64,
+    storage: HashMap<u64,Future>,
+}
+impl FutureRegistry {
+    fn new() -> Self {
+        return Self{
+            next_id: 0,
+            storage: HashMap::new(),
+        }
+    }
+    fn register(&mut self, value: Future) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.storage.insert(id, value);
+        return id;
+    }
+    fn get_mut(&mut self, id: u64) -> Option<&mut Future> {
+        return self.storage.get_mut(&id);
+    }
 }
 
 impl Instance {
@@ -111,6 +146,7 @@ impl Instance {
             name: name.to_string(),
             instance_per_backend,
             flags: instance_desc.flags,
+            futures: FutureRegistry::new(),
         }
     }
 
@@ -812,6 +848,29 @@ impl Global {
         resource_log!("Created Queue {:?}", queue_id);
 
         Ok((device_id, queue_id))
+    }
+}
+
+impl Global {
+    pub fn instance_create_future(
+        &mut self,
+    ) -> u64 {
+        let future_id = self.instance.futures.register(Future{
+            completed: false,
+        });
+        return future_id;
+    }
+
+    pub fn instance_complete_future(
+        &mut self,
+        future_id: u64,
+    ) {
+        match self.instance.futures.get_mut(future_id) {
+            Some(future) => {
+                future.completed = true;
+            },
+            None => panic!("invalid future id")
+        }
     }
 }
 
