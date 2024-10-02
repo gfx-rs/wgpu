@@ -3,7 +3,7 @@ use super::{
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
     make_local, Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo,
     EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
-    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options,
+    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, Options,
     PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
@@ -756,13 +756,7 @@ impl Writer {
             next_id
         };
 
-        context.write_block(
-            main_id,
-            &ir_function.body,
-            super::block::BlockExit::Return,
-            LoopContext::default(),
-            debug_info.as_ref(),
-        )?;
+        context.write_function_body(main_id, debug_info.as_ref())?;
 
         // Consume the `BlockContext`, ending its borrows and letting the
         // `Writer` steal back its cached expression table and temp_list.
