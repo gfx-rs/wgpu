@@ -402,6 +402,8 @@ impl super::Adapter {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
             atomic_int64_on_typed_resource_supported,
         );
+        // Ruint64 textures are always emulated on d3d12
+        features.set(wgt::Features::TEXTURE_INT64_ATOMIC, true);
 
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
