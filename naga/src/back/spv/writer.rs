@@ -936,10 +936,7 @@ impl Writer {
             LocalType::Image(image) => {
                 let local_type = LocalType::Value {
                     vector_size: None,
-                    scalar: crate::Scalar {
-                        kind: image.sampled_type,
-                        width: 4,
-                    },
+                    scalar: image.sampled_type,
                     pointer_space: None,
                 };
                 let type_id = self.get_type_id(LookupType::Local(local_type));

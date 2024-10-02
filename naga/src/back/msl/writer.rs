@@ -214,14 +214,15 @@ impl<'a> Display for TypeContext<'a> {
                     crate::ImageDimension::D3 => "3d",
                     crate::ImageDimension::Cube => "cube",
                 };
-                let (texture_str, msaa_str, kind, access) = match class {
+                let (texture_str, msaa_str, scalar, access) = match class {
                     crate::ImageClass::Sampled { kind, multi } => {
                         let (msaa_str, access) = if multi {
                             ("_ms", "read")
                         } else {
                             ("", "sample")
                         };
-                        ("texture", msaa_str, kind, access)
+                        let scalar = crate::Scalar { kind, width: 4 };
+                        ("texture", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Depth { multi } => {
                         let (msaa_str, access) = if multi {
@@ -229,7 +230,11 @@ impl<'a> Display for TypeContext<'a> {
                         } else {
                             ("", "sample")
                         };
-                        ("depth", msaa_str, crate::ScalarKind::Float, access)
+                        let scalar = crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                        };
+                        ("depth", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Storage { format, .. } => {
                         let access = if self
@@ -253,7 +258,7 @@ impl<'a> Display for TypeContext<'a> {
                         ("texture", "", format.into(), access)
                     }
                 };
-                let base_name = crate::Scalar { kind, width: 4 }.to_msl_name();
+                let base_name = scalar.to_msl_name();
                 let array_str = if arrayed { "_array" } else { "" };
                 write!(
                     out,
