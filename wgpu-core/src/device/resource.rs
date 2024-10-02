@@ -437,13 +437,11 @@ impl Device {
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
 
-                if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
-                    if submission_index > last_successful_submission_index {
-                        return Err(WaitIdleError::WrongSubmissionIndex(
-                            submission_index,
-                            last_successful_submission_index,
-                        ));
-                    }
+                if submission_index > last_successful_submission_index {
+                    return Err(WaitIdleError::WrongSubmissionIndex(
+                        submission_index,
+                        last_successful_submission_index,
+                    ));
                 }
 
                 submission_index
