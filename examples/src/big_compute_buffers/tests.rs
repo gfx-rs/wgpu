@@ -13,9 +13,9 @@ static COMPUTE_1: GpuTestConfiguration = GpuTestConfiguration::new()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS),
     )
     .run_async(|ctx| {
-        // We assume the test GPU in the testing environment's maximum supported buffer size
-        // is < 256MB.
-        const SIZE: usize = (256 << 20) / std::mem::size_of::<f32>(); //256mb of f32s
+        // The test environment's GPU reports 134MB as the max storage buffer size.https://github.com/gfx-rs/wgpu/actions/runs/11001397782/job/30546188996#step:12:1096
+        const SIZE: usize = (1 << 27) / std::mem::size_of::<f32>() * 2;
+        // 2 Buffers worth, of 0.0s.
         let input = &[0.0; SIZE];
 
         async move { assert_execute_gpu(&ctx.device, &ctx.queue, input).await }

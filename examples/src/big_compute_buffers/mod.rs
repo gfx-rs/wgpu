@@ -257,7 +257,7 @@ async fn run() {
     let numbers = {
         let bytes_per_gb = 1024 * 1024 * 1024;
         let bytes_per_f32 = std::mem::size_of::<f32>();
-        let total_bytes = (1.0 * bytes_per_gb as f32) as usize;
+        let total_bytes = (0.25 * bytes_per_gb as f32) as usize;
         let elements = total_bytes / bytes_per_f32;
 
         vec![0.0; elements]
