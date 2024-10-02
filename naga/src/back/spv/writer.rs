@@ -902,10 +902,7 @@ impl Writer {
                 Instruction::type_pointer(id, class, type_id)
             }
             LocalType::Image(image) => {
-                let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar {
-                    kind: image.sampled_type,
-                    width: 4,
-                }));
+                let local_type = LocalType::Numeric(NumericType::Scalar(image.sampled_type));
                 let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, image.dim, image.flags, image.image_format)
             }
