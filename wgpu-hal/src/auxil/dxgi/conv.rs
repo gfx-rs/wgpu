@@ -48,6 +48,7 @@ pub fn map_texture_format_failable(
         Tf::Rgb10a2Uint => DXGI_FORMAT_R10G10B10A2_UINT,
         Tf::Rgb10a2Unorm => DXGI_FORMAT_R10G10B10A2_UNORM,
         Tf::Rg11b10Ufloat => DXGI_FORMAT_R11G11B10_FLOAT,
+        Tf::R64Uint => DXGI_FORMAT_R32G32_UINT, // R64 emulated by R32G32
         Tf::Rg32Uint => DXGI_FORMAT_R32G32_UINT,
         Tf::Rg32Sint => DXGI_FORMAT_R32G32_SINT,
         Tf::Rg32Float => DXGI_FORMAT_R32G32_FLOAT,

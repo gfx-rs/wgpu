@@ -46,6 +46,7 @@ pub enum GpuTextureFormat {
     Rgb10a2uint = "rgb10a2uint",
     Rgb10a2unorm = "rgb10a2unorm",
     Rg11b10ufloat = "rg11b10ufloat",
+    R64uint = "r64uint",
     Rg32uint = "rg32uint",
     Rg32sint = "rg32sint",
     Rg32float = "rg32float",
