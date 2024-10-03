@@ -1930,7 +1930,7 @@ impl crate::Device for super::Device {
         for cat in desc.color_targets {
             let (key, attarchment) = if let Some(cat) = cat.as_ref() {
                 let mut vk_attachment = vk::PipelineColorBlendAttachmentState::default()
-                    .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits() as u32));
+                    .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
                 if let Some(ref blend) = cat.blend {
                     let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
                     let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
