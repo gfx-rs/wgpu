@@ -1,0 +1,69 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Matrix(
+                columns: Quad,
+                rows: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Bi,
+                rows: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("mvp_matrix"),
+            space: Uniform,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 0,
+            init: None,
+        ),
+        (
+            name: Some("w_mem"),
+            space: WorkGroup,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    comments: Some((
+        types: {},
+        struct_members: {},
+        entry_points: {},
+        functions: {},
+        constants: {},
+        global_variables: {},
+        module: [
+            "//! Module comment.",
+        ],
+    )),
+)

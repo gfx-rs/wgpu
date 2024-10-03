@@ -272,6 +272,48 @@ pub fn compact(module: &mut crate::Module) {
             module_map.global_expressions.adjust(init);
         }
     }
+    // Adjust comments
+    if let Some(ref mut comments) = module.comments {
+        let crate::Comments {
+            module: _,
+            types: ref mut comment_types,
+            struct_members: ref mut comment_struct_members,
+            entry_points: _,
+            functions: _,
+            constants: ref mut comment_constants,
+            global_variables: _,
+        } = **comments;
+        log::trace!("adjusting comments for types");
+        for (mut comment_type_handle, comment) in core::mem::take(comment_types) {
+            if !module_map.types.used(comment_type_handle) {
+                continue;
+            }
+            module_map.types.adjust(&mut comment_type_handle);
+            comment_types.insert(comment_type_handle, comment);
+        }
+        log::trace!("adjusting comments for struct members");
+        for (mut comment_struct_member_handle, comment) in core::mem::take(comment_struct_members) {
+            if !module_map.types.used(comment_struct_member_handle.0) {
+                continue;
+            }
+            module_map.types.adjust(&mut comment_struct_member_handle.0);
+            comment_struct_members.insert(
+                (
+                    comment_struct_member_handle.0,
+                    comment_struct_member_handle.1,
+                ),
+                comment,
+            );
+        }
+        log::trace!("adjusting comments for constants");
+        for (mut comment_constant_handle, comment) in core::mem::take(comment_constants) {
+            if !module_map.constants.used(comment_constant_handle) {
+                continue;
+            }
+            module_map.constants.adjust(&mut comment_constant_handle);
+            comment_constants.insert(comment_constant_handle, comment);
+        }
+    }
 
     // Temporary storage to help us reuse allocations of existing
     // named expression tables.

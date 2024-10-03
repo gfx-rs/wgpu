@@ -469,6 +469,8 @@ impl<'a> Error<'a> {
                         Token::Arrow => "->".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
+                        Token::CommentDoc(s) => format!("documentation ('{s}')"),
+                        Token::CommentDocModule(s) => format!("module documentation ('{s}')"),
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),

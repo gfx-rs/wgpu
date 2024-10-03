@@ -5,7 +5,7 @@ use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
 
-use alloc::boxed::Box;
+use alloc::{boxed::Box, vec::Vec};
 
 type TokenSpan<'a> = (Token<'a>, Span);
 
@@ -25,6 +25,8 @@ pub enum Token<'a> {
     Arrow,
     Unknown(char),
     Trivia,
+    CommentDoc(&'a str),
+    CommentDocModule(&'a str),
     End,
 }
 
@@ -48,7 +50,7 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 ///     `Token::LogicalOperation` tokens.
 ///
 /// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
-fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
+fn consume_token(input: &str, generic: bool, save_comments: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
@@ -84,20 +86,64 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let _ = chars.position(is_comment_end);
-                    (Token::Trivia, chars.as_str())
+                    let end_position = {
+                        if let Some(end_position) = input
+                            .char_indices()
+                            .find(|char_indices| is_comment_end(char_indices.1))
+                        {
+                            end_position.0
+                        } else {
+                            input.len()
+                        }
+                    };
+                    if !save_comments {
+                        return (Token::Trivia, &input[end_position..]);
+                    }
+                    let next_char = chars.next();
+                    (
+                        match next_char {
+                            Some('/') => Token::CommentDoc(&input[..end_position]),
+                            Some('!') => Token::CommentDocModule(&input[..end_position]),
+                            _ => Token::Trivia,
+                        },
+                        &input[end_position..],
+                    )
                 }
                 Some('*') => {
                     let mut depth = 1;
                     let mut prev = None;
+                    let mut char_indices = input.char_indices();
 
-                    for c in &mut chars {
+                    // Skip '/' and '*'
+                    char_indices.next();
+                    char_indices.next();
+
+                    let mut constructing_token = if !save_comments {
+                        Token::Trivia
+                    } else {
+                        let next_char = char_indices
+                            .clone()
+                            .next()
+                            .map(|peeked_next_char| peeked_next_char.1);
+                        match next_char {
+                            Some('*') => Token::CommentDoc(""),
+                            Some('!') => Token::CommentDocModule(""),
+                            _ => Token::Trivia,
+                        }
+                    };
+                    for (index, c) in char_indices {
                         match (prev, c) {
                             (Some('*'), '/') => {
                                 prev = None;
                                 depth -= 1;
                                 if depth == 0 {
-                                    return (Token::Trivia, chars.as_str());
+                                    if let Token::CommentDoc(ref mut doc)
+                                    | Token::CommentDocModule(ref mut doc) = constructing_token
+                                    {
+                                        *doc = &input[..=index];
+                                    }
+
+                                    return (constructing_token, &input[(index + 1)..]);
                                 }
                             }
                             (Some('/'), '*') => {
@@ -170,6 +216,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
 
 /// Returns whether or not a char is a comment end
 /// (Unicode Pattern_White_Space excluding U+0020, U+0009, U+200E and U+200F)
+/// <https://www.w3.org/TR/WGSL/#line-break>
 const fn is_comment_end(c: char) -> bool {
     match c {
         '\u{000a}'..='\u{000d}' | '\u{0085}' | '\u{2028}' | '\u{2029}' => true,
@@ -220,16 +267,21 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// statements.
     last_end_offset: usize,
 
+    /// Whether or not to save comments as we lexe through them.
+    /// If `false`, comments are saved as [`Token::Trivia`].
+    save_comments: bool,
+
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 
 impl<'a> Lexer<'a> {
-    pub(in crate::front::wgsl) const fn new(input: &'a str) -> Self {
+    pub(in crate::front::wgsl) const fn new(input: &'a str, save_comments: bool) -> Self {
         Lexer {
             input,
             source: input,
             last_end_offset: 0,
             enable_extensions: EnableExtensions::empty(),
+            save_comments,
         }
     }
 
@@ -255,8 +307,8 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn start_byte_offset(&mut self) -> usize {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
-            let (token, rest) = consume_token(self.input, false);
-            if let Token::Trivia = token {
+            let (token, rest) = consume_token(self.input, false, self.save_comments);
+            if let Token::Trivia | Token::CommentDoc(_) | Token::CommentDocModule(_) = token {
                 self.input = rest;
             } else {
                 return self.current_byte_offset();
@@ -271,7 +323,29 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    const fn current_byte_offset(&self) -> usize {
+    /// Collect all doc comments until a non doc token is found.
+    pub(in crate::front::wgsl) fn accumulate_doc_item_comments(&'a mut self) -> Vec<Span> {
+        let mut comments = Vec::new();
+        loop {
+            let start = self.current_byte_offset();
+            // Eat all trivia because `next` doesn't eat trailing trivia.
+            let (token, rest) = consume_token(self.input, false, self.save_comments);
+            if let Token::CommentDoc(_) = token {
+                self.input = rest;
+                let next = self.current_byte_offset();
+                comments.push(Span::new(start as u32, next as u32));
+            } else if let Token::Trivia = token {
+                self.input = rest;
+            } else if let Token::CommentDocModule(_) = token {
+                self.input = rest;
+                // TODO: return an error ?
+            } else {
+                return comments;
+            }
+        }
+    }
+
+    pub const fn current_byte_offset(&self) -> usize {
         self.source.len() - self.input.len()
     }
 
@@ -301,17 +375,30 @@ impl<'a> Lexer<'a> {
     ///
     /// See [`consume_token`] for the meaning of `generic`.
     fn next_impl(&mut self, generic: bool) -> TokenSpan<'a> {
+        self.next_until(
+            |token| {
+                !matches!(
+                    token,
+                    Token::Trivia | Token::CommentDoc(_) | Token::CommentDocModule(_)
+                )
+            },
+            generic,
+        )
+    }
+
+    /// Return the next token from `self` for which `stop_at` returns true.
+    ///
+    /// See [`consume_token`] for the meaning of `generic`.
+    pub fn next_until(&mut self, stop_at: fn(Token) -> bool, generic: bool) -> TokenSpan<'a> {
         let mut start_byte_offset = self.current_byte_offset();
         loop {
-            let (token, rest) = consume_token(self.input, generic);
+            let (token, rest) = consume_token(self.input, generic, self.save_comments);
             self.input = rest;
-            match token {
-                Token::Trivia => start_byte_offset = self.current_byte_offset(),
-                _ => {
-                    self.last_end_offset = self.current_byte_offset();
-                    return (token, self.span_from(start_byte_offset));
-                }
+            if stop_at(token) {
+                self.last_end_offset = self.current_byte_offset();
+                return (token, self.span_from(start_byte_offset));
             }
+            start_byte_offset = self.current_byte_offset();
         }
     }
 
@@ -516,9 +603,35 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 #[track_caller]
 fn sub_test(source: &str, expected_tokens: &[Token]) {
-    let mut lex = Lexer::new(source);
+    sub_test_with_comments(false, source, expected_tokens);
+}
+
+#[cfg(test)]
+#[track_caller]
+fn sub_test_with_and_without_comments(source: &str, expected_tokens: &[Token]) {
+    sub_test_with_comments(true, source, expected_tokens);
+    sub_test_with_comments(
+        false,
+        source,
+        expected_tokens
+            .iter()
+            .filter(|v| !matches!(**v, Token::CommentDoc(_) | Token::CommentDocModule(_)))
+            .cloned()
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
+}
+
+#[cfg(test)]
+#[track_caller]
+fn sub_test_with_comments(with_comments: bool, source: &str, expected_tokens: &[Token]) {
+    let mut lex = Lexer::new(source, with_comments);
     for &token in expected_tokens {
-        assert_eq!(lex.next().0, token);
+        assert_eq!(
+            lex.next_until(|token| !matches!(token, Token::Trivia), false)
+                .0,
+            token
+        );
     }
     assert_eq!(lex.next().0, Token::End);
 }
@@ -737,11 +850,13 @@ fn test_tokens() {
     sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
     sub_test("No好", &[Token::Word("No好")]);
     sub_test("_No", &[Token::Word("_No")]);
-    sub_test(
+
+    sub_test_with_and_without_comments(
         "*/*/***/*//=/*****//",
         &[
             Token::Operation('*'),
             Token::AssignmentOperation('/'),
+            Token::CommentDoc("/*****/"),
             Token::Operation('/'),
         ],
     );
@@ -804,6 +919,135 @@ fn test_variable_decl() {
             Token::Word("u32"),
             Token::Paren('>'),
             Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comments_trivia() {
+    sub_test_with_and_without_comments("// Single comment", &[]);
+
+    sub_test_with_and_without_comments(
+        "/* multi
+    line
+    comment */",
+        &[],
+    );
+    sub_test_with_and_without_comments(
+        "/* multi
+    line
+    comment */
+    // and another",
+        &[],
+    );
+}
+
+#[test]
+fn test_comments() {
+    sub_test_with_and_without_comments(
+        "/// Single comment",
+        &[Token::CommentDoc("/// Single comment")],
+    );
+
+    sub_test_with_and_without_comments(
+        "/** multi
+    line
+    comment */",
+        &[Token::CommentDoc(
+            "/** multi
+    line
+    comment */",
+        )],
+    );
+    sub_test_with_and_without_comments(
+        "/** multi
+    line
+    comment */
+    /// and another",
+        &[
+            Token::CommentDoc(
+                "/** multi
+    line
+    comment */",
+            ),
+            Token::CommentDoc("/// and another"),
+        ],
+    );
+}
+
+#[test]
+fn test_comment_nested() {
+    sub_test_with_and_without_comments(
+        "/**
+    a comment with nested one /**
+        nested comment
+    */
+    */
+    const a : i32 = 2;",
+        &[
+            Token::CommentDoc(
+                "/**
+    a comment with nested one /**
+        nested comment
+    */
+    */",
+            ),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comment_long_character() {
+    sub_test_with_and_without_comments(
+        "/// π/2
+        ///     D(𝐡) = ───────────────────────────────────────────────────
+///            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`
+    const a : i32 = 2;",
+        &[
+            Token::CommentDoc("/// π/2"),
+            Token::CommentDoc("///     D(𝐡) = ───────────────────────────────────────────────────"),
+            Token::CommentDoc("///            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`"),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comments_module() {
+    sub_test_with_and_without_comments(
+        "//! Comment Module
+        //! Another one.
+        /*! Different module comment */
+        /// Trying to break module comment
+        // Trying to break module comment again
+        //! After a regular comment is ok.
+        /*! Different module comment again */
+
+        //! After a break is supported.
+        const
+        //! After anything else is not.",
+        &[
+            Token::CommentDocModule("//! Comment Module"),
+            Token::CommentDocModule("//! Another one."),
+            Token::CommentDocModule("/*! Different module comment */"),
+            Token::CommentDoc("/// Trying to break module comment"),
+            Token::CommentDocModule("//! After a regular comment is ok."),
+            Token::CommentDocModule("/*! Different module comment again */"),
+            Token::CommentDocModule("//! After a break is supported."),
+            Token::Word("const"),
         ],
     );
 }

@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use core::ops::Index;
 use directive::enable_extension::ImplementedEnableExtension;
 
 use crate::diagnostic_filter::{
@@ -271,6 +272,21 @@ impl<'a> BindingParser<'a> {
                 Ok(Some(ast::Binding::BuiltIn(built_in)))
             }
             (_, _, _, _, _, _) => Err(Box::new(Error::InconsistentBinding(span))),
+        }
+    }
+}
+
+/// Configuration for the whole parser run.
+pub struct Options {
+    /// Controls whether the parser should parse comments.
+    pub parse_comments: bool,
+}
+
+impl Options {
+    /// Creates a new [`Options`] without comments parsing.
+    pub const fn new() -> Self {
+        Options {
+            parse_comments: false,
         }
     }
 }
@@ -1326,6 +1342,7 @@ impl Parser {
             binding: None,
             ty,
             init,
+            comments: Vec::new(),
         })
     }
 
@@ -1346,6 +1363,9 @@ impl Parser {
                     ExpectedToken::Token(Token::Separator(',')),
                 )));
             }
+            // Save a lexer to be able to backtrack comments if need be.
+            let mut lexer_comments = lexer.clone();
+
             let (mut size, mut align) = (ParsedAttribute::default(), ParsedAttribute::default());
             self.push_rule_span(Rule::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
@@ -1375,12 +1395,20 @@ impl Parser {
             let ty = self.type_decl(lexer, ctx)?;
             ready = lexer.skip(Token::Separator(','));
 
+            let comments = lexer_comments.accumulate_doc_item_comments();
+
+            let comments = comments
+                .into_iter()
+                .map(|comment_span| lexer.source.index(comment_span))
+                .collect();
+
             members.push(ast::StructMember {
                 name,
                 ty,
                 binding,
                 size: size.value,
                 align: align.value,
+                comments,
             });
 
             if !member_names.insert(name.name) {
@@ -2708,6 +2736,7 @@ impl Parser {
             result,
             body,
             diagnostic_filter_leaf,
+            comments: Vec::new(),
         };
 
         // done
@@ -2750,6 +2779,9 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         out: &mut ast::TranslationUnit<'a>,
     ) -> Result<'a, ()> {
+        // Save a lexer to be able to backtrack comments if need be.
+        let mut lexer_comments = lexer.clone();
+
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
@@ -2856,7 +2888,6 @@ impl Parser {
                 _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
             }
         }
-
         let attrib_span = self.pop_rule_span(lexer);
         match (bind_group.value, bind_index.value) {
             (Some(group), Some(index)) => {
@@ -2874,7 +2905,8 @@ impl Parser {
 
         // read item
         let start = lexer.start_byte_offset();
-        let kind = match lexer.next() {
+        let token_span = lexer.next();
+        let kind = match token_span {
             (Token::Separator(';'), _) => {
                 ensure_no_diag_attrs(
                     DiagnosticAttributeNotSupportedPosition::SemicolonInModulePosition,
@@ -2893,7 +2925,18 @@ impl Parser {
                 let name = lexer.next_ident()?;
 
                 let members = self.struct_body(lexer, &mut ctx)?;
-                Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
+
+                let comments = lexer_comments.accumulate_doc_item_comments();
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+                Some(ast::GlobalDeclKind::Struct(ast::Struct {
+                    name,
+                    members,
+                    comments,
+                }))
             }
             (Token::Word("alias"), _) => {
                 ensure_no_diag_attrs("`alias`es".into(), diagnostic_filters)?;
@@ -2921,7 +2964,19 @@ impl Parser {
                 let init = self.general_expression(lexer, &mut ctx)?;
                 lexer.expect(Token::Separator(';'))?;
 
-                Some(ast::GlobalDeclKind::Const(ast::Const { name, ty, init }))
+                let comments = lexer_comments.accumulate_doc_item_comments();
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+
+                Some(ast::GlobalDeclKind::Const(ast::Const {
+                    name,
+                    ty,
+                    init,
+                    comments,
+                }))
             }
             (Token::Word("override"), _) => {
                 ensure_no_diag_attrs("`override`s".into(), diagnostic_filters)?;
@@ -2954,6 +3009,14 @@ impl Parser {
 
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
+
+                let comments = lexer_comments.accumulate_doc_item_comments();
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+                var.comments = comments;
                 Some(ast::GlobalDeclKind::Var(var))
             }
             (Token::Word("fn"), _) => {
@@ -2962,7 +3025,6 @@ impl Parser {
                     diagnostic_filters,
                     out.diagnostic_filter_leaf,
                 );
-
                 let function = self.function_decl(
                     lexer,
                     diagnostic_filter_leaf,
@@ -2970,6 +3032,14 @@ impl Parser {
                     out,
                     &mut dependencies,
                 )?;
+
+                let comments = lexer_comments.accumulate_doc_item_comments();
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
@@ -2983,6 +3053,7 @@ impl Parser {
                     } else {
                         None
                     },
+                    comments,
                     ..function
                 }))
             }
@@ -3030,13 +3101,33 @@ impl Parser {
         }
     }
 
-    pub fn parse<'a>(&mut self, source: &'a str) -> Result<'a, ast::TranslationUnit<'a>> {
+    pub fn parse<'a>(
+        &mut self,
+        source: &'a str,
+        options: &Options,
+    ) -> Result<'a, ast::TranslationUnit<'a>> {
         self.reset();
 
-        let mut lexer = Lexer::new(source);
+        let mut lexer = Lexer::new(source, options.parse_comments);
         let mut tu = ast::TranslationUnit::default();
         let mut enable_extensions = EnableExtensions::empty();
         let mut diagnostic_filters = DiagnosticFilterMap::new();
+
+        if options.parse_comments {
+            // Parse module comments.
+            let mut comments = Vec::new();
+
+            fn peek_any_next<'a>(lexer: &'a Lexer) -> (Token<'a>, Span) {
+                let mut cloned = lexer.clone();
+                let token = cloned.next_until(|_| true, false);
+                token
+            }
+            while let (Token::CommentDocModule(_), span) = peek_any_next(&lexer) {
+                comments.push(lexer.source.index(span));
+                let _ = lexer.next_until(|_| true, false);
+            }
+            tu.comments = comments;
+        }
 
         // Parse directives.
         while let Ok((ident, _directive_ident_span)) = lexer.peek_ident_with_span() {
@@ -3110,7 +3201,6 @@ impl Parser {
                 }
             }
         }
-
         Ok(tu)
     }
 
