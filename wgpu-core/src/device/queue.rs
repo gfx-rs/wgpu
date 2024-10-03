@@ -1334,12 +1334,16 @@ impl Global {
         &self,
         queue_id: QueueId,
         closure: SubmittedWorkDoneClosure,
-    ) {
+    ) -> SubmissionIndex {
         api_log!("Queue::on_submitted_work_done {queue_id:?}");
 
         //TODO: flush pending writes
         let queue = self.hub.queues.get(queue_id);
-        queue.device.lock_life().add_work_done_closure(closure);
+        let result = queue.device.lock_life().add_work_done_closure(closure);
+        match result {
+            Some(submission_index) => submission_index,
+            None => queue.device.last_successful_submission_index.load(Ordering::Acquire),
+        }
     }
 }
 

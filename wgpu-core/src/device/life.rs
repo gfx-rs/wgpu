@@ -304,15 +304,17 @@ impl LifetimeTracker {
         }
     }
 
-    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) {
+    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) -> Option<SubmissionIndex> {
         match self.active.last_mut() {
             Some(active) => {
                 active.work_done_closures.push(closure);
+                Some(active.index)
             }
             // We must defer the closure until all previously occurring map_async closures
             // have fired. This is required by the spec.
             None => {
                 self.work_done_closures.push(closure);
+                None
             }
         }
     }
