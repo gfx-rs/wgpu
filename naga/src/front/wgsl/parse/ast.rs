@@ -186,6 +186,8 @@ pub struct StructMember<'a> {
 pub struct Struct<'a> {
     pub name: Ident<'a>,
     pub members: Vec<StructMember<'a>>,
+    // TODO: Make it optional ? Store Span ? Add it to other elements
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]

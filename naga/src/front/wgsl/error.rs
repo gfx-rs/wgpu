@@ -299,6 +299,7 @@ impl<'a> Error<'a> {
                             Token::Arrow => "->".to_string(),
                             Token::Unknown(c) => format!("unknown ('{c}')"),
                             Token::Trivia => "trivia".to_string(),
+                            Token::Comment(s) => format!("documentation ('{s}')"),
                             Token::End => "end".to_string(),
                         }
                     }

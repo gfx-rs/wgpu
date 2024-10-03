@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
@@ -2172,6 +2174,9 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         out: &mut ast::TranslationUnit<'a>,
     ) -> Result<(), Error<'a>> {
+        // Save a lexer to be able to backtrack comments if need be.
+        let mut lexer_comments = lexer.clone();
+
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
@@ -2251,7 +2256,6 @@ impl Parser {
                 (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
             }
         }
-
         let attrib_span = self.pop_rule_span(lexer);
         match (bind_group.value, bind_index.value) {
             (Some(group), Some(index)) => {
@@ -2267,13 +2271,27 @@ impl Parser {
 
         // read item
         let start = lexer.start_byte_offset();
-        let kind = match lexer.next() {
+        let token_span = lexer.next();
+
+        let kind = match token_span {
             (Token::Separator(';'), _) => None,
             (Token::Word("struct"), _) => {
                 let name = lexer.next_ident()?;
 
                 let members = self.struct_body(lexer, &mut ctx)?;
-                Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
+
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+                Some(ast::GlobalDeclKind::Struct(ast::Struct {
+                    name,
+                    members,
+                    comments,
+                }))
             }
             (Token::Word("alias"), _) => {
                 let name = lexer.next_ident()?;

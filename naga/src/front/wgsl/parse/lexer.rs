@@ -22,6 +22,7 @@ pub enum Token<'a> {
     Arrow,
     Unknown(char),
     Trivia,
+    Comment(&'a str),
     End,
 }
 
@@ -81,8 +82,13 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let _ = chars.position(is_comment_end);
-                    (Token::Trivia, chars.as_str())
+                    let og_chars = chars.as_str();
+                    let documentation = if let Some(end_position) = chars.position(is_comment_end) {
+                        &og_chars[..end_position]
+                    } else {
+                        og_chars
+                    };
+                    (Token::Comment(documentation), chars.as_str())
                 }
                 Some('*') => {
                     let mut depth = 1;
@@ -238,7 +244,7 @@ impl<'a> Lexer<'a> {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false);
-            if let Token::Trivia = token {
+            if let Token::Trivia | Token::Comment(_) = token {
                 self.input = rest;
             } else {
                 return self.current_byte_offset();
@@ -253,7 +259,27 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    const fn current_byte_offset(&self) -> usize {
+    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment(
+        &'a mut self,
+        comments: &mut Vec<Span>,
+    ) -> usize {
+        loop {
+            let start = self.current_byte_offset();
+            // Eat all trivia because `next` doesn't eat trailing trivia.
+            let (token, rest) = consume_token(self.input, false);
+            if let Token::Comment(_) = token {
+                let next = self.current_byte_offset();
+                comments.push(Span::new(start as u32, next as u32));
+                self.input = rest;
+            } else if let Token::Trivia = token {
+                self.input = rest;
+            } else {
+                return self.current_byte_offset();
+            }
+        }
+    }
+
+    pub const fn current_byte_offset(&self) -> usize {
         self.source.len() - self.input.len()
     }
 
@@ -288,7 +314,7 @@ impl<'a> Lexer<'a> {
             let (token, rest) = consume_token(self.input, generic);
             self.input = rest;
             match token {
-                Token::Trivia => start_byte_offset = self.current_byte_offset(),
+                Token::Trivia | Token::Comment(_) => start_byte_offset = self.current_byte_offset(),
                 _ => {
                     self.last_end_offset = self.current_byte_offset();
                     return (token, self.span_from(start_byte_offset));
