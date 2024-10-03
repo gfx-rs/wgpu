@@ -59,6 +59,30 @@ enum BlockExit {
     },
 }
 
+/// What code generation did with a provided [`BlockExit`] value.
+///
+/// A function that accepts a [`BlockExit`] argument should return a value of
+/// this type, to indicate whether the code it generated ended up using the
+/// provided exit, or ignored it and did a non-local exit of some other kind
+/// (say, [`Break`] or [`Continue`]). Some callers must use this information to
+/// decide whether to generate the target block at all.
+///
+/// [`Break`]: Statement::Break
+/// [`Continue`]: Statement::Continue
+#[must_use]
+enum BlockExitDisposition {
+    /// The generated code used the provided `BlockExit` value. If it included a
+    /// block label, the caller should be sure to actually emit the block it
+    /// refers to.
+    Used,
+
+    /// The generated code did not use the provided `BlockExit` value. If it
+    /// included a block label, the caller should not bother to actually emit
+    /// the block it refers to, unless it knows the block is needed for
+    /// something else.
+    Discarded,
+}
+
 #[derive(Clone, Copy, Default)]
 struct LoopContext {
     continuing_id: Option<Word>,
@@ -2065,6 +2089,22 @@ impl<'w> BlockContext<'w> {
         }
     }
 
+    /// Generate one or more SPIR-V blocks for `naga_block`.
+    ///
+    /// Use `label_id` as the label for the SPIR-V entry point block.
+    ///
+    /// If control reaches the end of the SPIR-V block, terminate it according
+    /// to `exit`. This function's return value indicates whether it acted on
+    /// this parameter or not; see [`BlockExitDisposition`].
+    ///
+    /// If the block contains [`Break`] or [`Continue`] statements,
+    /// `loop_context` supplies the labels of the SPIR-V blocks to jump to. If
+    /// either of these labels are `None`, then it should have been a Naga
+    /// validation error for the corresponding statement to occur in this
+    /// context.
+    ///
+    /// [`Break`]: Statement::Break
+    /// [`Continue`]: Statement::Continue
     fn write_block(
         &mut self,
         label_id: Word,
@@ -2072,7 +2112,7 @@ impl<'w> BlockContext<'w> {
         exit: BlockExit,
         loop_context: LoopContext,
         debug_info: Option<&DebugInfoInner>,
-    ) -> Result<(), Error> {
+    ) -> Result<BlockExitDisposition, Error> {
         let mut block = Block::new(label_id);
         for (statement, span) in naga_block.span_iter() {
             if let (Some(debug_info), false) = (
@@ -2108,7 +2148,7 @@ impl<'w> BlockContext<'w> {
                     self.function.consume(block, Instruction::branch(scope_id));
 
                     let merge_id = self.gen_id();
-                    self.write_block(
+                    let merge_used = self.write_block(
                         scope_id,
                         block_statements,
                         BlockExit::Branch { target: merge_id },
@@ -2116,7 +2156,14 @@ impl<'w> BlockContext<'w> {
                         debug_info,
                     )?;
 
-                    block = Block::new(merge_id);
+                    match merge_used {
+                        BlockExitDisposition::Used => {
+                            block = Block::new(merge_id);
+                        }
+                        BlockExitDisposition::Discarded => {
+                            return Ok(BlockExitDisposition::Discarded);
+                        }
+                    }
                 }
                 Statement::If {
                     condition,
@@ -2152,7 +2199,11 @@ impl<'w> BlockContext<'w> {
                     );
 
                     if let Some(block_id) = accept_id {
-                        self.write_block(
+                        // We can ignore the `BlockExitDisposition` returned here because,
+                        // even if `merge_id` is not actually reachable, it is always
+                        // referred to by the `OpSelectionMerge` instruction we emitted
+                        // earlier.
+                        let _ = self.write_block(
                             block_id,
                             accept,
                             BlockExit::Branch { target: merge_id },
@@ -2161,7 +2212,11 @@ impl<'w> BlockContext<'w> {
                         )?;
                     }
                     if let Some(block_id) = reject_id {
-                        self.write_block(
+                        // We can ignore the `BlockExitDisposition` returned here because,
+                        // even if `merge_id` is not actually reachable, it is always
+                        // referred to by the `OpSelectionMerge` instruction we emitted
+                        // earlier.
+                        let _ = self.write_block(
                             block_id,
                             reject,
                             BlockExit::Branch { target: merge_id },
@@ -2239,7 +2294,15 @@ impl<'w> BlockContext<'w> {
                         } else {
                             merge_id
                         };
-                        self.write_block(
+                        // We can ignore the `BlockExitDisposition` returned here because
+                        // `case_finish_id` is always referred to by either:
+                        //
+                        // - the `OpSwitch`, if it's the next case's label for a
+                        //   fall-through, or
+                        //
+                        // - the `OpSelectionMerge`, if it's the switch's overall merge
+                        //   block because there's no fall-through.
+                        let _ = self.write_block(
                             *label_id,
                             &case.body,
                             BlockExit::Branch {
@@ -2285,7 +2348,10 @@ impl<'w> BlockContext<'w> {
                     ));
                     self.function.consume(block, Instruction::branch(body_id));
 
-                    self.write_block(
+                    // We can ignore the `BlockExitDisposition` returned here because,
+                    // even if `continuing_id` is not actually reachable, it is always
+                    // referred to by the `OpLoopMerge` instruction we emitted earlier.
+                    let _ = self.write_block(
                         body_id,
                         body,
                         BlockExit::Branch {
@@ -2308,7 +2374,10 @@ impl<'w> BlockContext<'w> {
                         },
                     };
 
-                    self.write_block(
+                    // We can ignore the `BlockExitDisposition` returned here because,
+                    // even if `merge_id` is not actually reachable, it is always referred
+                    // to by the `OpLoopMerge` instruction we emitted earlier.
+                    let _ = self.write_block(
                         continuing_id,
                         continuing,
                         exit,
@@ -2324,14 +2393,14 @@ impl<'w> BlockContext<'w> {
                 Statement::Break => {
                     self.function
                         .consume(block, Instruction::branch(loop_context.break_id.unwrap()));
-                    return Ok(());
+                    return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Continue => {
                     self.function.consume(
                         block,
                         Instruction::branch(loop_context.continuing_id.unwrap()),
                     );
-                    return Ok(());
+                    return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Return { value: Some(value) } => {
                     let value_id = self.cached[value];
@@ -2350,15 +2419,15 @@ impl<'w> BlockContext<'w> {
                         None => Instruction::return_value(value_id),
                     };
                     self.function.consume(block, instruction);
-                    return Ok(());
+                    return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Return { value: None } => {
                     self.function.consume(block, Instruction::return_void());
-                    return Ok(());
+                    return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Kill => {
                     self.function.consume(block, Instruction::kill());
-                    return Ok(());
+                    return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Barrier(flags) => {
                     self.writer.write_barrier(flags, &mut block);
@@ -2724,7 +2793,7 @@ impl<'w> BlockContext<'w> {
         };
 
         self.function.consume(block, termination);
-        Ok(())
+        Ok(BlockExitDisposition::Used)
     }
 
     pub(super) fn write_function_body(
@@ -2732,7 +2801,9 @@ impl<'w> BlockContext<'w> {
         entry_id: Word,
         debug_info: Option<&DebugInfoInner>,
     ) -> Result<(), Error> {
-        self.write_block(
+        // We can ignore the `BlockExitDisposition` returned here because
+        // `BlockExit::Return` doesn't refer to a block.
+        let _ = self.write_block(
             entry_id,
             &self.ir_function.body,
             super::block::BlockExit::Return,
