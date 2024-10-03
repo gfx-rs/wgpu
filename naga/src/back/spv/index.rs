@@ -11,9 +11,9 @@ use crate::{arena::Handle, proc::BoundsCheckPolicy};
 
 /// The results of performing a bounds check.
 ///
-/// On success, `write_bounds_check` returns a value of this type. The
-/// caller can assume that the right policy has been applied, and
-/// simply do what the variant says.
+/// On success, [`write_bounds_check`](BlockContext::write_bounds_check)
+/// returns a value of this type. The caller can assume that the right
+/// policy has been applied, and simply do what the variant says.
 pub(super) enum BoundsCheckResult {
     /// The index is statically known and in bounds, with the given value.
     KnownInBounds(u32),
