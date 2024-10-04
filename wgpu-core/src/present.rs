@@ -288,8 +288,11 @@ impl Global {
                     .textures
                     .remove(texture.tracker_index());
                 let suf = surface.raw(device.backend()).unwrap();
-                let exclusive_snatch_guard = device.snatchable_lock.write();
-                match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
+                match texture
+                    .inner
+                    .snatch(&mut device.snatchable_lock.write())
+                    .unwrap()
+                {
                     resource::TextureInner::Surface { raw, parent_id } => {
                         if surface_id != parent_id {
                             log::error!("Presented frame is from a different surface");
@@ -359,8 +362,11 @@ impl Global {
                     .textures
                     .remove(texture.tracker_index());
                 let suf = surface.raw(device.backend());
-                let exclusive_snatch_guard = device.snatchable_lock.write();
-                match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
+                match texture
+                    .inner
+                    .snatch(&mut device.snatchable_lock.write())
+                    .unwrap()
+                {
                     resource::TextureInner::Surface { raw, parent_id } => {
                         if surface_id == parent_id {
                             unsafe { suf.unwrap().discard_texture(raw) };

@@ -130,6 +130,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### GLES / OpenGL
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
+- Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341)
 
 #### WebGPU
 

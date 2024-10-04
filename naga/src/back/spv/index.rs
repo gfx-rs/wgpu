@@ -11,16 +11,31 @@ use crate::{arena::Handle, proc::BoundsCheckPolicy};
 
 /// The results of performing a bounds check.
 ///
-/// On success, `write_bounds_check` returns a value of this type.
+/// On success, [`write_bounds_check`](BlockContext::write_bounds_check)
+/// returns a value of this type. The caller can assume that the right
+/// policy has been applied, and simply do what the variant says.
 pub(super) enum BoundsCheckResult {
     /// The index is statically known and in bounds, with the given value.
     KnownInBounds(u32),
 
     /// The given instruction computes the index to be used.
+    ///
+    /// When [`BoundsCheckPolicy::Restrict`] is in force, this is a
+    /// clamped version of the index the user supplied.
+    ///
+    /// When [`BoundsCheckPolicy::Unchecked`] is in force, this is
+    /// simply the index the user supplied. This variant indicates
+    /// that we couldn't prove statically that the index was in
+    /// bounds; otherwise we would have returned [`KnownInBounds`].
+    ///
+    /// [`KnownInBounds`]: BoundsCheckResult::KnownInBounds
     Computed(Word),
 
     /// The given instruction computes a boolean condition which is true
     /// if the index is in bounds.
+    ///
+    /// This is returned when [`BoundsCheckPolicy::ReadZeroSkipWrite`]
+    /// is in force.
     Conditional(Word),
 }
 
@@ -52,13 +67,14 @@ impl<'w> BlockContext<'w> {
     /// - An optional [`Access`] or [`AccessIndex`], for case 3, applied to...
     /// - A [`GlobalVariable`].
     ///
-    /// The SPIR-V generated takes into account wrapped globals; see
-    /// [`global_needs_wrapper`].
+    /// The generated SPIR-V takes into account wrapped globals; see
+    /// [`back::spv::GlobalVariable`] for details.
     ///
     /// [`GlobalVariable`]: crate::Expression::GlobalVariable
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Access`]: crate::Expression::Access
     /// [`base`]: crate::Expression::Access::base
+    /// [`back::spv::GlobalVariable`]: super::GlobalVariable
     pub(super) fn write_runtime_array_length(
         &mut self,
         array: Handle<crate::Expression>,
@@ -357,6 +373,8 @@ impl<'w> BlockContext<'w> {
 
     /// Write an index bounds comparison to `block`, if needed.
     ///
+    /// This is used to implement [`BoundsCheckPolicy::ReadZeroSkipWrite`].
+    ///
     /// If we're able to determine statically that `index` is in bounds for
     /// `sequence`, return `KnownInBounds(value)`, where `value` is the actual
     /// value of the index. (In principle, one could know that the index is in
@@ -477,11 +495,23 @@ impl<'w> BlockContext<'w> {
 
     /// Emit code for bounds checks for an array, vector, or matrix access.
     ///
-    /// This implements either `index_bounds_check_policy` or
-    /// `buffer_bounds_check_policy`, depending on the address space of the
-    /// pointer being accessed.
+    /// This tries to handle all the critical steps for bounds checks:
     ///
-    /// Return a `BoundsCheckResult` indicating how the index should be
+    /// - First, select the appropriate bounds check policy for `base`,
+    ///   depending on its address space.
+    ///
+    /// - Next, analyze `index` to see if its value is known at
+    ///   compile time, in which case we can decide statically whether
+    ///   the index is in bounds.
+    ///
+    /// - If the index's value is not known at compile time, emit code to:
+    ///
+    ///     - restrict its value (for [`BoundsCheckPolicy::Restrict`]), or
+    ///
+    ///     - check whether it's in bounds (for
+    ///       [`BoundsCheckPolicy::ReadZeroSkipWrite`]).
+    ///
+    /// Return a [`BoundsCheckResult`] indicating how the index should be
     /// consumed. See that type's documentation for details.
     pub(super) fn write_bounds_check(
         &mut self,

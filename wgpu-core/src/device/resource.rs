@@ -38,7 +38,6 @@ use arrayvec::ArrayVec;
 use once_cell::sync::OnceCell;
 
 use smallvec::SmallVec;
-use thiserror::Error;
 use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
@@ -187,14 +186,6 @@ impl Drop for Device {
             raw.exit(queue);
         }
     }
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum CreateDeviceError {
-    #[error("Not enough memory left to create device")]
-    OutOfMemory,
-    #[error("Failed to create internal buffer for initializing textures")]
-    FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
 impl Device {
@@ -376,7 +367,7 @@ impl Device {
                     let Some(view) = view.upgrade() else {
                         continue;
                     };
-                    let Some(raw_view) = view.raw.snatch(self.snatchable_lock.write()) else {
+                    let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write()) else {
                         continue;
                     };
 
@@ -390,7 +381,8 @@ impl Device {
                     let Some(bind_group) = bind_group.upgrade() else {
                         continue;
                     };
-                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write())
+                    let Some(raw_bind_group) =
+                        bind_group.raw.snatch(&mut self.snatchable_lock.write())
                     else {
                         continue;
                     };
@@ -441,13 +433,11 @@ impl Device {
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
 
-                if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
-                    if submission_index > last_successful_submission_index {
-                        return Err(WaitIdleError::WrongSubmissionIndex(
-                            submission_index,
-                            last_successful_submission_index,
-                        ));
-                    }
+                if submission_index > last_successful_submission_index {
+                    return Err(WaitIdleError::WrongSubmissionIndex(
+                        submission_index,
+                        last_successful_submission_index,
+                    ));
                 }
 
                 submission_index

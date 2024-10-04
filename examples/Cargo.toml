@@ -29,7 +29,7 @@ webgl = ["wgpu/webgl"]
 webgpu = ["wgpu/webgpu"]
 
 [dependencies]
-bytemuck.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
 cfg-if.workspace = true
 encase = { workspace = true, features = ["glam"] }
 flume.workspace = true
