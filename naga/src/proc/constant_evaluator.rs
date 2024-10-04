@@ -1,6 +1,8 @@
 use std::iter;
 
 use arrayvec::ArrayVec;
+use half::f16;
+use num_traits::{real::Real, FromPrimitive, One, ToPrimitive, Zero};
 
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
@@ -199,6 +201,7 @@ gen_component_wise_extractor! {
     literals: [
         AbstractFloat => AbstractFloat: f64,
         F32 => F32: f32,
+        F16 => F16: f16,
         AbstractInt => AbstractInt: i64,
         U32 => U32: u32,
         I32 => I32: i32,
@@ -219,6 +222,7 @@ gen_component_wise_extractor! {
     literals: [
         AbstractFloat => Abstract: f64,
         F32 => F32: f32,
+        F16 => F16: f16,
     ],
     scalar_kinds: [
         Float,
@@ -244,6 +248,7 @@ gen_component_wise_extractor! {
         AbstractFloat => AbstractFloat: f64,
         AbstractInt => AbstractInt: i64,
         F32 => F32: f32,
+        F16 => F16: f16,
         I32 => I32: i32,
     ],
     scalar_kinds: [
@@ -1088,6 +1093,7 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_scalar(self, span, [arg], |args| match args {
                     Scalar::AbstractFloat([e]) => Ok(Scalar::AbstractFloat([e.abs()])),
                     Scalar::F32([e]) => Ok(Scalar::F32([e.abs()])),
+                    Scalar::F16([e]) => Ok(Scalar::F16([e.abs()])),
                     Scalar::AbstractInt([e]) => Ok(Scalar::AbstractInt([e.abs()])),
                     Scalar::I32([e]) => Ok(Scalar::I32([e.wrapping_abs()])),
                     Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
@@ -1119,9 +1125,13 @@ impl<'a> ConstantEvaluator<'a> {
                     }
                 )
             }
-            crate::MathFunction::Saturate => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
-            }
+            crate::MathFunction::Saturate => component_wise_float(self, span, [arg], |e| match e {
+                Float::F16([e]) => Ok(Float::F16(
+                    [e.clamp(f16::from_f32(0.0), f16::from_f32(1.0))],
+                )),
+                Float::F32([e]) => Ok(Float::F32([e.clamp(0., 1.)])),
+                Float::Abstract([e]) => Ok(Float::Abstract([e.clamp(0., 1.)])),
+            }),
 
             // trigonometry
             crate::MathFunction::Cos => {
@@ -1198,6 +1208,9 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float(self, span, [arg], |e| match e {
                     Float::Abstract([e]) => Ok(Float::Abstract([round_ties_even(e)])),
                     Float::F32([e]) => Ok(Float::F32([(round_ties_even(e as f64) as f32)])),
+                    Float::F16([e]) => {
+                        Ok(Float::F16([(f16::from_f64(round_ties_even(f64::from(e))))]))
+                    }
                 })
             }
             crate::MathFunction::Fract => {
@@ -1243,15 +1256,27 @@ impl<'a> ConstantEvaluator<'a> {
                 )
             }
             crate::MathFunction::Step => {
-                component_wise_float!(self, span, [arg, arg1.unwrap()], |edge, x| {
-                    Ok([if edge <= x { 1.0 } else { 0.0 }])
+                component_wise_float(self, span, [arg, arg1.unwrap()], |x| match x {
+                    Float::Abstract([edge, x]) => {
+                        Ok(Float::Abstract([if edge <= x { 1.0 } else { 0.0 }]))
+                    }
+                    Float::F32([edge, x]) => Ok(Float::F32([if edge <= x { 1.0 } else { 0.0 }])),
+                    Float::F16([edge, x]) => Ok(Float::F16([if edge <= x {
+                        f16::one()
+                    } else {
+                        f16::zero()
+                    }])),
                 })
             }
             crate::MathFunction::Sqrt => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
             }
             crate::MathFunction::InverseSqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([1. / e.sqrt()]) })
+                component_wise_float(self, span, [arg], |e| match e {
+                    Float::Abstract([e]) => Ok(Float::Abstract([1. / e.sqrt()])),
+                    Float::F32([e]) => Ok(Float::F32([1. / e.sqrt()])),
+                    Float::F16([e]) => Ok(Float::F16([f16::from_f32(1. / f32::from(e).sqrt())])),
+                })
             }
 
             // bits
@@ -1529,6 +1554,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::I32(v) => v,
                         Literal::U32(v) => v as i32,
                         Literal::F32(v) => v as i32,
+                        Literal::F16(v) => f16::to_i32(&v).unwrap(), //Only None on NaN or Inf
                         Literal::Bool(v) => v as i32,
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
@@ -1540,6 +1566,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
                         Literal::F32(v) => v as u32,
+                        Literal::F16(v) => f16::to_u32(&v).unwrap(), //Only None on NaN or Inf
                         Literal::Bool(v) => v as u32,
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
@@ -1555,6 +1582,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F64(v) => v as i64,
                         Literal::I64(v) => v,
                         Literal::U64(v) => v as i64,
+                        Literal::F16(v) => f16::to_i64(&v).unwrap(), //Only None on NaN or Inf
                         Literal::AbstractInt(v) => i64::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => i64::try_from_abstract(v)?,
                     }),
@@ -1566,8 +1594,21 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F64(v) => v as u64,
                         Literal::I64(v) => v as u64,
                         Literal::U64(v) => v,
+                        Literal::F16(v) => f16::to_u64(&v).unwrap(), //Only None on NaN or Inf
                         Literal::AbstractInt(v) => u64::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => u64::try_from_abstract(v)?,
+                    }),
+                    Sc::F16 => Literal::F16(match literal {
+                        Literal::F16(v) => v,
+                        Literal::F32(v) => f16::from_f32(v),
+                        Literal::F64(v) => f16::from_f64(v),
+                        Literal::Bool(v) => f16::from_u32(v as u32).unwrap(),
+                        Literal::I64(v) => f16::from_i64(v).unwrap(),
+                        Literal::U64(v) => f16::from_u64(v).unwrap(),
+                        Literal::I32(v) => f16::from_i32(v).unwrap(),
+                        Literal::U32(v) => f16::from_u32(v).unwrap(),
+                        Literal::AbstractFloat(v) => f16::try_from_abstract(v)?,
+                        Literal::AbstractInt(v) => f16::try_from_abstract(v)?,
                     }),
                     Sc::F32 => Literal::F32(match literal {
                         Literal::I32(v) => v as f32,
@@ -1577,12 +1618,14 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
                         }
+                        Literal::F16(v) => f16::to_f32(v),
                         Literal::AbstractInt(v) => f32::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => f32::try_from_abstract(v)?,
                     }),
                     Sc::F64 => Literal::F64(match literal {
                         Literal::I32(v) => v as f64,
                         Literal::U32(v) => v as f64,
+                        Literal::F16(v) => f16::to_f64(v),
                         Literal::F32(v) => v as f64,
                         Literal::F64(v) => v,
                         Literal::Bool(v) => v as u32 as f64,
@@ -1594,6 +1637,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,
                         Literal::F32(v) => v != 0.0,
+                        Literal::F16(v) => v != f16::zero(),
                         Literal::Bool(v) => v,
                         Literal::F64(_)
                         | Literal::I64(_)
@@ -1743,6 +1787,7 @@ impl<'a> ConstantEvaluator<'a> {
                 UnaryOperator::Negate => match value {
                     Literal::I32(v) => Literal::I32(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
+                    Literal::F16(v) => Literal::F16(-v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
                     Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
@@ -1874,6 +1919,14 @@ impl<'a> ConstantEvaluator<'a> {
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::F32(a), Literal::F32(b)) => Literal::F32(match op {
+                            BinaryOperator::Add => a + b,
+                            BinaryOperator::Subtract => a - b,
+                            BinaryOperator::Multiply => a * b,
+                            BinaryOperator::Divide => a / b,
+                            BinaryOperator::Modulo => a % b,
+                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                        }),
+                        (Literal::F16(a), Literal::F16(b)) => Literal::F16(match op {
                             BinaryOperator::Add => a + b,
                             BinaryOperator::Subtract => a - b,
                             BinaryOperator::Multiply => a * b,
@@ -2447,6 +2500,32 @@ impl TryFromAbstract<f64> for i64 {
 impl TryFromAbstract<f64> for u64 {
     fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
         Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u64" })
+    }
+}
+
+impl TryFromAbstract<f64> for f16 {
+    fn try_from_abstract(value: f64) -> Result<f16, ConstantEvaluatorError> {
+        let f = f16::from_f64(value);
+        if f.is_infinite() {
+            return Err(ConstantEvaluatorError::AutomaticConversionLossy {
+                value: format!("{value:?}"),
+                to_type: "f16",
+            });
+        }
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<i64> for f16 {
+    fn try_from_abstract(value: i64) -> Result<f16, ConstantEvaluatorError> {
+        let f = f16::from_i64(value);
+        if f.is_none() {
+            return Err(ConstantEvaluatorError::AutomaticConversionLossy {
+                value: format!("{value:?}"),
+                to_type: "f16",
+            });
+        }
+        Ok(f.unwrap())
     }
 }
 

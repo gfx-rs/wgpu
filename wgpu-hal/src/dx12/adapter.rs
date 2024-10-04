@@ -1,5 +1,5 @@
 use std::{
-    mem::{size_of, size_of_val},
+    mem::{self, size_of, size_of_val},
     ptr,
     sync::Arc,
     thread,
@@ -376,6 +376,24 @@ impl super::Adapter {
             shader_model >= naga::back::hlsl::ShaderModel::V6_0
                 && hr.is_ok()
                 && features1.Int64ShaderOps.as_bool(),
+        );
+
+        let float16_supported = {
+            let mut features4: Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS4 =
+                unsafe { mem::zeroed() };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS4, // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_feature#syntax
+                    ptr::from_mut(&mut features4).cast(),
+                    size_of::<Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS4>() as _,
+                )
+            };
+            hr.is_ok() && features4.Native16BitShaderOpsSupported.as_bool()
+        };
+
+        features.set(
+            wgt::Features::SHADER_F16,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_2 && float16_supported,
         );
 
         features.set(
