@@ -90,6 +90,10 @@ impl super::Scalar {
         kind: crate::ScalarKind::Uint,
         width: 4,
     };
+    pub const F16: Self = Self {
+        kind: crate::ScalarKind::Float,
+        width: 2,
+    };
     pub const F32: Self = Self {
         kind: crate::ScalarKind::Float,
         width: 4,
@@ -157,6 +161,7 @@ impl super::Scalar {
 pub enum HashableLiteral {
     F64(u64),
     F32(u32),
+    F16(u16),
     U32(u32),
     I32(i32),
     U64(u64),
@@ -171,6 +176,7 @@ impl From<crate::Literal> for HashableLiteral {
         match l {
             crate::Literal::F64(v) => Self::F64(v.to_bits()),
             crate::Literal::F32(v) => Self::F32(v.to_bits()),
+            crate::Literal::F16(v) => Self::F16(v.to_bits()),
             crate::Literal::U32(v) => Self::U32(v),
             crate::Literal::I32(v) => Self::I32(v),
             crate::Literal::U64(v) => Self::U64(v),
@@ -209,6 +215,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
+            Self::F16(_) => 2,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
         }
@@ -217,6 +224,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) => crate::Scalar::F64,
             Self::F32(_) => crate::Scalar::F32,
+            Self::F16(_) => crate::Scalar::F16,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
             Self::U64(_) => crate::Scalar::U64,

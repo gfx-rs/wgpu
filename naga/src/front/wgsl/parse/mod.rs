@@ -2255,6 +2255,54 @@ impl Parser {
         Ok(fun)
     }
 
+    fn enable_extension<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+    ) -> Result<crate::Extension, Error<'a>> {
+        let (ext, ext_span) = lexer.next_extension_with_span()?;
+        let extension = conv::map_extension(ext, ext_span)?;
+        lexer.add_extension(extension.clone());
+        Ok(extension)
+    }
+
+    fn global_directive<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        out: &mut ast::TranslationUnit<'a>,
+    ) -> Result<(), Error<'a>> {
+        while let Token::Word("enable") = lexer.peek().0 {
+            let (_, enable_span) = lexer.next_ident_with_span()?;
+
+            let mut enable_extension_list = Vec::with_capacity(4);
+
+            // Parse the first extension
+            let extension = self.enable_extension(lexer)?;
+            enable_extension_list.push(extension);
+
+            // Parse additional extensions separated by commas
+            while lexer.skip(Token::Separator(',')) {
+                let extension = self.enable_extension(lexer)?;
+                enable_extension_list.push(extension);
+            }
+
+            // Require a semicolon at the end
+            if !lexer.skip(Token::Separator(';')) {
+                return Err(Error::Unexpected(
+                    lexer.next().1,
+                    ExpectedToken::Token(Token::Separator(';')),
+                ));
+            }
+
+            out.directives.append(
+                ast::GlobalDirective::Enable(ast::EnableDirective {
+                    enable_extension_list,
+                }),
+                enable_span,
+            );
+        }
+        Ok(())
+    }
+
     fn global_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -2474,6 +2522,7 @@ impl Parser {
 
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
+        self.global_directive(&mut lexer, &mut tu)?;
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
                 Err(error) => return Err(error),

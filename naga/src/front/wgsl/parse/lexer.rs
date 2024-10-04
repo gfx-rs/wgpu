@@ -1,8 +1,10 @@
+use smallvec::SmallVec;
+
 use super::{number::consume_number, Error, ExpectedToken};
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
-use crate::Span;
+use crate::{Extension, Span};
 
 type TokenSpan<'a> = (Token<'a>, Span);
 
@@ -204,6 +206,7 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     pub(in crate::front::wgsl) source: &'a str,
     // The byte offset of the end of the last non-trivia token.
     last_end_offset: usize,
+    extensions: SmallVec<[Extension; 4]>,
 }
 
 impl<'a> Lexer<'a> {
@@ -212,7 +215,13 @@ impl<'a> Lexer<'a> {
             input,
             source: input,
             last_end_offset: 0,
+            extensions: SmallVec::new_const(),
         }
+    }
+
+    /// Add a new extension to the lexer.
+    pub(in crate::front::wgsl) fn add_extension(&mut self, extension: Extension) {
+        self.extensions.push(extension);
     }
 
     /// Calls the function with a lexer and returns the result of the function as well as the span for everything the function parsed
@@ -346,6 +355,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub(in crate::front::wgsl) fn next_extension_with_span(
+        &mut self,
+    ) -> Result<(&'a str, Span), Error<'a>> {
+        match self.next() {
+            (Token::Word(word), span) => Ok((word, span)),
+            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+        }
+    }
+
     pub(in crate::front::wgsl) fn next_ident_with_span(
         &mut self,
     ) -> Result<(&'a str, Span), Error<'a>> {
@@ -376,14 +394,19 @@ impl<'a> Lexer<'a> {
     /// Parses a generic scalar type, for example `<f32>`.
     pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<Scalar, Error<'a>> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
-            (Token::Word(word), span) => {
-                conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(span))
-            }
+        let (scalar, span) = match self.next() {
+            (Token::Word(word), span) => conv::get_scalar_type(word)
+                .map(|scalar| (scalar, span))
+                .ok_or(Error::UnknownScalarType(span)),
             (_, span) => Err(Error::UnknownScalarType(span)),
         }?;
+
+        if matches!(scalar, Scalar::F16) && !self.extensions.contains(&Extension::F16) {
+            return Err(Error::ExtensionNotEnabled(span, Extension::F16));
+        }
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok(scalar)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
@@ -393,14 +416,20 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(Scalar, Span), Error<'a>> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
+
+        let (scalar, span) = match self.next() {
             (Token::Word(word), span) => conv::get_scalar_type(word)
                 .map(|scalar| (scalar, span))
                 .ok_or(Error::UnknownScalarType(span)),
             (_, span) => Err(Error::UnknownScalarType(span)),
         }?;
+
+        if matches!(scalar, Scalar::F16) && !self.extensions.contains(&Extension::F16) {
+            return Err(Error::ExtensionNotEnabled(span, Extension::F16));
+        }
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok((scalar, span))
     }
 
     pub(in crate::front::wgsl) fn next_storage_access(
@@ -458,6 +487,7 @@ fn sub_test(source: &str, expected_tokens: &[Token]) {
 
 #[test]
 fn test_numbers() {
+    use half::f16;
     // WGSL spec examples //
 
     // decimal integer
@@ -482,14 +512,14 @@ fn test_numbers() {
             Token::Number(Ok(Number::AbstractFloat(0.01))),
             Token::Number(Ok(Number::AbstractFloat(12.34))),
             Token::Number(Ok(Number::F32(0.))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(0.)))),
             Token::Number(Ok(Number::AbstractFloat(0.001))),
             Token::Number(Ok(Number::AbstractFloat(43.75))),
             Token::Number(Ok(Number::F32(16.))),
             Token::Number(Ok(Number::AbstractFloat(0.1875))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(0.75)))),
             Token::Number(Ok(Number::AbstractFloat(0.12109375))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(12.5)))),
         ],
     );
 
