@@ -17,6 +17,7 @@ person(s) who reviewed your changes. This will make sure it gets re-added to the
 **Checklist**
 
 - [ ] Run `cargo fmt`.
+- [ ] Run `taplo format`.
 - [ ] Run `cargo clippy`. If applicable, add:
   - [ ] `--target wasm32-unknown-unknown`
   - [ ] `--target wasm32-unknown-emscripten`
