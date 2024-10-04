@@ -1,50 +1,48 @@
 [bans]
 multiple-versions = "deny"
 skip-tree = [
-	# We never enable loom in any of our dependencies but it causes dupes
-	{ name = "loom", version = "0.7.2" },
-	{ name = "windows-sys", version = "0.45" },
-	{ name = "winit", version = "0.29" },
-	{ name = "rustc_version", version = "0.2.3" },
-	{ name = "sourcemap", version = "7.1.1" },
-	{ name = "miniz_oxide", version = "0.7.4" },
+    # We never enable loom in any of our dependencies but it causes dupes
+    { name = "loom", version = "0.7.2" },
+    { name = "windows-sys", version = "0.45" },
+    { name = "winit", version = "0.29" },
+    { name = "rustc_version", version = "0.2.3" },
+    { name = "sourcemap", version = "7.1.1" },
+    { name = "miniz_oxide", version = "0.7.4" },
 ]
 skip = [
-	{ name = "hlsl-snapshots", version = "0.1.0" },
-	# Strum uses an old version
-	{ name = "heck", version = "0.4.0" },
+    { name = "hlsl-snapshots", version = "0.1.0" },
+    # Strum uses an old version
+    { name = "heck", version = "0.4.0" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
 
 [licenses]
 allow = [
-	"Apache-2.0",
-	"Apache-2.0 WITH LLVM-exception",
-	"BSD-2-Clause",
-	"BSD-3-Clause",
-	"CC0-1.0",
-	"ISC",
-	"MPL-2.0",
-	"MIT",
-	"MIT-0",
-	"Unicode-DFS-2016",
-	"Zlib",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "MPL-2.0",
+    "MIT",
+    "MIT-0",
+    "Unicode-DFS-2016",
+    "Zlib",
 ]
 
 [sources]
 allow-git = [
-	# Waiting on releases; used in examples only
-	"https://github.com/Razaekel/noise-rs",
-	
-	"https://github.com/grovesNL/glow",
-	"https://github.com/gfx-rs/metal-rs",
+    # Waiting on releases; used in examples only
+    "https://github.com/Razaekel/noise-rs",
+
+    "https://github.com/grovesNL/glow",
+    "https://github.com/gfx-rs/metal-rs",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"
 required-git-spec = "rev"
 
 [sources.allow-org]
-github = [
-	"gfx-rs"
-]
+github = ["gfx-rs"]

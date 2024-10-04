@@ -205,11 +205,21 @@ features = ["wgsl-in"]
 [dev-dependencies]
 cfg-if.workspace = true
 env_logger.workspace = true
-glam.workspace = true # for ray-traced-triangle example
-winit.workspace = true # for "halmark" example
+glam.workspace = true       # for ray-traced-triangle example
+winit.workspace = true      # for "halmark" example
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dev-dependencies]
-glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] } # for "raw-gles" example
-glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] } # for "raw-gles" example
+glutin-winit = { workspace = true, features = [
+    "egl",
+    "wgl",
+    "wayland",
+    "x11",
+] } # for "raw-gles" example
+glutin = { workspace = true, features = [
+    "egl",
+    "wgl",
+    "wayland",
+    "x11",
+] } # for "raw-gles" example
 rwh_05 = { version = "0.5", package = "raw-window-handle" } # temporary compatibility for glutin-winit in "raw-gles" example
 winit = { workspace = true, features = ["rwh_05"] } # for "raw-gles" example
