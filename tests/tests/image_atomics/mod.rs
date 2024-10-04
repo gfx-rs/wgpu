@@ -145,7 +145,7 @@ static IMAGE_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
         let data: Vec<u8> = slice.get_mapped_range().to_vec();
 
         assert_eq!(data.len(), 256 * 256 * 8);
-        for (i, long) in data.chunks(8).into_iter().enumerate() {
+        for (i, long) in data.chunks(8).enumerate() {
             let x = (i as u32 % size.width) as u8;
             let y = (i as u32 / size.width) as u8;
             assert_eq!(long[0], 3);
