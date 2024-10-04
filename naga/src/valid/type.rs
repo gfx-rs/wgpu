@@ -243,8 +243,8 @@ impl super::Validator {
     pub(super) const fn check_width(&self, scalar: crate::Scalar) -> Result<(), WidthError> {
         let good = match scalar.kind {
             crate::ScalarKind::Bool => scalar.width == crate::BOOL_WIDTH,
-            crate::ScalarKind::Float => {
-                if scalar.width == 8 {
+            crate::ScalarKind::Float => match scalar.width {
+                8 => {
                     if !self.capabilities.contains(Capabilities::FLOAT64) {
                         return Err(WidthError::MissingCapability {
                             name: "f64",
@@ -252,10 +252,18 @@ impl super::Validator {
                         });
                     }
                     true
-                } else {
-                    scalar.width == 4
                 }
-            }
+                2 => {
+                    if !self.capabilities.contains(Capabilities::SHADER_FLOAT16) {
+                        return Err(WidthError::MissingCapability {
+                            name: "f16",
+                            flag: "FLOAT16",
+                        });
+                    }
+                    true
+                }
+                _ => scalar.width == 4,
+            },
             crate::ScalarKind::Sint => {
                 if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT64) {

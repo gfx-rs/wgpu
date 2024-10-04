@@ -1444,11 +1444,14 @@ dependencies = [
 [[package]]
 name = "half"
 version = "2.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
+source = "git+https://github.com/FL33TW00D/half-rs.git?branch=feature/arbitrary#6bc4bea632269b53ccb6666a8508edc25fba9f3e"
 dependencies = [
+ "arbitrary",
+ "bytemuck",
  "cfg-if",
  "crunchy",
+ "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -1704,6 +1707,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
+
+[[package]]
 name = "libredox"
 version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1885,11 +1894,13 @@ dependencies = [
  "codespan-reporting",
  "diff",
  "env_logger",
+ "half",
  "hexf-parse",
  "hlsl-snapshots",
  "indexmap",
  "itertools",
  "log",
+ "num-traits",
  "petgraph",
  "pp-rs",
  "ron",
@@ -2026,6 +2037,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+ "libm",
 ]
 
 [[package]]
@@ -3652,6 +3664,7 @@ dependencies = [
  "flume",
  "getrandom",
  "glam",
+ "half",
  "ktx2",
  "log",
  "nanorand",
