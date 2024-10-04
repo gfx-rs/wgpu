@@ -797,6 +797,15 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      # NOTE: Keep this above the others, because this will fail if there are _any_ changes to
+      # files, even ones this step doesn't modify.
+      - name: "Format `**/*.{md,js,html,yml}` files"
+        uses: creyD/prettier_action@v4.6
+        with:
+          prettier_version: 3.8.1
+          prettier_options: --check --write .
+          dry: true
+
       - name: Run `cargo fmt`
         run: |
           cargo --locked fmt -- --check
