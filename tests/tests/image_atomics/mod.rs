@@ -12,7 +12,7 @@ static IMAGE_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_compute_workgroup_size_x: 4,
                 max_compute_workgroup_size_y: 4,
                 max_compute_workgroup_size_z: 4,
-                max_compute_workgroups_per_dimension: 64,
+                max_compute_workgroups_per_dimension: 4,
                 ..wgt::Limits::downlevel_webgl2_defaults()
             })
             .features(
@@ -22,7 +22,7 @@ static IMAGE_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
                     | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             ),
     )
-    .run_sync(|ctx| {
+    .run_async(|ctx| async move {
         let size = wgpu::Extent3d {
             width: 256,
             height: 256,
@@ -72,7 +72,9 @@ static IMAGE_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
             dimension: wgpu::TextureDimension::D2,
             size,
             format: wgpu::TextureFormat::R64Uint,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::SHADER_ATOMIC,
+            usage: wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::SHADER_ATOMIC
+                | wgpu::TextureUsages::COPY_SRC,
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
@@ -100,7 +102,59 @@ static IMAGE_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
         });
         rpass.set_pipeline(&pipeline);
         rpass.set_bind_group(0, Some(&bind_group), &[]);
-        rpass.dispatch_workgroups(1, 1, 1);
+        rpass.dispatch_workgroups(4, 2, 4);
         drop(rpass);
         ctx.queue.submit(Some(encoder.finish()));
+
+        let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: (size.height * size.width * size.depth_or_array_layers) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        encoder.copy_texture_to_buffer(
+            wgpu::ImageCopyTexture {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::ImageCopyBuffer {
+                buffer: &read_buffer,
+                layout: wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(size.width * 8),
+                    rows_per_image: Some(size.height),
+                },
+            },
+            size,
+        );
+
+        ctx.queue.submit(Some(encoder.finish()));
+
+        let slice = read_buffer.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| ());
+        ctx.async_poll(wgpu::Maintain::wait())
+            .await
+            .panic_on_timeout();
+        let data: Vec<u8> = slice.get_mapped_range().to_vec();
+
+        assert_eq!(data.len(), 256 * 256 * 8);
+        for (i, long) in data.chunks(8).into_iter().enumerate() {
+            let x = (i as u32 % size.width) as u8;
+            let y = (i as u32 / size.width) as u8;
+            assert_eq!(long[0], 3);
+            assert_eq!(long[1], y);
+            assert_eq!(long[2], x);
+            assert_eq!(long[3], 0);
+            assert_eq!(long[4], 7);
+            assert_eq!(long[5], 0);
+            assert_eq!(long[6], 0);
+            assert_eq!(long[7], 0);
+        }
     });

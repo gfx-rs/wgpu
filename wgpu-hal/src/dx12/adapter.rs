@@ -682,6 +682,12 @@ impl crate::Adapter for super::Adapter {
                 .Support2
                 .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD),
         );
+        caps.set(
+            Tfc::SHADER_ATOMIC,
+            data_srv_uav
+                .Support2
+                .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX),
+        );
 
         // We load via UAV/SRV so use srv_uav_format
         let no_msaa_load = caps.contains(Tfc::SAMPLED)
