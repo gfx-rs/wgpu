@@ -146,6 +146,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false, // No RODS
         webgpu: true,
     },
+    ExampleDesc {
+        name: "shader-f16",
+        function: wgpu_examples::shader_f16::main,
+        webgl: false, // No RODS
+        webgpu: true,
+    },
 ];
 
 fn get_example_name() -> Option<String> {

@@ -193,6 +193,7 @@ ndk-sys = "0.5.0"
 #gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
 
 [patch.crates-io]
+half = { git = "https://github.com/FL33TW00D/half-rs.git", branch = "feature/arbitrary" }
 #glow = { path = "../glow" }
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
