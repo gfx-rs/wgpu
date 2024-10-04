@@ -634,7 +634,8 @@ impl Frontend {
                         self.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 format!(
-                                    "'{name}': image needs {overload_access:?} access but only {call_access:?} was provided"
+                                    "'{}': image needs {:?} access but only {:?} was provided",
+                                    name, overload_access, call_access
                                 )
                                 .into(),
                             ),

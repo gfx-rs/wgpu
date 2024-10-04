@@ -56,6 +56,7 @@ vulkan = [
 ]
 gles = [
     "naga/glsl-out",
+    "dep:bytemuck",
     "dep:glow",
     "dep:glutin_wgl_sys",
     "dep:khronos-egl",
@@ -126,6 +127,7 @@ rustc-hash.workspace = true
 log.workspace = true
 
 # backend: Gles
+bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
 
 [dependencies.wgt]

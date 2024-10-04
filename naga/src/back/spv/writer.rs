@@ -3,7 +3,7 @@ use super::{
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
     make_local, Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo,
     EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
-    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options,
+    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, Options,
     PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
@@ -31,6 +31,9 @@ impl Function {
             if index == 0 {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
+                }
+                for internal_var in self.internal_variables.iter() {
+                    internal_var.instruction.to_words(sink);
                 }
             }
             for instruction in block.body.iter() {
@@ -133,6 +136,56 @@ impl Writer {
         *self = fresh;
 
         self.capabilities_used.insert(spirv::Capability::Shader);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn promote_access_expression_to_variable(
+        &mut self,
+        ir_types: &UniqueArena<crate::Type>,
+        result_type_id: Word,
+        container_id: Word,
+        container_ty: Handle<crate::Type>,
+        index_id: Word,
+        element_ty: Handle<crate::Type>,
+        block: &mut Block,
+    ) -> Result<(Word, LocalVariable), Error> {
+        let pointer_type_id =
+            self.get_pointer_id(ir_types, container_ty, spirv::StorageClass::Function)?;
+
+        let variable = {
+            let id = self.id_gen.next();
+            LocalVariable {
+                id,
+                instruction: Instruction::variable(
+                    pointer_type_id,
+                    id,
+                    spirv::StorageClass::Function,
+                    None,
+                ),
+            }
+        };
+        block
+            .body
+            .push(Instruction::store(variable.id, container_id, None));
+
+        let element_pointer_id = self.id_gen.next();
+        let element_pointer_type_id =
+            self.get_pointer_id(ir_types, element_ty, spirv::StorageClass::Function)?;
+        block.body.push(Instruction::access_chain(
+            element_pointer_type_id,
+            element_pointer_id,
+            variable.id,
+            &[index_id],
+        ));
+        let id = self.id_gen.next();
+        block.body.push(Instruction::load(
+            result_type_id,
+            id,
+            element_pointer_id,
+            None,
+        ));
+
+        Ok((id, variable))
     }
 
     /// Indicate that the code requires any one of the listed capabilities.
@@ -703,13 +756,7 @@ impl Writer {
             next_id
         };
 
-        context.write_block(
-            main_id,
-            &ir_function.body,
-            super::block::BlockExit::Return,
-            LoopContext::default(),
-            debug_info.as_ref(),
-        )?;
+        context.write_function_body(main_id, debug_info.as_ref())?;
 
         // Consume the `BlockContext`, ending its borrows and letting the
         // `Writer` steal back its cached expression table and temp_list.

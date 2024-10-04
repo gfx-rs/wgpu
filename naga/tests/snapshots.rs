@@ -936,6 +936,7 @@ fn convert_wgsl() {
             "phony_assignment",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        ("6220-break-from-loop", Targets::SPIRV),
     ];
 
     for &(name, targets) in inputs.iter() {

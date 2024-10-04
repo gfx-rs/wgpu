@@ -14,7 +14,10 @@ use thiserror::Error;
 pub enum PipelineConstantError {
     #[error("Missing value for pipeline-overridable constant with identifier string: '{0}'")]
     MissingValue(String),
-    #[error("Source f64 value needs to be finite (NaNs and Inifinites are not allowed) for number destinations")]
+    #[error(
+        "Source f64 value needs to be finite ({}) for number destinations",
+        "NaNs and Inifinites are not allowed"
+    )]
     SrcNeedsToBeFinite,
     #[error("Source f64 value doesn't fit in destination")]
     DstRangeTooSmall,

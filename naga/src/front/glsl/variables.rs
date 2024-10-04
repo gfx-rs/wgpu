@@ -294,14 +294,17 @@ impl Frontend {
                             .any(|i| components[i..].contains(&components[i - 1]));
                         if not_unique {
                             self.errors.push(Error {
-                                kind:
-                                ErrorKind::SemanticError(
-                                format!(
-                                    "swizzle cannot have duplicate components in left-hand-side expression for \"{name:?}\""
-                                )
-                                .into(),
-                            ),
-                                meta ,
+                                kind: ErrorKind::SemanticError(
+                                    format!(
+                                        concat!(
+                                            "swizzle cannot have duplicate components in ",
+                                            "left-hand-side expression for \"{:?}\""
+                                        ),
+                                        name
+                                    )
+                                    .into(),
+                                ),
+                                meta,
                             })
                         }
                     }

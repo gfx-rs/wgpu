@@ -3,8 +3,6 @@
 precision highp float;
 precision highp int;
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-
 struct GlobalConst {
     uint a;
     uvec3 b;
@@ -44,10 +42,11 @@ int array_by_value(int a_1[5], int i) {
 }
 
 void main() {
-    uint val = 33u;
-    vec4 arr[2] = vec4[2](vec4(6.0), vec4(7.0));
-    assign_through_ptr_fn(val);
-    assign_array_through_ptr_fn(arr);
+    uint vi_1 = uint(gl_VertexID);
+    int arr_1[5] = int[5](1, 2, 3, 4, 5);
+    int value = arr_1[vi_1];
+    gl_Position = vec4(ivec4(value));
+    gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }
 
