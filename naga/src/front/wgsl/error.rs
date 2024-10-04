@@ -1,4 +1,4 @@
-use crate::front::wgsl::parse::directive::enable_extension::EnableExtension;
+use crate::front::wgsl::parse::directive::enable_extension::ImplementedEnableExtension;
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
@@ -136,8 +136,6 @@ pub enum NumberError {
     Invalid,
     #[error("numeric literal not representable by target type")]
     NotRepresentable,
-    #[error("unimplemented f16 type")]
-    UnimplementedF16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -280,8 +278,7 @@ pub(crate) enum Error<'a> {
         span: Span,
         tracking_issue_num: u16,
     },
-    #[allow(dead_code)]
-    EnableExtensionNotEnabled(Span, EnableExtension),
+    EnableExtensionNotEnabled(Span, ImplementedEnableExtension),
 }
 
 #[derive(Clone, Debug)]

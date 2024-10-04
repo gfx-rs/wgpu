@@ -2,22 +2,26 @@ use crate::{front::wgsl::error::Error, Span};
 
 /// If `Some`, indicates that `enable f16;` was written at the given [`Span`].
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EnableExtensions {}
+pub struct EnableExtensions {
+    f16: bool,
+}
 
 impl EnableExtensions {
     pub(crate) const fn empty() -> Self {
-        Self {}
+        Self { f16: false }
     }
 
-    #[allow(unreachable_code)]
     pub(crate) fn add(&mut self, ext: ImplementedEnableExtension) {
-        let _field: &mut bool = match ext {};
-        *_field = true;
+        let field = match ext {
+            ImplementedEnableExtension::F16 => &mut self.f16,
+        };
+        *field = true;
     }
 
-    #[allow(unused)]
     pub(crate) const fn contains(&self, ext: ImplementedEnableExtension) -> bool {
-        match ext {}
+        match ext {
+            ImplementedEnableExtension::F16 => self.f16,
+        }
     }
 }
 
@@ -32,7 +36,6 @@ impl Default for EnableExtensions {
 /// WGSL spec.: <https://www.w3.org/TR/WGSL/#enable-extensions-sec>
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum EnableExtension {
-    #[allow(unused)]
     Implemented(ImplementedEnableExtension),
     Unimplemented(UnimplementedEnableExtension),
 }
@@ -40,10 +43,7 @@ pub enum EnableExtension {
 impl EnableExtension {
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<(Self, &'static str), Error<'_>> {
         match word {
-            "f16" => Ok((
-                Self::Unimplemented(UnimplementedEnableExtension::F16),
-                "f16",
-            )),
+            "f16" => Ok((Self::Implemented(ImplementedEnableExtension::F16), "f16")),
             "clip_distances" => Ok((
                 Self::Unimplemented(UnimplementedEnableExtension::ClipDistances),
                 "clip_distances",
@@ -58,16 +58,17 @@ impl EnableExtension {
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum ImplementedEnableExtension {}
-
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum UnimplementedEnableExtension {
+pub enum ImplementedEnableExtension {
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
     /// In the WGSL standard, this corresponds to [`enable f16;`].
     ///
     /// [`enable f16;`]: https://www.w3.org/TR/WGSL/#extension-f16
     F16,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum UnimplementedEnableExtension {
     /// Enables the `clip_distances` variable in WGSL.
     ///
     /// In the WGSL standard, this corresponds to [`enable clip_distances;`].
@@ -85,7 +86,6 @@ pub enum UnimplementedEnableExtension {
 impl UnimplementedEnableExtension {
     pub(crate) const fn tracking_issue(self) -> u16 {
         match self {
-            Self::F16 => 4384,
             Self::ClipDistances => 6236,
             Self::DualSourceBlending => 6402,
         }

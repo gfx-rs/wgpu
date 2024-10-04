@@ -36,6 +36,7 @@ mod null;
 use convert::*;
 pub use error::Error;
 use function::*;
+use half::f16;
 use indexmap::IndexSet;
 
 use crate::{
@@ -5484,6 +5485,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }) => {
                 let low = self.next()?;
                 match width {
+                    // https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#Literal
+                    // If a numeric type’s bit width is less than 32-bits, the value appears in the low-order bits of the word.
+                    2 => crate::Literal::F16(f16::from_bits(low as u16)),
                     4 => crate::Literal::F32(f32::from_bits(low)),
                     8 => {
                         inst.expect(5)?;
