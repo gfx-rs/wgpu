@@ -1090,10 +1090,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = self.r#struct(s, span, &mut ctx)?;
                     ctx.globals
                         .insert(s.name.name, LoweredGlobalDecl::Type(handle));
-                    ctx.module
-                        .comments
-                        .types
-                        .insert(handle, s.comments.iter().map(|s| s.to_string()).collect());
+                    if !s.comments.is_empty() {
+                        ctx.module
+                            .comments
+                            .types
+                            .insert(handle, s.comments.iter().map(|s| s.to_string()).collect());
+                    }
                 }
                 ast::GlobalDeclKind::Type(ref alias) => {
                     let ty = self.resolve_named_ast_type(
