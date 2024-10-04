@@ -259,7 +259,7 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment(
+    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment<'b>(
         &'a mut self,
         comments: &mut Vec<Span>,
     ) -> usize {
@@ -268,9 +268,9 @@ impl<'a> Lexer<'a> {
             // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false);
             if let Token::Comment(_) = token {
+                self.input = rest;
                 let next = self.current_byte_offset();
                 comments.push(Span::new(start as u32, next as u32));
-                self.input = rest;
             } else if let Token::Trivia = token {
                 self.input = rest;
             } else {

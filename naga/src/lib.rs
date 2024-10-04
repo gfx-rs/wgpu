@@ -2263,4 +2263,18 @@ pub struct Module {
     pub functions: Arena<Function>,
     /// Entry points.
     pub entry_points: Vec<EntryPoint>,
+    /// Comments, usually serving as documentation
+    pub comments: Comments,
+}
+
+/// Comments preceding items.
+///
+/// These can be used to generate automated documentation,
+/// IDE hover information or translate shaders with their context comments.
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct Comments {
+    pub types: FastIndexMap<Handle<Type>, Vec<String>>,
 }
