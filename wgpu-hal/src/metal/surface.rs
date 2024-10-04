@@ -12,7 +12,7 @@ use objc2::{
     runtime::{AnyClass, AnyObject, Bool, ProtocolObject, Sel},
     sel, ClassType,
 };
-use objc2_foundation::{CGFloat, CGRect, CGSize, MainThreadMarker, NSObject, NSObjectProtocol};
+use objc2_foundation::{CGFloat, CGSize, MainThreadMarker, NSObject, NSObjectProtocol};
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{
     kCAGravityResize, CAAutoresizingMask, CALayer, CAMetalDrawable, CAMetalLayer,

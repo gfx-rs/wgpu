@@ -1584,8 +1584,7 @@ pub mod bundle_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `offset_length` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_set_bind_group(
+    pub unsafe fn wgpu_render_bundle_set_bind_group(
         bundle: &mut RenderBundleEncoder,
         index: u32,
         bind_group_id: Option<id::BindGroupId>,
@@ -1612,8 +1611,7 @@ pub mod bundle_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_set_pipeline(
+    pub fn wgpu_render_bundle_set_pipeline(
         bundle: &mut RenderBundleEncoder,
         pipeline_id: id::RenderPipelineId,
     ) {
@@ -1627,8 +1625,7 @@ pub mod bundle_ffi {
             .push(RenderCommand::SetPipeline(pipeline_id));
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_set_vertex_buffer(
+    pub fn wgpu_render_bundle_set_vertex_buffer(
         bundle: &mut RenderBundleEncoder,
         slot: u32,
         buffer_id: id::BufferId,
@@ -1643,8 +1640,7 @@ pub mod bundle_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_set_index_buffer(
+    pub fn wgpu_render_bundle_set_index_buffer(
         encoder: &mut RenderBundleEncoder,
         buffer: id::BufferId,
         index_format: IndexFormat,
@@ -1658,8 +1654,7 @@ pub mod bundle_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `data` elements.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_set_push_constants(
+    pub unsafe fn wgpu_render_bundle_set_push_constants(
         pass: &mut RenderBundleEncoder,
         stages: wgt::ShaderStages,
         offset: u32,
@@ -1695,8 +1690,7 @@ pub mod bundle_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_draw(
+    pub fn wgpu_render_bundle_draw(
         bundle: &mut RenderBundleEncoder,
         vertex_count: u32,
         instance_count: u32,
@@ -1711,8 +1705,7 @@ pub mod bundle_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_draw_indexed(
+    pub fn wgpu_render_bundle_draw_indexed(
         bundle: &mut RenderBundleEncoder,
         index_count: u32,
         instance_count: u32,
@@ -1729,8 +1722,7 @@ pub mod bundle_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_draw_indirect(
+    pub fn wgpu_render_bundle_draw_indirect(
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -1743,8 +1735,7 @@ pub mod bundle_ffi {
         });
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_draw_indexed_indirect(
+    pub fn wgpu_render_bundle_draw_indexed_indirect(
         bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,
@@ -1761,16 +1752,14 @@ pub mod bundle_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
     /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_push_debug_group(
+    pub unsafe fn wgpu_render_bundle_push_debug_group(
         _bundle: &mut RenderBundleEncoder,
         _label: RawString,
     ) {
         //TODO
     }
 
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_pop_debug_group(_bundle: &mut RenderBundleEncoder) {
+    pub fn wgpu_render_bundle_pop_debug_group(_bundle: &mut RenderBundleEncoder) {
         //TODO
     }
 
@@ -1778,8 +1767,7 @@ pub mod bundle_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given `label`
     /// is a valid null-terminated string.
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_insert_debug_marker(
+    pub unsafe fn wgpu_render_bundle_insert_debug_marker(
         _bundle: &mut RenderBundleEncoder,
         _label: RawString,
     ) {

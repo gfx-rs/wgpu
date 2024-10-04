@@ -11,6 +11,7 @@ pub struct Span {
 
 impl Span {
     pub const UNDEFINED: Self = Self { start: 0, end: 0 };
+
     /// Creates a new `Span` from a range of byte indices
     ///
     /// Note: end is exclusive, it doesn't belong to the `Span`

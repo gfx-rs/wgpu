@@ -737,8 +737,7 @@ impl Buffer {
         let device = &self.device;
 
         let temp = {
-            let snatch_guard = device.snatchable_lock.write();
-            let raw = match self.raw.snatch(snatch_guard) {
+            let raw = match self.raw.snatch(&mut device.snatchable_lock.write()) {
                 Some(raw) => raw,
                 None => {
                     return Err(DestroyError::AlreadyDestroyed);
@@ -1057,7 +1056,7 @@ impl Texture {
                 if init {
                     TextureInitTracker::new(desc.mip_level_count, desc.array_layer_count())
                 } else {
-                    TextureInitTracker::new(0, 0)
+                    TextureInitTracker::new(desc.mip_level_count, 0)
                 },
             ),
             full_range: TextureSelector {
@@ -1185,8 +1184,7 @@ impl Texture {
         let device = &self.device;
 
         let temp = {
-            let snatch_guard = device.snatchable_lock.write();
-            let raw = match self.inner.snatch(snatch_guard) {
+            let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
                     return Ok(());

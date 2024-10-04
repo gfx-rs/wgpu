@@ -520,7 +520,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             wgt::QueryType::Timestamp => {
                 encoder.resolveCounters_inRange_destinationBuffer_destinationOffset(
                     set.counter_sample_buffer.as_ref().unwrap(),
-                    NSRange::new(range.start as usize, range.end as usize),
+                    NSRange::new(range.start as usize, (range.end - range.start) as usize),
                     &buffer.raw,
                     offset as usize,
                 );

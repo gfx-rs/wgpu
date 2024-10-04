@@ -401,10 +401,7 @@ pub fn op_webgpu_request_adapter(
         force_fallback_adapter,
         compatible_surface: None, // windowless
     };
-    let res = instance.request_adapter(
-        &descriptor,
-        wgpu_core::instance::AdapterInputs::Mask(backends, |_| None),
-    );
+    let res = instance.request_adapter(&descriptor, backends, None);
 
     let adapter = match res {
         Ok(adapter) => adapter,

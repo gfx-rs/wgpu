@@ -216,10 +216,6 @@
                                 ),
                             ],
                             reject: [
-                                Emit((
-                                    start: 13,
-                                    end: 14,
-                                )),
                                 Atomic(
                                     pointer: 7,
                                     fun: Add,

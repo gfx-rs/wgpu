@@ -664,9 +664,6 @@ impl super::Validator {
                 )
             }
             Ti::BindingArray { base, size } => {
-                if base >= handle {
-                    return Err(TypeError::InvalidArrayBaseType(base));
-                }
                 let type_info_mask = match size {
                     crate::ArraySize::Constant(_) => TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
                     crate::ArraySize::Dynamic => {
@@ -680,7 +677,6 @@ impl super::Validator {
                     // Currently Naga only supports binding arrays of structs for non-handle types.
                     match gctx.types[base].inner {
                         crate::TypeInner::Struct { .. } => {}
-                        crate::TypeInner::Array { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
                 }
