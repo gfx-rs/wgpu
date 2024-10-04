@@ -618,6 +618,7 @@ jobs:
         run: |
           cargo fmt -- --check
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
+          cargo fmt --manifest-path naga/xtask/Cargo.toml -- --check
 
       - name: Check for typos
         uses: crate-ci/typos@v1.24.6
