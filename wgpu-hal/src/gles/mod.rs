@@ -457,11 +457,24 @@ impl Texture {
         };
 
         log::error!(
-            "wgpu-hal heuristics assumed that the view dimension will be equal to `{got}` rather than `{view_dimension:?}`.\n{}\n{}\n{}\n{}",
-            "`D2` textures with `depth_or_array_layers == 1` are assumed to have view dimension `D2`",
-            "`D2` textures with `depth_or_array_layers > 1` are assumed to have view dimension `D2Array`",
-            "`D2` textures with `depth_or_array_layers == 6` are assumed to have view dimension `Cube`",
-            "`D2` textures with `depth_or_array_layers > 6 && depth_or_array_layers % 6 == 0` are assumed to have view dimension `CubeArray`",
+            concat!(
+                "wgpu-hal heuristics assumed that ",
+                "the view dimension will be equal to `{}` rather than `{:?}`.\n",
+                "`D2` textures with ",
+                "`depth_or_array_layers == 1` ",
+                "are assumed to have view dimension `D2`\n",
+                "`D2` textures with ",
+                "`depth_or_array_layers > 1` ",
+                "are assumed to have view dimension `D2Array`\n",
+                "`D2` textures with ",
+                "`depth_or_array_layers == 6` ",
+                "are assumed to have view dimension `Cube`\n",
+                "`D2` textures with ",
+                "`depth_or_array_layers > 6 && depth_or_array_layers % 6 == 0` ",
+                "are assumed to have view dimension `CubeArray`\n",
+            ),
+            got,
+            view_dimension,
         );
     }
 }

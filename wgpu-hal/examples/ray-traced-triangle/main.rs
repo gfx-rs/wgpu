@@ -124,7 +124,12 @@ impl AccelerationStructureInstance {
         &mut self,
         shader_binding_table_record_offset: u32,
     ) {
-        debug_assert!(shader_binding_table_record_offset <= Self::MAX_U24, "shader_binding_table_record_offset uses more than 24 bits! {shader_binding_table_record_offset} > {}", Self::MAX_U24);
+        debug_assert!(
+            shader_binding_table_record_offset <= Self::MAX_U24,
+            "shader_binding_table_record_offset uses more than 24 bits! {} > {}",
+            shader_binding_table_record_offset,
+            Self::MAX_U24
+        );
         self.shader_binding_table_record_offset_and_flags = (shader_binding_table_record_offset
             & Self::LOW_24_MASK)
             | (self.shader_binding_table_record_offset_and_flags & !Self::LOW_24_MASK)
@@ -151,7 +156,9 @@ impl AccelerationStructureInstance {
         );
         debug_assert!(
             shader_binding_table_record_offset <= Self::MAX_U24,
-            "shader_binding_table_record_offset uses more than 24 bits! {shader_binding_table_record_offset} > {}", Self::MAX_U24
+            "shader_binding_table_record_offset uses more than 24 bits! {} > {}",
+            shader_binding_table_record_offset,
+            Self::MAX_U24
         );
         AccelerationStructureInstance {
             transform: Self::affine_to_rows(transform),

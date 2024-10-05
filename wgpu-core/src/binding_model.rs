@@ -373,10 +373,6 @@ impl BindingTypeMaxCountValidator {
             limits.max_sampled_textures_per_shader_stage,
             BindingTypeMaxCountErrorKind::SampledTextures,
         )?;
-        self.storage_buffers.validate(
-            limits.max_storage_buffers_per_shader_stage,
-            BindingTypeMaxCountErrorKind::StorageBuffers,
-        )?;
         self.samplers.validate(
             limits.max_samplers_per_shader_stage,
             BindingTypeMaxCountErrorKind::Samplers,
