@@ -413,7 +413,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         queue_data: &Self::QueueData,
         callback: SubmittedWorkDoneCallback,
-    );
+    ) -> Self::SubmissionIndexData;
 
     fn device_start_capture(&self, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device_data: &Self::DeviceData);
@@ -1092,7 +1092,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         queue_data: &crate::Data,
         callback: SubmittedWorkDoneCallback,
-    );
+    ) -> Arc<crate::Data>;
 
     fn device_start_capture(&self, data: &crate::Data);
     fn device_stop_capture(&self, data: &crate::Data);
@@ -2112,9 +2112,10 @@ where
         &self,
         queue_data: &crate::Data,
         callback: SubmittedWorkDoneCallback,
-    ) {
+    ) -> Arc<crate::Data> {
         let queue_data = downcast_ref(queue_data);
-        Context::queue_on_submitted_work_done(self, queue_data, callback)
+        let data = Context::queue_on_submitted_work_done(self, queue_data, callback);
+        Arc::new(data) as _
     }
 
     fn device_start_capture(&self, device_data: &crate::Data) {
