@@ -197,6 +197,7 @@ ndk-sys = "0.5.0"
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
+raw-window-handle = { git = "https://github.com/morr0ne/raw-window-handle", branch = "drm-connector" }
 
 [profile.release]
 lto = "thin"

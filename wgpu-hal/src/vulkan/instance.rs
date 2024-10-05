@@ -1,5 +1,7 @@
 use std::{
     ffi::{c_void, CStr, CString},
+    mem::MaybeUninit,
+    num::NonZeroU32,
     slice,
     str::FromStr,
     sync::Arc,
@@ -9,6 +11,7 @@ use std::{
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::RwLock;
+use raw_window_handle::DrmWindowHandle;
 
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -288,6 +291,10 @@ impl super::Instance {
         // so that we don't have to conditionally use the functions provided by the 1.1 instance
         extensions.push(khr::get_physical_device_properties2::NAME);
 
+        extensions.push(ext::acquire_drm_display::NAME);
+        extensions.push(khr::display::NAME);
+        extensions.push(ext::direct_mode_display::NAME);
+
         // Only keep available extensions.
         extensions.retain(|&ext| {
             if instance_extensions
@@ -536,6 +543,100 @@ impl super::Instance {
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
+
+        Ok(self.create_surface_from_vk_surface_khr(surface))
+    }
+
+    // FIXME: handle errors
+    fn create_surface_drm(
+        &self,
+        fd: i32,
+        conn: NonZeroU32,
+        plane: u32,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        // Get the device major and minor from the fd
+        let (major, minor) = {
+            let mut stat = MaybeUninit::<libc::stat>::uninit();
+
+            if unsafe { libc::fstat(fd, stat.as_mut_ptr()) } != 0 {
+                return Err(crate::InstanceError::new(
+                    "Unable to fstat drm device".to_string(),
+                ));
+            }
+
+            let stat = unsafe { stat.assume_init() };
+
+            unsafe { (libc::major(stat.st_rdev), libc::minor(stat.st_rdev)) }
+        };
+
+        let mut physical_device = None;
+
+        let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
+            Ok(devices) => devices,
+            Err(err) => {
+                log::error!("enumerate_adapters: {}", err);
+                Vec::new()
+            }
+        };
+
+        // Enumerate through all devices until a matching one is found
+        for device in raw_devices {
+            let properties2 = vk::PhysicalDeviceProperties2KHR::default();
+
+            let mut drm_props = vk::PhysicalDeviceDrmPropertiesEXT::default();
+            let mut properties2 = properties2.push_next(&mut drm_props);
+
+            unsafe {
+                self.shared
+                    .raw
+                    .get_physical_device_properties2(device, &mut properties2)
+            };
+
+            if drm_props.primary_major == major.into() && drm_props.primary_minor == minor.into() {
+                physical_device = Some(device);
+
+                break;
+            }
+        }
+
+        let physical_device = physical_device.ok_or(crate::InstanceError::new(
+            "Failed to find suitable drm device".to_string(),
+        ))?;
+
+        let instance =
+            ext::acquire_drm_display::Instance::new(&self.shared.entry, &self.shared.raw);
+
+        let display = unsafe {
+            instance
+                .get_drm_display(physical_device, fd, conn.get())
+                .expect("Failed to get drm display")
+        };
+
+        unsafe {
+            instance
+                .acquire_drm_display(physical_device, fd, display)
+                .expect("Failed to acquire display")
+        };
+
+        let display_instance = khr::display::Instance::new(&self.shared.entry, &self.shared.raw);
+
+        let modes = unsafe {
+            display_instance
+                .get_display_mode_properties(physical_device, display)
+                .expect("Failed to get modes")
+        };
+
+        let mode = modes.first().expect("Failed to find a suitable mode");
+
+        let create_info = vk::DisplaySurfaceCreateInfoKHR::default()
+            .display_mode(mode.display_mode)
+            .image_extent(mode.parameters.visible_region)
+            .transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
+            .alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
+            .plane_index(plane);
+
+        let surface = unsafe { display_instance.create_display_plane_surface(&create_info, None) }
+            .expect("Failed to create surface");
 
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }
@@ -867,6 +968,15 @@ impl crate::Instance for super::Instance {
             (Rwh::AndroidNdk(handle), _) => {
                 self.create_surface_android(handle.a_native_window.as_ptr())
             }
+            (
+                Rwh::Drm(DrmWindowHandle {
+                    plane,
+                    connector_id: Some(connector_id),
+                    ..
+                }),
+                Rdh::Drm(display),
+            ) => self.create_surface_drm(display.fd, connector_id, plane),
+            #[cfg(windows)]
             (Rwh::Win32(handle), _) => {
                 let hinstance = handle.hinstance.ok_or_else(|| {
                     crate::InstanceError::new(String::from(
