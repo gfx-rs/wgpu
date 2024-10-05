@@ -4,6 +4,10 @@
             entry_point:"foo_vert",
             target_profile:"vs_5_1",
         ),
+        (
+            entry_point:"foo_1",
+            target_profile:"vs_5_1",
+        ),
     ],
     fragment:[
         (

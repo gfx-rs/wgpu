@@ -1778,12 +1778,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 return Ok(());
             }
-            ast::StatementKind::Ignore(expr) => {
+            ast::StatementKind::Phony(expr) => {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
-                let _ = self.expression(expr, &mut ctx.as_expression(block, &mut emitter))?;
+                let value = self.expression(expr, &mut ctx.as_expression(block, &mut emitter))?;
                 block.extend(emitter.finish(&ctx.function.expressions));
+                ctx.named_expressions
+                    .insert(value, ("phony".to_string(), stmt.span));
                 return Ok(());
             }
         };

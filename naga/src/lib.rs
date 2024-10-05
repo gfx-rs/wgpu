@@ -1402,21 +1402,20 @@ pub enum Expression {
     /// ## Dynamic indexing restrictions
     ///
     /// To accommodate restrictions in some of the shader languages that Naga
-    /// targets, it is not permitted to subscript a matrix or array with a
-    /// dynamically computed index unless that matrix or array appears behind a
-    /// pointer. In other words, if the inner type of `base` is [`Array`] or
-    /// [`Matrix`], then `index` must be a constant. But if the type of `base`
-    /// is a [`Pointer`] to an array or matrix or a [`ValuePointer`] with a
-    /// `size`, then the index may be any expression of integer type.
+    /// targets, it is not permitted to subscript a matrix with a dynamically
+    /// computed index unless that matrix appears behind a pointer. In other
+    /// words, if the inner type of `base` is [`Matrix`], then `index` must be a
+    /// constant. But if the type of `base` is a [`Pointer`] to an matrix, then
+    /// the index may be any expression of integer type.
     ///
     /// You can use the [`Expression::is_dynamic_index`] method to determine
-    /// whether a given index expression requires matrix or array base operands
-    /// to be behind a pointer.
+    /// whether a given index expression requires matrix base operands to be
+    /// behind a pointer.
     ///
     /// (It would be simpler to always require the use of `AccessIndex` when
-    /// subscripting arrays and matrices that are not behind pointers, but to
-    /// accommodate existing front ends, Naga also permits `Access`, with a
-    /// restricted `index`.)
+    /// subscripting matrices that are not behind pointers, but to accommodate
+    /// existing front ends, Naga also permits `Access`, with a restricted
+    /// `index`.)
     ///
     /// [`Vector`]: TypeInner::Vector
     /// [`Matrix`]: TypeInner::Matrix

@@ -76,7 +76,7 @@ arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.6"
-bytemuck = { version = "1.18", features = ["derive"] }
+bytemuck = { version = "1.18" }
 cfg_aliases = "0.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -111,7 +111,7 @@ pico-args = { version = "0.5.0", features = [
     "short-space-opt",
     "combined-flags",
 ] }
-png = "0.17.11"
+png = "0.17.14"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.6"
