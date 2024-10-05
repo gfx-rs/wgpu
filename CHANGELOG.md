@@ -86,6 +86,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### General
 
 - Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170)
+- Return submission index in `map_async` and `on_submitted_work_done` to track down completion of async callbacks. By @eliemichel in [#6360](https://github.com/gfx-rs/wgpu/pull/6360)
 
 #### Vulkan
 
