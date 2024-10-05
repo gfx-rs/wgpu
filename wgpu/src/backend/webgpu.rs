@@ -815,7 +815,6 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
-        max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
         max_color_attachments: limits.max_color_attachments(),
         max_color_attachment_bytes_per_sample: limits.max_color_attachment_bytes_per_sample(),
         max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
@@ -829,6 +828,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_subgroup_size: wgt::Limits::default().max_subgroup_size,
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
+        max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
     }
 }
 
@@ -875,7 +875,6 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxBufferSize, max_buffer_size),
         (maxVertexAttributes, max_vertex_attributes),
         (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
-        (maxInterStageShaderComponents, max_inter_stage_shader_components),
         (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
         (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
         (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
