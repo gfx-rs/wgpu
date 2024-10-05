@@ -624,8 +624,7 @@ impl Buffer {
             .buffers
             .set_single(self, internal_use);
 
-        let mut fence = device.fence.write(); // is this needed to be able to increment active_submission_index?
-        // should we increment last_successful_submission_index instead?
+        // TODO: should we increment last_successful_submission_index instead?
         let submit_index = device
             .active_submission_index
             .fetch_add(1, core::sync::atomic::Ordering::SeqCst)

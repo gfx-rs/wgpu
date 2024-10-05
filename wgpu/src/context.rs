@@ -218,7 +218,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    );
+    ) -> Self::SubmissionIndexData;
     fn buffer_get_mapped_range(
         &self,
         buffer_data: &Self::BufferData,
@@ -908,7 +908,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    );
+    ) -> Arc<crate::Data>;
     fn buffer_get_mapped_range(
         &self,
         buffer_data: &crate::Data,
@@ -1688,9 +1688,10 @@ where
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    ) {
+    ) -> Arc<crate::Data> {
         let buffer_data = downcast_ref(buffer_data);
-        Context::buffer_map_async(self, buffer_data, mode, range, callback)
+        let data = Context::buffer_map_async(self, buffer_data, mode, range, callback);
+        Arc::new(data) as _
     }
 
     fn buffer_get_mapped_range(

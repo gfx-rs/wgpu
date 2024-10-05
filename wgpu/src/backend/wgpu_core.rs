@@ -1391,7 +1391,7 @@ impl crate::Context for ContextWgpuCore {
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
-    ) {
+    ) -> Self::SubmissionIndexData {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,
@@ -1411,9 +1411,10 @@ impl crate::Context for ContextWgpuCore {
             Some(range.end - range.start),
             operation,
         ) {
-            Ok(()) => (),
+            Ok(index) => index,
             Err(cause) => {
-                self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async")
+                self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async");
+                Self::SubmissionIndexData::MAX // invalid submission index
             }
         }
     }

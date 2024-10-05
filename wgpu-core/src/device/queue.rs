@@ -1342,7 +1342,10 @@ impl Global {
         let result = queue.device.lock_life().add_work_done_closure(closure);
         match result {
             Some(submission_index) => submission_index,
-            None => queue.device.last_successful_submission_index.load(Ordering::Acquire),
+            None => queue
+                .device
+                .last_successful_submission_index
+                .load(Ordering::Acquire),
         }
     }
 }

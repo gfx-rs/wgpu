@@ -304,7 +304,10 @@ impl LifetimeTracker {
         }
     }
 
-    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) -> Option<SubmissionIndex> {
+    pub fn add_work_done_closure(
+        &mut self,
+        closure: SubmittedWorkDoneClosure,
+    ) -> Option<SubmissionIndex> {
         match self.active.last_mut() {
             Some(active) => {
                 active.work_done_closures.push(closure);
