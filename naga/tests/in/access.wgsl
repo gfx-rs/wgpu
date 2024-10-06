@@ -178,3 +178,11 @@ fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 fn array_by_value(a: array<i32, 5>, i: i32) -> i32 {
     return a[i];
 }
+
+fn matrix_col_by_value(m: mat4x4<f32>, i: i32) -> vec4<f32> {
+    return m[i];
+}
+
+fn matrix_by_value(m: mat4x4<f32>, col: i32, row: i32) -> f32 {
+    return m[col][row];
+}

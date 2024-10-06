@@ -166,6 +166,21 @@ int array_by_value(
     return a_1.inner[i];
 }
 
+metal::float4 matrix_col_by_value(
+    metal::float4x4 m,
+    int i_1
+) {
+    return m[i_1];
+}
+
+float matrix_by_value(
+    metal::float4x4 m_1,
+    int col,
+    int row
+) {
+    return m_1[col][row];
+}
+
 struct foo_vertInput {
 };
 struct foo_vertOutput {

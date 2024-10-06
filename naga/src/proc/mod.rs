@@ -520,26 +520,6 @@ impl crate::Expression {
             _ => false,
         }
     }
-
-    /// Return true if this expression is a dynamic array/vector/matrix index,
-    /// for [`Access`].
-    ///
-    /// This method returns true if this expression is a dynamically computed
-    /// index, and as such can only be used to index matrices when they appear
-    /// behind a pointer. See the documentation for [`Access`] for details.
-    ///
-    /// Note, this does not check the _type_ of the given expression. It's up to
-    /// the caller to establish that the `Access` expression is well-typed
-    /// through other means, like [`ResolveContext`].
-    ///
-    /// [`Access`]: crate::Expression::Access
-    /// [`ResolveContext`]: crate::proc::ResolveContext
-    pub const fn is_dynamic_index(&self) -> bool {
-        match *self {
-            Self::Literal(_) | Self::ZeroValue(_) | Self::Constant(_) => false,
-            _ => true,
-        }
-    }
 }
 
 impl crate::Function {

@@ -362,13 +362,39 @@ impl<'w> BlockContext<'w> {
                             base_id,
                             base_ty,
                             index_id,
-                            ty_element,
+                            LookupType::Handle(ty_element),
                             block,
                         )?;
                         self.function.internal_variables.push(variable);
                         id
                     }
-                    // wgpu#4337: Support `crate::TypeInner::Matrix`
+                    crate::TypeInner::Matrix { scalar, rows, .. } => {
+                        let index_id = self.cached[index];
+                        let base_id = self.cached[base];
+                        let base_ty = match self.fun_info[base].ty {
+                            TypeResolution::Handle(handle) => handle,
+                            TypeResolution::Value(_) => {
+                                return Err(Error::Validation(
+                                    "Array types should always be in the arena",
+                                ))
+                            }
+                        };
+                        let (id, variable) = self.writer.promote_access_expression_to_variable(
+                            &self.ir_module.types,
+                            result_type_id,
+                            base_id,
+                            base_ty,
+                            index_id,
+                            LookupType::Local(LocalType::Value {
+                                vector_size: Some(rows),
+                                scalar,
+                                pointer_space: None,
+                            }),
+                            block,
+                        )?;
+                        self.function.internal_variables.push(variable);
+                        id
+                    }
                     ref other => {
                         log::error!(
                             "Unable to access base {:?} of type {:?}",
@@ -376,7 +402,7 @@ impl<'w> BlockContext<'w> {
                             other
                         );
                         return Err(Error::Validation(
-                            "only vectors and arrays may be dynamically indexed by value",
+                            "only vectors, arrays and matrices may be dynamically indexed by value",
                         ));
                     }
                 }

@@ -130,6 +130,14 @@ fn array_by_value(a_1: array<i32, 5>, i: i32) -> i32 {
     return a_1[i];
 }
 
+fn matrix_col_by_value(m: mat4x4<f32>, i_1: i32) -> vec4<f32> {
+    return m[i_1];
+}
+
+fn matrix_by_value(m_1: mat4x4<f32>, col: i32, row: i32) -> f32 {
+    return m_1[col][row];
+}
+
 @vertex 
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0f;

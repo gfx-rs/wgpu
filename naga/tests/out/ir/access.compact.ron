@@ -317,6 +317,17 @@
                 space: Function,
             ),
         ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Quad,
+                rows: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -1693,6 +1704,99 @@
                 )),
                 Return(
                     value: Some(2),
+                ),
+            ],
+        ),
+        (
+            name: Some("matrix_col_by_value"),
+            arguments: [
+                (
+                    name: Some("m"),
+                    ty: 29,
+                    binding: None,
+                ),
+                (
+                    name: Some("i"),
+                    ty: 2,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 24,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                FunctionArgument(1),
+                Access(
+                    base: 0,
+                    index: 1,
+                ),
+            ],
+            named_expressions: {
+                0: "m",
+                1: "i",
+            },
+            body: [
+                Emit((
+                    start: 2,
+                    end: 3,
+                )),
+                Return(
+                    value: Some(2),
+                ),
+            ],
+        ),
+        (
+            name: Some("matrix_by_value"),
+            arguments: [
+                (
+                    name: Some("m"),
+                    ty: 29,
+                    binding: None,
+                ),
+                (
+                    name: Some("col"),
+                    ty: 2,
+                    binding: None,
+                ),
+                (
+                    name: Some("row"),
+                    ty: 2,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 5,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                FunctionArgument(1),
+                FunctionArgument(2),
+                Access(
+                    base: 0,
+                    index: 1,
+                ),
+                Access(
+                    base: 3,
+                    index: 2,
+                ),
+            ],
+            named_expressions: {
+                0: "m",
+                1: "col",
+                2: "row",
+            },
+            body: [
+                Emit((
+                    start: 3,
+                    end: 5,
+                )),
+                Return(
+                    value: Some(4),
                 ),
             ],
         ),

@@ -146,7 +146,7 @@ impl Writer {
         container_id: Word,
         container_ty: Handle<crate::Type>,
         index_id: Word,
-        element_ty: Handle<crate::Type>,
+        element_ty: LookupType,
         block: &mut Block,
     ) -> Result<(Word, LocalVariable), Error> {
         let pointer_type_id =
@@ -169,8 +169,14 @@ impl Writer {
             .push(Instruction::store(variable.id, container_id, None));
 
         let element_pointer_id = self.id_gen.next();
-        let element_pointer_type_id =
-            self.get_pointer_id(ir_types, element_ty, spirv::StorageClass::Function)?;
+        let element_pointer_type_id = match element_ty {
+            LookupType::Handle(handle) => {
+                self.get_pointer_id(ir_types, handle, spirv::StorageClass::Function)?
+            }
+            LookupType::Local(local_type) => {
+                self.get_local_pointer_id(local_type, spirv::StorageClass::Function)
+            }
+        };
         block.body.push(Instruction::access_chain(
             element_pointer_type_id,
             element_pointer_id,
@@ -286,6 +292,20 @@ impl Writer {
             self.lookup_type.insert(lookup_type, id);
             id
         })
+    }
+
+    pub(super) fn get_local_pointer_id(
+        &mut self,
+        local_type: LocalType,
+        class: spirv::StorageClass,
+    ) -> Word {
+        let id = self.id_gen.next();
+        let ty_id = self.get_type_id(LookupType::Local(local_type));
+        let instruction = Instruction::type_pointer(id, class, ty_id);
+        instruction.to_words(&mut self.logical_layout.declarations);
+        // TODO: add to self.lookup
+        // this requires pointer to support local types
+        id
     }
 
     pub(super) fn get_uint_type_id(&mut self) -> Word {
