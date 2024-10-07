@@ -1,18 +1,18 @@
 [package]
-name = "lock-analyzer"
+authors.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+homepage.workspace = true
 keywords.workspace = true
 license.workspace = true
-homepage.workspace = true
+name = "lock-analyzer"
 repository.workspace = true
+rust-version.workspace = true
 version.workspace = true
-authors.workspace = true
 
 [dependencies]
-ron.workspace = true
 anyhow.workspace = true
+ron.workspace = true
 
 [dependencies.serde]
-workspace = true
 features = ["serde_derive"]
+workspace = true

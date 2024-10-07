@@ -1,11 +1,11 @@
 [package]
-name = "cts_runner"
-version = "0.1.0"
 authors = ["Luca Casonato <hello@lcas.dev>"]
-edition.workspace = true
 description = "CTS runner for wgpu"
+edition.workspace = true
 license.workspace = true
+name = "cts_runner"
 publish = false
+version = "0.1.0"
 
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.
@@ -14,7 +14,7 @@ deno_console.workspace = true
 deno_core.workspace = true
 deno_url.workspace = true
 deno_web.workspace = true
-deno_webidl.workspace = true
 deno_webgpu.workspace = true
-tokio = { workspace = true, features = ["full"] }
+deno_webidl.workspace = true
 termcolor.workspace = true
+tokio = { workspace = true, features = ["full"] }

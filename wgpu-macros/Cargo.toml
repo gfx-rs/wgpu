@@ -1,15 +1,15 @@
 [package]
-name = "wgpu-macros"
-version.workspace = true
 authors.workspace = true
-edition.workspace = true
 description = "Macros for wgpu"
+edition.workspace = true
+exclude = ["Cargo.lock"]
 homepage.workspace = true
-repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-exclude = ["Cargo.lock"]
+name = "wgpu-macros"
 publish = false
+repository.workspace = true
+version.workspace = true
 
 [lib]
 proc-macro = true

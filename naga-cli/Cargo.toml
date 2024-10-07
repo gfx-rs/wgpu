@@ -1,12 +1,12 @@
 [package]
-name = "naga-cli"
-version = "22.0.0"
 authors = ["gfx-rs developers"]
-edition = "2021"
 description = "Shader translation command line tool"
-repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga-cli"
-keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
+edition = "2021"
+keywords = ["GLSL", "MSL", "SPIR-V", "shader"]
 license = "MIT OR Apache-2.0"
+name = "naga-cli"
+repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga-cli"
+version = "22.0.0"
 
 [[bin]]
 name = "naga"
@@ -18,26 +18,26 @@ doc = false
 test = false
 
 [dependencies]
+anyhow.workspace = true
+argh.workspace = true
 bincode.workspace = true
 codespan-reporting.workspace = true
 env_logger.workspace = true
-argh.workspace = true
-anyhow.workspace = true
 
 [dependencies.naga]
-version = "22.0.0"
-path = "../naga"
 features = [
     "compact",
-    "wgsl-in",
-    "wgsl-out",
+    "deserialize",
+    "dot-out",
     "glsl-in",
     "glsl-out",
+    "hlsl-out",
+    "msl-out",
+    "serialize",
     "spv-in",
     "spv-out",
-    "msl-out",
-    "hlsl-out",
-    "dot-out",
-    "serialize",
-    "deserialize",
+    "wgsl-in",
+    "wgsl-out",
 ]
+path = "../naga"
+version = "22.0.0"
