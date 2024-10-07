@@ -1,13 +1,13 @@
 [package]
-name = "wgpu-core"
-version = "22.0.0"
 authors = ["gfx-rs developers"]
-edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
+edition = "2021"
 homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
+name = "wgpu-core"
+repository = "https://github.com/gfx-rs/wgpu"
+version = "22.0.0"
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for
@@ -19,10 +19,10 @@ rust-version = "1.76"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 targets = [
-    "x86_64-unknown-linux-gnu",
+    "wasm32-unknown-unknown",
     "x86_64-apple-darwin",
     "x86_64-pc-windows-msvc",
-    "wasm32-unknown-unknown",
+    "x86_64-unknown-linux-gnu",
 ]
 
 [package.metadata.cargo-machete]
@@ -52,16 +52,16 @@ renderdoc = ["hal/renderdoc"]
 strict_asserts = ["wgt/strict_asserts"]
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
+serde = ["arrayvec/serde", "dep:serde", "wgt/serde"]
 
 ## Enable API tracing.
-trace = ["dep:ron", "serde", "naga/serialize"]
+trace = ["dep:ron", "naga/serialize", "serde"]
 
 ## Enable lock order observation.
 observe_locks = ["dep:ron", "serde/serde_derive"]
 
 ## Enable API replaying
-replay = ["serde", "naga/deserialize"]
+replay = ["naga/deserialize", "serde"]
 
 ## Enable creating instances using raw-window-handle
 raw-window-handle = ["dep:raw-window-handle"]
@@ -73,7 +73,7 @@ wgsl = ["naga/wgsl-in"]
 glsl = ["naga/glsl-in"]
 
 ## Enable `ShaderModuleSource::SpirV`
-spirv = ["naga/spv-in", "dep:bytemuck"]
+spirv = ["dep:bytemuck", "naga/spv-in"]
 
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
@@ -133,10 +133,10 @@ path = "../wgpu-types"
 version = "22.0.0"
 
 [dependencies.hal]
+default-features = false
 package = "wgpu-hal"
 path = "../wgpu-hal"
 version = "22.0.0"
-default-features = false
 
 [build-dependencies]
 cfg_aliases.workspace = true

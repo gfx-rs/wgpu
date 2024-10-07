@@ -1,13 +1,13 @@
 [package]
-name = "wgpu-types"
-version = "22.0.0"
 authors = ["gfx-rs developers"]
-edition = "2021"
 description = "WebGPU types"
+edition = "2021"
 homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
+name = "wgpu-types"
+repository = "https://github.com/gfx-rs/wgpu"
+version = "22.0.0"
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for
@@ -19,18 +19,18 @@ rust-version = "1.76"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 targets = [
-    "x86_64-unknown-linux-gnu",
+    "wasm32-unknown-unknown",
     "x86_64-apple-darwin",
     "x86_64-pc-windows-msvc",
-    "wasm32-unknown-unknown",
+    "x86_64-unknown-linux-gnu",
 ]
 
 [lib]
 
 [features]
-strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde"]
+strict_asserts = []
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 
@@ -41,11 +41,11 @@ serde = { workspace = true, features = ["derive"], optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys.workspace = true
 web-sys = { workspace = true, features = [
-    "ImageBitmap",
-    "ImageData",
+    "HtmlCanvasElement",
     "HtmlImageElement",
     "HtmlVideoElement",
-    "HtmlCanvasElement",
+    "ImageBitmap",
+    "ImageData",
     "OffscreenCanvas",
     "VideoFrame",
 ] }

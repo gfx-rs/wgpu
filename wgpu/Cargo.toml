@@ -1,24 +1,24 @@
 [package]
-name = "wgpu"
-version.workspace = true
 authors.workspace = true
-edition.workspace = true
 description = "Rusty WebGPU API wrapper"
+edition.workspace = true
+exclude = ["Cargo.lock"]
 homepage.workspace = true
-repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+name = "wgpu"
 readme = "../README.md"
-exclude = ["Cargo.lock"]
+repository.workspace = true
+version.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 targets = [
-    "x86_64-unknown-linux-gnu",
+    "wasm32-unknown-unknown",
     "x86_64-apple-darwin",
     "x86_64-pc-windows-msvc",
-    "wasm32-unknown-unknown",
+    "x86_64-unknown-linux-gnu",
 ]
 
 [package.metadata.cargo-machete]
@@ -29,7 +29,7 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["wgsl", "dx12", "metal", "webgpu"]
+default = ["dx12", "metal", "webgpu", "wgsl"]
 
 #! ### Backends
 # --------------------------------------------------------------------
@@ -120,15 +120,15 @@ fragile-send-sync-non-atomic-wasm = [
 # wgpu-core is always available as an optional dependency, "wgc".
 # Whenever wgpu-core is selected, we want raw window handle support.
 [dependencies.wgc]
+features = ["raw-window-handle"]
 optional = true
 workspace = true
-features = ["raw-window-handle"]
 
 # wgpu-core is required whenever not targeting web APIs directly.
 # Whenever wgpu-core is selected, we want raw window handle support.
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.wgc]
-workspace = true
 features = ["raw-window-handle"]
+workspace = true
 
 # Enable `wgc` by default on macOS and iOS to allow the `metal` crate feature to
 # enable the Metal backend while being no-op on other targets.
@@ -137,18 +137,18 @@ workspace = true
 
 # We want the wgpu-core Direct3D backend and OpenGL (via WGL) on Windows.
 [target.'cfg(windows)'.dependencies.wgc]
-workspace = true
 features = ["gles"]
+workspace = true
 
 # We want the wgpu-core Vulkan backend on Unix (but not emscripten, macOS, iOS) and Windows.
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
-workspace = true
 features = ["vulkan"]
+workspace = true
 
 # We want the wgpu-core GLES backend on Unix (but not macOS, iOS).
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies.wgc]
-workspace = true
 features = ["gles"]
+workspace = true
 
 [dependencies.wgt]
 workspace = true
@@ -164,8 +164,8 @@ hal = { workspace = true, features = ["renderdoc"] }
 hal = { workspace = true, features = ["renderdoc"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.hal]
-workspace = true
 optional = true
+workspace = true
 
 [dependencies]
 arrayvec.workspace = true
@@ -179,27 +179,31 @@ smallvec.workspace = true
 static_assertions.workspace = true
 
 [dependencies.naga]
-workspace = true
 optional = true
+workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true
 
 # used to test all the example shaders
 [dev-dependencies.naga]
-workspace = true
 features = ["wgsl-in"]
+workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+parking_lot.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true, features = [
     "Document",
+    "HtmlCanvasElement",
+    "ImageBitmap",
+    "ImageBitmapRenderingContext",
     "Navigator",
     "Node",
     "NodeList",
-    "HtmlCanvasElement",
     "OffscreenCanvas",
-    "ImageBitmap",
-    "ImageBitmapRenderingContext",
     "Window",
     "WorkerGlobalScope",
     "WorkerNavigator",
@@ -207,7 +211,3 @@ web-sys = { workspace = true, features = [
     "Event",
     "EventTarget",
 ] }
-wasm-bindgen.workspace = true
-js-sys.workspace = true
-wasm-bindgen-futures.workspace = true
-parking_lot.workspace = true

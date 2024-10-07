@@ -1,20 +1,20 @@
 [package]
-name = "wgpu-test"
-version.workspace = true
 authors.workspace = true
-edition.workspace = true
+autotests = false
 description = "common code for wgpu tests"
+edition.workspace = true
 homepage.workspace = true
-repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autotests = false
+name = "wgpu-test"
 publish = false
+repository.workspace = true
+version.workspace = true
 
 [[test]]
+harness = false
 name = "wgpu-test"
 path = "tests/root.rs"
-harness = false
 
 [features]
 webgl = ["wgpu/webgl"]
@@ -34,11 +34,11 @@ parking_lot.workspace = true
 png.workspace = true
 pollster.workspace = true
 profiling.workspace = true
-serde_json.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 strum = { workspace = true, features = ["derive"] }
-wgpu-macros.workspace = true
 wgpu = { workspace = true, features = ["wgsl"] }
+wgpu-macros.workspace = true
 wgt = { workspace = true, features = ["serde"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -54,7 +54,7 @@ web-sys = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true
 js-sys.workspace = true
+wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen-test.workspace = true
-wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
+web-sys = { workspace = true, features = ["Blob", "CanvasRenderingContext2d"] }

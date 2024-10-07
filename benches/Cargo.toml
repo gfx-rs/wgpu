@@ -1,19 +1,19 @@
 [package]
-name = "wgpu-benchmark"
-version.workspace = true
 authors.workspace = true
-edition.workspace = true
+autobenches = false
 description = "wgpu benchmarking suite"
+edition.workspace = true
 homepage.workspace = true
-repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autobenches = false
+name = "wgpu-benchmark"
 publish = false
+repository.workspace = true
+version.workspace = true
 
 [[bench]]
-name = "root"
 harness = false
+name = "root"
 path = "benches/root.rs"
 
 [features]
@@ -27,14 +27,14 @@ bytemuck.workspace = true
 criterion.workspace = true
 naga = { workspace = true, features = [
     "deserialize",
-    "serialize",
-    "wgsl-in",
-    "spv-in",
     "glsl-in",
-    "spv-out",
-    "msl-out",
-    "hlsl-out",
     "glsl-out",
+    "hlsl-out",
+    "msl-out",
+    "serialize",
+    "spv-in",
+    "spv-out",
+    "wgsl-in",
     "wgsl-out",
 ] }
 nanorand.workspace = true
@@ -43,4 +43,4 @@ pollster.workspace = true
 profiling.workspace = true
 rayon.workspace = true
 tracy-client = { workspace = true, optional = true }
-wgpu = { workspace = true, features = ["wgsl", "metal", "dx12"] }
+wgpu = { workspace = true, features = ["dx12", "metal", "wgsl"] }
