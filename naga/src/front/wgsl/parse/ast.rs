@@ -183,6 +183,7 @@ pub struct StructMember<'a> {
     pub binding: Option<Binding<'a>>,
     pub align: Option<Handle<Expression<'a>>>,
     pub size: Option<Handle<Expression<'a>>>,
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]

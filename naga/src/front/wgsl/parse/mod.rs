@@ -999,6 +999,9 @@ impl Parser {
                     ExpectedToken::Token(Token::Separator(',')),
                 ));
             }
+            // Save a lexer to be able to backtrack comments if need be.
+            let mut lexer_comments = lexer.clone();
+
             let (mut size, mut align) = (ParsedAttribute::default(), ParsedAttribute::default());
             self.push_rule_span(Rule::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
@@ -1028,12 +1031,21 @@ impl Parser {
             let ty = self.type_decl(lexer, ctx)?;
             ready = lexer.skip(Token::Separator(','));
 
+            let mut comments = Vec::new();
+            lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+            let comments = comments
+                .into_iter()
+                .map(|comment_span| lexer.source.index(comment_span))
+                .collect();
+
             members.push(ast::StructMember {
                 name,
                 ty,
                 binding,
                 size: size.value,
                 align: align.value,
+                comments: comments,
             });
         }
 

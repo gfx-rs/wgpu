@@ -2277,6 +2277,10 @@ pub struct Module {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Comments {
     pub types: FastIndexMap<Handle<Type>, Vec<String>>,
+    // The key is:
+    // - key.0: the handle to the Struct
+    // - key.1: the index of the `StructMember`.
+    pub struct_members: FastIndexMap<(Handle<Type>, usize), Vec<String>>,
     pub functions: FastIndexMap<String, Vec<String>>,
     pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
     pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
