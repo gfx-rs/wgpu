@@ -979,6 +979,7 @@ impl Parser {
             binding: None,
             ty,
             init,
+            comments: Vec::new(),
         })
     }
 
@@ -2161,6 +2162,7 @@ impl Parser {
             result,
             body,
             locals,
+            comments: Vec::new(),
         };
 
         // done
@@ -2315,7 +2317,20 @@ impl Parser {
                 let init = self.general_expression(lexer, &mut ctx)?;
                 lexer.expect(Token::Separator(';'))?;
 
-                Some(ast::GlobalDeclKind::Const(ast::Const { name, ty, init }))
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+
+                Some(ast::GlobalDeclKind::Const(ast::Const {
+                    name,
+                    ty,
+                    init,
+                    comments,
+                }))
             }
             (Token::Word("override"), _) => {
                 let name = lexer.next_ident()?;
@@ -2344,10 +2359,28 @@ impl Parser {
             (Token::Word("var"), _) => {
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
+
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+                var.comments = comments;
                 Some(ast::GlobalDeclKind::Var(var))
             }
             (Token::Word("fn"), _) => {
                 let function = self.function_decl(lexer, out, &mut dependencies)?;
+
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
@@ -2361,6 +2394,7 @@ impl Parser {
                     } else {
                         None
                     },
+                    comments,
                     ..function
                 }))
             }

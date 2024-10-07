@@ -2277,4 +2277,7 @@ pub struct Module {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Comments {
     pub types: FastIndexMap<Handle<Type>, Vec<String>>,
+    pub functions: FastIndexMap<String, Vec<String>>,
+    pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
+    pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
 }

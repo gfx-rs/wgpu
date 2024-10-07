@@ -145,6 +145,8 @@ pub struct Function<'a> {
     pub locals: Arena<Local>,
 
     pub body: Block<'a>,
+
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]
@@ -171,6 +173,7 @@ pub struct GlobalVariable<'a> {
     pub binding: Option<ResourceBinding<'a>>,
     pub ty: Handle<Type<'a>>,
     pub init: Option<Handle<Expression<'a>>>,
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]
@@ -201,6 +204,7 @@ pub struct Const<'a> {
     pub name: Ident<'a>,
     pub ty: Option<Handle<Type<'a>>>,
     pub init: Handle<Expression<'a>>,
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]

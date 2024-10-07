@@ -8,7 +8,7 @@ use crate::front::Typifier;
 use crate::proc::{
     ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
 };
-use crate::{Arena, Comments, FastHashMap, FastIndexMap, Handle, Span};
+use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
 mod construction;
 mod conversion;
@@ -932,6 +932,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             match decl.kind {
                 ast::GlobalDeclKind::Fn(ref f) => {
                     let lowered_decl = self.function(f, span, &mut ctx)?;
+                    if !f.comments.is_empty() {
+                        ctx.module.comments.functions.insert(
+                            f.name.name.to_string(),
+                            f.comments.iter().map(|s| s.to_string()).collect(),
+                        );
+                    }
                     ctx.globals.insert(f.name.name, lowered_decl);
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
@@ -982,6 +988,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         span,
                     );
 
+                    if !v.comments.is_empty() {
+                        ctx.module
+                            .comments
+                            .global_variables
+                            .insert(handle, v.comments.iter().map(|s| s.to_string()).collect());
+                    }
                     ctx.globals
                         .insert(v.name.name, LoweredGlobalDecl::Var(handle));
                 }
@@ -1026,6 +1038,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     ctx.globals
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
+                    if !c.comments.is_empty() {
+                        ctx.module
+                            .comments
+                            .constants
+                            .insert(handle, c.comments.iter().map(|s| s.to_string()).collect());
+                    }
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
                     let init = o
