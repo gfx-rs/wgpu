@@ -2,7 +2,7 @@ use super::Error;
 use crate::{
     back::{self, Baked},
     proc::{self, ExpressionKindTracker, NameKey},
-    valid, Handle, Module, ShaderStage, TypeInner,
+    valid, Handle, MathFunction, Module, ScalarKind, ShaderStage, TypeInner,
 };
 use std::fmt::Write;
 
@@ -61,6 +61,62 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum PolyfillOverload {
+    /// Overload for the given matNxN matrix.
+    /// As matricies are always a float type, we don't need to specify the scalar kind.
+    Inverse {
+        dimension: crate::VectorSize,
+        width: crate::Bytes,
+    },
+    Outer {
+        columns: crate::VectorSize,
+        rows: crate::VectorSize,
+        width: crate::Bytes,
+    },
+}
+
+impl PolyfillOverload {
+    pub fn from_type(math_function: MathFunction, ty: &TypeInner) -> Option<PolyfillOverload> {
+        if math_function == MathFunction::Inverse {
+            let TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } = ty
+            else {
+                return None;
+            };
+            if columns != rows || scalar.kind != ScalarKind::Float {
+                return None;
+            };
+            Some(PolyfillOverload::Inverse {
+                dimension: *columns,
+                width: scalar.width,
+            })
+        } else if math_function == MathFunction::Outer {
+            let TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } = ty
+            else {
+                return None;
+            };
+            if scalar.kind != ScalarKind::Float {
+                return None;
+            };
+            Some(PolyfillOverload::Outer {
+                columns: *columns,
+                rows: *rows,
+                width: scalar.width,
+            })
+        } else {
+            None
+        }
+    }
+}
+
 pub struct Writer<W> {
     out: W,
     flags: WriterFlags,
@@ -68,10 +124,19 @@ pub struct Writer<W> {
     namer: proc::Namer,
     named_expressions: crate::NamedExpressions,
     ep_results: Vec<(ShaderStage, Handle<crate::Type>)>,
+    mf_polyfills: crate::FastHashMap<PolyfillOverload, String>,
 }
 
 impl<W: Write> Writer<W> {
     pub fn new(out: W, flags: WriterFlags) -> Self {
+        Self::new_with_polyfills(out, flags, crate::FastHashMap::default())
+    }
+
+    pub fn new_with_polyfills(
+        out: W,
+        flags: WriterFlags,
+        polyfills: crate::FastHashMap<PolyfillOverload, String>,
+    ) -> Writer<W> {
         Writer {
             out,
             flags,
@@ -79,6 +144,7 @@ impl<W: Write> Writer<W> {
             namer: proc::Namer::default(),
             named_expressions: crate::NamedExpressions::default(),
             ep_results: vec![],
+            mf_polyfills: polyfills,
         }
     }
 
@@ -1651,8 +1717,9 @@ impl<W: Write> Writer<W> {
             } => {
                 use crate::MathFunction as Mf;
 
-                enum Function {
+                enum Function<'a> {
                     Regular(&'static str),
+                    Polyfill(&'a str),
                 }
 
                 let function = match fun {
@@ -1736,13 +1803,23 @@ impl<W: Write> Writer<W> {
                     Mf::Unpack2x16float => Function::Regular("unpack2x16float"),
                     Mf::Unpack4xI8 => Function::Regular("unpack4xI8"),
                     Mf::Unpack4xU8 => Function::Regular("unpack4xU8"),
-                    Mf::Inverse | Mf::Outer => {
-                        return Err(Error::UnsupportedMathFunction(fun));
+                    mf @ Mf::Inverse | mf @ Mf::Outer => {
+                        let typ = func_ctx.resolve_type(arg, &module.types);
+
+                        let Some(overload) = PolyfillOverload::from_type(mf, typ) else {
+                            return Err(Error::UnsupportedMathFunction(fun));
+                        };
+
+                        let Some(polyfill) = self.mf_polyfills.get(&overload) else {
+                            return Err(Error::UnsupportedMathFunction(fun));
+                        };
+
+                        Function::Polyfill(polyfill.as_str())
                     }
                 };
 
                 match function {
-                    Function::Regular(fun_name) => {
+                    Function::Regular(fun_name) | Function::Polyfill(fun_name) => {
                         write!(self.out, "{fun_name}(")?;
                         self.write_expr(module, arg, func_ctx)?;
                         for arg in IntoIterator::into_iter([arg1, arg2, arg3]).flatten() {

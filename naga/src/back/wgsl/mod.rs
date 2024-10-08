@@ -8,6 +8,7 @@ mod writer;
 
 use thiserror::Error;
 
+pub use writer::PolyfillOverload;
 pub use writer::{Writer, WriterFlags};
 
 #[derive(Error, Debug)]
