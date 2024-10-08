@@ -1941,9 +1941,8 @@ fn builtin_str(built_in: crate::BuiltIn) -> Result<&'static str, Error> {
         | Bi::CullDistance
         | Bi::PointSize
         | Bi::PointCoord
-        | Bi::WorkGroupSize => {
-            return Err(Error::Custom(format!("Unsupported builtin {built_in:?}")))
-        }
+        | Bi::WorkGroupSize
+        | Bi::DrawID => return Err(Error::Custom(format!("Unsupported builtin {built_in:?}"))),
     })
 }
 
