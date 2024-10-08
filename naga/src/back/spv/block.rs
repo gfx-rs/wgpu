@@ -3,8 +3,8 @@ Implementations for `BlockContext` methods.
 */
 
 use super::{
-    helpers, index::BoundsCheckResult, make_local, selection::Selection, Block, BlockContext,
-    Dimension, Error, Instruction, LocalType, LookupType, ResultMember, Writer, WriterFlags,
+    helpers, index::BoundsCheckResult, selection::Selection, Block, BlockContext, Dimension, Error,
+    Instruction, LocalType, LookupType, ResultMember, Writer, WriterFlags,
 };
 use crate::{arena::Handle, proc::TypeResolution, Statement};
 use spirv::Word;
@@ -1809,7 +1809,9 @@ impl<'w> BlockContext<'w> {
                 Some(ty) => ty,
                 None => LookupType::Handle(ty_handle),
             },
-            TypeResolution::Value(ref inner) => LookupType::Local(make_local(inner).unwrap()),
+            TypeResolution::Value(ref inner) => {
+                LookupType::Local(LocalType::from_inner(inner).unwrap())
+            }
         };
         let result_type_id = self.get_type_id(result_lookup_ty);
 
