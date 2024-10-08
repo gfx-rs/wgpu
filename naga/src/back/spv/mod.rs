@@ -231,6 +231,21 @@ impl LocalImageType {
     }
 }
 
+/// A numeric type, for use in [`LocalType`].
+#[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
+enum NumericType {
+    Scalar(crate::Scalar),
+    Vector {
+        size: crate::VectorSize,
+        scalar: crate::Scalar,
+    },
+    Matrix {
+        columns: crate::VectorSize,
+        rows: crate::VectorSize,
+        scalar: crate::Scalar,
+    },
+}
+
 /// A SPIR-V type constructed during code generation.
 ///
 /// This is the variant of [`LookupType`] used to represent types that might not
@@ -276,19 +291,11 @@ impl LocalImageType {
 /// [`TypeInner`]: crate::TypeInner
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LocalType {
-    /// A scalar, vector, or pointer to one of those.
-    Value {
-        /// If `None`, this represents a scalar type. If `Some`, this represents
-        /// a vector type of the given size.
-        vector_size: Option<crate::VectorSize>,
-        scalar: crate::Scalar,
-        pointer_space: Option<spirv::StorageClass>,
-    },
-    /// A matrix of floating-point values.
-    Matrix {
-        columns: crate::VectorSize,
-        rows: crate::VectorSize,
-        width: crate::Bytes,
+    /// A numeric type.
+    Numeric(NumericType),
+    LocalPointer {
+        base: NumericType,
+        class: spirv::StorageClass,
     },
     Pointer {
         base: Handle<crate::Type>,
@@ -361,38 +368,39 @@ impl LocalType {
     fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
         Some(match *inner {
             crate::TypeInner::Scalar(scalar) | crate::TypeInner::Atomic(scalar) => {
-                LocalType::Value {
-                    vector_size: None,
-                    scalar,
-                    pointer_space: None,
-                }
+                LocalType::Numeric(NumericType::Scalar(scalar))
             }
-            crate::TypeInner::Vector { size, scalar } => LocalType::Value {
-                vector_size: Some(size),
-                scalar,
-                pointer_space: None,
-            },
+            crate::TypeInner::Vector { size, scalar } => {
+                LocalType::Numeric(NumericType::Vector { size, scalar })
+            }
             crate::TypeInner::Matrix {
                 columns,
                 rows,
                 scalar,
-            } => LocalType::Matrix {
+            } => LocalType::Numeric(NumericType::Matrix {
                 columns,
                 rows,
-                width: scalar.width,
-            },
+                scalar,
+            }),
             crate::TypeInner::Pointer { base, space } => LocalType::Pointer {
                 base,
                 class: helpers::map_storage_class(space),
             },
             crate::TypeInner::ValuePointer {
-                size,
+                size: Some(size),
                 scalar,
                 space,
-            } => LocalType::Value {
-                vector_size: size,
+            } => LocalType::LocalPointer {
+                base: NumericType::Vector { size, scalar },
+                class: helpers::map_storage_class(space),
+            },
+            crate::TypeInner::ValuePointer {
+                size: None,
                 scalar,
-                pointer_space: Some(helpers::map_storage_class(space)),
+                space,
+            } => LocalType::LocalPointer {
+                base: NumericType::Scalar(scalar),
+                class: helpers::map_storage_class(space),
             },
             crate::TypeInner::Image {
                 dim,
