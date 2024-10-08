@@ -99,6 +99,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### Naga
 
+- SPIR-V frontend splats depth texture sample and load results. Fixes [issue #4551](https://github.com/gfx-rs/wgpu/issues/4551). By @schell in [#6384](https://github.com/gfx-rs/wgpu/pull/6384).
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
 - Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256).
 - Per-polygon and flat inputs should not be considered subgroup uniform. By @magcius in [#6276](https://github.com/gfx-rs/wgpu/pull/6276).
