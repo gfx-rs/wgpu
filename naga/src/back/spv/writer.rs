@@ -144,13 +144,37 @@ impl Writer {
         ir_types: &UniqueArena<crate::Type>,
         result_type_id: Word,
         container_id: Word,
-        container_ty: Handle<crate::Type>,
+        container_resolution: &TypeResolution,
         index_id: Word,
         element_ty: LookupType,
         block: &mut Block,
     ) -> Result<(Word, LocalVariable), Error> {
-        let pointer_type_id =
-            self.get_pointer_id(ir_types, container_ty, spirv::StorageClass::Function)?;
+        let pointer_type_id = match *container_resolution {
+            TypeResolution::Handle(handle) => self.get_pointer_id(
+                ir_types,
+                LookupType::Handle(handle),
+                spirv::StorageClass::Function,
+            ),
+            TypeResolution::Value(ref type_inner) => make_local(type_inner)
+                .map(|local_type| {
+                    self.get_pointer_id(
+                        ir_types,
+                        LookupType::Local(local_type),
+                        spirv::StorageClass::Function,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    let container_type_id = self.get_expression_type_id(container_resolution);
+                    let pointer_type_id = self.id_gen.next();
+                    Instruction::type_pointer(
+                        pointer_type_id,
+                        spirv::StorageClass::Function,
+                        container_type_id,
+                    )
+                    .to_words(&mut self.logical_layout.declarations);
+                    pointer_type_id
+                }),
+        };
 
         let variable = {
             let id = self.id_gen.next();
@@ -169,14 +193,8 @@ impl Writer {
             .push(Instruction::store(variable.id, container_id, None));
 
         let element_pointer_id = self.id_gen.next();
-        let element_pointer_type_id = match element_ty {
-            LookupType::Handle(handle) => {
-                self.get_pointer_id(ir_types, handle, spirv::StorageClass::Function)?
-            }
-            LookupType::Local(local_type) => {
-                self.get_local_pointer_id(local_type, spirv::StorageClass::Function)
-            }
-        };
+        let element_pointer_type_id =
+            self.get_pointer_id(ir_types, element_ty, spirv::StorageClass::Function);
         block.body.push(Instruction::access_chain(
             element_pointer_type_id,
             element_pointer_id,
@@ -272,18 +290,39 @@ impl Writer {
     pub(super) fn get_pointer_id(
         &mut self,
         arena: &UniqueArena<crate::Type>,
-        handle: Handle<crate::Type>,
+        pointee_ty: LookupType,
         class: spirv::StorageClass,
-    ) -> Result<Word, Error> {
-        let ty_id = self.get_type_id(LookupType::Handle(handle));
-        if let crate::TypeInner::Pointer { .. } = arena[handle].inner {
-            return Ok(ty_id);
-        }
-        let lookup_type = LookupType::Local(LocalType::Pointer {
-            base: handle,
-            class,
-        });
-        Ok(if let Some(&id) = self.lookup_type.get(&lookup_type) {
+    ) -> Word {
+        let ty_id = self.get_type_id(pointee_ty);
+        let lookup_type = match pointee_ty {
+            LookupType::Handle(handle) => {
+                if let crate::TypeInner::Pointer { .. } = arena[handle].inner {
+                    return ty_id;
+                }
+                LookupType::Local(LocalType::Pointer {
+                    base: handle,
+                    class,
+                })
+            }
+            LookupType::Local(local_type) => match local_type {
+                LocalType::Pointer { .. }
+                | LocalType::Value {
+                    pointer_space: Some(_),
+                    ..
+                } => return ty_id,
+                LocalType::Value {
+                    vector_size,
+                    scalar,
+                    pointer_space: None,
+                } => LookupType::Local(LocalType::Value {
+                    vector_size,
+                    scalar,
+                    pointer_space: Some(class),
+                }),
+                _ => unimplemented!(),
+            },
+        };
+        if let Some(&id) = self.lookup_type.get(&lookup_type) {
             id
         } else {
             let id = self.id_gen.next();
@@ -291,21 +330,7 @@ impl Writer {
             instruction.to_words(&mut self.logical_layout.declarations);
             self.lookup_type.insert(lookup_type, id);
             id
-        })
-    }
-
-    pub(super) fn get_local_pointer_id(
-        &mut self,
-        local_type: LocalType,
-        class: spirv::StorageClass,
-    ) -> Word {
-        let id = self.id_gen.next();
-        let ty_id = self.get_type_id(LookupType::Local(local_type));
-        let instruction = Instruction::type_pointer(id, class, ty_id);
-        instruction.to_words(&mut self.logical_layout.declarations);
-        // TODO: add to self.lookup
-        // this requires pointer to support local types
-        id
+        }
     }
 
     pub(super) fn get_uint_type_id(&mut self) -> Word {
@@ -420,9 +445,9 @@ impl Writer {
             let argument_type_id = match handle_ty {
                 true => self.get_pointer_id(
                     &ir_module.types,
-                    argument.ty,
+                    LookupType::Handle(argument.ty),
                     spirv::StorageClass::UniformConstant,
-                )?,
+                ),
                 false => self.get_type_id(LookupType::Handle(argument.ty)),
             };
 
@@ -653,8 +678,11 @@ impl Writer {
                         gv.handle_id = id;
                     } else if global_needs_wrapper(ir_module, var) {
                         let class = map_storage_class(var.space);
-                        let pointer_type_id =
-                            self.get_pointer_id(&ir_module.types, var.ty, class)?;
+                        let pointer_type_id = self.get_pointer_id(
+                            &ir_module.types,
+                            LookupType::Handle(var.ty),
+                            class,
+                        );
                         let index_id = self.get_index_constant(0);
                         let id = self.id_gen.next();
                         prelude.body.push(Instruction::access_chain(
@@ -715,9 +743,9 @@ impl Writer {
             let init_word = variable.init.map(|constant| context.cached[constant]);
             let pointer_type_id = context.writer.get_pointer_id(
                 &ir_module.types,
-                variable.ty,
+                LookupType::Handle(variable.ty),
                 spirv::StorageClass::Function,
-            )?;
+            );
             let instruction = Instruction::variable(
                 pointer_type_id,
                 id,
@@ -1537,7 +1565,7 @@ impl Writer {
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
         let id = self.id_gen.next();
-        let pointer_type_id = self.get_pointer_id(&ir_module.types, ty, class)?;
+        let pointer_type_id = self.get_pointer_id(&ir_module.types, LookupType::Handle(ty), class);
         Instruction::variable(pointer_type_id, id, class, None)
             .to_words(&mut self.logical_layout.declarations);
 
@@ -1869,7 +1897,11 @@ impl Writer {
             if substitute_inner_type_lookup.is_some() {
                 inner_type_id
             } else {
-                self.get_pointer_id(&ir_module.types, global_variable.ty, class)?
+                self.get_pointer_id(
+                    &ir_module.types,
+                    LookupType::Handle(global_variable.ty),
+                    class,
+                )
             }
         };
 

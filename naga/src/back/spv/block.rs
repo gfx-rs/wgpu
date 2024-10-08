@@ -348,14 +348,7 @@ impl<'w> BlockContext<'w> {
                     } => {
                         let index_id = self.cached[index];
                         let base_id = self.cached[base];
-                        let base_ty = match self.fun_info[base].ty {
-                            TypeResolution::Handle(handle) => handle,
-                            TypeResolution::Value(_) => {
-                                return Err(Error::Validation(
-                                    "Array types should always be in the arena",
-                                ))
-                            }
-                        };
+                        let base_ty = &self.fun_info[base].ty;
                         let (id, variable) = self.writer.promote_access_expression_to_variable(
                             &self.ir_module.types,
                             result_type_id,
@@ -371,14 +364,7 @@ impl<'w> BlockContext<'w> {
                     crate::TypeInner::Matrix { scalar, rows, .. } => {
                         let index_id = self.cached[index];
                         let base_id = self.cached[base];
-                        let base_ty = match self.fun_info[base].ty {
-                            TypeResolution::Handle(handle) => handle,
-                            TypeResolution::Value(_) => {
-                                return Err(Error::Validation(
-                                    "Array types should always be in the arena",
-                                ))
-                            }
-                        };
+                        let base_ty = &self.fun_info[base].ty;
                         let (id, variable) = self.writer.promote_access_expression_to_variable(
                             &self.ir_module.types,
                             result_type_id,

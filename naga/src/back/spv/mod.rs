@@ -623,8 +623,9 @@ impl BlockContext<'_> {
         handle: Handle<crate::Type>,
         class: spirv::StorageClass,
     ) -> Result<Word, Error> {
-        self.writer
-            .get_pointer_id(&self.ir_module.types, handle, class)
+        Ok(self
+            .writer
+            .get_pointer_id(&self.ir_module.types, LookupType::Handle(handle), class))
     }
 }
 
