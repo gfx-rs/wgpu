@@ -57,6 +57,12 @@ struct type_20 {
 struct type_22 {
     metal::float4 inner[2];
 };
+struct AssignToMember {
+    uint x;
+};
+struct type_25 {
+    uint inner[4];
+};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
@@ -166,6 +172,34 @@ int array_by_value(
     return a_1.inner[i];
 }
 
+uint fetch_arg_ptr_member(
+    thread AssignToMember& p_1
+) {
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(
+    thread AssignToMember& p_2
+) {
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(
+    thread type_25& p_3
+) {
+    uint _e2 = p_3.inner[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(
+    thread type_25& p_4
+) {
+    p_4.inner[1] = 10u;
+    return;
+}
+
 struct foo_vertInput {
 };
 struct foo_vertOutput {
@@ -237,4 +271,16 @@ vertex foo_1Output foo_1(
     type_20 arr_2 = type_20 {1, 2, 3, 4, 5};
     int value_1 = arr_2.inner[vi_1];
     return foo_1Output { static_cast<metal::float4>(metal::int4(value_1)) };
+}
+
+
+kernel void assign_to_ptr_components(
+) {
+    AssignToMember s1_ = {};
+    type_25 a1_ = {};
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
+    return;
 }
