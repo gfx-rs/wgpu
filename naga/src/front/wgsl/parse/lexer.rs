@@ -48,6 +48,7 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
 fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
+    let full_chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
         None => return (Token::End, ""),
@@ -82,33 +83,36 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let og_chars = chars.as_str();
                     let documentation = if let Some(end_position) = chars.position(is_comment_end) {
-                        &og_chars[..end_position]
+                        &full_chars.as_str()[..end_position + 1]
                     } else {
-                        og_chars
+                        full_chars.as_str()
                     };
                     (Token::Comment(documentation), chars.as_str())
                 }
                 Some('*') => {
                     let mut depth = 1;
                     let mut prev = None;
-
+                    let mut nb_characters = 1;
                     for c in &mut chars {
                         match (prev, c) {
                             (Some('*'), '/') => {
                                 prev = None;
                                 depth -= 1;
+                                nb_characters += 1;
                                 if depth == 0 {
-                                    return (Token::Trivia, chars.as_str());
+                                    let doc = &full_chars.as_str()[..nb_characters + 1];
+                                    return (Token::Comment(doc), chars.as_str());
                                 }
                             }
                             (Some('/'), '*') => {
                                 prev = None;
                                 depth += 1;
+                                nb_characters += 1;
                             }
                             _ => {
                                 prev = Some(c);
+                                nb_characters += 1;
                             }
                         }
                     }
@@ -309,17 +313,25 @@ impl<'a> Lexer<'a> {
     ///
     /// See [`consume_token`] for the meaning of `generic`.
     fn next_impl(&mut self, generic: bool) -> TokenSpan<'a> {
+        self.next_until(
+            |token| !matches!(token, Token::Trivia | Token::Comment(_)),
+            generic,
+        )
+    }
+
+    /// Return the next token from `self` for which `stop_at` returns true.
+    ///
+    /// See [`consume_token`] for the meaning of `generic`.
+    pub fn next_until(&mut self, stop_at: fn(Token) -> bool, generic: bool) -> TokenSpan<'a> {
         let mut start_byte_offset = self.current_byte_offset();
         loop {
             let (token, rest) = consume_token(self.input, generic);
             self.input = rest;
-            match token {
-                Token::Trivia | Token::Comment(_) => start_byte_offset = self.current_byte_offset(),
-                _ => {
-                    self.last_end_offset = self.current_byte_offset();
-                    return (token, self.span_from(start_byte_offset));
-                }
+            if stop_at(token) {
+                self.last_end_offset = self.current_byte_offset();
+                return (token, self.span_from(start_byte_offset));
             }
+            start_byte_offset = self.current_byte_offset();
         }
     }
 
@@ -477,7 +489,11 @@ impl<'a> Lexer<'a> {
 fn sub_test(source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source);
     for &token in expected_tokens {
-        assert_eq!(lex.next().0, token);
+        assert_eq!(
+            lex.next_until(|token| !matches!(token, Token::Trivia), false)
+                .0,
+            token
+        );
     }
     assert_eq!(lex.next().0, Token::End);
 }
@@ -759,6 +775,63 @@ fn test_variable_decl() {
             Token::Paren('<'),
             Token::Word("u32"),
             Token::Paren('>'),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comments() {
+    sub_test("// Single comment", &[Token::Comment("// Single comment")]);
+    sub_test(
+        "/* multi
+    line
+    comment */",
+        &[Token::Comment(
+            "/* multi
+    line
+    comment */",
+        )],
+    );
+    sub_test(
+        "/* multi
+    line
+    comment */
+    // and another",
+        &[
+            Token::Comment(
+                "/* multi
+    line
+    comment */",
+            ),
+            Token::Comment("// and another"),
+        ],
+    );
+}
+
+#[test]
+fn test_comment_nested() {
+    sub_test(
+        "/*
+    a comment with nested one /*
+        nested comment
+    */
+    */
+    const a : i32 = 2;",
+        &[
+            Token::Comment(
+                "/*
+    a comment with nested one /*
+        nested comment
+    */
+    */",
+            ),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
             Token::Separator(';'),
         ],
     );

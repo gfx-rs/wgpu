@@ -15,6 +15,24 @@ fn parse_comment() {
 }
 
 #[test]
+fn parse_types_with_comments() {
+    parse_str(
+        "/*
+    a comment with nested one /*
+        nested comment
+    */
+    */
+    const a : i32 = 2;",
+    )
+    .unwrap();
+    parse_str(
+        "// test
+    var t: texture_2d<f32>;",
+    )
+    .unwrap();
+}
+
+#[test]
 fn parse_types() {
     parse_str("const a : i32 = 2;").unwrap();
     parse_str("const a : u64 = 2lu;").unwrap();
