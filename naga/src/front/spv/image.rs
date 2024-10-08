@@ -677,7 +677,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             depth_ref,
         };
         let image_sample_handle = ctx.expressions.append(expr, self.span_from_with_op(start));
-        let handle = if is_depth {
+        let handle = if is_depth && depth_ref.is_none() {
             let splat_expr = crate::Expression::Splat {
                 size: crate::VectorSize::Quad,
                 value: image_sample_handle,
