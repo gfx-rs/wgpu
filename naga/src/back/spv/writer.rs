@@ -1,10 +1,10 @@
 use super::{
     block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
-    make_local, Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo,
-    EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
-    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, Options,
-    PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
+    Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo, EntryPointContext, Error,
+    Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
+    LogicalLayout, LookupFunctionType, LookupType, Options, PhysicalLayout, PipelineOptions,
+    ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
@@ -254,7 +254,9 @@ impl Writer {
     pub(super) fn get_expression_lookup_type(&mut self, tr: &TypeResolution) -> LookupType {
         match *tr {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
-            TypeResolution::Value(ref inner) => LookupType::Local(make_local(inner).unwrap()),
+            TypeResolution::Value(ref inner) => {
+                LookupType::Local(LocalType::from_inner(inner).unwrap())
+            }
         }
     }
 
@@ -1025,7 +1027,7 @@ impl Writer {
         // because some types which map to the same LocalType have different
         // capability requirements. See https://github.com/gfx-rs/wgpu/issues/5569
         self.request_type_capabilities(&ty.inner)?;
-        let id = if let Some(local) = make_local(&ty.inner) {
+        let id = if let Some(local) = LocalType::from_inner(&ty.inner) {
             // This type can be represented as a `LocalType`, so check if we've
             // already written an instruction for it. If not, do so now, with
             // `write_type_declaration_local`.
