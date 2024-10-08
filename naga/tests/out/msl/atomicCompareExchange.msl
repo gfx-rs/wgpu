@@ -19,10 +19,9 @@ struct _atomic_compare_exchange_resultUint4_ {
     bool exchanged;
 };
 
-namespace metal {
     template <typename A>
-    _atomic_compare_exchange_resultSint4_ atomic_naga_atomic_compare_exchange_weak_explicit(
-        volatile device A *atomic_ptr,
+    _atomic_compare_exchange_resultSint4_ naga_atomic_compare_exchange_weak_explicit(
+        device A *atomic_ptr,
         int cmp,
         int v
     ) {
@@ -33,8 +32,8 @@ namespace metal {
         return _atomic_compare_exchange_resultSint4_{cmp, swapped};
     }
     template <typename A>
-    _atomic_compare_exchange_resultSint4_ atomic_naga_atomic_compare_exchange_weak_explicit(
-        volatile threadgroup A *atomic_ptr,
+    _atomic_compare_exchange_resultSint4_ naga_atomic_compare_exchange_weak_explicit(
+        threadgroup A *atomic_ptr,
         int cmp,
         int v
     ) {
@@ -44,12 +43,10 @@ namespace metal {
         );
         return _atomic_compare_exchange_resultSint4_{cmp, swapped};
     }
-}
 
-namespace metal {
     template <typename A>
-    _atomic_compare_exchange_resultUint4_ atomic_naga_atomic_compare_exchange_weak_explicit(
-        volatile device A *atomic_ptr,
+    _atomic_compare_exchange_resultUint4_ naga_atomic_compare_exchange_weak_explicit(
+        device A *atomic_ptr,
         uint cmp,
         uint v
     ) {
@@ -60,8 +57,8 @@ namespace metal {
         return _atomic_compare_exchange_resultUint4_{cmp, swapped};
     }
     template <typename A>
-    _atomic_compare_exchange_resultUint4_ atomic_naga_atomic_compare_exchange_weak_explicit(
-        volatile threadgroup A *atomic_ptr,
+    _atomic_compare_exchange_resultUint4_ naga_atomic_compare_exchange_weak_explicit(
+        threadgroup A *atomic_ptr,
         uint cmp,
         uint v
     ) {
@@ -71,7 +68,6 @@ namespace metal {
         );
         return _atomic_compare_exchange_resultUint4_{cmp, swapped};
     }
-}
 constant uint SIZE = 128u;
 
 kernel void test_atomic_compare_exchange_i32_(
@@ -108,7 +104,7 @@ kernel void test_atomic_compare_exchange_i32_(
                     int new_ = as_type<int>(as_type<float>(_e14) + 1.0);
                     uint _e20 = i;
                     int _e22 = old;
-                    _atomic_compare_exchange_resultSint4_ _e23 = metal::atomic_naga_atomic_compare_exchange_weak_explicit(&arr_i32_.inner[_e20], _e22, new_);
+                    _atomic_compare_exchange_resultSint4_ _e23 = naga_atomic_compare_exchange_weak_explicit(&arr_i32_.inner[_e20], _e22, new_);
                     old = _e23.old_value;
                     exchanged = _e23.exchanged;
                 }
@@ -153,7 +149,7 @@ kernel void test_atomic_compare_exchange_u32_(
                     uint new_1 = as_type<uint>(as_type<float>(_e14) + 1.0);
                     uint _e20 = i_1;
                     uint _e22 = old_1;
-                    _atomic_compare_exchange_resultUint4_ _e23 = metal::atomic_naga_atomic_compare_exchange_weak_explicit(&arr_u32_.inner[_e20], _e22, new_1);
+                    _atomic_compare_exchange_resultUint4_ _e23 = naga_atomic_compare_exchange_weak_explicit(&arr_u32_.inner[_e20], _e22, new_1);
                     old_1 = _e23.old_value;
                     exchanged_1 = _e23.exchanged;
                 }

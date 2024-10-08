@@ -33,7 +33,7 @@ const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
-pub(crate) const ATOMIC_COMP_EXCH_FUNCTION_KEY: &str = "naga_atomic_compare_exchange_weak";
+pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
@@ -3177,23 +3177,27 @@ impl<W: Write> Writer<W> {
                         write!(self.out, " ? ")?;
                     }
 
-                    write!(
-                        self.out,
-                        "{NAMESPACE}::atomic_{fun_key}_explicit({ATOMIC_REFERENCE}"
-                    )?;
-                    self.put_access_chain(pointer, policy, context)?;
-
-                    // Put the extra argument if provided.
-                    if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
-                        write!(self.out, ", ")?;
-                        self.put_expression(cmp, context, true)?;
-                        write!(self.out, ", ")?;
-                        self.put_expression(value, context, true)?;
-                        write!(self.out, ")")?;
-                    } else {
-                        write!(self.out, ", ")?;
-                        self.put_expression(value, context, true)?;
-                        write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
+                    // Put the atomic function invocation.
+                    match *fun {
+                        crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
+                            write!(self.out, "{ATOMIC_COMP_EXCH_FUNCTION}({ATOMIC_REFERENCE}")?;
+                            self.put_access_chain(pointer, policy, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(cmp, context, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(value, context, true)?;
+                            write!(self.out, ")")?;
+                        }
+                        _ => {
+                            write!(
+                                self.out,
+                                "{NAMESPACE}::atomic_{fun_key}_explicit({ATOMIC_REFERENCE}"
+                            )?;
+                            self.put_access_chain(pointer, policy, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(value, context, true)?;
+                            write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
+                        }
                     }
 
                     // Finish the ternary expression.
@@ -3830,45 +3834,31 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 &crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
-                    let crate::Scalar { kind, width } = scalar;
-                    let arg_type_name = match width {
-                        1 => "bool",
-                        4 => match kind {
-                            crate::ScalarKind::Sint => "int",
-                            crate::ScalarKind::Uint => "uint",
-                            crate::ScalarKind::Float => "float",
-                            _ => return Err(Error::UnsupportedScalar(scalar)),
-                        },
-                        _ => return Err(Error::UnsupportedScalar(scalar)),
-                    };
-
+                    let arg_type_name = scalar.to_msl_name();
                     let called_func_name = "atomic_compare_exchange_weak_explicit";
-                    let defined_func_key = ATOMIC_COMP_EXCH_FUNCTION_KEY;
+                    let defined_func_name = ATOMIC_COMP_EXCH_FUNCTION;
                     let struct_name = &self.names[&NameKey::Type(*struct_ty)];
 
                     writeln!(self.out)?;
-                    writeln!(self.out, "namespace {NAMESPACE} {{")?;
 
                     for address_space_name in ["device", "threadgroup"] {
                         writeln!(
                             self.out,
-                            "    \
-    template <typename A>
-    {struct_name} atomic_{defined_func_key}_explicit(
-        volatile {address_space_name} A *atomic_ptr,
-        {arg_type_name} cmp,
-        {arg_type_name} v
-    ) {{
-        bool swapped = {NAMESPACE}::{called_func_name}(
-            atomic_ptr, &cmp, v,
-            metal::memory_order_relaxed, metal::memory_order_relaxed
-        );
-        return {struct_name}{{cmp, swapped}};
-    }}"
+                            "\
+template <typename A>
+{struct_name} {defined_func_name}(
+    {address_space_name} A *atomic_ptr,
+    {arg_type_name} cmp,
+    {arg_type_name} v
+) {{
+    bool swapped = {NAMESPACE}::{called_func_name}(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return {struct_name}{{cmp, swapped}};
+}}"
                         )?;
                     }
-
-                    writeln!(self.out, "}}")?;
                 }
             }
         }
@@ -6117,7 +6107,7 @@ impl crate::AtomicFunction {
             Self::Min => "fetch_min",
             Self::Max => "fetch_max",
             Self::Exchange { compare: None } => "exchange",
-            Self::Exchange { compare: Some(_) } => ATOMIC_COMP_EXCH_FUNCTION_KEY,
+            Self::Exchange { compare: Some(_) } => ATOMIC_COMP_EXCH_FUNCTION,
         }
     }
 
