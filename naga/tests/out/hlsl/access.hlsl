@@ -68,6 +68,10 @@ struct MatCx2InArray {
     __mat4x2 am[2];
 };
 
+struct AssignToMember {
+    uint x;
+};
+
 GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     GlobalConst ret = (GlobalConst)0;
     ret.a = arg0;
@@ -235,6 +239,30 @@ int array_by_value(int a_1[5], int i)
     return a_1[i];
 }
 
+uint fetch_arg_ptr_member(inout AssignToMember p_1)
+{
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(inout AssignToMember p_2)
+{
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(inout uint p_3[4])
+{
+    uint _e2 = p_3[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(inout uint p_4[4])
+{
+    p_4[1] = 10u;
+    return;
+}
+
 typedef int ret_Constructarray5_int_[5];
 ret_Constructarray5_int_ Constructarray5_int_(int arg0, int arg1, int arg2, int arg3, int arg4) {
     int ret[5] = { arg0, arg1, arg2, arg3, arg4 };
@@ -321,4 +349,17 @@ float4 foo_1(uint vi_1 : SV_VertexID) : SV_Position
     int arr_2[5] = Constructarray5_int_(1, 2, 3, 4, 5);
     int value_1 = arr_2[vi_1];
     return float4((value_1).xxxx);
+}
+
+[numthreads(1, 1, 1)]
+void assign_to_ptr_components()
+{
+    AssignToMember s1_ = (AssignToMember)0;
+    uint a1_[4] = (uint[4])0;
+
+    assign_to_arg_ptr_member(s1_);
+    const uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    const uint _e3 = fetch_arg_ptr_array_element(a1_);
+    return;
 }

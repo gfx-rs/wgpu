@@ -67,10 +67,12 @@ void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
 }
 
 void main() {
-    uint val = 33u;
-    vec4 arr[2] = vec4[2](vec4(6.0), vec4(7.0));
-    assign_through_ptr_fn(val);
-    assign_array_through_ptr_fn(arr);
+    AssignToMember s1_ = AssignToMember(0u);
+    uint a1_[4] = uint[4](0u, 0u, 0u, 0u);
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }
 
