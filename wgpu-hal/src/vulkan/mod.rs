@@ -418,7 +418,13 @@ impl Surface {
             swapchain.next_present_time = Some(present_timing);
         } else {
             // Ideally we'd use something like `device.required_features` here, but that's in `wgpu-core`, which we are a dependency of
-            panic!("Tried to set display timing properties without the corresponding feature ({features:?}) enabled.");
+            panic!(
+                concat!(
+                    "Tried to set display timing properties ",
+                    "without the corresponding feature ({:?}) enabled."
+                ),
+                features
+            );
         }
     }
 }

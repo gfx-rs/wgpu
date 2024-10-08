@@ -144,6 +144,7 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<FunctionArgument>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+    internal_variables: Vec<LocalVariable>,
     blocks: Vec<TerminatedBlock>,
     entry_point_context: Option<EntryPointContext>,
 }
@@ -466,38 +467,75 @@ enum CachedConstant {
     ZeroValue(Word),
 }
 
+/// The SPIR-V representation of a [`crate::GlobalVariable`].
+///
+/// In the Vulkan spec 1.3.296, the section [Descriptor Set Interface][dsi] says:
+///
+/// > Variables identified with the `Uniform` storage class are used to access
+/// > transparent buffer backed resources. Such variables *must* be:
+/// >
+/// > -   typed as `OpTypeStruct`, or an array of this type,
+/// >
+/// > -   identified with a `Block` or `BufferBlock` decoration, and
+/// >
+/// > -   laid out explicitly using the `Offset`, `ArrayStride`, and `MatrixStride`
+/// >     decorations as specified in "Offset and Stride Assignment".
+///
+/// This is followed by identical language for the `StorageBuffer`,
+/// except that a `BufferBlock` decoration is not allowed.
+///
+/// When we encounter a global variable in the [`Storage`] or [`Uniform`]
+/// address spaces whose type is not already [`Struct`], this backend implicitly
+/// wraps the global variable in a struct: we generate a SPIR-V global variable
+/// holding an `OpTypeStruct` with a single member, whose type is what the Naga
+/// global's type would suggest, decorated as required above.
+///
+/// The [`helpers::global_needs_wrapper`] function determines whether a given
+/// [`crate::GlobalVariable`] needs to be wrapped.
+///
+/// [dsi]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#interfaces-resources-descset
+/// [`Storage`]: crate::AddressSpace::Storage
+/// [`Uniform`]: crate::AddressSpace::Uniform
+/// [`Struct`]: crate::TypeInner::Struct
 #[derive(Clone)]
 struct GlobalVariable {
-    /// ID of the OpVariable that declares the global.
+    /// The SPIR-V id of the `OpVariable` that declares the global.
     ///
-    /// If you need the variable's value, use [`access_id`] instead of this
-    /// field. If we wrapped the Naga IR `GlobalVariable`'s type in a struct to
-    /// comply with Vulkan's requirements, then this points to the `OpVariable`
-    /// with the synthesized struct type, whereas `access_id` points to the
-    /// field of said struct that holds the variable's actual value.
+    /// If this global has been implicitly wrapped in an `OpTypeStruct`, this id
+    /// refers to the wrapper, not the original Naga value it contains. If you
+    /// need the Naga value, use [`access_id`] instead of this field.
+    ///
+    /// If this global is not implicitly wrapped, this is the same as
+    /// [`access_id`].
     ///
     /// This is used to compute the `access_id` pointer in function prologues,
-    /// and used for `ArrayLength` expressions, which do need the struct.
+    /// and used for `ArrayLength` expressions, which need to pass the wrapper
+    /// struct.
     ///
     /// [`access_id`]: GlobalVariable::access_id
     var_id: Word,
 
-    /// For `AddressSpace::Handle` variables, this ID is recorded in the function
-    /// prelude block (and reset before every function) as `OpLoad` of the variable.
-    /// It is then used for all the global ops, such as `OpImageSample`.
+    /// The loaded value of a `AddressSpace::Handle` global variable.
+    ///
+    /// If the current function uses this global variable, this is the id of an
+    /// `OpLoad` instruction in the function's prologue that loads its value.
+    /// (This value is assigned as we write the prologue code of each function.)
+    /// It is then used for all operations on the global, such as `OpImageSample`.
     handle_id: Word,
 
-    /// Actual ID used to access this variable.
-    /// For wrapped buffer variables, this ID is `OpAccessChain` into the
-    /// wrapper. Otherwise, the same as `var_id`.
+    /// The SPIR-V id of a pointer to this variable's Naga IR value.
     ///
-    /// Vulkan requires that globals in the `StorageBuffer` and `Uniform` storage
-    /// classes must be structs with the `Block` decoration, but WGSL and Naga IR
-    /// make no such requirement. So for such variables, we generate a wrapper struct
-    /// type with a single element of the type given by Naga, generate an
-    /// `OpAccessChain` for that member in the function prelude, and use that pointer
-    /// to refer to the global in the function body. This is the id of that access,
-    /// updated for each function in `write_function`.
+    /// If the current function uses this global variable, and it has been
+    /// implicitly wrapped in an `OpTypeStruct`, this is the id of an
+    /// `OpAccessChain` instruction in the function's prologue that refers to
+    /// the wrapped value inside the struct. (This value is assigned as we write
+    /// the prologue code of each function.) If you need the wrapper struct
+    /// itself, use [`var_id`] instead of this field.
+    ///
+    /// If this global is not implicitly wrapped, this is the same as
+    /// [`var_id`].
+    ///
+    /// [`var_id`]: GlobalVariable::var_id
     access_id: Word,
 }
 
@@ -625,12 +663,6 @@ impl BlockContext<'_> {
         self.writer
             .get_pointer_id(&self.ir_module.types, handle, class)
     }
-}
-
-#[derive(Clone, Copy, Default)]
-struct LoopContext {
-    continuing_id: Option<Word>,
-    break_id: Option<Word>,
 }
 
 pub struct Writer {

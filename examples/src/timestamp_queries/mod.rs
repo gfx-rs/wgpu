@@ -239,10 +239,7 @@ fn submit_render_and_compute_pass_with_queries(
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
     let mut queries = Queries::new(device, QueryResults::NUM_QUERIES);
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     if device
         .features()

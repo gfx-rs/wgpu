@@ -82,6 +82,8 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
 - Add `first` and `either` sampling types for `@interpolate(flat, …)` in WGSL. By @ErichDonGubler in [#6181](https://github.com/gfx-rs/wgpu/pull/6181).
 - Support for more atomic ops in the SPIR-V frontend. By @schell in [#5824](https://github.com/gfx-rs/wgpu/pull/5824).
+- Support local `const` declarations in WGSL. By @sagudev in [#6156](https://github.com/gfx-rs/wgpu/pull/6156).
+- Implemented `const_assert` in WGSL. By @sagudev in [#6198](https://github.com/gfx-rs/wgpu/pull/6198).
 
 #### General
 
@@ -98,9 +100,14 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### Naga
 
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
-- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256)
+- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256).
 - Per-polygon and flat inputs should not be considered subgroup uniform. By @magcius in [#6276](https://github.com/gfx-rs/wgpu/pull/6276).
-- Added `gl_DrawID` to glsl and `DrawIndex` to spv. By @ChosenName in [#6325](https://github.com/gfx-rs/wgpu/pull/6325)
+- Validate all swizzle components are either color (rgba) or dimension (xyzw) in WGSL. By @sagudev in [#6187](https://github.com/gfx-rs/wgpu/pull/6187).
+- Fix detection of shl overflows to detect arithmetic overflows. By @sagudev in [#6186](https://github.com/gfx-rs/wgpu/pull/6186).
+- Fix type parameters to vec/mat type constructors to also support aliases. By @sagudev in [#6189](https://github.com/gfx-rs/wgpu/pull/6189).
+- Accept global `var`s without explicit type. By @sagudev in [#6199](https://github.com/gfx-rs/wgpu/pull/6199).
+- Fix handling of phony statements, so they are actually emitted. By @sagudev in [#6328](https://github.com/gfx-rs/wgpu/pull/6328).
+- Added `gl_DrawID` to glsl and `DrawIndex` to spv. By @ChosenName in [#6325](https://github.com/gfx-rs/wgpu/pull/6325).
 
 #### General
 
@@ -120,6 +127,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 #### GLES / OpenGL
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
+- Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341)
 
 #### WebGPU
 
@@ -143,6 +151,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 ### Documentation
 
 - Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271)
+- Used `wgpu::include_wgsl!(…)` more in examples and tests. By @ErichDonGubler in [#6326](https://github.com/gfx-rs/wgpu/pull/6326).
 
 ### Dependency Updates
 

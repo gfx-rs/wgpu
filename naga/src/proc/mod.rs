@@ -521,12 +521,12 @@ impl crate::Expression {
         }
     }
 
-    /// Return true if this expression is a dynamic array index, for [`Access`].
+    /// Return true if this expression is a dynamic array/vector/matrix index,
+    /// for [`Access`].
     ///
     /// This method returns true if this expression is a dynamically computed
-    /// index, and as such can only be used to index matrices and arrays when
-    /// they appear behind a pointer. See the documentation for [`Access`] for
-    /// details.
+    /// index, and as such can only be used to index matrices when they appear
+    /// behind a pointer. See the documentation for [`Access`] for details.
     ///
     /// Note, this does not check the _type_ of the given expression. It's up to
     /// the caller to establish that the `Access` expression is well-typed
