@@ -344,11 +344,36 @@ impl<'w> BlockContext<'w> {
                     crate::TypeInner::Vector { .. } => {
                         self.write_vector_access(expr_handle, base, index, block)?
                     }
-                    // Only binding arrays in the `Handle` address space will take this
-                    // path, since we handled the `Pointer` case above.
+                    crate::TypeInner::Array {
+                        base: ty_element, ..
+                    } => {
+                        let index_id = self.cached[index];
+                        let base_id = self.cached[base];
+                        let base_ty = match self.fun_info[base].ty {
+                            TypeResolution::Handle(handle) => handle,
+                            TypeResolution::Value(_) => {
+                                return Err(Error::Validation(
+                                    "Array types should always be in the arena",
+                                ))
+                            }
+                        };
+                        let (id, variable) = self.writer.promote_access_expression_to_variable(
+                            result_type_id,
+                            base_id,
+                            base_ty,
+                            index_id,
+                            ty_element,
+                            block,
+                        )?;
+                        self.function.internal_variables.push(variable);
+                        id
+                    }
+                    // wgpu#4337: Support `crate::TypeInner::Matrix`
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
+                        // Only binding arrays in the `Handle` address space will take
+                        // this path, since we handled the `Pointer` case above.
                         let result_id = match self.write_expression_pointer(
                             expr_handle,
                             block,
@@ -384,31 +409,6 @@ impl<'w> BlockContext<'w> {
 
                         load_id
                     }
-                    crate::TypeInner::Array {
-                        base: ty_element, ..
-                    } => {
-                        let index_id = self.cached[index];
-                        let base_id = self.cached[base];
-                        let base_ty = match self.fun_info[base].ty {
-                            TypeResolution::Handle(handle) => handle,
-                            TypeResolution::Value(_) => {
-                                return Err(Error::Validation(
-                                    "Array types should always be in the arena",
-                                ))
-                            }
-                        };
-                        let (id, variable) = self.writer.promote_access_expression_to_variable(
-                            result_type_id,
-                            base_id,
-                            base_ty,
-                            index_id,
-                            ty_element,
-                            block,
-                        )?;
-                        self.function.internal_variables.push(variable);
-                        id
-                    }
-                    // wgpu#4337: Support `crate::TypeInner::Matrix`
                     ref other => {
                         log::error!(
                             "Unable to access base {:?} of type {:?}",
@@ -449,10 +449,11 @@ impl<'w> BlockContext<'w> {
                         ));
                         id
                     }
-                    // Only binding arrays in the Handle address space will take this path (due to `is_intermediate`)
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
+                        // Only binding arrays in the `Handle` address space will take
+                        // this path, since we handled the `Pointer` case above.
                         let result_id = match self.write_expression_pointer(
                             expr_handle,
                             block,
