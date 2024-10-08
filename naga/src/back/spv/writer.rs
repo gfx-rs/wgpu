@@ -3,8 +3,8 @@ use super::{
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
     Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo, EntryPointContext, Error,
     Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
-    LogicalLayout, LookupFunctionType, LookupType, Options, PhysicalLayout, PipelineOptions,
-    ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
+    LogicalLayout, LookupFunctionType, LookupType, NumericType, Options, PhysicalLayout,
+    PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
@@ -291,83 +291,52 @@ impl Writer {
     }
 
     pub(super) fn get_uint_type_id(&mut self) -> Word {
-        let local_type = LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::U32,
-            pointer_space: None,
-        };
+        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::U32));
         self.get_type_id(local_type.into())
     }
 
     pub(super) fn get_float_type_id(&mut self) -> Word {
-        let local_type = LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::F32,
-            pointer_space: None,
-        };
+        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::F32));
         self.get_type_id(local_type.into())
     }
 
     pub(super) fn get_uint3_type_id(&mut self) -> Word {
-        let local_type = LocalType::Value {
-            vector_size: Some(crate::VectorSize::Tri),
+        let local_type = LocalType::Numeric(NumericType::Vector {
+            size: crate::VectorSize::Tri,
             scalar: crate::Scalar::U32,
-            pointer_space: None,
-        };
+        });
         self.get_type_id(local_type.into())
     }
 
     pub(super) fn get_float_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
-        let lookup_type = LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::F32,
-            pointer_space: Some(class),
-        });
-        if let Some(&id) = self.lookup_type.get(&lookup_type) {
-            id
-        } else {
-            let id = self.id_gen.next();
-            let ty_id = self.get_float_type_id();
-            let instruction = Instruction::type_pointer(id, class, ty_id);
-            instruction.to_words(&mut self.logical_layout.declarations);
-            self.lookup_type.insert(lookup_type, id);
-            id
-        }
-    }
-
-    pub(super) fn get_uint3_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
-        let lookup_type = LookupType::Local(LocalType::Value {
-            vector_size: Some(crate::VectorSize::Tri),
-            scalar: crate::Scalar::U32,
-            pointer_space: Some(class),
-        });
-        if let Some(&id) = self.lookup_type.get(&lookup_type) {
-            id
-        } else {
-            let id = self.id_gen.next();
-            let ty_id = self.get_uint3_type_id();
-            let instruction = Instruction::type_pointer(id, class, ty_id);
-            instruction.to_words(&mut self.logical_layout.declarations);
-            self.lookup_type.insert(lookup_type, id);
-            id
-        }
-    }
-
-    pub(super) fn get_bool_type_id(&mut self) -> Word {
-        let local_type = LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::BOOL,
-            pointer_space: None,
+        let local_type = LocalType::LocalPointer {
+            base: NumericType::Scalar(crate::Scalar::F32),
+            class,
         };
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_bool3_type_id(&mut self) -> Word {
-        let local_type = LocalType::Value {
-            vector_size: Some(crate::VectorSize::Tri),
-            scalar: crate::Scalar::BOOL,
-            pointer_space: None,
+    pub(super) fn get_uint3_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+        let local_type = LocalType::LocalPointer {
+            base: NumericType::Vector {
+                size: crate::VectorSize::Tri,
+                scalar: crate::Scalar::U32,
+            },
+            class,
         };
+        self.get_type_id(local_type.into())
+    }
+
+    pub(super) fn get_bool_type_id(&mut self) -> Word {
+        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::BOOL));
+        self.get_type_id(local_type.into())
+    }
+
+    pub(super) fn get_bool3_type_id(&mut self) -> Word {
+        let local_type = LocalType::Numeric(NumericType::Vector {
+            size: crate::VectorSize::Tri,
+            scalar: crate::Scalar::BOOL,
+        });
         self.get_type_id(local_type.into())
     }
 
@@ -935,62 +904,50 @@ impl Writer {
         Ok(())
     }
 
+    fn write_numeric_type_declaration_local(&mut self, id: Word, numeric: NumericType) {
+        let instruction =
+            match numeric {
+                NumericType::Scalar(scalar) => self.make_scalar(id, scalar),
+                NumericType::Vector { size, scalar } => {
+                    let scalar_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                        NumericType::Scalar(scalar),
+                    )));
+                    Instruction::type_vector(id, scalar_id, size)
+                }
+                NumericType::Matrix {
+                    columns,
+                    rows,
+                    scalar,
+                } => {
+                    let column_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                        NumericType::Vector { size: rows, scalar },
+                    )));
+                    Instruction::type_matrix(id, column_id, columns)
+                }
+            };
+
+        instruction.to_words(&mut self.logical_layout.declarations);
+    }
+
     fn write_type_declaration_local(&mut self, id: Word, local_ty: LocalType) {
         let instruction = match local_ty {
-            LocalType::Value {
-                vector_size: None,
-                scalar,
-                pointer_space: None,
-            } => self.make_scalar(id, scalar),
-            LocalType::Value {
-                vector_size: Some(size),
-                scalar,
-                pointer_space: None,
-            } => {
-                let scalar_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    scalar,
-                    pointer_space: None,
-                }));
-                Instruction::type_vector(id, scalar_id, size)
+            LocalType::Numeric(numeric) => {
+                self.write_numeric_type_declaration_local(id, numeric);
+                return;
             }
-            LocalType::Matrix {
-                columns,
-                rows,
-                width,
-            } => {
-                let vector_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: Some(rows),
-                    scalar: crate::Scalar::float(width),
-                    pointer_space: None,
-                }));
-                Instruction::type_matrix(id, vector_id, columns)
+            LocalType::LocalPointer { base, class } => {
+                let base_id = self.get_type_id(LookupType::Local(LocalType::Numeric(base)));
+                Instruction::type_pointer(id, class, base_id)
             }
             LocalType::Pointer { base, class } => {
                 let type_id = self.get_type_id(LookupType::Handle(base));
                 Instruction::type_pointer(id, class, type_id)
             }
-            LocalType::Value {
-                vector_size,
-                scalar,
-                pointer_space: Some(class),
-            } => {
-                let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size,
-                    scalar,
-                    pointer_space: None,
-                }));
-                Instruction::type_pointer(id, class, type_id)
-            }
             LocalType::Image(image) => {
-                let local_type = LocalType::Value {
-                    vector_size: None,
-                    scalar: crate::Scalar {
-                        kind: image.sampled_type,
-                        width: 4,
-                    },
-                    pointer_space: None,
-                };
+                let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar {
+                    kind: image.sampled_type,
+                    width: 4,
+                }));
                 let type_id = self.get_type_id(LookupType::Local(local_type));
                 Instruction::type_image(id, type_id, image.dim, image.flags, image.image_format)
             }
@@ -1224,11 +1181,9 @@ impl Writer {
                 self.debugs.push(Instruction::name(id, name));
             }
         }
-        let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: value.scalar(),
-            pointer_space: None,
-        }));
+        let type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Scalar(
+            value.scalar(),
+        ))));
         let instruction = match *value {
             crate::Literal::F64(value) => {
                 let bits = value.to_bits();
