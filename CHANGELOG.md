@@ -123,6 +123,9 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201)
 - Raise validation error instead of panicking in `{Render,Compute}Pipeline::get_bind_group_layout` on native / WebGL. By @bgr360 in [#6280](https://github.com/gfx-rs/wgpu/pull/6280).
 - **BREAKING**: Remove the last exposed C symbols in project, located in `wgpu_core::render::bundle::bundle_ffi`, to allow multiple versions of WGPU to compile together. By @ErichDonGubler in [#6272](https://github.com/gfx-rs/wgpu/pull/6272).
+- Call `flush_mapped_ranges` when unmapping write-mapped buffers. By @teoxoy in [#6089](https://github.com/gfx-rs/wgpu/pull/6089).
+- When mapping buffers for reading, mark buffers as initialized only when they have `MAP_WRITE` usage. By @teoxoy in [#6178](https://github.com/gfx-rs/wgpu/pull/6178).
+- Add a separate pipeline constants error. By @teoxoy in [#6094](https://github.com/gfx-rs/wgpu/pull/6094).
 
 #### GLES / OpenGL
 
@@ -143,6 +146,16 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - `wgpu_hal::gles::Adapter::new_external` now requires the context to be current when dropping the adapter and related objects. By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
 - Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
 - `Rg11b10Float` is renamed to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
+- Invalidate the device when we encounter driver-induced device loss or on unexpected errors. By @teoxoy in [#6229](https://github.com/gfx-rs/wgpu/pull/6229).
+- Make Vulkan error handling more robust. By @teoxoy in [#6119](https://github.com/gfx-rs/wgpu/pull/6119).
+
+#### Internal
+
+- Tracker simplifications. By @teoxoy in [#6073](https://github.com/gfx-rs/wgpu/pull/6073) & [#6088](https://github.com/gfx-rs/wgpu/pull/6088).
+- D3D12 cleanup. By @teoxoy in [#6200](https://github.com/gfx-rs/wgpu/pull/6200).
+- Use `ManuallyDrop` in remaining places. By @teoxoy in [#6092](https://github.com/gfx-rs/wgpu/pull/6092).
+- Move out invalidity from the `Registry`. By @teoxoy in [#6243](https://github.com/gfx-rs/wgpu/pull/6243).
+- Remove `backend` from ID. By @teoxoy in [#6263](https://github.com/gfx-rs/wgpu/pull/6263).
 
 #### HAL
 
