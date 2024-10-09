@@ -217,32 +217,6 @@ impl Writer {
 }
 
 impl<'w> BlockContext<'w> {
-    /// Decide whether to put off emitting instructions for `expr_handle`.
-    ///
-    /// We would like to gather together chains of `Access` and `AccessIndex`
-    /// Naga expressions into a single `OpAccessChain` SPIR-V instruction. To do
-    /// this, we don't generate instructions for these exprs when we first
-    /// encounter them. Their ids in `self.writer.cached.ids` are left as zero. Then,
-    /// once we encounter a `Load` or `Store` expression that actually needs the
-    /// chain's value, we call `write_expression_pointer` to handle the whole
-    /// thing in one fell swoop.
-    fn is_intermediate(&self, expr_handle: Handle<crate::Expression>) -> bool {
-        match self.ir_function.expressions[expr_handle] {
-            crate::Expression::GlobalVariable(handle) => {
-                self.ir_module.global_variables[handle].space != crate::AddressSpace::Handle
-            }
-            crate::Expression::LocalVariable(_) => true,
-            crate::Expression::FunctionArgument(index) => {
-                let arg = &self.ir_function.arguments[index as usize];
-                self.ir_module.types[arg.ty].inner.pointer_space().is_some()
-            }
-
-            // The chain rule: if this `Access...`'s `base` operand was
-            // previously omitted, then omit this one, too.
-            _ => self.cached.ids[expr_handle] == 0,
-        }
-    }
-
     /// Cache an expression for a value.
     pub(super) fn cache_expression_value(
         &mut self,
@@ -313,18 +287,22 @@ impl<'w> BlockContext<'w> {
                     id
                 }
             }
-            crate::Expression::Access { base, index: _ } if self.is_intermediate(base) => {
-                // See `is_intermediate`; we'll handle this later in
-                // `write_expression_pointer`.
-                0
-            }
             crate::Expression::Access { base, index } => {
                 let base_ty_inner = self.fun_info[base].ty.inner_with(&self.ir_module.types);
                 match *base_ty_inner {
+                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                        // When we have a chain of `Access` and `AccessIndex` expressions
+                        // operating on pointers, we want to generate a single
+                        // `OpAccessChain` instruction for the whole chain. Put off
+                        // generating any code for this until we find the `Expression`
+                        // that actually dereferences the pointer.
+                        0
+                    }
                     crate::TypeInner::Vector { .. } => {
                         self.write_vector_access(expr_handle, base, index, block)?
                     }
-                    // Only binding arrays in the Handle address space will take this path (due to `is_intermediate`)
+                    // Only binding arrays in the `Handle` address space will take this
+                    // path, since we handled the `Pointer` case above.
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
@@ -410,13 +388,16 @@ impl<'w> BlockContext<'w> {
                     }
                 }
             }
-            crate::Expression::AccessIndex { base, index: _ } if self.is_intermediate(base) => {
-                // See `is_intermediate`; we'll handle this later in
-                // `write_expression_pointer`.
-                0
-            }
             crate::Expression::AccessIndex { base, index } => {
                 match *self.fun_info[base].ty.inner_with(&self.ir_module.types) {
+                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                        // When we have a chain of `Access` and `AccessIndex` expressions
+                        // operating on pointers, we want to generate a single
+                        // `OpAccessChain` instruction for the whole chain. Put off
+                        // generating any code for this until we find the `Expression`
+                        // that actually dereferences the pointer.
+                        0
+                    }
                     crate::TypeInner::Vector { .. }
                     | crate::TypeInner::Matrix { .. }
                     | crate::TypeInner::Array { .. }
