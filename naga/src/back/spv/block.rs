@@ -1355,58 +1355,7 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::LocalVariable(variable) => self.function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
-                match self.write_expression_pointer(pointer, block, None)? {
-                    ExpressionPointer::Ready { pointer_id } => {
-                        let id = self.gen_id();
-                        let atomic_space =
-                            match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
-                                crate::TypeInner::Pointer { base, space } => {
-                                    match self.ir_module.types[base].inner {
-                                        crate::TypeInner::Atomic { .. } => Some(space),
-                                        _ => None,
-                                    }
-                                }
-                                _ => None,
-                            };
-                        let instruction = if let Some(space) = atomic_space {
-                            let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                            let scope_constant_id = self.get_scope_constant(scope as u32);
-                            let semantics_id = self.get_index_constant(semantics.bits());
-                            Instruction::atomic_load(
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                            )
-                        } else {
-                            Instruction::load(result_type_id, id, pointer_id, None)
-                        };
-                        block.body.push(instruction);
-                        id
-                    }
-                    ExpressionPointer::Conditional { condition, access } => {
-                        //TODO: support atomics?
-                        self.write_conditional_indexed_load(
-                            result_type_id,
-                            condition,
-                            block,
-                            move |id_gen, block| {
-                                // The in-bounds path. Perform the access and the load.
-                                let pointer_id = access.result_id.unwrap();
-                                let value_id = id_gen.next();
-                                block.body.push(access);
-                                block.body.push(Instruction::load(
-                                    result_type_id,
-                                    value_id,
-                                    pointer_id,
-                                    None,
-                                ));
-                                value_id
-                            },
-                        )
-                    }
-                }
+                self.write_checked_load(pointer, block, result_type_id)?
             }
             crate::Expression::FunctionArgument(index) => self.function.parameter_id(index),
             crate::Expression::CallResult(_)
@@ -1943,6 +1892,67 @@ impl<'w> BlockContext<'w> {
             None => {
                 // Start a fresh chain of checks.
                 *chain = Some(comparison_id);
+            }
+        }
+    }
+
+    fn write_checked_load(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        block: &mut Block,
+        result_type_id: Word,
+    ) -> Result<Word, Error> {
+        match self.write_expression_pointer(pointer, block, None)? {
+            ExpressionPointer::Ready { pointer_id } => {
+                let id = self.gen_id();
+                let atomic_space =
+                    match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
+                        crate::TypeInner::Pointer { base, space } => {
+                            match self.ir_module.types[base].inner {
+                                crate::TypeInner::Atomic { .. } => Some(space),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                let instruction = if let Some(space) = atomic_space {
+                    let (semantics, scope) = space.to_spirv_semantics_and_scope();
+                    let scope_constant_id = self.get_scope_constant(scope as u32);
+                    let semantics_id = self.get_index_constant(semantics.bits());
+                    Instruction::atomic_load(
+                        result_type_id,
+                        id,
+                        pointer_id,
+                        scope_constant_id,
+                        semantics_id,
+                    )
+                } else {
+                    Instruction::load(result_type_id, id, pointer_id, None)
+                };
+                block.body.push(instruction);
+                Ok(id)
+            }
+            ExpressionPointer::Conditional { condition, access } => {
+                //TODO: support atomics?
+                let value = self.write_conditional_indexed_load(
+                    result_type_id,
+                    condition,
+                    block,
+                    move |id_gen, block| {
+                        // The in-bounds path. Perform the access and the load.
+                        let pointer_id = access.result_id.unwrap();
+                        let value_id = id_gen.next();
+                        block.body.push(access);
+                        block.body.push(Instruction::load(
+                            result_type_id,
+                            value_id,
+                            pointer_id,
+                            None,
+                        ));
+                        value_id
+                    },
+                );
+                Ok(value)
             }
         }
     }
