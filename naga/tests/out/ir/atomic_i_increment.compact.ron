@@ -283,4 +283,11 @@
             ),
         ),
     ],
+    comments: (
+        types: {},
+        struct_members: {},
+        functions: {},
+        constants: {},
+        global_variables: {},
+    ),
 )

@@ -330,4 +330,26 @@
             ),
         ),
     ],
+    comments: (
+        types: {},
+        struct_members: {
+            (2, 0): [],
+        },
+        functions: {
+            "collatz_iterations": [
+                "// The Collatz Conjecture states that for any integer n:",
+                "// If n is even, n = n/2",
+                "// If n is odd, n = 3n+1",
+                "// And repeat this process for each new n, you will always eventually reach 1.",
+                "// Though the conjecture has not been proven, no counterexample has ever been found.",
+                "// This function returns how many times this recurrence needs to be applied to reach 1.",
+            ],
+        },
+        constants: {},
+        global_variables: {
+            0: [
+                "// this is used as both input and output for convenience",
+            ],
+        },
+    ),
 )
