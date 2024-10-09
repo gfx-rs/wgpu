@@ -3,7 +3,6 @@ use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
-
 type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -83,17 +82,21 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let documentation = if let Some(end_position) = chars.position(is_comment_end) {
-                        &full_chars.as_str()[..end_position + 1]
-                    } else {
-                        full_chars.as_str()
-                    };
-                    (Token::Comment(documentation), chars.as_str())
+                    if let Some(end_position) = input
+                        .char_indices()
+                        .find(|char_indices| is_comment_end(char_indices.1))
+                    {
+                        return (
+                            Token::Comment(&input[..end_position.0]),
+                            &input[end_position.0..],
+                        );
+                    }
+                    (Token::Comment(input), &input[input.len() - 1..])
                 }
                 Some('*') => {
                     let mut depth = 1;
                     let mut prev = None;
-                    let mut nb_characters = 1;
+                    let mut nb_characters = 2;
                     for c in &mut chars {
                         match (prev, c) {
                             (Some('*'), '/') => {
@@ -101,7 +104,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
                                 depth -= 1;
                                 nb_characters += 1;
                                 if depth == 0 {
-                                    let doc = &full_chars.as_str()[..nb_characters + 1];
+                                    let doc = &full_chars.as_str()[..nb_characters];
                                     return (Token::Comment(doc), chars.as_str());
                                 }
                             }
@@ -177,6 +180,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
 
 /// Returns whether or not a char is a comment end
 /// (Unicode Pattern_White_Space excluding U+0020, U+0009, U+200E and U+200F)
+/// https://www.w3.org/TR/WGSL/#line-break
 const fn is_comment_end(c: char) -> bool {
     match c {
         '\u{000a}'..='\u{000d}' | '\u{0085}' | '\u{2028}' | '\u{2029}' => true,
@@ -826,6 +830,28 @@ fn test_comment_nested() {
     */
     */",
             ),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comment_long_character() {
+    sub_test(
+        "// π/2
+        //     D(𝐡) = ───────────────────────────────────────────────────
+//            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`
+    const a : i32 = 2;",
+        &[
+            Token::Comment("// π/2"),
+            Token::Comment("//     D(𝐡) = ───────────────────────────────────────────────────"),
+            Token::Comment("//            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`"),
             Token::Word("const"),
             Token::Word("a"),
             Token::Separator(':'),
