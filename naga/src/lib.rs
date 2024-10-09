@@ -1945,6 +1945,7 @@ pub enum Statement {
         /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
         /// [`I64`]: Scalar::I64
         /// [`U64`]: Scalar::U64
+        /// [`F32`]: Scalar::F32
         pointer: Handle<Expression>,
 
         /// Function to run on the atomic value.
