@@ -381,7 +381,6 @@ impl<'w> BlockContext<'w> {
                             }
                         };
                         let (id, variable) = self.writer.promote_access_expression_to_variable(
-                            &self.ir_module.types,
                             result_type_id,
                             base_id,
                             base_ty,

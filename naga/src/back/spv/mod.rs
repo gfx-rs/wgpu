@@ -667,13 +667,8 @@ impl BlockContext<'_> {
             .get_constant_scalar(crate::Literal::I32(scope as _))
     }
 
-    fn get_pointer_id(
-        &mut self,
-        handle: Handle<crate::Type>,
-        class: spirv::StorageClass,
-    ) -> Result<Word, Error> {
-        self.writer
-            .get_pointer_id(&self.ir_module.types, handle, class)
+    fn get_pointer_id(&mut self, handle: Handle<crate::Type>, class: spirv::StorageClass) -> Word {
+        self.writer.get_pointer_id(handle, class)
     }
 }
 
