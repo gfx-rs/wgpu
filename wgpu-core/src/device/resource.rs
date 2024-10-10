@@ -35,8 +35,6 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use once_cell::sync::OnceCell;
-
 use smallvec::SmallVec;
 use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
@@ -48,7 +46,7 @@ use std::{
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Weak,
+        Arc, OnceLock, Weak,
     },
 };
 
@@ -80,8 +78,8 @@ use super::{
 pub struct Device {
     raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceCell<Weak<Queue>>,
-    queue_to_drop: OnceCell<Box<dyn hal::DynQueue>>,
+    pub(crate) queue: OnceLock<Weak<Queue>>,
+    queue_to_drop: OnceLock<Box<dyn hal::DynQueue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -266,8 +264,8 @@ impl Device {
         Ok(Self {
             raw: ManuallyDrop::new(raw_device),
             adapter: adapter.clone(),
-            queue: OnceCell::new(),
-            queue_to_drop: OnceCell::new(),
+            queue: OnceLock::new(),
+            queue_to_drop: OnceLock::new(),
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
@@ -1865,7 +1863,7 @@ impl Device {
             device: self.clone(),
             entries: entry_map,
             origin,
-            exclusive_pipeline: OnceCell::new(),
+            exclusive_pipeline: OnceLock::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
         };
