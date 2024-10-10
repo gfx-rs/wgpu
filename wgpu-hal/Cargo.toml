@@ -122,7 +122,6 @@ parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 thiserror.workspace = true
-once_cell.workspace = true
 
 # backends common
 arrayvec.workspace = true

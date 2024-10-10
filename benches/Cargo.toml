@@ -43,7 +43,6 @@ naga = { workspace = true, features = [
     "wgsl-out",
 ] }
 nanorand.workspace = true
-once_cell.workspace = true
 pollster.workspace = true
 profiling.workspace = true
 rayon.workspace = true
