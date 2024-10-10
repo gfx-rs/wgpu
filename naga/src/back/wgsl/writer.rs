@@ -93,7 +93,7 @@ impl<W: Write> Writer<W> {
             // an identifier must not start with two underscore
             &[],
             &[],
-            &["__"],
+            &["__", "_naga"],
             &mut self.names,
         );
         self.named_expressions.clear();
