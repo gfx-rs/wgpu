@@ -2284,4 +2284,6 @@ pub struct Comments {
     pub functions: FastIndexMap<String, Vec<String>>,
     pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
     pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
+    // top level comments, appearing before any space.
+    pub module: Vec<String>,
 }

@@ -24,6 +24,10 @@ pub struct TranslationUnit<'a> {
     /// These are referred to by `Handle<ast::Type<'a>>` values.
     /// User-defined types are referred to by name until lowering.
     pub types: Arena<Type<'a>>,
+
+    /// Comments appearing first in the file.
+    /// This serves as documentation for the whole TranslationUnit.
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy)]
