@@ -1721,14 +1721,9 @@ impl<'w> BlockContext<'w> {
             let resolution = &self.fun_info[expr_handle].ty;
             match type_adjustment {
                 AccessTypeAdjustment::None => self.writer.get_expression_type_id(resolution),
-                AccessTypeAdjustment::IntroducePointer(class) => match *resolution {
-                    TypeResolution::Handle(handle) => self.writer.get_pointer_id(handle, class),
-                    TypeResolution::Value(_) => {
-                        unreachable!(
-                            "IntroducePointer should only be used with images and samplers"
-                        );
-                    }
-                },
+                AccessTypeAdjustment::IntroducePointer(class) => {
+                    self.writer.get_resolution_pointer_id(resolution, class)
+                }
             }
         };
 
