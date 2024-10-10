@@ -457,16 +457,12 @@ pub struct ImplicitPipelineIds<'a> {
 
 impl ImplicitPipelineIds<'_> {
     fn prepare(self, hub: &Hub) -> ImplicitPipelineContext {
-        let backend = self.root_id.backend();
         ImplicitPipelineContext {
-            root_id: hub
-                .pipeline_layouts
-                .prepare(backend, Some(self.root_id))
-                .id(),
+            root_id: hub.pipeline_layouts.prepare(Some(self.root_id)).id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(backend, Some(*id_in)).id())
+                .map(|id_in| hub.bind_group_layouts.prepare(Some(*id_in)).id())
                 .collect(),
         }
     }

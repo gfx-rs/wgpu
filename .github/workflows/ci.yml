@@ -13,21 +13,23 @@ env:
   #
 
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  VULKAN_SDK_VERSION: "1.3.268"
+  #
+  # We don't include the 4th version number, as it's not used in any URL.
+  VULKAN_SDK_VERSION: "1.3.290"
   # Sourced from https://www.nuget.org/packages/Microsoft.Direct3D.WARP
-  WARP_VERSION: "1.0.8"
+  WARP_VERSION: "1.0.13"
 
   # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
   #
   # Must also be changed in shaders.yaml
-  DXC_RELEASE: "v1.7.2308"
-  DXC_FILENAME: "dxc_2023_08_14.zip"
+  DXC_RELEASE: "v1.8.2407"
+  DXC_FILENAME: "dxc_2024_07_31_clang_cl.zip"
 
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
-  MESA_VERSION: "23.3.1"
+  MESA_VERSION: "24.2.3"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
-  CI_BINARY_BUILD: "build18"
+  CI_BINARY_BUILD: "build19"
 
   # We sometimes need nightly to use special things in CI.
   #
@@ -311,7 +313,6 @@ jobs:
           rustup override set ${{ env.CORE_MSRV }}
           cargo -V
 
-      # Use special toolchain for rustdoc, see https://github.com/gfx-rs/wgpu/issues/4905
       - name: Install Nightly Toolchain
         run: |
           rustup toolchain install ${{ env.NIGHTLY_VERSION }} --no-self-update --profile=minimal --component clippy
@@ -442,7 +443,7 @@ jobs:
           dxc --version
 
           curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
-          7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
+          7z.exe e warp.zip -owarp build/native/bin/x64/d3d10warp.dll
 
           mkdir -p target/llvm-cov-target/debug/deps
 
@@ -554,7 +555,7 @@ jobs:
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: upload coverage report to codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -613,13 +614,14 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: run rustfmt
+      - name: Run `cargo fmt`
         run: |
           cargo fmt -- --check
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
+          cargo fmt --manifest-path naga/xtask/Cargo.toml -- --check
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.24.5
+        uses: crate-ci/typos@v1.24.6
 
   check-cts-runner:
     # runtime is normally 2 minutes

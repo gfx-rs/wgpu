@@ -638,6 +638,8 @@ pub enum RenderPassErrorInner {
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
+    UnalignedIndirectBufferOffset(BufferAddress),
     #[error("Indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}",
         count.map_or_else(String::new, |v| format!("(using count {v})")))]
     IndirectBufferOverrun {
@@ -2450,6 +2452,10 @@ fn multi_draw_indirect(
 
     let actual_count = count.map_or(1, |c| c.get());
 
+    if offset % 4 != 0 {
+        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+    }
+
     let end_offset = offset + stride as u64 * actual_count as u64;
     if end_offset > indirect_buffer.size {
         return Err(RenderPassErrorInner::IndirectBufferOverrun {
@@ -2533,6 +2539,10 @@ fn multi_draw_indirect_count(
 
     count_buffer.check_usage(BufferUsages::INDIRECT)?;
     let count_raw = count_buffer.try_raw(state.snatch_guard)?;
+
+    if offset % 4 != 0 {
+        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+    }
 
     let end_offset = offset + stride * max_count as u64;
     if end_offset > indirect_buffer.size {

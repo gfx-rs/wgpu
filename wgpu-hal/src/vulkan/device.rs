@@ -769,6 +769,7 @@ impl super::Device {
                         temp_options.debug_info = Some(naga::back::spv::DebugInfo {
                             source_code: &debug.source_code,
                             file_name: debug.file_name.as_ref().as_ref(),
+                            language: naga::back::spv::SourceLanguage::WGSL,
                         })
                     }
                     if !stage.zero_initialize_workgroup_memory {
@@ -1742,6 +1743,7 @@ impl crate::Device for super::Device {
                         .map(|d| naga::back::spv::DebugInfo {
                             source_code: d.source_code.as_ref(),
                             file_name: d.file_name.as_ref().as_ref(),
+                            language: naga::back::spv::SourceLanguage::WGSL,
                         });
                 if !desc.runtime_checks {
                     naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
@@ -2536,8 +2538,7 @@ impl super::DeviceShared {
                         }
                         None => {
                             crate::hal_usage_error(format!(
-                                "no signals reached value {}",
-                                wait_value
+                                "no signals reached value {wait_value}"
                             ));
                         }
                     }
