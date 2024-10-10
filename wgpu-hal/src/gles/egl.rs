@@ -1,13 +1,19 @@
 #![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
 
 use std::{
-    ffi, mem::ManuallyDrop, os::raw, ptr, rc::Rc, string::String, sync::Arc, time::Duration,
+    ffi,
+    mem::ManuallyDrop,
+    os::raw,
+    ptr,
+    rc::Rc,
+    string::String,
+    sync::{Arc, LazyLock},
+    time::Duration,
     vec::Vec,
 };
 
 use glow::HasContext;
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
@@ -474,7 +480,8 @@ struct Inner {
 // Different calls to `eglGetPlatformDisplay` may return the same `Display`, making it a global
 // state of all our `EglContext`s. This forces us to track the number of such context to prevent
 // terminating the display if it's currently used by another `EglContext`.
-static DISPLAYS_REFERENCE_COUNT: Lazy<Mutex<HashMap<usize, usize>>> = Lazy::new(Default::default);
+static DISPLAYS_REFERENCE_COUNT: LazyLock<Mutex<HashMap<usize, usize>>> =
+    LazyLock::new(Default::default);
 
 fn initialize_display(
     egl: &EglInstance,

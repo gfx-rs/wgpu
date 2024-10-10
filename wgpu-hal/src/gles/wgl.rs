@@ -9,7 +9,7 @@ use std::{
     string::String,
     sync::{
         mpsc::{sync_channel, SyncSender},
-        Arc,
+        Arc, LazyLock,
     },
     thread,
     time::Duration,
@@ -22,7 +22,6 @@ use glutin_wgl_sys::wgl_extra::{
     CONTEXT_PROFILE_MASK_ARB,
 };
 use hashbrown::HashSet;
-use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use wgt::InstanceFlags;
@@ -325,8 +324,8 @@ fn create_global_window_class() -> Result<CString, crate::InstanceError> {
 }
 
 fn get_global_window_class() -> Result<CString, crate::InstanceError> {
-    static GLOBAL: Lazy<Result<CString, crate::InstanceError>> =
-        Lazy::new(create_global_window_class);
+    static GLOBAL: LazyLock<Result<CString, crate::InstanceError>> =
+        LazyLock::new(create_global_window_class);
     GLOBAL.clone()
 }
 
