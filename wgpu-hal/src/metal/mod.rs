@@ -289,6 +289,7 @@ struct PrivateCapabilities {
     supports_simd_scoped_operations: bool,
     int64: bool,
     int64_atomics: bool,
+    int64_image_atomics: bool,
 }
 
 #[derive(Clone, Debug)]

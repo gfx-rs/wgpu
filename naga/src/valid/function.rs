@@ -146,6 +146,10 @@ pub enum FunctionError {
     },
     #[error("Image store parameters are invalid")]
     InvalidImageStore(#[source] ExpressionError),
+    #[error("Image atomic parameters are invalid")]
+    InvalidImageAtomic(#[source] ExpressionError),
+    #[error("Image atomic value is invalid")]
+    InvalidAtomicValue(Handle<crate::Expression>),
     #[error("Call to {function:?} is invalid")]
     InvalidCall {
         function: Handle<crate::Function>,
@@ -1089,10 +1093,7 @@ impl super::Validator {
                                 crate::ImageClass::Storage { format, .. } => {
                                     crate::TypeInner::Vector {
                                         size: crate::VectorSize::Quad,
-                                        scalar: crate::Scalar {
-                                            kind: format.into(),
-                                            width: 4,
-                                        },
+                                        scalar: format.into(),
                                     }
                                 }
                                 _ => {
@@ -1138,6 +1139,113 @@ impl super::Validator {
                     result,
                 } => {
                     self.validate_atomic(pointer, fun, value, result, span, context)?;
+                }
+                S::ImageAtomic {
+                    image,
+                    coordinate,
+                    sample: _,
+                    fun: _,
+                    value,
+                } => {
+                    // Note: this code uses a lot of `FunctionError::InvalidImageAtomic`,
+                    // and could probably be refactored.
+                    let var = match *context.get_expression(image) {
+                        crate::Expression::GlobalVariable(var_handle) => {
+                            &context.global_vars[var_handle]
+                        }
+                        // We're looking at a binding index situation, so punch through the index and look at the global behind it.
+                        crate::Expression::Access { base, .. }
+                        | crate::Expression::AccessIndex { base, .. } => {
+                            match *context.get_expression(base) {
+                                crate::Expression::GlobalVariable(var_handle) => {
+                                    &context.global_vars[var_handle]
+                                }
+                                _ => {
+                                    return Err(FunctionError::InvalidImageAtomic(
+                                        ExpressionError::ExpectedGlobalVariable,
+                                    )
+                                    .with_span_handle(image, context.expressions))
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(FunctionError::InvalidImageAtomic(
+                                ExpressionError::ExpectedGlobalVariable,
+                            )
+                            .with_span_handle(image, context.expressions))
+                        }
+                    };
+
+                    // Punch through a binding array to get the underlying type
+                    let global_ty = match context.types[var.ty].inner {
+                        Ti::BindingArray { base, .. } => &context.types[base].inner,
+                        ref inner => inner,
+                    };
+
+                    let value_ty = match *global_ty {
+                        Ti::Image {
+                            class,
+                            arrayed: _,
+                            dim,
+                        } => {
+                            match context
+                                .resolve_type(coordinate, &self.valid_expression_set)?
+                                .image_storage_coordinates()
+                            {
+                                Some(coord_dim) if coord_dim == dim => {}
+                                _ => {
+                                    return Err(FunctionError::InvalidImageAtomic(
+                                        ExpressionError::InvalidImageCoordinateType(
+                                            dim, coordinate,
+                                        ),
+                                    )
+                                    .with_span_handle(coordinate, context.expressions));
+                                }
+                            };
+
+                            match class {
+                                crate::ImageClass::Storage { format, access } => {
+                                    if access
+                                        != crate::StorageAccess::LOAD | crate::StorageAccess::STORE
+                                    {
+                                        return Err(FunctionError::InvalidImageAtomic(
+                                            ExpressionError::InvalidImageStorageAccess(access),
+                                        )
+                                        .with_span_handle(image, context.expressions));
+                                    }
+                                    match format {
+                                        crate::StorageFormat::R64Uint => {}
+                                        _ => {
+                                            return Err(FunctionError::InvalidImageAtomic(
+                                                ExpressionError::InvalidImageFormat(format),
+                                            )
+                                            .with_span_handle(image, context.expressions));
+                                        }
+                                    }
+                                    crate::TypeInner::Scalar(format.into())
+                                }
+                                _ => {
+                                    return Err(FunctionError::InvalidImageAtomic(
+                                        ExpressionError::InvalidImageClass(class),
+                                    )
+                                    .with_span_handle(image, context.expressions));
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(FunctionError::InvalidImageAtomic(
+                                ExpressionError::ExpectedImageType(var.ty),
+                            )
+                            .with_span()
+                            .with_handle(var.ty, context.types)
+                            .with_handle(image, context.expressions))
+                        }
+                    };
+
+                    if *context.resolve_type(value, &self.valid_expression_set)? != value_ty {
+                        return Err(FunctionError::InvalidAtomicValue(value)
+                            .with_span_handle(value, context.expressions));
+                    }
                 }
                 S::WorkGroupUniformLoad { pointer, result } => {
                     stages &= super::ShaderStages::COMPUTE;

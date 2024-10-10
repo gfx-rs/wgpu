@@ -1095,12 +1095,16 @@ impl<'a, W: Write> Writer<'a, W> {
         // - Array - used if it's an image array
         // - Shadow - used if it's a depth image
         use crate::ImageClass as Ic;
-
-        let (base, kind, ms, comparison) = match class {
-            Ic::Sampled { kind, multi: true } => ("sampler", kind, "MS", ""),
-            Ic::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
-            Ic::Depth { multi: true } => ("sampler", crate::ScalarKind::Float, "MS", ""),
-            Ic::Depth { multi: false } => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
+        use crate::Scalar as S;
+        let float = S {
+            kind: crate::ScalarKind::Float,
+            width: 4,
+        };
+        let (base, scalar, ms, comparison) = match class {
+            Ic::Sampled { kind, multi: true } => ("sampler", S { kind, width: 4 }, "MS", ""),
+            Ic::Sampled { kind, multi: false } => ("sampler", S { kind, width: 4 }, "", ""),
+            Ic::Depth { multi: true } => ("sampler", float, "MS", ""),
+            Ic::Depth { multi: false } => ("sampler", float, "", "Shadow"),
             Ic::Storage { format, .. } => ("image", format.into(), "", ""),
         };
 
@@ -1114,7 +1118,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.out,
             "{}{}{}{}{}{}{}",
             precision,
-            glsl_scalar(crate::Scalar { kind, width: 4 })?.prefix,
+            glsl_scalar(scalar)?.prefix,
             base,
             glsl_dimension(dim),
             ms,
@@ -2464,6 +2468,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 self.write_expr(value, ctx)?;
                 writeln!(self.out, ");")?;
+            }
+            // Stores a value into an image.
+            Statement::ImageAtomic {
+                image,
+                coordinate,
+                sample,
+                fun,
+                value,
+            } => {
+                write!(self.out, "{level}")?;
+                self.write_image_atomic(ctx, image, coordinate, sample, fun, value)?
             }
             Statement::RayQuery { .. } => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
@@ -4085,6 +4100,56 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method to write the `ImageStore` statement
+    fn write_image_atomic(
+        &mut self,
+        ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        _sample: Handle<crate::Expression>,
+        fun: crate::AtomicFunction,
+        value: Handle<crate::Expression>,
+    ) -> Result<(), Error> {
+        use crate::ImageDimension as IDim;
+
+        // NOTE: openGL requires that `imageStore`s have no effets when the texel is invalid
+        // so we don't need to generate bounds checks (OpenGL 4.2 Core §3.9.20)
+
+        // This will only panic if the module is invalid
+        let dim = match *ctx.resolve_type(image, &self.module.types) {
+            TypeInner::Image { dim, .. } => dim,
+            _ => unreachable!(),
+        };
+
+        // Begin our call to `imageStore`
+        let fun_str = fun.to_glsl();
+        write!(self.out, "imageAtomic{fun_str}(")?;
+        self.write_expr(image, ctx)?;
+        // Separate the image argument from the coordinates
+        write!(self.out, ", ")?;
+
+        // openGL es doesn't have 1D images so we need workaround it
+        let tex_1d_hack = dim == IDim::D1 && self.options.version.is_es();
+        // Write the coordinate vector
+        self.write_texture_coord(
+            ctx,
+            // Get the size of the coordinate vector
+            self.get_coordinate_vector_size(dim, false),
+            coordinate,
+            None,
+            tex_1d_hack,
+        )?;
+
+        // Separate the coordinate from the value to write and write the expression
+        // of the value to write.
+        write!(self.out, ", ")?;
+        self.write_expr(value, ctx)?;
+        // End the call to `imageStore` and the statement.
+        writeln!(self.out, ");")?;
+
+        Ok(())
+    }
+
     /// Helper method for writing an `ImageLoad` expression.
     #[allow(clippy::too_many_arguments)]
     fn write_image_load(
@@ -4827,6 +4892,7 @@ fn glsl_storage_format(format: crate::StorageFormat) -> Result<&'static str, Err
         Sf::Rgb10a2Uint => "rgb10_a2ui",
         Sf::Rgb10a2Unorm => "rgb10_a2",
         Sf::Rg11b10Ufloat => "r11f_g11f_b10f",
+        Sf::R64Uint => "r64ui",
         Sf::Rg32Uint => "rg32ui",
         Sf::Rg32Sint => "rg32i",
         Sf::Rg32Float => "rg32f",

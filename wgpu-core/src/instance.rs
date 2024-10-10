@@ -216,6 +216,10 @@ impl Adapter {
             wgt::TextureUsages::RENDER_ATTACHMENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
         );
+        allowed_usages.set(
+            wgt::TextureUsages::SHADER_ATOMIC,
+            caps.intersects(Tfc::SHADER_ATOMIC),
+        );
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
         flags.set(

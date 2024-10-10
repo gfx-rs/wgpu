@@ -1077,6 +1077,8 @@ impl crate::Adapter for super::Adapter {
 
         let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
+        let image_atomic = feature_fn(wgt::Features::TEXTURE_INT64_ATOMIC, Tfc::SHADER_ATOMIC);
+
         match format {
             Tf::R8Unorm => filterable_renderable,
             Tf::R8Snorm => filterable,
@@ -1108,6 +1110,7 @@ impl crate::Adapter for super::Adapter {
             Tf::Rgb10a2Uint => renderable,
             Tf::Rgb10a2Unorm => filterable_renderable,
             Tf::Rg11b10Ufloat => filterable | float_renderable,
+            Tf::R64Uint => image_atomic,
             Tf::Rg32Uint => renderable,
             Tf::Rg32Sint => renderable,
             Tf::Rg32Float => unfilterable | float_renderable | texture_float_linear,

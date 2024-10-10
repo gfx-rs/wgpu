@@ -402,6 +402,8 @@ impl super::Adapter {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
             atomic_int64_on_typed_resource_supported,
         );
+        // Ruint64 textures are always emulated on d3d12
+        features.set(wgt::Features::TEXTURE_INT64_ATOMIC, true);
 
         // float32-filterable should always be available on d3d12
         features.set(wgt::Features::FLOAT32_FILTERABLE, true);
@@ -679,6 +681,12 @@ impl crate::Adapter for super::Adapter {
             data_srv_uav
                 .Support2
                 .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD),
+        );
+        caps.set(
+            Tfc::SHADER_ATOMIC,
+            data_srv_uav
+                .Support2
+                .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX),
         );
 
         // We load via UAV/SRV so use srv_uav_format

@@ -626,6 +626,7 @@ pub enum StorageFormat {
     Rg11b10Ufloat,
 
     // 64-bit formats
+    R64Uint,
     Rg32Uint,
     Rg32Sint,
     Rg32Float,
@@ -1987,6 +1988,54 @@ pub enum Statement {
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
         result: Option<Handle<Expression>>,
+    },
+    /// Performs an atomic operation on a texel value of an image.
+    ///
+    /// Doing atomics on images with mipmaps is not supported, so there is no
+    /// `level` operand.
+    ///
+    /// This statement is a barrier for any operations on the corresponding
+    /// [`Expression::GlobalVariable`] for this image.
+    ImageAtomic {
+        /// The image to perform an atomic operation on. This must have type
+        /// [`Image`]. (This will necessarily be a [`GlobalVariable`] or
+        /// [`FunctionArgument`] expression, since no other expressions are
+        /// allowed to have that type.)
+        ///
+        /// [`Image`]: TypeInner::Image
+        /// [`GlobalVariable`]: Expression::GlobalVariable
+        /// [`FunctionArgument`]: Expression::FunctionArgument
+        image: Handle<Expression>,
+
+        /// The coordinate of the texel we wish to load. This must be a scalar
+        /// for [`D1`] images, a [`Bi`] vector for [`D2`] images, and a [`Tri`]
+        /// vector for [`D3`] images. (sample indices are supplied separately.)
+        /// Its component type must be [`Sint`].
+        ///
+        /// If this image is arrayed, [`D1`] images require a [`Bi`] vector and
+        /// [`D2`] images require a [`Tri`] vector.
+        ///
+        /// Explicit level-of-detail values are unsupported.
+        ///
+        /// [`D1`]: ImageDimension::D1
+        /// [`D2`]: ImageDimension::D2
+        /// [`D3`]: ImageDimension::D3
+        /// [`Bi`]: VectorSize::Bi
+        /// [`Tri`]: VectorSize::Tri
+        /// [`Sint`]: ScalarKind::Sint
+        coordinate: Handle<Expression>,
+
+        /// A sample index, for multisampled [`Sampled`] and [`Depth`] images.
+        ///
+        /// [`Sampled`]: ImageClass::Sampled
+        /// [`Depth`]: ImageClass::Depth
+        sample: Handle<Expression>,
+
+        /// The kind of atomic operation to perform on the texel.
+        fun: AtomicFunction,
+
+        // The value with which to perform the atomic operation.
+        value: Handle<Expression>,
     },
     /// Load uniformly from a uniform pointer in the workgroup address space.
     ///

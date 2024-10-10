@@ -983,10 +983,7 @@ impl Writer {
             LocalType::Image(image) => {
                 let local_type = LocalType::Value {
                     vector_size: None,
-                    scalar: crate::Scalar {
-                        kind: image.sampled_type,
-                        width: 4,
-                    },
+                    scalar: image.sampled_type,
                     pointer_space: None,
                 };
                 let type_id = self.get_type_id(LookupType::Local(local_type));
@@ -1163,10 +1160,13 @@ impl Writer {
                 "storage image format",
                 &[spirv::Capability::StorageImageExtendedFormats],
             ),
-            If::R64ui | If::R64i => self.require_any(
-                "64-bit integer storage image format",
-                &[spirv::Capability::Int64ImageEXT],
-            ),
+            If::R64ui | If::R64i => {
+                self.use_extension("SPV_EXT_shader_image_int64");
+                self.require_any(
+                    "64-bit integer storage image format",
+                    &[spirv::Capability::Int64ImageEXT],
+                )
+            }
             If::Unknown
             | If::Rgba32f
             | If::Rgba16f

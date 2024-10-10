@@ -264,6 +264,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
+        TextureFormat::R64Uint => tf::R64uint,
         TextureFormat::Rg32Uint => tf::Rg32uint,
         TextureFormat::Rg32Sint => tf::Rg32sint,
         TextureFormat::Rg32Float => tf::Rg32float,

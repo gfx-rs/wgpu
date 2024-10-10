@@ -109,6 +109,9 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_shader_atomic_int64`, promoted to Vulkan 1.2.
     shader_atomic_int64: Option<vk::PhysicalDeviceShaderAtomicInt64Features<'static>>,
 
+    /// Features provided by `VK_EXT_shader_image_atomic_int64`
+    shader_image_atomic_int64: Option<vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT<'static>>,
+
     /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
 }
@@ -155,6 +158,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_int64 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_image_atomic_int64 {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.subgroup_size_control {
@@ -438,6 +444,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_image_atomic_int64: if enabled_extensions
+                .contains(&ext::shader_image_atomic_int64::NAME)
+            {
+                let needed = requested_features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC);
+                Some(
+                    vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT::default()
+                        .shader_image_int64_atomics(needed),
+                )
+            } else {
+                None
+            },
             subgroup_size_control: if device_api_version >= vk::API_VERSION_1_3
                 || enabled_extensions.contains(&ext::subgroup_size_control::NAME)
             {
@@ -587,6 +604,16 @@ impl PhysicalDeviceFeatures {
                 F::SHADER_INT64_ATOMIC_ALL_OPS | F::SHADER_INT64_ATOMIC_MIN_MAX,
                 shader_atomic_int64.shader_buffer_int64_atomics != 0
                     && shader_atomic_int64.shader_shared_int64_atomics != 0,
+            );
+        }
+
+        if let Some(ref shader_image_atomic_int64) = self.shader_image_atomic_int64 {
+            features.set(
+                F::TEXTURE_INT64_ATOMIC,
+                shader_image_atomic_int64
+                    .shader_image_int64_atomics(true)
+                    .shader_image_int64_atomics
+                    != 0,
             );
         }
 
@@ -1010,6 +1037,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::shader_atomic_int64::NAME);
         }
 
+        // Require `VK_EXT_shader_image_atomic_int64` if the associated feature was requested
+        if requested_features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC) {
+            extensions.push(ext::shader_image_atomic_int64::NAME);
+        }
+
         // Require VK_GOOGLE_display_timing if the associated feature was requested
         if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
             extensions.push(google::display_timing::NAME);
@@ -1290,6 +1322,13 @@ impl super::InstanceShared {
                 let next = features
                     .shader_atomic_int64
                     .insert(vk::PhysicalDeviceShaderAtomicInt64Features::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(ext::shader_image_atomic_int64::NAME) {
+                let next = features
+                    .shader_image_atomic_int64
+                    .insert(vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT::default());
                 features2 = features2.push_next(next);
             }
 
@@ -1786,6 +1825,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Int64Atomics);
             }
 
+            if features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC) {
+                capabilities.push(spv::Capability::Int64ImageEXT);
+            }
+
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
@@ -2118,6 +2161,10 @@ impl crate::Adapter for super::Adapter {
         flags.set(
             Tfc::COPY_DST,
             features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
+        );
+        flags.set(
+            Tfc::SHADER_ATOMIC,
+            features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
