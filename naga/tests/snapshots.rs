@@ -936,6 +936,7 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("6220-break-from-loop", Targets::SPIRV),
+        ("index-by-value", Targets::SPIRV | Targets::IR),
     ];
 
     for &(name, targets) in inputs.iter() {

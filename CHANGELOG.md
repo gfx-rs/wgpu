@@ -113,6 +113,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Accept global `var`s without explicit type. By @sagudev in [#6199](https://github.com/gfx-rs/wgpu/pull/6199).
 - Fix handling of phony statements, so they are actually emitted. By @sagudev in [#6328](https://github.com/gfx-rs/wgpu/pull/6328).
 - Added `gl_DrawID` to glsl and `DrawIndex` to spv. By @ChosenName in [#6325](https://github.com/gfx-rs/wgpu/pull/6325).
+- Matrices can now be indexed by value (#4337), and indexing arrays by value no longer causes excessive spilling (#6358). By @jimblandy in [#6390](https://github.com/gfx-rs/wgpu/pull/6390).
 
 #### General
 
