@@ -351,5 +351,6 @@
                 "// this is used as both input and output for convenience",
             ],
         },
+        module: [],
     ),
 )

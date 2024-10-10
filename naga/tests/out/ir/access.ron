@@ -2232,11 +2232,7 @@
         ),
     ],
     comments: (
-        types: {
-            3: [
-                "// This snapshot tests accessing various containers, dereferencing pointers.",
-            ],
-        },
+        types: {},
         struct_members: {
             (3, 0): [],
             (3, 1): [],
@@ -2258,5 +2254,8 @@
                 "// tests msl padding insertion for global constants",
             ],
         },
+        module: [
+            "// This snapshot tests accessing various containers, dereferencing pointers.",
+        ],
     ),
 )

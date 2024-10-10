@@ -289,5 +289,6 @@
         functions: {},
         constants: {},
         global_variables: {},
+        module: [],
     ),
 )
