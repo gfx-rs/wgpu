@@ -2438,6 +2438,26 @@ impl Parser {
 
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
+        let mut comments = Vec::new();
+
+        fn peek_any_next<'a>(lexer: &'a Lexer) -> (Token<'a>, Span) {
+            let mut cloned = lexer.clone();
+            let token = cloned.next_until(|_| true, false);
+            token
+        }
+        loop {
+            match peek_any_next(&lexer) {
+                (Token::Comment(_), span) => {
+                    comments.push(lexer.source.index(span));
+                    let _ = lexer.next_until(|_| true, false);
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+        tu.comments = comments;
+
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
                 Err(error) => return Err(error),
@@ -2448,7 +2468,6 @@ impl Parser {
                 }
             }
         }
-
         Ok(tu)
     }
 

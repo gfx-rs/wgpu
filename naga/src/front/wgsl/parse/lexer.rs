@@ -267,7 +267,7 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment<'b>(
+    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment(
         &'a mut self,
         comments: &mut Vec<Span>,
     ) -> usize {

@@ -924,6 +924,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             const_typifier: &mut Typifier::new(),
             global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker::new(),
         };
+        ctx.module.comments.module = tu.comments.iter().map(|s| s.to_string()).collect();
 
         for decl_handle in self.index.visit_ordered() {
             let span = tu.decls.get_span(decl_handle);
