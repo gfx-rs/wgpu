@@ -411,12 +411,18 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             .append(image_load_expr, self.span_from_with_op(start));
 
         let handle = if is_depth {
-            let splat_expr = crate::Expression::Splat {
-                size: crate::VectorSize::Quad,
-                value: image_load_handle,
-            };
-            ctx.expressions
-                .append(splat_expr, self.span_from_with_op(start))
+            let result_ty = self.lookup_type.lookup(result_type_id)?;
+            match ctx.type_arena[result_ty.handle].inner {
+                crate::TypeInner::Vector { size, .. } => {
+                    let splat_expr = crate::Expression::Splat {
+                        size,
+                        value: image_load_handle,
+                    };
+                    ctx.expressions
+                        .append(splat_expr, self.span_from_with_op(start))
+                }
+                _ => image_load_handle,
+            }
         } else {
             image_load_handle
         };
@@ -678,12 +684,18 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         };
         let image_sample_handle = ctx.expressions.append(expr, self.span_from_with_op(start));
         let handle = if is_depth && depth_ref.is_none() {
-            let splat_expr = crate::Expression::Splat {
-                size: crate::VectorSize::Quad,
-                value: image_sample_handle,
-            };
-            ctx.expressions
-                .append(splat_expr, self.span_from_with_op(start))
+            let result_ty = self.lookup_type.lookup(result_type_id)?;
+            match ctx.type_arena[result_ty.handle].inner {
+                crate::TypeInner::Vector { size, .. } => {
+                    let splat_expr = crate::Expression::Splat {
+                        size,
+                        value: image_sample_handle,
+                    };
+                    ctx.expressions
+                        .append(splat_expr, self.span_from_with_op(start))
+                }
+                _ => image_sample_handle,
+            }
         } else {
             image_sample_handle
         };
