@@ -773,7 +773,10 @@ fn convert_wgsl() {
             "atomicOps",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
+        (
+            "atomicCompareExchange",
+            Targets::SPIRV | Targets::METAL | Targets::WGSL,
+        ),
         (
             "padding",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -917,7 +920,7 @@ fn convert_wgsl() {
         ),
         (
             "overrides-atomicCompareExchangeWeak",
-            Targets::IR | Targets::SPIRV,
+            Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
         (
             "overrides-ray-query",
