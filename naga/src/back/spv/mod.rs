@@ -246,6 +246,27 @@ enum NumericType {
     },
 }
 
+impl NumericType {
+    const fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
+        match *inner {
+            crate::TypeInner::Scalar(scalar) | crate::TypeInner::Atomic(scalar) => {
+                Some(NumericType::Scalar(scalar))
+            }
+            crate::TypeInner::Vector { size, scalar } => Some(NumericType::Vector { size, scalar }),
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Some(NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// A SPIR-V type constructed during code generation.
 ///
 /// This is the variant of [`LookupType`] used to represent types that might not
@@ -367,21 +388,14 @@ struct LookupFunctionType {
 impl LocalType {
     fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
         Some(match *inner {
-            crate::TypeInner::Scalar(scalar) | crate::TypeInner::Atomic(scalar) => {
-                LocalType::Numeric(NumericType::Scalar(scalar))
+            crate::TypeInner::Scalar(_)
+            | crate::TypeInner::Atomic(_)
+            | crate::TypeInner::Vector { .. }
+            | crate::TypeInner::Matrix { .. } => {
+                // We expect `NumericType::from_inner` to handle all
+                // these cases, so unwrap.
+                LocalType::Numeric(NumericType::from_inner(inner).unwrap())
             }
-            crate::TypeInner::Vector { size, scalar } => {
-                LocalType::Numeric(NumericType::Vector { size, scalar })
-            }
-            crate::TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            } => LocalType::Numeric(NumericType::Matrix {
-                columns,
-                rows,
-                scalar,
-            }),
             crate::TypeInner::Pointer { base, space } => LocalType::Pointer {
                 base,
                 class: helpers::map_storage_class(space),
