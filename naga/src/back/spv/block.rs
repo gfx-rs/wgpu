@@ -6,11 +6,7 @@ use super::{
     index::BoundsCheckResult, selection::Selection, Block, BlockContext, Dimension, Error,
     Instruction, LocalType, LookupType, NumericType, ResultMember, Writer, WriterFlags,
 };
-use crate::{
-    arena::Handle,
-    proc::{index::GuardedIndex, TypeResolution},
-    Statement,
-};
+use crate::{arena::Handle, proc::index::GuardedIndex, Statement};
 use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
@@ -345,34 +341,64 @@ impl<'w> BlockContext<'w> {
                         // that actually dereferences the pointer.
                         0
                     }
+                    _ if self.function.spilled_accesses.contains(base) => {
+                        // As far as Naga IR is concerned, this expression does not yield
+                        // a pointer (we just checked, above), but this backend spilled it
+                        // to a temporary variable, so SPIR-V thinks we're accessing it
+                        // via a pointer.
+
+                        // Since the base expression was spilled, mark this access to it
+                        // as spilled, too.
+                        self.function.spilled_accesses.insert(expr_handle);
+                        self.maybe_access_spilled_composite(expr_handle, block, result_type_id)?
+                    }
                     crate::TypeInner::Vector { .. } => {
                         self.write_vector_access(expr_handle, base, index, block)?
                     }
-                    crate::TypeInner::Array {
-                        base: ty_element, ..
-                    } => {
-                        let index_id = self.cached[index];
-                        let base_id = self.cached[base];
-                        let base_ty = match self.fun_info[base].ty {
-                            TypeResolution::Handle(handle) => handle,
-                            TypeResolution::Value(_) => {
-                                return Err(Error::Validation(
-                                    "Array types should always be in the arena",
-                                ))
+                    crate::TypeInner::Array { .. } | crate::TypeInner::Matrix { .. } => {
+                        // See if `index` is known at compile time.
+                        match GuardedIndex::from_expression(index, self.ir_function, self.ir_module)
+                        {
+                            GuardedIndex::Known(value) => {
+                                // If `index` is known and in bounds, we can just use
+                                // `OpCompositeExtract`.
+                                //
+                                // At the moment, validation rejects programs if this
+                                // index is out of bounds, so we don't need bounds checks.
+                                // However, that rejection is incorrect, since WGSL says
+                                // that `let` bindings are not constant expressions
+                                // (#6396). So eventually we will need to emulate bounds
+                                // checks here.
+                                let id = self.gen_id();
+                                let base_id = self.cached[base];
+                                block.body.push(Instruction::composite_extract(
+                                    result_type_id,
+                                    id,
+                                    base_id,
+                                    &[value],
+                                ));
+                                id
                             }
-                        };
-                        let (id, variable) = self.writer.promote_access_expression_to_variable(
-                            result_type_id,
-                            base_id,
-                            base_ty,
-                            index_id,
-                            ty_element,
-                            block,
-                        )?;
-                        self.function.internal_variables.push(variable);
-                        id
+                            GuardedIndex::Expression(_) => {
+                                // We are subscripting an array or matrix that is not
+                                // behind a pointer, using an index computed at runtime.
+                                // SPIR-V has no instructions that do this, so the best we
+                                // can do is spill the value to a new temporary variable,
+                                // at which point we can get a pointer to that and just
+                                // use `OpAccessChain` in the usual way.
+                                self.spill_to_internal_variable(base, block);
+
+                                // Since the base was spilled, mark this access to it as
+                                // spilled, too.
+                                self.function.spilled_accesses.insert(expr_handle);
+                                self.maybe_access_spilled_composite(
+                                    expr_handle,
+                                    block,
+                                    result_type_id,
+                                )?
+                            }
+                        }
                     }
-                    // wgpu#4337: Support `crate::TypeInner::Matrix`
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
@@ -434,6 +460,17 @@ impl<'w> BlockContext<'w> {
                         // generating any code for this until we find the `Expression`
                         // that actually dereferences the pointer.
                         0
+                    }
+                    _ if self.function.spilled_accesses.contains(base) => {
+                        // As far as Naga IR is concerned, this expression does not yield
+                        // a pointer (we just checked, above), but this backend spilled it
+                        // to a temporary variable, so SPIR-V thinks we're accessing it
+                        // via a pointer.
+
+                        // Since the base expression was spilled, mark this access to it
+                        // as spilled, too.
+                        self.function.spilled_accesses.insert(expr_handle);
+                        self.maybe_access_spilled_composite(expr_handle, block, result_type_id)?
                     }
                     crate::TypeInner::Vector { .. }
                     | crate::TypeInner::Matrix { .. }
@@ -1737,6 +1774,14 @@ impl<'w> BlockContext<'w> {
 
         self.temp_list.clear();
         let root_id = loop {
+            // If `expr_handle` was spilled, then the temporary variable has exactly
+            // the value we want to start from.
+            if let Some(spilled) = self.function.spilled_composites.get(&expr_handle) {
+                // The root id of the `OpAccessChain` instruction is the temporary
+                // variable we spilled the composite to.
+                break spilled.id;
+            }
+
             expr_handle = match self.ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
                     is_non_uniform_binding_array |=
@@ -1986,6 +2031,71 @@ impl<'w> BlockContext<'w> {
                 );
                 Ok(value)
             }
+        }
+    }
+
+    fn spill_to_internal_variable(&mut self, base: Handle<crate::Expression>, block: &mut Block) {
+        // Generate an internal variable of the appropriate type for `base`.
+        let variable_id = self.writer.id_gen.next();
+        let pointer_type_id = self
+            .writer
+            .get_resolution_pointer_id(&self.fun_info[base].ty, spirv::StorageClass::Function);
+        let variable = super::LocalVariable {
+            id: variable_id,
+            instruction: Instruction::variable(
+                pointer_type_id,
+                variable_id,
+                spirv::StorageClass::Function,
+                None,
+            ),
+        };
+
+        let base_id = self.cached[base];
+        block
+            .body
+            .push(Instruction::store(variable.id, base_id, None));
+        self.function.spilled_composites.insert(base, variable);
+    }
+
+    /// Generate an access to a spilled temporary, if necessary.
+    ///
+    /// Given `access`, an [`Access`] or [`AccessIndex`] expression that refers
+    /// to a component of a composite value that has been spilled to a temporary
+    /// variable, determine whether other expressions are going to use
+    /// `access`'s value:
+    ///
+    /// - If so, perform the access and cache that as the value of `access`.
+    ///
+    /// - Otherwise, generate no code and cache no value for `access`.
+    ///
+    /// Return `Ok(0)` if no value was fetched, or `Ok(id)` if we loaded it into
+    /// the instruction given by `id`.
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    fn maybe_access_spilled_composite(
+        &mut self,
+        access: Handle<crate::Expression>,
+        block: &mut Block,
+        result_type_id: Word,
+    ) -> Result<Word, Error> {
+        let access_uses = self.function.access_uses.get(&access).map_or(0, |r| *r);
+        if access_uses == self.fun_info[access].ref_count {
+            // This expression is only used by other `Access` and
+            // `AccessIndex` expressions, so we don't need to cache a
+            // value for it yet.
+            Ok(0)
+        } else {
+            // There are other expressions that are going to expect this
+            // expression's value to be cached, not just other `Access` or
+            // `AccessIndex` expressions. We must actually perform the
+            // access on the spill variable now.
+            self.write_checked_load(
+                access,
+                block,
+                AccessTypeAdjustment::IntroducePointer(spirv::StorageClass::Function),
+                result_type_id,
+            )
         }
     }
 

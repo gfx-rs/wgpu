@@ -1,0 +1,80 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 59
+OpCapability Shader
+OpCapability Linkage
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpDecorate %4 ArrayStride 4
+OpDecorate %7 ArrayStride 4
+OpDecorate %9 ArrayStride 8
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 1
+%6 = OpTypeInt 32 0
+%5 = OpConstant  %6  5
+%4 = OpTypeArray %3 %5
+%8 = OpConstant  %6  2
+%7 = OpTypeArray %3 %8
+%9 = OpTypeArray %7 %8
+%10 = OpTypeFloat 32
+%12 = OpTypeVector %10 2
+%11 = OpTypeMatrix %12 2
+%17 = OpTypeFunction %3 %4 %3
+%20 = OpTypePointer Function %4
+%21 = OpTypePointer Function %3
+%28 = OpTypeFunction %3 %3 %3
+%29 = OpConstant  %3  1
+%30 = OpConstant  %3  2
+%31 = OpConstantComposite  %7  %29 %30
+%32 = OpConstant  %3  3
+%33 = OpConstant  %3  4
+%34 = OpConstantComposite  %7  %32 %33
+%35 = OpConstantComposite  %9  %31 %34
+%38 = OpTypePointer Function %9
+%45 = OpTypeFunction %10 %3 %3
+%46 = OpConstant  %10  1.0
+%47 = OpConstant  %10  2.0
+%48 = OpConstant  %10  3.0
+%49 = OpConstant  %10  4.0
+%50 = OpConstantComposite  %12  %46 %47
+%51 = OpConstantComposite  %12  %48 %49
+%52 = OpConstantComposite  %11  %50 %51
+%55 = OpTypePointer Function %11
+%56 = OpTypePointer Function %10
+%16 = OpFunction  %3  None %17
+%14 = OpFunctionParameter  %4
+%15 = OpFunctionParameter  %3
+%13 = OpLabel
+%19 = OpVariable  %20  Function
+OpBranch %18
+%18 = OpLabel
+OpStore %19 %14
+%22 = OpAccessChain  %21  %19 %15
+%23 = OpLoad  %3  %22
+OpReturnValue %23
+OpFunctionEnd
+%27 = OpFunction  %3  None %28
+%25 = OpFunctionParameter  %3
+%26 = OpFunctionParameter  %3
+%24 = OpLabel
+%37 = OpVariable  %38  Function
+OpBranch %36
+%36 = OpLabel
+OpStore %37 %35
+%39 = OpAccessChain  %21  %37 %25 %26
+%40 = OpLoad  %3  %39
+OpReturnValue %40
+OpFunctionEnd
+%44 = OpFunction  %10  None %45
+%42 = OpFunctionParameter  %3
+%43 = OpFunctionParameter  %3
+%41 = OpLabel
+%54 = OpVariable  %55  Function
+OpBranch %53
+%53 = OpLabel
+OpStore %54 %52
+%57 = OpAccessChain  %56  %54 %42 %43
+%58 = OpLoad  %10  %57
+OpReturnValue %58
+OpFunctionEnd

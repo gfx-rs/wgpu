@@ -144,7 +144,41 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<FunctionArgument>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
-    internal_variables: Vec<LocalVariable>,
+
+    /// A map taking an expression that yields a composite value (array, matrix)
+    /// to the temporary variables we have spilled it to, if any. Spilling
+    /// allows us to render an arbitrary chain of [`Access`] and [`AccessIndex`]
+    /// expressions as an `OpAccessChain` and an `OpLoad` (plus bounds checks).
+    /// This supports dynamic indexing of by-value arrays and matrices, which
+    /// SPIR-V does not.
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    spilled_composites: crate::FastIndexMap<Handle<crate::Expression>, LocalVariable>,
+
+    /// A set of expressions that are either in [`spilled_composites`] or refer
+    /// to some component/element of such.
+    ///
+    /// [`spilled_composites`]: Function::spilled_composites
+    spilled_accesses: crate::arena::HandleSet<crate::Expression>,
+
+    /// A map taking each expression to the number of [`Access`] and
+    /// [`AccessIndex`] expressions that uses it as a base value. If an
+    /// expression has no entry, its count is zero: it is never used as a
+    /// [`Access`] or [`AccessIndex`] base.
+    ///
+    /// We use this, together with [`ExpressionInfo::ref_count`], to recognize
+    /// the tips of chains of [`Access`] and [`AccessIndex`] expressions that
+    /// access spilled values --- expressions in [`spilled_composites`]. We
+    /// defer generating code for the chain until we reach its tip, so we can
+    /// handle it with a single instruction.
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    /// [`ExpressionInfo::ref_count`]: crate::valid::ExpressionInfo
+    /// [`spilled_composites`]: Function::spilled_composites
+    access_uses: crate::FastHashMap<Handle<crate::Expression>, usize>,
+
     blocks: Vec<TerminatedBlock>,
     entry_point_context: Option<EntryPointContext>,
 }

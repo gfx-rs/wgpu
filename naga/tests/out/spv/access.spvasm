@@ -240,7 +240,7 @@ OpDecorate %343 BuiltIn Position
 %215 = OpConstantComposite  %31  %66 %66 %66 %66
 %216 = OpConstantComposite  %34  %214 %215
 %222 = OpTypeFunction %5 %32 %5
-%224 = OpTypePointer Function %32
+%225 = OpTypePointer Function %32
 %231 = OpTypeFunction %3 %37
 %238 = OpTypeFunction %2 %37
 %244 = OpTypeFunction %3 %40
@@ -434,11 +434,11 @@ OpFunctionEnd
 %219 = OpFunctionParameter  %32
 %220 = OpFunctionParameter  %5
 %218 = OpLabel
-%225 = OpVariable  %224  Function
+%224 = OpVariable  %225  Function
 OpBranch %223
 %223 = OpLabel
-OpStore %225 %219
-%226 = OpAccessChain  %88  %225 %220
+OpStore %224 %219
+%226 = OpAccessChain  %88  %224 %220
 %227 = OpLoad  %5  %226
 OpReturnValue %227
 OpFunctionEnd
@@ -481,7 +481,7 @@ OpFunctionEnd
 %260 = OpFunction  %2  None %60
 %254 = OpLabel
 %272 = OpVariable  %27  Function %265
-%273 = OpVariable  %224  Function %274
+%273 = OpVariable  %225  Function %274
 %257 = OpLoad  %3  %255
 %261 = OpAccessChain  %61  %49 %41
 %263 = OpAccessChain  %262  %52 %41
@@ -549,7 +549,7 @@ OpReturn
 OpFunctionEnd
 %344 = OpFunction  %2  None %60
 %340 = OpLabel
-%348 = OpVariable  %224  Function
+%348 = OpVariable  %225  Function
 %342 = OpLoad  %3  %341
 OpBranch %347
 %347 = OpLabel
