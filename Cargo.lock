@@ -4009,7 +4009,6 @@ dependencies = [
  "criterion",
  "naga",
  "nanorand",
- "once_cell",
  "pollster",
  "profiling",
  "rayon",
