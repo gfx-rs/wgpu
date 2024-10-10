@@ -355,6 +355,7 @@ impl Writer {
         mut interface: Option<FunctionInterface>,
         debug_info: &Option<DebugInfoInner>,
     ) -> Result<Word, Error> {
+        log::trace!("Generating code for {:?}", ir_function.name);
         let mut function = Function::default();
 
         let prelude_id = self.id_gen.next();
