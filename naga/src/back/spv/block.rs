@@ -6,7 +6,11 @@ use super::{
     index::BoundsCheckResult, selection::Selection, Block, BlockContext, Dimension, Error,
     Instruction, LocalType, LookupType, NumericType, ResultMember, Writer, WriterFlags,
 };
-use crate::{arena::Handle, proc::TypeResolution, Statement};
+use crate::{
+    arena::Handle,
+    proc::{index::GuardedIndex, TypeResolution},
+    Statement,
+};
 use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
@@ -1743,7 +1747,7 @@ impl<'w> BlockContext<'w> {
                     is_non_uniform_binding_array |=
                         self.is_nonuniform_binding_array_access(base, index);
 
-                    let index = crate::proc::index::GuardedIndex::Expression(index);
+                    let index = GuardedIndex::Expression(index);
                     let index_id =
                         self.write_access_chain_index(base, index, &mut accumulated_checks, block)?;
                     self.temp_list.push(index_id);
@@ -1768,7 +1772,7 @@ impl<'w> BlockContext<'w> {
                         // through the bounds check process.
                         self.write_access_chain_index(
                             base,
-                            crate::proc::index::GuardedIndex::Known(index),
+                            GuardedIndex::Known(index),
                             &mut accumulated_checks,
                             block,
                         )?
@@ -1861,7 +1865,7 @@ impl<'w> BlockContext<'w> {
     fn write_access_chain_index(
         &mut self,
         base: Handle<crate::Expression>,
-        index: crate::proc::index::GuardedIndex,
+        index: GuardedIndex,
         accumulated_checks: &mut Option<Word>,
         block: &mut Block,
     ) -> Result<Word, Error> {
