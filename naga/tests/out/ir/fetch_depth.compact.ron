@@ -1,0 +1,195 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 3,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Depth(
+                    multi: false,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: None,
+            ty: 1,
+            init: 0,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 4,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 2,
+            )),
+            ty: 5,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(I32(0)),
+    ],
+    functions: [
+        (
+            name: None,
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [
+                GlobalVariable(2),
+                GlobalVariable(0),
+                GlobalVariable(1),
+                Constant(0),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 2,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 5,
+                ),
+                ImageLoad(
+                    image: 0,
+                    coordinate: 6,
+                    array_index: None,
+                    sample: None,
+                    level: Some(3),
+                ),
+                Splat(
+                    size: Quad,
+                    value: 7,
+                ),
+                AccessIndex(
+                    base: 8,
+                    index: 0,
+                ),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 4,
+                    end: 10,
+                )),
+                Store(
+                    pointer: 4,
+                    value: 9,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            name: "cull::fetch_depth",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (32, 1, 1),
+            function: (
+                name: Some("cull::fetch_depth_wrap"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)
