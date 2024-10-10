@@ -274,6 +274,24 @@ impl Writer {
         }))
     }
 
+    /// Return a SPIR-V type for a pointer to `resolution`.
+    ///
+    /// The given `resolution` must be one that we can represent
+    /// either as a `LocalType::Pointer` or `LocalType::LocalPointer`.
+    pub(super) fn get_resolution_pointer_id(
+        &mut self,
+        resolution: &TypeResolution,
+        class: spirv::StorageClass,
+    ) -> Word {
+        match *resolution {
+            TypeResolution::Handle(handle) => self.get_pointer_id(handle, class),
+            TypeResolution::Value(ref inner) => {
+                let base = NumericType::from_inner(inner).unwrap();
+                self.get_type_id(LookupType::Local(LocalType::LocalPointer { base, class }))
+            }
+        }
+    }
+
     pub(super) fn get_uint_type_id(&mut self) -> Word {
         let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::U32));
         self.get_type_id(local_type.into())
