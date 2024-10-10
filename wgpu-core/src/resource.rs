@@ -86,7 +86,7 @@ impl std::fmt::Display for ResourceErrorIdent {
     }
 }
 
-pub(crate) trait ParentDevice: Labeled {
+pub trait ParentDevice: Labeled {
     fn device(&self) -> &Arc<Device>;
 
     fn is_equal(self: &Arc<Self>, other: &Arc<Self>) -> bool {
@@ -131,7 +131,7 @@ macro_rules! impl_parent_device {
     };
 }
 
-pub(crate) trait ResourceType {
+pub trait ResourceType {
     const TYPE: &'static str;
 }
 
@@ -144,7 +144,7 @@ macro_rules! impl_resource_type {
     };
 }
 
-pub(crate) trait Labeled: ResourceType {
+pub trait Labeled: ResourceType {
     /// Returns a string identifying this resource for logging and errors.
     ///
     /// It may be a user-provided string or it may be a placeholder from wgpu.
@@ -417,7 +417,7 @@ pub struct DestroyedResourceError(pub ResourceErrorIdent);
 #[error("{0} is invalid")]
 pub struct InvalidResourceError(pub ResourceErrorIdent);
 
-pub(crate) enum Fallible<T: ParentDevice> {
+pub enum Fallible<T: ParentDevice> {
     Valid(Arc<T>),
     Invalid(Arc<String>),
 }
