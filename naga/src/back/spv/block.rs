@@ -1390,7 +1390,7 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::LocalVariable(variable) => self.function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
-                self.write_checked_load(pointer, block, result_type_id)?
+                self.write_checked_load(pointer, block, AccessTypeAdjustment::None, result_type_id)?
             }
             crate::Expression::FunctionArgument(index) => self.function.parameter_id(index),
             crate::Expression::CallResult(_)
@@ -1931,9 +1931,10 @@ impl<'w> BlockContext<'w> {
         &mut self,
         pointer: Handle<crate::Expression>,
         block: &mut Block,
+        access_type_adjustment: AccessTypeAdjustment,
         result_type_id: Word,
     ) -> Result<Word, Error> {
-        match self.write_expression_pointer(pointer, block, AccessTypeAdjustment::None)? {
+        match self.write_expression_pointer(pointer, block, access_type_adjustment)? {
             ExpressionPointer::Ready { pointer_id } => {
                 let id = self.gen_id();
                 let atomic_space =
