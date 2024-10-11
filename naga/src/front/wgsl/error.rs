@@ -300,6 +300,7 @@ impl<'a> Error<'a> {
                             Token::Unknown(c) => format!("unknown ('{c}')"),
                             Token::Trivia => "trivia".to_string(),
                             Token::Comment(s) => format!("documentation ('{s}')"),
+                            Token::CommentModule(s) => format!("module documentation ('{s}')"),
                             Token::End => "end".to_string(),
                         }
                     }
