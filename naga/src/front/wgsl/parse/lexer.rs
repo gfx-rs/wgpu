@@ -22,6 +22,7 @@ pub enum Token<'a> {
     Unknown(char),
     Trivia,
     Comment(&'a str),
+    CommentModule(&'a str),
     End,
 }
 
@@ -88,7 +89,11 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
                     {
                         let end_position = end_position.0 + 1;
                         return (
-                            Token::Comment(&input[..end_position]),
+                            if chars.next() == Some('!') {
+                                Token::CommentModule(&input[..end_position])
+                            } else {
+                                Token::Comment(&input[..end_position])
+                            },
                             &input[end_position..],
                         );
                     }
@@ -253,7 +258,7 @@ impl<'a> Lexer<'a> {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false);
-            if let Token::Trivia | Token::Comment(_) = token {
+            if let Token::Trivia | Token::Comment(_) | Token::CommentModule(_) = token {
                 self.input = rest;
             } else {
                 return self.current_byte_offset();
@@ -277,6 +282,25 @@ impl<'a> Lexer<'a> {
             // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false);
             if let Token::Comment(_) = token {
+                self.input = rest;
+                let next = self.current_byte_offset();
+                comments.push(Span::new(start as u32, next as u32));
+            } else if let Token::Trivia = token {
+                self.input = rest;
+            } else {
+                return self.current_byte_offset();
+            }
+        }
+    }
+    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment_module(
+        &'a mut self,
+        comments: &mut Vec<Span>,
+    ) -> usize {
+        loop {
+            let start = self.current_byte_offset();
+            // Eat all trivia because `next` doesn't eat trailing trivia.
+            let (token, rest) = consume_token(self.input, false);
+            if let Token::CommentModule(_) = token {
                 self.input = rest;
                 let next = self.current_byte_offset();
                 comments.push(Span::new(start as u32, next as u32));

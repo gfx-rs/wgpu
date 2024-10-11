@@ -2283,9 +2283,22 @@ impl Parser {
             (None, None) => {}
         }
 
+        // read module docs
+        {
+            let mut module_comments = Vec::new();
+            let mut lexer_comment_modules = lexer_comments.clone();
+            lexer_comment_modules
+                .start_byte_offset_and_aggregate_comment_module(&mut module_comments);
+            let mut module_comments: Vec<_> = module_comments
+                .into_iter()
+                .map(|comment_span| lexer.source.index(comment_span))
+                .collect();
+            out.comments.append(&mut module_comments);
+        }
+        let token_span = lexer.next();
+
         // read item
         let start = lexer.start_byte_offset();
-        let token_span = lexer.next();
 
         let kind = match token_span {
             (Token::Separator(';'), _) => None,
@@ -2438,25 +2451,6 @@ impl Parser {
 
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
-        let mut comments = Vec::new();
-
-        fn peek_any_next<'a>(lexer: &'a Lexer) -> (Token<'a>, Span) {
-            let mut cloned = lexer.clone();
-            let token = cloned.next_until(|_| true, false);
-            token
-        }
-        loop {
-            match peek_any_next(&lexer) {
-                (Token::Comment(_), span) => {
-                    comments.push(lexer.source.index(span));
-                    let _ = lexer.next_until(|_| true, false);
-                }
-                _ => {
-                    break;
-                }
-            }
-        }
-        tu.comments = comments;
 
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
