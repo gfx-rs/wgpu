@@ -24,9 +24,10 @@ impl GlobalReport {
 }
 
 pub struct Global {
-    pub instance: Instance,
     pub(crate) surfaces: Registry<Arc<Surface>>,
     pub(crate) hub: Hub,
+    // the instance must be dropped last
+    pub instance: Instance,
 }
 
 impl Global {
@@ -88,12 +89,10 @@ impl Drop for Global {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
         resource_log!("Global::drop");
-        let mut surfaces_locked = self.surfaces.write();
 
-        // destroy hub before the instance gets dropped
-        self.hub.clear(&surfaces_locked);
-
-        surfaces_locked.map.clear();
+        for (_, device) in self.hub.devices.read().iter() {
+            device.prepare_to_die();
+        }
     }
 }
 
