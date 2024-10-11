@@ -2978,7 +2978,7 @@ impl<'w> BlockContext<'w> {
         let _ = self.write_block(
             entry_id,
             &self.ir_function.body,
-            super::block::BlockExit::Return,
+            BlockExit::Return,
             LoopContext::default(),
             debug_info,
         )?;
