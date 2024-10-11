@@ -142,7 +142,6 @@ impl Surface<'_> {
                 texture: Texture {
                     context: Arc::clone(&self.context),
                     data,
-                    owned: false,
                     descriptor,
                 },
                 suboptimal,
