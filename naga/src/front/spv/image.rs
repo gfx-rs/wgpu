@@ -412,6 +412,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
         let handle = if is_depth {
             let result_ty = self.lookup_type.lookup(result_type_id)?;
+            // The return type of `OpImageRead` can be a scalar or vector.
             match ctx.type_arena[result_ty.handle].inner {
                 crate::TypeInner::Vector { size, .. } => {
                     let splat_expr = crate::Expression::Splat {
