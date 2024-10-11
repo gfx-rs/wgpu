@@ -23,8 +23,8 @@ struct AssignToMember {
     uint x;
 };
 
-float read_from_private(inout float foo_2) {
-    float _e1 = foo_2;
+float read_from_private(inout float foo_1) {
+    float _e1 = foo_1;
     return _e1;
 }
 
@@ -37,13 +37,9 @@ void assign_through_ptr_fn(inout uint p) {
     return;
 }
 
-void assign_array_through_ptr_fn(inout vec4 foo_3[2]) {
-    foo_3 = vec4[2](vec4(1.0), vec4(2.0));
+void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
+    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
     return;
-}
-
-int array_by_value(int a_1[5], int i) {
-    return a_1[i];
 }
 
 uint fetch_arg_ptr_member(inout AssignToMember p_1) {

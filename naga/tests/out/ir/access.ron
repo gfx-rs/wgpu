@@ -1692,47 +1692,6 @@
             ],
         ),
         (
-            name: Some("array_by_value"),
-            arguments: [
-                (
-                    name: Some("a"),
-                    ty: 25,
-                    binding: None,
-                ),
-                (
-                    name: Some("i"),
-                    ty: 2,
-                    binding: None,
-                ),
-            ],
-            result: Some((
-                ty: 2,
-                binding: None,
-            )),
-            local_variables: [],
-            expressions: [
-                FunctionArgument(0),
-                FunctionArgument(1),
-                Access(
-                    base: 0,
-                    index: 1,
-                ),
-            ],
-            named_expressions: {
-                0: "a",
-                1: "i",
-            },
-            body: [
-                Emit((
-                    start: 2,
-                    end: 3,
-                )),
-                Return(
-                    value: Some(2),
-                ),
-            ],
-        ),
-        (
             name: Some("fetch_arg_ptr_member"),
             arguments: [
                 (
@@ -2454,82 +2413,6 @@
             ),
         ),
         (
-            name: "foo",
-            stage: Vertex,
-            early_depth_test: None,
-            workgroup_size: (0, 0, 0),
-            function: (
-                name: Some("foo"),
-                arguments: [
-                    (
-                        name: Some("vi"),
-                        ty: 0,
-                        binding: Some(BuiltIn(VertexIndex)),
-                    ),
-                ],
-                result: Some((
-                    ty: 24,
-                    binding: Some(BuiltIn(Position(
-                        invariant: false,
-                    ))),
-                )),
-                local_variables: [],
-                expressions: [
-                    FunctionArgument(0),
-                    Literal(I32(1)),
-                    Literal(I32(2)),
-                    Literal(I32(3)),
-                    Literal(I32(4)),
-                    Literal(I32(5)),
-                    Compose(
-                        ty: 25,
-                        components: [
-                            1,
-                            2,
-                            3,
-                            4,
-                            5,
-                        ],
-                    ),
-                    Access(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Splat(
-                        size: Quad,
-                        value: 7,
-                    ),
-                    As(
-                        expr: 8,
-                        kind: Float,
-                        convert: Some(4),
-                    ),
-                ],
-                named_expressions: {
-                    0: "vi",
-                    6: "arr",
-                    7: "value",
-                },
-                body: [
-                    Emit((
-                        start: 6,
-                        end: 7,
-                    )),
-                    Emit((
-                        start: 7,
-                        end: 8,
-                    )),
-                    Emit((
-                        start: 8,
-                        end: 10,
-                    )),
-                    Return(
-                        value: Some(9),
-                    ),
-                ],
-            ),
-        ),
-        (
             name: "assign_to_ptr_components",
             stage: Compute,
             early_depth_test: None,
@@ -2552,35 +2435,35 @@
                 ],
                 expressions: [
                     LocalVariable(0),
-                    CallResult(7),
+                    CallResult(6),
                     LocalVariable(1),
-                    CallResult(9),
+                    CallResult(8),
                 ],
                 named_expressions: {},
                 body: [
                     Call(
-                        function: 8,
+                        function: 7,
                         arguments: [
                             0,
                         ],
                         result: None,
                     ),
                     Call(
-                        function: 7,
+                        function: 6,
                         arguments: [
                             0,
                         ],
                         result: Some(1),
                     ),
                     Call(
-                        function: 10,
+                        function: 9,
                         arguments: [
                             2,
                         ],
                         result: None,
                     ),
                     Call(
-                        function: 9,
+                        function: 8,
                         arguments: [
                             2,
                         ],
