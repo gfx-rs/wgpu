@@ -43,6 +43,8 @@ pub enum SurfaceError {
     Device(#[from] DeviceError),
     #[error("Surface image is already acquired")]
     AlreadyAcquired,
+    #[error("Texture has been destroyed")]
+    TextureDestroyed,
     #[error("Acquired frame is still referenced")]
     StillReferenced,
 }
@@ -271,15 +273,13 @@ impl Global {
             .take()
             .ok_or(SurfaceError::AlreadyAcquired)?;
 
-        let result = match texture
-            .inner
-            .snatch(&mut device.snatchable_lock.write())
-            .unwrap()
-        {
-            resource::TextureInner::Surface { raw } => unsafe {
+        let result = match texture.inner.snatch(&mut device.snatchable_lock.write()) {
+            None => return Err(SurfaceError::TextureDestroyed),
+            Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = surface.raw(device.backend()).unwrap();
-                queue.raw().present(raw_surface, raw)
-            },
+                let raw_queue = queue.raw();
+                unsafe { raw_queue.present(raw_surface, raw) }
+            }
             _ => unreachable!(),
         };
 
@@ -323,12 +323,9 @@ impl Global {
             .take()
             .ok_or(SurfaceError::AlreadyAcquired)?;
 
-        match texture
-            .inner
-            .snatch(&mut device.snatchable_lock.write())
-            .unwrap()
-        {
-            resource::TextureInner::Surface { raw } => {
+        match texture.inner.snatch(&mut device.snatchable_lock.write()) {
+            None => return Err(SurfaceError::TextureDestroyed),
+            Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = surface.raw(device.backend()).unwrap();
                 unsafe { raw_surface.discard_texture(raw) };
             }
