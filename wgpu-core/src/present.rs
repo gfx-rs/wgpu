@@ -17,8 +17,7 @@ use crate::{
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
-    hal_label, id,
-    resource::{self, Trackable},
+    hal_label, id, resource,
 };
 
 use thiserror::Error;
@@ -30,7 +29,7 @@ const FRAME_TIMEOUT_MS: u32 = 1000;
 pub(crate) struct Presentation {
     pub(crate) device: Arc<Device>,
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
-    pub(crate) acquired_texture: Option<id::TextureId>,
+    pub(crate) acquired_texture: Option<Arc<resource::Texture>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -212,12 +211,12 @@ impl Global {
                     .textures
                     .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
 
-                let id = fid.assign(resource::Fallible::Valid(texture));
-
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
                 }
-                present.acquired_texture = Some(id);
+                present.acquired_texture = Some(texture.clone());
+
+                let id = fid.assign(resource::Fallible::Valid(texture));
 
                 let status = if ast.suboptimal {
                     Status::Suboptimal
@@ -249,8 +248,6 @@ impl Global {
     pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
         profiling::scope!("SwapChain::present");
 
-        let hub = &self.hub;
-
         let surface = self.surfaces.get(surface_id);
 
         let mut presentation = surface.presentation.lock();
@@ -269,35 +266,21 @@ impl Global {
         device.check_is_valid()?;
         let queue = device.get_queue().unwrap();
 
-        let result = {
-            let texture_id = present
-                .acquired_texture
-                .take()
-                .ok_or(SurfaceError::AlreadyAcquired)?;
+        let texture = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::AlreadyAcquired)?;
 
-            // The texture ID got added to the device tracker by `submit()`,
-            // and now we are moving it away.
-            let texture = hub.textures.remove(texture_id).get();
-            if let Ok(texture) = texture {
-                device
-                    .trackers
-                    .lock()
-                    .textures
-                    .remove(texture.tracker_index());
-                let suf = surface.raw(device.backend()).unwrap();
-                match texture
-                    .inner
-                    .snatch(&mut device.snatchable_lock.write())
-                    .unwrap()
-                {
-                    resource::TextureInner::Surface { raw } => unsafe {
-                        queue.raw().present(suf, raw)
-                    },
-                    _ => unreachable!(),
-                }
-            } else {
-                Err(hal::SurfaceError::Outdated) //TODO?
-            }
+        let result = match texture
+            .inner
+            .snatch(&mut device.snatchable_lock.write())
+            .unwrap()
+        {
+            resource::TextureInner::Surface { raw } => unsafe {
+                let raw_surface = surface.raw(device.backend()).unwrap();
+                queue.raw().present(raw_surface, raw)
+            },
+            _ => unreachable!(),
         };
 
         match result {
@@ -319,8 +302,6 @@ impl Global {
     pub fn surface_texture_discard(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
         profiling::scope!("SwapChain::discard");
 
-        let hub = &self.hub;
-
         let surface = self.surfaces.get(surface_id);
         let mut presentation = surface.presentation.lock();
         let present = match presentation.as_mut() {
@@ -337,34 +318,21 @@ impl Global {
 
         device.check_is_valid()?;
 
+        let texture = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::AlreadyAcquired)?;
+
+        match texture
+            .inner
+            .snatch(&mut device.snatchable_lock.write())
+            .unwrap()
         {
-            let texture_id = present
-                .acquired_texture
-                .take()
-                .ok_or(SurfaceError::AlreadyAcquired)?;
-
-            // The texture ID got added to the device tracker by `submit()`,
-            // and now we are moving it away.
-            let texture = hub.textures.remove(texture_id).get();
-
-            if let Ok(texture) = texture {
-                device
-                    .trackers
-                    .lock()
-                    .textures
-                    .remove(texture.tracker_index());
-                let suf = surface.raw(device.backend());
-                match texture
-                    .inner
-                    .snatch(&mut device.snatchable_lock.write())
-                    .unwrap()
-                {
-                    resource::TextureInner::Surface { raw } => {
-                        unsafe { suf.unwrap().discard_texture(raw) };
-                    }
-                    _ => unreachable!(),
-                }
+            resource::TextureInner::Surface { raw } => {
+                let raw_surface = surface.raw(device.backend()).unwrap();
+                unsafe { raw_surface.discard_texture(raw) };
             }
+            _ => unreachable!(),
         }
 
         Ok(())
