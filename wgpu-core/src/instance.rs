@@ -135,6 +135,28 @@ impl Instance {
         })
     }
 
+    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
+        profiling::scope!("Instance::enumerate_adapters");
+        api_log!("Instance::enumerate_adapters");
+
+        let mut adapters = Vec::new();
+        for (_, instance) in self
+            .instance_per_backend
+            .iter()
+            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
+        {
+            profiling::scope!("enumerating", &*format!("{:?}", backend));
+
+            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
+            for raw in hal_adapters {
+                let adapter = Adapter::new(raw);
+                log::info!("Adapter {:?}", adapter.raw.info);
+                adapters.push(adapter);
+            }
+        }
+        adapters
+    }
+
     pub fn request_adapter(
         &self,
         desc: &wgt::RequestAdapterOptions<&Surface>,
@@ -687,27 +709,11 @@ impl Global {
     }
 
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<AdapterId> {
-        profiling::scope!("Instance::enumerate_adapters");
-        api_log!("Instance::enumerate_adapters");
-
-        let mut adapters = Vec::new();
-        for (_, instance) in self
-            .instance
-            .instance_per_backend
-            .iter()
-            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
-        {
-            profiling::scope!("enumerating", &*format!("{:?}", backend));
-
-            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
-            for raw in hal_adapters {
-                let adapter = Adapter::new(raw);
-                log::info!("Adapter {:?}", adapter.raw.info);
-                let id = self.hub.adapters.prepare(None).assign(Arc::new(adapter));
-                adapters.push(id);
-            }
-        }
+        let adapters = self.instance.enumerate_adapters(backends);
         adapters
+            .into_iter()
+            .map(|adapter| self.hub.adapters.prepare(None).assign(Arc::new(adapter)))
+            .collect()
     }
 
     pub fn request_adapter(
