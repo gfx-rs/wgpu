@@ -168,18 +168,6 @@ fn assign_through_ptr() {
     assign_array_through_ptr_fn(&arr);
 }
 
-@vertex
-fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
-	let arr = array<i32, 5>(1, 2, 3, 4, 5);
-	let value = arr[vi];
-	return vec4<f32>(vec4<i32>(value));
-}
-
-fn array_by_value(a: array<i32, 5>, i: i32) -> i32 {
-    return a[i];
-}
-
-
 struct AssignToMember {
   x: u32,
 }
