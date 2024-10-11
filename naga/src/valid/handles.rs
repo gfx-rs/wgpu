@@ -39,6 +39,8 @@ impl super::Validator {
             ref types,
             ref special_types,
             ref global_expressions,
+            // TODO: validate comments (shouldn't have invalid handle or spans ?)
+            ..
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.

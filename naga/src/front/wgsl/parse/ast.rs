@@ -24,6 +24,10 @@ pub struct TranslationUnit<'a> {
     /// These are referred to by `Handle<ast::Type<'a>>` values.
     /// User-defined types are referred to by name until lowering.
     pub types: Arena<Type<'a>>,
+
+    /// Comments appearing first in the file.
+    /// This serves as documentation for the whole TranslationUnit.
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -145,6 +149,8 @@ pub struct Function<'a> {
     pub locals: Arena<Local>,
 
     pub body: Block<'a>,
+
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]
@@ -171,6 +177,7 @@ pub struct GlobalVariable<'a> {
     pub binding: Option<ResourceBinding<'a>>,
     pub ty: Handle<Type<'a>>,
     pub init: Option<Handle<Expression<'a>>>,
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]
@@ -180,12 +187,15 @@ pub struct StructMember<'a> {
     pub binding: Option<Binding<'a>>,
     pub align: Option<Handle<Expression<'a>>>,
     pub size: Option<Handle<Expression<'a>>>,
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]
 pub struct Struct<'a> {
     pub name: Ident<'a>,
     pub members: Vec<StructMember<'a>>,
+    // TODO: Make it optional ? Store Span ? Add it to other elements
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]
@@ -199,6 +209,7 @@ pub struct Const<'a> {
     pub name: Ident<'a>,
     pub ty: Option<Handle<Type<'a>>>,
     pub init: Handle<Expression<'a>>,
+    pub comments: Vec<&'a str>,
 }
 
 #[derive(Debug)]

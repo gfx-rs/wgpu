@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
@@ -977,6 +979,7 @@ impl Parser {
             binding: None,
             ty,
             init,
+            comments: Vec::new(),
         })
     }
 
@@ -996,6 +999,9 @@ impl Parser {
                     ExpectedToken::Token(Token::Separator(',')),
                 ));
             }
+            // Save a lexer to be able to backtrack comments if need be.
+            let mut lexer_comments = lexer.clone();
+
             let (mut size, mut align) = (ParsedAttribute::default(), ParsedAttribute::default());
             self.push_rule_span(Rule::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
@@ -1025,12 +1031,21 @@ impl Parser {
             let ty = self.type_decl(lexer, ctx)?;
             ready = lexer.skip(Token::Separator(','));
 
+            let mut comments = Vec::new();
+            lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+            let comments = comments
+                .into_iter()
+                .map(|comment_span| lexer.source.index(comment_span))
+                .collect();
+
             members.push(ast::StructMember {
                 name,
                 ty,
                 binding,
                 size: size.value,
                 align: align.value,
+                comments: comments,
             });
         }
 
@@ -2159,6 +2174,7 @@ impl Parser {
             result,
             body,
             locals,
+            comments: Vec::new(),
         };
 
         // done
@@ -2172,6 +2188,9 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         out: &mut ast::TranslationUnit<'a>,
     ) -> Result<(), Error<'a>> {
+        // Save a lexer to be able to backtrack comments if need be.
+        let mut lexer_comments = lexer.clone();
+
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
@@ -2251,7 +2270,6 @@ impl Parser {
                 (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
             }
         }
-
         let attrib_span = self.pop_rule_span(lexer);
         match (bind_group.value, bind_index.value) {
             (Some(group), Some(index)) => {
@@ -2265,15 +2283,42 @@ impl Parser {
             (None, None) => {}
         }
 
+        // read module docs
+        {
+            let mut module_comments = Vec::new();
+            let mut lexer_comment_modules = lexer_comments.clone();
+            lexer_comment_modules
+                .start_byte_offset_and_aggregate_comment_module(&mut module_comments);
+            let mut module_comments: Vec<_> = module_comments
+                .into_iter()
+                .map(|comment_span| lexer.source.index(comment_span))
+                .collect();
+            out.comments.append(&mut module_comments);
+        }
+        let token_span = lexer.next();
+
         // read item
         let start = lexer.start_byte_offset();
-        let kind = match lexer.next() {
+
+        let kind = match token_span {
             (Token::Separator(';'), _) => None,
             (Token::Word("struct"), _) => {
                 let name = lexer.next_ident()?;
 
                 let members = self.struct_body(lexer, &mut ctx)?;
-                Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
+
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+                Some(ast::GlobalDeclKind::Struct(ast::Struct {
+                    name,
+                    members,
+                    comments,
+                }))
             }
             (Token::Word("alias"), _) => {
                 let name = lexer.next_ident()?;
@@ -2297,7 +2342,20 @@ impl Parser {
                 let init = self.general_expression(lexer, &mut ctx)?;
                 lexer.expect(Token::Separator(';'))?;
 
-                Some(ast::GlobalDeclKind::Const(ast::Const { name, ty, init }))
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+
+                Some(ast::GlobalDeclKind::Const(ast::Const {
+                    name,
+                    ty,
+                    init,
+                    comments,
+                }))
             }
             (Token::Word("override"), _) => {
                 let name = lexer.next_ident()?;
@@ -2326,10 +2384,28 @@ impl Parser {
             (Token::Word("var"), _) => {
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
+
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+                var.comments = comments;
                 Some(ast::GlobalDeclKind::Var(var))
             }
             (Token::Word("fn"), _) => {
                 let function = self.function_decl(lexer, out, &mut dependencies)?;
+
+                let mut comments = Vec::new();
+                lexer_comments.start_byte_offset_and_aggregate_comment(&mut comments);
+
+                let comments = comments
+                    .into_iter()
+                    .map(|comment_span| lexer.source.index(comment_span))
+                    .collect();
+
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
@@ -2343,6 +2419,7 @@ impl Parser {
                     } else {
                         None
                     },
+                    comments,
                     ..function
                 }))
             }
@@ -2374,6 +2451,7 @@ impl Parser {
 
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
+
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
                 Err(error) => return Err(error),
@@ -2384,7 +2462,6 @@ impl Parser {
                 }
             }
         }
-
         Ok(tu)
     }
 

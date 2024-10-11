@@ -924,6 +924,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             const_typifier: &mut Typifier::new(),
             global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker::new(),
         };
+        ctx.module.comments.module = tu.comments.iter().map(|s| s.to_string()).collect();
 
         for decl_handle in self.index.visit_ordered() {
             let span = tu.decls.get_span(decl_handle);
@@ -932,6 +933,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             match decl.kind {
                 ast::GlobalDeclKind::Fn(ref f) => {
                     let lowered_decl = self.function(f, span, &mut ctx)?;
+                    if !f.comments.is_empty() {
+                        ctx.module.comments.functions.insert(
+                            f.name.name.to_string(),
+                            f.comments.iter().map(|s| s.to_string()).collect(),
+                        );
+                    }
                     ctx.globals.insert(f.name.name, lowered_decl);
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
@@ -982,6 +989,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         span,
                     );
 
+                    if !v.comments.is_empty() {
+                        ctx.module
+                            .comments
+                            .global_variables
+                            .insert(handle, v.comments.iter().map(|s| s.to_string()).collect());
+                    }
                     ctx.globals
                         .insert(v.name.name, LoweredGlobalDecl::Var(handle));
                 }
@@ -1026,6 +1039,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     ctx.globals
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
+                    if !c.comments.is_empty() {
+                        ctx.module
+                            .comments
+                            .constants
+                            .insert(handle, c.comments.iter().map(|s| s.to_string()).collect());
+                    }
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
                     let init = o
@@ -1090,6 +1109,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = self.r#struct(s, span, &mut ctx)?;
                     ctx.globals
                         .insert(s.name.name, LoweredGlobalDecl::Type(handle));
+                    if !s.comments.is_empty() {
+                        ctx.module
+                            .comments
+                            .types
+                            .insert(handle, s.comments.iter().map(|s| s.to_string()).collect());
+                    }
                 }
                 ast::GlobalDeclKind::Type(ref alias) => {
                     let ty = self.resolve_named_ast_type(
@@ -2715,6 +2740,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut struct_alignment = Alignment::ONE;
         let mut members = Vec::with_capacity(s.members.len());
 
+        let mut comments = Vec::new();
+
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, ctx)?;
 
@@ -2754,6 +2781,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             offset = member_alignment.round_up(offset);
             struct_alignment = struct_alignment.max(member_alignment);
 
+            comments.push(member.comments.iter().map(|s| s.to_string()).collect());
             members.push(crate::StructMember {
                 name: Some(member.name.name.to_owned()),
                 ty,
@@ -2777,6 +2805,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             },
             span,
         );
+        for (i, c) in comments.drain(..).enumerate() {
+            ctx.module.comments.struct_members.insert((handle, i), c);
+        }
         Ok(handle)
     }
 

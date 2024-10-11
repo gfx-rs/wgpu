@@ -3,7 +3,6 @@ use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
-
 type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -22,6 +21,8 @@ pub enum Token<'a> {
     Arrow,
     Unknown(char),
     Trivia,
+    Comment(&'a str),
+    CommentModule(&'a str),
     End,
 }
 
@@ -47,6 +48,7 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
 fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
+    let full_chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
         None => return (Token::End, ""),
@@ -81,28 +83,45 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let _ = chars.position(is_comment_end);
-                    (Token::Trivia, chars.as_str())
+                    if let Some(end_position) = input
+                        .char_indices()
+                        .find(|char_indices| is_comment_end(char_indices.1))
+                    {
+                        let end_position = end_position.0 + 1;
+                        return (
+                            if chars.next() == Some('!') {
+                                Token::CommentModule(&input[..end_position])
+                            } else {
+                                Token::Comment(&input[..end_position])
+                            },
+                            &input[end_position..],
+                        );
+                    }
+                    (Token::Comment(input), &input[input.len() - 1..])
                 }
                 Some('*') => {
                     let mut depth = 1;
                     let mut prev = None;
-
+                    let mut nb_characters = 2;
                     for c in &mut chars {
                         match (prev, c) {
                             (Some('*'), '/') => {
                                 prev = None;
                                 depth -= 1;
+                                nb_characters += 1;
                                 if depth == 0 {
-                                    return (Token::Trivia, chars.as_str());
+                                    let doc = &full_chars.as_str()[..nb_characters];
+                                    return (Token::Comment(doc), chars.as_str());
                                 }
                             }
                             (Some('/'), '*') => {
                                 prev = None;
                                 depth += 1;
+                                nb_characters += 1;
                             }
                             _ => {
                                 prev = Some(c);
+                                nb_characters += 1;
                             }
                         }
                     }
@@ -167,6 +186,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
 
 /// Returns whether or not a char is a comment end
 /// (Unicode Pattern_White_Space excluding U+0020, U+0009, U+200E and U+200F)
+/// https://www.w3.org/TR/WGSL/#line-break
 const fn is_comment_end(c: char) -> bool {
     match c {
         '\u{000a}'..='\u{000d}' | '\u{0085}' | '\u{2028}' | '\u{2029}' => true,
@@ -238,7 +258,7 @@ impl<'a> Lexer<'a> {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false);
-            if let Token::Trivia = token {
+            if let Token::Trivia | Token::Comment(_) | Token::CommentModule(_) = token {
                 self.input = rest;
             } else {
                 return self.current_byte_offset();
@@ -253,7 +273,46 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    const fn current_byte_offset(&self) -> usize {
+    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment(
+        &'a mut self,
+        comments: &mut Vec<Span>,
+    ) -> usize {
+        loop {
+            let start = self.current_byte_offset();
+            // Eat all trivia because `next` doesn't eat trailing trivia.
+            let (token, rest) = consume_token(self.input, false);
+            if let Token::Comment(_) = token {
+                self.input = rest;
+                let next = self.current_byte_offset();
+                comments.push(Span::new(start as u32, next as u32));
+            } else if let Token::Trivia = token {
+                self.input = rest;
+            } else {
+                return self.current_byte_offset();
+            }
+        }
+    }
+    pub(in crate::front::wgsl) fn start_byte_offset_and_aggregate_comment_module(
+        &'a mut self,
+        comments: &mut Vec<Span>,
+    ) -> usize {
+        loop {
+            let start = self.current_byte_offset();
+            // Eat all trivia because `next` doesn't eat trailing trivia.
+            let (token, rest) = consume_token(self.input, false);
+            if let Token::CommentModule(_) = token {
+                self.input = rest;
+                let next = self.current_byte_offset();
+                comments.push(Span::new(start as u32, next as u32));
+            } else if let Token::Trivia = token {
+                self.input = rest;
+            } else {
+                return self.current_byte_offset();
+            }
+        }
+    }
+
+    pub const fn current_byte_offset(&self) -> usize {
         self.source.len() - self.input.len()
     }
 
@@ -283,17 +342,25 @@ impl<'a> Lexer<'a> {
     ///
     /// See [`consume_token`] for the meaning of `generic`.
     fn next_impl(&mut self, generic: bool) -> TokenSpan<'a> {
+        self.next_until(
+            |token| !matches!(token, Token::Trivia | Token::Comment(_)),
+            generic,
+        )
+    }
+
+    /// Return the next token from `self` for which `stop_at` returns true.
+    ///
+    /// See [`consume_token`] for the meaning of `generic`.
+    pub fn next_until(&mut self, stop_at: fn(Token) -> bool, generic: bool) -> TokenSpan<'a> {
         let mut start_byte_offset = self.current_byte_offset();
         loop {
             let (token, rest) = consume_token(self.input, generic);
             self.input = rest;
-            match token {
-                Token::Trivia => start_byte_offset = self.current_byte_offset(),
-                _ => {
-                    self.last_end_offset = self.current_byte_offset();
-                    return (token, self.span_from(start_byte_offset));
-                }
+            if stop_at(token) {
+                self.last_end_offset = self.current_byte_offset();
+                return (token, self.span_from(start_byte_offset));
             }
+            start_byte_offset = self.current_byte_offset();
         }
     }
 
@@ -451,7 +518,11 @@ impl<'a> Lexer<'a> {
 fn sub_test(source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source);
     for &token in expected_tokens {
-        assert_eq!(lex.next().0, token);
+        assert_eq!(
+            lex.next_until(|token| !matches!(token, Token::Trivia), false)
+                .0,
+            token
+        );
     }
     assert_eq!(lex.next().0, Token::End);
 }
@@ -733,6 +804,85 @@ fn test_variable_decl() {
             Token::Paren('<'),
             Token::Word("u32"),
             Token::Paren('>'),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comments() {
+    sub_test("// Single comment", &[Token::Comment("// Single comment")]);
+    sub_test(
+        "/* multi
+    line
+    comment */",
+        &[Token::Comment(
+            "/* multi
+    line
+    comment */",
+        )],
+    );
+    sub_test(
+        "/* multi
+    line
+    comment */
+    // and another",
+        &[
+            Token::Comment(
+                "/* multi
+    line
+    comment */",
+            ),
+            Token::Comment("// and another"),
+        ],
+    );
+}
+
+#[test]
+fn test_comment_nested() {
+    sub_test(
+        "/*
+    a comment with nested one /*
+        nested comment
+    */
+    */
+    const a : i32 = 2;",
+        &[
+            Token::Comment(
+                "/*
+    a comment with nested one /*
+        nested comment
+    */
+    */",
+            ),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comment_long_character() {
+    sub_test(
+        "// π/2
+        //     D(𝐡) = ───────────────────────────────────────────────────
+//            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`
+    const a : i32 = 2;",
+        &[
+            Token::Comment("// π/2"),
+            Token::Comment("//     D(𝐡) = ───────────────────────────────────────────────────"),
+            Token::Comment("//            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`"),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
             Token::Separator(';'),
         ],
     );
