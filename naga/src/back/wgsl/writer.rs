@@ -1,4 +1,5 @@
 use super::Error;
+use crate::back::wgsl::polyfill::InversePolyfill;
 use crate::{
     back::{self, Baked},
     proc::{self, ExpressionKindTracker, NameKey},
@@ -68,6 +69,7 @@ pub struct Writer<W> {
     namer: proc::Namer,
     named_expressions: crate::NamedExpressions,
     ep_results: Vec<(ShaderStage, Handle<crate::Type>)>,
+    required_polyfills: crate::FastIndexSet<InversePolyfill>,
 }
 
 impl<W: Write> Writer<W> {
@@ -79,6 +81,7 @@ impl<W: Write> Writer<W> {
             namer: proc::Namer::default(),
             named_expressions: crate::NamedExpressions::default(),
             ep_results: vec![],
+            required_polyfills: crate::FastIndexSet::default(),
         }
     }
 
@@ -90,11 +93,12 @@ impl<W: Write> Writer<W> {
             // an identifier must not start with two underscore
             &[],
             &[],
-            &["__"],
+            &["__", "_naga"],
             &mut self.names,
         );
         self.named_expressions.clear();
         self.ep_results.clear();
+        self.required_polyfills.clear();
     }
 
     fn is_builtin_wgsl_struct(&self, module: &Module, handle: Handle<crate::Type>) -> bool {
@@ -201,6 +205,13 @@ impl<W: Write> Writer<W> {
             if index < module.entry_points.len() - 1 {
                 writeln!(self.out)?;
             }
+        }
+
+        // Write any polyfills that were required.
+        for polyfill in &self.required_polyfills {
+            writeln!(self.out)?;
+            write!(self.out, "{}", polyfill.source)?;
+            writeln!(self.out)?;
         }
 
         Ok(())
@@ -1653,6 +1664,7 @@ impl<W: Write> Writer<W> {
 
                 enum Function {
                     Regular(&'static str),
+                    InversePolyfill(InversePolyfill),
                 }
 
                 let function = match fun {
@@ -1736,9 +1748,16 @@ impl<W: Write> Writer<W> {
                     Mf::Unpack2x16float => Function::Regular("unpack2x16float"),
                     Mf::Unpack4xI8 => Function::Regular("unpack4xI8"),
                     Mf::Unpack4xU8 => Function::Regular("unpack4xU8"),
-                    Mf::Inverse | Mf::Outer => {
-                        return Err(Error::UnsupportedMathFunction(fun));
+                    Mf::Inverse => {
+                        let typ = func_ctx.resolve_type(arg, &module.types);
+
+                        let Some(overload) = InversePolyfill::find_overload(typ) else {
+                            return Err(Error::UnsupportedMathFunction(fun));
+                        };
+
+                        Function::InversePolyfill(overload)
                     }
+                    Mf::Outer => return Err(Error::UnsupportedMathFunction(fun)),
                 };
 
                 match function {
@@ -1750,6 +1769,12 @@ impl<W: Write> Writer<W> {
                             self.write_expr(module, arg, func_ctx)?;
                         }
                         write!(self.out, ")")?
+                    }
+                    Function::InversePolyfill(inverse) => {
+                        write!(self.out, "{}(", inverse.fun_name)?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ")")?;
+                        self.required_polyfills.insert(inverse);
                     }
                 }
             }
