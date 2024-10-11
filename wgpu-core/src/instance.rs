@@ -135,6 +135,159 @@ impl Instance {
         })
     }
 
+    /// Creates a new surface targeting the given display/window handles.
+    ///
+    /// Internally attempts to create hal surfaces for all enabled backends.
+    ///
+    /// Fails only if creation for surfaces for all enabled backends fails in which case
+    /// the error for each enabled backend is listed.
+    /// Vice versa, if creation for any backend succeeds, success is returned.
+    /// Surface creation errors are logged to the debug log in any case.
+    ///
+    /// # Safety
+    ///
+    /// - `display_handle` must be a valid object to create a surface upon.
+    /// - `window_handle` must remain valid as long as the returned
+    ///   [`SurfaceId`] is being used.
+    #[cfg(feature = "raw-window-handle")]
+    pub unsafe fn create_surface(
+        &self,
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::create_surface");
+
+        let mut errors = HashMap::default();
+        let mut surface_per_backend = HashMap::default();
+
+        for (backend, instance) in &self.instance_per_backend {
+            match unsafe {
+                instance
+                    .as_ref()
+                    .create_surface(display_handle, window_handle)
+            } {
+                Ok(raw) => {
+                    surface_per_backend.insert(*backend, raw);
+                }
+                Err(err) => {
+                    log::debug!(
+                        "Instance::create_surface: failed to create surface for {:?}: {:?}",
+                        backend,
+                        err
+                    );
+                    errors.insert(*backend, err);
+                }
+            }
+        }
+
+        if surface_per_backend.is_empty() {
+            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
+                errors,
+            ))
+        } else {
+            let surface = Surface {
+                presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+                surface_per_backend,
+            };
+
+            Ok(surface)
+        }
+    }
+
+    /// # Safety
+    ///
+    /// `layer` must be a valid pointer.
+    #[cfg(metal)]
+    pub unsafe fn create_surface_metal(
+        &self,
+        layer: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::create_surface_metal");
+
+        let instance = unsafe { self.as_hal::<hal::api::Metal>() }
+            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
+
+        let layer = layer.cast();
+        // SAFETY: We do this cast and deref. (rather than using `metal` to get the
+        // object we want) to avoid direct coupling on the `metal` crate.
+        //
+        // To wit, this pointer…
+        //
+        // - …is properly aligned.
+        // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+        //   field.
+        // - …points to an _initialized_ `MetalLayerRef`.
+        // - …is only ever aliased via an immutable reference that lives within this
+        //   lexical scope.
+        let layer = unsafe { &*layer };
+        let raw_surface: Box<dyn hal::DynSurface> =
+            Box::new(instance.create_surface_from_layer(layer));
+
+        let surface = Surface {
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+            surface_per_backend: std::iter::once((Backend::Metal, raw_surface)).collect(),
+        };
+
+        Ok(surface)
+    }
+
+    #[cfg(dx12)]
+    fn create_surface_dx12(
+        &self,
+        create_surface_func: impl FnOnce(&hal::dx12::Instance) -> hal::dx12::Surface,
+    ) -> Result<Surface, CreateSurfaceError> {
+        let instance = unsafe { self.as_hal::<hal::api::Dx12>() }
+            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Dx12))?;
+        let surface: Box<dyn hal::DynSurface> = Box::new(create_surface_func(instance));
+
+        let surface = Surface {
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+            surface_per_backend: std::iter::once((Backend::Dx12, surface)).collect(),
+        };
+
+        Ok(surface)
+    }
+
+    #[cfg(dx12)]
+    /// # Safety
+    ///
+    /// The visual must be valid and able to be used to make a swapchain with.
+    pub unsafe fn create_surface_from_visual(
+        &self,
+        visual: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::instance_create_surface_from_visual");
+        self.create_surface_dx12(|inst| unsafe { inst.create_surface_from_visual(visual) })
+    }
+
+    #[cfg(dx12)]
+    /// # Safety
+    ///
+    /// The surface_handle must be valid and able to be used to make a swapchain with.
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::instance_create_surface_from_surface_handle");
+        self.create_surface_dx12(|inst| unsafe {
+            inst.create_surface_from_surface_handle(surface_handle)
+        })
+    }
+
+    #[cfg(dx12)]
+    /// # Safety
+    ///
+    /// The swap_chain_panel must be valid and able to be used to make a swapchain with.
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
+        self.create_surface_dx12(|inst| unsafe {
+            inst.create_surface_from_swap_chain_panel(swap_chain_panel)
+        })
+    }
+
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         profiling::scope!("Instance::enumerate_adapters");
         api_log!("Instance::enumerate_adapters");
@@ -543,47 +696,9 @@ impl Global {
         window_handle: raw_window_handle::RawWindowHandle,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::create_surface");
-
-        let mut errors = HashMap::default();
-        let mut surface_per_backend = HashMap::default();
-
-        for (backend, instance) in &self.instance.instance_per_backend {
-            match unsafe {
-                instance
-                    .as_ref()
-                    .create_surface(display_handle, window_handle)
-            } {
-                Ok(raw) => {
-                    surface_per_backend.insert(*backend, raw);
-                }
-                Err(err) => {
-                    log::debug!(
-                        "Instance::create_surface: failed to create surface for {:?}: {:?}",
-                        backend,
-                        err
-                    );
-                    errors.insert(*backend, err);
-                }
-            }
-        }
-
-        if surface_per_backend.is_empty() {
-            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
-                errors,
-            ))
-        } else {
-            let surface = Surface {
-                presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-                surface_per_backend,
-            };
-
-            let id = self
-                .surfaces
-                .prepare(id_in) // No specific backend for Surface, since it's not specific.
-                .assign(Arc::new(surface));
-            Ok(id)
-        }
+        let surface = unsafe { self.instance.create_surface(display_handle, window_handle) }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     /// # Safety
@@ -595,51 +710,7 @@ impl Global {
         layer: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::create_surface_metal");
-
-        let instance = unsafe { self.instance.as_hal::<hal::api::Metal>() }
-            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
-
-        let layer = layer.cast();
-        // SAFETY: We do this cast and deref. (rather than using `metal` to get the
-        // object we want) to avoid direct coupling on the `metal` crate.
-        //
-        // To wit, this pointer…
-        //
-        // - …is properly aligned.
-        // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
-        //   field.
-        // - …points to an _initialized_ `MetalLayerRef`.
-        // - …is only ever aliased via an immutable reference that lives within this
-        //   lexical scope.
-        let layer = unsafe { &*layer };
-        let raw_surface: Box<dyn hal::DynSurface> =
-            Box::new(instance.create_surface_from_layer(layer));
-
-        let surface = Surface {
-            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            surface_per_backend: std::iter::once((Backend::Metal, raw_surface)).collect(),
-        };
-
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
-        Ok(id)
-    }
-
-    #[cfg(dx12)]
-    fn instance_create_surface_dx12(
-        &self,
-        id_in: Option<SurfaceId>,
-        create_surface_func: impl FnOnce(&hal::dx12::Instance) -> hal::dx12::Surface,
-    ) -> Result<SurfaceId, CreateSurfaceError> {
-        let instance = unsafe { self.instance.as_hal::<hal::api::Dx12>() }
-            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Dx12))?;
-        let surface: Box<dyn hal::DynSurface> = Box::new(create_surface_func(instance));
-
-        let surface = Surface {
-            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            surface_per_backend: std::iter::once((Backend::Dx12, surface)).collect(),
-        };
-
+        let surface = unsafe { self.instance.create_surface_metal(layer) }?;
         let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
@@ -653,10 +724,9 @@ impl Global {
         visual: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::instance_create_surface_from_visual");
-        self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_visual(visual)
-        })
+        let surface = unsafe { self.instance.create_surface_from_visual(visual) }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     #[cfg(dx12)]
@@ -668,10 +738,12 @@ impl Global {
         surface_handle: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::instance_create_surface_from_surface_handle");
-        self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_surface_handle(surface_handle)
-        })
+        let surface = unsafe {
+            self.instance
+                .create_surface_from_surface_handle(surface_handle)
+        }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     #[cfg(dx12)]
@@ -683,10 +755,12 @@ impl Global {
         swap_chain_panel: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
-        self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_swap_chain_panel(swap_chain_panel)
-        })
+        let surface = unsafe {
+            self.instance
+                .create_surface_from_swap_chain_panel(swap_chain_panel)
+        }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
