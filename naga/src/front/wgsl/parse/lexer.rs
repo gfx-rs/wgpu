@@ -86,9 +86,10 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
                         .char_indices()
                         .find(|char_indices| is_comment_end(char_indices.1))
                     {
+                        let end_position = end_position.0 + 1;
                         return (
-                            Token::Comment(&input[..end_position.0]),
-                            &input[end_position.0..],
+                            Token::Comment(&input[..end_position]),
+                            &input[end_position..],
                         );
                     }
                     (Token::Comment(input), &input[input.len() - 1..])
