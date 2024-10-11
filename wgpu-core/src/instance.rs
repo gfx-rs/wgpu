@@ -427,6 +427,18 @@ impl Surface {
     }
 }
 
+impl Drop for Surface {
+    fn drop(&mut self) {
+        if let Some(present) = self.presentation.lock().take() {
+            for (&backend, surface) in &self.surface_per_backend {
+                if backend == present.device.backend() {
+                    unsafe { surface.unconfigure(present.device.raw()) };
+                }
+            }
+        }
+    }
+}
+
 pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
 }
@@ -768,18 +780,7 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        let surface = self.surfaces.remove(id);
-        let surface =
-            Arc::into_inner(surface).expect("Surface cannot be destroyed because is still in use");
-
-        if let Some(present) = surface.presentation.lock().take() {
-            for (&backend, surface) in &surface.surface_per_backend {
-                if backend == present.device.backend() {
-                    unsafe { surface.unconfigure(present.device.raw()) };
-                }
-            }
-        }
-        drop(surface)
+        self.surfaces.remove(id);
     }
 
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<AdapterId> {
