@@ -194,10 +194,7 @@ impl Global {
                 let present = presentation.as_mut().unwrap();
                 let texture = resource::Texture::new(
                     &device,
-                    resource::TextureInner::Surface {
-                        raw: ast.texture,
-                        parent_id: surface_id,
-                    },
+                    resource::TextureInner::Surface { raw: ast.texture },
                     hal_usage,
                     &texture_desc,
                     format_features,
@@ -293,14 +290,9 @@ impl Global {
                     .snatch(&mut device.snatchable_lock.write())
                     .unwrap()
                 {
-                    resource::TextureInner::Surface { raw, parent_id } => {
-                        if surface_id != parent_id {
-                            log::error!("Presented frame is from a different surface");
-                            Err(hal::SurfaceError::Lost)
-                        } else {
-                            unsafe { queue.raw().present(suf, raw) }
-                        }
-                    }
+                    resource::TextureInner::Surface { raw } => unsafe {
+                        queue.raw().present(suf, raw)
+                    },
                     _ => unreachable!(),
                 }
             } else {
@@ -367,12 +359,8 @@ impl Global {
                     .snatch(&mut device.snatchable_lock.write())
                     .unwrap()
                 {
-                    resource::TextureInner::Surface { raw, parent_id } => {
-                        if surface_id == parent_id {
-                            unsafe { suf.unwrap().discard_texture(raw) };
-                        } else {
-                            log::warn!("Surface texture is outdated");
-                        }
+                    resource::TextureInner::Surface { raw } => {
+                        unsafe { suf.unwrap().discard_texture(raw) };
                     }
                     _ => unreachable!(),
                 }
