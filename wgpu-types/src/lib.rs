@@ -6638,7 +6638,7 @@ pub enum BindingType {
         ///
         /// If this is `Some(size)`:
         ///
-        /// - When calling [`create_bind_group`], the resource at this bind point
+        /// - When calling [`create_bind_group_layout`], the resource at this bind point
         ///   must be a [`BindingResource::Buffer`] whose effective size is at
         ///   least `size`.
         ///
