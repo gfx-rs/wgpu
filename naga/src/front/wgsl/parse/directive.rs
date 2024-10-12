@@ -1,5 +1,8 @@
+pub mod enable_extension;
+
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum DirectiveKind {
+    Enable,
     Unimplemented(UnimplementedDirectiveKind),
 }
 
@@ -10,10 +13,7 @@ impl DirectiveKind {
                 Self::Unimplemented(UnimplementedDirectiveKind::Diagnostic),
                 "diagnostic",
             ),
-            "enable" => (
-                Self::Unimplemented(UnimplementedDirectiveKind::Enable),
-                "enable",
-            ),
+            "enable" => (Self::Enable, "enable"),
             "requires" => (
                 Self::Unimplemented(UnimplementedDirectiveKind::Requires),
                 "requires",
@@ -34,7 +34,6 @@ impl DirectiveKind {
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum UnimplementedDirectiveKind {
     Diagnostic,
-    Enable,
     Requires,
 }
 
@@ -43,7 +42,6 @@ impl UnimplementedDirectiveKind {
         match self {
             Self::Diagnostic => 5320,
             Self::Requires => 6350,
-            Self::Enable => 5476,
         }
     }
 }
@@ -72,19 +70,6 @@ error: `diagnostic` is not yet implemented
   │ ^^^^^^^^^^ this global directive is standard, but not yet implemented
   │
   = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5320>, so they can prioritize it!
-
-";
-                }
-                UnimplementedDirectiveKind::Enable => {
-                    shader = "enable f16;";
-                    expected_msg = "\
-error: `enable` is not yet implemented
-  ┌─ wgsl:1:1
-  │
-1 │ enable f16;
-  │ ^^^^^^ this global directive is standard, but not yet implemented
-  │
-  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5476>, so they can prioritize it!
 
 ";
                 }
@@ -126,7 +111,7 @@ error: expected global declaration, but found a global directive
 
 ";
                 }
-                DirectiveKind::Unimplemented(UnimplementedDirectiveKind::Enable) => {
+                DirectiveKind::Enable => {
                     directive = "enable f16";
                     expected_msg = "\
 error: expected global declaration, but found a global directive
