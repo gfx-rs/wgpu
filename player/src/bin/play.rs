@@ -56,7 +56,7 @@ fn main() {
         global.instance_create_surface(
             window.display_handle().unwrap().into(),
             window.window_handle().unwrap().into(),
-            Some(wgc::id::Id::zip(0, 1, wgt::Backend::Empty)),
+            Some(wgc::id::Id::zip(0, 1)),
         )
     }
     .unwrap();
@@ -74,23 +74,24 @@ fn main() {
                         #[cfg(not(feature = "winit"))]
                         compatible_surface: None,
                     },
-                    wgc::instance::AdapterInputs::IdSet(&[wgc::id::AdapterId::zip(0, 0, backend)]),
+                    wgt::Backends::from(backend),
+                    Some(wgc::id::AdapterId::zip(0, 1)),
                 )
                 .expect("Unable to find an adapter for selected backend");
 
-            let info = global.adapter_get_info(adapter).unwrap();
+            let info = global.adapter_get_info(adapter);
             log::info!("Picked '{}'", info.name);
-            let device_id = wgc::id::Id::zip(1, 0, backend);
-            let queue_id = wgc::id::Id::zip(1, 0, backend);
-            let (_, _, error) = global.adapter_request_device(
+            let device_id = wgc::id::Id::zip(0, 1);
+            let queue_id = wgc::id::Id::zip(0, 1);
+            let res = global.adapter_request_device(
                 adapter,
                 &desc,
                 None,
                 Some(device_id),
                 Some(queue_id),
             );
-            if let Some(e) = error {
-                panic!("{:?}", e);
+            if let Err(e) = res {
+                panic!("{e:?}");
             }
             (device_id, queue_id)
         }

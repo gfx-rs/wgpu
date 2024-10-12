@@ -1,0 +1,64 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 42
+; Schema: 0
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %1 "stage::test_atomic_i_decrement" %2 %3
+               OpExecutionMode %1 LocalSize 32 1 1
+               OpDecorate %_runtimearr_uint ArrayStride 4
+               OpDecorate %_struct_7 Block
+               OpMemberDecorate %_struct_7 0 Offset 0
+               OpDecorate %_struct_8 Block
+               OpMemberDecorate %_struct_8 0 Offset 0
+               OpDecorate %2 Binding 0
+               OpDecorate %2 DescriptorSet 0
+               OpDecorate %3 Binding 1
+               OpDecorate %3 DescriptorSet 0
+       %uint = OpTypeInt 32 0
+       %void = OpTypeVoid
+         %11 = OpTypeFunction %void
+       %bool = OpTypeBool
+%_runtimearr_uint = OpTypeRuntimeArray %uint
+  %_struct_7 = OpTypeStruct %_runtimearr_uint
+%_ptr_StorageBuffer__struct_7 = OpTypePointer StorageBuffer %_struct_7
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+      %false = OpConstantFalse %bool
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+       %true = OpConstantTrue %bool
+  %_struct_8 = OpTypeStruct %uint
+%_ptr_StorageBuffer__struct_8 = OpTypePointer StorageBuffer %_struct_8
+          %2 = OpVariable %_ptr_StorageBuffer__struct_8 StorageBuffer
+          %3 = OpVariable %_ptr_StorageBuffer__struct_7 StorageBuffer
+          %1 = OpFunction %void None %11
+         %21 = OpLabel
+         %22 = OpAccessChain %_ptr_StorageBuffer_uint %2 %uint_0
+         %24 = OpArrayLength %uint %3 0
+               OpBranch %25
+         %25 = OpLabel
+               OpLoopMerge %26 %27 None
+               OpBranch %28
+         %28 = OpLabel
+         %29 = OpAtomicIDecrement %uint %22 %uint_2 %uint_0
+         %30 = OpULessThan %bool %29 %24
+               OpSelectionMerge %31 None
+               OpBranchConditional %30 %32 %33
+         %32 = OpLabel
+         %34 = OpAccessChain %_ptr_StorageBuffer_uint %3 %uint_0 %29
+               OpStore %34 %29
+         %35 = OpIEqual %bool %29 %uint_0
+         %41 = OpSelect %bool %35 %false %true
+               OpBranch %31
+         %33 = OpLabel
+               OpBranch %31
+         %31 = OpLabel
+         %40 = OpPhi %bool %41 %32 %false %33
+               OpBranch %27
+         %27 = OpLabel
+               OpBranchConditional %40 %25 %26
+         %26 = OpLabel
+               OpReturn
+               OpFunctionEnd

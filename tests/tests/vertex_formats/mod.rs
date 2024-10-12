@@ -352,10 +352,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
 
         let mut deltas = data.iter().zip(expected.iter()).map(|(d, e)| (d - e).abs());
         if deltas.any(|x| x > EPSILON) {
-            eprintln!(
-                "Failed: Got: {:?} Expected: {:?} - {case_name}",
-                data, expected,
-            );
+            eprintln!("Failed: Got: {data:?} Expected: {expected:?} - {case_name}",);
             failed = true;
             continue;
         }

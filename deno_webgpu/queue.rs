@@ -44,7 +44,7 @@ pub fn op_webgpu_queue_submit(
         })
         .collect::<Result<Vec<_>, AnyError>>()?;
 
-    let maybe_err = instance.queue_submit(queue, &ids).err();
+    let maybe_err = instance.queue_submit(queue, &ids).err().map(|(_idx, e)| e);
 
     for rid in command_buffers {
         let resource = state.resource_table.take::<WebGpuCommandBuffer>(rid)?;

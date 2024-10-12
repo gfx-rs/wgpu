@@ -4,6 +4,7 @@ use crate::command::{
 };
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::RenderPipeline;
+use crate::resource::InvalidResourceError;
 use crate::snatch::SnatchGuard;
 use crate::{
     api_log,
@@ -582,14 +583,6 @@ pub enum RenderPassErrorInner {
     InvalidParentEncoder,
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
     InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(id::BufferId),
-    #[error("Render pipeline {0:?} is invalid")]
-    InvalidPipeline(id::RenderPipelineId),
-    #[error("QuerySet {0:?} is invalid")]
-    InvalidQuerySet(id::QuerySetId),
-    #[error("Render bundle {0:?} is invalid")]
-    InvalidRenderBundle(id::RenderBundleId),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
     UnsupportedResolveTargetFormat {
         location: AttachmentErrorLocation,
@@ -635,8 +628,6 @@ pub enum RenderPassErrorInner {
     SurfaceTextureDropped,
     #[error("Not enough memory left for render pass")]
     OutOfMemory,
-    #[error("BindGroupId {0:?} is invalid")]
-    InvalidBindGroupId(id::BindGroupId),
     #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,
     #[error("Unable to clear non-present/read-only stencil")]
@@ -647,6 +638,8 @@ pub enum RenderPassErrorInner {
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
+    UnalignedIndirectBufferOffset(BufferAddress),
     #[error("Indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}",
         count.map_or_else(String::new, |v| format!("(using count {v})")))]
     IndirectBufferOverrun {
@@ -705,6 +698,8 @@ pub enum RenderPassErrorInner {
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("The compute pass has already been ended and no further commands can be recorded")]
     PassEnded,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
@@ -1362,14 +1357,10 @@ impl Global {
                     channel,
                 }) = color_attachment
                 {
-                    let view = texture_views
-                        .get_owned(*view_id)
-                        .map_err(|_| CommandEncoderError::InvalidAttachmentId(*view_id))?;
+                    let view = texture_views.get(*view_id).get()?;
 
                     let resolve_target = if let Some(resolve_target_id) = resolve_target {
-                        let rt_arc = texture_views.get_owned(*resolve_target_id).map_err(|_| {
-                            CommandEncoderError::InvalidResolveTargetId(*resolve_target_id)
-                        })?;
+                        let rt_arc = texture_views.get(*resolve_target_id).get()?;
 
                         Some(rt_arc)
                     } else {
@@ -1390,13 +1381,7 @@ impl Global {
 
             arc_desc.depth_stencil_attachment =
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
-                    let view = texture_views
-                        .get_owned(depth_stencil_attachment.view)
-                        .map_err(|_| {
-                            CommandEncoderError::InvalidDepthStencilAttachmentId(
-                                depth_stencil_attachment.view,
-                            )
-                        })?;
+                    let view = texture_views.get(depth_stencil_attachment.view).get()?;
 
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
@@ -1408,9 +1393,7 @@ impl Global {
                 };
 
             arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                let query_set = query_sets.get_owned(tw.query_set).map_err(|_| {
-                    CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set)
-                })?;
+                let query_set = query_sets.get(tw.query_set).get()?;
 
                 Some(ArcPassTimestampWrites {
                     query_set,
@@ -1423,9 +1406,7 @@ impl Global {
 
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {
-                    let query_set = query_sets.get_owned(occlusion_query_set).map_err(|_| {
-                        CommandEncoderError::InvalidOcclusionQuerySetId(occlusion_query_set)
-                    })?;
+                    let query_set = query_sets.get(occlusion_query_set).get()?;
 
                     Some(query_set)
                 } else {
@@ -1446,12 +1427,13 @@ impl Global {
 
         let make_err = |e, arc_desc| (RenderPass::new(None, arc_desc), Some(e));
 
-        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
-        };
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        match cmd_buf.lock_encoder() {
+        match cmd_buf
+            .try_get()
+            .map_err(|e| e.into())
+            .and_then(|mut cmd_buf_data| cmd_buf_data.lock_encoder())
+        {
             Ok(_) => {}
             Err(e) => return make_err(e, arc_desc),
         };
@@ -1461,6 +1443,8 @@ impl Global {
         (RenderPass::new(Some(cmd_buf), arc_desc), err)
     }
 
+    /// Note that this differs from [`Self::render_pass_end`], it will
+    /// create a new pass, replay the commands and end the pass.
     #[doc(hidden)]
     #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn render_pass_end_with_unresolved_commands(
@@ -1476,15 +1460,11 @@ impl Global {
 
         #[cfg(feature = "trace")]
         {
-            let hub = &self.hub;
-
-            let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-                Ok(cmd_buf) => cmd_buf,
-                Err(_) => return Err(CommandEncoderError::Invalid).map_pass_err(pass_scope)?,
-            };
-
-            let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            let cmd_buf = self
+                .hub
+                .command_buffers
+                .get(encoder_id.into_command_buffer_id());
+            let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
@@ -1528,28 +1508,25 @@ impl Global {
             });
         };
 
-        let hub = &self.hub;
         render_pass.base = Some(BasePass {
             label,
-            commands: super::RenderCommand::resolve_render_command_ids(hub, &commands)?,
+            commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)?,
             dynamic_offsets,
             string_data,
             push_constant_data,
         });
 
-        if let Some(err) = encoder_error {
-            Err(RenderPassError {
-                scope: pass_scope,
-                inner: err.into(),
-            })
-        } else {
-            self.render_pass_end(&mut render_pass)
-        }
+        self.render_pass_end(&mut render_pass)
     }
 
-    #[doc(hidden)]
     pub fn render_pass_end(&self, pass: &mut RenderPass) -> Result<(), RenderPassError> {
         let pass_scope = PassErrorScope::Pass;
+
+        let cmd_buf = pass
+            .parent
+            .as_ref()
+            .ok_or(RenderPassErrorInner::InvalidParentEncoder)
+            .map_pass_err(pass_scope)?;
 
         let base = pass
             .base
@@ -1562,20 +1539,16 @@ impl Global {
             base.label.as_deref().unwrap_or("")
         );
 
-        let Some(cmd_buf) = pass.parent.as_ref() else {
-            return Err(RenderPassErrorInner::InvalidParentEncoder).map_pass_err(pass_scope);
-        };
-        cmd_buf.unlock_encoder().map_pass_err(pass_scope)?;
-
-        let hal_label = hal_label(base.label.as_deref(), self.instance.flags);
+        let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+        cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
+        let cmd_buf_data = &mut *cmd_buf_data;
 
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
 
-        let (scope, pending_discard_init_fixups) = {
-            let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let hal_label = hal_label(base.label.as_deref(), device.instance_flags);
 
+        let (scope, pending_discard_init_fixups) = {
             device.check_is_valid().map_pass_err(pass_scope)?;
 
             let encoder = &mut cmd_buf_data.encoder;
@@ -1588,10 +1561,12 @@ impl Global {
             // We automatically keep extending command buffers over time, and because
             // we want to insert a command buffer _before_ what we're about to record,
             // we need to make sure to close the previous one.
-            encoder.close().map_pass_err(pass_scope)?;
+            encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
             // We will reset this to `Recording` if we succeed, acts as a fail-safe.
             *status = CommandEncoderStatus::Error;
-            encoder.open_pass(hal_label).map_pass_err(pass_scope)?;
+            encoder
+                .open_pass(hal_label, &cmd_buf.device)
+                .map_pass_err(pass_scope)?;
 
             let info = RenderPassInfo::start(
                 device,
@@ -1894,19 +1869,16 @@ impl Global {
                 .finish(state.raw_encoder, state.snatch_guard)
                 .map_pass_err(pass_scope)?;
 
-            encoder.close().map_pass_err(pass_scope)?;
+            encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
             (trackers, pending_discard_init_fixups)
         };
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;
         let tracker = &mut cmd_buf_data.trackers;
 
         {
-            let transit = encoder.open().map_pass_err(pass_scope)?;
+            let transit = encoder.open(&cmd_buf.device).map_pass_err(pass_scope)?;
 
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
@@ -1922,7 +1894,9 @@ impl Global {
         }
 
         *status = CommandEncoderStatus::Recording;
-        encoder.close_and_swap().map_pass_err(pass_scope)?;
+        encoder
+            .close_and_swap(&cmd_buf.device)
+            .map_pass_err(pass_scope)?;
 
         Ok(())
     }
@@ -2478,6 +2452,10 @@ fn multi_draw_indirect(
 
     let actual_count = count.map_or(1, |c| c.get());
 
+    if offset % 4 != 0 {
+        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+    }
+
     let end_offset = offset + stride as u64 * actual_count as u64;
     if end_offset > indirect_buffer.size {
         return Err(RenderPassErrorInner::IndirectBufferOverrun {
@@ -2561,6 +2539,10 @@ fn multi_draw_indirect_count(
 
     count_buffer.check_usage(BufferUsages::INDIRECT)?;
     let count_raw = count_buffer.try_raw(state.snatch_guard)?;
+
+    if offset % 4 != 0 {
+        return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
+    }
 
     let end_offset = offset + stride * max_count as u64;
     if end_offset > indirect_buffer.size {
@@ -2770,11 +2752,7 @@ impl Global {
         buffer_id: id::Id<id::markers::Buffer>,
     ) -> Result<Arc<crate::resource::Buffer>, RenderPassError> {
         let hub = &self.hub;
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
-            .map_pass_err(scope)?;
+        let buffer = hub.buffers.get(buffer_id).get().map_pass_err(scope)?;
 
         Ok(buffer)
     }
@@ -2785,11 +2763,7 @@ impl Global {
         query_set_id: id::Id<id::markers::QuerySet>,
     ) -> Result<Arc<QuerySet>, RenderPassError> {
         let hub = &self.hub;
-        let query_set = hub
-            .query_sets
-            .get(query_set_id)
-            .map_err(|_| RenderPassErrorInner::InvalidQuerySet(query_set_id))
-            .map_pass_err(scope)?;
+        let query_set = hub.query_sets.get(query_set_id).get().map_pass_err(scope)?;
 
         Ok(query_set)
     }
@@ -2826,7 +2800,7 @@ impl Global {
             let bg = hub
                 .bind_groups
                 .get(bind_group_id)
-                .map_err(|_| RenderPassErrorInner::InvalidBindGroupId(bind_group_id))
+                .get()
                 .map_pass_err(scope)?;
             bind_group = Some(bg);
         }
@@ -2859,7 +2833,7 @@ impl Global {
         let pipeline = hub
             .render_pipelines
             .get(pipeline_id)
-            .map_err(|_| RenderPassErrorInner::InvalidPipeline(pipeline_id))
+            .get()
             .map_pass_err(scope)?;
 
         base.commands.push(ArcRenderCommand::SetPipeline(pipeline));
@@ -3170,23 +3144,11 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        // Don't use resolve_render_pass_buffer_id here, because we don't want to take the read-lock twice.
-        let hub = &self.hub;
-        let buffers = hub.buffers.read();
-        let buffer = buffers
-            .get_owned(buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
-            .map_pass_err(scope)?;
-        let count_buffer = buffers
-            .get_owned(count_buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(count_buffer_id))
-            .map_pass_err(scope)?;
-
         base.commands
             .push(ArcRenderCommand::MultiDrawIndirectCount {
-                buffer,
+                buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
                 offset,
-                count_buffer,
+                count_buffer: self.resolve_render_pass_buffer_id(scope, count_buffer_id)?,
                 count_buffer_offset,
                 max_count,
                 indexed: false,
@@ -3210,24 +3172,11 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        // Don't use resolve_render_pass_buffer_id here, because we don't want to take the read-lock twice.
-        let hub = &self.hub;
-        let buffers = hub.buffers.read();
-        let buffer = buffers
-            .get_owned(buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(buffer_id))
-            .map_pass_err(scope)?;
-
-        let count_buffer = buffers
-            .get_owned(count_buffer_id)
-            .map_err(|_| RenderPassErrorInner::InvalidBuffer(count_buffer_id))
-            .map_pass_err(scope)?;
-
         base.commands
             .push(ArcRenderCommand::MultiDrawIndirectCount {
-                buffer,
+                buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
                 offset,
-                count_buffer,
+                count_buffer: self.resolve_render_pass_buffer_id(scope, count_buffer_id)?,
                 count_buffer_offset,
                 max_count,
                 indexed: true,
@@ -3371,10 +3320,7 @@ impl Global {
         let bundles = hub.render_bundles.read();
 
         for &bundle_id in render_bundle_ids {
-            let bundle = bundles
-                .get_owned(bundle_id)
-                .map_err(|_| RenderPassErrorInner::InvalidRenderBundle(bundle_id))
-                .map_pass_err(scope)?;
+            let bundle = bundles.get(bundle_id).get().map_pass_err(scope)?;
 
             base.commands.push(ArcRenderCommand::ExecuteBundle(bundle));
         }

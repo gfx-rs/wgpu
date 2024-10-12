@@ -74,7 +74,7 @@ impl ComputeCommand {
         hub: &crate::hub::Hub,
         commands: &[ComputeCommand],
     ) -> Result<Vec<ArcComputeCommand>, super::ComputePassError> {
-        use super::{ComputePassError, ComputePassErrorInner, PassErrorScope};
+        use super::{ComputePassError, PassErrorScope};
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -99,10 +99,10 @@ impl ComputeCommand {
                         }
 
                         let bind_group_id = bind_group_id.unwrap();
-                        let bg = bind_group_guard.get_owned(bind_group_id).map_err(|_| {
+                        let bg = bind_group_guard.get(bind_group_id).get().map_err(|e| {
                             ComputePassError {
                                 scope: PassErrorScope::SetBindGroup,
-                                inner: ComputePassErrorInner::InvalidBindGroupId(bind_group_id),
+                                inner: e.into(),
                             }
                         })?;
 
@@ -112,13 +112,13 @@ impl ComputeCommand {
                             bind_group: Some(bg),
                         }
                     }
-
                     ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
                         pipelines_guard
-                            .get_owned(pipeline_id)
-                            .map_err(|_| ComputePassError {
+                            .get(pipeline_id)
+                            .get()
+                            .map_err(|e| ComputePassError {
                                 scope: PassErrorScope::SetPipelineCompute,
-                                inner: ComputePassErrorInner::InvalidPipelineId(pipeline_id),
+                                inner: e.into(),
                             })?,
                     ),
 
@@ -136,10 +136,10 @@ impl ComputeCommand {
 
                     ComputeCommand::DispatchIndirect { buffer_id, offset } => {
                         ArcComputeCommand::DispatchIndirect {
-                            buffer: buffers_guard.get_owned(buffer_id).map_err(|_| {
+                            buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
                                 ComputePassError {
                                     scope: PassErrorScope::Dispatch { indirect: true },
-                                    inner: ComputePassErrorInner::InvalidBufferId(buffer_id),
+                                    inner: e.into(),
                                 }
                             })?,
                             offset,
@@ -160,10 +160,10 @@ impl ComputeCommand {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::WriteTimestamp {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
+                        query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
                             ComputePassError {
                                 scope: PassErrorScope::WriteTimestamp,
-                                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
+                                inner: e.into(),
                             }
                         })?,
                         query_index,
@@ -173,10 +173,10 @@ impl ComputeCommand {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::BeginPipelineStatisticsQuery {
-                        query_set: query_set_guard.get_owned(query_set_id).map_err(|_| {
+                        query_set: query_set_guard.get(query_set_id).get().map_err(|e| {
                             ComputePassError {
                                 scope: PassErrorScope::BeginPipelineStatisticsQuery,
-                                inner: ComputePassErrorInner::InvalidQuerySet(query_set_id),
+                                inner: e.into(),
                             }
                         })?,
                         query_index,

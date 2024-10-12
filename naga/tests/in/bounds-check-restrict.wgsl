@@ -70,3 +70,11 @@ fn set_in_bounds(v: f32) {
    globals.v[3] = v;
    globals.m[2][3] = v;
 }
+
+fn index_dynamic_array_constant_index() -> f32 {
+   return globals.d[1000];
+}
+
+fn set_dynamic_array_constant_index(v: f32) {
+   globals.d[1000] = v;
+}

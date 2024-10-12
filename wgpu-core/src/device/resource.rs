@@ -21,7 +21,7 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, StagingBuffer, Texture,
+        self, Buffer, Fallible, Labeled, ParentDevice, QuerySet, Sampler, StagingBuffer, Texture,
         TextureView, TextureViewNotRenderableReason, TrackingData,
     },
     resource_log,
@@ -38,7 +38,6 @@ use arrayvec::ArrayVec;
 use once_cell::sync::OnceCell;
 
 use smallvec::SmallVec;
-use thiserror::Error;
 use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
@@ -187,14 +186,6 @@ impl Drop for Device {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum CreateDeviceError {
-    #[error("Not enough memory left to create device")]
-    OutOfMemory,
-    #[error("Failed to create internal buffer for initializing textures")]
-    FailedToCreateZeroBuffer(#[from] DeviceError),
-}
-
 impl Device {
     pub(crate) fn raw(&self) -> &dyn hal::DynDevice {
         self.raw.as_ref()
@@ -227,31 +218,29 @@ impl Device {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         instance_flags: wgt::InstanceFlags,
-    ) -> Result<Self, CreateDeviceError> {
+    ) -> Result<Self, DeviceError> {
         #[cfg(not(feature = "trace"))]
         if let Some(_) = trace_path {
             log::error!("Feature 'trace' is not enabled");
         }
-        let fence =
-            unsafe { raw_device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
+        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
         let pending_encoder = command_allocator
             .acquire_encoder(raw_device.as_ref(), raw_queue)
-            .map_err(|_| CreateDeviceError::OutOfMemory)?;
+            .map_err(DeviceError::from_hal)?;
         let mut pending_writes = PendingWrites::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
-            raw_device
-                .create_buffer(&hal::BufferDescriptor {
-                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                    size: ZERO_BUFFER_SIZE,
-                    usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-                .map_err(DeviceError::from)?
-        };
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                size: ZERO_BUFFER_SIZE,
+                usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
+                memory_flags: hal::MemoryFlags::empty(),
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
         pending_writes.activate();
         unsafe {
             pending_writes
@@ -339,6 +328,18 @@ impl Device {
         }
     }
 
+    pub fn handle_hal_error(&self, error: hal::DeviceError) -> DeviceError {
+        match error {
+            hal::DeviceError::OutOfMemory => {}
+            hal::DeviceError::Lost
+            | hal::DeviceError::ResourceCreationFailed
+            | hal::DeviceError::Unexpected => {
+                self.lose(&error.to_string());
+            }
+        }
+        DeviceError::from_hal(error)
+    }
+
     pub(crate) fn release_queue(&self, queue: Box<dyn hal::DynQueue>) {
         assert!(self.queue_to_drop.set(queue).is_ok());
     }
@@ -362,7 +363,7 @@ impl Device {
                     let Some(view) = view.upgrade() else {
                         continue;
                     };
-                    let Some(raw_view) = view.raw.snatch(self.snatchable_lock.write()) else {
+                    let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write()) else {
                         continue;
                     };
 
@@ -376,7 +377,8 @@ impl Device {
                     let Some(bind_group) = bind_group.upgrade() else {
                         continue;
                     };
-                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write())
+                    let Some(raw_bind_group) =
+                        bind_group.raw.snatch(&mut self.snatchable_lock.write())
                     else {
                         continue;
                     };
@@ -427,13 +429,11 @@ impl Device {
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
 
-                if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
-                    if submission_index > last_successful_submission_index {
-                        return Err(WaitIdleError::WrongSubmissionIndex(
-                            submission_index,
-                            last_successful_submission_index,
-                        ));
-                    }
+                if submission_index > last_successful_submission_index {
+                    return Err(WaitIdleError::WrongSubmissionIndex(
+                        submission_index,
+                        last_successful_submission_index,
+                    ));
                 }
 
                 submission_index
@@ -441,22 +441,19 @@ impl Device {
             wgt::Maintain::Wait => self
                 .last_successful_submission_index
                 .load(Ordering::Acquire),
-            wgt::Maintain::Poll => unsafe {
-                self.raw()
-                    .get_fence_value(fence.as_ref())
-                    .map_err(DeviceError::from)?
-            },
+            wgt::Maintain::Poll => unsafe { self.raw().get_fence_value(fence.as_ref()) }
+                .map_err(|e| self.handle_hal_error(e))?,
         };
 
         // If necessary, wait for that submission to complete.
         if maintain.is_wait() {
+            log::trace!("Device::maintain: waiting for submission index {submission_index}");
             unsafe {
                 self.raw()
                     .wait(fence.as_ref(), submission_index, CLEANUP_WAIT_MS)
-                    .map_err(DeviceError::from)?
-            };
+            }
+            .map_err(|e| self.handle_hal_error(e))?;
         }
-        log::trace!("Device::maintain: waiting for submission index {submission_index}");
 
         let mut life_tracker = self.lock_life();
         let submission_closures =
@@ -588,7 +585,8 @@ impl Device {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
+        let buffer =
+            unsafe { self.raw().create_buffer(&hal_desc) }.map_err(|e| self.handle_hal_error(e))?;
 
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
@@ -686,11 +684,11 @@ impl Device {
         Ok(texture)
     }
 
-    pub fn create_buffer_from_hal(
+    pub(crate) fn create_buffer_from_hal(
         self: &Arc<Self>,
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
-    ) -> Arc<Buffer> {
+    ) -> Fallible<Buffer> {
         unsafe { self.raw().add_raw_buffer(&*hal_buffer) };
 
         let buffer = Buffer {
@@ -715,7 +713,7 @@ impl Device {
             .buffers
             .insert_single(&buffer, hal::BufferUses::empty());
 
-        buffer
+        Fallible::Valid(buffer)
     }
 
     pub(crate) fn create_texture(
@@ -935,11 +933,8 @@ impl Device {
             view_formats: hal_view_formats,
         };
 
-        let raw_texture = unsafe {
-            self.raw()
-                .create_texture(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let clear_mode = if hal_usage
             .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
@@ -982,7 +977,7 @@ impl Device {
                                 unsafe {
                                     self.raw().create_texture_view(raw_texture.as_ref(), &desc)
                                 }
-                                .map_err(DeviceError::from)?,
+                                .map_err(|e| self.handle_hal_error(e))?,
                             ));
                         };
                     }
@@ -1288,11 +1283,8 @@ impl Device {
             range: resolved_range,
         };
 
-        let raw = unsafe {
-            self.raw()
-                .create_texture_view(texture_raw, &hal_desc)
-                .map_err(|_| resource::CreateTextureViewError::OutOfMemory)?
-        };
+        let raw = unsafe { self.raw().create_texture_view(texture_raw, &hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let selector = TextureSelector {
             mips: desc.range.base_mip_level..mip_level_end,
@@ -1423,11 +1415,8 @@ impl Device {
             border_color: desc.border_color,
         };
 
-        let raw = unsafe {
-            self.raw()
-                .create_sampler(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw = unsafe { self.raw().create_sampler(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let sampler = Sampler {
             raw: ManuallyDrop::new(raw),
@@ -1551,7 +1540,7 @@ impl Device {
             Err(error) => {
                 return Err(match error {
                     hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(error.into())
+                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
                         log::error!("Shader error: {}", msg);
@@ -1592,7 +1581,7 @@ impl Device {
             Err(error) => {
                 return Err(match error {
                     hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(error.into())
+                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
                         log::error!("Shader error: {}", msg);
@@ -1624,7 +1613,8 @@ impl Device {
 
         let encoder = self
             .command_allocator
-            .acquire_encoder(self.raw(), queue.raw())?;
+            .acquire_encoder(self.raw(), queue.raw())
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let command_buffer = command::CommandBuffer::new(encoder, self, label);
 
@@ -1856,11 +1846,9 @@ impl Device {
             flags: bgl_flags,
             entries: &hal_bindings,
         };
-        let raw = unsafe {
-            self.raw()
-                .create_bind_group_layout(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+
+        let raw = unsafe { self.raw().create_bind_group_layout(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
         for entry in entry_map.values() {
@@ -2290,11 +2278,8 @@ impl Device {
             textures: &hal_textures,
             acceleration_structures: &[],
         };
-        let raw = unsafe {
-            self.raw()
-                .create_bind_group(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw = unsafe { self.raw().create_bind_group(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         // collect in the order of BGL iteration
         let late_buffer_binding_sizes = layout
@@ -2588,11 +2573,8 @@ impl Device {
             push_constant_ranges: desc.push_constant_ranges.as_ref(),
         };
 
-        let raw = unsafe {
-            self.raw()
-                .create_pipeline_layout(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         drop(raw_bind_group_layouts);
 
@@ -2746,7 +2728,7 @@ impl Device {
             unsafe { self.raw().create_compute_pipeline(&pipeline_desc) }.map_err(
                 |err| match err {
                     hal::PipelineError::Device(error) => {
-                        pipeline::CreateComputePipelineError::Device(error.into())
+                        pipeline::CreateComputePipelineError::Device(self.handle_hal_error(error))
                     }
                     hal::PipelineError::Linkage(_stages, msg) => {
                         pipeline::CreateComputePipelineError::Internal(msg)
@@ -3326,7 +3308,7 @@ impl Device {
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
                 |err| match err {
                     hal::PipelineError::Device(error) => {
-                        pipeline::CreateRenderPipelineError::Device(error.into())
+                        pipeline::CreateRenderPipelineError::Device(self.handle_hal_error(error))
                     }
                     hal::PipelineError::Linkage(stage, msg) => {
                         pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
@@ -3449,7 +3431,9 @@ impl Device {
         };
         let raw = match unsafe { self.raw().create_pipeline_cache(&cache_desc) } {
             Ok(raw) => raw,
-            Err(e) => return Err(e.into()),
+            Err(e) => match e {
+                hal::PipelineCacheError::Device(e) => return Err(self.handle_hal_error(e).into()),
+            },
         };
         let cache = pipeline::PipelineCache {
             device: self.clone(),
@@ -3506,9 +3490,11 @@ impl Device {
         submission_index: crate::SubmissionIndex,
     ) -> Result<(), DeviceError> {
         let fence = self.fence.read();
-        let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref())? };
+        let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref()) }
+            .map_err(|e| self.handle_hal_error(e))?;
         if last_done_index < submission_index {
-            unsafe { self.raw().wait(fence.as_ref(), submission_index, !0)? };
+            unsafe { self.raw().wait(fence.as_ref(), submission_index, !0) }
+                .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
             let closures = self
                 .lock_life()
@@ -3567,7 +3553,7 @@ impl Device {
         Ok(query_set)
     }
 
-    pub(crate) fn lose(&self, message: &str) {
+    fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
@@ -3634,16 +3620,6 @@ impl Device {
 }
 
 impl Device {
-    pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer) {
-        let mut baked = cmd_buf.extract_baked_commands();
-        unsafe {
-            baked.encoder.reset_all(baked.list);
-        }
-        unsafe {
-            self.raw().destroy_command_encoder(baked.encoder);
-        }
-    }
-
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
         self.pending_writes.lock().deactivate();

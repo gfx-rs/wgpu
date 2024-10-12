@@ -1,5 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use std::borrow::Cow;
 use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
@@ -53,10 +52,7 @@ impl crate::framework::Example for Example {
             push_constant_ranges: &[],
         });
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,

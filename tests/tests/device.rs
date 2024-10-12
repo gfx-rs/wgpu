@@ -87,7 +87,7 @@ static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything
-    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0, false).await;
+    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(None, false).await;
 
     let device_error = adapter
         .request_device(
@@ -644,33 +644,6 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
 
         // Drop the device.
         drop(ctx.device);
-
-        assert!(
-            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
-
-#[gpu_test]
-static DEVICE_INVALID_THEN_SET_LOST_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|ctx| {
-        // This test checks that when the device is invalid, a subsequent call
-        // to set the device lost callback will immediately call the callback.
-        // Invalidating the device is done via a testing-only method. Fails on
-        // webgl because webgl doesn't implement make_invalid.
-
-        // Make the device invalid.
-        ctx.device.make_invalid();
-
-        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
-
-        // Set a LoseDeviceCallback on the device.
-        let callback = Box::new(|reason, _m| {
-            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert_eq!(reason, wgt::DeviceLostReason::DeviceInvalid);
-        });
-        ctx.device.set_device_lost_callback(callback);
 
         assert!(
             WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
