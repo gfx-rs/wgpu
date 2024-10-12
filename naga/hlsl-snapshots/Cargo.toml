@@ -1,9 +1,9 @@
 [package]
-name = "hlsl-snapshots"
-version = "0.1.0"
 edition = "2021"
-publish = false
 license = "MIT OR Apache-2.0"
+name = "hlsl-snapshots"
+publish = false
+version = "0.1.0"
 
 [lib]
 name = "hlsl_snapshots"

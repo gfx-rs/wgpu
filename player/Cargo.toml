@@ -1,14 +1,14 @@
 [package]
-name = "player"
-version.workspace = true
 authors.workspace = true
-edition.workspace = true
 description = "WebGPU trace player"
+edition.workspace = true
 homepage.workspace = true
-repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+name = "player"
 publish = false
+repository.workspace = true
+version.workspace = true
 
 [lib]
 name = "player"
@@ -28,21 +28,21 @@ ron.workspace = true
 winit = { workspace = true, optional = true }
 
 [dependencies.wgt]
-workspace = true
 features = ["serde"]
+workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
-workspace = true
 features = [
-    "replay",
-    "raw-window-handle",
-    "strict_asserts",
-    "wgsl",
-    "metal",
     "dx12",
-    "vulkan",
     "gles",
+    "metal",
+    "raw-window-handle",
+    "replay",
+    "strict_asserts",
+    "vulkan",
+    "wgsl",
 ]
+workspace = true
 
 [dev-dependencies]
 serde.workspace = true

@@ -1,13 +1,13 @@
 [package]
-name = "wgpu-info"
-version.workspace = true
 authors.workspace = true
-edition.workspace = true
 description = "A tool to print and process information about available wgpu adapters."
+edition.workspace = true
 homepage.workspace = true
-repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+name = "wgpu-info"
+repository.workspace = true
+version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
