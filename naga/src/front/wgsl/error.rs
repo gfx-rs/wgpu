@@ -1,3 +1,6 @@
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtension, UnimplementedEnableExtension,
+};
 use crate::front::wgsl::parse::directive::{DirectiveKind, UnimplementedDirectiveKind};
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
@@ -184,6 +187,7 @@ pub(crate) enum Error<'a> {
     UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
+    UnknownEnableExtension(Span, &'a str),
     SizeAttributeTooLow(Span, u32),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
@@ -272,6 +276,10 @@ pub(crate) enum Error<'a> {
     },
     DirectiveAfterFirstGlobalDecl {
         directive_span: Span,
+    },
+    EnableExtensionNotYetImplemented {
+        kind: UnimplementedEnableExtension,
+        span: Span,
     },
 }
 
@@ -516,6 +524,14 @@ impl<'a> Error<'a> {
                 message: format!("unknown type: '{}'", &source[bad_span]),
                 labels: vec![(bad_span, "unknown type".into())],
                 notes: vec![],
+            },
+            Error::UnknownEnableExtension(span, word) => ParseError {
+                message: format!("unknown enable-extension `{}`", word),
+                labels: vec![(span, "".into())],
+                notes: vec![
+                    "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
+                        .into(),
+                ],
             },
             Error::SizeAttributeTooLow(bad_span, min_size) => ParseError {
                 message: format!("struct member size must be at least {min_size}"),
@@ -898,6 +914,28 @@ impl<'a> Error<'a> {
                     "maybe hoist this closer to the top of the shader module?"
                 )
                 .into()],
+            },
+            Error::EnableExtensionNotYetImplemented { kind, span } => ParseError {
+                message: format!(
+                    "the `{}` extension is not yet supported (sorry!)",
+                    EnableExtension::Unimplemented(kind).to_ident()
+                ),
+                labels: vec![(
+                    span,
+                    concat!(
+                        "this extension specifies standard functionality ",
+                        "which is not yet implemented in Naga"
+                    )
+                    .into(),
+                )],
+                notes: vec![format!(
+                    concat!(
+                        "Let Naga maintainers know that you ran into this at ",
+                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                        "so they can prioritize it!"
+                    ),
+                    kind.tracking_issue_num()
+                )],
             },
         }
     }
