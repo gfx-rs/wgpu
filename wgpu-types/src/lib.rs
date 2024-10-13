@@ -960,7 +960,7 @@ bitflags::bitflags! {
         /// - Vulkan (with VK_EXT_shader_atomic_float)
         ///
         /// This is a native only feature.
-        const SHADER_FLT32_ATOMIC = 1 << 62;
+        const SHADER_FLOAT32_ATOMIC = 1 << 62;
         /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
         ///
         /// This is used for frame pacing to reduce latency, and is generally only available on Android.

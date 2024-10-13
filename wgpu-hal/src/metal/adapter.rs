@@ -915,7 +915,7 @@ impl super::PrivateCapabilities {
             self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
         );
         features.set(
-            F::SHADER_FLT32_ATOMIC,
+            F::SHADER_FLOAT32_ATOMIC,
             self.float_atomics && self.msl_version >= MTLLanguageVersion::V3_0,
         );
 

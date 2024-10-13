@@ -1934,7 +1934,7 @@ pub enum Statement {
         /// If [`SHADER_INT64_ATOMIC_MIN_MAX`] or [`SHADER_INT64_ATOMIC_ALL_OPS`] are
         /// enabled, this may also be [`I64`] or [`U64`].
         ///
-        /// If [`SHADER_FLT32_ATOMIC`] is enabled, this may be [`F32`].
+        /// If [`SHADER_FLOAT32_ATOMIC`] is enabled, this may be [`F32`].
         ///
         /// [`Pointer`]: TypeInner::Pointer
         /// [`Atomic`]: TypeInner::Atomic
@@ -1942,7 +1942,7 @@ pub enum Statement {
         /// [`U32`]: Scalar::U32
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
-        /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
+        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         /// [`I64`]: Scalar::I64
         /// [`U64`]: Scalar::U64
         /// [`F32`]: Scalar::F32
@@ -1964,7 +1964,7 @@ pub enum Statement {
         ///
         /// If [`pointer`] refers to a 32-bit floating-point atomic value, then:
         ///
-        /// - The [`SHADER_FLT32_ATOMIC`] capability allows [`AtomicFunction::Add`],
+        /// - The [`SHADER_FLOAT32_ATOMIC`] capability allows [`AtomicFunction::Add`],
         ///   [`AtomicFunction::Subtract`], and [`AtomicFunction::Exchange { compare: None }`]
         ///   in the [`Storage`] address space here.
         ///
@@ -1973,7 +1973,7 @@ pub enum Statement {
         /// [`Storage`]: AddressSpace::Storage
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
-        /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
+        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         fun: AtomicFunction,
 
         /// Value to use in the function.
@@ -2000,7 +2000,7 @@ pub enum Statement {
         /// [`Exchange { compare: None }`]: AtomicFunction::Exchange
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
-        /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
+        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         result: Option<Handle<Expression>>,
     },
     /// Load uniformly from a uniform pointer in the workgroup address space.

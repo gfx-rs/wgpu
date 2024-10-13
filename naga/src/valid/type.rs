@@ -379,10 +379,10 @@ impl super::Validator {
                     crate::Scalar::F32 => {
                         if !self
                             .capabilities
-                            .contains(Capabilities::SHADER_FLT32_ATOMIC)
+                            .contains(Capabilities::SHADER_FLOAT32_ATOMIC)
                         {
                             return Err(TypeError::MissingCapability(
-                                Capabilities::SHADER_FLT32_ATOMIC,
+                                Capabilities::SHADER_FLOAT32_ATOMIC,
                             ));
                         }
                     }

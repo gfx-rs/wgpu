@@ -445,7 +445,7 @@ impl PhysicalDeviceFeatures {
                 None
             },
             shader_atomic_float: if enabled_extensions.contains(&ext::shader_atomic_float::NAME) {
-                let needed = requested_features.contains(wgt::Features::SHADER_FLT32_ATOMIC);
+                let needed = requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC);
                 Some(
                     vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default()
                         .shader_buffer_float32_atomics(needed)
@@ -608,7 +608,7 @@ impl PhysicalDeviceFeatures {
 
         if let Some(ref shader_atomic_float) = self.shader_atomic_float {
             features.set(
-                F::SHADER_FLT32_ATOMIC,
+                F::SHADER_FLOAT32_ATOMIC,
                 shader_atomic_float.shader_buffer_float32_atomics != 0
                     && shader_atomic_float.shader_buffer_float32_atomic_add != 0,
             );
@@ -1035,7 +1035,7 @@ impl PhysicalDeviceProperties {
         }
 
         // Require `VK_EXT_shader_atomic_float` if the associated feature was requested
-        if requested_features.contains(wgt::Features::SHADER_FLT32_ATOMIC) {
+        if requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
             extensions.push(ext::shader_atomic_float::NAME);
         }
 
@@ -1821,7 +1821,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Int64Atomics);
             }
 
-            if features.contains(wgt::Features::SHADER_FLT32_ATOMIC) {
+            if features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
                 capabilities.push(spv::Capability::AtomicFloat32AddEXT);
             }
 

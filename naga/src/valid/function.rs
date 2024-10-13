@@ -450,16 +450,16 @@ impl super::Validator {
             }
             // Check for the special restrictions on 32-bit floating-point atomic operations.
             crate::Scalar::F32 => {
-                // `Capabilities::SHADER_FLT32_ATOMIC` allows 32-bit floating-point
+                // `Capabilities::SHADER_FLOAT32_ATOMIC` allows 32-bit floating-point
                 // atomic operations `Add`, `Subtract`, and `Exchange`
                 // in the `Storage` address space.
                 if !self
                     .capabilities
-                    .contains(super::Capabilities::SHADER_FLT32_ATOMIC)
+                    .contains(super::Capabilities::SHADER_FLOAT32_ATOMIC)
                 {
                     log::error!("Float32 atomic operations are not supported");
                     return Err(AtomicError::MissingCapability(
-                        super::Capabilities::SHADER_FLT32_ATOMIC,
+                        super::Capabilities::SHADER_FLOAT32_ATOMIC,
                     )
                     .with_span_handle(value, context.expressions)
                     .into_other());

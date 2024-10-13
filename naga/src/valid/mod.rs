@@ -151,7 +151,7 @@ bitflags::bitflags! {
         /// [`AtomicFunction::Sub`]: crate::AtomicFunction::Sub
         /// [`AtomicFunction::Exchange { compare: None }`]: crate::AtomicFunction::Exchange
         /// [`Storage`]: crate::AddressSpace::Storage
-        const SHADER_FLT32_ATOMIC = 1 << 21;
+        const SHADER_FLOAT32_ATOMIC = 1 << 21;
     }
 }
 

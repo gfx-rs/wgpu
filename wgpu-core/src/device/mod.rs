@@ -525,8 +525,8 @@ pub fn create_validator(
         features.contains(wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS),
     );
     caps.set(
-        Caps::SHADER_FLT32_ATOMIC,
-        features.contains(wgt::Features::SHADER_FLT32_ATOMIC),
+        Caps::SHADER_FLOAT32_ATOMIC,
+        features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC),
     );
     caps.set(
         Caps::MULTISAMPLED_SHADING,

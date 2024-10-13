@@ -151,7 +151,7 @@ static INT64_ATOMIC_ALL_OPS: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
-fn create_flt32_atomic_test() -> Vec<ShaderTest> {
+fn create_float32_atomic_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
     let test = ShaderTest::new(
@@ -180,15 +180,15 @@ fn create_flt32_atomic_test() -> Vec<ShaderTest> {
 }
 
 #[gpu_test]
-static FLT32_ATOMIC: GpuTestConfiguration = GpuTestConfiguration::new()
+static FLOAT32_ATOMIC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgt::Features::SHADER_FLT32_ATOMIC)
+            .features(wgt::Features::SHADER_FLOAT32_ATOMIC)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
     .run_async(|ctx| {
-        shader_input_output_test(ctx, InputStorageType::Storage, create_flt32_atomic_test())
+        shader_input_output_test(ctx, InputStorageType::Storage, create_float32_atomic_test())
     });
 
 // See https://github.com/gfx-rs/wgpu/issues/5276
