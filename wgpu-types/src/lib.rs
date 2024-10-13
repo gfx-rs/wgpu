@@ -956,10 +956,12 @@ bitflags::bitflags! {
         /// Allows shaders to use f32 atomic load, store, add, sub, and exchange.
         ///
         /// Supported platforms:
-        /// - Metal (with MSL 3.0+)
-        /// - Vulkan (with VK_EXT_shader_atomic_float)
+        /// - Metal (with MSL 3.0+ and Apple7+/Mac2)
+        /// - Vulkan (with [VK_EXT_shader_atomic_float])
         ///
         /// This is a native only feature.
+        /// 
+        /// [VK_EXT_shader_atomic_float]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_shader_atomic_float.html
         const SHADER_FLOAT32_ATOMIC = 1 << 62;
         /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
         ///
