@@ -68,6 +68,10 @@ struct MatCx2InArray {
     __mat4x2 am[2];
 };
 
+struct AssignToMember {
+    uint x;
+};
+
 GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     GlobalConst ret = (GlobalConst)0;
     ret.a = arg0;
@@ -201,9 +205,9 @@ void test_matrix_within_array_within_struct_accesses()
     return;
 }
 
-float read_from_private(inout float foo_2)
+float read_from_private(inout float foo_1)
 {
-    float _e1 = foo_2;
+    float _e1 = foo_1;
     return _e1;
 }
 
@@ -224,15 +228,34 @@ ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
     return ret;
 }
 
-void assign_array_through_ptr_fn(inout float4 foo_3[2])
+void assign_array_through_ptr_fn(inout float4 foo_2[2])
 {
-    foo_3 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
+    foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
     return;
 }
 
-int array_by_value(int a_1[5], int i)
+uint fetch_arg_ptr_member(inout AssignToMember p_1)
 {
-    return a_1[i];
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(inout AssignToMember p_2)
+{
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(inout uint p_3[4])
+{
+    uint _e2 = p_3[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(inout uint p_4[4])
+{
+    p_4[1] = 10u;
+    return;
 }
 
 typedef int ret_Constructarray5_int_[5];
@@ -271,10 +294,10 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     float4x3 _matrix = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
     uint2 arr_1[2] = Constructarray2_uint2_(asuint(bar.Load2(144+0)), asuint(bar.Load2(144+8)));
     float b = asfloat(bar.Load(0+3u*16+0));
-    int a_2 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
+    int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
     int2 c = asint(qux.Load2(0));
     const float _e33 = read_from_private(foo);
-    c2_ = Constructarray5_int_(a_2, int(b), 3, 4, 5);
+    c2_ = Constructarray5_int_(a_1, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value = c2_[vi];
     const float _e47 = test_arr_as_arg(ZeroValuearray5_array10_float__());
@@ -316,9 +339,15 @@ void assign_through_ptr()
     return;
 }
 
-float4 foo_1(uint vi_1 : SV_VertexID) : SV_Position
+[numthreads(1, 1, 1)]
+void assign_to_ptr_components()
 {
-    int arr_2[5] = Constructarray5_int_(1, 2, 3, 4, 5);
-    int value_1 = arr_2[vi_1];
-    return float4((value_1).xxxx);
+    AssignToMember s1_ = (AssignToMember)0;
+    uint a1_[4] = (uint[4])0;
+
+    assign_to_arg_ptr_member(s1_);
+    const uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    const uint _e3 = fetch_arg_ptr_array_element(a1_);
+    return;
 }

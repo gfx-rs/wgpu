@@ -3,10 +3,10 @@ Implementations for `BlockContext` methods.
 */
 
 use super::{
-    helpers, index::BoundsCheckResult, make_local, selection::Selection, Block, BlockContext,
-    Dimension, Error, Instruction, LocalType, LookupType, ResultMember, Writer, WriterFlags,
+    index::BoundsCheckResult, selection::Selection, Block, BlockContext, Dimension, Error,
+    Instruction, LocalType, LookupType, NumericType, ResultMember, Writer, WriterFlags,
 };
-use crate::{arena::Handle, proc::TypeResolution, Statement};
+use crate::{arena::Handle, proc::index::GuardedIndex, Statement};
 use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
@@ -16,6 +16,54 @@ fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
         crate::TypeInner::Matrix { .. } => Dimension::Matrix,
         _ => unreachable!(),
     }
+}
+
+/// How to derive the type of `OpAccessChain` instructions from Naga IR.
+///
+/// Most of the time, we compile Naga IR to SPIR-V instructions whose result
+/// types are simply the direct SPIR-V analog of the Naga IR's. But in some
+/// cases, the Naga IR and SPIR-V types need to diverge.
+///
+/// This enum specifies how [`BlockContext::write_expression_pointer`] should
+/// choose a SPIR-V result type for the `OpAccessChain` it generates, based on
+/// the type of the given Naga IR [`Expression`] it's generating code for.
+///
+/// [`Expression`]: crate::Expression
+enum AccessTypeAdjustment {
+    /// No adjustment needed: the SPIR-V type should be the direct
+    /// analog of the Naga IR expression type.
+    ///
+    /// For most access chains, this is the right thing: the Naga IR access
+    /// expression produces a [`Pointer`] to the element / component, and the
+    /// SPIR-V `OpAccessChain` instruction does the same.
+    ///
+    /// [`Pointer`]: crate::TypeInner::Pointer
+    None,
+
+    /// The SPIR-V type should be an `OpPointer` to the direct analog of the
+    /// Naga IR expression's type.
+    ///
+    /// This is necessary for indexing binding arrays in the [`Handle`] address
+    /// space:
+    ///
+    /// - In Naga IR, referencing a binding array [`GlobalVariable`] in the
+    ///   [`Handle`] address space produces a value of type [`BindingArray`],
+    ///   not a pointer to such. And [`Access`] and [`AccessIndex`] expressions
+    ///   operate on handle binding arrays by value, and produce handle values,
+    ///   not pointers.
+    ///
+    /// - In SPIR-V, a binding array `OpVariable` produces a pointer to an
+    ///   array, and `OpAccessChain` instructions operate on pointers,
+    ///   regardless of whether the elements are opaque types or not.
+    ///
+    /// See also the documentation for [`BindingArray`].
+    ///
+    /// [`Handle`]: crate::AddressSpace::Handle
+    /// [`GlobalVariable`]: crate::GlobalVariable
+    /// [`BindingArray`]: crate::TypeInner::BindingArray
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    IntroducePointer(spirv::StorageClass),
 }
 
 /// The results of emitting code for a left-hand-side expression.
@@ -105,10 +153,9 @@ impl Writer {
         position_id: Word,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::F32,
-            pointer_space: Some(spirv::StorageClass::Output),
+        let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::LocalPointer {
+            base: NumericType::Scalar(crate::Scalar::F32),
+            class: spirv::StorageClass::Output,
         }));
         let index_y_id = self.get_index_constant(1);
         let access_id = self.id_gen.next();
@@ -119,11 +166,9 @@ impl Writer {
             &[index_y_id],
         ));
 
-        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::F32,
-            pointer_space: None,
-        }));
+        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+            NumericType::Scalar(crate::Scalar::F32),
+        )));
         let load_id = self.id_gen.next();
         body.push(Instruction::load(float_type_id, load_id, access_id, None));
 
@@ -145,11 +190,9 @@ impl Writer {
         frag_depth_id: Word,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::F32,
-            pointer_space: None,
-        }));
+        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+            NumericType::Scalar(crate::Scalar::F32),
+        )));
         let zero_scalar_id = self.get_constant_scalar(crate::Literal::F32(0.0));
         let one_scalar_id = self.get_constant_scalar(crate::Literal::F32(1.0));
 
@@ -217,32 +260,6 @@ impl Writer {
 }
 
 impl<'w> BlockContext<'w> {
-    /// Decide whether to put off emitting instructions for `expr_handle`.
-    ///
-    /// We would like to gather together chains of `Access` and `AccessIndex`
-    /// Naga expressions into a single `OpAccessChain` SPIR-V instruction. To do
-    /// this, we don't generate instructions for these exprs when we first
-    /// encounter them. Their ids in `self.writer.cached.ids` are left as zero. Then,
-    /// once we encounter a `Load` or `Store` expression that actually needs the
-    /// chain's value, we call `write_expression_pointer` to handle the whole
-    /// thing in one fell swoop.
-    fn is_intermediate(&self, expr_handle: Handle<crate::Expression>) -> bool {
-        match self.ir_function.expressions[expr_handle] {
-            crate::Expression::GlobalVariable(handle) => {
-                self.ir_module.global_variables[handle].space != crate::AddressSpace::Handle
-            }
-            crate::Expression::LocalVariable(_) => true,
-            crate::Expression::FunctionArgument(index) => {
-                let arg = &self.ir_function.arguments[index as usize];
-                self.ir_module.types[arg.ty].inner.pointer_space().is_some()
-            }
-
-            // The chain rule: if this `Access...`'s `base` operand was
-            // previously omitted, then omit this one, too.
-            _ => self.cached.ids[expr_handle] == 0,
-        }
-    }
-
     /// Cache an expression for a value.
     pub(super) fn cache_expression_value(
         &mut self,
@@ -313,36 +330,86 @@ impl<'w> BlockContext<'w> {
                     id
                 }
             }
-            crate::Expression::Access { base, index: _ } if self.is_intermediate(base) => {
-                // See `is_intermediate`; we'll handle this later in
-                // `write_expression_pointer`.
-                0
-            }
             crate::Expression::Access { base, index } => {
                 let base_ty_inner = self.fun_info[base].ty.inner_with(&self.ir_module.types);
                 match *base_ty_inner {
+                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                        // When we have a chain of `Access` and `AccessIndex` expressions
+                        // operating on pointers, we want to generate a single
+                        // `OpAccessChain` instruction for the whole chain. Put off
+                        // generating any code for this until we find the `Expression`
+                        // that actually dereferences the pointer.
+                        0
+                    }
+                    _ if self.function.spilled_accesses.contains(base) => {
+                        // As far as Naga IR is concerned, this expression does not yield
+                        // a pointer (we just checked, above), but this backend spilled it
+                        // to a temporary variable, so SPIR-V thinks we're accessing it
+                        // via a pointer.
+
+                        // Since the base expression was spilled, mark this access to it
+                        // as spilled, too.
+                        self.function.spilled_accesses.insert(expr_handle);
+                        self.maybe_access_spilled_composite(expr_handle, block, result_type_id)?
+                    }
                     crate::TypeInner::Vector { .. } => {
                         self.write_vector_access(expr_handle, base, index, block)?
                     }
-                    // Only binding arrays in the Handle address space will take this path (due to `is_intermediate`)
+                    crate::TypeInner::Array { .. } | crate::TypeInner::Matrix { .. } => {
+                        // See if `index` is known at compile time.
+                        match GuardedIndex::from_expression(index, self.ir_function, self.ir_module)
+                        {
+                            GuardedIndex::Known(value) => {
+                                // If `index` is known and in bounds, we can just use
+                                // `OpCompositeExtract`.
+                                //
+                                // At the moment, validation rejects programs if this
+                                // index is out of bounds, so we don't need bounds checks.
+                                // However, that rejection is incorrect, since WGSL says
+                                // that `let` bindings are not constant expressions
+                                // (#6396). So eventually we will need to emulate bounds
+                                // checks here.
+                                let id = self.gen_id();
+                                let base_id = self.cached[base];
+                                block.body.push(Instruction::composite_extract(
+                                    result_type_id,
+                                    id,
+                                    base_id,
+                                    &[value],
+                                ));
+                                id
+                            }
+                            GuardedIndex::Expression(_) => {
+                                // We are subscripting an array or matrix that is not
+                                // behind a pointer, using an index computed at runtime.
+                                // SPIR-V has no instructions that do this, so the best we
+                                // can do is spill the value to a new temporary variable,
+                                // at which point we can get a pointer to that and just
+                                // use `OpAccessChain` in the usual way.
+                                self.spill_to_internal_variable(base, block);
+
+                                // Since the base was spilled, mark this access to it as
+                                // spilled, too.
+                                self.function.spilled_accesses.insert(expr_handle);
+                                self.maybe_access_spilled_composite(
+                                    expr_handle,
+                                    block,
+                                    result_type_id,
+                                )?
+                            }
+                        }
+                    }
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
-                        let space = match self.ir_function.expressions[base] {
-                            crate::Expression::GlobalVariable(gvar) => {
-                                self.ir_module.global_variables[gvar].space
-                            }
-                            _ => unreachable!(),
-                        };
-                        let binding_array_false_pointer = LookupType::Local(LocalType::Pointer {
-                            base: binding_type,
-                            class: helpers::map_storage_class(space),
-                        });
-
+                        // Only binding arrays in the `Handle` address space will take
+                        // this path, since we handled the `Pointer` case above.
                         let result_id = match self.write_expression_pointer(
                             expr_handle,
                             block,
-                            Some(binding_array_false_pointer),
+                            AccessTypeAdjustment::IntroducePointer(
+                                spirv::StorageClass::UniformConstant,
+                            ),
                         )? {
                             ExpressionPointer::Ready { pointer_id } => pointer_id,
                             ExpressionPointer::Conditional { .. } => {
@@ -372,32 +439,6 @@ impl<'w> BlockContext<'w> {
 
                         load_id
                     }
-                    crate::TypeInner::Array {
-                        base: ty_element, ..
-                    } => {
-                        let index_id = self.cached[index];
-                        let base_id = self.cached[base];
-                        let base_ty = match self.fun_info[base].ty {
-                            TypeResolution::Handle(handle) => handle,
-                            TypeResolution::Value(_) => {
-                                return Err(Error::Validation(
-                                    "Array types should always be in the arena",
-                                ))
-                            }
-                        };
-                        let (id, variable) = self.writer.promote_access_expression_to_variable(
-                            &self.ir_module.types,
-                            result_type_id,
-                            base_id,
-                            base_ty,
-                            index_id,
-                            ty_element,
-                            block,
-                        )?;
-                        self.function.internal_variables.push(variable);
-                        id
-                    }
-                    // wgpu#4337: Support `crate::TypeInner::Matrix`
                     ref other => {
                         log::error!(
                             "Unable to access base {:?} of type {:?}",
@@ -410,13 +451,27 @@ impl<'w> BlockContext<'w> {
                     }
                 }
             }
-            crate::Expression::AccessIndex { base, index: _ } if self.is_intermediate(base) => {
-                // See `is_intermediate`; we'll handle this later in
-                // `write_expression_pointer`.
-                0
-            }
             crate::Expression::AccessIndex { base, index } => {
                 match *self.fun_info[base].ty.inner_with(&self.ir_module.types) {
+                    crate::TypeInner::Pointer { .. } | crate::TypeInner::ValuePointer { .. } => {
+                        // When we have a chain of `Access` and `AccessIndex` expressions
+                        // operating on pointers, we want to generate a single
+                        // `OpAccessChain` instruction for the whole chain. Put off
+                        // generating any code for this until we find the `Expression`
+                        // that actually dereferences the pointer.
+                        0
+                    }
+                    _ if self.function.spilled_accesses.contains(base) => {
+                        // As far as Naga IR is concerned, this expression does not yield
+                        // a pointer (we just checked, above), but this backend spilled it
+                        // to a temporary variable, so SPIR-V thinks we're accessing it
+                        // via a pointer.
+
+                        // Since the base expression was spilled, mark this access to it
+                        // as spilled, too.
+                        self.function.spilled_accesses.insert(expr_handle);
+                        self.maybe_access_spilled_composite(expr_handle, block, result_type_id)?
+                    }
                     crate::TypeInner::Vector { .. }
                     | crate::TypeInner::Matrix { .. }
                     | crate::TypeInner::Array { .. }
@@ -435,25 +490,17 @@ impl<'w> BlockContext<'w> {
                         ));
                         id
                     }
-                    // Only binding arrays in the Handle address space will take this path (due to `is_intermediate`)
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
-                        let space = match self.ir_function.expressions[base] {
-                            crate::Expression::GlobalVariable(gvar) => {
-                                self.ir_module.global_variables[gvar].space
-                            }
-                            _ => unreachable!(),
-                        };
-                        let binding_array_false_pointer = LookupType::Local(LocalType::Pointer {
-                            base: binding_type,
-                            class: helpers::map_storage_class(space),
-                        });
-
+                        // Only binding arrays in the `Handle` address space will take
+                        // this path, since we handled the `Pointer` case above.
                         let result_id = match self.write_expression_pointer(
                             expr_handle,
                             block,
-                            Some(binding_array_false_pointer),
+                            AccessTypeAdjustment::IntroducePointer(
+                                spirv::StorageClass::UniformConstant,
+                            ),
                         )? {
                             ExpressionPointer::Ready { pointer_id } => pointer_id,
                             ExpressionPointer::Conditional { .. } => {
@@ -830,12 +877,8 @@ impl<'w> BlockContext<'w> {
                         let mut arg2_id = self.writer.get_constant_scalar_with(1, scalar)?;
 
                         if let Some(size) = maybe_size {
-                            let ty = LocalType::Value {
-                                vector_size: Some(size),
-                                scalar,
-                                pointer_space: None,
-                            }
-                            .into();
+                            let ty =
+                                LocalType::Numeric(NumericType::Vector { size, scalar }).into();
 
                             self.temp_list.clear();
                             self.temp_list.resize(size as _, arg1_id);
@@ -950,12 +993,9 @@ impl<'w> BlockContext<'w> {
                                 &crate::TypeInner::Vector { size, .. },
                                 &crate::TypeInner::Scalar(scalar),
                             ) => {
-                                let selector_type_id =
-                                    self.get_type_id(LookupType::Local(LocalType::Value {
-                                        vector_size: Some(size),
-                                        scalar,
-                                        pointer_space: None,
-                                    }));
+                                let selector_type_id = self.get_type_id(LookupType::Local(
+                                    LocalType::Numeric(NumericType::Vector { size, scalar }),
+                                ));
                                 self.temp_list.clear();
                                 self.temp_list.resize(size as usize, arg2_id);
 
@@ -998,12 +1038,8 @@ impl<'w> BlockContext<'w> {
                     Mf::CountTrailingZeros => {
                         let uint_id = match *arg_ty {
                             crate::TypeInner::Vector { size, scalar } => {
-                                let ty = LocalType::Value {
-                                    vector_size: Some(size),
-                                    scalar,
-                                    pointer_space: None,
-                                }
-                                .into();
+                                let ty =
+                                    LocalType::Numeric(NumericType::Vector { size, scalar }).into();
 
                                 self.temp_list.clear();
                                 self.temp_list.resize(
@@ -1040,12 +1076,8 @@ impl<'w> BlockContext<'w> {
                     Mf::CountLeadingZeros => {
                         let (int_type_id, int_id, width) = match *arg_ty {
                             crate::TypeInner::Vector { size, scalar } => {
-                                let ty = LocalType::Value {
-                                    vector_size: Some(size),
-                                    scalar,
-                                    pointer_space: None,
-                                }
-                                .into();
+                                let ty =
+                                    LocalType::Numeric(NumericType::Vector { size, scalar }).into();
 
                                 self.temp_list.clear();
                                 self.temp_list.resize(
@@ -1061,11 +1093,9 @@ impl<'w> BlockContext<'w> {
                                 )
                             }
                             crate::TypeInner::Scalar(scalar) => (
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    scalar,
-                                    pointer_space: None,
-                                })),
+                                self.get_type_id(LookupType::Local(LocalType::Numeric(
+                                    NumericType::Scalar(scalar),
+                                ))),
                                 self.writer
                                     .get_constant_scalar_with(scalar.width * 8 - 1, scalar)?,
                                 scalar.width,
@@ -1130,14 +1160,9 @@ impl<'w> BlockContext<'w> {
                             .writer
                             .get_constant_scalar(crate::Literal::U32(bit_width as u32));
 
-                        let u32_type = self.get_type_id(LookupType::Local(LocalType::Value {
-                            vector_size: None,
-                            scalar: crate::Scalar {
-                                kind: crate::ScalarKind::Uint,
-                                width: 4,
-                            },
-                            pointer_space: None,
-                        }));
+                        let u32_type = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                            NumericType::Scalar(crate::Scalar::U32),
+                        )));
 
                         // o = min(offset, w)
                         let offset_id = self.gen_id();
@@ -1186,14 +1211,9 @@ impl<'w> BlockContext<'w> {
                             .writer
                             .get_constant_scalar(crate::Literal::U32(bit_width as u32));
 
-                        let u32_type = self.get_type_id(LookupType::Local(LocalType::Value {
-                            vector_size: None,
-                            scalar: crate::Scalar {
-                                kind: crate::ScalarKind::Uint,
-                                width: 4,
-                            },
-                            pointer_space: None,
-                        }));
+                        let u32_type = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                            NumericType::Scalar(crate::Scalar::U32),
+                        )));
 
                         // o = min(offset, w)
                         let offset_id = self.gen_id();
@@ -1259,23 +1279,16 @@ impl<'w> BlockContext<'w> {
                             Mf::Pack4xU8 => (crate::ScalarKind::Uint, false),
                             _ => unreachable!(),
                         };
-                        let uint_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                            vector_size: None,
-                            scalar: crate::Scalar {
-                                kind: crate::ScalarKind::Uint,
-                                width: 4,
-                            },
-                            pointer_space: None,
-                        }));
+                        let uint_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                            NumericType::Scalar(crate::Scalar::U32),
+                        )));
 
-                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                            vector_size: None,
-                            scalar: crate::Scalar {
+                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                            NumericType::Scalar(crate::Scalar {
                                 kind: int_type,
                                 width: 4,
-                            },
-                            pointer_space: None,
-                        }));
+                            }),
+                        )));
 
                         let mut last_instruction = Instruction::new(spirv::Op::Nop);
 
@@ -1352,24 +1365,17 @@ impl<'w> BlockContext<'w> {
                             _ => unreachable!(),
                         };
 
-                        let sint_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                            vector_size: None,
-                            scalar: crate::Scalar {
-                                kind: crate::ScalarKind::Sint,
-                                width: 4,
-                            },
-                            pointer_space: None,
-                        }));
+                        let sint_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                            NumericType::Scalar(crate::Scalar::I32),
+                        )));
 
                         let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
-                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                            vector_size: None,
-                            scalar: crate::Scalar {
+                        let int_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                            NumericType::Scalar(crate::Scalar {
                                 kind: int_type,
                                 width: 4,
-                            },
-                            pointer_space: None,
-                        }));
+                            }),
+                        )));
                         block
                             .body
                             .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
@@ -1421,58 +1427,7 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::LocalVariable(variable) => self.function.variables[&variable].id,
             crate::Expression::Load { pointer } => {
-                match self.write_expression_pointer(pointer, block, None)? {
-                    ExpressionPointer::Ready { pointer_id } => {
-                        let id = self.gen_id();
-                        let atomic_space =
-                            match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
-                                crate::TypeInner::Pointer { base, space } => {
-                                    match self.ir_module.types[base].inner {
-                                        crate::TypeInner::Atomic { .. } => Some(space),
-                                        _ => None,
-                                    }
-                                }
-                                _ => None,
-                            };
-                        let instruction = if let Some(space) = atomic_space {
-                            let (semantics, scope) = space.to_spirv_semantics_and_scope();
-                            let scope_constant_id = self.get_scope_constant(scope as u32);
-                            let semantics_id = self.get_index_constant(semantics.bits());
-                            Instruction::atomic_load(
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                scope_constant_id,
-                                semantics_id,
-                            )
-                        } else {
-                            Instruction::load(result_type_id, id, pointer_id, None)
-                        };
-                        block.body.push(instruction);
-                        id
-                    }
-                    ExpressionPointer::Conditional { condition, access } => {
-                        //TODO: support atomics?
-                        self.write_conditional_indexed_load(
-                            result_type_id,
-                            condition,
-                            block,
-                            move |id_gen, block| {
-                                // The in-bounds path. Perform the access and the load.
-                                let pointer_id = access.result_id.unwrap();
-                                let value_id = id_gen.next();
-                                block.body.push(access);
-                                block.body.push(Instruction::load(
-                                    result_type_id,
-                                    value_id,
-                                    pointer_id,
-                                    None,
-                                ));
-                                value_id
-                            },
-                        )
-                    }
-                }
+                self.write_checked_load(pointer, block, AccessTypeAdjustment::None, result_type_id)?
             }
             crate::Expression::FunctionArgument(index) => self.function.parameter_id(index),
             crate::Expression::CallResult(_)
@@ -1533,11 +1488,10 @@ impl<'w> BlockContext<'w> {
                                 self.writer.get_constant_scalar_with(0, src_scalar)?;
                             let zero_id = match src_size {
                                 Some(size) => {
-                                    let ty = LocalType::Value {
-                                        vector_size: Some(size),
+                                    let ty = LocalType::Numeric(NumericType::Vector {
+                                        size,
                                         scalar: src_scalar,
-                                        pointer_space: None,
-                                    }
+                                    })
                                     .into();
 
                                     self.temp_list.clear();
@@ -1562,11 +1516,10 @@ impl<'w> BlockContext<'w> {
                                 self.writer.get_constant_scalar_with(1, dst_scalar)?;
                             let (accept_id, reject_id) = match src_size {
                                 Some(size) => {
-                                    let ty = LocalType::Value {
-                                        vector_size: Some(size),
+                                    let ty = LocalType::Numeric(NumericType::Vector {
+                                        size,
                                         scalar: dst_scalar,
-                                        pointer_space: None,
-                                    }
+                                    })
                                     .into();
 
                                     self.temp_list.clear();
@@ -1704,12 +1657,12 @@ impl<'w> BlockContext<'w> {
                     self.temp_list.clear();
                     self.temp_list.resize(size as usize, condition_id);
 
-                    let bool_vector_type_id =
-                        self.get_type_id(LookupType::Local(LocalType::Value {
-                            vector_size: Some(size),
+                    let bool_vector_type_id = self.get_type_id(LookupType::Local(
+                        LocalType::Numeric(NumericType::Vector {
+                            size,
                             scalar: condition_scalar,
-                            pointer_space: None,
-                        }));
+                        }),
+                    ));
 
                     let id = self.gen_id();
                     block.body.push(Instruction::composite_construct(
@@ -1789,9 +1742,9 @@ impl<'w> BlockContext<'w> {
     ///
     /// Emit any needed bounds-checking expressions to `block`.
     ///
-    /// Some cases we need to generate a different return type than what the IR gives us.
-    /// This is because pointers to binding arrays of handles (such as images or samplers)
-    /// don't exist in the IR, but we need to create them to create an access chain in SPIRV.
+    /// Give the `OpAccessChain` a result type based on `expr_handle`, adjusted
+    /// according to `type_adjustment`; see the documentation for
+    /// [`AccessTypeAdjustment`] for details.
     ///
     /// On success, the return value is an [`ExpressionPointer`] value; see the
     /// documentation for that type.
@@ -1799,19 +1752,17 @@ impl<'w> BlockContext<'w> {
         &mut self,
         mut expr_handle: Handle<crate::Expression>,
         block: &mut Block,
-        return_type_override: Option<LookupType>,
+        type_adjustment: AccessTypeAdjustment,
     ) -> Result<ExpressionPointer, Error> {
-        let result_lookup_ty = match self.fun_info[expr_handle].ty {
-            TypeResolution::Handle(ty_handle) => match return_type_override {
-                // We use the return type override as a special case for handle binding arrays as the OpAccessChain
-                // needs to return a pointer, but indexing into a handle binding array just gives you the type of
-                // the binding in the IR.
-                Some(ty) => ty,
-                None => LookupType::Handle(ty_handle),
-            },
-            TypeResolution::Value(ref inner) => LookupType::Local(make_local(inner).unwrap()),
+        let result_type_id = {
+            let resolution = &self.fun_info[expr_handle].ty;
+            match type_adjustment {
+                AccessTypeAdjustment::None => self.writer.get_expression_type_id(resolution),
+                AccessTypeAdjustment::IntroducePointer(class) => {
+                    self.writer.get_resolution_pointer_id(resolution, class)
+                }
+            }
         };
-        let result_type_id = self.get_type_id(result_lookup_ty);
 
         // The id of the boolean `and` of all dynamic bounds checks up to this point.
         //
@@ -1823,12 +1774,20 @@ impl<'w> BlockContext<'w> {
 
         self.temp_list.clear();
         let root_id = loop {
+            // If `expr_handle` was spilled, then the temporary variable has exactly
+            // the value we want to start from.
+            if let Some(spilled) = self.function.spilled_composites.get(&expr_handle) {
+                // The root id of the `OpAccessChain` instruction is the temporary
+                // variable we spilled the composite to.
+                break spilled.id;
+            }
+
             expr_handle = match self.ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
                     is_non_uniform_binding_array |=
                         self.is_nonuniform_binding_array_access(base, index);
 
-                    let index = crate::proc::index::GuardedIndex::Expression(index);
+                    let index = GuardedIndex::Expression(index);
                     let index_id =
                         self.write_access_chain_index(base, index, &mut accumulated_checks, block)?;
                     self.temp_list.push(index_id);
@@ -1853,7 +1812,7 @@ impl<'w> BlockContext<'w> {
                         // through the bounds check process.
                         self.write_access_chain_index(
                             base,
-                            crate::proc::index::GuardedIndex::Known(index),
+                            GuardedIndex::Known(index),
                             &mut accumulated_checks,
                             block,
                         )?
@@ -1946,7 +1905,7 @@ impl<'w> BlockContext<'w> {
     fn write_access_chain_index(
         &mut self,
         base: Handle<crate::Expression>,
-        index: crate::proc::index::GuardedIndex,
+        index: GuardedIndex,
         accumulated_checks: &mut Option<Word>,
         block: &mut Block,
     ) -> Result<Word, Error> {
@@ -2013,6 +1972,133 @@ impl<'w> BlockContext<'w> {
         }
     }
 
+    fn write_checked_load(
+        &mut self,
+        pointer: Handle<crate::Expression>,
+        block: &mut Block,
+        access_type_adjustment: AccessTypeAdjustment,
+        result_type_id: Word,
+    ) -> Result<Word, Error> {
+        match self.write_expression_pointer(pointer, block, access_type_adjustment)? {
+            ExpressionPointer::Ready { pointer_id } => {
+                let id = self.gen_id();
+                let atomic_space =
+                    match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
+                        crate::TypeInner::Pointer { base, space } => {
+                            match self.ir_module.types[base].inner {
+                                crate::TypeInner::Atomic { .. } => Some(space),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                let instruction = if let Some(space) = atomic_space {
+                    let (semantics, scope) = space.to_spirv_semantics_and_scope();
+                    let scope_constant_id = self.get_scope_constant(scope as u32);
+                    let semantics_id = self.get_index_constant(semantics.bits());
+                    Instruction::atomic_load(
+                        result_type_id,
+                        id,
+                        pointer_id,
+                        scope_constant_id,
+                        semantics_id,
+                    )
+                } else {
+                    Instruction::load(result_type_id, id, pointer_id, None)
+                };
+                block.body.push(instruction);
+                Ok(id)
+            }
+            ExpressionPointer::Conditional { condition, access } => {
+                //TODO: support atomics?
+                let value = self.write_conditional_indexed_load(
+                    result_type_id,
+                    condition,
+                    block,
+                    move |id_gen, block| {
+                        // The in-bounds path. Perform the access and the load.
+                        let pointer_id = access.result_id.unwrap();
+                        let value_id = id_gen.next();
+                        block.body.push(access);
+                        block.body.push(Instruction::load(
+                            result_type_id,
+                            value_id,
+                            pointer_id,
+                            None,
+                        ));
+                        value_id
+                    },
+                );
+                Ok(value)
+            }
+        }
+    }
+
+    fn spill_to_internal_variable(&mut self, base: Handle<crate::Expression>, block: &mut Block) {
+        // Generate an internal variable of the appropriate type for `base`.
+        let variable_id = self.writer.id_gen.next();
+        let pointer_type_id = self
+            .writer
+            .get_resolution_pointer_id(&self.fun_info[base].ty, spirv::StorageClass::Function);
+        let variable = super::LocalVariable {
+            id: variable_id,
+            instruction: Instruction::variable(
+                pointer_type_id,
+                variable_id,
+                spirv::StorageClass::Function,
+                None,
+            ),
+        };
+
+        let base_id = self.cached[base];
+        block
+            .body
+            .push(Instruction::store(variable.id, base_id, None));
+        self.function.spilled_composites.insert(base, variable);
+    }
+
+    /// Generate an access to a spilled temporary, if necessary.
+    ///
+    /// Given `access`, an [`Access`] or [`AccessIndex`] expression that refers
+    /// to a component of a composite value that has been spilled to a temporary
+    /// variable, determine whether other expressions are going to use
+    /// `access`'s value:
+    ///
+    /// - If so, perform the access and cache that as the value of `access`.
+    ///
+    /// - Otherwise, generate no code and cache no value for `access`.
+    ///
+    /// Return `Ok(0)` if no value was fetched, or `Ok(id)` if we loaded it into
+    /// the instruction given by `id`.
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    fn maybe_access_spilled_composite(
+        &mut self,
+        access: Handle<crate::Expression>,
+        block: &mut Block,
+        result_type_id: Word,
+    ) -> Result<Word, Error> {
+        let access_uses = self.function.access_uses.get(&access).map_or(0, |r| *r);
+        if access_uses == self.fun_info[access].ref_count {
+            // This expression is only used by other `Access` and
+            // `AccessIndex` expressions, so we don't need to cache a
+            // value for it yet.
+            Ok(0)
+        } else {
+            // There are other expressions that are going to expect this
+            // expression's value to be cached, not just other `Access` or
+            // `AccessIndex` expressions. We must actually perform the
+            // access on the spill variable now.
+            self.write_checked_load(
+                access,
+                block,
+                AccessTypeAdjustment::IntroducePointer(spirv::StorageClass::Function),
+                result_type_id,
+            )
+        }
+    }
+
     /// Build the instructions for matrix - matrix column operations
     #[allow(clippy::too_many_arguments)]
     fn write_matrix_matrix_column_op(
@@ -2029,11 +2115,11 @@ impl<'w> BlockContext<'w> {
     ) {
         self.temp_list.clear();
 
-        let vector_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: Some(rows),
-            scalar: crate::Scalar::float(width),
-            pointer_space: None,
-        }));
+        let vector_type_id =
+            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                size: rows,
+                scalar: crate::Scalar::float(width),
+            })));
 
         for index in 0..columns as u32 {
             let column_id_left = self.gen_id();
@@ -2514,7 +2600,11 @@ impl<'w> BlockContext<'w> {
                 }
                 Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
-                    match self.write_expression_pointer(pointer, &mut block, None)? {
+                    match self.write_expression_pointer(
+                        pointer,
+                        &mut block,
+                        AccessTypeAdjustment::None,
+                    )? {
                         ExpressionPointer::Ready { pointer_id } => {
                             let atomic_space = match *self.fun_info[pointer]
                                 .ty
@@ -2610,15 +2700,18 @@ impl<'w> BlockContext<'w> {
                         self.cached[result] = id;
                     }
 
-                    let pointer_id =
-                        match self.write_expression_pointer(pointer, &mut block, None)? {
-                            ExpressionPointer::Ready { pointer_id } => pointer_id,
-                            ExpressionPointer::Conditional { .. } => {
-                                return Err(Error::FeatureNotImplemented(
-                                    "Atomics out-of-bounds handling",
-                                ));
-                            }
-                        };
+                    let pointer_id = match self.write_expression_pointer(
+                        pointer,
+                        &mut block,
+                        AccessTypeAdjustment::None,
+                    )? {
+                        ExpressionPointer::Ready { pointer_id } => pointer_id,
+                        ExpressionPointer::Conditional { .. } => {
+                            return Err(Error::FeatureNotImplemented(
+                                "Atomics out-of-bounds handling",
+                            ));
+                        }
+                    };
 
                     let space = self.fun_info[pointer]
                         .ty
@@ -2780,18 +2873,12 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
-                            let scalar_type_id =
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    scalar,
-                                    pointer_space: None,
-                                }));
-                            let bool_type_id =
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    scalar: crate::Scalar::BOOL,
-                                    pointer_space: None,
-                                }));
+                            let scalar_type_id = self.get_type_id(LookupType::Local(
+                                LocalType::Numeric(NumericType::Scalar(scalar)),
+                            ));
+                            let bool_type_id = self.get_type_id(LookupType::Local(
+                                LocalType::Numeric(NumericType::Scalar(crate::Scalar::BOOL)),
+                            ));
 
                             let cas_result_id = self.gen_id();
                             let equality_result_id = self.gen_id();
@@ -2833,7 +2920,11 @@ impl<'w> BlockContext<'w> {
                         .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
                     // Embed the body of
-                    match self.write_expression_pointer(pointer, &mut block, None)? {
+                    match self.write_expression_pointer(
+                        pointer,
+                        &mut block,
+                        AccessTypeAdjustment::None,
+                    )? {
                         ExpressionPointer::Ready { pointer_id } => {
                             let id = self.gen_id();
                             block.body.push(Instruction::load(
@@ -2935,7 +3026,7 @@ impl<'w> BlockContext<'w> {
         let _ = self.write_block(
             entry_id,
             &self.ir_function.body,
-            super::block::BlockExit::Return,
+            BlockExit::Return,
             LoopContext::default(),
             debug_info,
         )?;

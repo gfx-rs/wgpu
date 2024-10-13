@@ -226,7 +226,7 @@ impl<'w> BlockContext<'w> {
                 let element_type_id = match self.ir_module.types[global.ty].inner {
                     crate::TypeInner::BindingArray { base, size: _ } => {
                         let class = map_storage_class(global.space);
-                        self.get_pointer_id(base, class)?
+                        self.get_pointer_id(base, class)
                     }
                     _ => return Err(Error::Validation("array length expression case-5")),
                 };

@@ -317,6 +317,42 @@
                 space: Function,
             ),
         ),
+        (
+            name: Some("AssignToMember"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("x"),
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 29,
+                space: Function,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Constant(4),
+                stride: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 31,
+                space: Function,
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -1656,43 +1692,148 @@
             ],
         ),
         (
-            name: Some("array_by_value"),
+            name: Some("fetch_arg_ptr_member"),
             arguments: [
                 (
-                    name: Some("a"),
-                    ty: 25,
-                    binding: None,
-                ),
-                (
-                    name: Some("i"),
-                    ty: 2,
+                    name: Some("p"),
+                    ty: 30,
                     binding: None,
                 ),
             ],
             result: Some((
-                ty: 2,
+                ty: 0,
                 binding: None,
             )),
             local_variables: [],
             expressions: [
                 FunctionArgument(0),
-                FunctionArgument(1),
-                Access(
+                AccessIndex(
                     base: 0,
-                    index: 1,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 1,
                 ),
             ],
             named_expressions: {
-                0: "a",
-                1: "i",
+                0: "p",
             },
             body: [
                 Emit((
-                    start: 2,
+                    start: 1,
                     end: 3,
                 )),
                 Return(
                     value: Some(2),
+                ),
+            ],
+        ),
+        (
+            name: Some("assign_to_arg_ptr_member"),
+            arguments: [
+                (
+                    name: Some("p"),
+                    ty: 30,
+                    binding: None,
+                ),
+            ],
+            result: None,
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                Literal(U32(10)),
+            ],
+            named_expressions: {
+                0: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Store(
+                    pointer: 1,
+                    value: 2,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
+        (
+            name: Some("fetch_arg_ptr_array_element"),
+            arguments: [
+                (
+                    name: Some("p"),
+                    ty: 32,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                AccessIndex(
+                    base: 0,
+                    index: 1,
+                ),
+                Load(
+                    pointer: 1,
+                ),
+            ],
+            named_expressions: {
+                0: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 3,
+                )),
+                Return(
+                    value: Some(2),
+                ),
+            ],
+        ),
+        (
+            name: Some("assign_to_arg_ptr_array_element"),
+            arguments: [
+                (
+                    name: Some("p"),
+                    ty: 32,
+                    binding: None,
+                ),
+            ],
+            result: None,
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                AccessIndex(
+                    base: 0,
+                    index: 1,
+                ),
+                Literal(U32(10)),
+            ],
+            named_expressions: {
+                0: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Store(
+                    pointer: 1,
+                    value: 2,
+                ),
+                Return(
+                    value: None,
                 ),
             ],
         ),
@@ -2272,77 +2413,64 @@
             ),
         ),
         (
-            name: "foo",
-            stage: Vertex,
+            name: "assign_to_ptr_components",
+            stage: Compute,
             early_depth_test: None,
-            workgroup_size: (0, 0, 0),
+            workgroup_size: (1, 1, 1),
             function: (
-                name: Some("foo"),
-                arguments: [
+                name: Some("assign_to_ptr_components"),
+                arguments: [],
+                result: None,
+                local_variables: [
                     (
-                        name: Some("vi"),
-                        ty: 0,
-                        binding: Some(BuiltIn(VertexIndex)),
+                        name: Some("s1"),
+                        ty: 29,
+                        init: None,
+                    ),
+                    (
+                        name: Some("a1"),
+                        ty: 31,
+                        init: None,
                     ),
                 ],
-                result: Some((
-                    ty: 24,
-                    binding: Some(BuiltIn(Position(
-                        invariant: false,
-                    ))),
-                )),
-                local_variables: [],
                 expressions: [
-                    FunctionArgument(0),
-                    Literal(I32(1)),
-                    Literal(I32(2)),
-                    Literal(I32(3)),
-                    Literal(I32(4)),
-                    Literal(I32(5)),
-                    Compose(
-                        ty: 25,
-                        components: [
-                            1,
-                            2,
-                            3,
-                            4,
-                            5,
-                        ],
-                    ),
-                    Access(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Splat(
-                        size: Quad,
-                        value: 7,
-                    ),
-                    As(
-                        expr: 8,
-                        kind: Float,
-                        convert: Some(4),
-                    ),
+                    LocalVariable(0),
+                    CallResult(6),
+                    LocalVariable(1),
+                    CallResult(8),
                 ],
-                named_expressions: {
-                    0: "vi",
-                    6: "arr",
-                    7: "value",
-                },
+                named_expressions: {},
                 body: [
-                    Emit((
-                        start: 6,
-                        end: 7,
-                    )),
-                    Emit((
-                        start: 7,
-                        end: 8,
-                    )),
-                    Emit((
-                        start: 8,
-                        end: 10,
-                    )),
+                    Call(
+                        function: 7,
+                        arguments: [
+                            0,
+                        ],
+                        result: None,
+                    ),
+                    Call(
+                        function: 6,
+                        arguments: [
+                            0,
+                        ],
+                        result: Some(1),
+                    ),
+                    Call(
+                        function: 9,
+                        arguments: [
+                            2,
+                        ],
+                        result: None,
+                    ),
+                    Call(
+                        function: 8,
+                        arguments: [
+                            2,
+                        ],
+                        result: Some(3),
+                    ),
                     Return(
-                        value: Some(9),
+                        value: None,
                     ),
                 ],
             ),

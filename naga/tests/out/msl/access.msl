@@ -57,6 +57,12 @@ struct type_20 {
 struct type_22 {
     metal::float4 inner[2];
 };
+struct AssignToMember {
+    uint x;
+};
+struct type_25 {
+    uint inner[4];
+};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
@@ -133,9 +139,9 @@ void test_matrix_within_array_within_struct_accesses(
 }
 
 float read_from_private(
-    thread float& foo_2
+    thread float& foo_1
 ) {
-    float _e1 = foo_2;
+    float _e1 = foo_1;
     return _e1;
 }
 
@@ -153,17 +159,38 @@ void assign_through_ptr_fn(
 }
 
 void assign_array_through_ptr_fn(
-    thread type_22& foo_3
+    thread type_22& foo_2
 ) {
-    foo_3 = type_22 {metal::float4(1.0), metal::float4(2.0)};
+    foo_2 = type_22 {metal::float4(1.0), metal::float4(2.0)};
     return;
 }
 
-int array_by_value(
-    type_20 a_1,
-    int i
+uint fetch_arg_ptr_member(
+    thread AssignToMember& p_1
 ) {
-    return a_1.inner[i];
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(
+    thread AssignToMember& p_2
+) {
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(
+    thread type_25& p_3
+) {
+    uint _e2 = p_3.inner[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(
+    thread type_25& p_4
+) {
+    p_4.inner[1] = 10u;
+    return;
 }
 
 struct foo_vertInput {
@@ -188,10 +215,10 @@ vertex foo_vertOutput foo_vert(
     metal::float4x3 _matrix = bar._matrix;
     type_10 arr_1 = bar.arr;
     float b = bar._matrix[3u].x;
-    int a_2 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
+    int a_1 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
     float _e33 = read_from_private(foo);
-    c2_ = type_20 {a_2, static_cast<int>(b), 3, 4, 5};
+    c2_ = type_20 {a_1, static_cast<int>(b), 3, 4, 5};
     c2_.inner[vi + 1u] = 42;
     int value = c2_.inner[vi];
     float _e47 = test_arr_as_arg(type_18 {});
@@ -226,15 +253,13 @@ kernel void assign_through_ptr(
 }
 
 
-struct foo_1Input {
-};
-struct foo_1Output {
-    metal::float4 member_3 [[position]];
-};
-vertex foo_1Output foo_1(
-  uint vi_1 [[vertex_id]]
+kernel void assign_to_ptr_components(
 ) {
-    type_20 arr_2 = type_20 {1, 2, 3, 4, 5};
-    int value_1 = arr_2.inner[vi_1];
-    return foo_1Output { static_cast<metal::float4>(metal::int4(value_1)) };
+    AssignToMember s1_ = {};
+    type_25 a1_ = {};
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
+    return;
 }

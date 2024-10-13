@@ -620,6 +620,14 @@ jobs:
           cargo fmt --manifest-path xtask/Cargo.toml -- --check
           cargo fmt --manifest-path naga/xtask/Cargo.toml -- --check
 
+      - name: Install Taplo
+        uses: uncenter/setup-taplo@v1
+        with:
+          version: "0.9.3"
+
+      - name: run `taplo fmt`
+        run: taplo format --check --diff
+
       - name: Check for typos
         uses: crate-ci/typos@v1.24.6
 

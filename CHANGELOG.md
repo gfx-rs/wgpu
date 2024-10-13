@@ -84,6 +84,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Support for more atomic ops in the SPIR-V frontend. By @schell in [#5824](https://github.com/gfx-rs/wgpu/pull/5824).
 - Support local `const` declarations in WGSL. By @sagudev in [#6156](https://github.com/gfx-rs/wgpu/pull/6156).
 - Implemented `const_assert` in WGSL. By @sagudev in [#6198](https://github.com/gfx-rs/wgpu/pull/6198).
+- Support polyfilling `inverse` in WGSL. By @chyyran in [#6385](https://github.com/gfx-rs/wgpu/pull/6385).
 
 #### General
 
@@ -105,6 +106,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### Naga
 
+- SPIR-V frontend splats depth texture sample and load results. Fixes [issue #4551](https://github.com/gfx-rs/wgpu/issues/4551). By @schell in [#6384](https://github.com/gfx-rs/wgpu/pull/6384).
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
 - Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256).
 - Per-polygon and flat inputs should not be considered subgroup uniform. By @magcius in [#6276](https://github.com/gfx-rs/wgpu/pull/6276).
@@ -114,6 +116,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Accept global `var`s without explicit type. By @sagudev in [#6199](https://github.com/gfx-rs/wgpu/pull/6199).
 - Fix handling of phony statements, so they are actually emitted. By @sagudev in [#6328](https://github.com/gfx-rs/wgpu/pull/6328).
 - Added `gl_DrawID` to glsl and `DrawIndex` to spv. By @ChosenName in [#6325](https://github.com/gfx-rs/wgpu/pull/6325).
+- Matrices can now be indexed by value (#4337), and indexing arrays by value no longer causes excessive spilling (#6358). By @jimblandy in [#6390](https://github.com/gfx-rs/wgpu/pull/6390).
 
 #### General
 
