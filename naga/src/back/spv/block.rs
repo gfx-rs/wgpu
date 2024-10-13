@@ -2755,8 +2755,8 @@ impl<'w> BlockContext<'w> {
                                     (spirv::Op::AtomicISub, value_id)
                                 }
                                 crate::ScalarKind::Float => {
-                                    // SPIR-V doesn't have a atomic subtraction, so we
-                                    // need to negate the value and add it.
+                                    // HACK: SPIR-V doesn't have a atomic subtraction,
+                                    // so we add the negated value instead.
                                     let neg_result_id = self.gen_id();
                                     block.body.push(Instruction::unary(
                                         spirv::Op::FNegate,
