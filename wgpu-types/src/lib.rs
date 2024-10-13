@@ -960,7 +960,7 @@ bitflags::bitflags! {
         /// - Vulkan (with [VK_EXT_shader_atomic_float])
         ///
         /// This is a native only feature.
-        /// 
+        ///
         /// [VK_EXT_shader_atomic_float]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_shader_atomic_float.html
         const SHADER_FLOAT32_ATOMIC = 1 << 62;
         /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
