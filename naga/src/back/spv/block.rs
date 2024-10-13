@@ -2631,17 +2631,19 @@ impl<'w> BlockContext<'w> {
                     let value_id = self.cached[value];
                     let value_inner = self.fun_info[value].ty.inner_with(&self.ir_module.types);
 
+                    let crate::TypeInner::Scalar(scalar) = *value_inner else {
+                        return Err(Error::FeatureNotImplemented(
+                            "Atomics with non-scalar values",
+                        ));
+                    };
+
                     let instruction = match *fun {
                         crate::AtomicFunction::Add => {
-                            let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                    width: _,
-                                }) => spirv::Op::AtomicIAdd,
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Float,
-                                    width: _,
-                                }) => spirv::Op::AtomicFAddEXT,
+                            let spirv_op = match scalar.kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    spirv::Op::AtomicIAdd
+                                }
+                                crate::ScalarKind::Float => spirv::Op::AtomicFAddEXT,
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2655,11 +2657,22 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::Subtract => {
-                            let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                    width: _,
-                                }) => spirv::Op::AtomicISub,
+                            let (spirv_op, value_id) = match scalar.kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    (spirv::Op::AtomicISub, value_id)
+                                }
+                                crate::ScalarKind::Float => {
+                                    // SPIR-V doesn't have a atomic subtraction, so we
+                                    // need to negate the value and add it.
+                                    let neg_result_id = self.gen_id();
+                                    block.body.push(Instruction::unary(
+                                        spirv::Op::FNegate,
+                                        result_type_id,
+                                        neg_result_id,
+                                        value_id,
+                                    ));
+                                    (spirv::Op::AtomicFAddEXT, neg_result_id)
+                                }
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2673,11 +2686,10 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::And => {
-                            let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                    width: _,
-                                }) => spirv::Op::AtomicAnd,
+                            let spirv_op = match scalar.kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    spirv::Op::AtomicAnd
+                                }
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2691,11 +2703,10 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::InclusiveOr => {
-                            let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                    width: _,
-                                }) => spirv::Op::AtomicOr,
+                            let spirv_op = match scalar.kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    spirv::Op::AtomicOr
+                                }
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2709,11 +2720,10 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::ExclusiveOr => {
-                            let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                    width: _,
-                                }) => spirv::Op::AtomicXor,
+                            let spirv_op = match scalar.kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    spirv::Op::AtomicXor
+                                }
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2727,15 +2737,9 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::Min => {
-                            let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Sint,
-                                    width: _,
-                                }) => spirv::Op::AtomicSMin,
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Uint,
-                                    width: _,
-                                }) => spirv::Op::AtomicUMin,
+                            let spirv_op = match scalar.kind {
+                                crate::ScalarKind::Sint => spirv::Op::AtomicSMin,
+                                crate::ScalarKind::Uint => spirv::Op::AtomicUMin,
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2749,15 +2753,9 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::Max => {
-                            let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Sint,
-                                    width: _,
-                                }) => spirv::Op::AtomicSMax,
-                                crate::TypeInner::Scalar(crate::Scalar {
-                                    kind: crate::ScalarKind::Uint,
-                                    width: _,
-                                }) => spirv::Op::AtomicUMax,
+                            let spirv_op = match scalar.kind {
+                                crate::ScalarKind::Sint => spirv::Op::AtomicSMax,
+                                crate::ScalarKind::Uint => spirv::Op::AtomicUMax,
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2782,16 +2780,12 @@ impl<'w> BlockContext<'w> {
                             )
                         }
                         crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
-                            let scalar_type_id = match *value_inner {
-                                crate::TypeInner::Scalar(scalar) => {
-                                    self.get_type_id(LookupType::Local(LocalType::Value {
-                                        vector_size: None,
-                                        scalar,
-                                        pointer_space: None,
-                                    }))
-                                }
-                                _ => unimplemented!(),
-                            };
+                            let scalar_type_id =
+                                self.get_type_id(LookupType::Local(LocalType::Value {
+                                    vector_size: None,
+                                    scalar,
+                                    pointer_space: None,
+                                }));
                             let bool_type_id =
                                 self.get_type_id(LookupType::Local(LocalType::Value {
                                     vector_size: None,
@@ -2801,6 +2795,12 @@ impl<'w> BlockContext<'w> {
 
                             let cas_result_id = self.gen_id();
                             let equality_result_id = self.gen_id();
+                            let equality_operator = match scalar.kind {
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                                    spirv::Op::IEqual
+                                }
+                                _ => unimplemented!(),
+                            };
                             let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
                             cas_instr.set_type(scalar_type_id);
                             cas_instr.set_result(cas_result_id);
@@ -2812,7 +2812,7 @@ impl<'w> BlockContext<'w> {
                             cas_instr.add_operand(self.cached[cmp]);
                             block.body.push(cas_instr);
                             block.body.push(Instruction::binary(
-                                spirv::Op::IEqual,
+                                equality_operator,
                                 bool_type_id,
                                 equality_result_id,
                                 cas_result_id,

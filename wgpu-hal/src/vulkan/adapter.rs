@@ -444,9 +444,7 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            shader_atomic_float: if device_api_version >= vk::API_VERSION_1_1
-                || enabled_extensions.contains(&ext::shader_atomic_float::NAME)
-            {
+            shader_atomic_float: if enabled_extensions.contains(&ext::shader_atomic_float::NAME) {
                 let needed = requested_features.contains(wgt::Features::SHADER_FLT32_ATOMIC);
                 Some(
                     vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default()

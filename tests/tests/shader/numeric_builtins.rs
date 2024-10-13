@@ -135,15 +135,42 @@ fn create_int64_atomic_all_ops_test() -> Vec<ShaderTest> {
     tests
 }
 
+#[gpu_test]
+static INT64_ATOMIC_ALL_OPS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgt::Features::SHADER_INT64 | wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_int64_atomic_all_ops_test(),
+        )
+    });
+
 fn create_flt32_atomic_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
     let test = ShaderTest::new(
         "atomicAdd".into(),
         "value: f32".into(),
-        "atomicStore(&output, 0.0); atomicAdd(&output, -0.5); atomicAdd(&output, 1.5);".into(),
-        &[0.0_f32],
-        &[1.0_f32],
+        "atomicStore(&output, 0.0); atomicAdd(&output, -0.50); atomicAdd(&output, 1.75);".into(),
+        &[0_f32],
+        &[1.25_f32],
+    )
+    .output_type("atomic<f32>".into());
+
+    tests.push(test);
+
+    let test = ShaderTest::new(
+        "atomicAdd".into(),
+        "value: f32".into(),
+        "atomicStore(&output, 0.0); atomicSub(&output, -2.5); atomicSub(&output, 3.0);".into(),
+        &[0_f32],
+        &[-0.5_f32],
     )
     .output_type("atomic<f32>".into());
 
@@ -162,22 +189,6 @@ static FLT32_ATOMIC: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_async(|ctx| {
         shader_input_output_test(ctx, InputStorageType::Storage, create_flt32_atomic_test())
-    });
-
-#[gpu_test]
-static INT64_ATOMIC_ALL_OPS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgt::Features::SHADER_INT64 | wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS)
-            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
-    )
-    .run_async(|ctx| {
-        shader_input_output_test(
-            ctx,
-            InputStorageType::Storage,
-            create_int64_atomic_all_ops_test(),
-        )
     });
 
 // See https://github.com/gfx-rs/wgpu/issues/5276

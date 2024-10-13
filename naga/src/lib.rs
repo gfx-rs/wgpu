@@ -1956,18 +1956,21 @@ pub enum Statement {
         ///   value here.
         ///
         /// - The [`SHADER_INT64_ATOMIC_MIN_MAX`] capability allows
-        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`] here.
+        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`]
+        ///   in the [`Storage`] address space here.
         ///
         /// - If neither of those capabilities are present, then 64-bit scalar
         ///   atomics are not allowed.
         ///
         /// If [`pointer`] refers to a 32-bit floating-point atomic value, then:
         ///
-        /// - The [`SHADER_FLT32_ATOMIC`] capability allows allows
-        ///   [`AtomicFunction::Add`], [`AtomicFunction::Subtract`] and
-        ///   [`AtomicFunction::Exchange`] here.
+        /// - The [`SHADER_FLT32_ATOMIC`] capability allows [`AtomicFunction::Add`],
+        ///   [`AtomicFunction::Subtract`], and [`AtomicFunction::Exchange { compare: None }`]
+        ///   in the [`Storage`] address space here.
         ///
+        /// [`AtomicFunction::Exchange { compare: None }`]: AtomicFunction::Exchange
         /// [`pointer`]: Statement::Atomic::pointer
+        /// [`Storage`]: AddressSpace::Storage
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
         /// [`SHADER_FLT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLT32_ATOMIC
