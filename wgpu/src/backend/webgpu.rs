@@ -1089,7 +1089,7 @@ pub struct BrowserGpuPropertyInaccessible;
 /// the current context is neither the main thread nor a dedicated worker.
 ///
 /// If WebGPU is not supported, the Gpu property may (!) be `undefined`,
-/// and so this function will return `Ok(None)` function will return `Ok(None)`.
+/// and so this function will return `Ok(None)`.
 /// Note that this check is insufficient to determine whether WebGPU is
 /// supported, as the browser may define the Gpu property, but be unable to
 /// create any WebGPU adapters.
