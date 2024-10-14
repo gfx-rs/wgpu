@@ -2147,33 +2147,27 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
         op: BufferMapOperation,
-    ) -> BufferAccessResult {
+    ) -> Result<crate::SubmissionIndex, BufferAccessError> {
         profiling::scope!("Buffer::map_async");
         api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 
         let hub = &self.hub;
 
-        let op_and_err = 'error: {
-            let buffer = match hub.buffers.get(buffer_id).get() {
-                Ok(buffer) => buffer,
-                Err(e) => break 'error Some((op, e.into())),
-            };
-
-            buffer.map_async(offset, size, op).err()
+        let map_result = match hub.buffers.get(buffer_id).get() {
+            Ok(buffer) => buffer.map_async(offset, size, op),
+            Err(e) => Err((op, e.into())),
         };
 
-        // User callbacks must not be called while holding `buffer.map_async`'s locks, so we
-        // defer the error callback if it needs to be called immediately (typically when running
-        // into errors).
-        if let Some((mut operation, err)) = op_and_err {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(Err(err.clone()));
+        match map_result {
+            Ok(submission_index) => Ok(submission_index),
+            Err((mut operation, err)) => {
+                if let Some(callback) = operation.callback.take() {
+                    callback.call(Err(err.clone()));
+                }
+                log::error!("Buffer::map_async error: {err}");
+                Err(err)
             }
-            log::error!("Buffer::map_async error: {err}");
-            return Err(err);
         }
-
-        Ok(())
     }
 
     pub fn buffer_get_mapped_range(

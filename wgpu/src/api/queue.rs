@@ -275,11 +275,15 @@ impl Queue {
     /// has completed. There are no restrictions on the code you can run in the callback, however on native the
     /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
     /// and used to set flags, send messages, etc.
-    pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
-        DynContext::queue_on_submitted_work_done(
+    pub fn on_submitted_work_done(
+        &self,
+        callback: impl FnOnce() + Send + 'static,
+    ) -> SubmissionIndex {
+        let data = DynContext::queue_on_submitted_work_done(
             &*self.context,
             self.data.as_ref(),
             Box::new(callback),
-        )
+        );
+        SubmissionIndex { data }
     }
 }

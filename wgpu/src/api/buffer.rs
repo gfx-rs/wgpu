@@ -337,7 +337,7 @@ impl<'a> BufferSlice<'a> {
         &self,
         mode: MapMode,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
-    ) {
+    ) -> SubmissionIndex {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
         let end = match self.size {
@@ -346,13 +346,15 @@ impl<'a> BufferSlice<'a> {
         };
         mc.initial_range = self.offset..end;
 
-        DynContext::buffer_map_async(
+        let data = DynContext::buffer_map_async(
             &*self.buffer.context,
             self.buffer.data.as_ref(),
             mode,
             self.offset..end,
             Box::new(callback),
-        )
+        );
+
+        SubmissionIndex { data }
     }
 
     /// Gain read-only access to the bytes of a [mapped] [`Buffer`].
