@@ -20,6 +20,7 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use std::num::NonZeroU64;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Debug,
@@ -1866,3 +1867,88 @@ pub enum DestroyError {
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
+
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+
+pub(crate) trait AccelerationStructure: Trackable {
+    fn raw(&self) -> &dyn hal::DynAccelerationStructure;
+}
+
+#[derive(Debug)]
+pub struct Blas {
+    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) handle: u64,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+}
+
+impl Drop for Blas {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl, and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            self.device.raw().destroy_acceleration_structure(raw);
+        }
+    }
+}
+
+impl AccelerationStructure for Blas {
+    fn raw(&self) -> &dyn hal::DynAccelerationStructure {
+        self.raw.as_ref()
+    }
+}
+
+crate::impl_resource_type!(Blas);
+crate::impl_labeled!(Blas);
+crate::impl_parent_device!(Blas);
+crate::impl_storage_item!(Blas);
+crate::impl_trackable!(Blas);
+
+#[derive(Debug)]
+pub struct Tlas {
+    pub(crate) raw: ManuallyDrop<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) max_instance_count: u32,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
+    pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+}
+
+impl Drop for Tlas {
+    fn drop(&mut self) {
+        unsafe {
+            let structure = ManuallyDrop::take(&mut self.raw);
+            let buffer = ManuallyDrop::take(&mut self.instance_buffer);
+            resource_log!("Destroy raw {}", self.error_ident());
+            self.device.raw().destroy_acceleration_structure(structure);
+            self.device.raw().destroy_buffer(buffer);
+        }
+    }
+}
+
+impl AccelerationStructure for Tlas {
+    fn raw(&self) -> &dyn hal::DynAccelerationStructure {
+        self.raw.as_ref()
+    }
+}
+
+crate::impl_resource_type!(Tlas);
+crate::impl_labeled!(Tlas);
+crate::impl_parent_device!(Tlas);
+crate::impl_storage_item!(Tlas);
+crate::impl_trackable!(Tlas);

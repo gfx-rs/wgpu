@@ -40,6 +40,7 @@ use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
 
+use crate::resource::{AccelerationStructure, Tlas};
 use std::{
     borrow::Cow,
     mem::ManuallyDrop,
@@ -144,6 +145,7 @@ pub struct Device {
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool,
+    pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -306,6 +308,8 @@ impl Device {
             ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
+            // By starting at one, we can put the result in a NonZeroU64.
+            last_acceleration_structure_build_command_index: AtomicU64::new(1),
         })
     }
 
@@ -1785,7 +1789,7 @@ impl Device {
                         },
                     )
                 }
-                Bt::AccelerationStructure => todo!(),
+                Bt::AccelerationStructure => (None, WritableStorage::No),
             };
 
             // Validate the count parameter
@@ -2112,6 +2116,33 @@ impl Device {
         })
     }
 
+    fn create_tlas_binding<'a>(
+        self: &Arc<Self>,
+        used: &mut BindGroupStates,
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        tlas: &'a Arc<Tlas>,
+    ) -> Result<&'a dyn hal::DynAccelerationStructure, binding_model::CreateBindGroupError> {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        used.acceleration_structures.insert_single(tlas.clone());
+
+        tlas.same_device(self)?;
+
+        match decl.ty {
+            wgt::BindingType::AccelerationStructure => (),
+            _ => {
+                return Err(Error::WrongBindingType {
+                    binding,
+                    actual: decl.ty,
+                    expected: "Tlas",
+                });
+            }
+        }
+
+        Ok(tlas.raw())
+    }
+
     // This function expects the provided bind group layout to be resolved
     // (not passing a duplicate) beforehand.
     pub(crate) fn create_bind_group(
@@ -2151,6 +2182,7 @@ impl Device {
         let mut hal_buffers = Vec::new();
         let mut hal_samplers = Vec::new();
         let mut hal_textures = Vec::new();
+        let mut hal_tlas_s = Vec::new();
         let snatch_guard = self.snatchable_lock.read();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
@@ -2250,6 +2282,12 @@ impl Device {
 
                     (res_index, num_bindings)
                 }
+                Br::AccelerationStructure(ref tlas) => {
+                    let tlas = self.create_tlas_binding(&mut used, binding, decl, tlas)?;
+                    let res_index = hal_tlas_s.len();
+                    hal_tlas_s.push(tlas);
+                    (res_index, 1)
+                }
             };
 
             hal_entries.push(hal::BindGroupEntry {
@@ -2274,7 +2312,7 @@ impl Device {
             buffers: &hal_buffers,
             samplers: &hal_samplers,
             textures: &hal_textures,
-            acceleration_structures: &[],
+            acceleration_structures: &hal_tlas_s,
         };
         let raw = unsafe { self.raw().create_bind_group(&hal_desc) }
             .map_err(|e| self.handle_hal_error(e))?;

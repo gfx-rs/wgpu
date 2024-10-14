@@ -40,6 +40,7 @@ strum = { workspace = true, features = ["derive"] }
 wgpu-macros.workspace = true
 wgpu = { workspace = true, features = ["wgsl"] }
 wgt = { workspace = true, features = ["serde"] }
+glam.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true

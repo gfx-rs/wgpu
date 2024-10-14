@@ -119,6 +119,94 @@ impl GlobalPlay for wgc::global::Global {
                     )
                     .unwrap();
                 }
+                trace::Command::BuildAccelerationStructuresUnsafeTlas { blas, tlas } => {
+                    let blas_iter = blas.iter().map(|x| {
+                        let geometries = match &x.geometries {
+                            wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                                triangle_geometries,
+                            ) => {
+                                let iter = triangle_geometries.iter().map(|tg| {
+                                    wgc::ray_tracing::BlasTriangleGeometry {
+                                        size: &tg.size,
+                                        vertex_buffer: tg.vertex_buffer,
+                                        index_buffer: tg.index_buffer,
+                                        transform_buffer: tg.transform_buffer,
+                                        first_vertex: tg.first_vertex,
+                                        vertex_stride: tg.vertex_stride,
+                                        index_buffer_offset: tg.index_buffer_offset,
+                                        transform_buffer_offset: tg.transform_buffer_offset,
+                                    }
+                                });
+                                wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                            }
+                        };
+                        wgc::ray_tracing::BlasBuildEntry {
+                            blas_id: x.blas_id,
+                            geometries,
+                        }
+                    });
+
+                    if !tlas.is_empty() {
+                        log::error!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable! skipping tlas build");
+                    }
+
+                    self.command_encoder_build_acceleration_structures_unsafe_tlas(
+                        encoder,
+                        blas_iter,
+                        std::iter::empty(),
+                    )
+                    .unwrap();
+                }
+                trace::Command::BuildAccelerationStructures { blas, tlas } => {
+                    let blas_iter = blas.iter().map(|x| {
+                        let geometries = match &x.geometries {
+                            wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                                triangle_geometries,
+                            ) => {
+                                let iter = triangle_geometries.iter().map(|tg| {
+                                    wgc::ray_tracing::BlasTriangleGeometry {
+                                        size: &tg.size,
+                                        vertex_buffer: tg.vertex_buffer,
+                                        index_buffer: tg.index_buffer,
+                                        transform_buffer: tg.transform_buffer,
+                                        first_vertex: tg.first_vertex,
+                                        vertex_stride: tg.vertex_stride,
+                                        index_buffer_offset: tg.index_buffer_offset,
+                                        transform_buffer_offset: tg.transform_buffer_offset,
+                                    }
+                                });
+                                wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                            }
+                        };
+                        wgc::ray_tracing::BlasBuildEntry {
+                            blas_id: x.blas_id,
+                            geometries,
+                        }
+                    });
+
+                    let tlas_iter = tlas.iter().map(|x| {
+                        let instances = x.instances.iter().map(|instance| {
+                            instance
+                                .as_ref()
+                                .map(|instance| wgc::ray_tracing::TlasInstance {
+                                    blas_id: instance.blas_id,
+                                    transform: &instance.transform,
+                                    custom_index: instance.custom_index,
+                                    mask: instance.mask,
+                                })
+                        });
+                        wgc::ray_tracing::TlasPackage {
+                            tlas_id: x.tlas_id,
+                            instances: Box::new(instances),
+                            lowest_unmodified: x.lowest_unmodified,
+                        }
+                    });
+
+                    self.command_encoder_build_acceleration_structures(
+                        encoder, blas_iter, tlas_iter,
+                    )
+                    .unwrap();
+                }
             }
         }
         let (cmd_buf, error) =
@@ -359,6 +447,24 @@ impl GlobalPlay for wgc::global::Global {
                 }
                 let cmdbuf = self.encode_commands(encoder, commands);
                 self.queue_submit(queue, &[cmdbuf]).unwrap();
+            }
+            Action::CreateBlas { id, desc, sizes } => {
+                self.device_create_blas(device, &desc, sizes, Some(id));
+            }
+            Action::FreeBlas(id) => {
+                self.blas_destroy(id).unwrap();
+            }
+            Action::DestroyBlas(id) => {
+                self.blas_drop(id);
+            }
+            Action::CreateTlas { id, desc } => {
+                self.device_create_tlas(device, &desc, Some(id));
+            }
+            Action::FreeTlas(id) => {
+                self.tlas_destroy(id).unwrap();
+            }
+            Action::DestroyTlas(id) => {
+                self.tlas_drop(id);
             }
         }
     }
