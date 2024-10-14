@@ -1,7 +1,7 @@
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
-use crate::{SourceLocation, Span};
+use crate::{Extension, SourceLocation, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
@@ -135,8 +135,6 @@ pub enum NumberError {
     Invalid,
     #[error("numeric literal not representable by target type")]
     NotRepresentable,
-    #[error("unimplemented f16 type")]
-    UnimplementedF16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -183,6 +181,7 @@ pub(crate) enum Error<'a> {
     UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
+    UnknownExtension(Span, &'a str),
     SizeAttributeTooLow(Span, u32),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
@@ -265,6 +264,7 @@ pub(crate) enum Error<'a> {
     PipelineConstantIDValue(Span),
     NotBool(Span),
     ConstAssertFailed(Span),
+    ExtensionNotEnabled(Span, Extension),
 }
 
 #[derive(Clone, Debug)]
@@ -859,6 +859,16 @@ impl<'a> Error<'a> {
             Error::ConstAssertFailed(span) => ParseError {
                 message: "const_assert failure".to_string(),
                 labels: vec![(span, "evaluates to false".into())],
+                notes: vec![],
+            },
+            Error::UnknownExtension(span, word) => ParseError {
+                message: format!("Unknown extension: {}. See available extensions at: https://www.w3.org/TR/WGSL/#enable-extension", word),
+                labels: vec![(span, "unknown extension".into())],
+                notes: vec![],
+            },
+            Error::ExtensionNotEnabled(span, ref extension) => ParseError {
+                message: format!("Extension `{:?}` is not enabled", extension),
+                labels: vec![(span, "extension not enabled".into())],
                 notes: vec![],
             },
         }

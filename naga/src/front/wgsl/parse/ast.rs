@@ -1,10 +1,11 @@
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
-use crate::{Arena, FastIndexSet, Handle, Span};
+use crate::{Arena, Extension, FastIndexSet, Handle, Span};
 use std::hash::Hash;
 
 #[derive(Debug, Default)]
 pub struct TranslationUnit<'a> {
+    pub directives: Arena<GlobalDirective>,
     pub decls: Arena<GlobalDecl<'a>>,
     /// The common expressions arena for the entire translation unit.
     ///
@@ -66,6 +67,12 @@ impl PartialEq for Dependency<'_> {
 }
 
 impl Eq for Dependency<'_> {}
+
+//A directive modifies how a WGSL program is processed by a WebGPU implementation.
+#[derive(Debug)]
+pub enum GlobalDirective {
+    Enable(EnableDirective),
+}
 
 /// A module-scope declaration.
 #[derive(Debug)]
@@ -136,6 +143,11 @@ pub enum Binding<'a> {
 pub struct ResourceBinding<'a> {
     pub group: Handle<Expression<'a>>,
     pub binding: Handle<Expression<'a>>,
+}
+
+#[derive(Debug)]
+pub struct EnableDirective {
+    pub enable_extension_list: Vec<Extension>,
 }
 
 #[derive(Debug)]

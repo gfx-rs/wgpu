@@ -37,3 +37,19 @@ pub struct ISwapChainPanelNative_Vtbl {
         swap_chain: *mut core::ffi::c_void,
     ) -> windows_core::HRESULT,
 }
+
+// winapi::ENUM! {
+//     enum D3D12_SHARED_RESOURCE_COMPATIBILITY_TIER {
+//         D3D12_SHARED_RESOURCE_COMPATIBILITY_TIER_0 = 0,
+//         // D3D12_SHARED_RESOURCE_COMPATIBILITY_TIER_1,
+//         // D3D12_SHARED_RESOURCE_COMPATIBILITY_TIER_2,
+//     }
+// }
+//
+// winapi::STRUCT! {
+//     struct D3D12_FEATURE_DATA_D3D12_OPTIONS4 {
+//         MSAA64KBAlignedTextureSupported: winapi::shared::minwindef::BOOL,
+//         SharedResourceCompatibilityTier: D3D12_SHARED_RESOURCE_COMPATIBILITY_TIER,
+//         Native16BitShaderOpsSupported: winapi::shared::minwindef::BOOL,
+//     }
+// }

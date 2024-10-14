@@ -17,6 +17,7 @@ pub mod mipmap;
 pub mod msaa_line;
 pub mod render_to_texture;
 pub mod repeated_compute;
+pub mod shader_f16;
 pub mod shadow;
 pub mod skybox;
 pub mod srgb_blend;
