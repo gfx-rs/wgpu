@@ -2078,20 +2078,7 @@ impl Global {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {device_id:?}");
 
-        let device = self.hub.devices.remove(device_id);
-        let device_lost_closure = device.lock_life().device_lost_closure.take();
-        if let Some(closure) = device_lost_closure {
-            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
-        }
-
-        // The things `Device::prepare_to_die` takes care are mostly
-        // unnecessary here. We know our queue is empty, so we don't
-        // need to wait for submissions or triage them. We know we were
-        // just polled, so `life_tracker.free_resources` is empty.
-        debug_assert!(device.lock_life().queue_empty());
-        device.pending_writes.lock().deactivate();
-
-        drop(device);
+        self.hub.devices.remove(device_id);
     }
 
     // This closure will be called exactly once during "lose the device",

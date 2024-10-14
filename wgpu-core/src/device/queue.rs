@@ -345,15 +345,6 @@ impl PendingWrites {
         }
         self.command_encoder.as_mut()
     }
-
-    pub fn deactivate(&mut self) {
-        if self.is_recording {
-            unsafe {
-                self.command_encoder.discard_encoding();
-            }
-            self.is_recording = false;
-        }
-    }
 }
 
 #[derive(Clone, Debug, Error)]

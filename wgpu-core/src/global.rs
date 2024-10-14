@@ -89,10 +89,6 @@ impl Drop for Global {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
         resource_log!("Global::drop");
-
-        for (_, device) in self.hub.devices.read().iter() {
-            device.prepare_to_die();
-        }
     }
 }
 
