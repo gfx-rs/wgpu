@@ -1328,9 +1328,6 @@ impl crate::Context for ContextWgpuCore {
     fn device_drop(&self, device_data: &Self::DeviceData) {
         #[cfg(any(native, Emscripten))]
         {
-            // Call device_poll, but don't check for errors. We have to use its
-            // return value, but we just drop it.
-            let _ = self.0.device_poll(device_data.id, wgt::Maintain::wait());
             self.0.device_drop(device_data.id);
         }
     }

@@ -141,12 +141,12 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
-    #[cfg(feature = "trace")]
-    pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool,
-
     #[cfg(feature = "indirect-validation")]
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    // needs to be dropped last
+    #[cfg(feature = "trace")]
+    pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -168,6 +168,12 @@ impl std::fmt::Debug for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
+
+        let device_lost_closure = self.lock_life().device_lost_closure.take();
+        if let Some(closure) = device_lost_closure {
+            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
+        }
+
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
@@ -3687,34 +3693,6 @@ impl Device {
 
     pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         self.raw().generate_allocator_report()
-    }
-}
-
-impl Device {
-    /// Wait for idle and remove resources that we can, before we die.
-    pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.lock().deactivate();
-        let current_index = self
-            .last_successful_submission_index
-            .load(Ordering::Acquire);
-        if let Err(error) = unsafe {
-            let fence = self.fence.read();
-            self.raw()
-                .wait(fence.as_ref(), current_index, CLEANUP_WAIT_MS)
-        } {
-            log::error!("failed to wait for the device: {error}");
-        }
-        let mut life_tracker = self.lock_life();
-        let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
-        if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_tracker);
-            device_lost_closure.call(DeviceLostReason::Dropped, "Device is dying.".to_string());
-        }
-        #[cfg(feature = "trace")]
-        {
-            *self.trace.lock() = None;
-        }
     }
 }
 
