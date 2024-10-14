@@ -1,0 +1,372 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Constant(5),
+                stride: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Constant(2),
+                stride: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 2,
+                size: Constant(2),
+                stride: 8,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Bi,
+                rows: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [],
+    global_expressions: [],
+    functions: [
+        (
+            name: Some("index_arg_array"),
+            arguments: [
+                (
+                    name: Some("a"),
+                    ty: 1,
+                    binding: None,
+                ),
+                (
+                    name: Some("i"),
+                    ty: 0,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                FunctionArgument(1),
+                Access(
+                    base: 0,
+                    index: 1,
+                ),
+            ],
+            named_expressions: {
+                0: "a",
+                1: "i",
+            },
+            body: [
+                Emit((
+                    start: 2,
+                    end: 3,
+                )),
+                Return(
+                    value: Some(2),
+                ),
+            ],
+        ),
+        (
+            name: Some("index_let_array"),
+            arguments: [
+                (
+                    name: Some("i"),
+                    ty: 0,
+                    binding: None,
+                ),
+                (
+                    name: Some("j"),
+                    ty: 0,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                FunctionArgument(1),
+                Literal(I32(1)),
+                Literal(I32(2)),
+                Compose(
+                    ty: 2,
+                    components: [
+                        2,
+                        3,
+                    ],
+                ),
+                Literal(I32(3)),
+                Literal(I32(4)),
+                Compose(
+                    ty: 2,
+                    components: [
+                        5,
+                        6,
+                    ],
+                ),
+                Compose(
+                    ty: 3,
+                    components: [
+                        4,
+                        7,
+                    ],
+                ),
+                Access(
+                    base: 8,
+                    index: 0,
+                ),
+                Access(
+                    base: 9,
+                    index: 1,
+                ),
+            ],
+            named_expressions: {
+                0: "i",
+                1: "j",
+                8: "a",
+            },
+            body: [
+                Emit((
+                    start: 0,
+                    end: 0,
+                )),
+                Emit((
+                    start: 0,
+                    end: 0,
+                )),
+                Emit((
+                    start: 4,
+                    end: 5,
+                )),
+                Emit((
+                    start: 7,
+                    end: 9,
+                )),
+                Emit((
+                    start: 9,
+                    end: 11,
+                )),
+                Return(
+                    value: Some(10),
+                ),
+            ],
+        ),
+        (
+            name: Some("index_let_matrix"),
+            arguments: [
+                (
+                    name: Some("i"),
+                    ty: 0,
+                    binding: None,
+                ),
+                (
+                    name: Some("j"),
+                    ty: 0,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 4,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                FunctionArgument(1),
+                Literal(F32(1.0)),
+                Literal(F32(2.0)),
+                Literal(F32(3.0)),
+                Literal(F32(4.0)),
+                Compose(
+                    ty: 6,
+                    components: [
+                        2,
+                        3,
+                    ],
+                ),
+                Compose(
+                    ty: 6,
+                    components: [
+                        4,
+                        5,
+                    ],
+                ),
+                Compose(
+                    ty: 5,
+                    components: [
+                        6,
+                        7,
+                    ],
+                ),
+                Access(
+                    base: 8,
+                    index: 0,
+                ),
+                Access(
+                    base: 9,
+                    index: 1,
+                ),
+            ],
+            named_expressions: {
+                0: "i",
+                1: "j",
+                8: "a",
+            },
+            body: [
+                Emit((
+                    start: 6,
+                    end: 9,
+                )),
+                Emit((
+                    start: 9,
+                    end: 11,
+                )),
+                Return(
+                    value: Some(10),
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            name: "index_let_array_1d",
+            stage: Vertex,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            function: (
+                name: Some("index_let_array_1d"),
+                arguments: [
+                    (
+                        name: Some("vi"),
+                        ty: 7,
+                        binding: Some(BuiltIn(VertexIndex)),
+                    ),
+                ],
+                result: Some((
+                    ty: 8,
+                    binding: Some(BuiltIn(Position(
+                        invariant: false,
+                    ))),
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    Literal(I32(1)),
+                    Literal(I32(2)),
+                    Literal(I32(3)),
+                    Literal(I32(4)),
+                    Literal(I32(5)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                        ],
+                    ),
+                    Access(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Splat(
+                        size: Quad,
+                        value: 7,
+                    ),
+                    As(
+                        expr: 8,
+                        kind: Float,
+                        convert: Some(4),
+                    ),
+                ],
+                named_expressions: {
+                    0: "vi",
+                    6: "arr",
+                    7: "value",
+                },
+                body: [
+                    Emit((
+                        start: 6,
+                        end: 7,
+                    )),
+                    Emit((
+                        start: 7,
+                        end: 8,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 10,
+                    )),
+                    Return(
+                        value: Some(9),
+                    ),
+                ],
+            ),
+        ),
+    ],
+)

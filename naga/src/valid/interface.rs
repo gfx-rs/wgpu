@@ -194,7 +194,11 @@ impl VaryingContext<'_> {
                 }
 
                 let (visible, type_good) = match built_in {
-                    Bi::BaseInstance | Bi::BaseVertex | Bi::InstanceIndex | Bi::VertexIndex => (
+                    Bi::BaseInstance
+                    | Bi::BaseVertex
+                    | Bi::InstanceIndex
+                    | Bi::VertexIndex
+                    | Bi::DrawID => (
                         self.stage == St::Vertex && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),

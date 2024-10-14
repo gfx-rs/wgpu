@@ -17,6 +17,9 @@ struct Baz {
 struct MatCx2InArray {
     mat4x2 am[2];
 };
+struct AssignToMember {
+    uint x;
+};
 layout(std430) buffer Bar_block_0Vertex {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -103,8 +106,8 @@ void test_matrix_within_array_within_struct_accesses() {
     return;
 }
 
-float read_from_private(inout float foo_2) {
-    float _e1 = foo_2;
+float read_from_private(inout float foo_1) {
+    float _e1 = foo_1;
     return _e1;
 }
 
@@ -117,13 +120,29 @@ void assign_through_ptr_fn(inout uint p) {
     return;
 }
 
-void assign_array_through_ptr_fn(inout vec4 foo_3[2]) {
-    foo_3 = vec4[2](vec4(1.0), vec4(2.0));
+void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
+    foo_2 = vec4[2](vec4(1.0), vec4(2.0));
     return;
 }
 
-int array_by_value(int a_1[5], int i) {
-    return a_1[i];
+uint fetch_arg_ptr_member(inout AssignToMember p_1) {
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(inout AssignToMember p_2) {
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
+    uint _e2 = p_3[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
+    p_4[1] = 10u;
+    return;
 }
 
 void main() {
@@ -137,10 +156,10 @@ void main() {
     mat4x3 _matrix = _group_0_binding_0_vs._matrix;
     uvec2 arr_1[2] = _group_0_binding_0_vs.arr;
     float b = _group_0_binding_0_vs._matrix[3u][0];
-    int a_2 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
+    int a_1 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     ivec2 c = _group_0_binding_2_vs;
     float _e33 = read_from_private(foo);
-    c2_ = int[5](a_2, int(b), 3, 4, 5);
+    c2_ = int[5](a_1, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value = c2_[vi];
     float _e47 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));

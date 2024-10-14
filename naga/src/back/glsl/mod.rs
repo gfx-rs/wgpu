@@ -238,7 +238,7 @@ bitflags::bitflags! {
         /// additional functions on shadows and arrays of shadows.
         const TEXTURE_SHADOW_LOD = 0x2;
         /// Supports ARB_shader_draw_parameters on the host, which provides
-        /// support for `gl_BaseInstanceARB`, `gl_BaseVertexARB`, and `gl_DrawIDARB`.
+        /// support for `gl_BaseInstanceARB`, `gl_BaseVertexARB`, `gl_DrawIDARB`, and `gl_DrawID`.
         const DRAW_PARAMETERS = 0x4;
         /// Include unused global variables, constants and functions. By default the output will exclude
         /// global variables that are not used in the specified entrypoint (including indirect use),
@@ -4719,6 +4719,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         }
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
+        Bi::DrawID => "gl_DrawID",
         // fragment
         Bi::FragDepth => "gl_FragDepth",
         Bi::PointCoord => "gl_PointCoord",

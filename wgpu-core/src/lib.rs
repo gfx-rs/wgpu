@@ -67,6 +67,8 @@ mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
+#[cfg(feature = "indirect-validation")]
+mod indirect_validation;
 mod init_tracker;
 pub mod instance;
 mod lock;

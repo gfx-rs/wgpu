@@ -36,3 +36,11 @@ fn exchange_atomic_dynamic_sized_array(i: i32) -> u32 {
    return atomicExchange(&globals.c[i], 1u);
 }
 
+fn fetch_add_atomic_dynamic_sized_array_static_index() -> u32 {
+   return atomicAdd(&globals.c[1000], 1u);
+}
+
+fn exchange_atomic_dynamic_sized_array_static_index() -> u32 {
+   return atomicExchange(&globals.c[1000], 1u);
+}
+

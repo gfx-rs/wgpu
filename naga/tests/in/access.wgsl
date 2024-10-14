@@ -168,13 +168,33 @@ fn assign_through_ptr() {
     assign_array_through_ptr_fn(&arr);
 }
 
-@vertex
-fn foo(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
-	let arr = array<i32, 5>(1, 2, 3, 4, 5);
-	let value = arr[vi];
-	return vec4<f32>(vec4<i32>(value));
+struct AssignToMember {
+  x: u32,
 }
 
-fn array_by_value(a: array<i32, 5>, i: i32) -> i32 {
-    return a[i];
+fn fetch_arg_ptr_member(p: ptr<function, AssignToMember>) -> u32 {
+  return (*p).x;
+}
+
+fn assign_to_arg_ptr_member(p: ptr<function, AssignToMember>) {
+  (*p).x = 10u;
+}
+
+fn fetch_arg_ptr_array_element(p: ptr<function, array<u32, 4>>) -> u32 {
+  return (*p)[1];
+}
+
+fn assign_to_arg_ptr_array_element(p: ptr<function, array<u32, 4>>) {
+  (*p)[1] = 10u;
+}
+
+@compute @workgroup_size(1)
+fn assign_to_ptr_components() {
+   var s1: AssignToMember;
+   assign_to_arg_ptr_member(&s1);
+   fetch_arg_ptr_member(&s1);
+
+   var a1: array<u32, 4>;
+   assign_to_arg_ptr_array_element(&a1);
+   fetch_arg_ptr_array_element(&a1);
 }
