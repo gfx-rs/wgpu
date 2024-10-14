@@ -1093,7 +1093,7 @@ pub struct BrowserGpuPropertyInaccessible;
 /// Note that this check is insufficient to determine whether WebGPU is
 /// supported, as the browser may define the Gpu property, but be unable to
 /// create any WebGPU adapters.
-/// To detect whether WebGPU is supported, use the [`crate::utils::is_webgpu_supported`] function.
+/// To detect whether WebGPU is supported, use the [`crate::utils::is_browser_webgpu_supported`] function.
 ///
 /// See:
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>

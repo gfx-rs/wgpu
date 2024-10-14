@@ -154,7 +154,9 @@ pub async fn is_browser_webgpu_supported() -> bool {
         let adapter_promise = gpu.request_adapter();
         wasm_bindgen_futures::JsFuture::from(adapter_promise)
             .await
-            .is_ok()
+            .map_or(false, |adapter| {
+                !adapter.is_undefined() && !adapter.is_null()
+            })
     }
     #[cfg(not(webgpu))]
     {
