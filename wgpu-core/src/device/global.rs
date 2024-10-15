@@ -2090,14 +2090,14 @@ impl Global {
     ) {
         let device = self.hub.devices.get(device_id);
 
-        let mut life_tracker = device.lock_life();
-        if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_tracker);
-            existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-            life_tracker = device.lock_life();
+        let old_device_lost_closure = device
+            .device_lost_closure
+            .lock()
+            .replace(device_lost_closure);
+
+        if let Some(old_device_lost_closure) = old_device_lost_closure {
+            old_device_lost_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
         }
-        life_tracker.device_lost_closure = Some(device_lost_closure);
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {

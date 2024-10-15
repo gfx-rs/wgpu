@@ -1,7 +1,7 @@
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
-        DeviceError, DeviceLostClosure,
+        DeviceError,
     },
     resource::{self, Buffer, Texture, Trackable},
     snatch::SnatchGuard,
@@ -196,11 +196,6 @@ pub(crate) struct LifetimeTracker {
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
     /// here until the next time the device is maintained.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
-
-    /// Closure to be called on "lose the device". This is invoked directly by
-    /// device.lose or by the UserCallbacks returned from maintain when the device
-    /// has been destroyed and its queues are empty.
-    pub device_lost_closure: Option<DeviceLostClosure>,
 }
 
 impl LifetimeTracker {
@@ -209,7 +204,6 @@ impl LifetimeTracker {
             active: Vec::new(),
             ready_to_map: Vec::new(),
             work_done_closures: SmallVec::new(),
-            device_lost_closure: None,
         }
     }
 
