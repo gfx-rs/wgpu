@@ -134,10 +134,51 @@ wgpu-types = { version = "22.0.0", path = "./wgpu-types" }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
-block = "0.1"
-core-graphics-types = "0.1"
-metal = { version = "0.29.0" }
-objc = "0.2.5"
+block2 = "0.5.1"
+objc2 = "0.5.2"
+objc2-foundation = { version = "0.2.2", features = [
+    "NSError",
+    "NSGeometry",
+    "NSProcessInfo",
+    "NSRange",
+    "NSString",
+    "NSThread",
+] }
+objc2-metal = { version = "0.2.2", features = [
+    "block2",
+    "MTLBlitCommandEncoder",
+    "MTLBlitPass",
+    "MTLBuffer",
+    "MTLCaptureManager",
+    "MTLCaptureScope",
+    "MTLCommandBuffer",
+    "MTLCommandEncoder",
+    "MTLCommandQueue",
+    "MTLComputeCommandEncoder",
+    "MTLComputePass",
+    "MTLComputePipeline",
+    "MTLCounters",
+    "MTLDepthStencil",
+    "MTLDevice",
+    "MTLDrawable",
+    "MTLLibrary",
+    "MTLPipeline",
+    "MTLPixelFormat",
+    "MTLRenderCommandEncoder",
+    "MTLRenderPass",
+    "MTLRenderPipeline",
+    "MTLResource",
+    "MTLSampler",
+    "MTLStageInputOutputDescriptor",
+    "MTLTexture",
+    "MTLTypes",
+    "MTLVertexDescriptor",
+] }
+objc2-quartz-core = { version = "0.2.2", features = [
+    "CALayer",
+    "CAMetalLayer",
+    "objc2-metal",
+] }
 
 # Vulkan dependencies
 android_system_properties = "0.1.1"
