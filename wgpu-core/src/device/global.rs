@@ -219,9 +219,11 @@ impl Global {
         device.check_is_valid()?;
         buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
 
-        let last_submission = device
-            .lock_life()
-            .get_buffer_latest_submission_index(&buffer);
+        let last_submission = device.get_queue().and_then(|queue| {
+            queue
+                .lock_life()
+                .get_buffer_latest_submission_index(&buffer)
+        });
 
         if let Some(last_submission) = last_submission {
             device.wait_for_submit(last_submission)?;

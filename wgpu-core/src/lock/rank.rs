@@ -118,9 +118,9 @@ define_lock_ranks! {
     rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-        DEVICE_LIFE_TRACKER,
+        QUEUE_LIFE_TRACKER,
     }
-    rank DEVICE_LIFE_TRACKER "Device::life_tracker" followed by {
+    rank QUEUE_LIFE_TRACKER "Queue::life_tracker" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_TRACE,
     }

@@ -14,7 +14,7 @@ use crate::{
     hal_label,
     id::{self, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
-    lock::{rank, Mutex, RwLockWriteGuard},
+    lock::{rank, Mutex, MutexGuard, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
         DestroyedTexture, Fallible, FlushedStagingBuffer, InvalidResourceError, Labeled,
@@ -37,12 +37,13 @@ use std::{
 };
 use thiserror::Error;
 
-use super::Device;
+use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
     raw: ManuallyDrop<Box<dyn hal::DynQueue>>,
     pub(crate) device: Arc<Device>,
     pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
+    life_tracker: Mutex<LifetimeTracker>,
 }
 
 impl Queue {
@@ -94,11 +95,17 @@ impl Queue {
             raw: ManuallyDrop::new(raw),
             device,
             pending_writes,
+            life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
         })
     }
 
     pub(crate) fn raw(&self) -> &dyn hal::DynQueue {
         self.raw.as_ref()
+    }
+
+    #[track_caller]
+    pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
+        self.life_tracker.lock()
     }
 }
 
@@ -1292,7 +1299,7 @@ impl Queue {
             profiling::scope!("cleanup");
 
             // this will register the new submission to the life time tracker
-            self.device.lock_life().track_submission(
+            self.lock_life().track_submission(
                 submit_index,
                 pending_writes.temp_resources.drain(..),
                 active_executions,
@@ -1341,7 +1348,7 @@ impl Queue {
     ) -> Option<SubmissionIndex> {
         api_log!("Queue::on_submitted_work_done");
         //TODO: flush pending writes
-        self.device.lock_life().add_work_done_closure(closure)
+        self.lock_life().add_work_done_closure(closure)
     }
 }
 

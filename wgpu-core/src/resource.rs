@@ -634,7 +634,12 @@ impl Buffer {
             .buffers
             .set_single(self, internal_use);
 
-        let submit_index = device.lock_life().map(self).unwrap_or(0); // '0' means no wait is necessary
+        let submit_index = if let Some(queue) = device.get_queue() {
+            queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
+        } else {
+            // TODO: map immediately
+            0
+        };
 
         Ok(submit_index)
     }
@@ -783,14 +788,13 @@ impl Buffer {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_buffer(self) {
                 pending_writes.consume_temp(temp);
-                return Ok(());
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
-        }
-
-        let mut life_lock = device.lock_life();
-        let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-        if let Some(last_submit_index) = last_submit_index {
-            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
@@ -1252,14 +1256,13 @@ impl Texture {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_texture(self) {
                 pending_writes.consume_temp(temp);
-                return Ok(());
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
-        }
-
-        let mut life_lock = device.lock_life();
-        let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-        if let Some(last_submit_index) = last_submit_index {
-            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
@@ -1971,14 +1974,13 @@ impl Blas {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_blas(self) {
                 pending_writes.consume_temp(temp);
-                return Ok(());
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_blas_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
-        }
-
-        let mut life_lock = device.lock_life();
-        let last_submit_index = life_lock.get_blas_latest_submission_index(self);
-        if let Some(last_submit_index) = last_submit_index {
-            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
@@ -2061,14 +2063,13 @@ impl Tlas {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_tlas(self) {
                 pending_writes.consume_temp(temp);
-                return Ok(());
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
-        }
-
-        let mut life_lock = device.lock_life();
-        let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
-        if let Some(last_submit_index) = last_submit_index {
-            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
