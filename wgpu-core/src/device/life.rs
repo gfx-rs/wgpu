@@ -3,7 +3,7 @@ use crate::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
     },
-    resource::{self, Buffer, Texture, Trackable},
+    resource::{Buffer, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
@@ -388,7 +388,6 @@ impl LifetimeTracker {
     #[must_use]
     pub(crate) fn handle_mapping(
         &mut self,
-        raw: &dyn hal::DynDevice,
         snatch_guard: &SnatchGuard,
     ) -> Vec<super::BufferMapPendingClosure> {
         if self.ready_to_map.is_empty() {
@@ -398,61 +397,10 @@ impl LifetimeTracker {
             Vec::with_capacity(self.ready_to_map.len());
 
         for buffer in self.ready_to_map.drain(..) {
-            // This _cannot_ be inlined into the match. If it is, the lock will be held
-            // open through the whole match, resulting in a deadlock when we try to re-lock
-            // the buffer back to active.
-            let mapping = std::mem::replace(
-                &mut *buffer.map_state.lock(),
-                resource::BufferMapState::Idle,
-            );
-            let pending_mapping = match mapping {
-                resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
-                // Mapping cancelled
-                resource::BufferMapState::Idle => continue,
-                // Mapping queued at least twice by map -> unmap -> map
-                // and was already successfully mapped below
-                resource::BufferMapState::Active { .. } => {
-                    *buffer.map_state.lock() = mapping;
-                    continue;
-                }
-                _ => panic!("No pending mapping."),
-            };
-            let status = if pending_mapping.range.start != pending_mapping.range.end {
-                let host = pending_mapping.op.host;
-                let size = pending_mapping.range.end - pending_mapping.range.start;
-                match super::map_buffer(
-                    raw,
-                    &buffer,
-                    pending_mapping.range.start,
-                    size,
-                    host,
-                    snatch_guard,
-                ) {
-                    Ok(mapping) => {
-                        *buffer.map_state.lock() = resource::BufferMapState::Active {
-                            mapping,
-                            range: pending_mapping.range.clone(),
-                            host,
-                        };
-                        Ok(())
-                    }
-                    Err(e) => {
-                        log::error!("Mapping failed: {e}");
-                        Err(e)
-                    }
-                }
-            } else {
-                *buffer.map_state.lock() = resource::BufferMapState::Active {
-                    mapping: hal::BufferMapping {
-                        ptr: std::ptr::NonNull::dangling(),
-                        is_coherent: true,
-                    },
-                    range: pending_mapping.range,
-                    host: pending_mapping.op.host,
-                };
-                Ok(())
-            };
-            pending_callbacks.push((pending_mapping.op, status));
+            match buffer.map(snatch_guard) {
+                Some(cb) => pending_callbacks.push(cb),
+                None => continue,
+            }
         }
         pending_callbacks
     }

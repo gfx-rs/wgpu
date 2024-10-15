@@ -447,7 +447,7 @@ impl Device {
                 let submission_closures =
                     life_tracker.triage_submissions(submission_index, &self.command_allocator);
 
-                let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
+                let mapping_closures = life_tracker.handle_mapping(&snatch_guard);
 
                 let queue_empty = life_tracker.queue_empty();
 
@@ -620,14 +620,7 @@ impl Device {
                 }
             } else {
                 let snatch_guard: SnatchGuard = self.snatchable_lock.read();
-                map_buffer(
-                    self.raw(),
-                    &buffer,
-                    0,
-                    map_size,
-                    HostMap::Write,
-                    &snatch_guard,
-                )?
+                map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
             };
             *buffer.map_state.lock() = resource::BufferMapState::Active {
                 mapping,
