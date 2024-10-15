@@ -49,8 +49,8 @@ use std::{
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR,
-    ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
+    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -104,6 +104,11 @@ pub struct Device {
     /// using ref-counted references for internal access.
     pub(crate) valid: AtomicBool,
 
+    /// Closure to be called on "lose the device". This is invoked directly by
+    /// device.lose or by the UserCallbacks returned from maintain when the device
+    /// has been destroyed and its queues are empty.
+    pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
+
     /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
@@ -144,8 +149,7 @@ impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
 
-        let device_lost_closure = self.lock_life().device_lost_closure.take();
-        if let Some(closure) = device_lost_closure {
+        if let Some(closure) = self.device_lost_closure.lock().take() {
             closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
         }
 
@@ -256,6 +260,7 @@ impl Device {
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
+            device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
             life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
@@ -457,9 +462,9 @@ impl Device {
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
-            if life_tracker.device_lost_closure.is_some() {
+            if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
                 device_lost_invocations.push(DeviceLostInvocation {
-                    closure: life_tracker.device_lost_closure.take().unwrap(),
+                    closure: device_lost_closure,
                     reason: DeviceLostReason::Destroyed,
                     message: String::new(),
                 });
@@ -3583,13 +3588,7 @@ impl Device {
         self.valid.store(false, Ordering::Release);
 
         // 1) Resolve the GPUDevice device.lost promise.
-        let mut life_lock = self.lock_life();
-        let closure = life_lock.device_lost_closure.take();
-        // It's important to not hold the lock while calling the closure and while calling
-        // release_gpu_resources which may take the lock again.
-        drop(life_lock);
-
-        if let Some(device_lost_closure) = closure {
+        if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
         }
 

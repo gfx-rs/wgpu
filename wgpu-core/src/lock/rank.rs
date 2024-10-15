@@ -135,6 +135,7 @@ define_lock_ranks! {
     #[allow(dead_code)]
     rank DEVICE_TRACE "Device::trace" followed by { }
     rank DEVICE_TRACKERS "Device::trackers" followed by { }
+    rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
