@@ -6,10 +6,8 @@ use crate::{
     device::{
         bgl, create_validator,
         life::{LifetimeTracker, WaitIdleError},
-        map_buffer,
-        queue::PendingWrites,
-        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
-        RenderPassContext, CLEANUP_WAIT_MS,
+        map_buffer, AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
+        MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_label,
     init_tracker::{
@@ -141,7 +139,6 @@ pub struct Device {
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
-    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
@@ -181,11 +178,8 @@ impl Drop for Device {
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
-        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
-        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        pending_writes.dispose(raw.as_ref());
         self.command_allocator.dispose(raw.as_ref());
         #[cfg(feature = "indirect-validation")]
         self.indirect_validation
@@ -228,7 +222,6 @@ impl Device {
 impl Device {
     pub(crate) fn new(
         raw_device: Box<dyn hal::DynDevice>,
-        raw_queue: &dyn hal::DynQueue,
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
@@ -241,10 +234,6 @@ impl Device {
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
-        let pending_encoder = command_allocator
-            .acquire_encoder(raw_device.as_ref(), raw_queue)
-            .map_err(DeviceError::from_hal)?;
-        let mut pending_writes = PendingWrites::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
@@ -256,24 +245,6 @@ impl Device {
             })
         }
         .map_err(DeviceError::from_hal)?;
-        pending_writes.activate();
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                }]);
-            pending_writes
-                .command_encoder
-                .clear_buffer(zero_buffer.as_ref(), 0..ZERO_BUFFER_SIZE);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
-                }]);
-        }
 
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
@@ -336,10 +307,6 @@ impl Device {
             features: desc.required_features,
             downlevel,
             instance_flags,
-            pending_writes: Mutex::new(
-                rank::DEVICE_PENDING_WRITES,
-                ManuallyDrop::new(pending_writes),
-            ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             // By starting at one, we can put the result in a NonZeroU64.

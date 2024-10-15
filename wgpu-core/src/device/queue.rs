@@ -14,7 +14,7 @@ use crate::{
     hal_label,
     id::{self, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
-    lock::RwLockWriteGuard,
+    lock::{rank, Mutex, RwLockWriteGuard},
     resource::{
         Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
         DestroyedTexture, Fallible, FlushedStagingBuffer, InvalidResourceError, Labeled,
@@ -42,14 +42,59 @@ use super::Device;
 pub struct Queue {
     raw: ManuallyDrop<Box<dyn hal::DynQueue>>,
     pub(crate) device: Arc<Device>,
+    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
 }
 
 impl Queue {
-    pub(crate) fn new(device: Arc<Device>, raw: Box<dyn hal::DynQueue>) -> Self {
-        Queue {
+    pub(crate) fn new(
+        device: Arc<Device>,
+        raw: Box<dyn hal::DynQueue>,
+    ) -> Result<Self, DeviceError> {
+        let pending_encoder = device
+            .command_allocator
+            .acquire_encoder(device.raw(), raw.as_ref())
+            .map_err(DeviceError::from_hal);
+
+        let pending_encoder = match pending_encoder {
+            Ok(pending_encoder) => pending_encoder,
+            Err(e) => {
+                device.release_queue(raw);
+                return Err(e);
+            }
+        };
+
+        let mut pending_writes = PendingWrites::new(pending_encoder);
+
+        let zero_buffer = device.zero_buffer.as_ref();
+        pending_writes.activate();
+        unsafe {
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: zero_buffer,
+                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                }]);
+            pending_writes
+                .command_encoder
+                .clear_buffer(zero_buffer, 0..super::ZERO_BUFFER_SIZE);
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: zero_buffer,
+                    usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
+                }]);
+        }
+
+        let pending_writes = Mutex::new(
+            rank::QUEUE_PENDING_WRITES,
+            ManuallyDrop::new(pending_writes),
+        );
+
+        Ok(Queue {
             raw: ManuallyDrop::new(raw),
             device,
-        }
+            pending_writes,
+        })
     }
 
     pub(crate) fn raw(&self) -> &dyn hal::DynQueue {
@@ -70,6 +115,9 @@ crate::impl_storage_item!(Queue);
 impl Drop for Queue {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
+        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
+        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
+        pending_writes.dispose(self.device.raw());
         // SAFETY: we never access `self.raw` beyond this point.
         let queue = unsafe { ManuallyDrop::take(&mut self.raw) };
         self.device.release_queue(queue);
@@ -418,7 +466,7 @@ impl Queue {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let mut staging_buffer = StagingBuffer::new(&self.device, data_size)?;
-        let mut pending_writes = self.device.pending_writes.lock();
+        let mut pending_writes = self.pending_writes.lock();
 
         let staging_buffer = {
             profiling::scope!("copy");
@@ -460,7 +508,7 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
-        let mut pending_writes = self.device.pending_writes.lock();
+        let mut pending_writes = self.pending_writes.lock();
 
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
@@ -636,7 +684,7 @@ impl Queue {
                 .map_err(TransferError::from)?;
         }
 
-        let mut pending_writes = self.device.pending_writes.lock();
+        let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
@@ -888,7 +936,7 @@ impl Queue {
 
         let (selector, dst_base) = extract_texture_selector(&destination, &size, &dst)?;
 
-        let mut pending_writes = self.device.pending_writes.lock();
+        let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
@@ -1157,7 +1205,7 @@ impl Queue {
                 }
             }
 
-            let mut pending_writes = self.device.pending_writes.lock();
+            let mut pending_writes = self.pending_writes.lock();
 
             {
                 used_surface_textures.set_size(self.device.tracker_indices.textures.size());

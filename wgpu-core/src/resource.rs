@@ -676,36 +676,37 @@ impl Buffer {
                     });
                 }
 
-                let mut pending_writes = device.pending_writes.lock();
-
                 let staging_buffer = staging_buffer.flush();
 
-                let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size,
-                });
-                let transition_src = hal::BufferBarrier {
-                    buffer: staging_buffer.raw(),
-                    usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
-                };
-                let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
-                    buffer: raw_buf,
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                };
-                let encoder = pending_writes.activate();
-                unsafe {
-                    encoder.transition_buffers(&[transition_src, transition_dst]);
-                    if self.size > 0 {
-                        encoder.copy_buffer_to_buffer(
-                            staging_buffer.raw(),
-                            raw_buf,
-                            region.as_slice(),
-                        );
+                if let Some(queue) = device.get_queue() {
+                    let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
+                        src_offset: 0,
+                        dst_offset: 0,
+                        size,
+                    });
+                    let transition_src = hal::BufferBarrier {
+                        buffer: staging_buffer.raw(),
+                        usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                    };
+                    let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
+                        buffer: raw_buf,
+                        usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                    };
+                    let mut pending_writes = queue.pending_writes.lock();
+                    let encoder = pending_writes.activate();
+                    unsafe {
+                        encoder.transition_buffers(&[transition_src, transition_dst]);
+                        if self.size > 0 {
+                            encoder.copy_buffer_to_buffer(
+                                staging_buffer.raw(),
+                                raw_buf,
+                                region.as_slice(),
+                            );
+                        }
                     }
+                    pending_writes.consume(staging_buffer);
+                    pending_writes.insert_buffer(self);
                 }
-                pending_writes.consume(staging_buffer);
-                pending_writes.insert_buffer(self);
             }
             BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
@@ -778,15 +779,18 @@ impl Buffer {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_buffer(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_buffer(self) {
+                pending_writes.consume_temp(temp);
+                return Ok(());
             }
+        }
+
+        let mut life_lock = device.lock_life();
+        let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
@@ -1244,15 +1248,18 @@ impl Texture {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_texture(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_texture(self) {
+                pending_writes.consume_temp(temp);
+                return Ok(());
             }
+        }
+
+        let mut life_lock = device.lock_life();
+        let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
@@ -1960,15 +1967,18 @@ impl Blas {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_blas(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_blas_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_blas(self) {
+                pending_writes.consume_temp(temp);
+                return Ok(());
             }
+        }
+
+        let mut life_lock = device.lock_life();
+        let last_submit_index = life_lock.get_blas_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())
@@ -2047,15 +2057,18 @@ impl Tlas {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_tlas(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_tlas(self) {
+                pending_writes.consume_temp(temp);
+                return Ok(());
             }
+        }
+
+        let mut life_lock = device.lock_life();
+        let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
+        if let Some(last_submit_index) = last_submit_index {
+            life_lock.schedule_resource_destruction(temp, last_submit_index);
         }
 
         Ok(())

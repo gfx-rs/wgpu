@@ -1,5 +1,5 @@
 use crate::{
-    device::queue::TempResource,
+    device::{queue::TempResource, Device},
     global::Global,
     hub::Hub,
     id::CommandEncoderId,
@@ -20,10 +20,7 @@ use crate::{
 use wgt::{math::align_to, BufferUsages, Features};
 
 use super::CommandBufferMutable;
-use crate::device::queue::PendingWrites;
 use hal::BufferUses;
-use std::mem::ManuallyDrop;
-use std::ops::DerefMut;
 use std::{
     cmp::max,
     num::NonZeroU64,
@@ -184,7 +181,7 @@ impl Global {
             build_command_index,
             &mut buf_storage,
             hub,
-            device.pending_writes.lock().deref_mut(),
+            device,
         )?;
 
         let snatch_guard = device.snatchable_lock.read();
@@ -248,7 +245,9 @@ impl Global {
                 .get()
                 .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
             cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
-            device.pending_writes.lock().insert_tlas(&tlas);
+            if let Some(queue) = device.get_queue() {
+                queue.pending_writes.lock().insert_tlas(&tlas);
+            }
 
             cmd_buf_data.tlas_actions.push(TlasAction {
                 tlas: tlas.clone(),
@@ -349,10 +348,12 @@ impl Global {
             }
         }
 
-        device
-            .pending_writes
-            .lock()
-            .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
+        if let Some(queue) = device.get_queue() {
+            queue
+                .pending_writes
+                .lock()
+                .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
+        }
 
         Ok(())
     }
@@ -495,7 +496,7 @@ impl Global {
             build_command_index,
             &mut buf_storage,
             hub,
-            device.pending_writes.lock().deref_mut(),
+            device,
         )?;
 
         let snatch_guard = device.snatchable_lock.read();
@@ -516,7 +517,9 @@ impl Global {
                 .get(package.tlas_id)
                 .get()
                 .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
-            device.pending_writes.lock().insert_tlas(&tlas);
+            if let Some(queue) = device.get_queue() {
+                queue.pending_writes.lock().insert_tlas(&tlas);
+            }
             cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
 
             tlas_lock_store.push((Some(package), tlas.clone()))
@@ -742,17 +745,21 @@ impl Global {
             }
 
             if let Some(staging_buffer) = staging_buffer {
-                device
-                    .pending_writes
-                    .lock()
-                    .consume_temp(TempResource::StagingBuffer(staging_buffer));
+                if let Some(queue) = device.get_queue() {
+                    queue
+                        .pending_writes
+                        .lock()
+                        .consume_temp(TempResource::StagingBuffer(staging_buffer));
+                }
             }
         }
 
-        device
-            .pending_writes
-            .lock()
-            .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
+        if let Some(queue) = device.get_queue() {
+            queue
+                .pending_writes
+                .lock()
+                .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
+        }
 
         Ok(())
     }
@@ -839,7 +846,7 @@ fn iter_blas<'a>(
     build_command_index: NonZeroU64,
     buf_storage: &mut Vec<TriangleBufferStore<'a>>,
     hub: &Hub,
-    pending_writes: &mut ManuallyDrop<PendingWrites>,
+    device: &Device,
 ) -> Result<(), BuildAccelerationStructureError> {
     let mut temp_buffer = Vec::new();
     for entry in blas_iter {
@@ -849,7 +856,9 @@ fn iter_blas<'a>(
             .get()
             .map_err(|_| BuildAccelerationStructureError::InvalidBlasId)?;
         cmd_buf_data.trackers.blas_s.set_single(blas.clone());
-        pending_writes.insert_blas(&blas);
+        if let Some(queue) = device.get_queue() {
+            queue.pending_writes.lock().insert_blas(&blas);
+        }
 
         cmd_buf_data.blas_actions.push(BlasAction {
             blas: blas.clone(),
