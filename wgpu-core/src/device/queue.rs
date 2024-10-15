@@ -143,12 +143,56 @@ crate::impl_storage_item!(Queue);
 impl Drop for Queue {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
+
+        let last_successful_submission_index = self
+            .device
+            .last_successful_submission_index
+            .load(Ordering::Acquire);
+
+        let fence = self.device.fence.read();
+        let wait_res = unsafe {
+            self.device.raw().wait(
+                fence.as_ref(),
+                last_successful_submission_index,
+                crate::device::CLEANUP_WAIT_MS,
+            )
+        };
+        drop(fence);
+
+        match wait_res {
+            Ok(true) => {}
+            // Note: If we don't panic here we are in UB land (destroying resources while they are still in use by the GPU).
+            Ok(false) => {
+                panic!("We timed out while waiting on the last successful submission to complete!");
+            }
+            Err(e) => {
+                panic!(
+                    "We ran into an error while waiting on the last successful submission to complete! - {e}"
+                );
+            }
+        }
+
+        let snatch_guard = self.device.snatchable_lock.read();
+        let (submission_closures, mapping_closures, queue_empty) =
+            self.maintain(last_successful_submission_index, &snatch_guard);
+        drop(snatch_guard);
+
+        assert!(queue_empty);
+
+        let closures = crate::device::UserClosures {
+            mappings: mapping_closures,
+            submissions: submission_closures,
+            device_lost_invocations: SmallVec::new(),
+        };
+
         // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
         let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         pending_writes.dispose(self.device.raw());
         // SAFETY: we never access `self.raw` beyond this point.
         let queue = unsafe { ManuallyDrop::take(&mut self.raw) };
         self.device.release_queue(queue);
+
+        closures.fire();
     }
 }
 
