@@ -135,3 +135,61 @@ pub fn gles_minor_version_from_env() -> Option<wgt::Gles3MinorVersion> {
         },
     )
 }
+
+/// Determines whether the [`Backends::BROWSER_WEBGPU`] backend is supported.
+///
+/// The result can only be true if this is called from the main thread or a dedicated worker.
+/// For convenience, this is also supported on non-wasm targets, always returning false there.
+pub async fn is_browser_webgpu_supported() -> bool {
+    #[cfg(webgpu)]
+    {
+        // In theory it should be enough to check for the presence of the `gpu` property...
+        let gpu = crate::backend::get_browser_gpu_property();
+        let Ok(Some(gpu)) = gpu else {
+            return false;
+        };
+
+        // ...but in practice, we also have to try to create an adapter, since as of writing
+        // Chrome on Linux has the `gpu` property but doesn't support WebGPU.
+        let adapter_promise = gpu.request_adapter();
+        wasm_bindgen_futures::JsFuture::from(adapter_promise)
+            .await
+            .map_or(false, |adapter| {
+                !adapter.is_undefined() && !adapter.is_null()
+            })
+    }
+    #[cfg(not(webgpu))]
+    {
+        false
+    }
+}
+
+/// Create an new instance of wgpu, but disabling [`Backends::BROWSER_WEBGPU`] if no WebGPU support was detected.
+///
+/// If the instance descriptor enables [`Backends::BROWSER_WEBGPU`],
+/// this checks via [`is_browser_webgpu_supported`] for WebGPU support before forwarding
+/// the descriptor with or without [`Backends::BROWSER_WEBGPU`] respecitively to [`Instance::new`].
+///
+/// You should prefer this method over [`Instance::new`] if you want to target WebGPU and automatically
+/// fall back to WebGL if WebGPU is not available.
+/// This is because WebGPU support has to be decided upon instance creation and [`Instance::new`]
+/// (being a `sync` function) can't establish WebGPU support (details see [`is_browser_webgpu_supported`]).
+///
+/// # Panics
+///
+/// If no backend feature for the active target platform is enabled,
+/// this method will panic, see [`Instance::enabled_backend_features()`].
+#[allow(unused_mut)]
+pub async fn new_instance_with_webgpu_detection(
+    mut instance_desc: wgt::InstanceDescriptor,
+) -> crate::Instance {
+    if instance_desc
+        .backends
+        .contains(wgt::Backends::BROWSER_WEBGPU)
+        && !is_browser_webgpu_supported().await
+    {
+        instance_desc.backends.remove(wgt::Backends::BROWSER_WEBGPU);
+    }
+
+    crate::Instance::new(instance_desc)
+}
