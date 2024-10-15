@@ -4,10 +4,9 @@ use crate::{
     binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
     device::{
-        bgl, create_validator,
-        life::{LifetimeTracker, WaitIdleError},
-        map_buffer, AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags,
-        MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
+        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
+        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        CLEANUP_WAIT_MS,
     },
     hal_label,
     init_tracker::{
@@ -15,7 +14,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     instance::Adapter,
-    lock::{rank, Mutex, MutexGuard, RwLock},
+    lock::{rank, Mutex, RwLock},
     pipeline,
     pool::ResourcePool,
     resource::{
@@ -112,7 +111,6 @@ pub struct Device {
     /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
-    life_tracker: Mutex<LifetimeTracker>,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
     pub(crate) alignments: hal::Alignments,
@@ -263,7 +261,6 @@ impl Device {
             device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
-            life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(
@@ -325,11 +322,6 @@ impl Device {
 
     pub(crate) fn release_queue(&self, queue: Box<dyn hal::DynQueue>) {
         assert!(self.queue_to_drop.set(queue).is_ok());
-    }
-
-    #[track_caller]
-    pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
-        self.life_tracker.lock()
     }
 
     /// Run some destroy operations that were deferred.
@@ -438,15 +430,22 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
         }
 
-        let mut life_tracker = self.lock_life();
-        let submission_closures =
-            life_tracker.triage_submissions(submission_index, &self.command_allocator);
+        let (submission_closures, mapping_closures, queue_empty) =
+            if let Some(queue) = self.get_queue() {
+                let mut life_tracker = queue.lock_life();
+                let submission_closures =
+                    life_tracker.triage_submissions(submission_index, &self.command_allocator);
 
-        life_tracker.triage_mapped();
+                life_tracker.triage_mapped();
 
-        let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
+                let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
 
-        let queue_empty = life_tracker.queue_empty();
+                let queue_empty = life_tracker.queue_empty();
+
+                (submission_closures, mapping_closures, queue_empty)
+            } else {
+                (SmallVec::new(), Vec::new(), true)
+            };
 
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
@@ -472,7 +471,6 @@ impl Device {
         }
 
         // Don't hold the locks while calling release_gpu_resources.
-        drop(life_tracker);
         drop(fence);
         drop(snatch_guard);
 
@@ -3523,13 +3521,15 @@ impl Device {
             unsafe { self.raw().wait(fence.as_ref(), submission_index, !0) }
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
-            let closures = self
-                .lock_life()
-                .triage_submissions(submission_index, &self.command_allocator);
-            assert!(
-                closures.is_empty(),
-                "wait_for_submit is not expected to work with closures"
-            );
+            if let Some(queue) = self.get_queue() {
+                let closures = queue
+                    .lock_life()
+                    .triage_submissions(submission_index, &self.command_allocator);
+                assert!(
+                    closures.is_empty(),
+                    "wait_for_submit is not expected to work with closures"
+                );
+            }
         }
         Ok(())
     }
