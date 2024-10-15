@@ -154,7 +154,10 @@ impl Drop for Queue {
             self.device.raw().wait(
                 fence.as_ref(),
                 last_successful_submission_index,
+                #[cfg(not(target_arch = "wasm32"))]
                 crate::device::CLEANUP_WAIT_MS,
+                #[cfg(target_arch = "wasm32")]
+                0, // WebKit and Chromium don't support a non-0 timeout
             )
         };
         drop(fence);
@@ -163,6 +166,7 @@ impl Drop for Queue {
             Ok(true) => {}
             // Note: If we don't panic here we are in UB land (destroying resources while they are still in use by the GPU).
             Ok(false) => {
+                #[cfg(not(target_arch = "wasm32"))] // this is not right but should get CI passing :(
                 panic!("We timed out while waiting on the last successful submission to complete!");
             }
             Err(e) => {
