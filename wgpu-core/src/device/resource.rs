@@ -443,15 +443,7 @@ impl Device {
 
         let (submission_closures, mapping_closures, queue_empty) =
             if let Some(queue) = self.get_queue() {
-                let mut life_tracker = queue.lock_life();
-                let submission_closures =
-                    life_tracker.triage_submissions(submission_index, &self.command_allocator);
-
-                let mapping_closures = life_tracker.handle_mapping(&snatch_guard);
-
-                let queue_empty = life_tracker.queue_empty();
-
-                (submission_closures, mapping_closures, queue_empty)
+                queue.maintain(submission_index, &snatch_guard)
             } else {
                 (SmallVec::new(), Vec::new(), true)
             };
