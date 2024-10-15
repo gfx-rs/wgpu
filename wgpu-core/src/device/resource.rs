@@ -57,24 +57,6 @@ use super::{
 
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
-///
-/// TODO: establish clear order of locking for these:
-/// `life_tracker`, `trackers`, `render_passes`, `pending_writes`, `trace`.
-///
-/// Currently, the rules are:
-/// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
-/// 1. `self.trackers` is locked last (unenforced)
-/// 1. `self.trace` is locked last (unenforced)
-///
-/// Right now avoid locking twice same resource or registry in a call execution
-/// and minimize the locking to the minimum scope possible
-/// Unless otherwise specified, no lock may be acquired while holding another lock.
-/// This means that you must inspect function calls made while a lock is held
-/// to see what locks the callee may try to acquire.
-///
-/// Important:
-/// When locking pending_writes please check that trackers is not locked
-/// trackers should be locked only when needed for the shortest time possible
 pub struct Device {
     raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
     pub(crate) adapter: Arc<Adapter>,
@@ -124,13 +106,9 @@ pub struct Device {
     /// using ref-counted references for internal access.
     pub(crate) valid: AtomicBool,
 
-    /// All live resources allocated with this [`Device`].
-    ///
-    /// Has to be locked temporarily only (locked last)
-    /// and never before pending_writes
+    /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
-    // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<LifetimeTracker>,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
