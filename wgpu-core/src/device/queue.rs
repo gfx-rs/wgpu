@@ -21,6 +21,7 @@ use crate::{
         ParentDevice, ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
     },
     resource_log,
+    snatch::SnatchGuard,
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
@@ -104,6 +105,28 @@ impl Queue {
     #[track_caller]
     pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
         self.life_tracker.lock()
+    }
+
+    pub(crate) fn maintain(
+        &self,
+        submission_index: u64,
+        snatch_guard: &SnatchGuard,
+    ) -> (
+        SmallVec<[SubmittedWorkDoneClosure; 1]>,
+        Vec<super::BufferMapPendingClosure>,
+        bool,
+    ) {
+        let mut life_tracker = self.lock_life();
+        let submission_closures =
+            life_tracker.triage_submissions(submission_index, &self.device.command_allocator);
+
+        life_tracker.triage_mapped();
+
+        let mapping_closures = life_tracker.handle_mapping(snatch_guard);
+
+        let queue_empty = life_tracker.queue_empty();
+
+        (submission_closures, mapping_closures, queue_empty)
     }
 }
 
@@ -1458,7 +1481,7 @@ fn validate_command_buffer(
     command_buffer: &CommandBuffer,
     queue: &Queue,
     cmd_buf_data: &crate::command::CommandBufferMutable,
-    snatch_guard: &crate::snatch::SnatchGuard<'_>,
+    snatch_guard: &SnatchGuard,
     submit_surface_textures_owned: &mut FastHashMap<*const Texture, Arc<Texture>>,
     used_surface_textures: &mut track::TextureUsageScope,
 ) -> Result<(), QueueSubmitError> {
