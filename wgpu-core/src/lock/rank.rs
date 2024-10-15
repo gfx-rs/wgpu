@@ -111,11 +111,11 @@ define_lock_ranks! {
         // COMMAND_BUFFER_DATA,
     }
     rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
-        DEVICE_PENDING_WRITES,
+        QUEUE_PENDING_WRITES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         DEVICE_TRACE,
     }
-    rank DEVICE_PENDING_WRITES "Device::pending_writes" followed by {
+    rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         DEVICE_LIFE_TRACKER,
