@@ -298,7 +298,7 @@ impl Instance {
             .iter()
             .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
         {
-            profiling::scope!("enumerating", &*format!("{:?}", backend));
+            profiling::scope!("enumerating", &*format!("{:?}", backends));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
