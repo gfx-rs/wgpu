@@ -4865,10 +4865,12 @@ pub struct DepthStencilState {
     ///
     /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
     pub format: TextureFormat,
-    /// If disabled, depth will not be written to.
-    pub depth_write_enabled: bool,
-    /// Comparison function used to compare depth values in the depth test.
-    pub depth_compare: CompareFunction,
+    /// If disabled, depth will not be written to. Must be specified if `format` has a depth
+    /// component.
+    pub depth_write_enabled: Option<bool>,
+    /// Comparison function used to compare depth values in the depth test. Must be specified if
+    /// `format` has a depth component.
+    pub depth_compare: Option<CompareFunction>,
     /// Stencil state.
     #[cfg_attr(feature = "serde", serde(default))]
     pub stencil: StencilState,
@@ -4881,13 +4883,15 @@ impl DepthStencilState {
     /// Returns true if the depth testing is enabled.
     #[must_use]
     pub fn is_depth_enabled(&self) -> bool {
-        self.depth_compare != CompareFunction::Always || self.depth_write_enabled
+        self.depth_compare
+            .map_or(false, |dc| dc != CompareFunction::Always)
+            || self.depth_write_enabled
     }
 
     /// Returns true if the state doesn't mutate the depth buffer.
     #[must_use]
     pub fn is_depth_read_only(&self) -> bool {
-        !self.depth_write_enabled
+        self.depth_write_enabled.map_or(false, |enabled| !enabled)
     }
 
     /// Returns true if the state doesn't mutate the stencil.
