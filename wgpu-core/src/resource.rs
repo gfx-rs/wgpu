@@ -14,6 +14,7 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
+    weak_vec::WeakVec,
     Label, LabelHelpers,
 };
 
@@ -26,7 +27,7 @@ use std::{
     mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
-    sync::{Arc, Weak},
+    sync::Arc,
 };
 
 /// Information about the wgpu-core resource.
@@ -474,7 +475,7 @@ pub struct Buffer {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
-    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup>>>,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     #[cfg(feature = "indirect-validation")]
     pub(crate) raw_indirect_validation_bind_group: Snatchable<Box<dyn hal::DynBindGroup>>,
 }
@@ -824,7 +825,7 @@ pub struct DestroyedBuffer {
     raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     device: Arc<Device>,
     label: String,
-    bind_groups: Vec<Weak<BindGroup>>,
+    bind_groups: WeakVec<BindGroup>,
     #[cfg(feature = "indirect-validation")]
     raw_indirect_validation_bind_group: Option<Box<dyn hal::DynBindGroup>>,
 }
@@ -838,9 +839,9 @@ impl DestroyedBuffer {
 impl Drop for DestroyedBuffer {
     fn drop(&mut self) {
         let mut deferred = self.device.deferred_destroy.lock();
-        for bind_group in self.bind_groups.drain(..) {
-            deferred.push(DeferredDestroy::BindGroup(bind_group));
-        }
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
         drop(deferred);
 
         #[cfg(feature = "indirect-validation")]
@@ -1060,8 +1061,8 @@ pub struct Texture {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) clear_mode: TextureClearMode,
-    pub(crate) views: Mutex<Vec<Weak<TextureView>>>,
-    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup>>>,
+    pub(crate) views: Mutex<WeakVec<TextureView>>,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
 
 impl Texture {
@@ -1095,8 +1096,8 @@ impl Texture {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
             clear_mode,
-            views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
-            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
+            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
     }
     /// Checks that the given texture usage contains the required texture usage,
@@ -1430,8 +1431,8 @@ impl Global {
 #[derive(Debug)]
 pub struct DestroyedTexture {
     raw: ManuallyDrop<Box<dyn hal::DynTexture>>,
-    views: Vec<Weak<TextureView>>,
-    bind_groups: Vec<Weak<BindGroup>>,
+    views: WeakVec<TextureView>,
+    bind_groups: WeakVec<BindGroup>,
     device: Arc<Device>,
     label: String,
 }
@@ -1447,12 +1448,10 @@ impl Drop for DestroyedTexture {
         let device = &self.device;
 
         let mut deferred = device.deferred_destroy.lock();
-        for view in self.views.drain(..) {
-            deferred.push(DeferredDestroy::TextureView(view));
-        }
-        for bind_group in self.bind_groups.drain(..) {
-            deferred.push(DeferredDestroy::BindGroup(bind_group));
-        }
+        deferred.push(DeferredDestroy::TextureViews(mem::take(&mut self.views)));
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
         drop(deferred);
 
         resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
