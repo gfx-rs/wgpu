@@ -422,8 +422,6 @@ async fn start<E: Example>(title: &str) {
                             &context.device,
                             &context.queue,
                         );
-
-                        window_loop.window.request_redraw();
                     }
                     WindowEvent::KeyboardInput {
                         event:

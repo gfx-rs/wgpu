@@ -138,6 +138,7 @@ block = "0.1"
 core-graphics-types = "0.1"
 metal = { version = "0.29.0" }
 objc = "0.2.5"
+raw-window-metal = "1.0"
 
 # Vulkan dependencies
 android_system_properties = "0.1.1"
