@@ -58,3 +58,21 @@ impl Frontend {
 pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
     Frontend::new().parse(source)
 }
+
+#[cfg(test)]
+#[track_caller]
+pub fn assert_parse_err(input: &str, snapshot: &str) {
+    let output = parse_str(input)
+        .expect_err("expected parser error")
+        .emit_to_string(input);
+    if output != snapshot {
+        for diff in diff::lines(snapshot, &output) {
+            match diff {
+                diff::Result::Left(l) => println!("-{l}"),
+                diff::Result::Both(l, _) => println!(" {l}"),
+                diff::Result::Right(r) => println!("+{r}"),
+            }
+        }
+        panic!("Error snapshot failed");
+    }
+}
