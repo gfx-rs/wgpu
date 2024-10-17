@@ -31,6 +31,7 @@ use crate::{
         UsageScopePool,
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
+    weak_vec::WeakVec,
     FastHashMap, LabelHelpers, PreHashedKey, PreHashedMap,
 };
 
@@ -42,7 +43,7 @@ use wgt::{
 
 use std::{
     borrow::Cow,
-    mem::ManuallyDrop,
+    mem::{self, ManuallyDrop},
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -150,8 +151,8 @@ pub struct Device {
 }
 
 pub(crate) enum DeferredDestroy {
-    TextureView(Weak<TextureView>),
-    BindGroup(Weak<BindGroup>),
+    TextureViews(WeakVec<TextureView>),
+    BindGroups(WeakVec<BindGroup>),
 }
 
 impl std::fmt::Debug for Device {
@@ -384,36 +385,42 @@ impl Device {
     /// implementation of a reference-counted structure).
     /// The snatch lock must not be held while this function is called.
     pub(crate) fn deferred_resource_destruction(&self) {
-        while let Some(item) = self.deferred_destroy.lock().pop() {
+        let deferred_destroy = mem::take(&mut *self.deferred_destroy.lock());
+        for item in deferred_destroy {
             match item {
-                DeferredDestroy::TextureView(view) => {
-                    let Some(view) = view.upgrade() else {
-                        continue;
-                    };
-                    let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write()) else {
-                        continue;
-                    };
+                DeferredDestroy::TextureViews(views) => {
+                    for view in views {
+                        let Some(view) = view.upgrade() else {
+                            continue;
+                        };
+                        let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write())
+                        else {
+                            continue;
+                        };
 
-                    resource_log!("Destroy raw {}", view.error_ident());
+                        resource_log!("Destroy raw {}", view.error_ident());
 
-                    unsafe {
-                        self.raw().destroy_texture_view(raw_view);
+                        unsafe {
+                            self.raw().destroy_texture_view(raw_view);
+                        }
                     }
                 }
-                DeferredDestroy::BindGroup(bind_group) => {
-                    let Some(bind_group) = bind_group.upgrade() else {
-                        continue;
-                    };
-                    let Some(raw_bind_group) =
-                        bind_group.raw.snatch(&mut self.snatchable_lock.write())
-                    else {
-                        continue;
-                    };
+                DeferredDestroy::BindGroups(bind_groups) => {
+                    for bind_group in bind_groups {
+                        let Some(bind_group) = bind_group.upgrade() else {
+                            continue;
+                        };
+                        let Some(raw_bind_group) =
+                            bind_group.raw.snatch(&mut self.snatchable_lock.write())
+                        else {
+                            continue;
+                        };
 
-                    resource_log!("Destroy raw {}", bind_group.error_ident());
+                        resource_log!("Destroy raw {}", bind_group.error_ident());
 
-                    unsafe {
-                        self.raw().destroy_bind_group(raw_bind_group);
+                        unsafe {
+                            self.raw().destroy_bind_group(raw_bind_group);
+                        }
                     }
                 }
             }
@@ -638,7 +645,7 @@ impl Device {
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
-            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             #[cfg(feature = "indirect-validation")]
             raw_indirect_validation_bind_group,
         };
@@ -753,7 +760,7 @@ impl Device {
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
-            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             #[cfg(feature = "indirect-validation")]
             raw_indirect_validation_bind_group,
         };
@@ -1386,10 +1393,6 @@ impl Device {
 
         {
             let mut views = texture.views.lock();
-
-            // Remove stale weak references
-            views.retain(|view| view.strong_count() > 0);
-
             views.push(Arc::downgrade(&view));
         }
 
@@ -2379,18 +2382,10 @@ impl Device {
         let weak_ref = Arc::downgrade(&bind_group);
         for range in &bind_group.used_texture_ranges {
             let mut bind_groups = range.texture.bind_groups.lock();
-
-            // Remove stale weak references
-            bind_groups.retain(|bg| bg.strong_count() > 0);
-
             bind_groups.push(weak_ref.clone());
         }
         for range in &bind_group.used_buffer_ranges {
             let mut bind_groups = range.buffer.bind_groups.lock();
-
-            // Remove stale weak references
-            bind_groups.retain(|bg| bg.strong_count() > 0);
-
             bind_groups.push(weak_ref.clone());
         }
 
