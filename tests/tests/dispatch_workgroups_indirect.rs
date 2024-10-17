@@ -16,7 +16,7 @@ static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new(
     )
     .run_async(|ctx| async move {
         let num_workgroups = [1, 2, 3];
-        let res = run_test(&ctx, &num_workgroups, false).await;
+        let res = run_test(&ctx, &num_workgroups).await;
         assert_eq!(res, num_workgroups);
     });
 
@@ -38,16 +38,16 @@ static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let max = ctx.device.limits().max_compute_workgroups_per_dimension;
 
-        let res = run_test(&ctx, &[max, max, max], false).await;
+        let res = run_test(&ctx, &[max, max, max]).await;
         assert_eq!(res, [max; 3]);
 
-        let res = run_test(&ctx, &[max + 1, 1, 1], false).await;
+        let res = run_test(&ctx, &[max + 1, 1, 1]).await;
         assert_eq!(res, [0; 3]);
 
-        let res = run_test(&ctx, &[1, max + 1, 1], false).await;
+        let res = run_test(&ctx, &[1, max + 1, 1]).await;
         assert_eq!(res, [0; 3]);
 
-        let res = run_test(&ctx, &[1, 1, max + 1], false).await;
+        let res = run_test(&ctx, &[1, 1, max + 1]).await;
         assert_eq!(res, [0; 3]);
     });
 
@@ -68,7 +68,24 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
-        let _ = run_test(&ctx, &[0, 0, 0], true).await;
+        let test_resources = TestResources::new(&ctx);
+
+        let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 12,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::INDIRECT,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+            compute_pass.set_pipeline(&test_resources.pipeline);
+            compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
+            // compute_pass.set_bind_group(0, Some(&test_resources.bind_group), &[]);
+            compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0);
+        }
+        ctx.queue.submit(Some(encoder.finish()));
 
         let error = pollster::block_on(ctx.device.pop_error_scope());
         assert!(error.map_or(false, |error| {
@@ -76,99 +93,159 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
         }));
     });
 
-async fn run_test(
-    ctx: &TestingContext,
-    num_workgroups: &[u32; 3],
-    forget_to_set_bind_group: bool,
-) -> [u32; 3] {
-    const SHADER_SRC: &str = "
-        struct TestOffsetPc {
-            inner: u32,
+/// Make sure that zero sized buffer validation is raised.
+#[gpu_test]
+static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::PUSH_CONSTANTS)
+            .downlevel_flags(
+                wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
+            )
+            .limits(wgpu::Limits {
+                max_push_constant_size: 4,
+                ..wgpu::Limits::downlevel_defaults()
+            }),
+    )
+    .run_async(|ctx| async move {
+        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+
+        let test_resources = TestResources::new(&ctx);
+
+        let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 0,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::INDIRECT,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&Default::default());
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&Default::default());
+            compute_pass.set_pipeline(&test_resources.pipeline);
+            compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
+            compute_pass.set_bind_group(0, Some(&test_resources.bind_group), &[]);
+            compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0);
         }
+        ctx.queue.submit(Some(encoder.finish()));
 
-        // `test_offset.inner` should always be 0; we test that resetting the push constant set by the validation code works properly.
-        var<push_constant> test_offset: TestOffsetPc;
+        let error = pollster::block_on(ctx.device.pop_error_scope());
+        assert!(error.map_or(false, |error| {
+            format!("{error}").contains(
+                "Indirect buffer uses bytes 0..12 which overruns indirect buffer of size 0",
+            )
+        }));
+    });
 
-        @group(0) @binding(0)
-        var<storage, read_write> out: array<u32, 3>;
+struct TestResources {
+    pipeline: wgpu::ComputePipeline,
+    out_buffer: wgpu::Buffer,
+    readback_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+}
 
-        @compute @workgroup_size(1)
-        fn main(@builtin(num_workgroups) num_workgroups: vec3u, @builtin(workgroup_id) workgroup_id: vec3u) {
-            if (all(workgroup_id == vec3u())) {
-                out[0] = num_workgroups.x + test_offset.inner;
-                out[1] = num_workgroups.y + test_offset.inner;
-                out[2] = num_workgroups.z + test_offset.inner;
+impl TestResources {
+    fn new(ctx: &TestingContext) -> Self {
+        const SHADER_SRC: &str = "
+            struct TestOffsetPc {
+                inner: u32,
             }
-        }
-    ";
 
-    let module = ctx
-        .device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            // `test_offset.inner` should always be 0; we test that resetting the push constant set by the validation code works properly.
+            var<push_constant> test_offset: TestOffsetPc;
+
+            @group(0) @binding(0)
+            var<storage, read_write> out: array<u32, 3>;
+
+            @compute @workgroup_size(1)
+            fn main(@builtin(num_workgroups) num_workgroups: vec3u, @builtin(workgroup_id) workgroup_id: vec3u) {
+                if (all(workgroup_id == vec3u())) {
+                    out[0] = num_workgroups.x + test_offset.inner;
+                    out[1] = num_workgroups.y + test_offset.inner;
+                    out[2] = num_workgroups.z + test_offset.inner;
+                }
+            }
+        ";
+
+        let module = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+            });
+
+        let bgl = ctx
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgt::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&bgl],
+                push_constant_ranges: &[wgt::PushConstantRange {
+                    stages: wgt::ShaderStages::COMPUTE,
+                    range: 0..4,
+                }],
+            });
+
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+
+        let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+            size: 12,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
         });
 
-    let bgl = ctx
-        .device
-        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
+            size: 12,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                visibility: wgt::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
+                resource: out_buffer.as_entire_binding(),
             }],
         });
 
-    let layout = ctx
-        .device
-        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[wgt::PushConstantRange {
-                stages: wgt::ShaderStages::COMPUTE,
-                range: 0..4,
-            }],
-        });
+        Self {
+            pipeline,
+            out_buffer,
+            readback_buffer,
+            bind_group,
+        }
+    }
+}
 
-    let pipeline = ctx
-        .device
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&layout),
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-
-    let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: 12,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-        mapped_at_creation: false,
-    });
-
-    let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-        label: None,
-        size: 12,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-
-    let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &pipeline.get_bind_group_layout(0),
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: out_buffer.as_entire_binding(),
-        }],
-    });
+async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
+    let test_resources = TestResources::new(ctx);
 
     let mut res = None;
 
@@ -202,19 +279,24 @@ async fn run_test(
         let mut encoder = ctx.device.create_command_encoder(&Default::default());
         {
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
-            compute_pass.set_pipeline(&pipeline);
+            compute_pass.set_pipeline(&test_resources.pipeline);
             compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
-            if !forget_to_set_bind_group {
-                compute_pass.set_bind_group(0, Some(&bind_group), &[]);
-            }
+            compute_pass.set_bind_group(0, Some(&test_resources.bind_group), &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, indirect_offset);
         }
 
-        encoder.copy_buffer_to_buffer(&out_buffer, 0, &readback_buffer, 0, 12);
+        encoder.copy_buffer_to_buffer(
+            &test_resources.out_buffer,
+            0,
+            &test_resources.readback_buffer,
+            0,
+            12,
+        );
 
         ctx.queue.submit(Some(encoder.finish()));
 
-        readback_buffer
+        test_resources
+            .readback_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| {});
 
@@ -222,11 +304,11 @@ async fn run_test(
             .await
             .panic_on_timeout();
 
-        let view = readback_buffer.slice(..).get_mapped_range();
+        let view = test_resources.readback_buffer.slice(..).get_mapped_range();
 
         let current_res = *bytemuck::from_bytes(&view);
         drop(view);
-        readback_buffer.unmap();
+        test_resources.readback_buffer.unmap();
 
         if let Some(past_res) = res {
             assert_eq!(past_res, current_res);

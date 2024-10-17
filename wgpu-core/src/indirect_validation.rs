@@ -266,14 +266,18 @@ impl IndirectValidation {
         })
     }
 
+    /// `Ok(None)` will only be returned if `buffer_size` is `0`.
     pub fn create_src_bind_group(
         &self,
         device: &dyn hal::DynDevice,
         limits: &wgt::Limits,
         buffer_size: u64,
         buffer: &dyn hal::DynBuffer,
-    ) -> Result<Box<dyn hal::DynBindGroup>, DeviceError> {
+    ) -> Result<Option<Box<dyn hal::DynBindGroup>>, DeviceError> {
         let binding_size = calculate_src_buffer_binding_size(buffer_size, limits);
+        let Some(binding_size) = NonZeroU64::new(binding_size) else {
+            return Ok(None);
+        };
         let hal_desc = hal::BindGroupDescriptor {
             label: None,
             layout: self.src_bind_group_layout.as_ref(),
@@ -285,7 +289,7 @@ impl IndirectValidation {
             buffers: &[hal::BufferBinding {
                 buffer,
                 offset: 0,
-                size: Some(NonZeroU64::new(binding_size).unwrap()),
+                size: Some(binding_size),
             }],
             samplers: &[],
             textures: &[],
@@ -294,6 +298,7 @@ impl IndirectValidation {
         unsafe {
             device
                 .create_bind_group(&hal_desc)
+                .map(Some)
                 .map_err(DeviceError::from_hal)
         }
     }

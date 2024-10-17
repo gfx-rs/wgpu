@@ -780,7 +780,10 @@ impl Device {
             let bind_group = indirect_validation
                 .create_src_bind_group(self.raw(), &self.limits, buffer_size, raw_buffer)
                 .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
-            Ok(Snatchable::new(bind_group))
+            match bind_group {
+                Some(bind_group) => Ok(Snatchable::new(bind_group)),
+                None => Ok(Snatchable::empty()),
+            }
         } else {
             Ok(Snatchable::empty())
         }
