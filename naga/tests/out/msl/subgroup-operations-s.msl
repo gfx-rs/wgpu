@@ -11,8 +11,8 @@ void main_1(
 ) {
     uint _e5 = subgroup_size_1;
     uint _e6 = subgroup_invocation_id_1;
-    metal::uint4 unnamed = uint4((uint64_t)metal::simd_ballot((_e6 & 1u) == 1u), 0, 0, 0);
-    metal::uint4 unnamed_1 = uint4((uint64_t)metal::simd_ballot(true), 0, 0, 0);
+    metal::uint4 unnamed = metal::uint4((uint64_t)metal::simd_ballot((_e6 & 1u) == 1u), 0, 0, 0);
+    metal::uint4 unnamed_1 = metal::uint4((uint64_t)metal::simd_ballot(true), 0, 0, 0);
     bool unnamed_2 = metal::simd_all(_e6 != 0u);
     bool unnamed_3 = metal::simd_any(_e6 == 0u);
     uint unnamed_4 = metal::simd_sum(_e6);

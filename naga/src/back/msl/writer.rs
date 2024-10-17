@@ -3323,7 +3323,10 @@ impl<W: Write> Writer<W> {
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
-                    write!(self.out, "uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    write!(
+                        self.out,
+                        "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
+                    )?;
                     if let Some(predicate) = predicate {
                         self.put_expression(predicate, &context.expression, true)?;
                     } else {
@@ -4487,7 +4490,7 @@ template <typename A>
                 let name = self.namer.call("unpackUint32x4");
                 writeln!(
                     self.out,
-                    "uint4 {name}(uint b0, \
+                    "{NAMESPACE}::uint4 {name}(uint b0, \
                                   uint b1, \
                                   uint b2, \
                                   uint b3, \
@@ -4506,7 +4509,7 @@ template <typename A>
                 )?;
                 writeln!(
                     self.out,
-                    "{}return uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                    "{}return {NAMESPACE}::uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
                                     (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
                                     (b11 << 24 | b10 << 16 | b9 << 8 | b8), \
                                     (b15 << 24 | b14 << 16 | b13 << 8 | b12));",
