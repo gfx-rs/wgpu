@@ -1,5 +1,8 @@
 use super::{number::consume_number, Error, ExpectedToken};
 use crate::front::wgsl::error::NumberError;
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
 use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
@@ -204,6 +207,8 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     pub(in crate::front::wgsl) source: &'a str,
     // The byte offset of the end of the last non-trivia token.
     last_end_offset: usize,
+    #[allow(dead_code)]
+    pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 
 impl<'a> Lexer<'a> {
@@ -212,6 +217,7 @@ impl<'a> Lexer<'a> {
             input,
             source: input,
             last_end_offset: 0,
+            enable_extensions: EnableExtensions::empty(),
         }
     }
 
@@ -350,40 +356,67 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
-            (Token::Word("_"), span) => Err(Error::InvalidIdentifierUnderscore(span)),
-            (Token::Word(word), span) if word.starts_with("__") => {
-                Err(Error::ReservedIdentifierPrefix(span))
-            }
-            (Token::Word(word), span) => Ok((word, span)),
+            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
             other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+        }
+    }
+
+    pub(in crate::front::wgsl) fn peek_ident_with_span(
+        &mut self,
+    ) -> Result<(&'a str, Span), Error<'a>> {
+        match self.peek() {
+            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
+            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+        }
+    }
+
+    fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+        match word {
+            "_" => Err(Error::InvalidIdentifierUnderscore(span)),
+            word if word.starts_with("__") => Err(Error::ReservedIdentifierPrefix(span)),
+            word => Ok((word, span)),
         }
     }
 
     pub(in crate::front::wgsl) fn next_ident(
         &mut self,
     ) -> Result<super::ast::Ident<'a>, Error<'a>> {
-        let ident = self
-            .next_ident_with_span()
-            .map(|(name, span)| super::ast::Ident { name, span })?;
+        self.next_ident_with_span()
+            .and_then(|(word, span)| Self::word_as_ident(word, span))
+            .map(|(name, span)| super::ast::Ident { name, span })
+    }
 
-        if crate::keywords::wgsl::RESERVED.contains(&ident.name) {
-            return Err(Error::ReservedKeyword(ident.span));
+    fn word_as_ident(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+        if crate::keywords::wgsl::RESERVED.contains(&word) {
+            Err(Error::ReservedKeyword(span))
+        } else {
+            Ok((word, span))
         }
-
-        Ok(ident)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
     pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<Scalar, Error<'a>> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
-            (Token::Word(word), span) => {
-                conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(span))
-            }
+        let (scalar, span) = match self.next() {
+            (Token::Word(word), span) => conv::get_scalar_type(word)
+                .map(|scalar| (scalar, span))
+                .ok_or(Error::UnknownScalarType(span)),
             (_, span) => Err(Error::UnknownScalarType(span)),
         }?;
+
+        if matches!(scalar, Scalar::F16)
+            && !self
+                .enable_extensions
+                .contains(ImplementedEnableExtension::F16)
+        {
+            return Err(Error::EnableExtensionNotEnabled(
+                span,
+                ImplementedEnableExtension::F16,
+            ));
+        }
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok(scalar)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
@@ -393,14 +426,27 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(Scalar, Span), Error<'a>> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
+
+        let (scalar, span) = match self.next() {
             (Token::Word(word), span) => conv::get_scalar_type(word)
                 .map(|scalar| (scalar, span))
                 .ok_or(Error::UnknownScalarType(span)),
             (_, span) => Err(Error::UnknownScalarType(span)),
         }?;
+
+        if matches!(scalar, Scalar::F16)
+            && !self
+                .enable_extensions
+                .contains(ImplementedEnableExtension::F16)
+        {
+            return Err(Error::EnableExtensionNotEnabled(
+                span,
+                ImplementedEnableExtension::F16,
+            ));
+        }
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok((scalar, span))
     }
 
     pub(in crate::front::wgsl) fn next_storage_access(
@@ -458,6 +504,7 @@ fn sub_test(source: &str, expected_tokens: &[Token]) {
 
 #[test]
 fn test_numbers() {
+    use half::f16;
     // WGSL spec examples //
 
     // decimal integer
@@ -482,14 +529,14 @@ fn test_numbers() {
             Token::Number(Ok(Number::AbstractFloat(0.01))),
             Token::Number(Ok(Number::AbstractFloat(12.34))),
             Token::Number(Ok(Number::F32(0.))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(0.)))),
             Token::Number(Ok(Number::AbstractFloat(0.001))),
             Token::Number(Ok(Number::AbstractFloat(43.75))),
             Token::Number(Ok(Number::F32(16.))),
             Token::Number(Ok(Number::AbstractFloat(0.1875))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(0.75)))),
             Token::Number(Ok(Number::AbstractFloat(0.12109375))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(12.5)))),
         ],
     );
 

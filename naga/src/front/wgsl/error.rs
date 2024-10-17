@@ -1,3 +1,4 @@
+use crate::front::wgsl::parse::directive::enable_extension::ImplementedEnableExtension;
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
@@ -135,8 +136,6 @@ pub enum NumberError {
     Invalid,
     #[error("numeric literal not representable by target type")]
     NotRepresentable,
-    #[error("unimplemented f16 type")]
-    UnimplementedF16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -183,6 +182,7 @@ pub(crate) enum Error<'a> {
     UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
+    UnknownEnableExtension(Span, &'a str),
     SizeAttributeTooLow(Span, u32),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
@@ -265,6 +265,20 @@ pub(crate) enum Error<'a> {
     PipelineConstantIDValue(Span),
     NotBool(Span),
     ConstAssertFailed(Span),
+    DirectiveNotYetImplemented {
+        kind: &'static str,
+        span: Span,
+        tracking_issue_num: u16,
+    },
+    DirectiveAfterFirstGlobalDecl {
+        directive_span: Span,
+    },
+    EnableExtensionNotYetImplemented {
+        kind: &'static str,
+        span: Span,
+        tracking_issue_num: u16,
+    },
+    EnableExtensionNotEnabled(Span, ImplementedEnableExtension),
 }
 
 #[derive(Clone, Debug)]
@@ -508,6 +522,14 @@ impl<'a> Error<'a> {
                 message: format!("unknown type: '{}'", &source[bad_span]),
                 labels: vec![(bad_span, "unknown type".into())],
                 notes: vec![],
+            },
+            Error::UnknownEnableExtension(span, word) => ParseError {
+                message: format!("unknown enable-extension `{}`", word),
+                labels: vec![(span, "".into())],
+                notes: vec![
+                    "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
+                        .into(),
+                ],
             },
             Error::SizeAttributeTooLow(bad_span, min_size) => ParseError {
                 message: format!("struct member size must be at least {min_size}"),
@@ -859,6 +881,76 @@ impl<'a> Error<'a> {
             Error::ConstAssertFailed(span) => ParseError {
                 message: "const_assert failure".to_string(),
                 labels: vec![(span, "evaluates to false".into())],
+                notes: vec![],
+            },
+            Error::DirectiveNotYetImplemented {
+                kind,
+                span,
+                tracking_issue_num,
+            } => ParseError {
+                message: format!("`{kind}` is not yet implemented"),
+                labels: vec![(
+                    span,
+                    "this global directive is standard, but not yet implemented".into(),
+                )],
+                notes: vec![format!(
+                    concat!(
+                        "Let Naga maintainers know that you ran into this at ",
+                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                        "so they can prioritize it!"
+                    ),
+                    tracking_issue_num
+                )],
+            },
+            Error::DirectiveAfterFirstGlobalDecl { directive_span } => ParseError {
+                message: "expected global declaration, but found a global directive".into(),
+                labels: vec![(
+                    directive_span,
+                    "written after first global declaration".into(),
+                )],
+                notes: vec![concat!(
+                    "global directives are only allowed before global declarations; ",
+                    "maybe hoist this closer to the top of the shader module?"
+                )
+                .into()],
+            },
+            Error::EnableExtensionNotYetImplemented {
+                kind,
+                span,
+                tracking_issue_num,
+            } => ParseError {
+                message: format!("the `{kind}` extension is not yet supported (sorry!)"),
+                labels: vec![(
+                    span,
+                    concat!(
+                        "this extension specifies standard functionality ",
+                        "which is not yet implemented in Naga"
+                    )
+                    .into(),
+                )],
+                notes: vec![format!(
+                    concat!(
+                        "Let Naga maintainers know that you ran into this at ",
+                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                        "so they can prioritize it!"
+                    ),
+                    tracking_issue_num
+                )],
+            },
+            Error::EnableExtensionNotEnabled(span, extension) => ParseError {
+                // TODO: match what somebody would write in code
+                message: format!("{:?} enable extension is not enabled", extension),
+                labels: vec![(
+                    span,
+                    format!(
+                        concat!(
+                            "{:?} extension is needed for this functionality, ",
+                            "but it is not currently enabled"
+                        ),
+                        extension
+                    )
+                    .into(),
+                )],
                 notes: vec![],
             },
         }

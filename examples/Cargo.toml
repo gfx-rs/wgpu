@@ -35,6 +35,7 @@ encase = { workspace = true, features = ["glam"] }
 flume.workspace = true
 getrandom.workspace = true
 glam.workspace = true
+half = { version = "2.1.0", features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true
 nanorand.workspace = true
