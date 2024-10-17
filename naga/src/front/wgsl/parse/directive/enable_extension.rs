@@ -62,13 +62,13 @@ impl EnableExtension {
     }
 
     /// Maps this [`EnableExtension`] into the sentinel word associated with it in WGSL.
-    pub fn to_ident(self) -> &'static str {
+    pub const fn to_ident(self) -> &'static str {
         match self {
             Self::Implemented(kind) => match kind {},
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::F16 => Self::F16,
-                UnimplementedEnableExtension::ClipDistances => todo!(),
-                UnimplementedEnableExtension::DualSourceBlending => todo!(),
+                UnimplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
+                UnimplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
             },
         }
     }

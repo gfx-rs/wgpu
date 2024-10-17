@@ -281,6 +281,10 @@ pub(crate) enum Error<'a> {
         kind: UnimplementedEnableExtension,
         span: Span,
     },
+    EnableExtensionNotEnabled {
+        kind: EnableExtension,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -936,6 +940,33 @@ impl<'a> Error<'a> {
                     ),
                     kind.tracking_issue_num()
                 )],
+            },
+            Error::EnableExtensionNotEnabled { kind, span } => ParseError {
+                message: format!("`{}` enable extension is not enabled", kind.to_ident()),
+                labels: vec![(
+                    span,
+                    format!(
+                        concat!(
+                            "the `{}` enable extension is needed for this functionality, ",
+                            "but it is not currently enabled"
+                        ),
+                        kind.to_ident()
+                    )
+                    .into(),
+                )],
+                notes: if let EnableExtension::Unimplemented(kind) = kind {
+                    vec![format!(
+                        concat!(
+                            "This extension is not yet implemented.",
+                            "Let Naga maintainers know that you ran into this at ",
+                            "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                            "so they can prioritize it!"
+                        ),
+                        kind.tracking_issue_num()
+                    )]
+                } else {
+                    vec![]
+                },
             },
         }
     }
