@@ -1,4 +1,5 @@
 use crate::front::wgsl::error::{Error, ExpectedToken};
+use crate::front::wgsl::parse::directive::DirectiveKind;
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
@@ -7,6 +8,7 @@ use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span};
 
 pub mod ast;
 pub mod conv;
+pub mod directive;
 pub mod lexer;
 pub mod number;
 
@@ -136,6 +138,7 @@ enum Rule {
     SingularExpr,
     UnaryExpr,
     GeneralExpr,
+    Directive,
 }
 
 struct ParsedAttribute<T> {
@@ -2357,6 +2360,9 @@ impl Parser {
         let start = lexer.start_byte_offset();
         let kind = match lexer.next() {
             (Token::Separator(';'), _) => None,
+            (Token::Word(word), directive_span) if DirectiveKind::from_ident(word).is_some() => {
+                return Err(Error::DirectiveAfterFirstGlobalDecl { directive_span });
+            }
             (Token::Word("struct"), _) => {
                 let name = lexer.next_ident()?;
 
@@ -2474,6 +2480,24 @@ impl Parser {
 
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
+
+        // Parse directives.
+        #[allow(clippy::never_loop, unreachable_code)]
+        while let Ok((ident, span)) = lexer.peek_ident_with_span() {
+            if let Some(kind) = DirectiveKind::from_ident(ident) {
+                self.push_rule_span(Rule::Directive, &mut lexer);
+                let _ = lexer.next_ident_with_span().unwrap();
+                match kind {
+                    DirectiveKind::Unimplemented(kind) => {
+                        return Err(Error::DirectiveNotYetImplemented { kind, span })
+                    }
+                }
+                self.pop_rule_span(&lexer);
+            } else {
+                break;
+            }
+        }
+
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
                 Err(error) => return Err(error),

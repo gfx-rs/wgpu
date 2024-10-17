@@ -355,7 +355,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    #[allow(dead_code)]
     pub(in crate::front::wgsl) fn peek_ident_with_span(
         &mut self,
     ) -> Result<(&'a str, Span), Error<'a>> {
