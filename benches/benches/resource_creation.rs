@@ -1,13 +1,13 @@
 use std::time::{Duration, Instant};
 
 use criterion::{criterion_group, Criterion, Throughput};
-use once_cell::sync::Lazy;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use std::sync::LazyLock;
 
 use crate::DeviceState;
 
 fn run_bench(ctx: &mut Criterion) {
-    let state = Lazy::new(DeviceState::new);
+    let state = LazyLock::new(DeviceState::new);
 
     const RESOURCES_TO_CREATE: usize = 8;
 
@@ -19,7 +19,7 @@ fn run_bench(ctx: &mut Criterion) {
         group.bench_function(
             format!("{threads} threads x {resources_per_thread} resource"),
             |b| {
-                Lazy::force(&state);
+                LazyLock::force(&state);
 
                 b.iter_custom(|iters| {
                     profiling::scope!("benchmark invocation");

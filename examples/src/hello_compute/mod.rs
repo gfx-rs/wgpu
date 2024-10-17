@@ -1,4 +1,4 @@
-use std::{mem::size_of_val, str::FromStr};
+use std::str::FromStr;
 use wgpu::util::DeviceExt;
 
 // Indicates a u32 overflow in an intermediate Collatz value

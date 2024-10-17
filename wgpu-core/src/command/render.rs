@@ -46,7 +46,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use std::sync::Arc;
-use std::{borrow::Cow, fmt, iter, mem::size_of, num::NonZeroU32, ops::Range, str};
+use std::{borrow::Cow, fmt, iter, num::NonZeroU32, ops::Range, str};
 
 use super::render_command::ArcRenderCommand;
 use super::{

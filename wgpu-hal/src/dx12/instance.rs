@@ -1,4 +1,4 @@
-use std::{mem::size_of_val, sync::Arc};
+use std::sync::Arc;
 
 use parking_lot::RwLock;
 use windows::{
