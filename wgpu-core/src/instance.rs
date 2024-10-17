@@ -293,12 +293,14 @@ impl Instance {
         api_log!("Instance::enumerate_adapters");
 
         let mut adapters = Vec::new();
-        for (_, instance) in self
+        for (_backend, instance) in self
             .instance_per_backend
             .iter()
             .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
         {
-            profiling::scope!("enumerating", &*format!("{:?}", backend));
+            // NOTE: We might be using `profiling` without any features. The empty backend of this
+            // macro emits no code, so unused code linting changes depending on the backend.
+            profiling::scope!("enumerating", &*format!("{:?}", _backend));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
