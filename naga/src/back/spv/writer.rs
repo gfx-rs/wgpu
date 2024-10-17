@@ -857,6 +857,16 @@ impl Writer {
             crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
                 self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
             }
+            crate::TypeInner::Atomic(crate::Scalar {
+                width: 4,
+                kind: crate::ScalarKind::Float,
+            }) => {
+                self.require_any(
+                    "32 bit floating-point atomics",
+                    &[spirv::Capability::AtomicFloat32AddEXT],
+                )?;
+                self.use_extension("SPV_EXT_shader_atomic_float_add");
+            }
             _ => {}
         }
         Ok(())

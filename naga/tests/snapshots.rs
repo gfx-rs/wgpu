@@ -790,6 +790,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
         ),
         (
+            "atomicOps-float32",
+            Targets::SPIRV | Targets::METAL | Targets::WGSL,
+        ),
+        (
             "atomicCompareExchange-int64",
             Targets::SPIRV | Targets::WGSL,
         ),
