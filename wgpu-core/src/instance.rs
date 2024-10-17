@@ -293,7 +293,7 @@ impl Instance {
         api_log!("Instance::enumerate_adapters");
 
         let mut adapters = Vec::new();
-        for (_, instance) in self
+        for (backend, instance) in self
             .instance_per_backend
             .iter()
             .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
