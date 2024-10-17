@@ -3323,7 +3323,10 @@ impl<W: Write> Writer<W> {
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
-                    write!(self.out, "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    write!(
+                        self.out,
+                        "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
+                    )?;
                     if let Some(predicate) = predicate {
                         self.put_expression(predicate, &context.expression, true)?;
                     } else {
