@@ -630,7 +630,7 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
     .run_sync(|ctx| {
         // This test checks that when the device is dropped (such as in a GC),
-        // the provided DeviceLostClosure is called with reason DeviceLostReason::Unknown.
+        // the provided DeviceLostClosure is called with reason DeviceLostReason::Dropped.
         // Fails on webgl because webgl doesn't implement drop.
         static WAS_CALLED: std::sync::atomic::AtomicBool = AtomicBool::new(false);
 
@@ -642,8 +642,7 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
         });
         ctx.device.set_device_lost_callback(callback);
 
-        // Drop the device.
-        drop(ctx.device);
+        drop(ctx);
 
         assert!(
             WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
@@ -670,35 +669,6 @@ static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguratio
         let replacement_callback = Box::new(move |_r, _m| {});
         ctx.device.set_device_lost_callback(replacement_callback);
 
-        assert!(
-            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
-
-#[gpu_test]
-static DROPPED_GLOBAL_THEN_DEVICE_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().skip(FailureCase::always()))
-    .run_sync(|ctx| {
-        // What we want to do is to drop the Global, forcing a code path that
-        // eventually calls Device.prepare_to_die, without having first dropped
-        // the device. This models what might happen in a user agent that kills
-        // wgpu without providing a more orderly shutdown. In such a case, the
-        // device lost callback should be invoked with the message "Device is
-        // dying."
-        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
-
-        // Set a LoseDeviceCallback on the device.
-        let callback = Box::new(|reason, message| {
-            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert_eq!(reason, wgt::DeviceLostReason::Dropped);
-            assert_eq!(message, "Device is dying.");
-        });
-        ctx.device.set_device_lost_callback(callback);
-
-        // TODO: Drop the Global, somehow.
-
-        // Confirm that the callback was invoked.
         assert!(
             WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
             "Device lost callback should have been called."
