@@ -184,7 +184,7 @@ static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
                 // Testing multisampling is important, because some backends don't behave well if one
                 // tries to compile code in an unsupported multisample count. Failing to validate here
                 // has historically resulted in requesting the back end to compile code.
-                for power_of_two in [1, 2, 4, 8, 16, 32, 64] {
+                for power_of_two in [1, 2, 4, 8, 16, 32, 64].map(wgpu::SampleCount::new) {
                     let _ = ctx
                         .device
                         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {

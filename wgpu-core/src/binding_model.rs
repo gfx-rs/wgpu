@@ -21,6 +21,7 @@ use arrayvec::ArrayVec;
 use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
+use wgt::SampleCount;
 
 use std::{
     borrow::Cow,
@@ -139,7 +140,7 @@ pub enum CreateBindGroupError {
     InvalidTextureMultisample {
         binding: u32,
         layout_multisampled: bool,
-        view_samples: u32,
+        view_samples: SampleCount,
     },
     #[error("Texture binding {binding} expects sample type = {layout_sample_type:?}, but given a view with format = {view_format:?}")]
     InvalidTextureSampleType {

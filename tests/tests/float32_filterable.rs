@@ -11,7 +11,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count: wgpu::SampleCount::no_multisampling(),
         dimension: wgpu::TextureDimension::D2,
         format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,

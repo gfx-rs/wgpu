@@ -73,7 +73,7 @@ impl super::DeviceShared {
                 let mut color_refs = Vec::with_capacity(e.key().colors.len());
                 let mut resolve_refs = Vec::with_capacity(color_refs.capacity());
                 let mut ds_ref = None;
-                let samples = vk::SampleCountFlags::from_raw(e.key().sample_count);
+                let samples = vk::SampleCountFlags::from_raw(e.key().sample_count.get());
                 let unused = vk::AttachmentReference {
                     attachment: vk::ATTACHMENT_UNUSED,
                     layout: vk::ImageLayout::UNDEFINED,
@@ -1063,7 +1063,7 @@ impl crate::Device for super::Device {
             .extent(conv::map_copy_extent(&copy_size))
             .mip_levels(desc.mip_level_count)
             .array_layers(desc.array_layer_count())
-            .samples(vk::SampleCountFlags::from_raw(desc.sample_count))
+            .samples(vk::SampleCountFlags::from_raw(desc.sample_count.get()))
             .tiling(vk::ImageTiling::OPTIMAL)
             .usage(conv::map_texture_usage(desc.usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
@@ -1922,7 +1922,7 @@ impl crate::Device for super::Device {
             (desc.multisample.mask >> 32) as u32,
         ];
         let vk_multisample = vk::PipelineMultisampleStateCreateInfo::default()
-            .rasterization_samples(vk::SampleCountFlags::from_raw(desc.multisample.count))
+            .rasterization_samples(vk::SampleCountFlags::from_raw(desc.multisample.count.get()))
             .alpha_to_coverage_enable(desc.multisample.alpha_to_coverage_enabled)
             .sample_mask(&vk_sample_mask);
 

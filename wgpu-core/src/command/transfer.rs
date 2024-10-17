@@ -21,7 +21,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsages, Extent3d, TextureUsages};
+use wgt::{BufferAddress, BufferUsages, Extent3d, SampleCount, TextureUsages};
 
 use std::sync::Arc;
 
@@ -129,7 +129,7 @@ pub enum TransferError {
     #[error("Cannot encode this copy because of a missing downelevel flag")]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Source texture sample count must be 1, got {sample_count}")]
-    InvalidSampleCount { sample_count: u32 },
+    InvalidSampleCount { sample_count: SampleCount },
     #[error("Requested mip level {requested} does no exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
 }

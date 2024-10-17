@@ -1,6 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use std::mem::size_of;
 use wgpu::util::DeviceExt;
+use wgpu::SampleCount;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -149,7 +150,7 @@ impl crate::framework::Example for Example {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Stencil8,
             view_formats: &[],
@@ -184,7 +185,7 @@ impl crate::framework::Example for Example {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: SampleCount::no_multisampling(),
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Stencil8,
             view_formats: &[],
