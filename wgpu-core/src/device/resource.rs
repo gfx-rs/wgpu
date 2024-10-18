@@ -3106,8 +3106,23 @@ impl Device {
                 }
 
                 let aspect = hal::FormatAspects::from(ds.format);
-                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
-                    break 'error Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
+                match (
+                    aspect.contains(hal::FormatAspects::DEPTH),
+                    ds.depth_write_enabled.zip(ds.depth_compare),
+                ) {
+                    (true, Some(_)) | (false, None) => (),
+                    (true, None) => {
+                        break 'error Some(pipeline::DepthStencilStateError::DepthOpsNotSpecified {
+                            format: ds.format,
+                            depth_write_enabled: ds.depth_write_enabled,
+                            depth_compare: ds.depth_compare,
+                        })
+                    }
+                    (false, Some(_)) => {
+                        break 'error Some(pipeline::DepthStencilStateError::FormatNotDepth(
+                            ds.format,
+                        ))
+                    }
                 }
                 if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspects::STENCIL) {
                     break 'error Some(pipeline::DepthStencilStateError::FormatNotStencil(
