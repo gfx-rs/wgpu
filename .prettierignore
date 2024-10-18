@@ -1,0 +1,4 @@
+**/*.frag
+**/*.vert
+naga/tests/in/
+naga/tests/out/
