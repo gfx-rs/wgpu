@@ -1,69 +1,61 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
-use std::ffi::c_uint;
-use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 use std::sync::Once;
 use std::thread;
 
-use core_graphics_types::{
-    base::CGFloat,
-    geometry::{CGRect, CGSize},
-};
-use metal::foreign_types::ForeignType;
-use objc::{
+use objc2::{
     class,
-    declare::ClassDecl,
-    msg_send,
-    rc::{autoreleasepool, StrongPtr},
-    runtime::{Class, Object, Sel, BOOL, NO, YES},
-    sel, sel_impl,
+    declare::ClassBuilder,
+    msg_send, msg_send_id,
+    rc::{autoreleasepool, Retained},
+    runtime::{AnyClass, AnyObject, Bool, ProtocolObject, Sel},
+    sel, ClassType,
+};
+use objc2_foundation::{CGFloat, CGSize, MainThreadMarker, NSObject, NSObjectProtocol};
+use objc2_metal::MTLTextureType;
+use objc2_quartz_core::{
+    kCAGravityResize, CAAutoresizingMask, CALayer, CAMetalDrawable, CAMetalLayer,
 };
 use parking_lot::{Mutex, RwLock};
 
-#[link(name = "QuartzCore", kind = "framework")]
-extern "C" {
-    #[allow(non_upper_case_globals)]
-    static kCAGravityResize: *mut Object;
-}
-
 extern "C" fn layer_should_inherit_contents_scale_from_window(
-    _: &Class,
+    _: &AnyClass,
     _: Sel,
-    _layer: *mut Object,
+    _layer: *mut AnyObject,
     _new_scale: CGFloat,
-    _from_window: *mut Object,
-) -> BOOL {
-    YES
+    _from_window: *mut AnyObject,
+) -> Bool {
+    Bool::YES
 }
 
 static CAML_DELEGATE_REGISTER: Once = Once::new();
 
 #[derive(Debug)]
-pub struct HalManagedMetalLayerDelegate(&'static Class);
+pub struct HalManagedMetalLayerDelegate(&'static AnyClass);
 
 impl HalManagedMetalLayerDelegate {
     pub fn new() -> Self {
         let class_name = format!("HalManagedMetalLayerDelegate@{:p}", &CAML_DELEGATE_REGISTER);
 
         CAML_DELEGATE_REGISTER.call_once(|| {
-            type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
-            let mut decl = ClassDecl::new(&class_name, class!(NSObject)).unwrap();
+            let mut decl = ClassBuilder::new(&class_name, class!(NSObject)).unwrap();
+            #[allow(trivial_casts)] // false positive
             unsafe {
                 // <https://developer.apple.com/documentation/appkit/nsviewlayercontentscaledelegate/3005294-layer?language=objc>
-                decl.add_class_method::<Fun>(
+                decl.add_class_method::<extern "C" fn(_, _, _, _, _) -> _>(
                     sel!(layer:shouldInheritContentsScale:fromWindow:),
                     layer_should_inherit_contents_scale_from_window,
                 );
             }
             decl.register();
         });
-        Self(Class::get(&class_name).unwrap())
+        Self(AnyClass::get(&class_name).unwrap())
     }
 }
 
 impl super::Surface {
-    fn new(layer: metal::MetalLayer) -> Self {
+    fn new(layer: Retained<CAMetalLayer>) -> Self {
         Self {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
@@ -74,21 +66,14 @@ impl super::Surface {
     }
 
     /// If not called on the main thread, this will panic.
-    #[allow(clippy::transmute_ptr_to_ref)]
-    pub unsafe fn from_view(view: NonNull<Object>) -> Self {
+    pub unsafe fn from_view(view: NonNull<NSObject>) -> Self {
         let layer = unsafe { Self::get_metal_layer(view) };
-        let layer = ManuallyDrop::new(layer);
-        // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
-        // we transfer the retain count to `MetalLayer` using `ManuallyDrop`.
-        let layer = unsafe { metal::MetalLayer::from_ptr(layer.cast()) };
         Self::new(layer)
     }
 
-    pub unsafe fn from_layer(layer: &metal::MetalLayerRef) -> Self {
-        let class = class!(CAMetalLayer);
-        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
-        assert_eq!(proper_kind, YES);
-        Self::new(layer.to_owned())
+    pub unsafe fn from_layer(layer: &CAMetalLayer) -> Self {
+        assert!(layer.isKindOfClass(CAMetalLayer::class()));
+        Self::new(layer.retain())
     }
 
     /// Get or create a new `CAMetalLayer` associated with the given `NSView`
@@ -101,21 +86,20 @@ impl super::Surface {
     /// # Safety
     ///
     /// The `view` must be a valid instance of `NSView` or `UIView`.
-    pub(crate) unsafe fn get_metal_layer(view: NonNull<Object>) -> StrongPtr {
-        let is_main_thread: BOOL = msg_send![class!(NSThread), isMainThread];
-        if is_main_thread == NO {
+    pub(crate) unsafe fn get_metal_layer(view: NonNull<NSObject>) -> Retained<CAMetalLayer> {
+        let Some(_mtm) = MainThreadMarker::new() else {
             panic!("get_metal_layer cannot be called in non-ui thread.");
-        }
+        };
 
         // Ensure that the view is layer-backed.
         // Views are always layer-backed in UIKit.
         #[cfg(target_os = "macos")]
-        let () = msg_send![view.as_ptr(), setWantsLayer: YES];
+        let () = msg_send![view.as_ptr(), setWantsLayer: true];
 
-        let root_layer: *mut Object = msg_send![view.as_ptr(), layer];
+        let root_layer: Option<Retained<CALayer>> = msg_send_id![view.as_ptr(), layer];
         // `-[NSView layer]` can return `NULL`, while `-[UIView layer]` should
         // always be available.
-        assert!(!root_layer.is_null(), "failed making the view layer-backed");
+        let root_layer = root_layer.expect("failed making the view layer-backed");
 
         // NOTE: We explicitly do not touch properties such as
         // `layerContentsPlacement`, `needsDisplayOnBoundsChange` and
@@ -125,8 +109,7 @@ impl super::Surface {
         // `NSViewLayerContentsRedrawDuringViewResize`, which allows the view
         // to receive `drawRect:`/`updateLayer` calls).
 
-        let is_metal_layer: BOOL = msg_send![root_layer, isKindOfClass: class!(CAMetalLayer)];
-        if is_metal_layer == YES {
+        if root_layer.isKindOfClass(CAMetalLayer::class()) {
             // The view has a `CAMetalLayer` as the root layer, which can
             // happen for example if user overwrote `-[NSView layerClass]` or
             // the view is `MTKView`.
@@ -135,7 +118,7 @@ impl super::Surface {
             // render directly into that; after all, the user passed a view
             // with an explicit Metal layer to us, so this is very likely what
             // they expect us to do.
-            unsafe { StrongPtr::retain(root_layer) }
+            unsafe { Retained::cast(root_layer) }
         } else {
             // The view does not have a `CAMetalLayer` as the root layer (this
             // is the default for most views).
@@ -204,8 +187,8 @@ impl super::Surface {
             // we're going to do.
 
             // Create a new sublayer.
-            let new_layer: *mut Object = msg_send![class!(CAMetalLayer), new];
-            let () = msg_send![root_layer, addSublayer: new_layer];
+            let new_layer = CAMetalLayer::new();
+            root_layer.addSublayer(&new_layer);
 
             // Automatically resize the sublayer's frame to match the
             // superlayer's bounds.
@@ -220,15 +203,15 @@ impl super::Surface {
             // We _could_ also let `configure` set the `bounds` size, however
             // that would be inconsistent with using the root layer directly
             // (as we may do, see above).
-            let width_sizable = 1 << 1; // kCALayerWidthSizable
-            let height_sizable = 1 << 4; // kCALayerHeightSizable
-            let mask: c_uint = width_sizable | height_sizable;
-            let () = msg_send![new_layer, setAutoresizingMask: mask];
+            new_layer.setAutoresizingMask(
+                CAAutoresizingMask::kCALayerWidthSizable
+                    | CAAutoresizingMask::kCALayerHeightSizable,
+            );
 
             // Specify the relative size that the auto resizing mask above
             // will keep (i.e. tell it to fill out its superlayer).
-            let frame: CGRect = msg_send![root_layer, bounds];
-            let () = msg_send![new_layer, setFrame: frame];
+            let frame = root_layer.bounds();
+            new_layer.setFrame(frame);
 
             // The gravity to use when the layer's `drawableSize` isn't the
             // same as the bounds rectangle.
@@ -241,26 +224,25 @@ impl super::Surface {
             // Unfortunately, it also makes it harder to see changes to
             // `width` and `height` in `configure`. When debugging resize
             // issues, swap this for `kCAGravityTopLeft` instead.
-            let _: () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityResize }];
+            new_layer.setContentsGravity(unsafe { kCAGravityResize });
 
             // Set initial scale factor of the layer. This is kept in sync by
             // `configure` (on UIKit), and the delegate below (on AppKit).
-            let scale_factor: CGFloat = msg_send![root_layer, contentsScale];
-            let () = msg_send![new_layer, setContentsScale: scale_factor];
+            let scale_factor = root_layer.contentsScale();
+            new_layer.setContentsScale(scale_factor);
 
             let delegate = HalManagedMetalLayerDelegate::new();
-            let () = msg_send![new_layer, setDelegate: delegate.0];
+            new_layer.setDelegate(std::mem::transmute(delegate.0));
 
-            unsafe { StrongPtr::new(new_layer) }
+            new_layer
         }
     }
 
     pub(super) fn dimensions(&self) -> wgt::Extent3d {
-        let (size, scale): (CGSize, CGFloat) = unsafe {
-            let render_layer_borrow = self.render_layer.lock();
-            let render_layer = render_layer_borrow.as_ref();
-            let bounds: CGRect = msg_send![render_layer, bounds];
-            let contents_scale: CGFloat = msg_send![render_layer, contentsScale];
+        let (size, scale): (CGSize, CGFloat) = {
+            let render_layer = self.render_layer.lock();
+            let bounds = render_layer.bounds();
+            let contents_scale = render_layer.contentsScale();
             (bounds.size, contents_scale)
         };
 
@@ -296,8 +278,8 @@ impl crate::Surface for super::Surface {
         let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 
         match config.composite_alpha_mode {
-            wgt::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
-            wgt::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
+            wgt::CompositeAlphaMode::Opaque => render_layer.setOpaque(true),
+            wgt::CompositeAlphaMode::PostMultiplied => render_layer.setOpaque(false),
             _ => (),
         }
 
@@ -317,33 +299,32 @@ impl crate::Surface for super::Surface {
         // TODO: Is there a way that we could listen to such changes instead?
         #[cfg(not(target_os = "macos"))]
         {
-            let superlayer: *mut Object = msg_send![render_layer.as_ptr(), superlayer];
-            if !superlayer.is_null() {
-                let scale_factor: CGFloat = msg_send![superlayer, contentsScale];
-                let () = msg_send![render_layer.as_ptr(), setContentsScale: scale_factor];
+            if let Some(superlayer) = render_layer.superlayer() {
+                let scale_factor = superlayer.contentsScale();
+                render_layer.setContentsScale(scale_factor);
             }
         }
 
         let device_raw = device.shared.device.lock();
-        render_layer.set_device(&device_raw);
-        render_layer.set_pixel_format(caps.map_format(config.format));
-        render_layer.set_framebuffer_only(framebuffer_only);
-        render_layer.set_presents_with_transaction(self.present_with_transaction);
+        render_layer.setDevice(Some(&device_raw));
+        render_layer.setPixelFormat(caps.map_format(config.format));
+        render_layer.setFramebufferOnly(framebuffer_only);
+        render_layer.setPresentsWithTransaction(self.present_with_transaction);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
         let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
-        if wants_edr != render_layer.wants_extended_dynamic_range_content() {
-            render_layer.set_wants_extended_dynamic_range_content(wants_edr);
+        if wants_edr != render_layer.wantsExtendedDynamicRangeContent() {
+            render_layer.setWantsExtendedDynamicRangeContent(wants_edr);
         }
 
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-        render_layer.set_maximum_drawable_count(config.maximum_frame_latency as u64 + 1);
-        render_layer.set_drawable_size(drawable_size);
+        render_layer.setMaximumDrawableCount(config.maximum_frame_latency as usize + 1);
+        render_layer.setDrawableSize(drawable_size);
         if caps.can_set_next_drawable_timeout {
-            let () = msg_send![*render_layer, setAllowsNextDrawableTimeout:false];
+            render_layer.setAllowsNextDrawableTimeout(false);
         }
         if caps.can_set_display_sync {
-            let () = msg_send![*render_layer, setDisplaySyncEnabled: display_sync];
+            render_layer.setDisplaySyncEnabled(display_sync);
         }
 
         Ok(())
@@ -359,9 +340,9 @@ impl crate::Surface for super::Surface {
         _fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();
-        let (drawable, texture) = match autoreleasepool(|| {
+        let (drawable, texture) = match autoreleasepool(|_| {
             render_layer
-                .next_drawable()
+                .nextDrawable()
                 .map(|drawable| (drawable.to_owned(), drawable.texture().to_owned()))
         }) {
             Some(pair) => pair,
@@ -374,7 +355,7 @@ impl crate::Surface for super::Surface {
             texture: super::Texture {
                 raw: texture,
                 format: swapchain_format,
-                raw_type: metal::MTLTextureType::D2,
+                raw_type: MTLTextureType::MTLTextureType2D,
                 array_layers: 1,
                 mip_levels: 1,
                 copy_size: crate::CopyExtent {
@@ -383,7 +364,7 @@ impl crate::Surface for super::Surface {
                     depth: 1,
                 },
             },
-            drawable,
+            drawable: ProtocolObject::from_retained(drawable),
             present_with_transaction: self.present_with_transaction,
         };
 
