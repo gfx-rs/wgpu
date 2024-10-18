@@ -3,12 +3,15 @@
 //! See also <https://www.w3.org/TR/WGSL/#directives>.
 
 pub mod enable_extension;
+pub(crate) mod language_extension;
 
 /// A parsed sentinel word indicating the type of directive to be parsed next.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum DirectiveKind {
     /// An [`enable_extension`].
     Enable,
+    /// A language extension.
+    Requires,
     Unimplemented(UnimplementedDirectiveKind),
 }
 
@@ -22,7 +25,7 @@ impl DirectiveKind {
         Some(match s {
             Self::DIAGNOSTIC => Self::Unimplemented(UnimplementedDirectiveKind::Diagnostic),
             Self::ENABLE => Self::Enable,
-            Self::REQUIRES => Self::Unimplemented(UnimplementedDirectiveKind::Requires),
+            Self::REQUIRES => Self::Requires,
             _ => return None,
         })
     }
@@ -31,9 +34,9 @@ impl DirectiveKind {
     pub const fn to_ident(self) -> &'static str {
         match self {
             Self::Enable => Self::ENABLE,
+            Self::Requires => Self::REQUIRES,
             Self::Unimplemented(kind) => match kind {
                 UnimplementedDirectiveKind::Diagnostic => Self::DIAGNOSTIC,
-                UnimplementedDirectiveKind::Requires => Self::REQUIRES,
             },
         }
     }
@@ -51,14 +54,12 @@ impl DirectiveKind {
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum UnimplementedDirectiveKind {
     Diagnostic,
-    Requires,
 }
 
 impl UnimplementedDirectiveKind {
     pub const fn tracking_issue_num(self) -> u16 {
         match self {
             Self::Diagnostic => 5320,
-            Self::Requires => 6350,
         }
     }
 }
@@ -87,19 +88,6 @@ error: `diagnostic` is not yet implemented
   │ ^^^^^^^^^^ this global directive is standard, but not yet implemented
   │
   = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5320>, so they can prioritize it!
-
-";
-                }
-                UnimplementedDirectiveKind::Requires => {
-                    shader = "requires readonly_and_readwrite_storage_textures";
-                    expected_msg = "\
-error: `requires` is not yet implemented
-  ┌─ wgsl:1:1
-  │
-1 │ requires readonly_and_readwrite_storage_textures
-  │ ^^^^^^^^ this global directive is standard, but not yet implemented
-  │
-  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/6350>, so they can prioritize it!
 
 ";
                 }
@@ -141,7 +129,7 @@ error: expected global declaration, but found a global directive
 
 ";
                 }
-                DirectiveKind::Unimplemented(UnimplementedDirectiveKind::Requires) => {
+                DirectiveKind::Requires => {
                     directive = "requires readonly_and_readwrite_storage_textures";
                     expected_msg = "\
 error: expected global declaration, but found a global directive
