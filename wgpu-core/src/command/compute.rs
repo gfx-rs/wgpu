@@ -29,7 +29,7 @@ use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
 
 use std::sync::Arc;
-use std::{fmt, mem::size_of, str};
+use std::{fmt, str};
 
 use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 

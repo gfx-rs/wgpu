@@ -21,6 +21,11 @@ path = "benches/root.rs"
 # tracy = ["dep:tracy-client", "profiling/profile-with-tracy"]
 # superluminal = ["profiling/profile-with-superluminal"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("tracy"))',
+] }
+
 [dependencies]
 bincode.workspace = true
 bytemuck.workspace = true
@@ -38,7 +43,6 @@ naga = { workspace = true, features = [
     "wgsl-out",
 ] }
 nanorand.workspace = true
-once_cell.workspace = true
 pollster.workspace = true
 profiling.workspace = true
 rayon.workspace = true

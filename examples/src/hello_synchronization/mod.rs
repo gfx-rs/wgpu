@@ -1,5 +1,3 @@
-use std::mem::size_of_val;
-
 const ARR_SIZE: usize = 128;
 
 struct ExecuteResults {
