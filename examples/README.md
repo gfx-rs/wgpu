@@ -33,6 +33,7 @@ The rest of the examples are for demonstrating specific features that you can co
 - `hello_workgroups` - Teaches the user about the basics of compute workgroups; what they are and what they can do.
 - `hello_synchronization` - Teaches the user about synchronization in WGSL, the ability to force all invocations in a workgroup to synchronize with each other before continuing via a sort of barrier.
 - `storage_texture` - Demonstrates the use of storage textures as outputs to compute shaders. The example on the outside seems very similar to `render_to_texture` in that it outputs an image either to the file system or the web page, except displaying a grayscale render of the Mandelbrot Set. However, inside, the example dispatches a grid of compute workgroups, one for each pixel, which calculates the pixel value and stores it to the corresponding pixel of the output storage texture. This example either outputs an image file of your naming (pass command line arguments after specifying a `--` like `cargo run --bin wgpu-examples -- storage_texture "test.png"`) or adds an `img` element containing the image to the page in WASM.
+- `big_compute_buffers` - Demonstrates how you can split _large_ datasets across multiple buffers, but treating them (in your `wgsl` code) as a single, contigious array.
 
 #### Combined
 
