@@ -638,6 +638,18 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 | crate::AtomicFunction::Exchange { compare: None } => {}
             }
         }
+        Statement::ImageAtomic {
+            ref mut image,
+            ref mut coordinate,
+            ref mut sample,
+            fun: _,
+            ref mut value,
+        } => {
+            adjust(image);
+            adjust(coordinate);
+            adjust(sample);
+            adjust(value);
+        }
         Statement::WorkGroupUniformLoad {
             ref mut pointer,
             ref mut result,

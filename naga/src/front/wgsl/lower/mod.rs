@@ -2349,6 +2349,42 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
+                        "imageAtomicMin" | "imageAtomicMax" => {
+                            let mut args = ctx.prepare_args(arguments, 3, span);
+
+                            let image = args.next()?;
+                            let image = self.expression(image, ctx)?;
+
+                            let coordinate = self.expression(args.next()?, ctx)?;
+
+                            let ty = ctx
+                                .ensure_type_exists(crate::TypeInner::Scalar(crate::Scalar::I32));
+                            // We fib in a zero value for sample because it is not supported
+                            let sample =
+                                ctx.append_expression(crate::Expression::ZeroValue(ty), span)?;
+
+                            let value = self.expression(args.next()?, ctx)?;
+
+                            args.finish()?;
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .extend(rctx.emitter.finish(&rctx.function.expressions));
+                            rctx.emitter.start(&rctx.function.expressions);
+                            let stmt = crate::Statement::ImageAtomic {
+                                image,
+                                coordinate,
+                                sample,
+                                fun: match function.name {
+                                    "imageAtomicMin" => crate::AtomicFunction::Min,
+                                    "imageAtomicMax" => crate::AtomicFunction::Max,
+                                    _ => unreachable!(),
+                                },
+                                value,
+                            };
+                            rctx.block.push(stmt, span);
+                            return Ok(None);
+                        }
                         "storageBarrier" => {
                             ctx.prepare_args(arguments, 0, span).finish()?;
 

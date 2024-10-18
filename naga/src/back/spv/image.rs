@@ -1189,4 +1189,71 @@ impl<'w> BlockContext<'w> {
 
         Ok(())
     }
+
+    pub(super) fn write_image_atomic(
+        &mut self,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        sample: Handle<crate::Expression>,
+        fun: crate::AtomicFunction,
+        value: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<(), Error> {
+        let image_id = match self.ir_function.originating_global(image) {
+            Some(handle) => self.writer.global_variables[handle].var_id,
+            _ => return Err(Error::Validation("Unexpected image type")),
+        };
+        let crate::TypeInner::Image { class, .. } =
+            *self.fun_info[image].ty.inner_with(&self.ir_module.types)
+        else {
+            return Err(Error::Validation("Invalid image type"));
+        };
+        let crate::ImageClass::Storage { format, .. } = class else {
+            return Err(Error::Validation("Invalid image class"));
+        };
+        let scalar = format.into();
+        let pointer_type_id = self.get_type_id(LookupType::Local(LocalType::LocalPointer {
+            base: NumericType::Scalar(scalar),
+            class: spirv::StorageClass::Image,
+        }));
+        if scalar.width == 8 {
+            self.writer
+                .require_any("64 bit image atomics", &[spirv::Capability::Int64Atomics])?;
+        }
+        let pointer_id = self.gen_id();
+        let coordinates = self.write_image_coordinates(coordinate, None, block)?;
+        let sample_id = self.cached[sample];
+        block.body.push(Instruction::image_texel_pointer(
+            pointer_type_id,
+            pointer_id,
+            image_id,
+            coordinates.value_id,
+            sample_id,
+        ));
+
+        let op = match fun {
+            crate::AtomicFunction::Max => spirv::Op::AtomicUMax,
+            crate::AtomicFunction::Min => spirv::Op::AtomicUMin,
+            _ => return Err(Error::Validation("Invalid image atomic operation")),
+        };
+        let result_type_id = self.get_expression_type_id(&self.fun_info[value].ty);
+        let id = self.gen_id();
+        let space = crate::AddressSpace::Handle;
+        let (semantics, scope) = space.to_spirv_semantics_and_scope();
+        let scope_constant_id = self.get_scope_constant(scope as u32);
+        let semantics_id = self.get_index_constant(semantics.bits());
+        let value_id = self.cached[value];
+
+        block.body.push(Instruction::image_atomic(
+            op,
+            result_type_id,
+            id,
+            pointer_id,
+            scope_constant_id,
+            semantics_id,
+            value_id,
+        ));
+
+        Ok(())
+    }
 }
