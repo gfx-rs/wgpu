@@ -1,3 +1,4 @@
+use crate::diagnostic_filter::{ConflictingDiagnosticRuleError, DiagnosticTriggeringRule};
 use crate::front::wgsl::parse::directive::{DirectiveKind, UnimplementedDirectiveKind};
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
@@ -273,6 +274,30 @@ pub(crate) enum Error<'a> {
     DirectiveAfterFirstGlobalDecl {
         directive_span: Span,
     },
+    DiagnosticInvalidSeverity {
+        severity_control_name_span: Span,
+    },
+    DiagnosticInvalidRuleName {
+        diagnostic_rule_name_span: Span,
+    },
+    DiagnosticDuplicateTriggeringRule {
+        triggering_rule: DiagnosticTriggeringRule,
+        triggering_rule_spans: [Span; 2],
+    },
+}
+
+// TODO: better place
+impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
+    fn from(value: ConflictingDiagnosticRuleError) -> Self {
+        let ConflictingDiagnosticRuleError {
+            triggering_rule,
+            triggering_rule_spans,
+        } = value;
+        Self::DiagnosticDuplicateTriggeringRule {
+            triggering_rule,
+            triggering_rule_spans,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -899,6 +924,53 @@ impl<'a> Error<'a> {
                 )
                 .into()],
             },
+            Error::DiagnosticInvalidSeverity {
+                severity_control_name_span,
+            } => ParseError {
+                message: "invalid `diagnostic(…)` severity".into(),
+                labels: vec![(
+                    severity_control_name_span,
+                    "not a valid severity level".into(),
+                )],
+                // TODO: note expected values
+                notes: vec![],
+            },
+            Error::DiagnosticInvalidRuleName {
+                diagnostic_rule_name_span,
+            } => ParseError {
+                // TODO: This should be a warning, not an error!
+                message: "invalid `diagnostic(…)` rule name".into(),
+                labels: vec![(diagnostic_rule_name_span, "not a valid rule name".into())],
+                // TODO: note expected values
+                notes: vec![],
+            },
+            Error::DiagnosticDuplicateTriggeringRule {
+                triggering_rule,
+                triggering_rule_spans,
+            } => {
+                let [first_span, second_span] = triggering_rule_spans;
+                ParseError {
+                    message: format!(
+                        "found conflicting `diagnostic(…)` rules for `{}`",
+                        triggering_rule.to_ident()
+                    ),
+                    // TODO: consider carrying spans for the rule name, too
+                    labels: vec![
+                        (first_span, "first rule's severity".into()),
+                        (
+                            second_span,
+                            "second rule's severity, which conflicts".into(),
+                        ),
+                    ],
+                    notes: vec![concat!(
+                        "multiple `@diagnostic(…)` rules with the same triggering rule ",
+                        "conflict unless the severity is the same; ",
+                        "delete the rule you don't want, or ",
+                        "ensure that all severities with the same rule name match"
+                    )
+                    .into()],
+                }
+            }
         }
     }
 }
