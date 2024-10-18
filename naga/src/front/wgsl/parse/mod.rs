@@ -2258,6 +2258,36 @@ impl Parser {
         Ok(fun)
     }
 
+    #[allow(unused)]
+    fn directive_ident_list<'a>(
+        &self,
+        lexer: &mut Lexer<'a>,
+        handler: impl FnMut(&'a str, Span) -> Result<(), Error<'a>>,
+    ) -> Result<(), Error<'a>> {
+        let mut handler = handler;
+        'next_arg: loop {
+            let (ident, span) = lexer.next_ident_with_span()?;
+            handler(ident, span)?;
+
+            let expected_token = match lexer.peek().0 {
+                Token::Separator(',') => {
+                    let _ = lexer.next();
+                    if matches!(lexer.peek().0, Token::Word(..)) {
+                        continue 'next_arg;
+                    }
+                    ExpectedToken::AfterIdentListComma
+                }
+                _ => ExpectedToken::AfterIdentListArg,
+            };
+
+            if !matches!(lexer.next().0, Token::Separator(';')) {
+                return Err(Error::Unexpected(span, expected_token));
+            }
+
+            break Ok(());
+        }
+    }
+
     fn global_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
