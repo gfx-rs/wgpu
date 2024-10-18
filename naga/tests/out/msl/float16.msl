@@ -1,0 +1,99 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct UniformCompatible {
+    uint val_u32_;
+    int val_i32_;
+    float val_f32_;
+    half val_f16_;
+    char _pad4[2];
+    metal::half2 val_f16_2_;
+    char _pad5[4];
+    metal::half3 val_f16_3_;
+    metal::half4 val_f16_4_;
+    half final_value;
+};
+struct type_7 {
+    half inner[2];
+};
+struct StorageCompatible {
+    type_7 val_f16_array_2_;
+    type_7 val_f16_array_2_1;
+};
+constant half constant_variable = 15.203125;
+
+half f16_function(
+    half x,
+    constant UniformCompatible& input_uniform,
+    device UniformCompatible const& input_storage,
+    device StorageCompatible const& input_arrays,
+    device UniformCompatible& output,
+    device StorageCompatible& output_arrays
+) {
+    half val = 15.203125;
+    half _e6 = val;
+    val = _e6 + (1.0 - 33344.0);
+    half _e8 = val;
+    half _e11 = val;
+    val = _e11 + (_e8 + 5.0);
+    float _e15 = input_uniform.val_f32_;
+    half _e16 = val;
+    half _e20 = val;
+    val = _e20 + static_cast<half>(_e15 + static_cast<float>(_e16));
+    half _e24 = input_uniform.val_f16_;
+    half _e27 = val;
+    val = _e27 + metal::half3(_e24).z;
+    half _e33 = input_uniform.val_f16_;
+    half _e36 = input_storage.val_f16_;
+    output.val_f16_ = _e33 + _e36;
+    metal::half2 _e42 = input_uniform.val_f16_2_;
+    metal::half2 _e45 = input_storage.val_f16_2_;
+    output.val_f16_2_ = _e42 + _e45;
+    metal::half3 _e51 = input_uniform.val_f16_3_;
+    metal::half3 _e54 = input_storage.val_f16_3_;
+    output.val_f16_3_ = _e51 + _e54;
+    metal::half4 _e60 = input_uniform.val_f16_4_;
+    metal::half4 _e63 = input_storage.val_f16_4_;
+    output.val_f16_4_ = _e60 + _e63;
+    type_7 _e69 = input_arrays.val_f16_array_2_;
+    output_arrays.val_f16_array_2_ = _e69;
+    half _e70 = val;
+    half _e72 = val;
+    val = _e72 + metal::abs(_e70);
+    half _e74 = val;
+    half _e75 = val;
+    half _e76 = val;
+    half _e78 = val;
+    val = _e78 + metal::clamp(_e74, _e75, _e76);
+    half _e80 = val;
+    half _e82 = val;
+    half _e85 = val;
+    val = _e85 + metal::dot(metal::half2(_e80), metal::half2(_e82));
+    half _e87 = val;
+    half _e88 = val;
+    half _e90 = val;
+    val = _e90 + metal::max(_e87, _e88);
+    half _e92 = val;
+    half _e93 = val;
+    half _e95 = val;
+    val = _e95 + metal::min(_e92, _e93);
+    half _e97 = val;
+    half _e99 = val;
+    val = _e99 + metal::sign(_e97);
+    return 1.0;
+}
+
+kernel void main_(
+  constant UniformCompatible& input_uniform [[user(fake0)]]
+, device UniformCompatible const& input_storage [[user(fake0)]]
+, device StorageCompatible const& input_arrays [[user(fake0)]]
+, device UniformCompatible& output [[user(fake0)]]
+, device StorageCompatible& output_arrays [[user(fake0)]]
+) {
+    half _e3 = f16_function(2.0, input_uniform, input_storage, input_arrays, output, output_arrays);
+    output.final_value = _e3;
+    return;
+}

@@ -114,7 +114,10 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<crate::StorageFormat
 pub fn get_scalar_type(word: &str) -> Option<Scalar> {
     use crate::ScalarKind as Sk;
     match word {
-        // "f16" => Some(Scalar { kind: Sk::Float, width: 2 }),
+        "f16" => Some(Scalar {
+            kind: Sk::Float,
+            width: 2,
+        }),
         "f32" => Some(Scalar {
             kind: Sk::Float,
             width: 4,

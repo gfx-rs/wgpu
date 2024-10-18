@@ -1,3 +1,6 @@
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtension, UnimplementedEnableExtension,
+};
 use crate::front::wgsl::parse::directive::{DirectiveKind, UnimplementedDirectiveKind};
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
@@ -136,8 +139,6 @@ pub enum NumberError {
     Invalid,
     #[error("numeric literal not representable by target type")]
     NotRepresentable,
-    #[error("unimplemented f16 type")]
-    UnimplementedF16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -184,6 +185,7 @@ pub(crate) enum Error<'a> {
     UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
+    UnknownEnableExtension(Span, &'a str),
     SizeAttributeTooLow(Span, u32),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
@@ -272,6 +274,14 @@ pub(crate) enum Error<'a> {
     },
     DirectiveAfterFirstGlobalDecl {
         directive_span: Span,
+    },
+    EnableExtensionNotYetImplemented {
+        kind: UnimplementedEnableExtension,
+        span: Span,
+    },
+    EnableExtensionNotEnabled {
+        kind: EnableExtension,
+        span: Span,
     },
 }
 
@@ -516,6 +526,14 @@ impl<'a> Error<'a> {
                 message: format!("unknown type: '{}'", &source[bad_span]),
                 labels: vec![(bad_span, "unknown type".into())],
                 notes: vec![],
+            },
+            Error::UnknownEnableExtension(span, word) => ParseError {
+                message: format!("unknown enable-extension `{}`", word),
+                labels: vec![(span, "".into())],
+                notes: vec![
+                    "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
+                        .into(),
+                ],
             },
             Error::SizeAttributeTooLow(bad_span, min_size) => ParseError {
                 message: format!("struct member size must be at least {min_size}"),
@@ -898,6 +916,55 @@ impl<'a> Error<'a> {
                     "maybe hoist this closer to the top of the shader module?"
                 )
                 .into()],
+            },
+            Error::EnableExtensionNotYetImplemented { kind, span } => ParseError {
+                message: format!(
+                    "the `{}` extension is not yet supported (sorry!)",
+                    EnableExtension::Unimplemented(kind).to_ident()
+                ),
+                labels: vec![(
+                    span,
+                    concat!(
+                        "this extension specifies standard functionality ",
+                        "which is not yet implemented in Naga"
+                    )
+                    .into(),
+                )],
+                notes: vec![format!(
+                    concat!(
+                        "Let Naga maintainers know that you ran into this at ",
+                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                        "so they can prioritize it!"
+                    ),
+                    kind.tracking_issue_num()
+                )],
+            },
+            Error::EnableExtensionNotEnabled { kind, span } => ParseError {
+                message: format!("`{}` enable extension is not enabled", kind.to_ident()),
+                labels: vec![(
+                    span,
+                    format!(
+                        concat!(
+                            "the `{}` enable extension is needed for this functionality, ",
+                            "but it is not currently enabled"
+                        ),
+                        kind.to_ident()
+                    )
+                    .into(),
+                )],
+                notes: if let EnableExtension::Unimplemented(kind) = kind {
+                    vec![format!(
+                        concat!(
+                            "This extension is not yet implemented.",
+                            "Let Naga maintainers know that you ran into this at ",
+                            "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                            "so they can prioritize it!"
+                        ),
+                        kind.tracking_issue_num()
+                    )]
+                } else {
+                    vec![]
+                },
             },
         }
     }
