@@ -2,6 +2,7 @@ use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, EnableExtensions, UnimplementedEnableExtension,
 };
+use crate::front::wgsl::parse::directive::language_extension::LanguageExtension;
 use crate::front::wgsl::parse::directive::DirectiveKind;
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
@@ -2542,6 +2543,23 @@ impl Parser {
                             };
                             enable_extensions.add(extension);
                             Ok(())
+                        })?;
+                    }
+                    DirectiveKind::Requires => {
+                        self.directive_ident_list(&mut lexer, |ident, span| {
+                            match LanguageExtension::from_ident(ident) {
+                                Some(LanguageExtension::Implemented(_kind)) => {
+                                    // NOTE: No further validation is needed for an extension, so
+                                    // just throw parsed information away. If we ever want to apply
+                                    // what we've parsed to diagnostics, maybe we'll want to refer
+                                    // to enabled extensions later?
+                                    Ok(())
+                                }
+                                Some(LanguageExtension::Unimplemented(kind)) => {
+                                    Err(Error::LanguageExtensionNotYetImplemented { kind, span })
+                                }
+                                None => Err(Error::UnknownLanguageExtension(span, ident)),
+                            }
                         })?;
                     }
                     DirectiveKind::Unimplemented(kind) => {

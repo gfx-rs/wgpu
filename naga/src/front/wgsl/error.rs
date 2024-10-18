@@ -1,6 +1,9 @@
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, UnimplementedEnableExtension,
 };
+use crate::front::wgsl::parse::directive::language_extension::{
+    LanguageExtension, UnimplementedLanguageExtension,
+};
 use crate::front::wgsl::parse::directive::{DirectiveKind, UnimplementedDirectiveKind};
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
@@ -190,6 +193,7 @@ pub(crate) enum Error<'a> {
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
     UnknownEnableExtension(Span, &'a str),
+    UnknownLanguageExtension(Span, &'a str),
     SizeAttributeTooLow(Span, u32),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
@@ -285,6 +289,10 @@ pub(crate) enum Error<'a> {
     },
     EnableExtensionNotEnabled {
         kind: EnableExtension,
+        span: Span,
+    },
+    LanguageExtensionNotYetImplemented {
+        kind: UnimplementedLanguageExtension,
         span: Span,
     },
 }
@@ -544,6 +552,15 @@ impl<'a> Error<'a> {
                     "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
                         .into(),
                 ],
+            },
+            Error::UnknownLanguageExtension(span, name) => ParseError {
+                message: format!("unknown language extension `{name}`"),
+                labels: vec![(span, "".into())],
+                notes: vec![concat!(
+                    "See available extensions at ",
+                    "<https://www.w3.org/TR/WGSL/#language-extensions-sec>."
+                )
+                .into()],
             },
             Error::SizeAttributeTooLow(bad_span, min_size) => ParseError {
                 message: format!("struct member size must be at least {min_size}"),
@@ -975,6 +992,21 @@ impl<'a> Error<'a> {
                 } else {
                     vec![]
                 },
+            },
+            Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {
+                message: format!(
+                    "the `{}` language extension is not yet supported",
+                    LanguageExtension::Unimplemented(kind).to_ident()
+                ),
+                labels: vec![(span, "".into())],
+                notes: vec![format!(
+                    concat!(
+                        "Let Naga maintainers know that you ran into this at ",
+                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                        "so they can prioritize it!"
+                    ),
+                    kind.tracking_issue_num()
+                )],
             },
         }
     }
