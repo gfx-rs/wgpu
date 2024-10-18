@@ -1,4 +1,4 @@
-use wgt::TextureFormatFeatures;
+use wgt::{SampleCount, TextureFormatFeatures};
 
 use crate::resource::{self, TextureDescriptor};
 
@@ -187,7 +187,7 @@ pub fn check_texture_dimension_size(
         height,
         depth_or_array_layers,
     }: wgt::Extent3d,
-    sample_size: u32,
+    sample_size: SampleCount,
     limits: &wgt::Limits,
 ) -> Result<(), resource::TextureDimensionError> {
     use resource::{TextureDimensionError as Tde, TextureErrorDimension as Ted};
@@ -225,7 +225,7 @@ pub fn check_texture_dimension_size(
             return Err(Tde::LimitExceeded { dim, given, limit });
         }
     }
-    if sample_size == 0 || sample_size > sample_limit || !sample_size.is_power_of_two() {
+    if sample_size == 0 || sample_size > sample_limit || !sample_size.get().is_power_of_two() {
         return Err(Tde::InvalidSampleCount(sample_size));
     }
 

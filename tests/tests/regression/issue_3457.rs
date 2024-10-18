@@ -125,7 +125,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count: wgpu::SampleCount::no_multisampling(),
                 dimension: TextureDimension::D2,
                 format: TextureFormat::Rgba8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT,

@@ -14,7 +14,7 @@ use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 use std::os::raw::c_char;
 use thiserror::Error;
-use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
+use wgt::{BufferAddress, DeviceLostReason, SampleCount, TextureFormat};
 
 use std::num::NonZeroU32;
 
@@ -61,7 +61,7 @@ impl<T: PartialEq> Eq for AttachmentData<T> {}
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
-    pub sample_count: u32,
+    pub sample_count: SampleCount,
     pub multiview: Option<NonZeroU32>,
 }
 #[derive(Clone, Debug, Error)]
@@ -88,8 +88,8 @@ pub enum RenderPassCompatibilityError {
         "Incompatible sample count: the RenderPass uses textures with sample count {expected:?} but the {res} uses attachments with format {actual:?}",
     )]
     IncompatibleSampleCount {
-        expected: u32,
-        actual: u32,
+        expected: SampleCount,
+        actual: SampleCount,
         res: ResourceErrorIdent,
     },
     #[error("Incompatible multiview setting: the RenderPass uses setting {expected:?} but the {res} uses setting {actual:?}")]
