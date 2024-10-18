@@ -2,45 +2,55 @@
 
 use std::sync::Weak;
 
-/// A container that holds Weak references of T.
-///
-/// On `push` it scans its contents for weak references with no strong references still alive and drops them.
+/// An optimized container for `Weak` references of `T` that minimizes reallocations by
+/// dropping older elements that no longer have strong references to them.
 #[derive(Debug)]
 pub(crate) struct WeakVec<T> {
     inner: Vec<Option<Weak<T>>>,
+    empty_slots: Vec<usize>,
+    scan_slots_on_next_push: bool,
 }
 
 impl<T> Default for WeakVec<T> {
     fn default() -> Self {
         Self {
             inner: Default::default(),
+            empty_slots: Default::default(),
+            scan_slots_on_next_push: false,
         }
     }
 }
 
 impl<T> WeakVec<T> {
     pub(crate) fn new() -> Self {
-        Self { inner: Vec::new() }
+        Self {
+            inner: Vec::new(),
+            empty_slots: Vec::default(),
+            scan_slots_on_next_push: false,
+        }
     }
 
-    /// Pushes a new element to this collection, dropping older elements that no longer have
-    /// a strong reference to them.
+    /// Pushes a new element to this collection.
     ///
-    /// NOTE: The length and capacity of this collection do not change when old elements are
-    /// dropped.
+    /// If the inner Vec needs to be reallocated, we will first drop older elements that
+    /// no longer have strong references to them.
     pub(crate) fn push(&mut self, value: Weak<T>) {
-        let mut to_insert = Some(value);
-        for slot in &mut self.inner {
-            if let Some(w) = slot {
-                if w.strong_count() == 0 {
-                    *slot = to_insert.take();
+        if self.scan_slots_on_next_push {
+            for (i, value) in self.inner.iter_mut().enumerate() {
+                if let Some(w) = value {
+                    if w.strong_count() == 0 {
+                        *value = None;
+                        self.empty_slots.push(i);
+                    }
                 }
-            } else {
-                *slot = to_insert.take();
             }
         }
-        if let Some(to_insert) = to_insert {
-            self.inner.push(Some(to_insert));
+        if let Some(i) = self.empty_slots.pop() {
+            self.inner[i] = Some(value);
+            self.scan_slots_on_next_push = false;
+        } else {
+            self.inner.push(Some(value));
+            self.scan_slots_on_next_push = self.inner.len() == self.inner.capacity();
         }
     }
 }
