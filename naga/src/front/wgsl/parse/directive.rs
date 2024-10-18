@@ -10,7 +10,7 @@ pub(crate) mod language_extension;
 pub(crate) enum DirectiveKind {
     /// An [`enable_extension`].
     Enable,
-    /// A language extension.
+    /// A [`language_extension`].
     Requires,
     Unimplemented(UnimplementedDirectiveKind),
 }
