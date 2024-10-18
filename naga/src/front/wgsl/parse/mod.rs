@@ -1,4 +1,7 @@
 use crate::front::wgsl::error::{Error, ExpectedToken};
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtension, EnableExtensions, ImplementedEnableExtension, UnimplementedEnableExtension,
+};
 use crate::front::wgsl::parse::directive::DirectiveKind;
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
@@ -666,7 +669,15 @@ impl Parser {
             }
             (Token::Number(res), span) => {
                 let _ = lexer.next();
-                let num = res.map_err(|err| Error::BadNumber(span, err))?;
+                let num = res.map_err(|err| match err {
+                    super::error::NumberError::UnimplementedF16 => {
+                        Error::EnableExtensionNotEnabled {
+                            kind: EnableExtension::Unimplemented(UnimplementedEnableExtension::F16),
+                            span,
+                        }
+                    }
+                    err => Error::BadNumber(span, err),
+                })?;
                 ast::Expression::Literal(ast::Literal::Number(num))
             }
             (Token::Word("RAY_FLAG_NONE"), _) => {
@@ -2258,6 +2269,23 @@ impl Parser {
         Ok(fun)
     }
 
+    /// Parses an `enable` extension.
+    #[allow(unused, unreachable_code)]
+    fn enable_extension_ident<'a>(
+        &self,
+        lexer: &mut Lexer<'a>,
+    ) -> Result<ImplementedEnableExtension, Error<'a>> {
+        let (ident, span) = lexer.next_ident_with_span()?;
+        let kind = EnableExtension::from_ident(ident, span)?;
+        let extension = match kind {
+            EnableExtension::Implemented(kind) => kind,
+            EnableExtension::Unimplemented(kind) => {
+                return Err(Error::EnableExtensionNotYetImplemented { kind, span })
+            }
+        };
+        Ok(extension)
+    }
+
     fn global_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -2480,14 +2508,28 @@ impl Parser {
 
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
+        let mut enable_extensions = EnableExtensions::empty();
 
         // Parse directives.
-        #[allow(clippy::never_loop, unreachable_code)]
         while let Ok((ident, span)) = lexer.peek_ident_with_span() {
             if let Some(kind) = DirectiveKind::from_ident(ident) {
                 self.push_rule_span(Rule::Directive, &mut lexer);
                 let _ = lexer.next_ident_with_span().unwrap();
                 match kind {
+                    DirectiveKind::Enable => {
+                        enable_extensions.add(self.enable_extension_ident(&mut lexer)?);
+                        while lexer.skip(Token::Separator(',')) {
+                            enable_extensions.add(self.enable_extension_ident(&mut lexer)?);
+                        }
+
+                        let semicolon = Token::Separator(';');
+                        if !lexer.skip(semicolon) {
+                            return Err(Error::Unexpected(
+                                lexer.next().1,
+                                ExpectedToken::Token(semicolon),
+                            ));
+                        }
+                    }
                     DirectiveKind::Unimplemented(kind) => {
                         return Err(Error::DirectiveNotYetImplemented { kind, span })
                     }
@@ -2497,6 +2539,9 @@ impl Parser {
                 break;
             }
         }
+
+        lexer.enable_extensions = enable_extensions.clone();
+        tu.enable_extensions = enable_extensions;
 
         loop {
             match self.global_decl(&mut lexer, &mut tu) {

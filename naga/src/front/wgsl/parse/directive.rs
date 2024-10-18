@@ -2,9 +2,13 @@
 //!
 //! See also <https://www.w3.org/TR/WGSL/#directives>.
 
+pub mod enable_extension;
+
 /// A parsed sentinel word indicating the type of directive to be parsed next.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum DirectiveKind {
+    /// An [`enable_extension`].
+    Enable,
     Unimplemented(UnimplementedDirectiveKind),
 }
 
@@ -17,7 +21,7 @@ impl DirectiveKind {
     pub fn from_ident(s: &str) -> Option<Self> {
         Some(match s {
             Self::DIAGNOSTIC => Self::Unimplemented(UnimplementedDirectiveKind::Diagnostic),
-            Self::ENABLE => Self::Unimplemented(UnimplementedDirectiveKind::Enable),
+            Self::ENABLE => Self::Enable,
             Self::REQUIRES => Self::Unimplemented(UnimplementedDirectiveKind::Requires),
             _ => return None,
         })
@@ -26,9 +30,9 @@ impl DirectiveKind {
     /// Maps this [`DirectiveKind`] into the sentinel word associated with it in WGSL.
     pub const fn to_ident(self) -> &'static str {
         match self {
+            Self::Enable => Self::ENABLE,
             Self::Unimplemented(kind) => match kind {
                 UnimplementedDirectiveKind::Diagnostic => Self::DIAGNOSTIC,
-                UnimplementedDirectiveKind::Enable => Self::ENABLE,
                 UnimplementedDirectiveKind::Requires => Self::REQUIRES,
             },
         }
@@ -47,7 +51,6 @@ impl DirectiveKind {
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum UnimplementedDirectiveKind {
     Diagnostic,
-    Enable,
     Requires,
 }
 
@@ -56,7 +59,6 @@ impl UnimplementedDirectiveKind {
         match self {
             Self::Diagnostic => 5320,
             Self::Requires => 6350,
-            Self::Enable => 5476,
         }
     }
 }
@@ -85,19 +87,6 @@ error: `diagnostic` is not yet implemented
   │ ^^^^^^^^^^ this global directive is standard, but not yet implemented
   │
   = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5320>, so they can prioritize it!
-
-";
-                }
-                UnimplementedDirectiveKind::Enable => {
-                    shader = "enable f16;";
-                    expected_msg = "\
-error: `enable` is not yet implemented
-  ┌─ wgsl:1:1
-  │
-1 │ enable f16;
-  │ ^^^^^^ this global directive is standard, but not yet implemented
-  │
-  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5476>, so they can prioritize it!
 
 ";
                 }
@@ -139,7 +128,7 @@ error: expected global declaration, but found a global directive
 
 ";
                 }
-                DirectiveKind::Unimplemented(UnimplementedDirectiveKind::Enable) => {
+                DirectiveKind::Enable => {
                     directive = "enable f16";
                     expected_msg = "\
 error: expected global declaration, but found a global directive
