@@ -1,6 +1,6 @@
 use crate::auxil::dxgi::result::HResult;
-use std::ffi::CStr;
 use std::path::PathBuf;
+use std::{error::Error, ffi::CStr};
 use windows::{
     core::{Interface, PCSTR, PCWSTR},
     Win32::Graphics::Direct3D::{Dxc, Fxc},
@@ -145,8 +145,9 @@ pub(super) fn get_dxc_container(
         Ok(dxc) => dxc,
         Err(e) => {
             log::warn!(
-                "Failed to load dxcompiler.dll. Defaulting to FXC instead: {}",
-                e
+                "Failed to load dxcompiler.dll. Defaulting to FXC instead: {}: {:?}",
+                e,
+                e.source()
             );
             return Ok(None);
         }
@@ -155,7 +156,11 @@ pub(super) fn get_dxc_container(
     let dxil = match DxcLib::new(dxil_path, "dxil.dll") {
         Ok(dxil) => dxil,
         Err(e) => {
-            log::warn!("Failed to load dxil.dll. Defaulting to FXC instead: {}", e);
+            log::warn!(
+                "Failed to load dxil.dll. Defaulting to FXC instead: {}: {:?}",
+                e,
+                e.source()
+            );
             return Ok(None);
         }
     };
