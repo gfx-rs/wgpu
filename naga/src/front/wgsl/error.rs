@@ -112,6 +112,8 @@ impl std::error::Error for ParseError {
 pub enum ExpectedToken<'a> {
     Token(Token<'a>),
     Identifier,
+    AfterIdentListComma,
+    AfterIdentListArg,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
     /// Expected: assignment, increment/decrement expression
@@ -345,6 +347,12 @@ impl<'a> Error<'a> {
                     ExpectedToken::Type => "type".to_string(),
                     ExpectedToken::Variable => "variable access".to_string(),
                     ExpectedToken::Function => "function name".to_string(),
+                    ExpectedToken::AfterIdentListArg => {
+                        "next argument, trailing comma, or end of list (',' or ';')".to_string()
+                    }
+                    ExpectedToken::AfterIdentListComma => {
+                        "next argument or end of list (';')".to_string()
+                    }
                 };
                 ParseError {
                     message: format!(
