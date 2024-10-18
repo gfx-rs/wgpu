@@ -773,7 +773,10 @@ fn convert_wgsl() {
             "atomicOps",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
+        (
+            "atomicCompareExchange",
+            Targets::SPIRV | Targets::METAL | Targets::WGSL,
+        ),
         (
             "padding",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -921,7 +924,7 @@ fn convert_wgsl() {
         ),
         (
             "overrides-atomicCompareExchangeWeak",
-            Targets::IR | Targets::SPIRV,
+            Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
         (
             "overrides-ray-query",
@@ -937,6 +940,7 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("6220-break-from-loop", Targets::SPIRV),
+        ("index-by-value", Targets::SPIRV | Targets::IR),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -1063,11 +1067,11 @@ fn convert_spv_all() {
         false,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+    convert_spv("atomic_i_increment", false, Targets::IR);
     convert_spv(
-        "atomic_i_increment",
+        "fetch_depth",
         false,
-        // TODO(@schell): remove Targets::NO_VALIDATION when OpAtomicIIncrement lands
-        Targets::IR | Targets::NO_VALIDATION,
+        Targets::IR | Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
     );
 }
 

@@ -1,6 +1,6 @@
 use std::{
     ffi,
-    mem::{self, size_of},
+    mem::{self, size_of, size_of_val},
     num::NonZeroU32,
     ptr,
     sync::Arc,
@@ -94,34 +94,12 @@ impl super::Device {
         let capacity_views = limits.max_non_sampler_bindings as u64;
         let capacity_samplers = 2_048;
 
-        fn create_command_signature(
-            raw: &Direct3D12::ID3D12Device,
-            byte_stride: usize,
-            arguments: &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC],
-            node_mask: u32,
-        ) -> Result<Direct3D12::ID3D12CommandSignature, crate::DeviceError> {
-            let mut signature = None;
-            unsafe {
-                raw.CreateCommandSignature(
-                    &Direct3D12::D3D12_COMMAND_SIGNATURE_DESC {
-                        ByteStride: byte_stride as u32,
-                        NumArgumentDescs: arguments.len() as u32,
-                        pArgumentDescs: arguments.as_ptr(),
-                        NodeMask: node_mask,
-                    },
-                    None,
-                    &mut signature,
-                )
-            }
-            .into_device_result("Command signature creation")?;
-            signature.ok_or(crate::DeviceError::Unexpected)
-        }
-
         let shared = super::DeviceShared {
             zero_buffer,
             cmd_signatures: super::CommandSignatures {
-                draw: create_command_signature(
+                draw: Self::create_command_signature(
                     &raw,
+                    None,
                     size_of::<wgt::DrawIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
@@ -129,8 +107,9 @@ impl super::Device {
                     }],
                     0,
                 )?,
-                draw_indexed: create_command_signature(
+                draw_indexed: Self::create_command_signature(
                     &raw,
+                    None,
                     size_of::<wgt::DrawIndexedIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
@@ -138,8 +117,9 @@ impl super::Device {
                     }],
                     0,
                 )?,
-                dispatch: create_command_signature(
+                dispatch: Self::create_command_signature(
                     &raw,
+                    None,
                     size_of::<wgt::DispatchIndirectArgs>(),
                     &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
                         Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
@@ -212,6 +192,30 @@ impl super::Device {
             dxc_container,
             counters: Default::default(),
         })
+    }
+
+    fn create_command_signature(
+        raw: &Direct3D12::ID3D12Device,
+        root_signature: Option<&Direct3D12::ID3D12RootSignature>,
+        byte_stride: usize,
+        arguments: &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC],
+        node_mask: u32,
+    ) -> Result<Direct3D12::ID3D12CommandSignature, crate::DeviceError> {
+        let mut signature = None;
+        unsafe {
+            raw.CreateCommandSignature(
+                &Direct3D12::D3D12_COMMAND_SIGNATURE_DESC {
+                    ByteStride: byte_stride as u32,
+                    NumArgumentDescs: arguments.len() as u32,
+                    pArgumentDescs: arguments.as_ptr(),
+                    NodeMask: node_mask,
+                },
+                root_signature,
+                &mut signature,
+            )
+        }
+        .into_device_result("Command signature creation")?;
+        signature.ok_or(crate::DeviceError::Unexpected)
     }
 
     // Blocks until the dedicated present queue is finished with all of its work.
@@ -1119,6 +1123,84 @@ impl crate::Device for super::Device {
         }
         .into_device_result("Root signature creation")?;
 
+        let special_constants = if let Some(root_index) = special_constants_root_index {
+            let constant_indirect_argument_desc = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
+                Anonymous: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0 {
+                    Constant: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_1 {
+                        RootParameterIndex: root_index,
+                        DestOffsetIn32BitValues: 0,
+                        Num32BitValuesToSet: 3,
+                    },
+                },
+            };
+            let special_constant_buffer_args_len = {
+                // Hack: construct a dummy value of the special constants buffer value we need to
+                // fill, and calculate the size of each member.
+                let super::RootElement::SpecialConstantBuffer {
+                    first_vertex,
+                    first_instance,
+                    other,
+                } = (super::RootElement::SpecialConstantBuffer {
+                    first_vertex: 0,
+                    first_instance: 0,
+                    other: 0,
+                })
+                else {
+                    unreachable!();
+                };
+                size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
+            };
+            let cmd_signatures = super::CommandSignatures {
+                draw: Self::create_command_signature(
+                    &self.raw,
+                    Some(&raw),
+                    special_constant_buffer_args_len + size_of::<wgt::DrawIndirectArgs>(),
+                    &[
+                        constant_indirect_argument_desc,
+                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
+                            ..Default::default()
+                        },
+                    ],
+                    0,
+                )?,
+                draw_indexed: Self::create_command_signature(
+                    &self.raw,
+                    Some(&raw),
+                    special_constant_buffer_args_len + size_of::<wgt::DrawIndexedIndirectArgs>(),
+                    &[
+                        constant_indirect_argument_desc,
+                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
+                            ..Default::default()
+                        },
+                    ],
+                    0,
+                )?,
+                dispatch: Self::create_command_signature(
+                    &self.raw,
+                    Some(&raw),
+                    special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
+                    &[
+                        constant_indirect_argument_desc,
+                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
+                            ..Default::default()
+                        },
+                    ],
+                    0,
+                )?,
+            };
+
+            Some(super::PipelineLayoutSpecialConstants {
+                root_index,
+                cmd_signatures,
+            })
+        } else {
+            None
+        };
+
         if let Some(label) = desc.label {
             unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
                 .into_device_result("SetName")?;
@@ -1130,7 +1212,7 @@ impl crate::Device for super::Device {
             shared: super::PipelineLayoutShared {
                 signature: Some(raw),
                 total_root_elements: parameters.len() as super::RootIndex,
-                special_constants_root_index,
+                special_constants,
                 root_constant_info,
             },
             bind_group_infos,

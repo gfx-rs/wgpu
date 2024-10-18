@@ -14,6 +14,7 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
+    weak_vec::WeakVec,
     Label, LabelHelpers,
 };
 
@@ -26,7 +27,7 @@ use std::{
     mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
-    sync::{Arc, Weak},
+    sync::Arc,
 };
 
 /// Information about the wgpu-core resource.
@@ -86,7 +87,7 @@ impl std::fmt::Display for ResourceErrorIdent {
     }
 }
 
-pub(crate) trait ParentDevice: Labeled {
+pub trait ParentDevice: Labeled {
     fn device(&self) -> &Arc<Device>;
 
     fn is_equal(self: &Arc<Self>, other: &Arc<Self>) -> bool {
@@ -131,7 +132,7 @@ macro_rules! impl_parent_device {
     };
 }
 
-pub(crate) trait ResourceType {
+pub trait ResourceType {
     const TYPE: &'static str;
 }
 
@@ -144,7 +145,7 @@ macro_rules! impl_resource_type {
     };
 }
 
-pub(crate) trait Labeled: ResourceType {
+pub trait Labeled: ResourceType {
     /// Returns a string identifying this resource for logging and errors.
     ///
     /// It may be a user-provided string or it may be a placeholder from wgpu.
@@ -417,7 +418,7 @@ pub struct DestroyedResourceError(pub ResourceErrorIdent);
 #[error("{0} is invalid")]
 pub struct InvalidResourceError(pub ResourceErrorIdent);
 
-pub(crate) enum Fallible<T: ParentDevice> {
+pub enum Fallible<T: ParentDevice> {
     Valid(Arc<T>),
     Invalid(Arc<String>),
 }
@@ -474,11 +475,19 @@ pub struct Buffer {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
-    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup>>>,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    #[cfg(feature = "indirect-validation")]
+    pub(crate) raw_indirect_validation_bind_group: Snatchable<Box<dyn hal::DynBindGroup>>,
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
+        #[cfg(feature = "indirect-validation")]
+        if let Some(raw) = self.raw_indirect_validation_bind_group.take() {
+            unsafe {
+                self.device.raw().destroy_bind_group(raw);
+            }
+        }
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
@@ -737,12 +746,21 @@ impl Buffer {
         let device = &self.device;
 
         let temp = {
-            let raw = match self.raw.snatch(&mut device.snatchable_lock.write()) {
+            let mut snatch_guard = device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
                     return Err(DestroyError::AlreadyDestroyed);
                 }
             };
+
+            #[cfg(feature = "indirect-validation")]
+            let raw_indirect_validation_bind_group = self
+                .raw_indirect_validation_bind_group
+                .snatch(&mut snatch_guard);
+
+            drop(snatch_guard);
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
@@ -754,6 +772,8 @@ impl Buffer {
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
                 bind_groups,
+                #[cfg(feature = "indirect-validation")]
+                raw_indirect_validation_bind_group,
             })
         };
 
@@ -789,6 +809,8 @@ pub enum CreateBufferError {
     MaxBufferSize { requested: u64, maximum: u64 },
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("Failed to create bind group for indirect buffer validation: {0}")]
+    IndirectValidationBindGroup(DeviceError),
 }
 
 crate::impl_resource_type!(Buffer);
@@ -803,7 +825,9 @@ pub struct DestroyedBuffer {
     raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     device: Arc<Device>,
     label: String,
-    bind_groups: Vec<Weak<BindGroup>>,
+    bind_groups: WeakVec<BindGroup>,
+    #[cfg(feature = "indirect-validation")]
+    raw_indirect_validation_bind_group: Option<Box<dyn hal::DynBindGroup>>,
 }
 
 impl DestroyedBuffer {
@@ -815,10 +839,17 @@ impl DestroyedBuffer {
 impl Drop for DestroyedBuffer {
     fn drop(&mut self) {
         let mut deferred = self.device.deferred_destroy.lock();
-        for bind_group in self.bind_groups.drain(..) {
-            deferred.push(DeferredDestroy::BindGroup(bind_group));
-        }
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
         drop(deferred);
+
+        #[cfg(feature = "indirect-validation")]
+        if let Some(raw) = self.raw_indirect_validation_bind_group.take() {
+            unsafe {
+                self.device.raw().destroy_bind_group(raw);
+            }
+        }
 
         resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
@@ -989,7 +1020,6 @@ pub(crate) enum TextureInner {
     },
     Surface {
         raw: Box<dyn hal::DynSurfaceTexture>,
-        parent_id: SurfaceId,
     },
 }
 
@@ -1031,8 +1061,8 @@ pub struct Texture {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) clear_mode: TextureClearMode,
-    pub(crate) views: Mutex<Vec<Weak<TextureView>>>,
-    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup>>>,
+    pub(crate) views: Mutex<WeakVec<TextureView>>,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
 
 impl Texture {
@@ -1066,8 +1096,8 @@ impl Texture {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
             clear_mode,
-            views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
-            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
+            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
     }
     /// Checks that the given texture usage contains the required texture usage,
@@ -1401,8 +1431,8 @@ impl Global {
 #[derive(Debug)]
 pub struct DestroyedTexture {
     raw: ManuallyDrop<Box<dyn hal::DynTexture>>,
-    views: Vec<Weak<TextureView>>,
-    bind_groups: Vec<Weak<BindGroup>>,
+    views: WeakVec<TextureView>,
+    bind_groups: WeakVec<BindGroup>,
     device: Arc<Device>,
     label: String,
 }
@@ -1418,12 +1448,10 @@ impl Drop for DestroyedTexture {
         let device = &self.device;
 
         let mut deferred = device.deferred_destroy.lock();
-        for view in self.views.drain(..) {
-            deferred.push(DeferredDestroy::TextureView(view));
-        }
-        for bind_group in self.bind_groups.drain(..) {
-            deferred.push(DeferredDestroy::BindGroup(bind_group));
-        }
+        deferred.push(DeferredDestroy::TextureViews(mem::take(&mut self.views)));
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
         drop(deferred);
 
         resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
