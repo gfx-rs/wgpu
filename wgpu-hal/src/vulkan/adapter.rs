@@ -109,6 +109,9 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_shader_atomic_int64`, promoted to Vulkan 1.2.
     shader_atomic_int64: Option<vk::PhysicalDeviceShaderAtomicInt64Features<'static>>,
 
+    /// Features provided by `VK_EXT_shader_atomic_float`.
+    shader_atomic_float: Option<vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT<'static>>,
+
     /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
 }
@@ -155,6 +158,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_int64 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_atomic_float {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.subgroup_size_control {
@@ -438,6 +444,16 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_atomic_float: if enabled_extensions.contains(&ext::shader_atomic_float::NAME) {
+                let needed = requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC);
+                Some(
+                    vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default()
+                        .shader_buffer_float32_atomics(needed)
+                        .shader_buffer_float32_atomic_add(needed),
+                )
+            } else {
+                None
+            },
             subgroup_size_control: if device_api_version >= vk::API_VERSION_1_3
                 || enabled_extensions.contains(&ext::subgroup_size_control::NAME)
             {
@@ -587,6 +603,14 @@ impl PhysicalDeviceFeatures {
                 F::SHADER_INT64_ATOMIC_ALL_OPS | F::SHADER_INT64_ATOMIC_MIN_MAX,
                 shader_atomic_int64.shader_buffer_int64_atomics != 0
                     && shader_atomic_int64.shader_shared_int64_atomics != 0,
+            );
+        }
+
+        if let Some(ref shader_atomic_float) = self.shader_atomic_float {
+            features.set(
+                F::SHADER_FLOAT32_ATOMIC,
+                shader_atomic_float.shader_buffer_float32_atomics != 0
+                    && shader_atomic_float.shader_buffer_float32_atomic_add != 0,
             );
         }
 
@@ -1010,6 +1034,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::shader_atomic_int64::NAME);
         }
 
+        // Require `VK_EXT_shader_atomic_float` if the associated feature was requested
+        if requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
+            extensions.push(ext::shader_atomic_float::NAME);
+        }
+
         // Require VK_GOOGLE_display_timing if the associated feature was requested
         if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
             extensions.push(google::display_timing::NAME);
@@ -1293,6 +1322,12 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.supports_extension(ext::shader_atomic_float::NAME) {
+                let next = features
+                    .shader_atomic_float
+                    .insert(vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
             if capabilities.supports_extension(ext::image_robustness::NAME) {
                 let next = features
                     .image_robustness
@@ -1784,6 +1819,10 @@ impl super::Adapter {
                     | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
             ) {
                 capabilities.push(spv::Capability::Int64Atomics);
+            }
+
+            if features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
+                capabilities.push(spv::Capability::AtomicFloat32AddEXT);
             }
 
             let mut flags = spv::WriterFlags::empty();
