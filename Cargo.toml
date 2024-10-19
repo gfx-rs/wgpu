@@ -76,7 +76,7 @@ arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.6"
-bytemuck = { version = "1.18" }
+bytemuck = { version = "1.19" }
 cfg_aliases = "0.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -153,7 +153,7 @@ windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
 khronos-egl = "6"
-glow = "0.14.1"
+glow = "0.14.2"
 glutin = { version = "0.31", default-features = false }
 glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"
@@ -165,10 +165,10 @@ windows = { version = "0.58", default-features = false }
 console_error_panic_hook = "0.1.7"
 console_log = "1"
 js-sys = "0.3.70"
-wasm-bindgen = "0.2.87"
+wasm-bindgen = "0.2.95"
 wasm-bindgen-futures = "0.4.43"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.70"
+web-sys = "0.3.72"
 web-time = "0.2.4"
 
 # deno dependencies

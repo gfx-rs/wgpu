@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, mem::size_of};
 use wgpu::util::DeviceExt;
 use winit::{
     event::{ElementState, KeyEvent},
@@ -164,7 +164,7 @@ impl crate::framework::Example for Example {
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
-                            min_binding_size: wgpu::BufferSize::new(mem::size_of::<Globals>() as _),
+                            min_binding_size: wgpu::BufferSize::new(size_of::<Globals>() as _),
                         },
                         count: None,
                     },
@@ -195,7 +195,7 @@ impl crate::framework::Example for Example {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
+                        min_binding_size: wgpu::BufferSize::new(size_of::<Bunny>() as _),
                     },
                     count: None,
                 }],
@@ -337,7 +337,7 @@ impl crate::framework::Example for Example {
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &local_buffer,
                     offset: 0,
-                    size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
+                    size: wgpu::BufferSize::new(size_of::<Bunny>() as _),
                 }),
             }],
             label: None,

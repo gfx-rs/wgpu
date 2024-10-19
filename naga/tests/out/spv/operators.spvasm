@@ -387,15 +387,15 @@ OpStore %302 %331
 %332 = OpLoad  %5  %302
 %333 = OpISub  %5  %332 %23
 OpStore %302 %333
-%335 = OpAccessChain  %334  %305 %23
+%335 = OpAccessChain  %334  %305 %122
 %336 = OpLoad  %5  %335
 %337 = OpIAdd  %5  %336 %23
-%338 = OpAccessChain  %334  %305 %23
+%338 = OpAccessChain  %334  %305 %122
 OpStore %338 %337
-%339 = OpAccessChain  %334  %305 %23
+%339 = OpAccessChain  %334  %305 %122
 %340 = OpLoad  %5  %339
 %341 = OpISub  %5  %340 %23
-%342 = OpAccessChain  %334  %305 %23
+%342 = OpAccessChain  %334  %305 %122
 OpStore %342 %341
 OpReturn
 OpFunctionEnd

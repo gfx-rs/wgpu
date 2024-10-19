@@ -4,10 +4,6 @@
             entry_point:"foo_vert",
             target_profile:"vs_5_1",
         ),
-        (
-            entry_point:"foo_1",
-            target_profile:"vs_5_1",
-        ),
     ],
     fragment:[
         (
@@ -18,6 +14,10 @@
     compute:[
         (
             entry_point:"assign_through_ptr",
+            target_profile:"cs_5_1",
+        ),
+        (
+            entry_point:"assign_to_ptr_components",
             target_profile:"cs_5_1",
         ),
     ],
