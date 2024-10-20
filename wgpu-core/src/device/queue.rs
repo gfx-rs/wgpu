@@ -1256,10 +1256,13 @@ impl Queue {
         unsafe { self.raw().get_timestamp_period() }
     }
 
-    pub fn on_submitted_work_done(&self, closure: SubmittedWorkDoneClosure) {
+    pub fn on_submitted_work_done(
+        &self,
+        closure: SubmittedWorkDoneClosure,
+    ) -> Option<SubmissionIndex> {
         api_log!("Queue::on_submitted_work_done");
         //TODO: flush pending writes
-        self.device.lock_life().add_work_done_closure(closure);
+        self.device.lock_life().add_work_done_closure(closure)
     }
 }
 
