@@ -745,9 +745,16 @@ impl Fence {
     fn get_latest(&self, gl: &glow::Context) -> crate::FenceValue {
         let mut max_value = self.last_completed;
         for &(value, sync) in self.pending.iter() {
+            if value <= max_value {
+                // We already know this was good, no need to check again
+                continue;
+            }
             let status = unsafe { gl.get_sync_status(sync) };
             if status == glow::SIGNALED {
                 max_value = value;
+            } else {
+                // Anything after the first unsignalled is guaranteed to also be unsignalled
+                break;
             }
         }
         max_value
