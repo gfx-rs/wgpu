@@ -2647,7 +2647,7 @@ impl Device {
 
     pub(crate) fn derive_pipeline_layout(
         self: &Arc<Self>,
-        mut derived_group_layouts: ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>,
+        mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
