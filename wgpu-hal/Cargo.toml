@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.80.0"
+rust-version = "1.82.0"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
