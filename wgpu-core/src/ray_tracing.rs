@@ -168,8 +168,8 @@ pub enum ValidateTlasActionsError {
     #[error("Blas {0:?} is used before it is built (in Tlas {1:?})")]
     UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
 
-    #[error("BlasId is invalid or destroyed (in Tlas {0:?})")]
-    InvalidBlasId(ResourceErrorIdent),
+    #[error("BlasId is destroyed (in Tlas {0:?})")]
+    InvalidBlas(ResourceErrorIdent),
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),

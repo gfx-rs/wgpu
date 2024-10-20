@@ -27,7 +27,7 @@ use crate::{
 
 use smallvec::SmallVec;
 
-use crate::resource::{Blas, Tlas};
+use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
 use crate::scratch::ScratchBuffer;
 use std::{
     iter,
@@ -148,8 +148,7 @@ pub enum TempResource {
     ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
-    Blas(Arc<Blas>),
-    Tlas(Arc<Tlas>),
+    DestroyedAccelerationStructure(DestroyedAccelerationStructure),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -279,6 +278,14 @@ impl PendingWrites {
 
     pub fn insert_tlas(&mut self, tlas: &Arc<Tlas>) {
         self.dst_tlas_s.insert(tlas.tracker_index(), tlas.clone());
+    }
+
+    pub fn contains_blas(&mut self, blas: &Arc<Blas>) -> bool {
+        self.dst_blas_s.contains_key(&blas.tracker_index())
+    }
+
+    pub fn contains_tlas(&mut self, tlas: &Arc<Tlas>) -> bool {
+        self.dst_tlas_s.contains_key(&tlas.tracker_index())
     }
 
     pub fn consume_temp(&mut self, resource: TempResource) {
@@ -1492,7 +1499,7 @@ fn validate_command_buffer(
         if let Err(e) = cmd_buf_data.validate_blas_actions() {
             return Err(e.into());
         }
-        if let Err(e) = cmd_buf_data.validate_tlas_actions() {
+        if let Err(e) = cmd_buf_data.validate_tlas_actions(snatch_guard) {
             return Err(e.into());
         }
     }

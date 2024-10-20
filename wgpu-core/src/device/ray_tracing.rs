@@ -3,10 +3,12 @@ use std::sync::Arc;
 
 #[cfg(feature = "trace")]
 use crate::device::trace;
-use crate::lock::rank;
+use crate::lock::{rank, Mutex};
 use crate::resource::{Fallible, TrackingData};
+use crate::snatch::Snatchable;
+use crate::weak_vec::WeakVec;
 use crate::{
-    device::{queue::TempResource, Device, DeviceError},
+    device::{Device, DeviceError},
     global::Global,
     id::{self, BlasId, TlasId},
     lock::RwLock,
@@ -90,7 +92,7 @@ impl Device {
         };
 
         Ok(Arc::new(resource::Blas {
-            raw: ManuallyDrop::new(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             size_info,
             sizes,
@@ -146,7 +148,7 @@ impl Device {
         .map_err(DeviceError::from_hal)?;
 
         Ok(Arc::new(resource::Tlas {
-            raw: ManuallyDrop::new(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             size_info,
             flags: desc.flags,
@@ -157,6 +159,7 @@ impl Device {
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
+            bind_groups: Mutex::new(rank::TLAS_BIND_GROUPS, WeakVec::new()),
         }))
     }
 }
@@ -270,23 +273,14 @@ impl Global {
         let hub = &self.hub;
 
         let blas = hub.blas_s.get(blas_id).get()?;
-        let device = &blas.device;
+        let _device = &blas.device;
 
         #[cfg(feature = "trace")]
-        if let Some(trace) = device.trace.lock().as_mut() {
+        if let Some(trace) = _device.trace.lock().as_mut() {
             trace.add(trace::Action::FreeBlas(blas_id));
         }
 
-        let temp = TempResource::Blas(blas.clone());
-        {
-            let mut device_lock = device.lock_life();
-            let last_submit_index = device_lock.get_blas_latest_submission_index(blas.as_ref());
-            if let Some(last_submit_index) = last_submit_index {
-                device_lock.schedule_resource_destruction(temp, last_submit_index);
-            }
-        }
-
-        Ok(())
+        blas.destroy()
     }
 
     pub fn blas_drop(&self, blas_id: BlasId) {
@@ -326,23 +320,14 @@ impl Global {
             .clone();
         drop(tlas_guard);
 
-        let device = &mut tlas.device.clone();
+        let _device = &mut tlas.device.clone();
 
         #[cfg(feature = "trace")]
-        if let Some(trace) = device.trace.lock().as_mut() {
+        if let Some(trace) = _device.trace.lock().as_mut() {
             trace.add(trace::Action::FreeTlas(tlas_id));
         }
 
-        let temp = TempResource::Tlas(tlas.clone());
-        {
-            let mut device_lock = device.lock_life();
-            let last_submit_index = device_lock.get_tlas_latest_submission_index(tlas.as_ref());
-            if let Some(last_submit_index) = last_submit_index {
-                device_lock.schedule_resource_destruction(temp, last_submit_index);
-            }
-        }
-
-        Ok(())
+        tlas.destroy()
     }
 
     pub fn tlas_drop(&self, tlas_id: TlasId) {

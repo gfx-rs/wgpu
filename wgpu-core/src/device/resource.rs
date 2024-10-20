@@ -41,7 +41,7 @@ use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
 
-use crate::resource::{AccelerationStructure, Tlas};
+use crate::resource::{AccelerationStructure, DestroyedResourceError, Tlas};
 use std::{
     borrow::Cow,
     mem::{self, ManuallyDrop},
@@ -2200,6 +2200,7 @@ impl Device {
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         tlas: &'a Arc<Tlas>,
+        snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<&'a dyn hal::DynAccelerationStructure, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -2218,7 +2219,9 @@ impl Device {
             }
         }
 
-        Ok(tlas.raw())
+        Ok(tlas
+            .raw(snatch_guard)
+            .ok_or(DestroyedResourceError(tlas.error_ident()))?)
     }
 
     // This function expects the provided bind group layout to be resolved
@@ -2361,7 +2364,8 @@ impl Device {
                     (res_index, num_bindings)
                 }
                 Br::AccelerationStructure(ref tlas) => {
-                    let tlas = self.create_tlas_binding(&mut used, binding, decl, tlas)?;
+                    let tlas =
+                        self.create_tlas_binding(&mut used, binding, decl, tlas, &snatch_guard)?;
                     let res_index = hal_tlas_s.len();
                     hal_tlas_s.push(tlas);
                     (res_index, 1)

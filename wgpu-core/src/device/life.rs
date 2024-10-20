@@ -283,7 +283,7 @@ impl LifetimeTracker {
     }
 
     /// Returns the submission index of the most recent submission that uses the
-    /// given blas.
+    /// given tlas.
     pub fn get_tlas_latest_submission_index(&self, tlas: &Tlas) -> Option<SubmissionIndex> {
         // We iterate in reverse order, so that we can bail out early as soon
         // as we find a hit.

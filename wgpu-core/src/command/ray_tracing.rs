@@ -292,48 +292,53 @@ impl Global {
                 ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
         };
 
-        let blas_descriptors = blas_storage
-            .iter()
-            .map(|storage| map_blas(storage, scratch_buffer.raw()));
+        let mut tlas_descriptors = Vec::new();
 
-        let tlas_descriptors = tlas_storage.iter().map(
-            |UnsafeTlasStore {
-                 tlas,
-                 entries,
-                 scratch_buffer_offset,
-             }| {
-                if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
-                    log::info!("only rebuild implemented")
-                }
-                hal::BuildAccelerationStructureDescriptor {
-                    entries,
-                    mode: hal::AccelerationStructureBuildMode::Build,
-                    flags: tlas.flags,
-                    source_acceleration_structure: None,
-                    destination_acceleration_structure: tlas.raw(),
-                    scratch_buffer: scratch_buffer.raw(),
-                    scratch_buffer_offset: *scratch_buffer_offset,
-                }
-            },
-        );
+        for UnsafeTlasStore {
+            tlas,
+            entries,
+            scratch_buffer_offset,
+        } in &tlas_storage
+        {
+            if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
+                log::info!("only rebuild implemented")
+            }
+            tlas_descriptors.push(hal::BuildAccelerationStructureDescriptor {
+                entries,
+                mode: hal::AccelerationStructureBuildMode::Build,
+                flags: tlas.flags,
+                source_acceleration_structure: None,
+                destination_acceleration_structure: tlas.raw(&snatch_guard).ok_or(
+                    BuildAccelerationStructureError::InvalidTlas(tlas.error_ident()),
+                )?,
+                scratch_buffer: scratch_buffer.raw(),
+                scratch_buffer_offset: *scratch_buffer_offset,
+            })
+        }
 
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
         let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
 
+        let mut descriptors = Vec::new();
+
+        for storage in &blas_storage {
+            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard)?);
+        }
+
         build_blas(
             cmd_buf_raw,
             blas_present,
             tlas_present,
             input_barriers,
-            &blas_descriptors.collect::<Vec<_>>(),
+            &descriptors,
             scratch_buffer_barrier,
         );
 
         if tlas_present {
             unsafe {
-                cmd_buf_raw.build_acceleration_structures(&tlas_descriptors.collect::<Vec<_>>());
+                cmd_buf_raw.build_acceleration_structures(&tlas_descriptors);
 
                 cmd_buf_raw.place_acceleration_structure_barrier(
                     hal::AccelerationStructureBarrier {
@@ -614,10 +619,6 @@ impl Global {
                 ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
         };
 
-        let blas_descriptors = blas_storage
-            .iter()
-            .map(|storage| map_blas(storage, scratch_buffer.raw()));
-
         let mut tlas_descriptors = Vec::with_capacity(tlas_storage.len());
 
         for &TlasStore {
@@ -638,7 +639,13 @@ impl Global {
                 mode: hal::AccelerationStructureBuildMode::Build,
                 flags: tlas.flags,
                 source_acceleration_structure: None,
-                destination_acceleration_structure: tlas.raw.as_ref(),
+                destination_acceleration_structure: tlas
+                    .raw
+                    .get(&snatch_guard)
+                    .ok_or(BuildAccelerationStructureError::InvalidTlas(
+                        tlas.error_ident(),
+                    ))?
+                    .as_ref(),
                 scratch_buffer: scratch_buffer.raw(),
                 scratch_buffer_offset: *scratch_buffer_offset,
             })
@@ -649,12 +656,18 @@ impl Global {
 
         let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
 
+        let mut descriptors = Vec::new();
+
+        for storage in &blas_storage {
+            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard)?);
+        }
+
         build_blas(
             cmd_buf_raw,
             blas_present,
             tlas_present,
             input_barriers,
-            &blas_descriptors.collect::<Vec<_>>(),
+            &descriptors,
             scratch_buffer_barrier,
         );
 
@@ -771,7 +784,10 @@ impl CommandBufferMutable {
     }
 
     // makes sure a tlas is built before it is used
-    pub(crate) fn validate_tlas_actions(&self) -> Result<(), ValidateTlasActionsError> {
+    pub(crate) fn validate_tlas_actions(
+        &self,
+        snatch_guard: &SnatchGuard,
+    ) -> Result<(), ValidateTlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
         for action in &self.tlas_actions {
             match &action.kind {
@@ -794,8 +810,9 @@ impl CommandBufferMutable {
                     for blas in dependencies.deref() {
                         let blas_build_index = *blas.built_index.read();
                         if blas_build_index.is_none() {
-                            return Err(ValidateTlasActionsError::UsedUnbuilt(
+                            return Err(ValidateTlasActionsError::UsedUnbuiltBlas(
                                 action.tlas.error_ident(),
+                                blas.error_ident(),
                             ));
                         }
                         if blas_build_index.unwrap() > tlas_build_index.unwrap() {
@@ -803,6 +820,9 @@ impl CommandBufferMutable {
                                 blas.error_ident(),
                                 action.tlas.error_ident(),
                             ));
+                        }
+                        if blas.raw.get(snatch_guard).is_none() {
+                            return Err(ValidateTlasActionsError::InvalidBlas(blas.error_ident()));
                         }
                     }
                 }
@@ -1180,10 +1200,14 @@ fn iter_buffers<'a, 'b>(
 fn map_blas<'a>(
     storage: &'a BlasStore<'_>,
     scratch_buffer: &'a dyn hal::DynBuffer,
-) -> hal::BuildAccelerationStructureDescriptor<
-    'a,
-    dyn hal::DynBuffer,
-    dyn hal::DynAccelerationStructure,
+    snatch_guard: &'a SnatchGuard,
+) -> Result<
+    hal::BuildAccelerationStructureDescriptor<
+        'a,
+        dyn hal::DynBuffer,
+        dyn hal::DynAccelerationStructure,
+    >,
+    BuildAccelerationStructureError,
 > {
     let BlasStore {
         blas,
@@ -1193,15 +1217,21 @@ fn map_blas<'a>(
     if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
         log::info!("only rebuild implemented")
     }
-    hal::BuildAccelerationStructureDescriptor {
+    Ok(hal::BuildAccelerationStructureDescriptor {
         entries,
         mode: hal::AccelerationStructureBuildMode::Build,
         flags: blas.flags,
         source_acceleration_structure: None,
-        destination_acceleration_structure: blas.raw.as_ref(),
+        destination_acceleration_structure: blas
+            .raw
+            .get(snatch_guard)
+            .ok_or(BuildAccelerationStructureError::InvalidBlas(
+                blas.error_ident(),
+            ))?
+            .as_ref(),
         scratch_buffer,
         scratch_buffer_offset: *scratch_buffer_offset,
-    }
+    })
 }
 
 fn build_blas<'a>(
