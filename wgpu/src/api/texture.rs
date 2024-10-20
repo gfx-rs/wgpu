@@ -12,7 +12,6 @@ use crate::*;
 pub struct Texture {
     pub(crate) context: Arc<C>,
     pub(crate) data: Box<Data>,
-    pub(crate) owned: bool,
     pub(crate) descriptor: TextureDescriptor<'static>,
 }
 #[cfg(send_sync)]
@@ -138,7 +137,7 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        if self.owned && !thread::panicking() {
+        if !thread::panicking() {
             self.context.texture_drop(self.data.as_ref());
         }
     }

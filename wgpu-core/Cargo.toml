@@ -51,6 +51,10 @@ renderdoc = ["hal/renderdoc"]
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
 
+## Validates indirect draw/dispatch calls. This will also enable naga's
+## WGSL frontend since we use a WGSL compute shader to do the validation.
+indirect-validation = ["naga/wgsl-in"]
+
 ## Enables serialization via `serde` on common wgpu types.
 serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 

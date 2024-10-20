@@ -622,6 +622,10 @@ impl super::ImageClass {
             crate::ImageClass::Storage { .. } => false,
         }
     }
+
+    pub const fn is_depth(self) -> bool {
+        matches!(self, crate::ImageClass::Depth { .. })
+    }
 }
 
 impl crate::Module {

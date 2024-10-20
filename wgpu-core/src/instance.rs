@@ -121,6 +121,271 @@ impl Instance {
                 (*instance_backend == backend).then(|| instance.as_ref())
             })
     }
+
+    /// # Safety
+    ///
+    /// - The raw instance handle returned must not be manually destroyed.
+    pub unsafe fn as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
+        self.raw(A::VARIANT).map(|instance| {
+            instance
+                .as_any()
+                .downcast_ref()
+                // This should be impossible. It would mean that backend instance and enum type are mismatching.
+                .expect("Stored instance is not of the correct type")
+        })
+    }
+
+    /// Creates a new surface targeting the given display/window handles.
+    ///
+    /// Internally attempts to create hal surfaces for all enabled backends.
+    ///
+    /// Fails only if creation for surfaces for all enabled backends fails in which case
+    /// the error for each enabled backend is listed.
+    /// Vice versa, if creation for any backend succeeds, success is returned.
+    /// Surface creation errors are logged to the debug log in any case.
+    ///
+    /// # Safety
+    ///
+    /// - `display_handle` must be a valid object to create a surface upon.
+    /// - `window_handle` must remain valid as long as the returned
+    ///   [`SurfaceId`] is being used.
+    #[cfg(feature = "raw-window-handle")]
+    pub unsafe fn create_surface(
+        &self,
+        display_handle: raw_window_handle::RawDisplayHandle,
+        window_handle: raw_window_handle::RawWindowHandle,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::create_surface");
+
+        let mut errors = HashMap::default();
+        let mut surface_per_backend = HashMap::default();
+
+        for (backend, instance) in &self.instance_per_backend {
+            match unsafe {
+                instance
+                    .as_ref()
+                    .create_surface(display_handle, window_handle)
+            } {
+                Ok(raw) => {
+                    surface_per_backend.insert(*backend, raw);
+                }
+                Err(err) => {
+                    log::debug!(
+                        "Instance::create_surface: failed to create surface for {:?}: {:?}",
+                        backend,
+                        err
+                    );
+                    errors.insert(*backend, err);
+                }
+            }
+        }
+
+        if surface_per_backend.is_empty() {
+            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
+                errors,
+            ))
+        } else {
+            let surface = Surface {
+                presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+                surface_per_backend,
+            };
+
+            Ok(surface)
+        }
+    }
+
+    /// # Safety
+    ///
+    /// `layer` must be a valid pointer.
+    #[cfg(metal)]
+    pub unsafe fn create_surface_metal(
+        &self,
+        layer: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::create_surface_metal");
+
+        let instance = unsafe { self.as_hal::<hal::api::Metal>() }
+            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
+
+        let layer = layer.cast();
+        // SAFETY: We do this cast and deref. (rather than using `metal` to get the
+        // object we want) to avoid direct coupling on the `metal` crate.
+        //
+        // To wit, this pointer…
+        //
+        // - …is properly aligned.
+        // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+        //   field.
+        // - …points to an _initialized_ `MetalLayerRef`.
+        // - …is only ever aliased via an immutable reference that lives within this
+        //   lexical scope.
+        let layer = unsafe { &*layer };
+        let raw_surface: Box<dyn hal::DynSurface> =
+            Box::new(instance.create_surface_from_layer(layer));
+
+        let surface = Surface {
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+            surface_per_backend: std::iter::once((Backend::Metal, raw_surface)).collect(),
+        };
+
+        Ok(surface)
+    }
+
+    #[cfg(dx12)]
+    fn create_surface_dx12(
+        &self,
+        create_surface_func: impl FnOnce(&hal::dx12::Instance) -> hal::dx12::Surface,
+    ) -> Result<Surface, CreateSurfaceError> {
+        let instance = unsafe { self.as_hal::<hal::api::Dx12>() }
+            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Dx12))?;
+        let surface: Box<dyn hal::DynSurface> = Box::new(create_surface_func(instance));
+
+        let surface = Surface {
+            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+            surface_per_backend: std::iter::once((Backend::Dx12, surface)).collect(),
+        };
+
+        Ok(surface)
+    }
+
+    #[cfg(dx12)]
+    /// # Safety
+    ///
+    /// The visual must be valid and able to be used to make a swapchain with.
+    pub unsafe fn create_surface_from_visual(
+        &self,
+        visual: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::instance_create_surface_from_visual");
+        self.create_surface_dx12(|inst| unsafe { inst.create_surface_from_visual(visual) })
+    }
+
+    #[cfg(dx12)]
+    /// # Safety
+    ///
+    /// The surface_handle must be valid and able to be used to make a swapchain with.
+    pub unsafe fn create_surface_from_surface_handle(
+        &self,
+        surface_handle: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::instance_create_surface_from_surface_handle");
+        self.create_surface_dx12(|inst| unsafe {
+            inst.create_surface_from_surface_handle(surface_handle)
+        })
+    }
+
+    #[cfg(dx12)]
+    /// # Safety
+    ///
+    /// The swap_chain_panel must be valid and able to be used to make a swapchain with.
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
+        self.create_surface_dx12(|inst| unsafe {
+            inst.create_surface_from_swap_chain_panel(swap_chain_panel)
+        })
+    }
+
+    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
+        profiling::scope!("Instance::enumerate_adapters");
+        api_log!("Instance::enumerate_adapters");
+
+        let mut adapters = Vec::new();
+        for (_backend, instance) in self
+            .instance_per_backend
+            .iter()
+            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
+        {
+            // NOTE: We might be using `profiling` without any features. The empty backend of this
+            // macro emits no code, so unused code linting changes depending on the backend.
+            profiling::scope!("enumerating", &*format!("{:?}", _backend));
+
+            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
+            for raw in hal_adapters {
+                let adapter = Adapter::new(raw);
+                log::info!("Adapter {:?}", adapter.raw.info);
+                adapters.push(adapter);
+            }
+        }
+        adapters
+    }
+
+    pub fn request_adapter(
+        &self,
+        desc: &wgt::RequestAdapterOptions<&Surface>,
+        backends: Backends,
+    ) -> Result<Adapter, RequestAdapterError> {
+        profiling::scope!("Instance::request_adapter");
+        api_log!("Instance::request_adapter");
+
+        let mut adapters = Vec::new();
+
+        for (backend, instance) in self
+            .instance_per_backend
+            .iter()
+            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
+        {
+            let compatible_hal_surface = desc
+                .compatible_surface
+                .and_then(|surface| surface.raw(*backend));
+            let mut backend_adapters =
+                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
+            if desc.force_fallback_adapter {
+                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
+            }
+            if let Some(surface) = desc.compatible_surface {
+                backend_adapters
+                    .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
+            }
+            adapters.extend(backend_adapters);
+        }
+
+        match desc.power_preference {
+            PowerPreference::LowPower => {
+                sort(&mut adapters, true);
+            }
+            PowerPreference::HighPerformance => {
+                sort(&mut adapters, false);
+            }
+            PowerPreference::None => {}
+        };
+
+        fn sort(adapters: &mut [hal::DynExposedAdapter], prefer_integrated_gpu: bool) {
+            adapters.sort_by(|a, b| {
+                get_order(a.info.device_type, prefer_integrated_gpu)
+                    .cmp(&get_order(b.info.device_type, prefer_integrated_gpu))
+            });
+        }
+
+        fn get_order(device_type: wgt::DeviceType, prefer_integrated_gpu: bool) -> u8 {
+            // Since devices of type "Other" might really be "Unknown" and come
+            // from APIs like OpenGL that don't specify device type, Prefer more
+            // Specific types over Other.
+            //
+            // This means that backends which do provide accurate device types
+            // will be preferred if their device type indicates an actual
+            // hardware GPU (integrated or discrete).
+            match device_type {
+                wgt::DeviceType::DiscreteGpu if prefer_integrated_gpu => 2,
+                wgt::DeviceType::IntegratedGpu if prefer_integrated_gpu => 1,
+                wgt::DeviceType::DiscreteGpu => 1,
+                wgt::DeviceType::IntegratedGpu => 2,
+                wgt::DeviceType::Other => 3,
+                wgt::DeviceType::VirtualGpu => 4,
+                wgt::DeviceType::Cpu => 5,
+            }
+        }
+
+        if let Some(adapter) = adapters.into_iter().next() {
+            log::info!("Adapter {:?}", adapter.info);
+            let adapter = Adapter::new(adapter);
+            Ok(adapter)
+        } else {
+            Err(RequestAdapterError::NotFound)
+        }
+    }
 }
 
 pub struct Surface {
@@ -164,12 +429,24 @@ impl Surface {
     }
 }
 
+impl Drop for Surface {
+    fn drop(&mut self) {
+        if let Some(present) = self.presentation.lock().take() {
+            for (&backend, surface) in &self.surface_per_backend {
+                if backend == present.device.backend() {
+                    unsafe { surface.unconfigure(present.device.raw()) };
+                }
+            }
+        }
+    }
+}
+
 pub struct Adapter {
     pub(crate) raw: hal::DynExposedAdapter,
 }
 
 impl Adapter {
-    fn new(mut raw: hal::DynExposedAdapter) -> Self {
+    pub fn new(mut raw: hal::DynExposedAdapter) -> Self {
         // WebGPU requires this offset alignment as lower bound on all adapters.
         const MIN_BUFFER_OFFSET_ALIGNMENT_LOWER_BOUND: u32 = 32;
 
@@ -185,6 +462,11 @@ impl Adapter {
         Self { raw }
     }
 
+    /// Returns the backend this adapter is using.
+    pub fn backend(&self) -> Backend {
+        self.raw.backend()
+    }
+
     pub fn is_surface_supported(&self, surface: &Surface) -> bool {
         // If get_capabilities returns Err, then the API does not advertise support for the surface.
         //
@@ -193,7 +475,27 @@ impl Adapter {
         surface.get_capabilities(self).is_ok()
     }
 
-    pub(crate) fn get_texture_format_features(
+    pub fn get_info(&self) -> wgt::AdapterInfo {
+        self.raw.info.clone()
+    }
+
+    pub fn features(&self) -> wgt::Features {
+        self.raw.features
+    }
+
+    pub fn limits(&self) -> wgt::Limits {
+        self.raw.capabilities.limits.clone()
+    }
+
+    pub fn downlevel_capabilities(&self) -> wgt::DownlevelCapabilities {
+        self.raw.capabilities.downlevel.clone()
+    }
+
+    pub fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
+        unsafe { self.raw.adapter.get_presentation_timestamp() }
+    }
+
+    pub fn get_texture_format_features(
         &self,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
@@ -286,8 +588,7 @@ impl Adapter {
         Ok((device, queue))
     }
 
-    #[allow(clippy::type_complexity)]
-    fn create_device_and_queue(
+    pub fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
@@ -301,7 +602,7 @@ impl Adapter {
         }
 
         let caps = &self.raw.capabilities;
-        if Backends::PRIMARY.contains(Backends::from(self.raw.backend()))
+        if Backends::PRIMARY.contains(Backends::from(self.backend()))
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;
@@ -409,47 +710,9 @@ impl Global {
         window_handle: raw_window_handle::RawWindowHandle,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::create_surface");
-
-        let mut errors = HashMap::default();
-        let mut surface_per_backend = HashMap::default();
-
-        for (backend, instance) in &self.instance.instance_per_backend {
-            match unsafe {
-                instance
-                    .as_ref()
-                    .create_surface(display_handle, window_handle)
-            } {
-                Ok(raw) => {
-                    surface_per_backend.insert(*backend, raw);
-                }
-                Err(err) => {
-                    log::debug!(
-                        "Instance::create_surface: failed to create surface for {:?}: {:?}",
-                        backend,
-                        err
-                    );
-                    errors.insert(*backend, err);
-                }
-            }
-        }
-
-        if surface_per_backend.is_empty() {
-            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
-                errors,
-            ))
-        } else {
-            let surface = Surface {
-                presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-                surface_per_backend,
-            };
-
-            let id = self
-                .surfaces
-                .prepare(id_in) // No specific backend for Surface, since it's not specific.
-                .assign(Arc::new(surface));
-            Ok(id)
-        }
+        let surface = unsafe { self.instance.create_surface(display_handle, window_handle) }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     /// # Safety
@@ -461,57 +724,7 @@ impl Global {
         layer: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::create_surface_metal");
-
-        let instance = self
-            .instance
-            .raw(Backend::Metal)
-            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
-        let instance_metal: &hal::metal::Instance = instance.as_any().downcast_ref().unwrap();
-
-        let layer = layer.cast();
-        // SAFETY: We do this cast and deref. (rather than using `metal` to get the
-        // object we want) to avoid direct coupling on the `metal` crate.
-        //
-        // To wit, this pointer…
-        //
-        // - …is properly aligned.
-        // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
-        //   field.
-        // - …points to an _initialized_ `MetalLayerRef`.
-        // - …is only ever aliased via an immutable reference that lives within this
-        //   lexical scope.
-        let layer = unsafe { &*layer };
-        let raw_surface: Box<dyn hal::DynSurface> =
-            Box::new(instance_metal.create_surface_from_layer(layer));
-
-        let surface = Surface {
-            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            surface_per_backend: std::iter::once((Backend::Metal, raw_surface)).collect(),
-        };
-
-        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
-        Ok(id)
-    }
-
-    #[cfg(dx12)]
-    fn instance_create_surface_dx12(
-        &self,
-        id_in: Option<SurfaceId>,
-        create_surface_func: impl FnOnce(&hal::dx12::Instance) -> hal::dx12::Surface,
-    ) -> Result<SurfaceId, CreateSurfaceError> {
-        let instance = self
-            .instance
-            .raw(Backend::Dx12)
-            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Dx12))?;
-        let instance_dx12 = instance.as_any().downcast_ref().unwrap();
-        let surface: Box<dyn hal::DynSurface> = Box::new(create_surface_func(instance_dx12));
-
-        let surface = Surface {
-            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            surface_per_backend: std::iter::once((Backend::Dx12, surface)).collect(),
-        };
-
+        let surface = unsafe { self.instance.create_surface_metal(layer) }?;
         let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
         Ok(id)
     }
@@ -525,10 +738,9 @@ impl Global {
         visual: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::instance_create_surface_from_visual");
-        self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_visual(visual)
-        })
+        let surface = unsafe { self.instance.create_surface_from_visual(visual) }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     #[cfg(dx12)]
@@ -540,10 +752,12 @@ impl Global {
         surface_handle: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::instance_create_surface_from_surface_handle");
-        self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_surface_handle(surface_handle)
-        })
+        let surface = unsafe {
+            self.instance
+                .create_surface_from_surface_handle(surface_handle)
+        }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     #[cfg(dx12)]
@@ -555,10 +769,12 @@ impl Global {
         swap_chain_panel: *mut std::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
-        profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
-        self.instance_create_surface_dx12(id_in, |inst| unsafe {
-            inst.create_surface_from_swap_chain_panel(swap_chain_panel)
-        })
+        let surface = unsafe {
+            self.instance
+                .create_surface_from_swap_chain_panel(swap_chain_panel)
+        }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
@@ -566,42 +782,15 @@ impl Global {
 
         api_log!("Surface::drop {id:?}");
 
-        let surface = self.surfaces.remove(id);
-        let surface =
-            Arc::into_inner(surface).expect("Surface cannot be destroyed because is still in use");
-
-        if let Some(present) = surface.presentation.lock().take() {
-            for (&backend, surface) in &surface.surface_per_backend {
-                if backend == present.device.backend() {
-                    unsafe { surface.unconfigure(present.device.raw()) };
-                }
-            }
-        }
-        drop(surface)
+        self.surfaces.remove(id);
     }
 
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<AdapterId> {
-        profiling::scope!("Instance::enumerate_adapters");
-        api_log!("Instance::enumerate_adapters");
-
-        let mut adapters = Vec::new();
-        for (_, instance) in self
-            .instance
-            .instance_per_backend
-            .iter()
-            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
-        {
-            profiling::scope!("enumerating", &*format!("{:?}", backend));
-
-            let hal_adapters = unsafe { instance.enumerate_adapters(None) };
-            for raw in hal_adapters {
-                let adapter = Adapter::new(raw);
-                log::info!("Adapter {:?}", adapter.raw.info);
-                let id = self.hub.adapters.prepare(None).assign(Arc::new(adapter));
-                adapters.push(id);
-            }
-        }
+        let adapters = self.instance.enumerate_adapters(backends);
         adapters
+            .into_iter()
+            .map(|adapter| self.hub.adapters.prepare(None).assign(Arc::new(adapter)))
+            .collect()
     }
 
     pub fn request_adapter(
@@ -610,80 +799,15 @@ impl Global {
         backends: Backends,
         id_in: Option<AdapterId>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        profiling::scope!("Instance::request_adapter");
-        api_log!("Instance::request_adapter");
-
         let compatible_surface = desc.compatible_surface.map(|id| self.surfaces.get(id));
-        let compatible_surface = compatible_surface.as_ref().map(|surface| surface.as_ref());
-        let mut adapters = Vec::new();
-
-        for (backend, instance) in self
-            .instance
-            .instance_per_backend
-            .iter()
-            .filter(|(backend, _)| backends.contains(Backends::from(*backend)))
-        {
-            let compatible_hal_surface =
-                compatible_surface.and_then(|surface| surface.raw(*backend));
-            let mut backend_adapters =
-                unsafe { instance.enumerate_adapters(compatible_hal_surface) };
-            if desc.force_fallback_adapter {
-                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
-            }
-            if let Some(surface) = compatible_surface {
-                backend_adapters
-                    .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
-            }
-            adapters.extend(backend_adapters);
-        }
-
-        match desc.power_preference {
-            PowerPreference::LowPower => {
-                sort(&mut adapters, true);
-            }
-            PowerPreference::HighPerformance => {
-                sort(&mut adapters, false);
-            }
-            PowerPreference::None => {}
+        let desc = wgt::RequestAdapterOptions {
+            power_preference: desc.power_preference,
+            force_fallback_adapter: desc.force_fallback_adapter,
+            compatible_surface: compatible_surface.as_deref(),
         };
-
-        fn sort(adapters: &mut [hal::DynExposedAdapter], prefer_integrated_gpu: bool) {
-            adapters.sort_by(|a, b| {
-                get_order(a.info.device_type, prefer_integrated_gpu)
-                    .cmp(&get_order(b.info.device_type, prefer_integrated_gpu))
-            });
-        }
-
-        fn get_order(device_type: wgt::DeviceType, prefer_integrated_gpu: bool) -> u8 {
-            // Since devices of type "Other" might really be "Unknown" and come
-            // from APIs like OpenGL that don't specify device type, Prefer more
-            // Specific types over Other.
-            //
-            // This means that backends which do provide accurate device types
-            // will be preferred if their device type indicates an actual
-            // hardware GPU (integrated or discrete).
-            match device_type {
-                wgt::DeviceType::DiscreteGpu if prefer_integrated_gpu => 2,
-                wgt::DeviceType::IntegratedGpu if prefer_integrated_gpu => 1,
-                wgt::DeviceType::DiscreteGpu => 1,
-                wgt::DeviceType::IntegratedGpu => 2,
-                wgt::DeviceType::Other => 3,
-                wgt::DeviceType::VirtualGpu => 4,
-                wgt::DeviceType::Cpu => 5,
-            }
-        }
-
-        if let Some(adapter) = adapters.into_iter().next() {
-            log::info!("Adapter {:?}", adapter.info);
-            let id = self
-                .hub
-                .adapters
-                .prepare(id_in)
-                .assign(Arc::new(Adapter::new(adapter)));
-            Ok(id)
-        } else {
-            Err(RequestAdapterError::NotFound)
-        }
+        let adapter = self.instance.request_adapter(&desc, backends)?;
+        let id = self.hub.adapters.prepare(id_in).assign(Arc::new(adapter));
+        Ok(id)
     }
 
     /// # Safety
@@ -705,7 +829,7 @@ impl Global {
 
     pub fn adapter_get_info(&self, adapter_id: AdapterId) -> wgt::AdapterInfo {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.info.clone()
+        adapter.get_info()
     }
 
     pub fn adapter_get_texture_format_features(
@@ -719,12 +843,12 @@ impl Global {
 
     pub fn adapter_features(&self, adapter_id: AdapterId) -> wgt::Features {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.features
+        adapter.features()
     }
 
     pub fn adapter_limits(&self, adapter_id: AdapterId) -> wgt::Limits {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.capabilities.limits.clone()
+        adapter.limits()
     }
 
     pub fn adapter_downlevel_capabilities(
@@ -732,7 +856,7 @@ impl Global {
         adapter_id: AdapterId,
     ) -> wgt::DownlevelCapabilities {
         let adapter = self.hub.adapters.get(adapter_id);
-        adapter.raw.capabilities.downlevel.clone()
+        adapter.downlevel_capabilities()
     }
 
     pub fn adapter_get_presentation_timestamp(
@@ -740,7 +864,7 @@ impl Global {
         adapter_id: AdapterId,
     ) -> wgt::PresentationTimestamp {
         let adapter = self.hub.adapters.get(adapter_id);
-        unsafe { adapter.raw.adapter.get_presentation_timestamp() }
+        adapter.get_presentation_timestamp()
     }
 
     pub fn adapter_drop(&self, adapter_id: AdapterId) {

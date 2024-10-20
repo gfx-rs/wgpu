@@ -13,7 +13,6 @@ use super::error::WebGpuResult;
 pub(crate) struct WebGpuTexture {
     pub(crate) instance: crate::Instance,
     pub(crate) id: wgpu_core::id::TextureId,
-    pub(crate) owned: bool,
 }
 
 impl Resource for WebGpuTexture {
@@ -22,10 +21,8 @@ impl Resource for WebGpuTexture {
     }
 
     fn close(self: Rc<Self>) {
-        if self.owned {
-            let instance = &self.instance;
-            instance.texture_drop(self.id);
-        }
+        let instance = &self.instance;
+        instance.texture_drop(self.id);
     }
 }
 
@@ -85,7 +82,6 @@ pub fn op_webgpu_create_texture(
     let rid = state.resource_table.add(WebGpuTexture {
         instance: instance.clone(),
         id: val,
-        owned: true,
     });
 
     Ok(WebGpuResult::rid_err(rid, maybe_err))

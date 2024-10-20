@@ -107,7 +107,13 @@ impl super::CommandEncoder {
                 );
             }
         }
-        if let Some(root_index) = self.pass.layout.special_constants_root_index {
+        if let Some(root_index) = self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .map(|sc| sc.root_index)
+        {
             let needs_update = match self.pass.root_elements[root_index as usize] {
                 super::RootElement::SpecialConstantBuffer {
                     first_vertex: other_vertex,
@@ -130,7 +136,13 @@ impl super::CommandEncoder {
     }
 
     fn prepare_dispatch(&mut self, count: [u32; 3]) {
-        if let Some(root_index) = self.pass.layout.special_constants_root_index {
+        if let Some(root_index) = self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .map(|sc| sc.root_index)
+        {
             let needs_update = match self.pass.root_elements[root_index as usize] {
                 super::RootElement::SpecialConstantBuffer {
                     first_vertex,
@@ -230,7 +242,7 @@ impl super::CommandEncoder {
     }
 
     fn reset_signature(&mut self, layout: &super::PipelineLayoutShared) {
-        if let Some(root_index) = layout.special_constants_root_index {
+        if let Some(root_index) = layout.special_constants.as_ref().map(|sc| sc.root_index) {
             self.pass.root_elements[root_index as usize] =
                 super::RootElement::SpecialConstantBuffer {
                     first_vertex: 0,
@@ -1210,11 +1222,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
-        self.prepare_dispatch([0; 3]);
-        //TODO: update special constants indirectly
+        self.update_root_elements();
+        let cmd_signature = &self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .map(|sc| &sc.cmd_signatures)
+            .unwrap_or_else(|| &self.shared.cmd_signatures)
+            .dispatch;
         unsafe {
             self.list.as_ref().unwrap().ExecuteIndirect(
-                &self.shared.cmd_signatures.dispatch,
+                cmd_signature,
                 1,
                 &buffer.resource,
                 offset,
