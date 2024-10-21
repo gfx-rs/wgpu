@@ -10,7 +10,7 @@ void test_workgroupUniformLoad(uint3 workgroup_id : SV_GroupID, uint3 __local_in
     }
     GroupMemoryBarrierWithGroupSync();
     GroupMemoryBarrierWithGroupSync();
-    int _e4 = arr_i32_[workgroup_id.x];
+    int _e4 = arr_i32_[min(uint(workgroup_id.x), 127u)];
     GroupMemoryBarrierWithGroupSync();
     if ((_e4 > 10)) {
         GroupMemoryBarrierWithGroupSync();

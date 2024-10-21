@@ -271,11 +271,13 @@ impl super::Device {
         .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}")))?;
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
-            != layout.naga_options.zero_initialize_workgroup_memory;
+            != layout.naga_options.zero_initialize_workgroup_memory
+            || stage.module.runtime_checks != layout.naga_options.restrict_indexing;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
             temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            temp_options.restrict_indexing = stage.module.runtime_checks;
             &temp_options
         } else {
             &layout.naga_options
@@ -1223,6 +1225,7 @@ impl crate::Device for super::Device {
                 special_constants_binding,
                 push_constants_target,
                 zero_initialize_workgroup_memory: true,
+                restrict_indexing: true,
             },
         })
     }
@@ -1438,7 +1441,11 @@ impl crate::Device for super::Device {
 
         let raw_name = desc.label.and_then(|label| ffi::CString::new(label).ok());
         match shader {
-            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule { naga, raw_name }),
+            crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
+                naga,
+                raw_name,
+                runtime_checks: desc.runtime_checks,
+            }),
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }
