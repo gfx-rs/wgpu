@@ -144,6 +144,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
 - Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341)
+- Optimise fence checking when `Queue::submit` is called many times per frame. By @dinnerbone in [#6427](https://github.com/gfx-rs/wgpu/pull/6427)
 
 #### WebGPU
 
@@ -950,7 +951,7 @@ By @cwfitzgerald in [#5053](https://github.com/gfx-rs/wgpu/pull/5053)
 
 #### Naga
 
-- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing thir operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
+- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing their operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
 - Naga constant evaluation can now process binary operators whose operands are both vectors. By @jimblandy in [#4861](https://github.com/gfx-rs/wgpu/pull/4861).
 - Add `--bulk-validate` option to Naga CLI. By @jimblandy in [#4871](https://github.com/gfx-rs/wgpu/pull/4871).
