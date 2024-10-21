@@ -142,6 +142,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
 - Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341)
+- Optimise fence checking when `Queue::submit` is called many times per frame. By @dinnerbone in [#6427](https://github.com/gfx-rs/wgpu/pull/6427)
 
 #### WebGPU
 
