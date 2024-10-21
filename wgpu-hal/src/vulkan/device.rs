@@ -814,13 +814,8 @@ impl super::Device {
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
             .handle_types(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE);
 
-        let ImageWithoutMemory {
-            raw,
-            requirements,
-            copy_size,
-            view_formats,
-            raw_flags,
-        } = self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
+        let image =
+            self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
 
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE)
@@ -828,37 +823,37 @@ impl super::Device {
 
         let mem_type_index = self
             .find_memory_type_index(
-                requirements.memory_type_bits,
+                image.requirements.memory_type_bits,
                 vk::MemoryPropertyFlags::DEVICE_LOCAL,
             )
             .ok_or(crate::DeviceError::ResourceCreationFailed)?;
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
-            .allocation_size(requirements.size)
+            .allocation_size(image.requirements.size)
             .memory_type_index(mem_type_index as _)
             .push_next(&mut import_memory_info);
         let memory = unsafe { self.shared.raw.allocate_memory(&memory_allocate_info, None) }
             .map_err(super::map_host_device_oom_err)?;
 
-        unsafe { self.shared.raw.bind_image_memory(raw, memory, 0) }
+        unsafe { self.shared.raw.bind_image_memory(image.raw, memory, 0) }
             .map_err(super::map_host_device_oom_err)?;
 
         if let Some(label) = desc.label {
-            unsafe { self.shared.set_object_name(raw, label) };
+            unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
         self.counters.textures.add(1);
 
         Ok(super::Texture {
-            raw,
+            raw: image.raw,
             drop_guard: None,
             external_memory: Some(memory),
             block: None,
             usage: desc.usage,
             format: desc.format,
-            raw_flags,
-            copy_size,
-            view_formats,
+            raw_flags: image.raw_flags,
+            copy_size: image.copy_size,
+            view_formats: image.view_formats,
         })
     }
 
@@ -1195,22 +1190,16 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        let ImageWithoutMemory {
-            raw,
-            requirements,
-            copy_size,
-            view_formats,
-            raw_flags,
-        } = self.create_image_without_memory(desc, None)?;
+        let image = self.create_image_without_memory(desc, None)?;
 
         let block = unsafe {
             self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
-                    size: requirements.size,
-                    align_mask: requirements.alignment - 1,
+                    size: image.requirements.size,
+                    align_mask: image.requirements.alignment - 1,
                     usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                    memory_types: requirements.memory_type_bits & self.valid_ash_memory_types,
+                    memory_types: image.requirements.memory_type_bits & self.valid_ash_memory_types,
                 },
             )?
         };
@@ -1220,26 +1209,26 @@ impl crate::Device for super::Device {
         unsafe {
             self.shared
                 .raw
-                .bind_image_memory(raw, *block.memory(), block.offset())
+                .bind_image_memory(image.raw, *block.memory(), block.offset())
                 .map_err(super::map_host_device_oom_err)?
         };
 
         if let Some(label) = desc.label {
-            unsafe { self.shared.set_object_name(raw, label) };
+            unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
         self.counters.textures.add(1);
 
         Ok(super::Texture {
-            raw,
+            raw: image.raw,
             drop_guard: None,
             external_memory: None,
             block: Some(block),
             usage: desc.usage,
             format: desc.format,
-            raw_flags,
-            copy_size,
-            view_formats,
+            raw_flags: image.raw_flags,
+            copy_size: image.copy_size,
+            view_formats: image.view_formats,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
