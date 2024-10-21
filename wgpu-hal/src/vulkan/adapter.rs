@@ -1545,8 +1545,8 @@ impl super::Instance {
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(khr::image_format_list::NAME),
             #[cfg(windows)]
-            external_memory_win32: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
-                || phd_capabilities.supports_extension(khr::external_memory_win32::NAME),
+            external_memory_win32: phd_capabilities
+                .supports_extension(khr::external_memory_win32::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
