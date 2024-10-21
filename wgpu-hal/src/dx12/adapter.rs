@@ -315,7 +315,11 @@ impl super::Adapter {
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
-            | wgt::Features::TEXTURE_FORMAT_NV12;
+            | wgt::Features::TEXTURE_FORMAT_NV12
+            // Ruint64 textures are always emulated on d3d12
+            | wgt::Features::TEXTURE_INT64_ATOMIC
+            // float32-filterable should always be available on d3d12
+            | wgt::Features::FLOAT32_FILTERABLE;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -402,11 +406,6 @@ impl super::Adapter {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
             atomic_int64_on_typed_resource_supported,
         );
-        // Ruint64 textures are always emulated on d3d12
-        features.set(wgt::Features::TEXTURE_INT64_ATOMIC, true);
-
-        // float32-filterable should always be available on d3d12
-        features.set(wgt::Features::FLOAT32_FILTERABLE, true);
 
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
