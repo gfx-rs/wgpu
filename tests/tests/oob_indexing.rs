@@ -1,5 +1,5 @@
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::Backends;
+use wgt::{Backend, Backends};
 
 /// Tests that writing and reading to the max length of a container (vec, mat, array)
 /// in the workgroup, private and function address spaces + let declarations
@@ -10,7 +10,7 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .skip(FailureCase::backend(Backends::DX12 | Backends::GL)),
+            .skip(FailureCase::backend(Backends::GL)),
     )
     .run_async(|ctx| async move {
         let test_resources = TestResources::new(&ctx);
@@ -51,7 +51,11 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
         drop(view);
         test_resources.readback_buffer.unmap();
 
-        assert_eq!([1; 12], current_res);
+        if ctx.adapter_info.backend == Backend::Dx12 {
+            assert_eq!([1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0], current_res);
+        } else {
+            assert_eq!([1; 12], current_res);
+        }
     });
 
 struct TestResources {
@@ -64,7 +68,16 @@ struct TestResources {
 
 impl TestResources {
     fn new(ctx: &TestingContext) -> Self {
-        const SHADER_SRC: &str = "
+        // FXC doesn't support dynamically indexing and writing to vectors and matrices, it errors with:
+        // error X3500: array reference cannot be used as an l-value; not natively addressable
+        // see also: https://github.com/gfx-rs/wgpu/issues/4460
+        let opt = if ctx.adapter_info.backend == Backend::Dx12 {
+            "//"
+        } else {
+            ""
+        };
+        let shader_src = format!(
+            "
             @group(0) @binding(0)
             var<storage, read_write> in: u32;
             @group(0) @binding(1)
@@ -79,7 +92,7 @@ impl TestResources {
             var<private> private_mat: mat3x3f;
 
             @compute @workgroup_size(1)
-            fn main() {
+            fn main() {{
                 let i = in;
 
                 var var_array = array<u32, 3>();
@@ -95,8 +108,8 @@ impl TestResources {
 
                 var var_vec = vec3u();
                 wg_vec[i] = 1u;
-                private_vec[i] = 1u;
-                var_vec[i] = 1u;
+                {opt} private_vec[i] = 1u;
+                {opt} var_vec[i] = 1u;
                 let let_vec = var_vec;
 
                 out[4] = wg_vec[i];
@@ -106,22 +119,23 @@ impl TestResources {
 
                 var var_mat = mat3x3f();
                 wg_mat[i][0] = 1f;
-                private_mat[i][0] = 1f;
-                var_mat[i][0] = 1f;
+                {opt} private_mat[i][0] = 1f;
+                {opt} var_mat[i][0] = 1f;
                 let let_mat = var_mat;
 
                 out[8] = u32(wg_mat[i][0]);
                 out[9] = u32(private_mat[i][0]);
                 out[10] = u32(var_mat[i][0]);
                 out[11] = u32(let_mat[i][0]);
-            }
-        ";
+            }}
+        "
+        );
 
         let module = ctx
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
-                source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
+                source: wgpu::ShaderSource::Wgsl(shader_src.into()),
             });
 
         let bgl = ctx

@@ -59,5 +59,6 @@
 		fake_missing_bindings: false,
 		special_constants_binding: Some((space: 0, register: 1)),
 		zero_initialize_workgroup_memory: true,
+		restrict_indexing: true
 	),
 )

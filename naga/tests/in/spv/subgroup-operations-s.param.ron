@@ -23,5 +23,6 @@
 		fake_missing_bindings: true,
 		special_constants_binding: None,
 		zero_initialize_workgroup_memory: true,
+		restrict_indexing: true
 	),
 )
