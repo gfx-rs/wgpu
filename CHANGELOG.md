@@ -87,6 +87,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Support polyfilling `inverse` in WGSL. By @chyyran in [#6385](https://github.com/gfx-rs/wgpu/pull/6385).
 - Add an internal skeleton for parsing `requires`, `enable`, and `diagnostic` directives that don't yet do anything besides emit nicer errors. By @ErichDonGubler in [#6352](https://github.com/gfx-rs/wgpu/pull/6352).
 - Include error chain information as a message and notes in shader compilation messages. By @ErichDonGubler in [#6436](https://github.com/gfx-rs/wgpu/pull/6436).
+- Unify Naga CLI error output with the format of shader compilation messages. By @ErichDonGubler in [#6436](https://github.com/gfx-rs/wgpu/pull/6436).
 
 #### General
 
