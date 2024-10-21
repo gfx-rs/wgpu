@@ -516,7 +516,7 @@ fn run() -> anyhow::Result<()> {
             // Validation failure is not fatal. Just report the error.
             if let Some(input) = &input_text {
                 let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
             } else {
                 print_err(&error);
             }
@@ -545,7 +545,7 @@ fn run() -> anyhow::Result<()> {
                     eprintln!("Error validating compacted module:");
                     if let Some(input) = &input_text {
                         let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                        emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                        error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
                     } else {
                         print_err(&error);
                     }
@@ -871,7 +871,7 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
             eprintln!("Error validating {input_path}:");
             if let Some(input) = &input_text {
                 let filename = path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
             } else {
                 print_err(&error);
             }
@@ -896,8 +896,4 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
 }
 
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-use naga::{FastHashMap, WithSpan};
-
-pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, source: &str) {
-    ann_err.emit_to_stderr_with_path(source, filename);
-}
+use naga::FastHashMap;
