@@ -1,0 +1,972 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 0,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Sampled(
+                    kind: Float,
+                    multi: false,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: BindingArray(
+                base: 4,
+                size: Dynamic,
+            ),
+        ),
+        (
+            name: None,
+            inner: Sampler(
+                comparison: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: BindingArray(
+                base: 6,
+                size: Dynamic,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 3,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Sint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 2,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Sint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 13,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 10,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 9,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Sampler(
+                comparison: true,
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Depth(
+                    multi: false,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: None,
+            ty: 10,
+            init: 0,
+        ),
+        (
+            name: None,
+            ty: 11,
+            init: 3,
+        ),
+        (
+            name: None,
+            ty: 2,
+            init: 4,
+        ),
+        (
+            name: None,
+            ty: 10,
+            init: 5,
+        ),
+        (
+            name: None,
+            ty: 2,
+            init: 6,
+        ),
+        (
+            name: None,
+            ty: 9,
+            init: 11,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("tex_id"),
+            space: Private,
+            binding: None,
+            ty: 0,
+            init: None,
+        ),
+        (
+            name: Some("textures"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 5,
+            init: None,
+        ),
+        (
+            name: Some("samp_id"),
+            space: Private,
+            binding: None,
+            ty: 0,
+            init: None,
+        ),
+        (
+            name: Some("samplers"),
+            space: Handle,
+            binding: Some((
+                group: 1,
+                binding: 0,
+            )),
+            ty: 7,
+            init: None,
+        ),
+        (
+            name: Some("uv"),
+            space: Private,
+            binding: None,
+            ty: 3,
+            init: None,
+        ),
+        (
+            name: Some("clamp"),
+            space: Private,
+            binding: None,
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("lod"),
+            space: Private,
+            binding: None,
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("cmp_samplers"),
+            space: Handle,
+            binding: Some((
+                group: 3,
+                binding: 0,
+            )),
+            ty: 18,
+            init: None,
+        ),
+        (
+            name: Some("cmp_texture"),
+            space: Handle,
+            binding: Some((
+                group: 2,
+                binding: 0,
+            )),
+            ty: 19,
+            init: None,
+        ),
+        (
+            name: Some("cmp"),
+            space: Private,
+            binding: None,
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("ddx"),
+            space: Private,
+            binding: None,
+            ty: 3,
+            init: None,
+        ),
+        (
+            name: Some("ddy"),
+            space: Private,
+            binding: None,
+            ty: 3,
+            init: None,
+        ),
+        (
+            name: Some("location"),
+            space: Private,
+            binding: None,
+            ty: 13,
+            init: None,
+        ),
+        (
+            name: Some("rw_textures"),
+            space: Handle,
+            binding: Some((
+                group: 4,
+                binding: 0,
+            )),
+            ty: 5,
+            init: None,
+        ),
+        (
+            name: Some("entryPointParam_main"),
+            space: Private,
+            binding: None,
+            ty: 9,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(I32(1)),
+        Constant(0),
+        Constant(0),
+        Compose(
+            ty: 11,
+            components: [
+                1,
+                2,
+            ],
+        ),
+        Literal(F32(0.0)),
+        Literal(I32(2)),
+        Literal(F32(1.0)),
+        Constant(4),
+        Constant(4),
+        Constant(4),
+        Constant(4),
+        Compose(
+            ty: 9,
+            components: [
+                7,
+                8,
+                9,
+                10,
+            ],
+        ),
+        Constant(1),
+        Constant(1),
+        Constant(1),
+        Constant(1),
+        Constant(1),
+        Constant(1),
+        Constant(1),
+    ],
+    functions: [
+        (
+            name: Some("main"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [
+                GlobalVariable(6),
+                GlobalVariable(14),
+                GlobalVariable(5),
+                GlobalVariable(8),
+                GlobalVariable(9),
+                GlobalVariable(0),
+                GlobalVariable(3),
+                GlobalVariable(12),
+                GlobalVariable(10),
+                GlobalVariable(1),
+                GlobalVariable(7),
+                GlobalVariable(13),
+                GlobalVariable(4),
+                GlobalVariable(11),
+                GlobalVariable(2),
+                Constant(5),
+                Constant(3),
+                Constant(2),
+                Constant(0),
+                Constant(4),
+                Constant(1),
+                Load(
+                    pointer: 5,
+                ),
+                Access(
+                    base: 9,
+                    index: 21,
+                ),
+                Load(
+                    pointer: 14,
+                ),
+                Access(
+                    base: 6,
+                    index: 23,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 25,
+                    array_index: None,
+                    offset: None,
+                    level: Auto,
+                    depth_ref: None,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 27,
+                    array_index: None,
+                    offset: Some(12),
+                    level: Auto,
+                    depth_ref: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 26,
+                    right: 28,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 2,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 30,
+                    array_index: None,
+                    offset: Some(13),
+                    level: Auto,
+                    depth_ref: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 29,
+                    right: 32,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 0,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 34,
+                    array_index: None,
+                    offset: None,
+                    level: Exact(35),
+                    depth_ref: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 33,
+                    right: 36,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 0,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 38,
+                    array_index: None,
+                    offset: Some(14),
+                    level: Exact(39),
+                    depth_ref: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 37,
+                    right: 40,
+                ),
+                Load(
+                    pointer: 14,
+                ),
+                Access(
+                    base: 10,
+                    index: 42,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 4,
+                ),
+                ImageSample(
+                    image: 3,
+                    sampler: 43,
+                    gather: None,
+                    coordinate: 44,
+                    array_index: None,
+                    offset: None,
+                    level: Auto,
+                    depth_ref: Some(45),
+                ),
+                Splat(
+                    size: Quad,
+                    value: 46,
+                ),
+                Binary(
+                    op: Add,
+                    left: 41,
+                    right: 47,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 4,
+                ),
+                ImageSample(
+                    image: 3,
+                    sampler: 43,
+                    gather: None,
+                    coordinate: 49,
+                    array_index: None,
+                    offset: Some(15),
+                    level: Auto,
+                    depth_ref: Some(50),
+                ),
+                Splat(
+                    size: Quad,
+                    value: 51,
+                ),
+                Binary(
+                    op: Add,
+                    left: 48,
+                    right: 52,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 4,
+                ),
+                ImageSample(
+                    image: 3,
+                    sampler: 43,
+                    gather: None,
+                    coordinate: 54,
+                    array_index: None,
+                    offset: None,
+                    level: Zero,
+                    depth_ref: Some(55),
+                ),
+                Splat(
+                    size: Quad,
+                    value: 56,
+                ),
+                Binary(
+                    op: Add,
+                    left: 53,
+                    right: 57,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 4,
+                ),
+                ImageSample(
+                    image: 3,
+                    sampler: 43,
+                    gather: None,
+                    coordinate: 59,
+                    array_index: None,
+                    offset: Some(16),
+                    level: Zero,
+                    depth_ref: Some(60),
+                ),
+                Splat(
+                    size: Quad,
+                    value: 61,
+                ),
+                Binary(
+                    op: Add,
+                    left: 58,
+                    right: 62,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 8,
+                ),
+                Load(
+                    pointer: 13,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 64,
+                    array_index: None,
+                    offset: None,
+                    level: Gradient(
+                        x: 65,
+                        y: 66,
+                    ),
+                    depth_ref: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 63,
+                    right: 67,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 8,
+                ),
+                Load(
+                    pointer: 13,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 69,
+                    array_index: None,
+                    offset: Some(17),
+                    level: Gradient(
+                        x: 70,
+                        y: 71,
+                    ),
+                    depth_ref: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 68,
+                    right: 72,
+                ),
+                Load(
+                    pointer: 12,
+                ),
+                Load(
+                    pointer: 2,
+                ),
+                Load(
+                    pointer: 8,
+                ),
+                Load(
+                    pointer: 13,
+                ),
+                ImageSample(
+                    image: 22,
+                    sampler: 24,
+                    gather: None,
+                    coordinate: 74,
+                    array_index: None,
+                    offset: Some(18),
+                    level: Gradient(
+                        x: 76,
+                        y: 77,
+                    ),
+                    depth_ref: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 73,
+                    right: 78,
+                ),
+                Load(
+                    pointer: 7,
+                ),
+                Swizzle(
+                    size: Bi,
+                    vector: 80,
+                    pattern: (X, Y, X, X),
+                ),
+                As(
+                    expr: 81,
+                    kind: Uint,
+                    convert: None,
+                ),
+                ImageLoad(
+                    image: 22,
+                    coordinate: 82,
+                    array_index: None,
+                    sample: None,
+                    level: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 79,
+                    right: 83,
+                ),
+                Access(
+                    base: 7,
+                    index: 16,
+                ),
+                Load(
+                    pointer: 85,
+                ),
+                ImageLoad(
+                    image: 22,
+                    coordinate: 81,
+                    array_index: None,
+                    sample: None,
+                    level: Some(86),
+                ),
+                Binary(
+                    op: Add,
+                    left: 84,
+                    right: 87,
+                ),
+                Load(
+                    pointer: 5,
+                ),
+                Access(
+                    base: 11,
+                    index: 89,
+                ),
+                ImageLoad(
+                    image: 90,
+                    coordinate: 81,
+                    array_index: None,
+                    sample: None,
+                    level: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 88,
+                    right: 91,
+                ),
+                ImageLoad(
+                    image: 90,
+                    coordinate: 81,
+                    array_index: None,
+                    sample: None,
+                    level: None,
+                ),
+                Binary(
+                    op: Add,
+                    left: 92,
+                    right: 93,
+                ),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 21,
+                    end: 95,
+                )),
+                ImageStore(
+                    image: 90,
+                    coordinate: 82,
+                    array_index: None,
+                    value: 15,
+                ),
+                Store(
+                    pointer: 1,
+                    value: 94,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            name: "main",
+            stage: Fragment,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            function: (
+                name: Some("main_wrap"),
+                arguments: [
+                    (
+                        name: Some("tex_id"),
+                        ty: 0,
+                        binding: Some(Location(
+                            location: 0,
+                            second_blend_source: false,
+                            interpolation: Some(Flat),
+                            sampling: None,
+                        )),
+                    ),
+                    (
+                        name: Some("samp_id"),
+                        ty: 0,
+                        binding: Some(Location(
+                            location: 1,
+                            second_blend_source: false,
+                            interpolation: Some(Flat),
+                            sampling: None,
+                        )),
+                    ),
+                    (
+                        name: Some("uv"),
+                        ty: 3,
+                        binding: Some(Location(
+                            location: 2,
+                            second_blend_source: false,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                        )),
+                    ),
+                    (
+                        name: Some("location"),
+                        ty: 13,
+                        binding: Some(Location(
+                            location: 3,
+                            second_blend_source: false,
+                            interpolation: Some(Flat),
+                            sampling: None,
+                        )),
+                    ),
+                    (
+                        name: Some("lod"),
+                        ty: 2,
+                        binding: Some(Location(
+                            location: 4,
+                            second_blend_source: false,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                        )),
+                    ),
+                    (
+                        name: Some("clamp"),
+                        ty: 2,
+                        binding: Some(Location(
+                            location: 5,
+                            second_blend_source: false,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                        )),
+                    ),
+                    (
+                        name: Some("cmp"),
+                        ty: 2,
+                        binding: Some(Location(
+                            location: 6,
+                            second_blend_source: false,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                        )),
+                    ),
+                    (
+                        name: Some("ddx"),
+                        ty: 3,
+                        binding: Some(Location(
+                            location: 7,
+                            second_blend_source: false,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                        )),
+                    ),
+                    (
+                        name: Some("ddy"),
+                        ty: 3,
+                        binding: Some(Location(
+                            location: 8,
+                            second_blend_source: false,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                        )),
+                    ),
+                ],
+                result: Some((
+                    ty: 9,
+                    binding: Some(Location(
+                        location: 0,
+                        second_blend_source: false,
+                        interpolation: None,
+                        sampling: None,
+                    )),
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    GlobalVariable(0),
+                    FunctionArgument(1),
+                    GlobalVariable(2),
+                    FunctionArgument(2),
+                    GlobalVariable(4),
+                    FunctionArgument(3),
+                    GlobalVariable(12),
+                    FunctionArgument(4),
+                    GlobalVariable(6),
+                    FunctionArgument(5),
+                    GlobalVariable(5),
+                    FunctionArgument(6),
+                    GlobalVariable(9),
+                    FunctionArgument(7),
+                    GlobalVariable(10),
+                    FunctionArgument(8),
+                    GlobalVariable(11),
+                    GlobalVariable(14),
+                    Load(
+                        pointer: 18,
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Store(
+                        pointer: 1,
+                        value: 0,
+                    ),
+                    Store(
+                        pointer: 3,
+                        value: 2,
+                    ),
+                    Store(
+                        pointer: 5,
+                        value: 4,
+                    ),
+                    Store(
+                        pointer: 7,
+                        value: 6,
+                    ),
+                    Store(
+                        pointer: 9,
+                        value: 8,
+                    ),
+                    Store(
+                        pointer: 11,
+                        value: 10,
+                    ),
+                    Store(
+                        pointer: 13,
+                        value: 12,
+                    ),
+                    Store(
+                        pointer: 15,
+                        value: 14,
+                    ),
+                    Store(
+                        pointer: 17,
+                        value: 16,
+                    ),
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                    Emit((
+                        start: 19,
+                        end: 20,
+                    )),
+                    Return(
+                        value: Some(19),
+                    ),
+                ],
+            ),
+        ),
+    ],
+)

@@ -1,0 +1,269 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Khronos; 40
+; Bound: 184
+; Schema: 0
+               OpCapability RuntimeDescriptorArray
+               OpCapability MinLod
+               OpCapability StorageImageReadWithoutFormat
+               OpCapability StorageImageWriteWithoutFormat
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %textures %samplers %cmp_samplers %cmp_texture %rw_textures %entryPointParam_main %tex_id %samp_id %uv %location %lod %clamp %cmp %ddx %ddy
+               OpExecutionMode %main OriginUpperLeft
+               OpSource Slang 1
+               OpName %tex_id "tex_id"
+               OpName %textures "textures"
+               OpName %samp_id "samp_id"
+               OpName %samplers "samplers"
+               OpName %uv "uv"
+               OpName %sampledImage "sampledImage"
+               OpName %sampled "sampled"
+               OpName %sampledImage_0 "sampledImage"
+               OpName %sampled_0 "sampled"
+               OpName %out "out"
+               OpName %clamp "clamp"
+               OpName %sampledImage_1 "sampledImage"
+               OpName %sampled_1 "sampled"
+               OpName %out_0 "out"
+               OpName %lod "lod"
+               OpName %sampledImage_2 "sampledImage"
+               OpName %sampled_2 "sampled"
+               OpName %out_1 "out"
+               OpName %sampledImage_3 "sampledImage"
+               OpName %sampled_3 "sampled"
+               OpName %out_2 "out"
+               OpName %cmp_samplers "cmp_samplers"
+               OpName %cmp_texture "cmp_texture"
+               OpName %cmp "cmp"
+               OpName %sampledImage_4 "sampledImage"
+               OpName %out_3 "out"
+               OpName %sampledImage_5 "sampledImage"
+               OpName %out_4 "out"
+               OpName %sampledImage_6 "sampledImage"
+               OpName %out_5 "out"
+               OpName %sampledImage_7 "sampledImage"
+               OpName %out_6 "out"
+               OpName %ddx "ddx"
+               OpName %ddy "ddy"
+               OpName %sampledImage_8 "sampledImage"
+               OpName %sampled_4 "sampled"
+               OpName %out_7 "out"
+               OpName %sampledImage_9 "sampledImage"
+               OpName %sampled_5 "sampled"
+               OpName %out_8 "out"
+               OpName %sampledImage_10 "sampledImage"
+               OpName %sampled_6 "sampled"
+               OpName %out_9 "out"
+               OpName %location "location"
+               OpName %sampled_7 "sampled"
+               OpName %out_10 "out"
+               OpName %sampled_8 "sampled"
+               OpName %out_11 "out"
+               OpName %rw_textures "rw_textures"
+               OpName %sampled_9 "sampled"
+               OpName %out_12 "out"
+               OpName %sampled_10 "sampled"
+               OpName %out_13 "out"
+               OpName %entryPointParam_main "entryPointParam_main"
+               OpName %main "main"
+               OpDecorate %tex_id Location 0
+               OpDecorate %tex_id Flat
+               OpDecorate %_runtimearr_11 ArrayStride 8
+               OpDecorate %textures Binding 0
+               OpDecorate %textures DescriptorSet 0
+               OpDecorate %samp_id Location 1
+               OpDecorate %samp_id Flat
+               OpDecorate %_runtimearr_20 ArrayStride 8
+               OpDecorate %samplers Binding 0
+               OpDecorate %samplers DescriptorSet 1
+               OpDecorate %uv Location 2
+               OpDecorate %clamp Location 5
+               OpDecorate %lod Location 4
+               OpDecorate %_runtimearr_20_0 ArrayStride 8
+               OpDecorate %cmp_samplers Binding 0
+               OpDecorate %cmp_samplers DescriptorSet 3
+               OpDecorate %cmp_texture Binding 0
+               OpDecorate %cmp_texture DescriptorSet 2
+               OpDecorate %cmp Location 6
+               OpDecorate %ddx Location 7
+               OpDecorate %ddy Location 8
+               OpDecorate %location Location 3
+               OpDecorate %location Flat
+               OpDecorate %_runtimearr_165 ArrayStride 8
+               OpDecorate %rw_textures Binding 0
+               OpDecorate %rw_textures DescriptorSet 4
+               OpDecorate %entryPointParam_main Location 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+%_ptr_Input_uint = OpTypePointer Input %uint
+      %float = OpTypeFloat 32
+         %11 = OpTypeImage %float 2D 2 0 0 1 Unknown
+%_runtimearr_11 = OpTypeRuntimeArray %11
+%_ptr_UniformConstant__runtimearr_11 = OpTypePointer UniformConstant %_runtimearr_11
+%_ptr_UniformConstant_11 = OpTypePointer UniformConstant %11
+         %20 = OpTypeSampler
+%_runtimearr_20 = OpTypeRuntimeArray %20
+%_ptr_UniformConstant__runtimearr_20 = OpTypePointer UniformConstant %_runtimearr_20
+%_ptr_UniformConstant_20 = OpTypePointer UniformConstant %20
+    %v2float = OpTypeVector %float 2
+%_ptr_Input_v2float = OpTypePointer Input %v2float
+         %31 = OpTypeSampledImage %11
+    %v4float = OpTypeVector %float 4
+        %int = OpTypeInt 32 1
+      %v2int = OpTypeVector %int 2
+      %int_1 = OpConstant %int 1
+         %43 = OpConstantComposite %v2int %int_1 %int_1
+%_ptr_Input_float = OpTypePointer Input %float
+%_runtimearr_20_0 = OpTypeRuntimeArray %20
+%_ptr_UniformConstant__runtimearr_20_0 = OpTypePointer UniformConstant %_runtimearr_20_0
+    %float_0 = OpConstant %float 0
+      %v3int = OpTypeVector %int 3
+%_ptr_Input_v3int = OpTypePointer Input %v3int
+     %v2uint = OpTypeVector %uint 2
+%_ptr_Input_int = OpTypePointer Input %int
+      %int_2 = OpConstant %int 2
+        %165 = OpTypeImage %float 2D 2 0 0 2 Unknown
+%_runtimearr_165 = OpTypeRuntimeArray %165
+%_ptr_UniformConstant__runtimearr_165 = OpTypePointer UniformConstant %_runtimearr_165
+%_ptr_UniformConstant_165 = OpTypePointer UniformConstant %165
+    %float_1 = OpConstant %float 1
+        %179 = OpConstantComposite %v4float %float_1 %float_1 %float_1 %float_1
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+     %tex_id = OpVariable %_ptr_Input_uint Input
+   %textures = OpVariable %_ptr_UniformConstant__runtimearr_11 UniformConstant
+    %samp_id = OpVariable %_ptr_Input_uint Input
+   %samplers = OpVariable %_ptr_UniformConstant__runtimearr_20 UniformConstant
+         %uv = OpVariable %_ptr_Input_v2float Input
+      %clamp = OpVariable %_ptr_Input_float Input
+        %lod = OpVariable %_ptr_Input_float Input
+%cmp_samplers = OpVariable %_ptr_UniformConstant__runtimearr_20_0 UniformConstant
+%cmp_texture = OpVariable %_ptr_UniformConstant_11 UniformConstant
+        %cmp = OpVariable %_ptr_Input_float Input
+        %ddx = OpVariable %_ptr_Input_v2float Input
+        %ddy = OpVariable %_ptr_Input_v2float Input
+   %location = OpVariable %_ptr_Input_v3int Input
+%rw_textures = OpVariable %_ptr_UniformConstant__runtimearr_165 UniformConstant
+%entryPointParam_main = OpVariable %_ptr_Output_v4float Output
+       %main = OpFunction %void None %3
+          %4 = OpLabel
+          %6 = OpLoad %uint %tex_id
+         %15 = OpAccessChain %_ptr_UniformConstant_11 %textures %6
+         %17 = OpLoad %uint %samp_id
+         %24 = OpAccessChain %_ptr_UniformConstant_20 %samplers %17
+         %25 = OpLoad %11 %15
+         %26 = OpLoad %20 %24
+         %28 = OpLoad %v2float %uv
+%sampledImage = OpSampledImage %31 %25 %26
+    %sampled = OpImageSampleImplicitLod %v4float %sampledImage %28 None
+         %36 = OpLoad %11 %15
+         %37 = OpLoad %20 %24
+         %38 = OpLoad %v2float %uv
+%sampledImage_0 = OpSampledImage %31 %36 %37
+  %sampled_0 = OpImageSampleImplicitLod %v4float %sampledImage_0 %38 ConstOffset %43
+        %out = OpFAdd %v4float %sampled %sampled_0
+         %47 = OpLoad %11 %15
+         %48 = OpLoad %20 %24
+         %49 = OpLoad %v2float %uv
+         %50 = OpLoad %float %clamp
+%sampledImage_1 = OpSampledImage %31 %47 %48
+  %sampled_1 = OpImageSampleImplicitLod %v4float %sampledImage_1 %49 ConstOffset|MinLod %43 %50
+      %out_0 = OpFAdd %v4float %out %sampled_1
+         %57 = OpLoad %11 %15
+         %58 = OpLoad %20 %24
+         %59 = OpLoad %v2float %uv
+         %60 = OpLoad %float %lod
+%sampledImage_2 = OpSampledImage %31 %57 %58
+  %sampled_2 = OpImageSampleExplicitLod %v4float %sampledImage_2 %59 Lod %60
+      %out_1 = OpFAdd %v4float %out_0 %sampled_2
+         %66 = OpLoad %11 %15
+         %67 = OpLoad %20 %24
+         %68 = OpLoad %v2float %uv
+         %69 = OpLoad %float %lod
+%sampledImage_3 = OpSampledImage %31 %66 %67
+  %sampled_3 = OpImageSampleExplicitLod %v4float %sampledImage_3 %68 Lod|ConstOffset %69 %43
+      %out_2 = OpFAdd %v4float %out_1 %sampled_3
+         %74 = OpLoad %uint %samp_id
+         %78 = OpAccessChain %_ptr_UniformConstant_20 %cmp_samplers %74
+         %79 = OpLoad %20 %78
+         %80 = OpLoad %11 %cmp_texture
+         %82 = OpLoad %v2float %uv
+         %83 = OpLoad %float %cmp
+%sampledImage_4 = OpSampledImage %31 %80 %79
+         %86 = OpImageSampleDrefImplicitLod %float %sampledImage_4 %82 %83
+         %87 = OpCompositeConstruct %v4float %86 %86 %86 %86
+      %out_3 = OpFAdd %v4float %out_2 %87
+         %89 = OpLoad %20 %78
+         %90 = OpLoad %11 %cmp_texture
+         %91 = OpLoad %v2float %uv
+         %92 = OpLoad %float %cmp
+%sampledImage_5 = OpSampledImage %31 %90 %89
+         %94 = OpImageSampleDrefImplicitLod %float %sampledImage_5 %91 %92 ConstOffset %43
+         %95 = OpCompositeConstruct %v4float %94 %94 %94 %94
+      %out_4 = OpFAdd %v4float %out_3 %95
+         %97 = OpLoad %20 %78
+         %98 = OpLoad %11 %cmp_texture
+         %99 = OpLoad %v2float %uv
+        %100 = OpLoad %float %cmp
+%sampledImage_6 = OpSampledImage %31 %98 %97
+        %102 = OpImageSampleDrefExplicitLod %float %sampledImage_6 %99 %100 Lod %float_0
+        %104 = OpCompositeConstruct %v4float %102 %102 %102 %102
+      %out_5 = OpFAdd %v4float %out_4 %104
+        %106 = OpLoad %20 %78
+        %107 = OpLoad %11 %cmp_texture
+        %108 = OpLoad %v2float %uv
+        %109 = OpLoad %float %cmp
+%sampledImage_7 = OpSampledImage %31 %107 %106
+        %111 = OpImageSampleDrefExplicitLod %float %sampledImage_7 %108 %109 Lod|ConstOffset %float_0 %43
+        %112 = OpCompositeConstruct %v4float %111 %111 %111 %111
+      %out_6 = OpFAdd %v4float %out_5 %112
+        %114 = OpLoad %11 %15
+        %115 = OpLoad %20 %24
+        %116 = OpLoad %v2float %uv
+        %117 = OpLoad %v2float %ddx
+        %119 = OpLoad %v2float %ddy
+%sampledImage_8 = OpSampledImage %31 %114 %115
+  %sampled_4 = OpImageSampleExplicitLod %v4float %sampledImage_8 %116 Grad %117 %119
+      %out_7 = OpFAdd %v4float %out_6 %sampled_4
+        %125 = OpLoad %11 %15
+        %126 = OpLoad %20 %24
+        %127 = OpLoad %v2float %uv
+        %128 = OpLoad %v2float %ddx
+        %129 = OpLoad %v2float %ddy
+%sampledImage_9 = OpSampledImage %31 %125 %126
+  %sampled_5 = OpImageSampleExplicitLod %v4float %sampledImage_9 %127 Grad|ConstOffset %128 %129 %43
+      %out_8 = OpFAdd %v4float %out_7 %sampled_5
+        %134 = OpLoad %11 %15
+        %135 = OpLoad %20 %24
+        %136 = OpLoad %v2float %uv
+        %137 = OpLoad %float %clamp
+        %138 = OpLoad %v2float %ddx
+        %139 = OpLoad %v2float %ddy
+%sampledImage_10 = OpSampledImage %31 %134 %135
+  %sampled_6 = OpImageSampleExplicitLod %v4float %sampledImage_10 %136 Grad|ConstOffset|MinLod %138 %139 %43 %137
+      %out_9 = OpFAdd %v4float %out_8 %sampled_6
+        %145 = OpLoad %v3int %location
+        %148 = OpVectorShuffle %v2int %145 %145 0 1
+        %150 = OpBitcast %v2uint %148
+        %151 = OpLoad %11 %15
+  %sampled_7 = OpImageFetch %v4float %151 %150
+     %out_10 = OpFAdd %v4float %out_9 %sampled_7
+        %156 = OpAccessChain %_ptr_Input_int %location %int_2
+        %158 = OpLoad %11 %15
+        %159 = OpLoad %int %156
+  %sampled_8 = OpImageFetch %v4float %158 %148 Lod|ConstOffset %159 %43
+     %out_11 = OpFAdd %v4float %out_10 %sampled_8
+        %163 = OpLoad %uint %tex_id
+        %169 = OpAccessChain %_ptr_UniformConstant_165 %rw_textures %163
+        %170 = OpLoad %165 %169
+  %sampled_9 = OpImageRead %v4float %170 %148
+     %out_12 = OpFAdd %v4float %out_11 %sampled_9
+        %174 = OpLoad %165 %169
+ %sampled_10 = OpImageRead %v4float %174 %148 ConstOffset %43
+     %out_13 = OpFAdd %v4float %out_12 %sampled_10
+        %178 = OpLoad %165 %169
+               OpImageWrite %178 %150 %179
+               OpStore %entryPointParam_main %out_13
+               OpReturn
+               OpFunctionEnd
