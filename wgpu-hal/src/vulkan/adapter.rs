@@ -903,11 +903,6 @@ impl PhysicalDeviceProperties {
             if requested_features.contains(wgt::Features::TEXTURE_FORMAT_NV12) {
                 extensions.push(khr::sampler_ycbcr_conversion::NAME);
             }
-
-            // Optional `VK_KHR_external_memory_win32`
-            if self.supports_extension(khr::external_memory_win32::NAME) {
-                extensions.push(khr::external_memory_win32::NAME);
-            }
         }
 
         if self.device_api_version < vk::API_VERSION_1_2 {
@@ -973,6 +968,11 @@ impl PhysicalDeviceProperties {
         // Optional `VK_EXT_robustness2`
         if self.supports_extension(ext::robustness2::NAME) {
             extensions.push(ext::robustness2::NAME);
+        }
+
+        // Optional `VK_KHR_external_memory_win32`
+        if self.supports_extension(khr::external_memory_win32::NAME) {
+            extensions.push(khr::external_memory_win32::NAME);
         }
 
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
