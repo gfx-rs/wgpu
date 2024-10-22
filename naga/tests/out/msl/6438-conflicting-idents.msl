@@ -12,11 +12,11 @@ struct OurVertexShaderOutput {
 struct vsInput {
     metal::float2 xy [[attribute(0)]];
 };
-struct vsOutput {
+struct vsOutput_1 {
     metal::float4 position [[position]];
     metal::float2 texcoord [[user(loc0), center_perspective]];
 };
-vertex vsOutput vs(
+vertex vsOutput_1 vs(
   vsInput varyings [[stage_in]]
 ) {
     const auto xy = varyings.xy;
@@ -24,7 +24,7 @@ vertex vsOutput vs(
     vsOutput.position = metal::float4(xy, 0.0, 1.0);
     OurVertexShaderOutput _e6 = vsOutput;
     const auto _tmp = _e6;
-    return vsOutput { _tmp.position, _tmp.texcoord };
+    return vsOutput_1 { _tmp.position, _tmp.texcoord };
 }
 
 
