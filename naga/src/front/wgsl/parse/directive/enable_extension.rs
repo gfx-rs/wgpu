@@ -76,10 +76,12 @@ impl EnableExtension {
 
 /// A variant of [`EnableExtension::Implemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub enum ImplementedEnableExtension {}
 
 /// A variant of [`EnableExtension::Unimplemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub enum UnimplementedEnableExtension {
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
@@ -109,4 +111,16 @@ impl UnimplementedEnableExtension {
             Self::DualSourceBlending => 6402,
         }
     }
+}
+#[cfg(test)]
+mod test {
+    use strum::IntoEnumIterator as _;
+
+    use super::ImplementedEnableExtension;
+
+    fn valid() {
+        for extension in ImplementedEnableExtension::iter() {}
+    }
+
+    fn unimplemented() {}
 }
