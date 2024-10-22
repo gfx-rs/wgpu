@@ -3,7 +3,7 @@
 //! The focal point of this module is the [`EnableExtension`] API.
 use crate::{front::wgsl::error::Error, Span};
 
-/// Tracks the status of every enable extension known to Naga.
+/// Tracks the status of every enable-extension known to Naga.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnableExtensions {}
 
@@ -12,14 +12,14 @@ impl EnableExtensions {
         Self {}
     }
 
-    /// Add an enable extension to the set requested by a module.
+    /// Add an enable-extension to the set requested by a module.
     #[allow(unreachable_code)]
     pub(crate) fn add(&mut self, ext: ImplementedEnableExtension) {
         let _field: &mut bool = match ext {};
         *_field = true;
     }
 
-    /// Query whether an enable extension tracked here has been requested.
+    /// Query whether an enable-extension tracked here has been requested.
     #[allow(unused)]
     pub(crate) const fn contains(&self, ext: ImplementedEnableExtension) -> bool {
         match ext {}
@@ -32,7 +32,7 @@ impl Default for EnableExtensions {
     }
 }
 
-/// A shader language extension not guaranteed to be present in all environments.
+/// An enable-extension not guaranteed to be present in all environments.
 ///
 /// WGSL spec.: <https://www.w3.org/TR/WGSL/#enable-extensions-sec>
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
