@@ -1,7 +1,5 @@
 use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
-    thread,
+    future::Future, ops::{Deref, DerefMut}, sync::Arc, thread
 };
 
 use crate::context::{DynContext, QueueWriteBuffer};
@@ -278,12 +276,12 @@ impl Queue {
     pub fn on_submitted_work_done(
         &self,
         callback: impl FnOnce() + Send + 'static,
-    ) -> SubmissionIndex {
+    ) -> impl Future<Output = ()> + WasmNotSend {
         let data = DynContext::queue_on_submitted_work_done(
             &*self.context,
             self.data.as_ref(),
             Box::new(callback),
         );
-        SubmissionIndex { data }
+        async move { data.await }
     }
 }

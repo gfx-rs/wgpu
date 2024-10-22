@@ -1,8 +1,5 @@
 use std::{
-    error, fmt,
-    ops::{Bound, Deref, DerefMut, Range, RangeBounds},
-    sync::Arc,
-    thread,
+    error, fmt, future::Future, ops::{Bound, Deref, DerefMut, Range, RangeBounds}, sync::Arc, thread
 };
 
 use parking_lot::Mutex;
@@ -338,7 +335,7 @@ impl<'a> BufferSlice<'a> {
         &self,
         mode: MapMode,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
-    ) -> SubmissionIndex {
+    ) -> impl Future<Output = Result<(), BufferAsyncError>> + WasmNotSend {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
         let end = match self.size {
@@ -355,7 +352,7 @@ impl<'a> BufferSlice<'a> {
             Box::new(callback),
         );
 
-        SubmissionIndex { data }
+        async move { data.await }
     }
 
     /// Gain read-only access to the bytes of a [mapped] [`Buffer`].

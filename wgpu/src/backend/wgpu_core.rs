@@ -540,6 +540,9 @@ impl crate::Context for ContextWgpuCore {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
     type CompilationInfoFuture = Ready<CompilationInfo>;
 
+    type BufferMapFuture = wgc::SubmissionIndex;
+    type SubmittedWorkDoneFuture = wgc::SubmissionIndex;
+
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::global::Global::new("wgpu", instance_desc))
     }
