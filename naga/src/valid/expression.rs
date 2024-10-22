@@ -39,11 +39,20 @@ pub enum ExpressionError {
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
     InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
-    #[error("Operation {op:?} can't work with {lhs:?} and {rhs:?}")]
+    #[error(
+        "Operation {:?} can't work with {:?} (of type {:?}) and {:?} (of type {:?})",
+        op,
+        lhs_expr,
+        lhs_type,
+        rhs_expr,
+        rhs_type
+    )]
     InvalidBinaryOperandTypes {
         op: crate::BinaryOperator,
-        lhs: Handle<crate::Expression>,
-        rhs: Handle<crate::Expression>,
+        lhs_expr: Handle<crate::Expression>,
+        lhs_type: crate::TypeInner,
+        rhs_expr: Handle<crate::Expression>,
+        rhs_type: crate::TypeInner,
     },
     #[error("Selecting is not possible")]
     InvalidSelectTypes,
@@ -849,8 +858,10 @@ impl super::Validator {
                     );
                     return Err(ExpressionError::InvalidBinaryOperandTypes {
                         op,
-                        lhs: left,
-                        rhs: right,
+                        lhs_expr: left,
+                        lhs_type: left_inner.clone(),
+                        rhs_expr: right,
+                        rhs_type: right_inner.clone(),
                     });
                 }
                 ShaderStages::all()
