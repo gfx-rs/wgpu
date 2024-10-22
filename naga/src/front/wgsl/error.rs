@@ -946,7 +946,7 @@ impl<'a> Error<'a> {
             },
             Error::EnableExtensionNotYetImplemented { kind, span } => ParseError {
                 message: format!(
-                    "the `{}` extension is not yet supported",
+                    "the `{}` enable extension is not yet supported",
                     EnableExtension::Unimplemented(kind).to_ident()
                 ),
                 labels: vec![(
