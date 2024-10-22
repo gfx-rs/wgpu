@@ -39,12 +39,12 @@ pub enum ExpressionError {
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
     InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
-    #[error("Operation {0:?} can't work with {1:?} and {2:?}")]
-    InvalidBinaryOperandTypes(
-        crate::BinaryOperator,
-        Handle<crate::Expression>,
-        Handle<crate::Expression>,
-    ),
+    #[error("Operation {op:?} can't work with {lhs:?} and {rhs:?}")]
+    InvalidBinaryOperandTypes {
+        op: crate::BinaryOperator,
+        lhs: Handle<crate::Expression>,
+        rhs: Handle<crate::Expression>,
+    },
     #[error("Selecting is not possible")]
     InvalidSelectTypes,
     #[error("Relational argument {0:?} is not a boolean vector")]
@@ -847,7 +847,11 @@ impl super::Validator {
                         function.expressions[right],
                         right_inner
                     );
-                    return Err(ExpressionError::InvalidBinaryOperandTypes(op, left, right));
+                    return Err(ExpressionError::InvalidBinaryOperandTypes {
+                        op,
+                        lhs: left,
+                        rhs: right,
+                    });
                 }
                 ShaderStages::all()
             }
