@@ -81,7 +81,7 @@ mod test {
                 UnimplementedDirectiveKind::Diagnostic => {
                     shader = "diagnostic(off,derivative_uniformity);";
                     expected_msg = "\
-error: `diagnostic` is not yet implemented
+error: the `diagnostic` directive is not yet implemented
   ┌─ wgsl:1:1
   │
 1 │ diagnostic(off,derivative_uniformity);
