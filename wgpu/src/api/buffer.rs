@@ -347,7 +347,7 @@ impl<'a> BufferSlice<'a> {
         };
         mc.initial_range = self.offset..end;
 
-        let id = DynContext::buffer_map_async(
+        let data = DynContext::buffer_map_async(
             &*self.buffer.context,
             self.buffer.data.as_ref(),
             mode,
@@ -355,7 +355,7 @@ impl<'a> BufferSlice<'a> {
             Box::new(callback),
         );
 
-        WgpuFuture { id }
+        WgpuFuture { data }
     }
 
     /// Gain read-only access to the bytes of a [mapped] [`Buffer`].

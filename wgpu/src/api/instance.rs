@@ -33,17 +33,6 @@ impl Default for Instance {
     }
 }
 
-/// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried for completion, but does not hold any returned data.
-///
-/// It's 'id' field is to be interpreted as a submission id (like wgc::SubmissionId)
-#[derive(Debug, Clone)]
-pub struct WgpuFuture {
-    #[cfg_attr(not(native), allow(dead_code))]
-    pub(crate) id: Arc<crate::Data>,
-}
-#[cfg(send_sync)]
-static_assertions::assert_impl_all!(WgpuFuture: Send, Sync);
-
 impl Instance {
     /// Returns which backends can be picked for the current build configuration.
     ///
@@ -404,4 +393,23 @@ impl Instance {
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| ctx.generate_report())
     }
+}
+
+/// Status returned when waiting on WgpuFuture objects.
+#[derive(Clone, Debug)]
+pub(crate) enum WaitStatus {
+    // At least one WgpuFuture completed successfully.
+    //Success,
+
+    // No WgpuFuture completed within the timeout.
+    //TimedOut,
+
+    /// A Timed-Wait was performed when timedWaitAnyEnable instance feature is false.
+    UnsupportedTimeout,
+
+    // The number of futures waited on in a Timed-Wait is greater than the supported timedWaitAnyMaxCount.
+    //UnsupportedCount,
+    
+    // An invalid wait was performed with Mixed-Sources.
+    //UnsupportedMixedSources,
 }

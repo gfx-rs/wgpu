@@ -51,6 +51,16 @@ pub type Maintain = wgt::Maintain<SubmissionIndex>;
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Maintain: Send, Sync);
 
+
+/// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried
+/// for completion, but does not hold any returned data.
+///
+/// It's 'id' field is to be interpreted as a submission id (like wgc::SubmissionId)
+pub type WgpuFuture = SubmissionIndex;
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(WgpuFuture: Send, Sync);
+
+
 /// A write-only view into a staging buffer.
 ///
 /// Reading into this buffer won't yield the contents of the buffer from the
@@ -277,11 +287,11 @@ impl Queue {
     /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
     /// and used to set flags, send messages, etc.
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) -> WgpuFuture {
-        let id = DynContext::queue_on_submitted_work_done(
+        let data = DynContext::queue_on_submitted_work_done(
             &*self.context,
             self.data.as_ref(),
             Box::new(callback),
         );
-        WgpuFuture { id }
+        WgpuFuture { data }
     }
 }

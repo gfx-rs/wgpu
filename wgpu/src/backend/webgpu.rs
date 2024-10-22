@@ -1253,6 +1253,16 @@ impl crate::context::Context for ContextWebGpu {
         }
     }
 
+    fn instance_wait_any(
+        &self,
+        _futures: &[&Self::WgpuFuture],
+        _timeout_ns: u64,
+    ) -> crate::WaitStatus {
+        // TODO: Yield back to the browser, run the equivalent of the following JavaScript:
+        // > await Promise.any([ ...futures, new Promise(resolve => setTimeout(timeout_ns, resolve) ]))
+        crate::WaitStatus::UnsupportedTimeout
+    }
+
     fn adapter_request_device(
         &self,
         adapter_data: &Self::AdapterData,
@@ -2162,7 +2172,7 @@ impl crate::context::Context for ContextWebGpu {
         buffer_data.0.set_mapped_range(range);
 
         register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
-        map_promise
+        map_promise.into()
     }
 
     fn buffer_get_mapped_range(

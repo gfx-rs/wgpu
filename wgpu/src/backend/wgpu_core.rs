@@ -608,6 +608,15 @@ impl crate::Context for ContextWgpuCore {
         ready(id.ok())
     }
 
+    fn instance_wait_any(
+        &self,
+        _futures: &[&Self::WgpuFuture],
+        _timeout_ns: u64,
+    ) -> crate::WaitStatus {
+        // TODO: We need to know at the instance level whether a submission ID is completed...
+        crate::WaitStatus::UnsupportedTimeout
+    }
+
     fn adapter_request_device(
         &self,
         adapter_data: &Self::AdapterData,
