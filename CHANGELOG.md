@@ -119,6 +119,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Added `gl_DrawID` to glsl and `DrawIndex` to spv. By @ChosenName in [#6325](https://github.com/gfx-rs/wgpu/pull/6325).
 - Matrices can now be indexed by value (#4337), and indexing arrays by value no longer causes excessive spilling (#6358). By @jimblandy in [#6390](https://github.com/gfx-rs/wgpu/pull/6390).
 - Add support for `textureQueryLevels` to the GLSL parser. By @magcius in [#6325](https://github.com/gfx-rs/wgpu/pull/6415).
+- Fix unescaped identifiers in the Metal backend shader I/O structures causing shader miscompilation. By @ErichDonGubler in [#6438](https://github.com/gfx-rs/wgpu/pull/6438).
 
 #### General
 
@@ -143,6 +144,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
 - Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341)
+- Optimise fence checking when `Queue::submit` is called many times per frame. By @dinnerbone in [#6427](https://github.com/gfx-rs/wgpu/pull/6427)
 
 #### WebGPU
 
@@ -160,6 +162,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - `Rg11b10Float` is renamed to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
 - Invalidate the device when we encounter driver-induced device loss or on unexpected errors. By @teoxoy in [#6229](https://github.com/gfx-rs/wgpu/pull/6229).
 - Make Vulkan error handling more robust. By @teoxoy in [#6119](https://github.com/gfx-rs/wgpu/pull/6119).
+- Add bounds checking to Buffer slice method. By @beholdnec in [#6432](https://github.com/gfx-rs/wgpu/pull/6432).
 
 #### Internal
 
@@ -949,7 +952,7 @@ By @cwfitzgerald in [#5053](https://github.com/gfx-rs/wgpu/pull/5053)
 
 #### Naga
 
-- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing thir operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
+- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing their operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
 - Naga constant evaluation can now process binary operators whose operands are both vectors. By @jimblandy in [#4861](https://github.com/gfx-rs/wgpu/pull/4861).
 - Add `--bulk-validate` option to Naga CLI. By @jimblandy in [#4871](https://github.com/gfx-rs/wgpu/pull/4871).

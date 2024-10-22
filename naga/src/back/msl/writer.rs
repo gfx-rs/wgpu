@@ -5063,7 +5063,7 @@ template <typename A>
             // a struct type named `<fun>Input` to hold them. If we are doing
             // vertex pulling, we instead update our attribute mapping to
             // note the types, names, and zero values of the attributes.
-            let stage_in_name = format!("{fun_name}Input");
+            let stage_in_name = self.namer.call(&format!("{fun_name}Input"));
             let varyings_member_name = self.namer.call("varyings");
             let mut has_varyings = false;
             if !flattened_arguments.is_empty() {
@@ -5115,7 +5115,7 @@ template <typename A>
 
             // Define a struct type named for the return value, if any, named
             // `<fun>Output`.
-            let stage_out_name = format!("{fun_name}Output");
+            let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
                 Some(ref result) => {
