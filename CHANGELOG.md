@@ -106,6 +106,10 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 ### Changes
 
+#### Naga
+
+- Show types of LHS and RHS in binary operation type mismatch errors. By @ErichDonGubler in [#6450](https://github.com/gfx-rs/wgpu/pull/6450).
+
 #### General
 
 - Make `Surface::as_hal` take an immutable reference to the surface. By @jerzywilczek in [#9999](https://github.com/gfx-rs/wgpu/pull/9999)
