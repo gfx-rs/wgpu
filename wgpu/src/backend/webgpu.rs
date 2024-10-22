@@ -1162,6 +1162,8 @@ impl crate::context::Context for ContextWebGpu {
         Box<dyn Fn(JsFutureResult) -> CompilationInfo>,
     >;
 
+    type WgpuFuture = Promise;
+
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let Ok(gpu) = get_browser_gpu_property() else {
             panic!(
@@ -2150,7 +2152,7 @@ impl crate::context::Context for ContextWebGpu {
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
-    ) {
+    ) -> Self::WgpuFuture {
         let map_promise = buffer_data.0.buffer.map_async_with_f64_and_f64(
             map_map_mode(mode),
             range.start as f64,
@@ -2160,6 +2162,7 @@ impl crate::context::Context for ContextWebGpu {
         buffer_data.0.set_mapped_range(range);
 
         register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
+        map_promise
     }
 
     fn buffer_get_mapped_range(
@@ -2773,7 +2776,7 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         _queue_data: &Self::QueueData,
         _callback: crate::context::SubmittedWorkDoneCallback,
-    ) {
+    ) -> Self::WgpuFuture {
         unimplemented!()
     }
 

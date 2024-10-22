@@ -61,7 +61,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type CompilationInfoFuture: Future<Output = CompilationInfo> + WasmNotSend + 'static;
 
     /// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried for completion, but does not hold any returned data.
-    type WgpuFuture: ContextData + Copy;
+    type WgpuFuture: ContextData;
 
     #[cfg(not(target_os = "emscripten"))]
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
