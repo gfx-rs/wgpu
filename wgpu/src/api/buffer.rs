@@ -1,5 +1,8 @@
 use std::{
-    error, fmt, future::Future, ops::{Bound, Deref, DerefMut, Range, RangeBounds}, sync::Arc, thread
+    error, fmt,
+    ops::{Bound, Deref, DerefMut, Range, RangeBounds},
+    sync::Arc,
+    thread,
 };
 
 use parking_lot::Mutex;
@@ -335,7 +338,7 @@ impl<'a> BufferSlice<'a> {
         &self,
         mode: MapMode,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
-    ) -> impl Future<Output = Result<(), BufferAsyncError>> + WasmNotSend {
+    ) -> WgpuFuture {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
         let end = match self.size {
@@ -344,7 +347,7 @@ impl<'a> BufferSlice<'a> {
         };
         mc.initial_range = self.offset..end;
 
-        let data = DynContext::buffer_map_async(
+        let id = DynContext::buffer_map_async(
             &*self.buffer.context,
             self.buffer.data.as_ref(),
             mode,
@@ -352,7 +355,7 @@ impl<'a> BufferSlice<'a> {
             Box::new(callback),
         );
 
-        async move { data.await }
+        WgpuFuture { id }
     }
 
     /// Gain read-only access to the bytes of a [mapped] [`Buffer`].

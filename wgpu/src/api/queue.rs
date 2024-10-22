@@ -1,5 +1,7 @@
 use std::{
-    future::Future, ops::{Deref, DerefMut}, sync::Arc, thread
+    ops::{Deref, DerefMut},
+    sync::Arc,
+    thread,
 };
 
 use crate::context::{DynContext, QueueWriteBuffer};
@@ -34,6 +36,7 @@ impl Drop for Queue {
 ///
 /// This type is unique to the Rust API of `wgpu`.
 /// There is no analogue in the WebGPU specification.
+/// NB: WgpuFuture should probably be used instead of this
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
     #[cfg_attr(not(native), allow(dead_code))]
@@ -273,15 +276,12 @@ impl Queue {
     /// has completed. There are no restrictions on the code you can run in the callback, however on native the
     /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
     /// and used to set flags, send messages, etc.
-    pub fn on_submitted_work_done(
-        &self,
-        callback: impl FnOnce() + Send + 'static,
-    ) -> impl Future<Output = ()> + WasmNotSend {
-        let data = DynContext::queue_on_submitted_work_done(
+    pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) -> WgpuFuture {
+        let id = DynContext::queue_on_submitted_work_done(
             &*self.context,
             self.data.as_ref(),
             Box::new(callback),
         );
-        async move { data.await }
+        WgpuFuture { id }
     }
 }

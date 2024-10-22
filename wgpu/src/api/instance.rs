@@ -33,6 +33,17 @@ impl Default for Instance {
     }
 }
 
+/// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried for completion, but does not hold any returned data.
+///
+/// It's 'id' field is to be interpreted as a submission id (like wgc::SubmissionId)
+#[derive(Debug, Clone)]
+pub struct WgpuFuture {
+    #[cfg_attr(not(native), allow(dead_code))]
+    pub(crate) id: Arc<crate::Data>,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(WgpuFuture: Send, Sync);
+
 impl Instance {
     /// Returns which backends can be picked for the current build configuration.
     ///

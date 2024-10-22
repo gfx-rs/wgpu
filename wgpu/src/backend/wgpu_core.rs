@@ -540,8 +540,7 @@ impl crate::Context for ContextWgpuCore {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
     type CompilationInfoFuture = Ready<CompilationInfo>;
 
-    type BufferMapFuture = wgc::SubmissionIndex;
-    type SubmittedWorkDoneFuture = wgc::SubmissionIndex;
+    type WgpuFuture = wgc::SubmissionIndex;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::global::Global::new("wgpu", instance_desc))
@@ -1394,7 +1393,7 @@ impl crate::Context for ContextWgpuCore {
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
-    ) -> Self::SubmissionIndexData {
+    ) -> Self::WgpuFuture {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,
@@ -2099,7 +2098,7 @@ impl crate::Context for ContextWgpuCore {
         &self,
         queue_data: &Self::QueueData,
         callback: crate::context::SubmittedWorkDoneCallback,
-    ) -> Self::SubmissionIndexData {
+    ) -> Self::WgpuFuture {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
         self.0.queue_on_submitted_work_done(queue_data.id, closure)
     }

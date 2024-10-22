@@ -60,8 +60,8 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     type CompilationInfoFuture: Future<Output = CompilationInfo> + WasmNotSend + 'static;
 
-    type BufferMapFuture: Future<Output = Result<(),BufferAsyncError>> + WasmNotSend + 'static;
-    type SubmittedWorkDoneFuture: Future<Output = ()> + WasmNotSend + 'static;
+    /// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried for completion, but does not hold any returned data.
+    type WgpuFuture: ContextData + Copy;
 
     #[cfg(not(target_os = "emscripten"))]
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
@@ -221,7 +221,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    ) -> Self::BufferMapFuture;
+    ) -> Self::WgpuFuture;
     fn buffer_get_mapped_range(
         &self,
         buffer_data: &Self::BufferData,
@@ -416,7 +416,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         queue_data: &Self::QueueData,
         callback: SubmittedWorkDoneCallback,
-    ) -> Self::SubmittedWorkDoneFuture;
+    ) -> Self::WgpuFuture;
 
     fn device_start_capture(&self, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device_data: &Self::DeviceData);
@@ -753,16 +753,6 @@ pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'sta
 #[cfg(not(send_sync))]
 pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
 
-#[cfg(send_sync)]
-pub type BufferMapFuture = Box<dyn Future<Output = Result<(),BufferAsyncError>> + Send>;
-#[cfg(not(send_sync))]
-pub type BufferMapFuture = Box<dyn Future<Output = Result<(),BufferAsyncError>>>;
-
-#[cfg(send_sync)]
-pub type SubmittedWorkDoneFuture = Box<dyn Future<Output = ()> + Send>;
-#[cfg(not(send_sync))]
-pub type SubmittedWorkDoneFuture = Box<dyn Future<Output = ()>>;
-
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
 pub(crate) trait DynContext: Debug + WasmNotSendSync {
     #[cfg(not(target_os = "emscripten"))]
@@ -921,7 +911,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    ) -> Pin<BufferMapFuture>;
+    ) -> Arc<crate::Data>;
     fn buffer_get_mapped_range(
         &self,
         buffer_data: &crate::Data,
@@ -1105,7 +1095,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         queue_data: &crate::Data,
         callback: SubmittedWorkDoneCallback,
-    ) -> Pin<SubmittedWorkDoneFuture>;
+    ) -> Arc<crate::Data>;
 
     fn device_start_capture(&self, data: &crate::Data);
     fn device_stop_capture(&self, data: &crate::Data);
@@ -1701,10 +1691,10 @@ where
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    ) -> Pin<BufferMapFuture> {
+    ) -> Arc<crate::Data> {
         let buffer_data = downcast_ref(buffer_data);
-        let future = Context::buffer_map_async(self, buffer_data, mode, range, callback);
-        Box::pin(async move { future.await })
+        let handle = Context::buffer_map_async(self, buffer_data, mode, range, callback);
+        Arc::new(handle) as _
     }
 
     fn buffer_get_mapped_range(
@@ -2125,10 +2115,10 @@ where
         &self,
         queue_data: &crate::Data,
         callback: SubmittedWorkDoneCallback,
-    ) -> Pin<SubmittedWorkDoneFuture> {
+    ) -> Arc<crate::Data> {
         let queue_data = downcast_ref(queue_data);
-        let future = Context::queue_on_submitted_work_done(self, queue_data, callback);
-        Box::pin(async move { future.await })
+        let handle = Context::queue_on_submitted_work_done(self, queue_data, callback);
+        Arc::new(handle) as _
     }
 
     fn device_start_capture(&self, device_data: &crate::Data) {
