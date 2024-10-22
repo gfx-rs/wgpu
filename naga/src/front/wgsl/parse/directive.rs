@@ -6,7 +6,7 @@ pub mod enable_extension;
 
 /// A parsed sentinel word indicating the type of directive to be parsed next.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum DirectiveKind {
+pub(crate) enum DirectiveKind {
     /// An [`enable_extension`].
     Enable,
     Unimplemented(UnimplementedDirectiveKind),
@@ -49,7 +49,7 @@ impl DirectiveKind {
 /// A [`DirectiveKind`] that is not yet implemented. See [`DirectiveKind::Unimplemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(test, derive(strum::EnumIter))]
-pub enum UnimplementedDirectiveKind {
+pub(crate) enum UnimplementedDirectiveKind {
     Diagnostic,
     Requires,
 }
