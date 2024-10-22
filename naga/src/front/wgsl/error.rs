@@ -916,7 +916,7 @@ impl<'a> Error<'a> {
             },
             Error::DirectiveNotYetImplemented { kind, span } => ParseError {
                 message: format!(
-                    "`{}` is not yet implemented",
+                    "the `{}` directive is not yet implemented",
                     DirectiveKind::Unimplemented(kind).to_ident()
                 ),
                 labels: vec![(
