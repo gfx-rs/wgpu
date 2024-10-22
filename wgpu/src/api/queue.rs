@@ -51,7 +51,6 @@ pub type Maintain = wgt::Maintain<SubmissionIndex>;
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Maintain: Send, Sync);
 
-
 /// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried
 /// for completion, but does not hold any returned data.
 ///
@@ -59,7 +58,6 @@ static_assertions::assert_impl_all!(Maintain: Send, Sync);
 pub type WgpuFuture = SubmissionIndex;
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(WgpuFuture: Send, Sync);
-
 
 /// A write-only view into a staging buffer.
 ///

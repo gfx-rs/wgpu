@@ -403,13 +403,11 @@ pub(crate) enum WaitStatus {
 
     // No WgpuFuture completed within the timeout.
     //TimedOut,
-
     /// A Timed-Wait was performed when timedWaitAnyEnable instance feature is false.
     UnsupportedTimeout,
-
     // The number of futures waited on in a Timed-Wait is greater than the supported timedWaitAnyMaxCount.
     //UnsupportedCount,
-    
+
     // An invalid wait was performed with Mixed-Sources.
     //UnsupportedMixedSources,
 }

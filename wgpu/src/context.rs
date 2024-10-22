@@ -16,7 +16,7 @@ use crate::{
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler, WaitStatus
+    UncapturedErrorHandler, WaitStatus,
 };
 /// Meta trait for an data associated with an id tracked by a context.
 ///
@@ -73,11 +73,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         options: &RequestAdapterOptions<'_, '_>,
     ) -> Self::RequestAdapterFuture;
-    fn instance_wait_any(
-        &self,
-        futures: &[&Self::WgpuFuture],
-        timeout_ns: u64,
-    ) -> WaitStatus;
+    fn instance_wait_any(&self, futures: &[&Self::WgpuFuture], timeout_ns: u64) -> WaitStatus;
     fn adapter_request_device(
         &self,
         adapter_data: &Self::AdapterData,
@@ -772,11 +768,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         options: &RequestAdapterOptions<'_, '_>,
     ) -> Pin<InstanceRequestAdapterFuture>;
-    fn instance_wait_any(
-        &self,
-        futures_data: &[&crate::Data],
-        timeout_ns: u64,
-    ) -> WaitStatus;
+    fn instance_wait_any(&self, futures_data: &[&crate::Data], timeout_ns: u64) -> WaitStatus;
     fn adapter_request_device(
         &self,
         adapter_data: &crate::Data,
@@ -1383,11 +1375,7 @@ where
         Box::pin(async move { future.await.map(|data| Box::new(data) as _) })
     }
 
-    fn instance_wait_any(
-        &self,
-        _futures_data: &[&crate::Data],
-        _timeout_ns: u64,
-    ) -> WaitStatus {
+    fn instance_wait_any(&self, _futures_data: &[&crate::Data], _timeout_ns: u64) -> WaitStatus {
         unimplemented!();
     }
 
