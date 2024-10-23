@@ -163,7 +163,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
         });
 
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, Some(&bg), &[]);
+        rpass.set_bind_group(0, &bg, &[]);
         rpass.set_push_constants(
             wgpu::ShaderStages::VERTEX_FRAGMENT,
             0,
