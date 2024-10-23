@@ -95,6 +95,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 - Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170)
 - Add `wgpu::util::new_instance_with_webgpu_detection` & `wgpu::util::is_browser_webgpu_supported` to make it easier to support WebGPU & WebGL in the same binary. By @wumpf in [#6371](https://github.com/gfx-rs/wgpu/pull/6371)
+- Return submission index in `map_async` and `on_submitted_work_done` to track down completion of async callbacks. By @eliemichel in [#6360](https://github.com/gfx-rs/wgpu/pull/6360)
 
 #### Vulkan
 

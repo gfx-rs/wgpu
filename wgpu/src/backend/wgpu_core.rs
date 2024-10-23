@@ -540,6 +540,8 @@ impl crate::Context for ContextWgpuCore {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
     type CompilationInfoFuture = Ready<CompilationInfo>;
 
+    type WgpuFuture = wgc::SubmissionIndex;
+
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::global::Global::new("wgpu", instance_desc))
     }
@@ -604,6 +606,15 @@ impl crate::Context for ContextWgpuCore {
             None,
         );
         ready(id.ok())
+    }
+
+    fn instance_wait_any(
+        &self,
+        _futures: &[&Self::WgpuFuture],
+        _timeout_ns: u64,
+    ) -> crate::WaitStatus {
+        // TODO: We need to know at the instance level whether a submission ID is completed...
+        crate::WaitStatus::UnsupportedTimeout
     }
 
     fn adapter_request_device(
@@ -1391,7 +1402,7 @@ impl crate::Context for ContextWgpuCore {
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
-    ) {
+    ) -> Self::WgpuFuture {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
                 MapMode::Read => wgc::device::HostMap::Read,
@@ -1411,9 +1422,10 @@ impl crate::Context for ContextWgpuCore {
             Some(range.end - range.start),
             operation,
         ) {
-            Ok(()) => (),
+            Ok(index) => index,
             Err(cause) => {
-                self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async")
+                self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async");
+                Self::SubmissionIndexData::MAX // invalid submission index
             }
         }
     }
@@ -2095,9 +2107,9 @@ impl crate::Context for ContextWgpuCore {
         &self,
         queue_data: &Self::QueueData,
         callback: crate::context::SubmittedWorkDoneCallback,
-    ) {
+    ) -> Self::WgpuFuture {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
-        self.0.queue_on_submitted_work_done(queue_data.id, closure);
+        self.0.queue_on_submitted_work_done(queue_data.id, closure)
     }
 
     fn device_start_capture(&self, device_data: &Self::DeviceData) {

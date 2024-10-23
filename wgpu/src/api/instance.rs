@@ -394,3 +394,20 @@ impl Instance {
             .map(|ctx| ctx.generate_report())
     }
 }
+
+/// Status returned when waiting on WgpuFuture objects.
+#[derive(Clone, Debug)]
+pub(crate) enum WaitStatus {
+    // At least one WgpuFuture completed successfully.
+    //Success,
+
+    // No WgpuFuture completed within the timeout.
+    //TimedOut,
+    /// A Timed-Wait was performed when timedWaitAnyEnable instance feature is false.
+    UnsupportedTimeout,
+    // The number of futures waited on in a Timed-Wait is greater than the supported timedWaitAnyMaxCount.
+    //UnsupportedCount,
+
+    // An invalid wait was performed with Mixed-Sources.
+    //UnsupportedMixedSources,
+}

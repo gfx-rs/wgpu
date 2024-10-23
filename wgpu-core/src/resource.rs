@@ -15,7 +15,7 @@ use crate::{
     snatch::{SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
     weak_vec::WeakVec,
-    Label, LabelHelpers,
+    Label, LabelHelpers, SubmissionIndex,
 };
 
 use smallvec::SmallVec;
@@ -27,7 +27,7 @@ use std::{
     mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
 };
 
 /// Information about the wgpu-core resource.
@@ -304,7 +304,7 @@ impl BufferMapCallback {
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
             BufferMapCallbackInner::C { inner } => unsafe {
                 let status = match result {
-                    Ok(()) => BufferMapAsyncStatus::Success,
+                    Ok(_) => BufferMapAsyncStatus::Success,
                     Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
                     Err(BufferAccessError::InvalidResource(_))
                     | Err(BufferAccessError::DestroyedResource(_)) => BufferMapAsyncStatus::Invalid,
@@ -546,7 +546,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<(), (BufferMapOperation, BufferAccessError)> {
+    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
         let range_size = if let Some(size) = size {
             size
         } else if offset > self.size {
@@ -633,9 +633,12 @@ impl Buffer {
             .buffers
             .set_single(self, internal_use);
 
-        device.lock_life().map(self);
+        let submit_index = match device.lock_life().map(self) {
+            Some(index) => index,
+            None => device.active_submission_index.load(Ordering::SeqCst),
+        };
 
-        Ok(())
+        Ok(submit_index)
     }
 
     // Note: This must not be called while holding a lock.

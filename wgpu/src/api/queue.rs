@@ -36,6 +36,7 @@ impl Drop for Queue {
 ///
 /// This type is unique to the Rust API of `wgpu`.
 /// There is no analogue in the WebGPU specification.
+/// NB: WgpuFuture should probably be used instead of this
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
     #[cfg_attr(not(native), allow(dead_code))]
@@ -49,6 +50,14 @@ pub use wgt::Maintain as MaintainBase;
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Maintain: Send, Sync);
+
+/// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried
+/// for completion, but does not hold any returned data.
+///
+/// It's 'id' field is to be interpreted as a submission id (like wgc::SubmissionId)
+pub type WgpuFuture = SubmissionIndex;
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(WgpuFuture: Send, Sync);
 
 /// A write-only view into a staging buffer.
 ///
@@ -275,11 +284,12 @@ impl Queue {
     /// has completed. There are no restrictions on the code you can run in the callback, however on native the
     /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
     /// and used to set flags, send messages, etc.
-    pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
-        DynContext::queue_on_submitted_work_done(
+    pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) -> WgpuFuture {
+        let data = DynContext::queue_on_submitted_work_done(
             &*self.context,
             self.data.as_ref(),
             Box::new(callback),
-        )
+        );
+        WgpuFuture { data }
     }
 }

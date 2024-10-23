@@ -1162,6 +1162,8 @@ impl crate::context::Context for ContextWebGpu {
         Box<dyn Fn(JsFutureResult) -> CompilationInfo>,
     >;
 
+    type WgpuFuture = wasm_bindgen_futures::JsFuture;
+
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let Ok(gpu) = get_browser_gpu_property() else {
             panic!(
@@ -1249,6 +1251,16 @@ impl crate::context::Context for ContextWebGpu {
             // Gpu is undefined; WebGPU is not supported in this browser.
             OptionFuture::none()
         }
+    }
+
+    fn instance_wait_any(
+        &self,
+        _futures: &[&Self::WgpuFuture],
+        _timeout_ns: u64,
+    ) -> crate::WaitStatus {
+        // TODO: Yield back to the browser, run the equivalent of the following JavaScript:
+        // > await Promise.any([ ...futures, new Promise(resolve => setTimeout(timeout_ns, resolve) ]))
+        crate::WaitStatus::UnsupportedTimeout
     }
 
     fn adapter_request_device(
@@ -2150,7 +2162,7 @@ impl crate::context::Context for ContextWebGpu {
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
-    ) {
+    ) -> Self::WgpuFuture {
         let map_promise = buffer_data.0.buffer.map_async_with_f64_and_f64(
             map_map_mode(mode),
             range.start as f64,
@@ -2160,6 +2172,7 @@ impl crate::context::Context for ContextWebGpu {
         buffer_data.0.set_mapped_range(range);
 
         register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
+        map_promise.into()
     }
 
     fn buffer_get_mapped_range(
@@ -2773,7 +2786,7 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         _queue_data: &Self::QueueData,
         _callback: crate::context::SubmittedWorkDoneCallback,
-    ) {
+    ) -> Self::WgpuFuture {
         unimplemented!()
     }
 

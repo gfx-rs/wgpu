@@ -16,7 +16,7 @@ use crate::{
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    UncapturedErrorHandler, WaitStatus,
 };
 /// Meta trait for an data associated with an id tracked by a context.
 ///
@@ -60,6 +60,9 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 
     type CompilationInfoFuture: Future<Output = CompilationInfo> + WasmNotSend + 'static;
 
+    /// This is not std::future, but rather a WGPUFuture, namely an opaque handle that can be queried for completion, but does not hold any returned data.
+    type WgpuFuture: ContextData;
+
     #[cfg(not(target_os = "emscripten"))]
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     unsafe fn instance_create_surface(
@@ -70,6 +73,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         options: &RequestAdapterOptions<'_, '_>,
     ) -> Self::RequestAdapterFuture;
+    fn instance_wait_any(&self, futures: &[&Self::WgpuFuture], timeout_ns: u64) -> WaitStatus;
     fn adapter_request_device(
         &self,
         adapter_data: &Self::AdapterData,
@@ -218,7 +222,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    );
+    ) -> Self::WgpuFuture;
     fn buffer_get_mapped_range(
         &self,
         buffer_data: &Self::BufferData,
@@ -413,7 +417,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         queue_data: &Self::QueueData,
         callback: SubmittedWorkDoneCallback,
-    );
+    ) -> Self::WgpuFuture;
 
     fn device_start_capture(&self, device_data: &Self::DeviceData);
     fn device_stop_capture(&self, device_data: &Self::DeviceData);
@@ -764,6 +768,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         options: &RequestAdapterOptions<'_, '_>,
     ) -> Pin<InstanceRequestAdapterFuture>;
+    fn instance_wait_any(&self, futures_data: &[&crate::Data], timeout_ns: u64) -> WaitStatus;
     fn adapter_request_device(
         &self,
         adapter_data: &crate::Data,
@@ -908,7 +913,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    );
+    ) -> Arc<crate::Data>;
     fn buffer_get_mapped_range(
         &self,
         buffer_data: &crate::Data,
@@ -1092,7 +1097,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         queue_data: &crate::Data,
         callback: SubmittedWorkDoneCallback,
-    );
+    ) -> Arc<crate::Data>;
 
     fn device_start_capture(&self, data: &crate::Data);
     fn device_stop_capture(&self, data: &crate::Data);
@@ -1368,6 +1373,10 @@ where
     ) -> Pin<InstanceRequestAdapterFuture> {
         let future: T::RequestAdapterFuture = Context::instance_request_adapter(self, options);
         Box::pin(async move { future.await.map(|data| Box::new(data) as _) })
+    }
+
+    fn instance_wait_any(&self, _futures_data: &[&crate::Data], _timeout_ns: u64) -> WaitStatus {
+        unimplemented!();
     }
 
     fn adapter_request_device(
@@ -1688,9 +1697,10 @@ where
         mode: MapMode,
         range: Range<BufferAddress>,
         callback: BufferMapCallback,
-    ) {
+    ) -> Arc<crate::Data> {
         let buffer_data = downcast_ref(buffer_data);
-        Context::buffer_map_async(self, buffer_data, mode, range, callback)
+        let handle = Context::buffer_map_async(self, buffer_data, mode, range, callback);
+        Arc::new(handle) as _
     }
 
     fn buffer_get_mapped_range(
@@ -2111,9 +2121,10 @@ where
         &self,
         queue_data: &crate::Data,
         callback: SubmittedWorkDoneCallback,
-    ) {
+    ) -> Arc<crate::Data> {
         let queue_data = downcast_ref(queue_data);
-        Context::queue_on_submitted_work_done(self, queue_data, callback)
+        let handle = Context::queue_on_submitted_work_done(self, queue_data, callback);
+        Arc::new(handle) as _
     }
 
     fn device_start_capture(&self, device_data: &crate::Data) {
