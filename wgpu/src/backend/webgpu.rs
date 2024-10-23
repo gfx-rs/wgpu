@@ -1162,7 +1162,7 @@ impl crate::context::Context for ContextWebGpu {
         Box<dyn Fn(JsFutureResult) -> CompilationInfo>,
     >;
 
-    type WgpuFuture = Promise;
+    type WgpuFuture = wasm_bindgen_futures::JsFuture;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let Ok(gpu) = get_browser_gpu_property() else {
