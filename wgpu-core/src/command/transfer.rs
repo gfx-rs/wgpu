@@ -634,11 +634,6 @@ impl Global {
             .into());
         }
 
-        if size == 0 {
-            log::trace!("Ignoring copy_buffer_to_buffer of size 0");
-            return Ok(());
-        }
-
         // Make sure source is initialized memory and mark dest as initialized.
         cmd_buf_data.buffer_memory_init_actions.extend(
             dst_buffer.initialization_status.read().create_action(
@@ -704,11 +699,6 @@ impl Global {
                 dst: *destination,
                 size: *copy_size,
             });
-        }
-
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring copy_buffer_to_texture of size 0");
-            return Ok(());
         }
 
         let dst_texture = hub.textures.get(destination.texture).get()?;
@@ -857,11 +847,6 @@ impl Global {
                 dst: *destination,
                 size: *copy_size,
             });
-        }
-
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring copy_texture_to_buffer of size 0");
-            return Ok(());
         }
 
         let src_texture = hub.textures.get(source.texture).get()?;
@@ -1026,11 +1011,6 @@ impl Global {
                 dst: *destination,
                 size: *copy_size,
             });
-        }
-
-        if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring copy_texture_to_texture of size 0");
-            return Ok(());
         }
 
         let src_texture = hub.textures.get(source.texture).get()?;
