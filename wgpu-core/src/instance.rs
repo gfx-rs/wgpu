@@ -573,18 +573,14 @@ impl Adapter {
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        let device = Device::new(
-            hal_device.device,
-            hal_device.queue.as_ref(),
-            self,
-            desc,
-            trace_path,
-            instance_flags,
-        )?;
-
+        let device = Device::new(hal_device.device, self, desc, trace_path, instance_flags)?;
         let device = Arc::new(device);
-        let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
+
+        let queue = Queue::new(device.clone(), hal_device.queue)?;
+        let queue = Arc::new(queue);
+
         device.set_queue(&queue);
+
         Ok((device, queue))
     }
 

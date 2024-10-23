@@ -4,12 +4,9 @@ use crate::{
     binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
     device::{
-        bgl, create_validator,
-        life::{LifetimeTracker, WaitIdleError},
-        map_buffer,
-        queue::PendingWrites,
-        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
-        RenderPassContext, CLEANUP_WAIT_MS,
+        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
+        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        CLEANUP_WAIT_MS,
     },
     hal_label,
     init_tracker::{
@@ -17,7 +14,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     instance::Adapter,
-    lock::{rank, Mutex, MutexGuard, RwLock},
+    lock::{rank, Mutex, RwLock},
     pipeline,
     pool::ResourcePool,
     resource::{
@@ -52,30 +49,12 @@ use std::{
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR,
-    ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
+    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
-///
-/// TODO: establish clear order of locking for these:
-/// `life_tracker`, `trackers`, `render_passes`, `pending_writes`, `trace`.
-///
-/// Currently, the rules are:
-/// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
-/// 1. `self.trackers` is locked last (unenforced)
-/// 1. `self.trace` is locked last (unenforced)
-///
-/// Right now avoid locking twice same resource or registry in a call execution
-/// and minimize the locking to the minimum scope possible
-/// Unless otherwise specified, no lock may be acquired while holding another lock.
-/// This means that you must inspect function calls made while a lock is held
-/// to see what locks the callee may try to acquire.
-///
-/// Important:
-/// When locking pending_writes please check that trackers is not locked
-/// trackers should be locked only when needed for the shortest time possible
 pub struct Device {
     raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
     pub(crate) adapter: Arc<Adapter>,
@@ -125,14 +104,14 @@ pub struct Device {
     /// using ref-counted references for internal access.
     pub(crate) valid: AtomicBool,
 
-    /// All live resources allocated with this [`Device`].
-    ///
-    /// Has to be locked temporarily only (locked last)
-    /// and never before pending_writes
+    /// Closure to be called on "lose the device". This is invoked directly by
+    /// device.lose or by the UserCallbacks returned from maintain when the device
+    /// has been destroyed and its queues are empty.
+    pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
+
+    /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
-    // Life tracker should be locked right after the device and before anything else.
-    life_tracker: Mutex<LifetimeTracker>,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
     pub(crate) alignments: hal::Alignments,
@@ -140,14 +119,13 @@ pub struct Device {
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
-    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
-    #[cfg(feature = "trace")]
-    pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool,
-
     #[cfg(feature = "indirect-validation")]
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    // needs to be dropped last
+    #[cfg(feature = "trace")]
+    pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -169,15 +147,17 @@ impl std::fmt::Debug for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
+
+        if let Some(closure) = self.device_lost_closure.lock().take() {
+            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
+        }
+
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
-        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
-        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        pending_writes.dispose(raw.as_ref());
         self.command_allocator.dispose(raw.as_ref());
         #[cfg(feature = "indirect-validation")]
         self.indirect_validation
@@ -220,7 +200,6 @@ impl Device {
 impl Device {
     pub(crate) fn new(
         raw_device: Box<dyn hal::DynDevice>,
-        raw_queue: &dyn hal::DynQueue,
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
@@ -233,10 +212,6 @@ impl Device {
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
-        let pending_encoder = command_allocator
-            .acquire_encoder(raw_device.as_ref(), raw_queue)
-            .map_err(DeviceError::from_hal)?;
-        let mut pending_writes = PendingWrites::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
@@ -248,24 +223,6 @@ impl Device {
             })
         }
         .map_err(DeviceError::from_hal)?;
-        pending_writes.activate();
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                }]);
-            pending_writes
-                .command_encoder
-                .clear_buffer(zero_buffer.as_ref(), 0..ZERO_BUFFER_SIZE);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
-                }]);
-        }
 
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
@@ -302,9 +259,9 @@ impl Device {
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
+            device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
-            life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(
@@ -328,10 +285,6 @@ impl Device {
             features: desc.required_features,
             downlevel,
             instance_flags,
-            pending_writes: Mutex::new(
-                rank::DEVICE_PENDING_WRITES,
-                ManuallyDrop::new(pending_writes),
-            ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             #[cfg(feature = "indirect-validation")]
@@ -370,11 +323,6 @@ impl Device {
 
     pub(crate) fn release_queue(&self, queue: Box<dyn hal::DynQueue>) {
         assert!(self.queue_to_drop.set(queue).is_ok());
-    }
-
-    #[track_caller]
-    pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
-        self.life_tracker.lock()
     }
 
     /// Run some destroy operations that were deferred.
@@ -489,15 +437,12 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
         }
 
-        let mut life_tracker = self.lock_life();
-        let submission_closures =
-            life_tracker.triage_submissions(submission_index, &self.command_allocator);
-
-        life_tracker.triage_mapped();
-
-        let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
-
-        let queue_empty = life_tracker.queue_empty();
+        let (submission_closures, mapping_closures, queue_empty) =
+            if let Some(queue) = self.get_queue() {
+                queue.maintain(submission_index, &snatch_guard)
+            } else {
+                (SmallVec::new(), Vec::new(), true)
+            };
 
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
@@ -513,9 +458,9 @@ impl Device {
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
-            if life_tracker.device_lost_closure.is_some() {
+            if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
                 device_lost_invocations.push(DeviceLostInvocation {
-                    closure: life_tracker.device_lost_closure.take().unwrap(),
+                    closure: device_lost_closure,
                     reason: DeviceLostReason::Destroyed,
                     message: String::new(),
                 });
@@ -523,7 +468,6 @@ impl Device {
         }
 
         // Don't hold the locks while calling release_gpu_resources.
-        drop(life_tracker);
         drop(fence);
         drop(snatch_guard);
 
@@ -664,14 +608,7 @@ impl Device {
                 }
             } else {
                 let snatch_guard: SnatchGuard = self.snatchable_lock.read();
-                map_buffer(
-                    self.raw(),
-                    &buffer,
-                    0,
-                    map_size,
-                    HostMap::Write,
-                    &snatch_guard,
-                )?
+                map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
             };
             *buffer.map_state.lock() = resource::BufferMapState::Active {
                 mapping,
@@ -3565,13 +3502,15 @@ impl Device {
             unsafe { self.raw().wait(fence.as_ref(), submission_index, !0) }
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
-            let closures = self
-                .lock_life()
-                .triage_submissions(submission_index, &self.command_allocator);
-            assert!(
-                closures.is_empty(),
-                "wait_for_submit is not expected to work with closures"
-            );
+            if let Some(queue) = self.get_queue() {
+                let closures = queue
+                    .lock_life()
+                    .triage_submissions(submission_index, &self.command_allocator);
+                assert!(
+                    closures.is_empty(),
+                    "wait_for_submit is not expected to work with closures"
+                );
+            }
         }
         Ok(())
     }
@@ -3630,13 +3569,7 @@ impl Device {
         self.valid.store(false, Ordering::Release);
 
         // 1) Resolve the GPUDevice device.lost promise.
-        let mut life_lock = self.lock_life();
-        let closure = life_lock.device_lost_closure.take();
-        // It's important to not hold the lock while calling the closure and while calling
-        // release_gpu_resources which may take the lock again.
-        drop(life_lock);
-
-        if let Some(device_lost_closure) = closure {
+        if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
         }
 
@@ -3685,34 +3618,6 @@ impl Device {
 
     pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         self.raw().generate_allocator_report()
-    }
-}
-
-impl Device {
-    /// Wait for idle and remove resources that we can, before we die.
-    pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.lock().deactivate();
-        let current_index = self
-            .last_successful_submission_index
-            .load(Ordering::Acquire);
-        if let Err(error) = unsafe {
-            let fence = self.fence.read();
-            self.raw()
-                .wait(fence.as_ref(), current_index, CLEANUP_WAIT_MS)
-        } {
-            log::error!("failed to wait for the device: {error}");
-        }
-        let mut life_tracker = self.lock_life();
-        let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
-        if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_tracker);
-            device_lost_closure.call(DeviceLostReason::Dropped, "Device is dying.".to_string());
-        }
-        #[cfg(feature = "trace")]
-        {
-            *self.trace.lock() = None;
-        }
     }
 }
 

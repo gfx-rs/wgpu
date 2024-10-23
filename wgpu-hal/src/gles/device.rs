@@ -1563,6 +1563,10 @@ impl crate::Device for super::Device {
     ) -> Result<bool, crate::DeviceError> {
         if fence.last_completed.load(Ordering::Relaxed) < wait_value {
             let gl = &self.shared.context.lock();
+            // MAX_CLIENT_WAIT_TIMEOUT_WEBGL is:
+            // - 1s in Gecko https://searchfox.org/mozilla-central/rev/754074e05178e017ef6c3d8e30428ffa8f1b794d/dom/canvas/WebGLTypes.h#1386
+            // - 0 in WebKit https://github.com/WebKit/WebKit/blob/4ef90d4672ca50267c0971b85db403d9684508ea/Source/WebCore/html/canvas/WebGL2RenderingContext.cpp#L110
+            // - 0 in Chromium https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/modules/webgl/webgl2_rendering_context_base.cc;l=112;drc=a3cb0ac4c71ec04abfeaed199e5d63230eca2551
             let timeout_ns = if cfg!(any(webgl, Emscripten)) {
                 0
             } else {
