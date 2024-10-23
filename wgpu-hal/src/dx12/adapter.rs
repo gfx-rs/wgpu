@@ -316,8 +316,6 @@ impl super::Adapter {
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
             | wgt::Features::TEXTURE_FORMAT_NV12
-            // Ruint64 textures are always emulated on d3d12
-            | wgt::Features::TEXTURE_INT64_ATOMIC
             // float32-filterable should always be available on d3d12
             | wgt::Features::FLOAT32_FILTERABLE;
 
@@ -378,6 +376,13 @@ impl super::Adapter {
         features.set(
             wgt::Features::SHADER_INT64,
             shader_model >= naga::back::hlsl::ShaderModel::V6_0
+                && hr.is_ok()
+                && features1.Int64ShaderOps.as_bool(),
+        );
+
+        features.set(
+            wgt::Features::TEXTURE_INT64_ATOMIC,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_6
                 && hr.is_ok()
                 && features1.Int64ShaderOps.as_bool(),
         );

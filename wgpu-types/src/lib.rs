@@ -3413,6 +3413,7 @@ impl TextureFormat {
             TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
         let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
         let storage = basic | TextureUsages::STORAGE_BINDING;
+        let atomic = TextureUsages::STORAGE_BINDING | TextureUsages::SHADER_ATOMIC;
         let binding = TextureUsages::TEXTURE_BINDING;
         let all_flags = TextureUsages::all();
         let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
@@ -3458,7 +3459,7 @@ impl TextureFormat {
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
-            Self::R64Uint =>              (        noaa, attachment),
+            Self::R64Uint =>              (        noaa,     atomic),
             Self::Rg32Uint =>             (        noaa,  all_flags),
             Self::Rg32Sint =>             (        noaa,  all_flags),
             Self::Rg32Float =>            (        noaa,  all_flags),
