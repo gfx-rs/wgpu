@@ -23,6 +23,7 @@ mod dispatch_workgroups_indirect;
 mod encoder;
 mod external_texture;
 mod float32_filterable;
+mod image_atomics;
 mod instance;
 mod life_cycle;
 mod mem_leaks;

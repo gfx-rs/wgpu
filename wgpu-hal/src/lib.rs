@@ -1570,6 +1570,9 @@ bitflags!(
         const COPY_SRC = 1 << 14;
         /// Format can be copied to.
         const COPY_DST = 1 << 15;
+
+        /// Format can be used with image atomics
+        const SHADER_ATOMIC = 1 << 16;
     }
 );
 
@@ -1733,6 +1736,8 @@ bitflags::bitflags! {
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
         const UNKNOWN = 1 << 11;
+        /// Image atomic enabled storage
+        const SHADER_ATOMIC = 1 << 12;
     }
 }
 

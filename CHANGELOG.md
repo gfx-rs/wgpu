@@ -79,6 +79,8 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 ### New Features
 
+64 bit image atomic support in shaders. By @atlv24 in [#5537](https://github.com/gfx-rs/wgpu/pull/5537)
+
 #### Naga
 
 - Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).

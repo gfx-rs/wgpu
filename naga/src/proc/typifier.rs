@@ -494,10 +494,7 @@ impl<'a> ResolveContext<'a> {
                         size: crate::VectorSize::Quad,
                     },
                     crate::ImageClass::Storage { format, .. } => Ti::Vector {
-                        scalar: crate::Scalar {
-                            kind: format.into(),
-                            width: 4,
-                        },
+                        scalar: format.into(),
                         size: crate::VectorSize::Quad,
                     },
                 }),
