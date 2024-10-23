@@ -624,7 +624,7 @@ impl crate::framework::Example for Example {
                     multiview: None,
                 });
             encoder.set_pipeline(&terrain_pipeline);
-            encoder.set_bind_group(0, Some(&terrain_flipped_bind_group), &[]);
+            encoder.set_bind_group(0, &terrain_flipped_bind_group, &[]);
             encoder.set_vertex_buffer(0, terrain_vertex_buf.slice(..));
             encoder.draw(0..terrain_vertices.len() as u32, 0..1);
             encoder.finish(&wgpu::RenderBundleDescriptor::default())
@@ -778,7 +778,7 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
-            rpass.set_bind_group(0, Some(&self.terrain_normal_bind_group), &[]);
+            rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
             rpass.set_vertex_buffer(0, self.terrain_vertex_buf.slice(..));
             rpass.draw(0..self.terrain_vertex_count as u32, 0..1);
         }
@@ -805,7 +805,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.water_pipeline);
-            rpass.set_bind_group(0, Some(&self.water_bind_group), &[]);
+            rpass.set_bind_group(0, &self.water_bind_group, &[]);
             rpass.set_vertex_buffer(0, self.water_vertex_buf.slice(..));
             rpass.draw(0..self.water_vertex_count as u32, 0..1);
         }

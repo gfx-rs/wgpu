@@ -117,7 +117,7 @@ impl super::Device {
         let ep_resources = &layout.per_stage_map[naga_stage];
 
         let bounds_check_policy = if stage.module.runtime_checks {
-            naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite
+            naga::proc::BoundsCheckPolicy::Restrict
         } else {
             naga::proc::BoundsCheckPolicy::Unchecked
         };

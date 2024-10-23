@@ -63,13 +63,13 @@ impl<'a> RenderBundleEncoder<'a> {
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in the binding order.
-    pub fn set_bind_group(
+    pub fn set_bind_group<'b>(
         &mut self,
         index: u32,
-        bind_group: Option<&'a BindGroup>,
+        bind_group: impl Into<Option<&'a BindGroup>>,
         offsets: &[DynamicOffset],
     ) {
-        let bg = bind_group.map(|x| x.data.as_ref());
+        let bg = bind_group.into().map(|x| x.data.as_ref());
         DynContext::render_bundle_encoder_set_bind_group(
             &*self.parent.context,
             self.data.as_mut(),

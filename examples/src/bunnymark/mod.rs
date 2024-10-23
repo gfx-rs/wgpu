@@ -128,11 +128,11 @@ impl Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, Some(&self.global_group), &[]);
+            rpass.set_bind_group(0, &self.global_group, &[]);
             for i in 0..self.bunnies.len() {
                 let offset =
                     (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
-                rpass.set_bind_group(1, Some(&self.local_group), &[offset]);
+                rpass.set_bind_group(1, &self.local_group, &[offset]);
                 rpass.draw(0..4, 0..1);
             }
         }

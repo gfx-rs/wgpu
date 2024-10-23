@@ -34,28 +34,14 @@ impl fmt::Display for ShaderError<crate::front::spv::Error> {
 }
 impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use codespan_reporting::{
-            diagnostic::{Diagnostic, Label},
-            files::SimpleFile,
-            term,
-        };
+        use codespan_reporting::{files::SimpleFile, term};
 
         let label = self.label.as_deref().unwrap_or_default();
         let files = SimpleFile::new(label, &self.source);
         let config = term::Config::default();
         let mut writer = termcolor::NoColor::new(Vec::new());
-
-        let diagnostic = Diagnostic::error().with_labels(
-            self.inner
-                .spans()
-                .map(|&(span, ref desc)| {
-                    Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
-                })
-                .collect(),
-        );
-
-        term::emit(&mut writer, &config, &files, &diagnostic).expect("cannot write error");
-
+        term::emit(&mut writer, &config, &files, &self.inner.diagnostic())
+            .expect("cannot write error");
         write!(
             f,
             "\nShader validation {}",

@@ -87,7 +87,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         drop(depth_stencil_view);
 
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, Some(&bind_group), &[]);
+        rpass.set_bind_group(0, &bind_group, &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.begin_occlusion_query(0);
@@ -163,7 +163,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
             ..Default::default()
         });
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, Some(&bind_group), &[]);
+        rpass.set_bind_group(0, &bind_group, &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.begin_pipeline_statistics_query(&query_set, 0);
@@ -242,7 +242,7 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         rpass.write_timestamp(&query_set_write_timestamp, 0);
 
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, Some(&bind_group), &[]);
+        rpass.set_bind_group(0, &bind_group, &[]);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.draw(0..3, 0..1);
@@ -305,7 +305,7 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
 
     // Record some a draw command.
     rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, Some(&bind_group), &[]);
+    rpass.set_bind_group(0, &bind_group, &[]);
     rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
     rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
     rpass.draw(0..3, 0..1);

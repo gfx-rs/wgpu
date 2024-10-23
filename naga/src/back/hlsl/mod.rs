@@ -207,6 +207,8 @@ pub struct Options {
     pub push_constants_target: Option<BindTarget>,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
+    /// Should we restrict indexing of vectors, matrices and arrays?
+    pub restrict_indexing: bool,
 }
 
 impl Default for Options {
@@ -218,6 +220,7 @@ impl Default for Options {
             special_constants_binding: None,
             push_constants_target: None,
             zero_initialize_workgroup_memory: true,
+            restrict_indexing: true,
         }
     }
 }

@@ -516,9 +516,10 @@ fn run() -> anyhow::Result<()> {
             // Validation failure is not fatal. Just report the error.
             if let Some(input) = &input_text {
                 let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+            } else {
+                print_err(&error);
             }
-            print_err(&error);
             None
         }
     };
@@ -544,9 +545,10 @@ fn run() -> anyhow::Result<()> {
                     eprintln!("Error validating compacted module:");
                     if let Some(input) = &input_text {
                         let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                        emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                        error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                    } else {
+                        print_err(&error);
                     }
-                    print_err(&error);
                     None
                 }
             }
@@ -869,9 +871,10 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
             eprintln!("Error validating {input_path}:");
             if let Some(input) = &input_text {
                 let filename = path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+            } else {
+                print_err(&error);
             }
-            print_err(&error);
         }
     }
 
@@ -892,29 +895,5 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
     Ok(())
 }
 
-use codespan_reporting::{
-    diagnostic::{Diagnostic, Label},
-    files::SimpleFile,
-    term::{
-        self,
-        termcolor::{ColorChoice, StandardStream},
-    },
-};
-use naga::{FastHashMap, WithSpan};
-
-pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, source: &str) {
-    let files = SimpleFile::new(filename, source);
-    let config = codespan_reporting::term::Config::default();
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-
-    let diagnostic = Diagnostic::error().with_labels(
-        ann_err
-            .spans()
-            .map(|(span, desc)| {
-                Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
-            })
-            .collect(),
-    );
-
-    term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
-}
+use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
+use naga::FastHashMap;
