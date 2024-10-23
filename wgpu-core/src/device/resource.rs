@@ -905,6 +905,14 @@ impl Device {
             }
         }
 
+        if matches!(desc.format, wgt::TextureFormat::R64Uint) {
+            // Error even if we have the feature, because its not implemented yet.
+            return Err(CreateTextureError::MissingFeatures(
+                desc.format,
+                MissingFeatures(wgt::Features::TEXTURE_INT64_ATOMIC),
+            ));
+        }
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
