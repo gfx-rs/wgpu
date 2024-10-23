@@ -146,6 +146,10 @@ pub enum FunctionError {
     },
     #[error("Image store parameters are invalid")]
     InvalidImageStore(#[source] ExpressionError),
+    #[error("Image atomic parameters are invalid")]
+    InvalidImageAtomic(#[source] ExpressionError),
+    #[error("Image atomic value is invalid")]
+    InvalidAtomicValue(Handle<crate::Expression>),
     #[error("Call to {function:?} is invalid")]
     InvalidCall {
         function: Handle<crate::Function>,
@@ -1135,6 +1139,18 @@ impl super::Validator {
                     result,
                 } => {
                     self.validate_atomic(pointer, fun, value, result, span, context)?;
+                }
+                S::ImageAtomic {
+                    image: _,
+                    coordinate: _,
+                    sample: _,
+                    fun: _,
+                    value: _,
+                } => {
+                    return Err(FunctionError::InvalidAtomic(AtomicError::MissingCapability(
+                        super::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX,
+                    ))
+                    .with_span_static(span, "Image atomics are not implemented yet"))
                 }
                 S::WorkGroupUniformLoad { pointer, result } => {
                     stages &= super::ShaderStages::COMPUTE;

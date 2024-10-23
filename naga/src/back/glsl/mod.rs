@@ -2469,6 +2469,18 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(value, ctx)?;
                 writeln!(self.out, ");")?;
             }
+            // Stores a value into an image.
+            Statement::ImageAtomic {
+                image: _,
+                coordinate: _,
+                sample: _,
+                fun: _,
+                value: _,
+            } => {
+                return Err(Error::Custom(
+                    "Image atomics are not implemented".to_string(),
+                ));
+            }
             Statement::RayQuery { .. } => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;

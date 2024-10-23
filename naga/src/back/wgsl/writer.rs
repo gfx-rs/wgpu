@@ -784,6 +784,15 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ");")?
             }
+            Statement::ImageAtomic {
+                image: _,
+                coordinate: _,
+                sample: _,
+                fun: _,
+                value: _,
+            } => {
+                unimplemented!("Image atomics are not yet supported");
+            }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 write!(self.out, "{level}")?;
                 // TODO: Obey named expressions here.

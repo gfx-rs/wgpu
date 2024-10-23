@@ -2209,6 +2209,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 writeln!(self.out, ");")?;
             }
+            crate::Statement::ImageAtomic {
+                image: _,
+                coordinate: _,
+                sample: _,
+                fun: _,
+                value: _,
+            } => {
+                return Err(Error::Unimplemented("image atomics".to_string()));
+            }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 write!(self.out, "{level}")?;

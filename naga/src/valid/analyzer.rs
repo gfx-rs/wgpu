@@ -1022,6 +1022,19 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::ImageAtomic {
+                    image,
+                    coordinate,
+                    sample,
+                    fun: _,
+                    value,
+                } => {
+                    let _ = self.add_ref_impl(image, GlobalUse::WRITE);
+                    let _ = self.add_ref(coordinate);
+                    let _ = self.add_ref(sample);
+                    let _ = self.add_ref(value);
+                    FunctionUniformity::new()
+                }
                 S::RayQuery { query, ref fun } => {
                     let _ = self.add_ref(query);
                     if let crate::RayQueryFunction::Initialize {

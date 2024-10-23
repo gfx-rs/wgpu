@@ -2870,6 +2870,17 @@ impl<'w> BlockContext<'w> {
 
                     block.body.push(instruction);
                 }
+                Statement::ImageAtomic {
+                    image: _,
+                    coordinate: _,
+                    sample: _,
+                    fun: _,
+                    value: _,
+                } => {
+                    return Err(Error::FeatureNotImplemented(
+                        "Image atomics are not supported",
+                    ));
+                }
                 Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.writer
                         .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
