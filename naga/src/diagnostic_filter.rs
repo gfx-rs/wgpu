@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 
 /// A severity set on a [`DiagnosticFilter`].
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub enum Severity {
     Off,
     Info,
@@ -29,10 +30,22 @@ impl Severity {
             _ => return None,
         })
     }
+
+    /// Maps this [`Severity`] into the sentinel word associated with it in WGSL.
+    #[cfg(test)]
+    pub const fn to_ident(self) -> &'static str {
+        match self {
+            Self::Error => Self::ERROR,
+            Self::Warning => Self::WARNING,
+            Self::Info => Self::INFO,
+            Self::Off => Self::OFF,
+        }
+    }
 }
 
 /// The rule being configured in a [`DiagnosticFilter`].
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub enum DiagnosticTriggeringRule {
     DerivativeUniformity,
 }
@@ -126,4 +139,76 @@ pub(crate) struct ConflictingDiagnosticRuleError {
 pub struct DiagnosticFilterNode {
     pub inner: DiagnosticFilter,
     pub parent: Option<Handle<DiagnosticFilterNode>>,
+}
+
+#[cfg(test)]
+mod test {
+    use crate::front::wgsl::assert_parse_err;
+
+    use super::{DiagnosticTriggeringRule, Severity};
+
+    use itertools::Itertools as _;
+    use strum::IntoEnumIterator as _;
+
+    #[test]
+    fn basic() {}
+
+    #[test]
+    fn malformed() {
+        assert_parse_err("directive;", snapshot);
+        assert_parse_err("directive(off, asdf;", snapshot);
+        assert_parse_err("directive();", snapshot);
+    }
+
+    #[test]
+    fn severities() {}
+
+    #[test]
+    fn invalid_severity() {}
+
+    #[test]
+    fn triggering_rules() {}
+
+    #[test]
+    fn invalid_triggering_rule() {
+        #[derive(Debug, Clone)]
+        enum Rule {
+            Valid(DiagnosticTriggeringRule),
+            Invalid,
+        }
+
+        #[derive(Debug, Clone)]
+        enum Sev {
+            Valid(Severity),
+            Invalid,
+        }
+
+        let cases = {
+            let invalid_sev_cases = DiagnosticTriggeringRule::iter()
+                .map(Rule::Valid)
+                .cartesian_product([Sev::Invalid]);
+            let invalid_rule_cases = [Rule::Invalid]
+                .into_iter()
+                .cartesian_product(Severity::iter().map(Sev::Valid));
+            invalid_sev_cases.chain(invalid_rule_cases)
+        };
+
+        for (rule, severity) in cases {
+            let rule = match rule {
+                Rule::Valid(rule) => rule.to_ident(),
+                Rule::Invalid => "totes_invalid_rule",
+            };
+            let severity = match severity {
+                Sev::Valid(severity) => severity.to_ident(),
+                Sev::Invalid => "totes_invalid_severity",
+            };
+            let shader = format!("diagnostic({severity},{rule});");
+            let expected_msg = format!(
+                "\
+"
+            );
+
+            assert_parse_err(&shader, &expected_msg);
+        }
+    }
 }
