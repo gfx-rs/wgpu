@@ -166,6 +166,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Invalidate the device when we encounter driver-induced device loss or on unexpected errors. By @teoxoy in [#6229](https://github.com/gfx-rs/wgpu/pull/6229).
 - Make Vulkan error handling more robust. By @teoxoy in [#6119](https://github.com/gfx-rs/wgpu/pull/6119).
 - Add bounds checking to Buffer slice method. By @beholdnec in [#6432](https://github.com/gfx-rs/wgpu/pull/6432).
+- Replace `impl From<StorageFormat> for ScalarKind` with `impl From<StorageFormat> for Scalar` so that byte width is included. By @atlv24 in [#6451](https://github.com/gfx-rs/wgpu/pull/6451).
 
 #### Internal
 

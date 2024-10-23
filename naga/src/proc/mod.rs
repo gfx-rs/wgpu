@@ -20,10 +20,10 @@ pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
 
-impl From<super::StorageFormat> for super::ScalarKind {
+impl From<super::StorageFormat> for super::Scalar {
     fn from(format: super::StorageFormat) -> Self {
         use super::{ScalarKind as Sk, StorageFormat as Sf};
-        match format {
+        let kind = match format {
             Sf::R8Unorm => Sk::Float,
             Sf::R8Snorm => Sk::Float,
             Sf::R8Uint => Sk::Uint,
@@ -64,7 +64,8 @@ impl From<super::StorageFormat> for super::ScalarKind {
             Sf::Rg16Snorm => Sk::Float,
             Sf::Rgba16Unorm => Sk::Float,
             Sf::Rgba16Snorm => Sk::Float,
-        }
+        };
+        super::Scalar { kind, width: 4 }
     }
 }
 
