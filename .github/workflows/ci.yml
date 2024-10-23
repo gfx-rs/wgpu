@@ -628,6 +628,12 @@ jobs:
       - name: run `taplo fmt`
         run: taplo format --check --diff
 
+      - name: "Format `**/*.{md,js,html,yml}` files"
+        uses: creyD/prettier_action@v4.3
+        with:
+          prettier_version: 3.3.3
+          prettier_options: --write .
+
       - name: Check for typos
         uses: crate-ci/typos@v1.26.0
 
