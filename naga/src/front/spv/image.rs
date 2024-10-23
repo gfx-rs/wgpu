@@ -30,6 +30,16 @@ impl<'function> super::BlockContext<'function> {
         match self.expressions[handle] {
             crate::Expression::GlobalVariable(handle) => Ok(self.global_arena[handle].ty),
             crate::Expression::FunctionArgument(i) => Ok(self.arguments[i as usize].ty),
+            crate::Expression::Access { base, .. } => match self.expressions[base] {
+                crate::Expression::GlobalVariable(handle) => {
+                    let array_ty = self.global_arena[handle].ty;
+                    match self.type_arena[array_ty].inner {
+                        crate::TypeInner::BindingArray { base, .. } => Ok(base),
+                        _ => Err(Error::InvalidImageBaseType(array_ty)),
+                    }
+                }
+                ref other => Err(Error::InvalidImageExpression(other.clone())),
+            },
             ref other => Err(Error::InvalidImageExpression(other.clone())),
         }
     }
@@ -210,6 +220,22 @@ pub(super) fn patch_comparison_type(
             arrayed,
         },
         crate::TypeInner::Sampler { .. } => crate::TypeInner::Sampler { comparison: true },
+        crate::TypeInner::BindingArray { base, .. } => {
+            let base_ty = &arena[base];
+            match base_ty.inner {
+                crate::TypeInner::Image {
+                    class: crate::ImageClass::Sampled { multi, .. },
+                    dim,
+                    arrayed,
+                } => crate::TypeInner::Image {
+                    class: crate::ImageClass::Depth { multi },
+                    dim,
+                    arrayed,
+                },
+                crate::TypeInner::Sampler { .. } => crate::TypeInner::Sampler { comparison: true },
+                ref other => unreachable!("Unexpected type for comparison mutation: {:?}", other),
+            }
+        }
         ref other => unreachable!("Unexpected type for comparison mutation: {:?}", other),
     };
 
