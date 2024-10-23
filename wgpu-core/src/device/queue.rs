@@ -27,6 +27,8 @@ use crate::{
 
 use smallvec::SmallVec;
 
+use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
+use crate::scratch::ScratchBuffer;
 use std::{
     iter,
     mem::{self, ManuallyDrop},
@@ -143,8 +145,10 @@ impl SubmittedWorkDoneClosure {
 #[derive(Debug)]
 pub enum TempResource {
     StagingBuffer(FlushedStagingBuffer),
+    ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
+    DestroyedAccelerationStructure(DestroyedAccelerationStructure),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -161,6 +165,10 @@ pub(crate) struct EncoderInFlight {
     pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     /// These are the textures that have been tracked by `PendingWrites`.
     pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
+    /// These are the BLASes that have been tracked by `PendingWrites`.
+    pub(crate) pending_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    /// These are the TLASes that have been tracked by `PendingWrites`.
+    pub(crate) pending_tlas_s: FastHashMap<TrackerIndex, Arc<Tlas>>,
 }
 
 impl EncoderInFlight {
@@ -177,6 +185,8 @@ impl EncoderInFlight {
             drop(self.trackers);
             drop(self.pending_buffers);
             drop(self.pending_textures);
+            drop(self.pending_blas_s);
+            drop(self.pending_tlas_s);
         }
         self.raw
     }
@@ -216,6 +226,8 @@ pub(crate) struct PendingWrites {
     temp_resources: Vec<TempResource>,
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
+    dst_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    dst_tlas_s: FastHashMap<TrackerIndex, Arc<Tlas>>,
 }
 
 impl PendingWrites {
@@ -226,6 +238,8 @@ impl PendingWrites {
             temp_resources: Vec::new(),
             dst_buffers: FastHashMap::default(),
             dst_textures: FastHashMap::default(),
+            dst_blas_s: FastHashMap::default(),
+            dst_tlas_s: FastHashMap::default(),
         }
     }
 
@@ -258,6 +272,22 @@ impl PendingWrites {
         self.dst_textures.contains_key(&texture.tracker_index())
     }
 
+    pub fn insert_blas(&mut self, blas: &Arc<Blas>) {
+        self.dst_blas_s.insert(blas.tracker_index(), blas.clone());
+    }
+
+    pub fn insert_tlas(&mut self, tlas: &Arc<Tlas>) {
+        self.dst_tlas_s.insert(tlas.tracker_index(), tlas.clone());
+    }
+
+    pub fn contains_blas(&mut self, blas: &Arc<Blas>) -> bool {
+        self.dst_blas_s.contains_key(&blas.tracker_index())
+    }
+
+    pub fn contains_tlas(&mut self, tlas: &Arc<Tlas>) -> bool {
+        self.dst_tlas_s.contains_key(&tlas.tracker_index())
+    }
+
     pub fn consume_temp(&mut self, resource: TempResource) {
         self.temp_resources.push(resource);
     }
@@ -276,6 +306,8 @@ impl PendingWrites {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
+            let pending_blas_s = mem::take(&mut self.dst_blas_s);
+            let pending_tlas_s = mem::take(&mut self.dst_tlas_s);
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
@@ -291,6 +323,8 @@ impl PendingWrites {
                 trackers: Tracker::new(),
                 pending_buffers,
                 pending_textures,
+                pending_blas_s,
+                pending_tlas_s,
             };
             Ok(Some(encoder))
         } else {
@@ -358,6 +392,10 @@ pub enum QueueSubmitError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     CommandEncoder(#[from] CommandEncoderError),
+    #[error(transparent)]
+    ValidateBlasActionsError(#[from] crate::ray_tracing::ValidateBlasActionsError),
+    #[error(transparent)]
+    ValidateTlasActionsError(#[from] crate::ray_tracing::ValidateTlasActionsError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -1117,6 +1155,8 @@ impl Queue {
                             trackers: baked.trackers,
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),
+                            pending_blas_s: FastHashMap::default(),
+                            pending_tlas_s: FastHashMap::default(),
                         });
                     }
 
@@ -1454,6 +1494,13 @@ fn validate_command_buffer(
                     };
                 }
             }
+        }
+
+        if let Err(e) = cmd_buf_data.validate_blas_actions() {
+            return Err(e.into());
+        }
+        if let Err(e) = cmd_buf_data.validate_tlas_actions(snatch_guard) {
+            return Err(e.into());
         }
     }
     Ok(())

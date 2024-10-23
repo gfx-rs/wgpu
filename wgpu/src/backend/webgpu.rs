@@ -1137,6 +1137,8 @@ impl crate::context::Context for ContextWebGpu {
     type RenderBundleEncoderData = Sendable<webgpu_sys::GpuRenderBundleEncoder>;
     type RenderBundleData = Sendable<webgpu_sys::GpuRenderBundle>;
     type SurfaceData = Sendable<(Canvas, webgpu_sys::GpuCanvasContext)>;
+    type BlasData = ();
+    type TlasData = ();
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
     type SubmissionIndexData = ();
@@ -1757,6 +1759,9 @@ impl crate::context::Context for ContextWebGpu {
                     }
                     crate::BindingResource::TextureViewArray(..) => {
                         panic!("Web backend does not support BINDING_INDEXING extension")
+                    }
+                    crate::BindingResource::AccelerationStructure(_) => {
+                        unimplemented!("Raytracing not implemented for web")
                     }
                 };
 
@@ -3383,6 +3388,57 @@ impl crate::context::Context for ContextWebGpu {
 
     fn render_pass_end(&self, pass_data: &mut Self::RenderPassData) {
         pass_data.0.end();
+    }
+
+    fn device_create_blas(
+        &self,
+        _device_data: &Self::DeviceData,
+        _desc: &crate::CreateBlasDescriptor<'_>,
+        _sizes: wgt::BlasGeometrySizeDescriptors,
+    ) -> (Option<u64>, Self::BlasData) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn device_create_tlas(
+        &self,
+        _device_data: &Self::DeviceData,
+        _desc: &crate::CreateTlasDescriptor<'_>,
+    ) -> Self::TlasData {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
+        &'a self,
+        _encoder_data: &Self::CommandEncoderData,
+        _blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        _tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<'a, Self>>,
+    ) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn command_encoder_build_acceleration_structures<'a>(
+        &'a self,
+        _encoder_data: &Self::CommandEncoderData,
+        _blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
+        _tlas: impl Iterator<Item = crate::ContextTlasPackage<'a, Self>>,
+    ) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn blas_destroy(&self, _blas_data: &Self::BlasData) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn blas_drop(&self, _blas_data: &Self::BlasData) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn tlas_destroy(&self, _tlas_data: &Self::TlasData) {
+        unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn tlas_drop(&self, _tlas_data: &Self::TlasData) {
+        unimplemented!("Raytracing not implemented for web");
     }
 }
 

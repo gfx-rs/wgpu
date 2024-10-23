@@ -732,6 +732,7 @@ impl Global {
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
                 sampler_storage: &Storage<Fallible<resource::Sampler>>,
                 texture_view_storage: &Storage<Fallible<resource::TextureView>>,
+                tlas_storage: &Storage<Fallible<resource::Tlas>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
@@ -753,6 +754,12 @@ impl Global {
                 };
                 let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
+                };
+                let resolve_tlas = |id: &id::TlasId| {
+                    tlas_storage
                         .get(*id)
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
@@ -788,6 +795,9 @@ impl Global {
                             .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
+                    BindingResource::AccelerationStructure(ref tlas) => {
+                        ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
+                    }
                 };
                 Ok(ResolvedBindGroupEntry {
                     binding: e.binding,
@@ -799,9 +809,18 @@ impl Global {
                 let buffer_guard = hub.buffers.read();
                 let texture_view_guard = hub.texture_views.read();
                 let sampler_guard = hub.samplers.read();
+                let tlas_guard = hub.tlas_s.read();
                 desc.entries
                     .iter()
-                    .map(|e| resolve_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard))
+                    .map(|e| {
+                        resolve_entry(
+                            e,
+                            &buffer_guard,
+                            &sampler_guard,
+                            &texture_view_guard,
+                            &tlas_guard,
+                        )
+                    })
                     .collect::<Result<Vec<_>, _>>()
             };
             let entries = match entries {

@@ -34,7 +34,7 @@ cfg-if.workspace = true
 encase = { workspace = true, features = ["glam"] }
 flume.workspace = true
 getrandom.workspace = true
-glam.workspace = true
+glam = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true
 nanorand.workspace = true

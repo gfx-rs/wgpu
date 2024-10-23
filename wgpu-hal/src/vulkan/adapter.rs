@@ -1802,6 +1802,9 @@ impl super::Adapter {
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
+            if features.contains(wgt::Features::RAY_QUERY) {
+                capabilities.push(spv::Capability::RayQueryKHR);
+            }
             spv::Options {
                 lang_version: if features
                     .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX)

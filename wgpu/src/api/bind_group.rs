@@ -70,6 +70,18 @@ pub enum BindingResource<'a> {
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
+    /// Binding is backed by a top level acceleration structure
+    ///
+    /// Corresponds to [`wgt::BindingType::AccelerationStructure`] with [`BindGroupLayoutEntry::count`] set to None.
+    ///
+    /// # Validation
+    /// When using (e.g. with `set_bind_group`) a bind group that has been created with one or more of this binding
+    /// resource certain checks take place.
+    /// - TLAS must have been built, if not a validation error is generated
+    /// - All BLASes that were built into the TLAS must be built before the TLAS, if this was not satisfied and TLAS was
+    /// built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
+    /// safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
+    AccelerationStructure(&'a Tlas),
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);

@@ -7,6 +7,7 @@ mod compute_command;
 mod draw;
 mod memory_init;
 mod query;
+mod ray_tracing;
 mod render;
 mod render_command;
 mod timestamp_writes;
@@ -31,6 +32,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
+use crate::ray_tracing::{BlasAction, TlasAction};
 use crate::resource::{InvalidResourceError, Labeled};
 use crate::track::{DeviceTracker, Tracker, UsageScope};
 use crate::LabelHelpers;
@@ -242,6 +244,8 @@ impl CommandEncoder {
     }
 }
 
+/// Look at the documentation for [`CommandBufferMutable`] for an explanation of
+/// the fields in this struct. This is the "built" counterpart to that type.
 pub(crate) struct BakedCommands {
     pub(crate) encoder: Box<dyn hal::DynCommandEncoder>,
     pub(crate) list: Vec<Box<dyn hal::DynCommandBuffer>>,
@@ -274,6 +278,10 @@ pub struct CommandBufferMutable {
     texture_memory_actions: CommandBufferTextureMemoryActions,
 
     pub(crate) pending_query_resets: QueryResetMap,
+
+    blas_actions: Vec<BlasAction>,
+    tlas_actions: Vec<TlasAction>,
+
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }
@@ -456,6 +464,8 @@ impl CommandBuffer {
                     buffer_memory_init_actions: Default::default(),
                     texture_memory_actions: Default::default(),
                     pending_query_resets: QueryResetMap::new(),
+                    blas_actions: Default::default(),
+                    tlas_actions: Default::default(),
                     #[cfg(feature = "trace")]
                     commands: if device.trace.lock().is_some() {
                         Some(Vec::new())

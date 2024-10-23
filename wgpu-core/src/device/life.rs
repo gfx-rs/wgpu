@@ -9,6 +9,7 @@ use crate::{
 };
 use smallvec::SmallVec;
 
+use crate::resource::{Blas, Tlas};
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -97,6 +98,44 @@ impl ActiveSubmission {
                 .pending_textures
                 .contains_key(&texture.tracker_index())
             {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_blas(&self, blas: &Blas) -> bool {
+        for encoder in &self.encoders {
+            // The ownership location of blas's depends on where the command encoder
+            // came from. If it is the staging command encoder on the queue, it is
+            // in the pending buffer list. If it came from a user command encoder,
+            // it is in the tracker.
+
+            if encoder.trackers.blas_s.contains(blas) {
+                return true;
+            }
+
+            if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_tlas(&self, tlas: &Tlas) -> bool {
+        for encoder in &self.encoders {
+            // The ownership location of tlas's depends on where the command encoder
+            // came from. If it is the staging command encoder on the queue, it is
+            // in the pending buffer list. If it came from a user command encoder,
+            // it is in the tracker.
+
+            if encoder.trackers.tlas_s.contains(tlas) {
+                return true;
+            }
+
+            if encoder.pending_tlas_s.contains_key(&tlas.tracker_index()) {
                 return true;
             }
         }
@@ -222,6 +261,34 @@ impl LifetimeTracker {
         // as we find a hit.
         self.active.iter().rev().find_map(|submission| {
             if submission.contains_buffer(buffer) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns the submission index of the most recent submission that uses the
+    /// given blas.
+    pub fn get_blas_latest_submission_index(&self, blas: &Blas) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_blas(blas) {
+                Some(submission.index)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns the submission index of the most recent submission that uses the
+    /// given tlas.
+    pub fn get_tlas_latest_submission_index(&self, tlas: &Tlas) -> Option<SubmissionIndex> {
+        // We iterate in reverse order, so that we can bail out early as soon
+        // as we find a hit.
+        self.active.iter().rev().find_map(|submission| {
+            if submission.contains_tlas(tlas) {
                 Some(submission.index)
             } else {
                 None

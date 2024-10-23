@@ -28,10 +28,10 @@ use crate::{
 use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
 
+use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
+use crate::ray_tracing::TlasAction;
 use std::sync::Arc;
 use std::{fmt, mem::size_of, str};
-
-use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -210,6 +210,7 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     tracker: &'cmd_buf mut Tracker,
     buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction>,
     texture_memory_actions: &'cmd_buf mut CommandBufferTextureMemoryActions,
+    tlas_actions: &'cmd_buf mut Vec<TlasAction>,
 
     temp_offsets: Vec<u32>,
     dynamic_offset_count: usize,
@@ -439,6 +440,7 @@ impl Global {
             tracker: &mut cmd_buf_data.trackers,
             buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
             texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+            tlas_actions: &mut cmd_buf_data.tlas_actions,
 
             temp_offsets: Vec::new(),
             dynamic_offset_count: 0,
@@ -683,6 +685,17 @@ fn set_bind_group(
             .pending_discard_init_fixups
             .extend(state.texture_memory_actions.register_init_action(action));
     }
+
+    let used_resource = bind_group
+        .used
+        .acceleration_structures
+        .into_iter()
+        .map(|tlas| TlasAction {
+            tlas: tlas.clone(),
+            kind: crate::ray_tracing::TlasActionKind::Use,
+        });
+
+    state.tlas_actions.extend(used_resource);
 
     let pipeline_layout = state.binder.pipeline_layout.clone();
     let entries = state

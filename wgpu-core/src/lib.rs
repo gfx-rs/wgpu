@@ -76,6 +76,7 @@ pub mod pipeline;
 mod pipeline_cache;
 mod pool;
 pub mod present;
+pub mod ray_tracing;
 pub mod registry;
 pub mod resource;
 mod snatch;
@@ -86,6 +87,7 @@ mod weak_vec;
 // preserve all run-time checks that `wgpu-core` does.
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
 // made private again.
+mod scratch;
 pub mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};

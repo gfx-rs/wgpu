@@ -986,6 +986,16 @@ impl Features {
     pub const fn all_native_mask() -> Self {
         Self::from_bits_truncate(!Self::all_webgpu_mask().bits())
     }
+
+    /// Vertex formats allowed for creating and building BLASes
+    #[must_use]
+    pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
+        let mut formats = Vec::new();
+        if self.contains(Self::RAY_TRACING_ACCELERATION_STRUCTURE) {
+            formats.push(VertexFormat::Float32x3);
+        }
+        formats
+    }
 }
 
 bitflags::bitflags! {
@@ -5296,6 +5306,10 @@ bitflags::bitflags! {
         const INDIRECT = 1 << 8;
         /// Allow a buffer to be the destination buffer for a [`CommandEncoder::resolve_query_set`] operation.
         const QUERY_RESOLVE = 1 << 9;
+        /// Allows a buffer to be used as input for a bottom level acceleration structure build
+        const BLAS_INPUT = 1 << 10;
+        /// Allows a buffer to be used as input for a top level acceleration structure build
+        const TLAS_INPUT = 1 << 11;
     }
 }
 
@@ -7423,19 +7437,119 @@ impl Default for InstanceDescriptor {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for all size defining attributes of a single triangle geometry inside a bottom level acceleration structure.
+pub struct BlasTriangleGeometrySizeDescriptor {
+    /// Format of a vertex position, must be [VertexFormat::Float32x3]
+    /// with just [Features::RAY_TRACING_ACCELERATION_STRUCTURE]
+    /// but later features may add more formats.
+    pub vertex_format: VertexFormat,
+    /// Number of vertices.
+    pub vertex_count: u32,
+    /// Format of an index. Only needed if an index buffer is used.
+    /// If `index_format` is provided `index_count` is required.
+    pub index_format: Option<IndexFormat>,
+    /// Number of indices. Only needed if an index buffer is used.
+    /// If `index_count` is provided `index_format` is required.
+    pub index_count: Option<u32>,
+    /// Flags for the geometry.
+    pub flags: AccelerationStructureGeometryFlags,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for all size defining attributes of all geometries inside a bottom level acceleration structure.
+pub enum BlasGeometrySizeDescriptors {
+    /// Triangle geometry version.
+    Triangles {
+        /// Descriptor for each triangle geometry.
+        descriptors: Vec<BlasTriangleGeometrySizeDescriptor>,
+    },
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Update mode for acceleration structure builds.
+pub enum AccelerationStructureUpdateMode {
+    /// Always perform a full build.
+    Build,
+    /// If possible, perform an incremental update.
+    ///
+    /// Not advised for major topology changes.
+    /// (Useful for e.g. skinning)
+    PreferUpdate,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for creating a bottom level acceleration structure.
+pub struct CreateBlasDescriptor<L> {
+    /// Label for the bottom level acceleration structure.
+    pub label: L,
+    /// Flags for the bottom level acceleration structure.
+    pub flags: AccelerationStructureFlags,
+    /// Update mode for the bottom level acceleration structure.
+    pub update_mode: AccelerationStructureUpdateMode,
+}
+
+impl<L> CreateBlasDescriptor<L> {
+    /// Takes a closure and maps the label of the blas descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K> {
+        CreateBlasDescriptor {
+            label: fun(&self.label),
+            flags: self.flags,
+            update_mode: self.update_mode,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for creating a top level acceleration structure.
+pub struct CreateTlasDescriptor<L> {
+    /// Label for the top level acceleration structure.
+    pub label: L,
+    /// Number of instances that can be stored in the acceleration structure.
+    pub max_instances: u32,
+    /// Flags for the bottom level acceleration structure.
+    pub flags: AccelerationStructureFlags,
+    /// Update mode for the bottom level acceleration structure.
+    pub update_mode: AccelerationStructureUpdateMode,
+}
+
+impl<L> CreateTlasDescriptor<L> {
+    /// Takes a closure and maps the label of the blas descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K> {
+        CreateTlasDescriptor {
+            label: fun(&self.label),
+            flags: self.flags,
+            update_mode: self.update_mode,
+            max_instances: self.max_instances,
+        }
+    }
+}
+
 bitflags::bitflags!(
     /// Flags for acceleration structures
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureFlags: u8 {
-        /// Allow for incremental updates (no change in size)
+        /// Allow for incremental updates (no change in size), currently this is unimplemented
+        /// and will build as normal (this is fine, update vs build should be unnoticeable)
         const ALLOW_UPDATE = 1 << 0;
-        /// Allow the acceleration structure to be compacted in a copy operation
+        /// Allow the acceleration structure to be compacted in a copy operation, the function
+        /// to compact is not currently implemented.
         const ALLOW_COMPACTION = 1 << 1;
-        /// Optimize for fast ray tracing performance
+        /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
+        /// to change (e.g. in a game: non-interactive scene geometry)
         const PREFER_FAST_TRACE = 1 << 2;
-        /// Optimize for fast build time
+        /// Optimize for fast build time, recommended if geometry is likely to change frequently
+        /// (e.g. in a game: player model).
         const PREFER_FAST_BUILD = 1 << 3;
-        /// Optimize for low memory footprint (scratch and output)
+        /// Optimize for low memory footprint (both while building and in the output BLAS).
         const LOW_MEMORY = 1 << 4;
     }
 );
@@ -7445,13 +7559,26 @@ bitflags::bitflags!(
     /// Flags for acceleration structure geometries
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureGeometryFlags: u8 {
-        /// Is OPAQUE
+        /// Is OPAQUE (is there no alpha test) recommended as currently in naga there is no
+        /// candidate intersections yet so currently BLASes without this flag will not have hits.
+        /// Not enabling this makes the BLAS unable to be interacted with in WGSL.
         const OPAQUE = 1 << 0;
-        /// NO_DUPLICATE_ANY_HIT_INVOCATION
+        /// NO_DUPLICATE_ANY_HIT_INVOCATION, not useful unless using hal with wgpu, ray-tracing
+        /// pipelines are not supported in wgpu so any-hit shaders do not exist. For when any-hit
+        /// shaders are implemented (or experienced users who combine this with an underlying library:
+        /// for any primitive (triangle or AABB) multiple any-hit shaders sometimes may be invoked
+        /// (especially in AABBs like a sphere), if this flag in present only one hit on a primitive may
+        /// invoke an any-hit shader.
         const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
     }
 );
 impl_bitflags!(AccelerationStructureGeometryFlags);
+
+/// Alignment requirement for transform buffers used in acceleration structure builds
+pub const TRANSFORM_BUFFER_ALIGNMENT: BufferAddress = 16;
+
+/// Alignment requirement for instance buffers used in acceleration structure builds (`build_acceleration_structures_unsafe_tlas`)
+pub const INSTANCE_BUFFER_ALIGNMENT: BufferAddress = 16;
 
 pub use send_sync::*;
 

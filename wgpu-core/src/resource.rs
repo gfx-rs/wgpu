@@ -21,6 +21,7 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use std::num::NonZeroU64;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Debug,
@@ -1893,4 +1894,202 @@ pub enum DestroyError {
     AlreadyDestroyed,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+
+pub(crate) trait AccelerationStructure: Trackable {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure>;
+}
+
+#[derive(Debug)]
+pub struct Blas {
+    pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) handle: u64,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+}
+
+impl Drop for Blas {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl, and we don't use self.raw anymore after this point.
+        if let Some(raw) = self.raw.take() {
+            unsafe {
+                self.device.raw().destroy_acceleration_structure(raw);
+            }
+        }
+    }
+}
+
+impl AccelerationStructure for Blas {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
+        Some(self.raw.get(guard)?.as_ref())
+    }
+}
+
+impl Blas {
+    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+        let device = &self.device;
+
+        let temp = {
+            let mut snatch_guard = device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    return Err(DestroyError::AlreadyDestroyed);
+                }
+            };
+
+            drop(snatch_guard);
+
+            queue::TempResource::DestroyedAccelerationStructure(DestroyedAccelerationStructure {
+                raw: ManuallyDrop::new(raw),
+                device: Arc::clone(&self.device),
+                label: self.label().to_owned(),
+                bind_groups: WeakVec::new(),
+            })
+        };
+
+        let mut pending_writes = device.pending_writes.lock();
+        if pending_writes.contains_blas(self) {
+            pending_writes.consume_temp(temp);
+        } else {
+            let mut life_lock = device.lock_life();
+            let last_submit_index = life_lock.get_blas_latest_submission_index(self);
+            if let Some(last_submit_index) = last_submit_index {
+                life_lock.schedule_resource_destruction(temp, last_submit_index);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+crate::impl_resource_type!(Blas);
+crate::impl_labeled!(Blas);
+crate::impl_parent_device!(Blas);
+crate::impl_storage_item!(Blas);
+crate::impl_trackable!(Blas);
+
+#[derive(Debug)]
+pub struct Tlas {
+    pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) max_instance_count: u32,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
+    pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+}
+
+impl Drop for Tlas {
+    fn drop(&mut self) {
+        unsafe {
+            resource_log!("Destroy raw {}", self.error_ident());
+            if let Some(structure) = self.raw.take() {
+                self.device.raw().destroy_acceleration_structure(structure);
+            }
+            let buffer = ManuallyDrop::take(&mut self.instance_buffer);
+            self.device.raw().destroy_buffer(buffer);
+        }
+    }
+}
+
+impl AccelerationStructure for Tlas {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&dyn hal::DynAccelerationStructure> {
+        Some(self.raw.get(guard)?.as_ref())
+    }
+}
+
+crate::impl_resource_type!(Tlas);
+crate::impl_labeled!(Tlas);
+crate::impl_parent_device!(Tlas);
+crate::impl_storage_item!(Tlas);
+crate::impl_trackable!(Tlas);
+
+impl Tlas {
+    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+        let device = &self.device;
+
+        let temp = {
+            let mut snatch_guard = device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    return Err(DestroyError::AlreadyDestroyed);
+                }
+            };
+
+            drop(snatch_guard);
+
+            queue::TempResource::DestroyedAccelerationStructure(DestroyedAccelerationStructure {
+                raw: ManuallyDrop::new(raw),
+                device: Arc::clone(&self.device),
+                label: self.label().to_owned(),
+                bind_groups: mem::take(&mut self.bind_groups.lock()),
+            })
+        };
+
+        let mut pending_writes = device.pending_writes.lock();
+        if pending_writes.contains_tlas(self) {
+            pending_writes.consume_temp(temp);
+        } else {
+            let mut life_lock = device.lock_life();
+            let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
+            if let Some(last_submit_index) = last_submit_index {
+                life_lock.schedule_resource_destruction(temp, last_submit_index);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct DestroyedAccelerationStructure {
+    raw: ManuallyDrop<Box<dyn hal::DynAccelerationStructure>>,
+    device: Arc<Device>,
+    label: String,
+    // only filled if the acceleration structure is a TLAS
+    bind_groups: WeakVec<BindGroup>,
+}
+
+impl DestroyedAccelerationStructure {
+    pub fn label(&self) -> &dyn Debug {
+        &self.label
+    }
+}
+
+impl Drop for DestroyedAccelerationStructure {
+    fn drop(&mut self) {
+        let mut deferred = self.device.deferred_destroy.lock();
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
+        drop(deferred);
+
+        resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            hal::DynDevice::destroy_acceleration_structure(self.device.raw(), raw);
+        }
+    }
 }
