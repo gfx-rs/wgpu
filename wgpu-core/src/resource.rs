@@ -27,7 +27,7 @@ use std::{
     mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
 };
 
 /// Information about the wgpu-core resource.
@@ -633,12 +633,10 @@ impl Buffer {
             .buffers
             .set_single(self, internal_use);
 
-        // TODO: should we increment last_successful_submission_index instead?
-        let submit_index = device
-            .active_submission_index
-            .fetch_add(1, core::sync::atomic::Ordering::SeqCst)
-            + 1;
-        device.lock_life().map(self);
+        let submit_index = match device.lock_life().map(self) {
+            Some(index) => index,
+            None => device.active_submission_index.load(Ordering::SeqCst),
+        };
 
         Ok(submit_index)
     }

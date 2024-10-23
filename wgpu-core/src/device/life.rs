@@ -211,8 +211,17 @@ impl LifetimeTracker {
         });
     }
 
-    pub(crate) fn map(&mut self, value: &Arc<Buffer>) {
-        self.mapped.push(value.clone());
+    pub(crate) fn map(&mut self, buffer: &Arc<Buffer>) -> Option<SubmissionIndex> {
+        self.mapped.push(buffer.clone());
+
+        // Warning: this duplicates what is in triage_mapped()
+        let submission = self
+            .active
+            .iter_mut()
+            .rev()
+            .find(|a| a.contains_buffer(&buffer));
+
+        submission.map(|s| s.index)
     }
 
     /// Returns the submission index of the most recent submission that uses the
