@@ -109,6 +109,12 @@ impl crate::Adapter for super::Adapter {
             ],
         );
 
+        let image_atomic = if pc.int64_atomics {
+            Tfc::SHADER_ATOMIC
+        } else {
+            Tfc::empty()
+        };
+
         // Metal defined pixel format capabilities
         let all_caps = Tfc::SAMPLED_LINEAR
             | Tfc::STORAGE
@@ -183,6 +189,7 @@ impl crate::Adapter for super::Adapter {
                 flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
                 flags
             }
+            Tf::R64Uint => Tfc::STORAGE | image_atomic,
             Tf::Rg32Uint | Tf::Rg32Sint => Tfc::COLOR_ATTACHMENT | Tfc::STORAGE | msaa_count,
             Tf::Rg32Float => {
                 if pc.format_rg32float_all {
@@ -908,6 +915,10 @@ impl super::PrivateCapabilities {
             F::SHADER_INT64_ATOMIC_MIN_MAX,
             self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
         );
+        features.set(
+            F::TEXTURE_INT64_ATOMIC,
+            self.int64_atomics && self.msl_version >= MTLLanguageVersion::V3_1,
+        );
 
         features.set(
             F::ADDRESS_MODE_CLAMP_TO_BORDER,
@@ -1041,6 +1052,8 @@ impl super::PrivateCapabilities {
             Tf::Rgb10a2Uint => RGB10A2Uint,
             Tf::Rgb10a2Unorm => RGB10A2Unorm,
             Tf::Rg11b10Ufloat => RG11B10Float,
+            // Ruint64 textures are emulated on metal
+            Tf::R64Uint => RG32Uint,
             Tf::Rg32Uint => RG32Uint,
             Tf::Rg32Sint => RG32Sint,
             Tf::Rg32Float => RG32Float,

@@ -124,6 +124,7 @@ impl crate::StorageFormat {
             Self::R8Snorm | Self::R16Snorm => "snorm float",
             Self::R8Uint | Self::R16Uint | Self::R32Uint => "uint",
             Self::R8Sint | Self::R16Sint | Self::R32Sint => "int",
+            Self::R64Uint => "uint64_t",
 
             Self::Rg16Float | Self::Rg32Float => "float2",
             Self::Rg8Unorm | Self::Rg16Unorm => "unorm float2",

@@ -969,6 +969,15 @@ bitflags::bitflags! {
         /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
         /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
         const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 62;
+        /// Enables R64Uint texture atomic min and max.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
+        /// - DX12 (with SM 6.6+ emulated via Rg32Uint texture)
+        /// - Metal (with MSL 3.1+ emulated via RG32Uint texture)
+        ///
+        /// This is a native only feature.
+        const TEXTURE_INT64_ATOMIC = 1 << 63;
     }
 }
 
@@ -2557,6 +2566,10 @@ pub enum TextureFormat {
     Rg11b10Ufloat,
 
     // Normal 64 bit formats
+    /// Red channel only. 64 bit integer per channel. Unsigned in shader.
+    ///
+    /// [`Features::TEXTURE_INT64_ATOMIC`] must be enabled to use this texture format.
+    R64Uint,
     /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
     Rg32Uint,
     /// Red and green channels. 32 bit integer per channel. Signed in shader.
@@ -2843,6 +2856,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "rgb10a2uint" => TextureFormat::Rgb10a2Uint,
                     "rgb10a2unorm" => TextureFormat::Rgb10a2Unorm,
                     "rg11b10ufloat" => TextureFormat::Rg11b10Ufloat,
+                    "r64uint" => TextureFormat::R64Uint,
                     "rg32uint" => TextureFormat::Rg32Uint,
                     "rg32sint" => TextureFormat::Rg32Sint,
                     "rg32float" => TextureFormat::Rg32Float,
@@ -2971,6 +2985,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Rgb10a2Uint => "rgb10a2uint",
             TextureFormat::Rgb10a2Unorm => "rgb10a2unorm",
             TextureFormat::Rg11b10Ufloat => "rg11b10ufloat",
+            TextureFormat::R64Uint => "r64uint",
             TextureFormat::Rg32Uint => "rg32uint",
             TextureFormat::Rg32Sint => "rg32sint",
             TextureFormat::Rg32Float => "rg32float",
@@ -3213,6 +3228,7 @@ impl TextureFormat {
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Ufloat
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -3336,6 +3352,8 @@ impl TextureFormat {
             | Self::Depth24PlusStencil8
             | Self::Depth32Float => Features::empty(),
 
+            Self::R64Uint => Features::TEXTURE_INT64_ATOMIC,
+
             Self::Depth32FloatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
 
             Self::NV12 => Features::TEXTURE_FORMAT_NV12,
@@ -3395,6 +3413,7 @@ impl TextureFormat {
             TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
         let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
         let storage = basic | TextureUsages::STORAGE_BINDING;
+        let atomic = TextureUsages::STORAGE_BINDING | TextureUsages::SHADER_ATOMIC;
         let binding = TextureUsages::TEXTURE_BINDING;
         let all_flags = TextureUsages::all();
         let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
@@ -3440,6 +3459,7 @@ impl TextureFormat {
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
+            Self::R64Uint =>              (        noaa,     atomic),
             Self::Rg32Uint =>             (        noaa,  all_flags),
             Self::Rg32Sint =>             (        noaa,  all_flags),
             Self::Rg32Float =>            (        noaa,  all_flags),
@@ -3561,6 +3581,7 @@ impl TextureFormat {
             | Self::Rg16Uint
             | Self::Rgba16Uint
             | Self::R32Uint
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rgba32Uint
             | Self::Rgb10a2Uint => Some(uint),
@@ -3691,7 +3712,7 @@ impl TextureFormat {
             | Self::Rgba16Uint
             | Self::Rgba16Sint
             | Self::Rgba16Float => Some(8),
-            Self::Rg32Uint | Self::Rg32Sint | Self::Rg32Float => Some(8),
+            Self::R64Uint | Self::Rg32Uint | Self::Rg32Sint | Self::Rg32Float => Some(8),
 
             Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
 
@@ -3780,6 +3801,7 @@ impl TextureFormat {
             | Self::Rgba16Unorm
             | Self::Rgba16Snorm
             | Self::Rgba16Float
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -3860,6 +3882,7 @@ impl TextureFormat {
             Self::R32Uint
             | Self::R32Sint
             | Self::R32Float
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -3928,7 +3951,8 @@ impl TextureFormat {
             | Self::R16Float
             | Self::R32Uint
             | Self::R32Sint
-            | Self::R32Float => 1,
+            | Self::R32Float
+            | Self::R64Uint => 1,
 
             Self::Rg8Unorm
             | Self::Rg8Snorm
@@ -4179,6 +4203,10 @@ fn texture_format_serialize() {
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rg11b10Ufloat).unwrap(),
         "\"rg11b10ufloat\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R64Uint).unwrap(),
+        "\"r64uint\"".to_string()
     );
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rg32Uint).unwrap(),
@@ -4475,6 +4503,10 @@ fn texture_format_deserialize() {
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rg11b10ufloat\"").unwrap(),
         TextureFormat::Rg11b10Ufloat
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r64uint\"").unwrap(),
+        TextureFormat::R64Uint
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rg32uint\"").unwrap(),
@@ -5485,6 +5517,11 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureUsages: u32 {
+        //
+        // ---- Start numbering at 1 << 0 ----
+        //
+        // WebGPU features:
+        //
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
         const COPY_SRC = 1 << 0;
@@ -5497,6 +5534,14 @@ bitflags::bitflags! {
         const STORAGE_BINDING = 1 << 3;
         /// Allows a texture to be an output attachment of a render pass.
         const RENDER_ATTACHMENT = 1 << 4;
+
+        //
+        // ---- Restart Numbering for Native Features ---
+        //
+        // Native Features:
+        //
+        /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_INT64_ATOMIC`]
+        const SHADER_ATOMIC = 1 << 16;
     }
 }
 
