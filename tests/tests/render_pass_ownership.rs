@@ -9,7 +9,7 @@
 //! * rpass.multi_draw_indirect_count
 //! * rpass.multi_draw_indexed_indirect_count
 //!
-use std::{mem::size_of, num::NonZeroU64};
+use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
 use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};

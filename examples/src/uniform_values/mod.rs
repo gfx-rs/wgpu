@@ -16,7 +16,7 @@
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
-use std::{mem::size_of, sync::Arc};
+use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated WGPU storage buffers.
 use encase::ShaderType;

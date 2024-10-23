@@ -3,11 +3,7 @@ use super::conv;
 use arrayvec::ArrayVec;
 use ash::vk;
 
-use std::{
-    mem::{self, size_of},
-    ops::Range,
-    slice,
-};
+use std::{mem, ops::Range, slice};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;

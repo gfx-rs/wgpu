@@ -5,8 +5,6 @@
 //! hello-compute example does not such as mapping buffers
 //! and why use the async channels.
 
-use std::mem::size_of_val;
-
 const OVERFLOW: u32 = 0xffffffff;
 
 async fn run() {

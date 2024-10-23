@@ -1,9 +1,4 @@
-use std::{
-    mem::{size_of, size_of_val},
-    ptr,
-    sync::Arc,
-    thread,
-};
+use std::{ptr, sync::Arc, thread};
 
 use parking_lot::Mutex;
 use windows::{

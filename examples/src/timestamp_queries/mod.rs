@@ -17,8 +17,6 @@
 //! The period, i.e. the unit of time, of the timestamps in wgpu is undetermined and needs to be queried with `wgpu::Queue::get_timestamp_period`
 //! in order to get comparable results.
 
-use std::mem::size_of;
-
 use wgpu::util::DeviceExt;
 
 struct Queries {

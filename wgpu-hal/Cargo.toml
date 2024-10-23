@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.80.0"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -106,6 +106,9 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
 [[example]]
 name = "halmark"
 
@@ -119,7 +122,6 @@ parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 thiserror.workspace = true
-once_cell.workspace = true
 
 # backends common
 arrayvec.workspace = true

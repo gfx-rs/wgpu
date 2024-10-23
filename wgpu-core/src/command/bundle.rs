@@ -103,7 +103,7 @@ use crate::{
 };
 use arrayvec::ArrayVec;
 
-use std::{borrow::Cow, mem::size_of, num::NonZeroU32, ops::Range, sync::Arc};
+use std::{borrow::Cow, num::NonZeroU32, ops::Range, sync::Arc};
 use thiserror::Error;
 
 use super::{

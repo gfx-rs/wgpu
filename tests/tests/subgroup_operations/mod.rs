@@ -1,4 +1,4 @@
-use std::{mem::size_of, num::NonZeroU64};
+use std::num::NonZeroU64;
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 

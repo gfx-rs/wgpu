@@ -5,8 +5,8 @@ use std::{
 
 use criterion::{criterion_group, Criterion, Throughput};
 use nanorand::{Rng, WyRand};
-use once_cell::sync::Lazy;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use std::sync::LazyLock;
 
 use crate::DeviceState;
 
@@ -427,7 +427,7 @@ impl RenderpassState {
 }
 
 fn run_bench(ctx: &mut Criterion) {
-    let state = Lazy::new(RenderpassState::new);
+    let state = LazyLock::new(RenderpassState::new);
 
     let draw_count = draw_count();
     let vertex_buffer_count = draw_count * VERTEX_BUFFERS_PER_DRAW;
@@ -450,7 +450,7 @@ fn run_bench(ctx: &mut Criterion) {
             group.bench_function(
                 format!("{rpasses} renderpasses x {draws_per_pass} draws ({label})"),
                 |b| {
-                    Lazy::force(&state);
+                    LazyLock::force(&state);
 
                     b.iter_custom(|iters| {
                         profiling::scope!("benchmark invocation");
@@ -502,7 +502,7 @@ fn run_bench(ctx: &mut Criterion) {
     for threads in [2, 4, 8] {
         let draws_per_pass = draw_count / threads;
         group.bench_function(format!("{threads} threads x {draws_per_pass} draws"), |b| {
-            Lazy::force(&state);
+            LazyLock::force(&state);
 
             b.iter_custom(|iters| {
                 profiling::scope!("benchmark invocation");
@@ -541,7 +541,7 @@ fn run_bench(ctx: &mut Criterion) {
     group.throughput(Throughput::Elements(draw_count as _));
 
     group.bench_function(format!("{draw_count} draws"), |b| {
-        Lazy::force(&state);
+        LazyLock::force(&state);
 
         b.iter_custom(|iters| {
             profiling::scope!("benchmark invocation");
@@ -577,7 +577,7 @@ fn run_bench(ctx: &mut Criterion) {
             texture_count + vertex_buffer_count
         ),
         |b| {
-            Lazy::force(&state);
+            LazyLock::force(&state);
 
             b.iter(|| state.device_state.queue.submit([]));
         },
