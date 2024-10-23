@@ -92,11 +92,11 @@ async fn bgl_dedupe(ctx: TestingContext) {
         timestamp_writes: None,
     });
 
-    pass.set_bind_group(0, Some(&bg_1b), &[]);
+    pass.set_bind_group(0, &bg_1b, &[]);
     pass.set_pipeline(&pipeline);
     pass.dispatch_workgroups(1, 1, 1);
 
-    pass.set_bind_group(0, Some(&bg_1a), &[]);
+    pass.set_bind_group(0, &bg_1a, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
     drop(pass);
@@ -179,7 +179,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
         timestamp_writes: None,
     });
 
-    pass.set_bind_group(0, Some(&bg), &[]);
+    pass.set_bind_group(0, &bg, &[]);
     pass.set_pipeline(&pipeline);
     pass.dispatch_workgroups(1, 1, 1);
 
@@ -250,10 +250,10 @@ fn get_derived_bgl(ctx: TestingContext) {
 
     pass.set_pipeline(&pipeline);
 
-    pass.set_bind_group(0, Some(&bg1), &[]);
+    pass.set_bind_group(0, &bg1, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
-    pass.set_bind_group(0, Some(&bg2), &[]);
+    pass.set_bind_group(0, &bg2, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
     drop(pass);
@@ -313,7 +313,7 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
     pass.set_pipeline(&pipeline1);
 
     // We use the wrong bind group for this pipeline here. This should fail.
-    pass.set_bind_group(0, Some(&bg2), &[]);
+    pass.set_bind_group(0, &bg2, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
     fail(
@@ -385,7 +385,7 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
 
     pass.set_pipeline(&pipeline);
 
-    pass.set_bind_group(0, Some(&bg), &[]);
+    pass.set_bind_group(0, &bg, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
     fail(
@@ -476,8 +476,8 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
         timestamp_writes: None,
     });
     pass.set_pipeline(&pipeline);
-    pass.set_bind_group(0, Some(&bind_group_0), &[]);
-    pass.set_bind_group(1, Some(&bind_group_1), &[]);
+    pass.set_bind_group(0, &bind_group_0, &[]);
+    pass.set_bind_group(1, &bind_group_1, &[]);
     pass.dispatch_workgroups(1, 1, 1);
 
     drop(pass);

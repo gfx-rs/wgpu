@@ -69,9 +69,11 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 #### `set_bind_group` now takes an `Option` for the bind group argument.
 
 https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup
-is nullable. This change is the start of implementing this part of the spec. Callers that
-specify a `Some()` value should have unchanged behavior. Handling of `None` values still
+is nullable. This change is the start of implementing this part of the spec.
+Callers that specify a `Some()` value should have unchanged behavior. Handling of `None` values still
 needs to be implemented by backends.
+For convenience, the `set_bind_group` on compute/render passes & encoders takes `impl Into<Option<&BindGroup>>`,
+so most code should still work the same.
 
 By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 

@@ -22,7 +22,7 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
         {
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
             compute_pass.set_pipeline(&test_resources.pipeline);
-            compute_pass.set_bind_group(0, Some(&test_resources.bind_group), &[]);
+            compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
 

@@ -74,13 +74,13 @@ impl<'encoder> RenderPass<'encoder> {
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     ///
     /// Subsequent draw calls’ shader executions will be able to access data in these bind groups.
-    pub fn set_bind_group(
+    pub fn set_bind_group<'a>(
         &mut self,
         index: u32,
-        bind_group: Option<&BindGroup>,
+        bind_group: impl Into<Option<&'a BindGroup>>,
         offsets: &[DynamicOffset],
     ) {
-        let bg = bind_group.map(|x| x.data.as_ref());
+        let bg = bind_group.into().map(|x| x.data.as_ref());
         DynContext::render_pass_set_bind_group(
             &*self.inner.context,
             self.inner.data.as_mut(),
