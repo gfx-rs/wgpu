@@ -44,7 +44,7 @@ static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(
                     depth_or_array_layers: 9001,
                 },
                 mip_level_count: 2000,
-                sample_count: 27,
+                sample_count: wgpu::SampleCount::new(27),
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::all(),

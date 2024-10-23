@@ -773,7 +773,7 @@ pub struct Texture {
     dimension: wgt::TextureDimension,
     size: wgt::Extent3d,
     mip_level_count: u32,
-    sample_count: u32,
+    sample_count: wgt::SampleCount,
     allocation: Option<suballocation::AllocationWrapper>,
 }
 
@@ -1262,7 +1262,7 @@ impl crate::Surface for Surface {
             dimension: wgt::TextureDimension::D2,
             size: sc.size,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgt::SampleCount::no_multisampling(),
             allocation: None,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {

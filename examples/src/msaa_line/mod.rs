@@ -10,7 +10,7 @@
 use std::{iter, mem::size_of};
 
 use bytemuck::{Pod, Zeroable};
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, SampleCount};
 
 use winit::{
     event::{ElementState, KeyEvent, WindowEvent},
@@ -31,10 +31,10 @@ struct Example {
     multisampled_framebuffer: wgpu::TextureView,
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
-    sample_count: u32,
+    sample_count: SampleCount,
     rebuild_bundle: bool,
     config: wgpu::SurfaceConfiguration,
-    max_sample_count: u32,
+    max_sample_count: SampleCount,
 }
 
 impl Example {
@@ -43,7 +43,7 @@ impl Example {
         config: &wgpu::SurfaceConfiguration,
         shader: &wgpu::ShaderModule,
         pipeline_layout: &wgpu::PipelineLayout,
-        sample_count: u32,
+        sample_count: SampleCount,
         vertex_buffer: &wgpu::Buffer,
         vertex_count: u32,
     ) -> wgpu::RenderBundle {
@@ -99,7 +99,7 @@ impl Example {
     fn create_multisampled_framebuffer(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        sample_count: u32,
+        sample_count: SampleCount,
     ) -> wgpu::TextureView {
         let multisampled_texture_extent = wgpu::Extent3d {
             width: config.width,
@@ -140,7 +140,7 @@ impl crate::framework::Example for Example {
             .get_texture_format_features(config.view_formats[0])
             .flags;
 
-        let max_sample_count = {
+        let max_sample_count = SampleCount::new({
             if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X16) {
                 16
             } else if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8) {
@@ -152,7 +152,7 @@ impl crate::framework::Example for Example {
             } else {
                 1
             }
-        };
+        });
 
         let sample_count = max_sample_count;
 
@@ -230,7 +230,7 @@ impl crate::framework::Example for Example {
                 //       supported sample counts to the user.
                 Key::Named(NamedKey::ArrowLeft) => {
                     if self.sample_count == self.max_sample_count {
-                        self.sample_count = 1;
+                        self.sample_count = SampleCount::no_multisampling();
                         self.rebuild_bundle = true;
                     }
                 }

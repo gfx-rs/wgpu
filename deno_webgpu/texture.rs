@@ -47,7 +47,7 @@ pub struct CreateTextureArgs {
     label: String,
     size: wgpu_types::Extent3d,
     mip_level_count: u32,
-    sample_count: u32,
+    sample_count: wgpu_types::SampleCount,
     dimension: wgpu_types::TextureDimension,
     format: wgpu_types::TextureFormat,
     usage: u32,

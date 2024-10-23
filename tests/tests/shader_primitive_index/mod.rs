@@ -161,7 +161,7 @@ async fn pulling_common(
         label: None,
         size: texture_size,
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count: wgpu::SampleCount::no_multisampling(),
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,

@@ -578,7 +578,7 @@ impl<A: hal::Api> Example<A> {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgt::SampleCount::no_multisampling(),
             dimension: wgt::TextureDimension::D2,
             format: wgt::TextureFormat::Rgba8Unorm,
             usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,

@@ -392,7 +392,7 @@ impl crate::Device for super::Device {
                 wgt::TextureDimension::D1 => metal::MTLTextureType::D1,
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
-                        descriptor.set_sample_count(desc.sample_count as u64);
+                        descriptor.set_sample_count(desc.sample_count.get() as u64);
                         metal::MTLTextureType::D2Multisample
                     } else if desc.size.depth_or_array_layers > 1 {
                         descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
@@ -1127,7 +1127,7 @@ impl crate::Device for super::Device {
 
             if desc.multisample.count != 1 {
                 //TODO: handle sample mask
-                descriptor.set_sample_count(desc.multisample.count as u64);
+                descriptor.set_sample_count(desc.multisample.count.get() as u64);
                 descriptor
                     .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
                 //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);

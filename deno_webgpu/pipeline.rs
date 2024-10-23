@@ -270,7 +270,7 @@ struct GpuVertexState {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GpuMultisampleState {
-    count: u32,
+    count: wgpu_types::SampleCount,
     mask: u64,
     alpha_to_coverage_enabled: bool,
 }

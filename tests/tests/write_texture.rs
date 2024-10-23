@@ -20,7 +20,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgpu::SampleCount::no_multisampling(),
             view_formats: &[],
         });
         let data = vec![1u8; size as usize * 2];
@@ -115,7 +115,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: wgpu::SampleCount::no_multisampling(),
             view_formats: &[],
         });
         let data = vec![1u8; (size * size) as usize * 2];

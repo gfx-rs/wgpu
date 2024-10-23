@@ -452,7 +452,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         height: 4,
         depth_or_array_layers: 1,
     };
-    let target_msaa = 4;
+    let target_msaa = wgpu::SampleCount::new(4);
     let target_format = wgpu::TextureFormat::Bgra8UnormSrgb;
 
     let target_desc = wgpu::TextureDescriptor {
@@ -468,7 +468,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let target_tex = ctx.device.create_texture(&target_desc);
     let target_tex_resolve = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("target_resolve"),
-        sample_count: 1,
+        sample_count: wgpu::SampleCount::no_multisampling(),
         ..target_desc
     });
 

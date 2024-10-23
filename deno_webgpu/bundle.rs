@@ -41,7 +41,7 @@ pub struct CreateRenderBundleEncoderArgs {
     label: String,
     color_formats: Vec<Option<wgpu_types::TextureFormat>>,
     depth_stencil_format: Option<wgpu_types::TextureFormat>,
-    sample_count: u32,
+    sample_count: wgpu_types::SampleCount,
     depth_read_only: bool,
     stencil_read_only: bool,
 }

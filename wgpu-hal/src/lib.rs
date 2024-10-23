@@ -285,7 +285,7 @@ use std::{
 use bitflags::bitflags;
 use parking_lot::Mutex;
 use thiserror::Error;
-use wgt::WasmNotSendSync;
+use wgt::{SampleCount, WasmNotSendSync};
 
 // - Vertex + Fragment
 // - Compute
@@ -1857,7 +1857,7 @@ pub struct TextureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::Extent3d,
     pub mip_level_count: u32,
-    pub sample_count: u32,
+    pub sample_count: SampleCount,
     pub dimension: wgt::TextureDimension,
     pub format: wgt::TextureFormat,
     pub usage: TextureUses,
@@ -2327,7 +2327,7 @@ pub struct PassTimestampWrites<'a, Q: DynQuerySet + ?Sized> {
 pub struct RenderPassDescriptor<'a, Q: DynQuerySet + ?Sized, T: DynTextureView + ?Sized> {
     pub label: Label<'a>,
     pub extent: wgt::Extent3d,
-    pub sample_count: u32,
+    pub sample_count: SampleCount,
     pub color_attachments: &'a [Option<ColorAttachment<'a, T>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, T>>,
     pub multiview: Option<NonZeroU32>,
