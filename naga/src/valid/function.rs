@@ -41,10 +41,12 @@ pub enum CallError {
 pub enum AtomicError {
     #[error("Pointer {0:?} to atomic is invalid.")]
     InvalidPointer(Handle<crate::Expression>),
-    #[error("Address space {0:?} does not support 64bit atomics.")]
+    #[error("Address space {0:?} is not supported.")]
     InvalidAddressSpace(crate::AddressSpace),
     #[error("Operand {0:?} has invalid type.")]
     InvalidOperand(Handle<crate::Expression>),
+    #[error("Operator {0:?} is not supported.")]
+    InvalidOperator(crate::AtomicFunction),
     #[error("Result expression {0:?} is not an `AtomicResult` expression")]
     InvalidResultExpression(Handle<crate::Expression>),
     #[error("Result expression {0:?} is marked as an `exchange`")]
@@ -401,49 +403,88 @@ impl super::Validator {
                 .into_other());
         }
 
-        // Check for the special restrictions on 64-bit atomic operations.
-        //
-        // We don't need to consider other widths here: this function has already checked
-        // that `pointer`'s type is an `Atomic`, and `validate_type` has already checked
-        // that that `Atomic` type has a permitted scalar width.
-        if pointer_scalar.width == 8 {
-            // `Capabilities::SHADER_INT64_ATOMIC_ALL_OPS` enables all sorts of 64-bit
-            // atomic operations.
-            if self
-                .capabilities
-                .contains(super::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS)
-            {
-                // okay
-            } else {
-                // `Capabilities::SHADER_INT64_ATOMIC_MIN_MAX` allows `Min` and
-                // `Max` on operations in `Storage`, without a return value.
-                if matches!(
-                    *fun,
-                    crate::AtomicFunction::Min | crate::AtomicFunction::Max
-                ) && matches!(pointer_space, crate::AddressSpace::Storage { .. })
-                    && result.is_none()
+        match pointer_scalar {
+            // Check for the special restrictions on 64-bit atomic operations.
+            //
+            // We don't need to consider other widths here: this function has already checked
+            // that `pointer`'s type is an `Atomic`, and `validate_type` has already checked
+            // that `Atomic` type has a permitted scalar width.
+            crate::Scalar::I64 | crate::Scalar::U64 => {
+                // `Capabilities::SHADER_INT64_ATOMIC_ALL_OPS` enables all sorts of 64-bit
+                // atomic operations.
+                if self
+                    .capabilities
+                    .contains(super::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS)
                 {
-                    if !self
-                        .capabilities
-                        .contains(super::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX)
+                    // okay
+                } else {
+                    // `Capabilities::SHADER_INT64_ATOMIC_MIN_MAX` allows `Min` and
+                    // `Max` on operations in `Storage`, without a return value.
+                    if matches!(
+                        *fun,
+                        crate::AtomicFunction::Min | crate::AtomicFunction::Max
+                    ) && matches!(pointer_space, crate::AddressSpace::Storage { .. })
+                        && result.is_none()
                     {
-                        log::error!("Int64 min-max atomic operations are not supported");
+                        if !self
+                            .capabilities
+                            .contains(super::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX)
+                        {
+                            log::error!("Int64 min-max atomic operations are not supported");
+                            return Err(AtomicError::MissingCapability(
+                                super::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX,
+                            )
+                            .with_span_handle(value, context.expressions)
+                            .into_other());
+                        }
+                    } else {
+                        // Otherwise, we require the full 64-bit atomic capability.
+                        log::error!("Int64 atomic operations are not supported");
                         return Err(AtomicError::MissingCapability(
-                            super::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX,
+                            super::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS,
                         )
                         .with_span_handle(value, context.expressions)
                         .into_other());
                     }
-                } else {
-                    // Otherwise, we require the full 64-bit atomic capability.
-                    log::error!("Int64 atomic operations are not supported");
+                }
+            }
+            // Check for the special restrictions on 32-bit floating-point atomic operations.
+            crate::Scalar::F32 => {
+                // `Capabilities::SHADER_FLOAT32_ATOMIC` allows 32-bit floating-point
+                // atomic operations `Add`, `Subtract`, and `Exchange`
+                // in the `Storage` address space.
+                if !self
+                    .capabilities
+                    .contains(super::Capabilities::SHADER_FLOAT32_ATOMIC)
+                {
+                    log::error!("Float32 atomic operations are not supported");
                     return Err(AtomicError::MissingCapability(
-                        super::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS,
+                        super::Capabilities::SHADER_FLOAT32_ATOMIC,
                     )
                     .with_span_handle(value, context.expressions)
                     .into_other());
                 }
+                if !matches!(
+                    *fun,
+                    crate::AtomicFunction::Add
+                        | crate::AtomicFunction::Subtract
+                        | crate::AtomicFunction::Exchange { compare: None }
+                ) {
+                    log::error!("Float32 atomic operation {:?} is not supported", fun);
+                    return Err(AtomicError::InvalidOperator(*fun)
+                        .with_span_handle(value, context.expressions)
+                        .into_other());
+                }
+                if !matches!(pointer_space, crate::AddressSpace::Storage { .. }) {
+                    log::error!(
+                        "Float32 atomic operations are only supported in the Storage address space"
+                    );
+                    return Err(AtomicError::InvalidAddressSpace(pointer_space)
+                        .with_span_handle(value, context.expressions)
+                        .into_other());
+                }
             }
+            _ => {}
         }
 
         // The result expression must be appropriate to the operation.

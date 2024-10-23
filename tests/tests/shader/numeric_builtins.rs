@@ -151,6 +151,46 @@ static INT64_ATOMIC_ALL_OPS: GpuTestConfiguration = GpuTestConfiguration::new()
         )
     });
 
+fn create_float32_atomic_test() -> Vec<ShaderTest> {
+    let mut tests = Vec::new();
+
+    let test = ShaderTest::new(
+        "atomicAdd".into(),
+        "value: f32".into(),
+        "atomicStore(&output, 0.0); atomicAdd(&output, -0.50); atomicAdd(&output, 1.75);".into(),
+        &[0_f32],
+        &[1.25_f32],
+    )
+    .output_type("atomic<f32>".into());
+
+    tests.push(test);
+
+    let test = ShaderTest::new(
+        "atomicAdd".into(),
+        "value: f32".into(),
+        "atomicStore(&output, 0.0); atomicSub(&output, -2.5); atomicSub(&output, 3.0);".into(),
+        &[0_f32],
+        &[-0.5_f32],
+    )
+    .output_type("atomic<f32>".into());
+
+    tests.push(test);
+
+    tests
+}
+
+#[gpu_test]
+static FLOAT32_ATOMIC: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgt::Features::SHADER_FLOAT32_ATOMIC)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(ctx, InputStorageType::Storage, create_float32_atomic_test())
+    });
+
 // See https://github.com/gfx-rs/wgpu/issues/5276
 /*
 fn create_int64_polyfill_test() -> Vec<ShaderTest> {
