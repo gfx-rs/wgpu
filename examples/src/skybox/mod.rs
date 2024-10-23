@@ -448,7 +448,7 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
 
-            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
             rpass.set_pipeline(&self.entity_pipeline);
 
             for entity in self.entities.iter() {

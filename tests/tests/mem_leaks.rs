@@ -194,7 +194,7 @@ async fn draw_test_with_reports(
     });
 
     rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, Some(&bg), &[]);
+    rpass.set_bind_group(0, &bg, &[]);
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report();
