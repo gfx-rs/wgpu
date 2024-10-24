@@ -970,6 +970,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::robustness2::NAME);
         }
 
+        // Optional `VK_KHR_external_memory_win32`
+        if self.supports_extension(khr::external_memory_win32::NAME) {
+            extensions.push(khr::external_memory_win32::NAME);
+        }
+
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
         // Even though Vulkan 1.2 has promoted the extension to core, we must require the extension to avoid
         // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.
@@ -1539,6 +1544,9 @@ impl super::Instance {
                 }),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(khr::image_format_list::NAME),
+            #[cfg(windows)]
+            external_memory_win32: phd_capabilities
+                .supports_extension(khr::external_memory_win32::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
