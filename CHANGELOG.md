@@ -709,6 +709,10 @@ This release includes `wgpu`, `wgpu-core`, `wgpu-hal`, `wgpu-types`, and `naga`.
 - Fix typo in `wgpu::CommandEncoder::clear_buffer` documentation. By @PWhiddy in [#5281](https://github.com/gfx-rs/wgpu/pull/5281).
 - `Surface` configuration incorrectly claimed that `wgpu::Instance::create_surface` was unsafe. By @hackaugusto in [#5265](https://github.com/gfx-rs/wgpu/pull/5265).
 
+### Examples
+
+- Add multiple render targets example. By @kaphula in [#5297](https://github.com/gfx-rs/wgpu/pull/5313)
+
 ### Bug Fixes
 
 #### General
