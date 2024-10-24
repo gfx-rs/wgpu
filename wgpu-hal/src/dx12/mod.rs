@@ -499,6 +499,12 @@ pub struct Surface {
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
+impl Surface {
+    pub unsafe fn swap_chain(&self) -> Option<d3d12::ComPtr<dxgi1_4::IDXGISwapChain3>> {
+        self.swap_chain.read().as_ref().map(|sc| sc.raw())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum MemoryArchitecture {
     Unified {
@@ -1018,6 +1024,10 @@ impl SwapChain {
     unsafe fn release_resources(mut self) -> Dxgi::IDXGISwapChain3 {
         unsafe { Foundation::HANDLE::free(&mut self.waitable) };
         self.raw
+    }
+
+    unsafe fn raw(&self) -> d3d12::ComPtr<dxgi1_4::IDXGISwapChain3> {
+        self.raw.clone()
     }
 
     unsafe fn wait(
