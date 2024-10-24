@@ -54,12 +54,6 @@ impl DiagnosticTriggeringRule {
             Self::DerivativeUniformity => Self::DERIVATIVE_UNIFORMITY,
         }
     }
-
-    pub(crate) const fn tracking_issue_num(self) -> u16 {
-        match self {
-            DiagnosticTriggeringRule::DerivativeUniformity => 5320,
-        }
-    }
 }
 
 /// A filter that modifies how diagnostics are emitted for shaders.

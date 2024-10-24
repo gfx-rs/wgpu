@@ -306,10 +306,6 @@ pub(crate) enum Error<'a> {
         triggering_rule: DiagnosticTriggeringRule,
         triggering_rule_spans: [Span; 2],
     },
-    DiagnosticNotYetImplemented {
-        triggering_rule: DiagnosticTriggeringRule,
-        span: Span,
-    },
 }
 
 impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
@@ -1087,24 +1083,6 @@ impl<'a> Error<'a> {
                     .into()],
                 }
             }
-            Error::DiagnosticNotYetImplemented {
-                triggering_rule,
-                span,
-            } => ParseError {
-                message: format!(
-                    "the `{}` diagnostic filter is not yet supported",
-                    triggering_rule.to_ident()
-                ),
-                labels: vec![(span, "".into())],
-                notes: vec![format!(
-                    concat!(
-                        "Let Naga maintainers know that you ran into this at ",
-                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
-                        "so they can prioritize it!"
-                    ),
-                    triggering_rule.tracking_issue_num()
-                )],
-            },
         }
     }
 }
