@@ -1,7 +1,5 @@
 use crate::front::wgsl::error::{Error, ExpectedToken};
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtension, EnableExtensions, UnimplementedEnableExtension,
-};
+use crate::front::wgsl::parse::directive::enable_extension::{EnableExtension, EnableExtensions};
 use crate::front::wgsl::parse::directive::language_extension::LanguageExtension;
 use crate::front::wgsl::parse::directive::DirectiveKind;
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
@@ -670,15 +668,7 @@ impl Parser {
             }
             (Token::Number(res), span) => {
                 let _ = lexer.next();
-                let num = res.map_err(|err| match err {
-                    super::error::NumberError::UnimplementedF16 => {
-                        Error::EnableExtensionNotEnabled {
-                            kind: EnableExtension::Unimplemented(UnimplementedEnableExtension::F16),
-                            span,
-                        }
-                    }
-                    err => Error::BadNumber(span, err),
-                })?;
+                let num = res.map_err(|err| Error::BadNumber(span, err))?;
                 ast::Expression::Literal(ast::Literal::Number(num))
             }
             (Token::Word("RAY_FLAG_NONE"), _) => {

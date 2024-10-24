@@ -41,8 +41,8 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
-serialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
-deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
+serialize = ["dep:serde", "bitflags/serde", "indexmap/serde", "half/serde"]
+deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde", "half/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
@@ -82,6 +82,9 @@ petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.6", optional = true }
+# TODO: remove `[patch]` entry in workspace `Cargo.toml` for `half` after we upstream `arbitrary` support
+half = { version = "2.4.1", features = ["arbitrary", "num-traits"] }
+num-traits = "0.2"
 
 [build-dependencies]
 cfg_aliases.workspace = true

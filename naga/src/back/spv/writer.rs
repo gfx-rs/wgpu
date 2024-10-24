@@ -799,6 +799,15 @@ impl Writer {
                 if bits == 64 {
                     self.capabilities_used.insert(spirv::Capability::Float64);
                 }
+                if bits == 16 {
+                    self.capabilities_used.insert(spirv::Capability::Float16);
+                    self.capabilities_used
+                        .insert(spirv::Capability::StorageBuffer16BitAccess);
+                    self.capabilities_used
+                        .insert(spirv::Capability::UniformAndStorageBuffer16BitAccess);
+                    self.capabilities_used
+                        .insert(spirv::Capability::StorageInputOutput16);
+                }
                 Instruction::type_float(id, bits)
             }
             Sk::Bool => Instruction::type_bool(id),
@@ -1145,6 +1154,10 @@ impl Writer {
                 Instruction::constant_64bit(type_id, id, bits as u32, (bits >> 32) as u32)
             }
             crate::Literal::F32(value) => Instruction::constant_32bit(type_id, id, value.to_bits()),
+            crate::Literal::F16(value) => {
+                let low = value.to_bits();
+                Instruction::constant_16bit(type_id, id, low as u32)
+            }
             crate::Literal::U32(value) => Instruction::constant_32bit(type_id, id, value),
             crate::Literal::I32(value) => Instruction::constant_32bit(type_id, id, value as u32),
             crate::Literal::U64(value) => {
