@@ -39,6 +39,10 @@ impl super::Validator {
             ref types,
             ref special_types,
             ref global_expressions,
+            #[cfg(feature = "wgsl-in")]
+            ref diagnostic_filters,
+            #[cfg(feature = "wgsl-in")]
+            ref diagnostic_filter_head,
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
@@ -178,6 +182,22 @@ impl super::Validator {
         }
         if let Some(ty) = special_types.ray_intersection {
             validate_type(ty)?;
+        }
+
+        #[cfg(feature = "wgsl-in")]
+        {
+            use crate::diagnostic_filter::DiagnosticFilterNode;
+
+            for (handle, _node) in diagnostic_filters.iter() {
+                handle.check_valid_for(diagnostic_filters)?;
+                let DiagnosticFilterNode { inner: _, parent } = diagnostic_filters[handle];
+                if let Some(handle) = parent {
+                    handle.check_valid_for(diagnostic_filters)?;
+                }
+            }
+            if let Some(handle) = *diagnostic_filter_head {
+                handle.check_valid_for(diagnostic_filters)?;
+            }
         }
 
         Ok(())

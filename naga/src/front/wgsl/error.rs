@@ -1,3 +1,4 @@
+use crate::diagnostic_filter::{ConflictingDiagnosticRuleError, DiagnosticTriggeringRule};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, UnimplementedEnableExtension,
 };
@@ -295,6 +296,29 @@ pub(crate) enum Error<'a> {
         kind: UnimplementedLanguageExtension,
         span: Span,
     },
+    DiagnosticInvalidSeverity {
+        severity_control_name_span: Span,
+    },
+    DiagnosticInvalidRuleName {
+        diagnostic_rule_name_span: Span,
+    },
+    DiagnosticDuplicateTriggeringRule {
+        triggering_rule: DiagnosticTriggeringRule,
+        triggering_rule_spans: [Span; 2],
+    },
+}
+
+impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
+    fn from(value: ConflictingDiagnosticRuleError) -> Self {
+        let ConflictingDiagnosticRuleError {
+            triggering_rule,
+            triggering_rule_spans,
+        } = value;
+        Self::DiagnosticDuplicateTriggeringRule {
+            triggering_rule,
+            triggering_rule_spans,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1008,6 +1032,57 @@ impl<'a> Error<'a> {
                     kind.tracking_issue_num()
                 )],
             },
+            Error::DiagnosticInvalidSeverity {
+                severity_control_name_span,
+            } => ParseError {
+                message: "invalid `diagnostic(…)` severity".into(),
+                labels: vec![(
+                    severity_control_name_span,
+                    "not a valid severity level".into(),
+                )],
+                notes: vec![concat!(
+                    "See available severities at ",
+                    "<https://www.w3.org/TR/WGSL/#diagnostic-severity>."
+                )
+                .into()],
+            },
+            Error::DiagnosticInvalidRuleName {
+                diagnostic_rule_name_span,
+            } => ParseError {
+                message: "invalid `diagnostic(…)` rule name".into(),
+                labels: vec![(
+                    diagnostic_rule_name_span,
+                    "not a valid diagnostic rule name".into(),
+                )],
+                notes: vec![concat!(
+                    "See available trigger rules at ",
+                    "<https://www.w3.org/TR/WGSL/#filterable-triggering-rules>."
+                )
+                .into()],
+            },
+            Error::DiagnosticDuplicateTriggeringRule {
+                triggering_rule,
+                triggering_rule_spans,
+            } => {
+                let [first_span, second_span] = triggering_rule_spans;
+                ParseError {
+                    message: format!(
+                        "found conflicting `diagnostic(…)` rule(s) for `{}`",
+                        triggering_rule.to_ident()
+                    ),
+                    labels: vec![
+                        (first_span, "first rule".into()),
+                        (second_span, "second rule".into()),
+                    ],
+                    notes: vec![concat!(
+                        "multiple `@diagnostic(…)` rules with the same rule name ",
+                        "conflict unless the severity is the same; ",
+                        "delete the rule you don't want, or ",
+                        "ensure that all severities with the same rule name match"
+                    )
+                    .into()],
+                }
+            }
         }
     }
 }
