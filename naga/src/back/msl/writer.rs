@@ -3219,6 +3219,17 @@ impl<W: Write> Writer<W> {
                     // Done
                     writeln!(self.out, ";")?;
                 }
+                crate::Statement::ImageAtomic {
+                    image: _,
+                    coordinate: _,
+                    sample: _,
+                    fun: _,
+                    value: _,
+                } => {
+                    return Err(Error::UnsupportedCall(
+                        "Image atomics are not supported".into(),
+                    ));
+                }
                 crate::Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
