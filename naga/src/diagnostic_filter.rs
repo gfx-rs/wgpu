@@ -84,13 +84,6 @@ impl FilterableTriggeringRule {
             Self::DerivativeUniformity => Self::DERIVATIVE_UNIFORMITY,
         }
     }
-
-    #[cfg(feature = "wgsl-in")]
-    pub(crate) const fn tracking_issue_num(self) -> u16 {
-        match self {
-            FilterableTriggeringRule::DerivativeUniformity => 5320,
-        }
-    }
 }
 
 /// A filter that modifies how diagnostics are emitted for shaders.
