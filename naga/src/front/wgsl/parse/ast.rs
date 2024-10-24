@@ -1,3 +1,4 @@
+use crate::diagnostic_filter::DiagnosticFilterNode;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
@@ -26,6 +27,13 @@ pub struct TranslationUnit<'a> {
     /// These are referred to by `Handle<ast::Type<'a>>` values.
     /// User-defined types are referred to by name until lowering.
     pub types: Arena<Type<'a>>,
+
+    /// Arena for all diagnostic filter rules parsed in this module, including those in functions.
+    pub diagnostic_filters: Arena<DiagnosticFilterNode>,
+    /// The head of a linked list of `diagnostic(…)` directives parsed in this module.
+    ///
+    /// TODO: doc more
+    pub diagnostic_filter_head: Option<Handle<DiagnosticFilterNode>>,
 }
 
 #[derive(Debug, Clone, Copy)]
