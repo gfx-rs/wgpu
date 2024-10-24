@@ -791,7 +791,9 @@ impl<W: Write> Writer<W> {
                 fun: _,
                 value: _,
             } => {
-                unimplemented!("Image atomics are not yet supported");
+                return Err(Error::Unimplemented(
+                    "Image atomics are not yet supported".into(),
+                ));
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 write!(self.out, "{level}")?;
