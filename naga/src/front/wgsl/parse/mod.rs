@@ -2534,13 +2534,8 @@ impl Parser {
                 match kind {
                     DirectiveKind::Diagnostic => {
                         if let Some(diagnostic_filter) = self.diagnostic_filter(&mut lexer)? {
-                            let triggering_rule = diagnostic_filter.triggering_rule;
                             let span = self.peek_rule_span(&lexer);
                             diagnostic_filters.add(diagnostic_filter, span)?;
-                            Err(Error::DiagnosticNotYetImplemented {
-                                triggering_rule,
-                                span,
-                            })?;
                         }
                         lexer.expect(Token::Separator(';'))?;
                     }
