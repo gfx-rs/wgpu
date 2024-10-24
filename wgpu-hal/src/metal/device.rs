@@ -1,7 +1,20 @@
+use objc2::{msg_send_id, rc::Retained, runtime::ProtocolObject};
+use objc2_foundation::{ns_string, NSError, NSRange, NSString};
+use objc2_metal::{
+    MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
+    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
+    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
+    MTLDevice, MTLFunction, MTLLanguageVersion, MTLLibrary, MTLMutability,
+    MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
+    MTLRenderPipelineDescriptor, MTLResource, MTLResourceOptions, MTLSamplerAddressMode,
+    MTLSamplerDescriptor, MTLSamplerMipFilter, MTLSize, MTLStencilDescriptor, MTLStorageMode,
+    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
+    MTLVertexStepFunction,
+};
 use parking_lot::Mutex;
 use std::{
     num::NonZeroU32,
-    ptr,
+    ptr::NonNull,
     sync::{atomic, Arc},
     thread, time,
 };
@@ -12,9 +25,9 @@ use crate::auxil::map_naga_stage;
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
 struct CompiledShader {
-    library: metal::Library,
-    function: metal::Function,
-    wg_size: metal::MTLSize,
+    library: Retained<ProtocolObject<dyn MTLLibrary>>,
+    function: Retained<ProtocolObject<dyn MTLFunction>>,
+    wg_size: MTLSize,
     wg_memory_sizes: Vec<u32>,
 
     /// Bindings of WGSL `storage` globals that contain variable-sized arrays.
@@ -34,27 +47,29 @@ fn create_stencil_desc(
     face: &wgt::StencilFaceState,
     read_mask: u32,
     write_mask: u32,
-) -> metal::StencilDescriptor {
-    let desc = metal::StencilDescriptor::new();
-    desc.set_stencil_compare_function(conv::map_compare_function(face.compare));
-    desc.set_read_mask(read_mask);
-    desc.set_write_mask(write_mask);
-    desc.set_stencil_failure_operation(conv::map_stencil_op(face.fail_op));
-    desc.set_depth_failure_operation(conv::map_stencil_op(face.depth_fail_op));
-    desc.set_depth_stencil_pass_operation(conv::map_stencil_op(face.pass_op));
+) -> Retained<MTLStencilDescriptor> {
+    let desc = unsafe { MTLStencilDescriptor::new() };
+    desc.setStencilCompareFunction(conv::map_compare_function(face.compare));
+    desc.setReadMask(read_mask);
+    desc.setWriteMask(write_mask);
+    desc.setStencilFailureOperation(conv::map_stencil_op(face.fail_op));
+    desc.setDepthFailureOperation(conv::map_stencil_op(face.depth_fail_op));
+    desc.setDepthStencilPassOperation(conv::map_stencil_op(face.pass_op));
     desc
 }
 
-fn create_depth_stencil_desc(state: &wgt::DepthStencilState) -> metal::DepthStencilDescriptor {
-    let desc = metal::DepthStencilDescriptor::new();
-    desc.set_depth_compare_function(conv::map_compare_function(state.depth_compare));
-    desc.set_depth_write_enabled(state.depth_write_enabled);
+fn create_depth_stencil_desc(
+    state: &wgt::DepthStencilState,
+) -> Retained<MTLDepthStencilDescriptor> {
+    let desc = unsafe { MTLDepthStencilDescriptor::new() };
+    desc.setDepthCompareFunction(conv::map_compare_function(state.depth_compare));
+    desc.setDepthWriteEnabled(state.depth_write_enabled);
     let s = &state.stencil;
     if s.is_enabled() {
         let front_desc = create_stencil_desc(&s.front, s.read_mask, s.write_mask);
-        desc.set_front_face_stencil(Some(&front_desc));
+        desc.setFrontFaceStencil(Some(&front_desc));
         let back_desc = create_stencil_desc(&s.back, s.read_mask, s.write_mask);
-        desc.set_back_face_stencil(Some(&back_desc));
+        desc.setBackFaceStencil(Some(&back_desc));
     }
     desc
 }
@@ -102,7 +117,7 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::ShaderModule>,
         vertex_buffer_mappings: &[naga::back::msl::VertexBufferMapping],
         layout: &super::PipelineLayout,
-        primitive_class: metal::MTLPrimitiveTopologyClass,
+        primitive_class: MTLPrimitiveTopologyClass,
         naga_stage: naga::ShaderStage,
     ) -> Result<CompiledShader, crate::PipelineError> {
         let stage_bit = map_naga_stage(naga_stage);
@@ -124,16 +139,19 @@ impl super::Device {
 
         let options = naga::back::msl::Options {
             lang_version: match self.shared.private_caps.msl_version {
-                metal::MTLLanguageVersion::V1_0 => (1, 0),
-                metal::MTLLanguageVersion::V1_1 => (1, 1),
-                metal::MTLLanguageVersion::V1_2 => (1, 2),
-                metal::MTLLanguageVersion::V2_0 => (2, 0),
-                metal::MTLLanguageVersion::V2_1 => (2, 1),
-                metal::MTLLanguageVersion::V2_2 => (2, 2),
-                metal::MTLLanguageVersion::V2_3 => (2, 3),
-                metal::MTLLanguageVersion::V2_4 => (2, 4),
-                metal::MTLLanguageVersion::V3_0 => (3, 0),
-                metal::MTLLanguageVersion::V3_1 => (3, 1),
+                #[allow(deprecated)]
+                MTLLanguageVersion::MTLLanguageVersion1_0 => (1, 0),
+                MTLLanguageVersion::MTLLanguageVersion1_1 => (1, 1),
+                MTLLanguageVersion::MTLLanguageVersion1_2 => (1, 2),
+                MTLLanguageVersion::MTLLanguageVersion2_0 => (2, 0),
+                MTLLanguageVersion::MTLLanguageVersion2_1 => (2, 1),
+                MTLLanguageVersion::MTLLanguageVersion2_2 => (2, 2),
+                MTLLanguageVersion::MTLLanguageVersion2_3 => (2, 3),
+                MTLLanguageVersion::MTLLanguageVersion2_4 => (2, 4),
+                MTLLanguageVersion::MTLLanguageVersion3_0 => (3, 0),
+                MTLLanguageVersion::MTLLanguageVersion3_1 => (3, 1),
+                // Newer version, fall back to 3.1
+                _ => (3, 1),
             },
             inline_samplers: Default::default(),
             spirv_cross_compatibility: false,
@@ -154,7 +172,7 @@ impl super::Device {
 
         let pipeline_options = naga::back::msl::PipelineOptions {
             allow_and_force_point_size: match primitive_class {
-                metal::MTLPrimitiveTopologyClass::Point => true,
+                MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
             vertex_pulling_transform: true,
@@ -172,18 +190,18 @@ impl super::Device {
             &source
         );
 
-        let options = metal::CompileOptions::new();
-        options.set_language_version(self.shared.private_caps.msl_version);
+        let options = MTLCompileOptions::new();
+        options.setLanguageVersion(self.shared.private_caps.msl_version);
 
         if self.shared.private_caps.supports_preserve_invariance {
-            options.set_preserve_invariance(true);
+            options.setPreserveInvariance(true);
         }
 
         let library = self
             .shared
             .device
             .lock()
-            .new_library_with_source(source.as_ref(), &options)
+            .newLibraryWithSource_options_error(&NSString::from_str(&source), Some(&options))
             .map_err(|err| {
                 log::warn!("Naga generated shader:\n{}", source);
                 crate::PipelineError::Linkage(stage_bit, format!("Metal: {}", err))
@@ -199,16 +217,18 @@ impl super::Device {
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
-        let wg_size = metal::MTLSize {
+        let wg_size = MTLSize {
             width: ep.workgroup_size[0] as _,
             height: ep.workgroup_size[1] as _,
             depth: ep.workgroup_size[2] as _,
         };
 
-        let function = library.get_function(ep_name, None).map_err(|e| {
-            log::error!("get_function: {:?}", e);
-            crate::PipelineError::EntryPoint(naga_stage)
-        })?;
+        let function = library
+            .newFunctionWithName(&NSString::from_str(ep_name))
+            .ok_or_else(|| {
+                log::error!("Function '{ep_name}' does not exist");
+                crate::PipelineError::EntryPoint(naga_stage)
+            })?;
 
         // collect sizes indices, immutable buffers, and work group memory sizes
         let ep_info = &module_info.get_entry_point(ep_index);
@@ -269,23 +289,21 @@ impl super::Device {
     }
 
     fn set_buffers_mutability(
-        buffers: &metal::PipelineBufferDescriptorArrayRef,
+        buffers: &MTLPipelineBufferDescriptorArray,
         mut immutable_mask: usize,
     ) {
         while immutable_mask != 0 {
             let slot = immutable_mask.trailing_zeros();
             immutable_mask ^= 1 << slot;
-            buffers
-                .object_at(slot as u64)
-                .unwrap()
-                .set_mutability(metal::MTLMutability::Immutable);
+            unsafe { buffers.objectAtIndexedSubscript(slot as usize) }
+                .setMutability(MTLMutability::Immutable);
         }
     }
 
     pub unsafe fn texture_from_raw(
-        raw: metal::Texture,
+        raw: Retained<ProtocolObject<dyn MTLTexture>>,
         format: wgt::TextureFormat,
-        raw_type: metal::MTLTextureType,
+        raw_type: MTLTextureType,
         array_layers: u32,
         mip_levels: u32,
         copy_size: crate::CopyExtent,
@@ -300,7 +318,10 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn device_from_raw(raw: metal::Device, features: wgt::Features) -> super::Device {
+    pub unsafe fn device_from_raw(
+        raw: Retained<ProtocolObject<dyn MTLDevice>>,
+        features: wgt::Features,
+    ) -> super::Device {
         super::Device {
             shared: Arc::new(super::AdapterShared::new(raw)),
             features,
@@ -308,11 +329,14 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn buffer_from_raw(raw: metal::Buffer, size: wgt::BufferAddress) -> super::Buffer {
+    pub unsafe fn buffer_from_raw(
+        raw: Retained<ProtocolObject<dyn MTLBuffer>>,
+        size: wgt::BufferAddress,
+    ) -> super::Buffer {
         super::Buffer { raw, size }
     }
 
-    pub fn raw_device(&self) -> &Mutex<metal::Device> {
+    pub fn raw_device(&self) -> &Mutex<Retained<ProtocolObject<dyn MTLDevice>>> {
         &self.shared.device
     }
 }
@@ -326,24 +350,29 @@ impl crate::Device for super::Device {
         let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
-        let mut options = metal::MTLResourceOptions::empty();
+        let mut options = MTLResourceOptions::empty();
         options |= if map_read || map_write {
             // `crate::MemoryFlags::PREFER_COHERENT` is ignored here
-            metal::MTLResourceOptions::StorageModeShared
+            MTLResourceOptions::MTLResourceStorageModeShared
         } else {
-            metal::MTLResourceOptions::StorageModePrivate
+            MTLResourceOptions::MTLResourceStorageModePrivate
         };
         options.set(
-            metal::MTLResourceOptions::CPUCacheModeWriteCombined,
+            MTLResourceOptions::MTLResourceCPUCacheModeWriteCombined,
             map_write,
         );
 
         //TODO: HazardTrackingModeUntracked
 
-        objc::rc::autoreleasepool(|| {
-            let raw = self.shared.device.lock().new_buffer(desc.size, options);
+        objc2::rc::autoreleasepool(|_| {
+            let raw = self
+                .shared
+                .device
+                .lock()
+                .newBufferWithLength_options(desc.size as usize, options)
+                .unwrap();
             if let Some(label) = desc.label {
-                raw.set_label(label);
+                raw.setLabel(Some(&NSString::from_str(label)));
             }
             self.counters.buffers.add(1);
             Ok(super::Buffer {
@@ -365,10 +394,9 @@ impl crate::Device for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> DeviceResult<crate::BufferMapping> {
-        let ptr = buffer.raw.contents().cast::<u8>();
-        assert!(!ptr.is_null());
+        let ptr: NonNull<u8> = buffer.raw.contents().cast();
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
+            ptr: unsafe { NonNull::new(ptr.as_ptr().offset(range.start as isize)).unwrap() },
             is_coherent: true,
         })
     }
@@ -381,46 +409,46 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        use metal::foreign_types::ForeignType as _;
-
         let mtl_format = self.shared.private_caps.map_format(desc.format);
 
-        objc::rc::autoreleasepool(|| {
-            let descriptor = metal::TextureDescriptor::new();
+        objc2::rc::autoreleasepool(|_| {
+            let descriptor = MTLTextureDescriptor::new();
 
             let mtl_type = match desc.dimension {
-                wgt::TextureDimension::D1 => metal::MTLTextureType::D1,
+                wgt::TextureDimension::D1 => MTLTextureType::MTLTextureType1D,
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
-                        descriptor.set_sample_count(desc.sample_count as u64);
-                        metal::MTLTextureType::D2Multisample
+                        descriptor.setSampleCount(desc.sample_count as usize);
+                        MTLTextureType::MTLTextureType2DMultisample
                     } else if desc.size.depth_or_array_layers > 1 {
-                        descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
-                        metal::MTLTextureType::D2Array
+                        descriptor.setArrayLength(desc.size.depth_or_array_layers as usize);
+                        MTLTextureType::MTLTextureType2DArray
                     } else {
-                        metal::MTLTextureType::D2
+                        MTLTextureType::MTLTextureType2D
                     }
                 }
                 wgt::TextureDimension::D3 => {
-                    descriptor.set_depth(desc.size.depth_or_array_layers as u64);
-                    metal::MTLTextureType::D3
+                    descriptor.setDepth(desc.size.depth_or_array_layers as usize);
+                    MTLTextureType::MTLTextureType3D
                 }
             };
 
-            descriptor.set_texture_type(mtl_type);
-            descriptor.set_width(desc.size.width as u64);
-            descriptor.set_height(desc.size.height as u64);
-            descriptor.set_mipmap_level_count(desc.mip_level_count as u64);
-            descriptor.set_pixel_format(mtl_format);
-            descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
-            descriptor.set_storage_mode(metal::MTLStorageMode::Private);
+            descriptor.setTextureType(mtl_type);
+            descriptor.setWidth(desc.size.width as usize);
+            descriptor.setHeight(desc.size.height as usize);
+            descriptor.setMipmapLevelCount(desc.mip_level_count as usize);
+            descriptor.setPixelFormat(mtl_format);
+            descriptor.setUsage(conv::map_texture_usage(desc.format, desc.usage));
+            descriptor.setStorageMode(MTLStorageMode::Private);
 
-            let raw = self.shared.device.lock().new_texture(&descriptor);
-            if raw.as_ptr().is_null() {
-                return Err(crate::DeviceError::OutOfMemory);
-            }
+            let raw = self
+                .shared
+                .device
+                .lock()
+                .newTextureWithDescriptor(&descriptor)
+                .ok_or(crate::DeviceError::OutOfMemory)?;
             if let Some(label) = desc.label {
-                raw.set_label(label);
+                raw.setLabel(Some(&NSString::from_str(label)));
             }
 
             self.counters.textures.add(1);
@@ -449,7 +477,7 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_type = if texture.raw_type == metal::MTLTextureType::D2Multisample {
+        let raw_type = if texture.raw_type == MTLTextureType::MTLTextureType2DMultisample {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)
@@ -482,21 +510,24 @@ impl crate::Device for super::Device {
                 .array_layer_count
                 .unwrap_or(texture.array_layers - desc.range.base_array_layer);
 
-            objc::rc::autoreleasepool(|| {
-                let raw = texture.raw.new_texture_view_from_slice(
-                    raw_format,
-                    raw_type,
-                    metal::NSRange {
-                        location: desc.range.base_mip_level as _,
-                        length: mip_level_count as _,
-                    },
-                    metal::NSRange {
-                        location: desc.range.base_array_layer as _,
-                        length: array_layer_count as _,
-                    },
-                );
+            objc2::rc::autoreleasepool(|_| {
+                let raw = texture
+                    .raw
+                    .newTextureViewWithPixelFormat_textureType_levels_slices(
+                        raw_format,
+                        raw_type,
+                        NSRange {
+                            location: desc.range.base_mip_level as _,
+                            length: mip_level_count as _,
+                        },
+                        NSRange {
+                            location: desc.range.base_array_layer as _,
+                            length: array_layer_count as _,
+                        },
+                    )
+                    .unwrap();
                 if let Some(label) = desc.label {
-                    raw.set_label(label);
+                    raw.setLabel(Some(&NSString::from_str(label)));
                 }
                 raw
             })
@@ -515,56 +546,61 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> DeviceResult<super::Sampler> {
-        objc::rc::autoreleasepool(|| {
-            let descriptor = metal::SamplerDescriptor::new();
+        objc2::rc::autoreleasepool(|_| {
+            let descriptor = MTLSamplerDescriptor::new();
 
-            descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
-            descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
-            descriptor.set_mip_filter(match desc.mipmap_filter {
+            descriptor.setMinFilter(conv::map_filter_mode(desc.min_filter));
+            descriptor.setMagFilter(conv::map_filter_mode(desc.mag_filter));
+            descriptor.setMipFilter(match desc.mipmap_filter {
                 wgt::FilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
-                    metal::MTLSamplerMipFilter::NotMipmapped
+                    MTLSamplerMipFilter::NotMipmapped
                 }
-                wgt::FilterMode::Nearest => metal::MTLSamplerMipFilter::Nearest,
-                wgt::FilterMode::Linear => metal::MTLSamplerMipFilter::Linear,
+                wgt::FilterMode::Nearest => MTLSamplerMipFilter::Nearest,
+                wgt::FilterMode::Linear => MTLSamplerMipFilter::Linear,
             });
 
             let [s, t, r] = desc.address_modes;
-            descriptor.set_address_mode_s(conv::map_address_mode(s));
-            descriptor.set_address_mode_t(conv::map_address_mode(t));
-            descriptor.set_address_mode_r(conv::map_address_mode(r));
+            descriptor.setSAddressMode(conv::map_address_mode(s));
+            descriptor.setTAddressMode(conv::map_address_mode(t));
+            descriptor.setRAddressMode(conv::map_address_mode(r));
 
             // Anisotropy is always supported on mac up to 16x
-            descriptor.set_max_anisotropy(desc.anisotropy_clamp as _);
+            descriptor.setMaxAnisotropy(desc.anisotropy_clamp as _);
 
-            descriptor.set_lod_min_clamp(desc.lod_clamp.start);
-            descriptor.set_lod_max_clamp(desc.lod_clamp.end);
+            descriptor.setLodMinClamp(desc.lod_clamp.start);
+            descriptor.setLodMaxClamp(desc.lod_clamp.end);
 
             if let Some(fun) = desc.compare {
-                descriptor.set_compare_function(conv::map_compare_function(fun));
+                descriptor.setCompareFunction(conv::map_compare_function(fun));
             }
 
             if let Some(border_color) = desc.border_color {
                 if let wgt::SamplerBorderColor::Zero = border_color {
                     if s == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_address_mode_s(metal::MTLSamplerAddressMode::ClampToZero);
+                        descriptor.setSAddressMode(MTLSamplerAddressMode::ClampToZero);
                     }
 
                     if t == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_address_mode_t(metal::MTLSamplerAddressMode::ClampToZero);
+                        descriptor.setTAddressMode(MTLSamplerAddressMode::ClampToZero);
                     }
 
                     if r == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_address_mode_r(metal::MTLSamplerAddressMode::ClampToZero);
+                        descriptor.setRAddressMode(MTLSamplerAddressMode::ClampToZero);
                     }
                 } else {
-                    descriptor.set_border_color(conv::map_border_color(border_color));
+                    descriptor.setBorderColor(conv::map_border_color(border_color));
                 }
             }
 
             if let Some(label) = desc.label {
-                descriptor.set_label(label);
+                descriptor.setLabel(Some(&NSString::from_str(label)));
             }
-            let raw = self.shared.device.lock().new_sampler(&descriptor);
+            let raw = self
+                .shared
+                .device
+                .lock()
+                .newSamplerStateWithDescriptor(&descriptor)
+                .unwrap();
 
             self.counters.samplers.add(1);
 
@@ -912,12 +948,12 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
-        objc::rc::autoreleasepool(|| {
-            let descriptor = metal::RenderPipelineDescriptor::new();
+        objc2::rc::autoreleasepool(|_| {
+            let descriptor = MTLRenderPipelineDescriptor::new();
 
             let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
-                wgt::PolygonMode::Fill => metal::MTLTriangleFillMode::Fill,
-                wgt::PolygonMode::Line => metal::MTLTriangleFillMode::Lines,
+                wgt::PolygonMode::Fill => MTLTriangleFillMode::Fill,
+                wgt::PolygonMode::Line => MTLTriangleFillMode::Lines,
                 wgt::PolygonMode::Point => panic!(
                     "{:?} is not enabled for this backend",
                     wgt::Features::POLYGON_MODE_POINT
@@ -966,10 +1002,10 @@ impl crate::Device for super::Device {
                     naga::ShaderStage::Vertex,
                 )?;
 
-                descriptor.set_vertex_function(Some(&vs.function));
+                descriptor.setVertexFunction(Some(&vs.function));
                 if self.shared.private_caps.supports_mutability {
                     Self::set_buffers_mutability(
-                        descriptor.vertex_buffers().unwrap(),
+                        &descriptor.vertexBuffers(),
                         vs.immutable_buffer_mask,
                     );
                 }
@@ -995,10 +1031,10 @@ impl crate::Device for super::Device {
                         naga::ShaderStage::Fragment,
                     )?;
 
-                    descriptor.set_fragment_function(Some(&fs.function));
+                    descriptor.setFragmentFunction(Some(&fs.function));
                     if self.shared.private_caps.supports_mutability {
                         Self::set_buffers_mutability(
-                            descriptor.fragment_buffers().unwrap(),
+                            &descriptor.fragmentBuffers(),
                             fs.immutable_buffer_mask,
                         );
                     }
@@ -1016,38 +1052,37 @@ impl crate::Device for super::Device {
                     // TODO: This is a workaround for what appears to be a Metal validation bug
                     // A pixel format is required even though no attachments are provided
                     if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
-                        descriptor
-                            .set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
+                        descriptor.setDepthAttachmentPixelFormat(MTLPixelFormat::Depth32Float);
                     }
                     (None, None)
                 }
             };
 
             for (i, ct) in desc.color_targets.iter().enumerate() {
-                let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
+                let at_descriptor = descriptor.colorAttachments().objectAtIndexedSubscript(i);
                 let ct = if let Some(color_target) = ct.as_ref() {
                     color_target
                 } else {
-                    at_descriptor.set_pixel_format(metal::MTLPixelFormat::Invalid);
+                    at_descriptor.setPixelFormat(MTLPixelFormat::Invalid);
                     continue;
                 };
 
                 let raw_format = self.shared.private_caps.map_format(ct.format);
-                at_descriptor.set_pixel_format(raw_format);
-                at_descriptor.set_write_mask(conv::map_color_write(ct.write_mask));
+                at_descriptor.setPixelFormat(raw_format);
+                at_descriptor.setWriteMask(conv::map_color_write(ct.write_mask));
 
                 if let Some(ref blend) = ct.blend {
-                    at_descriptor.set_blending_enabled(true);
+                    at_descriptor.setBlendingEnabled(true);
                     let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
                     let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
 
-                    at_descriptor.set_rgb_blend_operation(color_op);
-                    at_descriptor.set_source_rgb_blend_factor(color_src);
-                    at_descriptor.set_destination_rgb_blend_factor(color_dst);
+                    at_descriptor.setRgbBlendOperation(color_op);
+                    at_descriptor.setSourceRGBBlendFactor(color_src);
+                    at_descriptor.setDestinationRGBBlendFactor(color_dst);
 
-                    at_descriptor.set_alpha_blend_operation(alpha_op);
-                    at_descriptor.set_source_alpha_blend_factor(alpha_src);
-                    at_descriptor.set_destination_alpha_blend_factor(alpha_dst);
+                    at_descriptor.setAlphaBlendOperation(alpha_op);
+                    at_descriptor.setSourceAlphaBlendFactor(alpha_src);
+                    at_descriptor.setDestinationAlphaBlendFactor(alpha_dst);
                 }
             }
 
@@ -1056,10 +1091,10 @@ impl crate::Device for super::Device {
                     let raw_format = self.shared.private_caps.map_format(ds.format);
                     let aspects = crate::FormatAspects::from(ds.format);
                     if aspects.contains(crate::FormatAspects::DEPTH) {
-                        descriptor.set_depth_attachment_pixel_format(raw_format);
+                        descriptor.setDepthAttachmentPixelFormat(raw_format);
                     }
                     if aspects.contains(crate::FormatAspects::STENCIL) {
-                        descriptor.set_stencil_attachment_pixel_format(raw_format);
+                        descriptor.setStencilAttachmentPixelFormat(raw_format);
                     }
 
                     let ds_descriptor = create_depth_stencil_desc(ds);
@@ -1067,7 +1102,8 @@ impl crate::Device for super::Device {
                         .shared
                         .device
                         .lock()
-                        .new_depth_stencil_state(&ds_descriptor);
+                        .newDepthStencilStateWithDescriptor(&ds_descriptor)
+                        .unwrap();
                     Some((raw, ds.bias))
                 }
                 None => None,
@@ -1088,11 +1124,13 @@ impl crate::Device for super::Device {
             }
 
             if !desc.vertex_buffers.is_empty() {
-                let vertex_descriptor = metal::VertexDescriptor::new();
+                let vertex_descriptor = MTLVertexDescriptor::new();
                 for (i, vb) in desc.vertex_buffers.iter().enumerate() {
                     let buffer_index =
                         self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
-                    let buffer_desc = vertex_descriptor.layouts().object_at(buffer_index).unwrap();
+                    let buffer_desc = vertex_descriptor
+                        .layouts()
+                        .objectAtIndexedSubscript(buffer_index as usize);
 
                     // Metal expects the stride to be the actual size of the attributes.
                     // The semantics of array_stride == 0 can be achieved by setting
@@ -1104,44 +1142,43 @@ impl crate::Device for super::Device {
                             .map(|attribute| attribute.offset + attribute.format.size())
                             .max()
                             .unwrap_or(0);
-                        buffer_desc.set_stride(wgt::math::align_to(stride, 4));
-                        buffer_desc.set_step_function(metal::MTLVertexStepFunction::Constant);
-                        buffer_desc.set_step_rate(0);
+                        buffer_desc.setStride(wgt::math::align_to(stride as usize, 4));
+                        buffer_desc.setStepFunction(MTLVertexStepFunction::Constant);
+                        buffer_desc.setStepRate(0);
                     } else {
-                        buffer_desc.set_stride(vb.array_stride);
-                        buffer_desc.set_step_function(conv::map_step_mode(vb.step_mode));
+                        buffer_desc.setStride(vb.array_stride as usize);
+                        buffer_desc.setStepFunction(conv::map_step_mode(vb.step_mode));
                     }
 
                     for at in vb.attributes {
                         let attribute_desc = vertex_descriptor
                             .attributes()
-                            .object_at(at.shader_location as u64)
-                            .unwrap();
-                        attribute_desc.set_format(conv::map_vertex_format(at.format));
-                        attribute_desc.set_buffer_index(buffer_index);
-                        attribute_desc.set_offset(at.offset);
+                            .objectAtIndexedSubscript(at.shader_location as usize);
+                        attribute_desc.setFormat(conv::map_vertex_format(at.format));
+                        attribute_desc.setBufferIndex(buffer_index as usize);
+                        attribute_desc.setOffset(at.offset as usize);
                     }
                 }
-                descriptor.set_vertex_descriptor(Some(vertex_descriptor));
+                descriptor.setVertexDescriptor(Some(&vertex_descriptor));
             }
 
             if desc.multisample.count != 1 {
                 //TODO: handle sample mask
-                descriptor.set_sample_count(desc.multisample.count as u64);
-                descriptor
-                    .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
+                #[allow(deprecated)]
+                descriptor.setSampleCount(desc.multisample.count as usize);
+                descriptor.setAlphaToCoverageEnabled(desc.multisample.alpha_to_coverage_enabled);
                 //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);
             }
 
             if let Some(name) = desc.label {
-                descriptor.set_label(name);
+                descriptor.setLabel(Some(&NSString::from_str(name)));
             }
 
             let raw = self
                 .shared
                 .device
                 .lock()
-                .new_render_pipeline_state(&descriptor)
+                .newRenderPipelineStateWithDescriptor_error(&descriptor)
                 .map_err(|e| {
                     crate::PipelineError::Linkage(
                         wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
@@ -1163,9 +1200,9 @@ impl crate::Device for super::Device {
                 raw_cull_mode: conv::map_cull_mode(desc.primitive.cull_mode),
                 raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
                     Some(if desc.primitive.unclipped_depth {
-                        metal::MTLDepthClipMode::Clamp
+                        MTLDepthClipMode::Clamp
                     } else {
-                        metal::MTLDepthClipMode::Clip
+                        MTLDepthClipMode::Clip
                     })
                 } else {
                     None
@@ -1187,23 +1224,20 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
-        objc::rc::autoreleasepool(|| {
-            let descriptor = metal::ComputePipelineDescriptor::new();
+        objc2::rc::autoreleasepool(|_| {
+            let descriptor = MTLComputePipelineDescriptor::new();
 
             let cs = self.load_shader(
                 &desc.stage,
                 &[],
                 desc.layout,
-                metal::MTLPrimitiveTopologyClass::Unspecified,
+                MTLPrimitiveTopologyClass::Unspecified,
                 naga::ShaderStage::Compute,
             )?;
-            descriptor.set_compute_function(Some(&cs.function));
+            descriptor.setComputeFunction(Some(&cs.function));
 
             if self.shared.private_caps.supports_mutability {
-                Self::set_buffers_mutability(
-                    descriptor.buffers().unwrap(),
-                    cs.immutable_buffer_mask,
-                );
+                Self::set_buffers_mutability(&descriptor.buffers(), cs.immutable_buffer_mask);
             }
 
             let cs_info = super::PipelineStageInfo {
@@ -1214,20 +1248,17 @@ impl crate::Device for super::Device {
             };
 
             if let Some(name) = desc.label {
-                descriptor.set_label(name);
+                descriptor.setLabel(Some(&NSString::from_str(name)));
             }
 
-            let raw = self
-                .shared
-                .device
-                .lock()
-                .new_compute_pipeline_state(&descriptor)
-                .map_err(|e| {
-                    crate::PipelineError::Linkage(
-                        wgt::ShaderStages::COMPUTE,
-                        format!("new_compute_pipeline_state: {:?}", e),
-                    )
-                })?;
+            let raw =
+                new_compute_pipeline_state_with_descriptor(&self.shared.device.lock(), &descriptor)
+                    .map_err(|e| {
+                        crate::PipelineError::Linkage(
+                            wgt::ShaderStages::COMPUTE,
+                            format!("new_compute_pipeline_state: {:?}", e),
+                        )
+                    })?;
 
             self.counters.compute_pipelines.add(1);
 
@@ -1257,15 +1288,20 @@ impl crate::Device for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> DeviceResult<super::QuerySet> {
-        objc::rc::autoreleasepool(|| {
+        objc2::rc::autoreleasepool(|_| {
             match desc.ty {
                 wgt::QueryType::Occlusion => {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
-                    let options = metal::MTLResourceOptions::empty();
+                    let options = MTLResourceOptions::empty();
                     //TODO: HazardTrackingModeUntracked
-                    let raw_buffer = self.shared.device.lock().new_buffer(size, options);
+                    let raw_buffer = self
+                        .shared
+                        .device
+                        .lock()
+                        .newBufferWithLength_options(size as usize, options)
+                        .unwrap();
                     if let Some(label) = desc.label {
-                        raw_buffer.set_label(label);
+                        raw_buffer.setLabel(Some(&NSString::from_str(label)));
                     }
                     Ok(super::QuerySet {
                         raw_buffer,
@@ -1276,29 +1312,32 @@ impl crate::Device for super::Device {
                 wgt::QueryType::Timestamp => {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
                     let device = self.shared.device.lock();
-                    let destination_buffer =
-                        device.new_buffer(size, metal::MTLResourceOptions::empty());
+                    let destination_buffer = device
+                        .newBufferWithLength_options(size as usize, MTLResourceOptions::empty())
+                        .unwrap();
 
-                    let csb_desc = metal::CounterSampleBufferDescriptor::new();
-                    csb_desc.set_storage_mode(metal::MTLStorageMode::Shared);
-                    csb_desc.set_sample_count(desc.count as _);
+                    let csb_desc = MTLCounterSampleBufferDescriptor::new();
+                    csb_desc.setStorageMode(MTLStorageMode::Shared);
+                    csb_desc.setSampleCount(desc.count as _);
                     if let Some(label) = desc.label {
-                        csb_desc.set_label(label);
+                        csb_desc.setLabel(&NSString::from_str(label));
                     }
 
-                    let counter_sets = device.counter_sets();
-                    let timestamp_counter =
-                        match counter_sets.iter().find(|cs| cs.name() == "timestamp") {
-                            Some(counter) => counter,
-                            None => {
-                                log::error!("Failed to obtain timestamp counter set.");
-                                return Err(crate::DeviceError::ResourceCreationFailed);
-                            }
-                        };
-                    csb_desc.set_counter_set(timestamp_counter);
+                    let counter_sets = device.counterSets().unwrap();
+                    let timestamp_counter = match counter_sets
+                        .iter()
+                        .find(|cs| &*cs.name() == ns_string!("timestamp"))
+                    {
+                        Some(counter) => counter,
+                        None => {
+                            log::error!("Failed to obtain timestamp counter set.");
+                            return Err(crate::DeviceError::ResourceCreationFailed);
+                        }
+                    };
+                    csb_desc.setCounterSet(Some(timestamp_counter));
 
                     let counter_sample_buffer =
-                        match device.new_counter_sample_buffer_with_descriptor(&csb_desc) {
+                        match device.newCounterSampleBufferWithDescriptor_error(&csb_desc) {
                             Ok(buffer) => buffer,
                             Err(err) => {
                                 log::error!("Failed to create counter sample buffer: {:?}", err);
@@ -1340,7 +1379,7 @@ impl crate::Device for super::Device {
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
         let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
-            if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
+            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
                 max_value = value;
             }
         }
@@ -1370,7 +1409,7 @@ impl crate::Device for super::Device {
 
         let start = time::Instant::now();
         loop {
-            if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
+            if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return Ok(true);
             }
             if start.elapsed().as_millis() >= timeout_ms as u128 {
@@ -1385,19 +1424,20 @@ impl crate::Device for super::Device {
             return false;
         }
         let device = self.shared.device.lock();
-        let shared_capture_manager = metal::CaptureManager::shared();
-        let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device);
-        shared_capture_manager.set_default_capture_scope(&default_capture_scope);
-        shared_capture_manager.start_capture_with_scope(&default_capture_scope);
-        default_capture_scope.begin_scope();
+        let shared_capture_manager = MTLCaptureManager::sharedCaptureManager();
+        let default_capture_scope = shared_capture_manager.newCaptureScopeWithDevice(&device);
+        shared_capture_manager.setDefaultCaptureScope(Some(&default_capture_scope));
+        #[allow(deprecated)]
+        shared_capture_manager.startCaptureWithScope(&default_capture_scope);
+        default_capture_scope.beginScope();
         true
     }
     unsafe fn stop_capture(&self) {
-        let shared_capture_manager = metal::CaptureManager::shared();
-        if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
-            default_capture_scope.end_scope();
+        let shared_capture_manager = MTLCaptureManager::sharedCaptureManager();
+        if let Some(default_capture_scope) = shared_capture_manager.defaultCaptureScope() {
+            default_capture_scope.endScope();
         }
-        shared_capture_manager.stop_capture();
+        shared_capture_manager.stopCapture();
     }
 
     unsafe fn get_acceleration_structure_build_sizes(
@@ -1431,4 +1471,13 @@ impl crate::Device for super::Device {
     fn get_internal_counters(&self) -> wgt::HalCounters {
         self.counters.clone()
     }
+}
+
+// TODO: `newComputePipelineStateWithDescriptor:error:` is not exposed on
+// `MTLDevice`, is this always correct?
+fn new_compute_pipeline_state_with_descriptor(
+    device: &ProtocolObject<dyn MTLDevice>,
+    descriptor: &MTLComputePipelineDescriptor,
+) -> Result<Retained<ProtocolObject<dyn MTLComputePipelineState>>, Retained<NSError>> {
+    unsafe { msg_send_id![device, newComputePipelineStateWithDescriptor: descriptor, error: _] }
 }

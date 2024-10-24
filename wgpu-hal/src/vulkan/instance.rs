@@ -525,7 +525,7 @@ impl super::Instance {
         let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast()) };
         // NOTE: The layer is retained by Vulkan's `vkCreateMetalSurfaceEXT`,
         // so no need to retain it beyond the scope of this function.
-        let layer_ptr = (*layer).cast();
+        let layer_ptr = objc2::rc::Retained::as_ptr(&layer).cast();
 
         let surface = {
             let metal_loader =

@@ -18,10 +18,9 @@ rust-version = "1.76"
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
 #
-# However, the metal features fail to be documented because the docs.rs runner cross-compiling under
-# x86_64-unknown-linux-gnu and metal-rs cannot compile in that environment at the moment. The same applies
-# for the dx12 feature.
-features = ["vulkan", "gles", "renderdoc"]
+# However, the dx12 features fail to be documented because the docs.rs runner cross-compiling under
+# x86_64-unknown-linux-gnu cannot compile in that environment at the moment.
+features = ["metal", "vulkan", "gles", "renderdoc"]
 rustdoc-args = ["--cfg", "docsrs"]
 targets = [
     "x86_64-unknown-linux-gnu",
@@ -43,7 +42,6 @@ ignored = ["cfg_aliases"]
 metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
     "naga/msl-out-if-target-apple",
-    "dep:block",
 ]
 vulkan = [
     "naga/spv-out",
@@ -166,11 +164,11 @@ glutin_wgl_sys = { workspace = true, optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
-block = { workspace = true, optional = true }
-
-metal.workspace = true
-objc.workspace = true
-core-graphics-types.workspace = true
+block2.workspace = true
+objc2.workspace = true
+objc2-foundation.workspace = true
+objc2-metal.workspace = true
+objc2-quartz-core.workspace = true
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen.workspace = true
