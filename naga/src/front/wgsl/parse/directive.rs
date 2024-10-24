@@ -7,6 +7,7 @@ pub(crate) mod language_extension;
 
 /// A parsed sentinel word indicating the type of directive to be parsed next.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub(crate) enum DirectiveKind {
     /// A [`crate::diagnostic_filter`].
     Diagnostic,
@@ -14,7 +15,6 @@ pub(crate) enum DirectiveKind {
     Enable,
     /// A [`language_extension`].
     Requires,
-    Unimplemented(UnimplementedDirectiveKind),
 }
 
 impl DirectiveKind {
@@ -30,36 +30,6 @@ impl DirectiveKind {
             Self::REQUIRES => Self::Requires,
             _ => return None,
         })
-    }
-
-    /// Maps this [`DirectiveKind`] into the sentinel word associated with it in WGSL.
-    pub const fn to_ident(self) -> &'static str {
-        match self {
-            Self::Diagnostic => Self::DIAGNOSTIC,
-            Self::Enable => Self::ENABLE,
-            Self::Requires => Self::REQUIRES,
-            Self::Unimplemented(kind) => match kind {},
-        }
-    }
-
-    #[cfg(test)]
-    fn iter() -> impl Iterator<Item = Self> {
-        use strum::IntoEnumIterator;
-
-        [Self::Diagnostic, Self::Enable, Self::Requires]
-            .into_iter()
-            .chain(UnimplementedDirectiveKind::iter().map(Self::Unimplemented))
-    }
-}
-
-/// A [`DirectiveKind`] that is not yet implemented. See [`DirectiveKind::Unimplemented`].
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(test, derive(strum::EnumIter))]
-pub(crate) enum UnimplementedDirectiveKind {}
-
-impl UnimplementedDirectiveKind {
-    pub const fn tracking_issue_num(self) -> u16 {
-        match self {}
     }
 }
 
@@ -83,19 +53,7 @@ mod test {
 
     use crate::front::wgsl::assert_parse_err;
 
-    use super::{DirectiveKind, UnimplementedDirectiveKind};
-
-    #[test]
-    #[allow(clippy::never_loop, unreachable_code, unused_variables)]
-    fn unimplemented_directives() {
-        for unsupported_shader in UnimplementedDirectiveKind::iter() {
-            let shader;
-            let expected_msg;
-            match unsupported_shader {};
-
-            assert_parse_err(shader, expected_msg);
-        }
-    }
+    use super::DirectiveKind;
 
     #[test]
     fn directive_after_global_decl() {
@@ -142,7 +100,6 @@ error: expected global declaration, but found a global directive
 
 ";
                 }
-                DirectiveKind::Unimplemented(kind) => match kind {},
             }
 
             let shader = format!(

@@ -5,7 +5,6 @@ use crate::front::wgsl::parse::directive::enable_extension::{
 use crate::front::wgsl::parse::directive::language_extension::{
     LanguageExtension, UnimplementedLanguageExtension,
 };
-use crate::front::wgsl::parse::directive::{DirectiveKind, UnimplementedDirectiveKind};
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
@@ -278,10 +277,6 @@ pub(crate) enum Error<'a> {
     PipelineConstantIDValue(Span),
     NotBool(Span),
     ConstAssertFailed(Span),
-    DirectiveNotYetImplemented {
-        kind: UnimplementedDirectiveKind,
-        span: Span,
-    },
     DirectiveAfterFirstGlobalDecl {
         directive_span: Span,
     },
@@ -931,24 +926,6 @@ impl<'a> Error<'a> {
                 message: "const_assert failure".to_string(),
                 labels: vec![(span, "evaluates to false".into())],
                 notes: vec![],
-            },
-            Error::DirectiveNotYetImplemented { kind, span } => ParseError {
-                message: format!(
-                    "the `{}` directive is not yet implemented",
-                    DirectiveKind::Unimplemented(kind).to_ident()
-                ),
-                labels: vec![(
-                    span,
-                    "this global directive is standard, but not yet implemented".into(),
-                )],
-                notes: vec![format!(
-                    concat!(
-                        "Let Naga maintainers know that you ran into this at ",
-                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
-                        "so they can prioritize it!"
-                    ),
-                    kind.tracking_issue_num()
-                )],
             },
             Error::DirectiveAfterFirstGlobalDecl { directive_span } => ParseError {
                 message: "expected global declaration, but found a global directive".into(),

@@ -2525,7 +2525,7 @@ impl Parser {
         let mut enable_extensions = EnableExtensions::empty();
 
         // Parse directives.
-        while let Ok((ident, span)) = lexer.peek_ident_with_span() {
+        while let Ok((ident, _directive_ident_span)) = lexer.peek_ident_with_span() {
             if let Some(kind) = DirectiveKind::from_ident(ident) {
                 self.push_rule_span(Rule::Directive, &mut lexer);
                 let _ = lexer.next_ident_with_span().unwrap();
@@ -2573,9 +2573,6 @@ impl Parser {
                                 None => Err(Error::UnknownLanguageExtension(span, ident)),
                             }
                         })?;
-                    }
-                    DirectiveKind::Unimplemented(kind) => {
-                        return Err(Error::DirectiveNotYetImplemented { kind, span })
                     }
                 }
                 self.pop_rule_span(&lexer);
