@@ -45,7 +45,9 @@ impl DirectiveKind {
     fn iter() -> impl Iterator<Item = Self> {
         use strum::IntoEnumIterator;
 
-        UnimplementedDirectiveKind::iter().map(Self::Unimplemented)
+        [Self::Enable, Self::Requires]
+            .into_iter()
+            .chain(UnimplementedDirectiveKind::iter().map(Self::Unimplemented))
     }
 }
 
