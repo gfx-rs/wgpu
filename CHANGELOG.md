@@ -40,7 +40,49 @@ Bottom level categories:
 
 ## Unreleased
 
+### Themes of this release
+
+This release's theme is one that is likely to repeat for a few releases: convergence with the WebGPU specification! WGPU's design and base functionality are actually determined by two specifications: one for WebGPU, and one for the WebGPU Shading Language.
+
+This may not sound exciting, but let us convince you otherwise! All major web browsers have committed to offering WebGPU in their environment. Even JS runtimes like [Node][nodejs-webgpu-interest] and [Deno][deno_webgpu-crate-manifest] have communities that are very interested in providing WebGPU! WebGPU is slowly [eating the world][eat-the-world-meaning], as it were. 😀 It's really important, then, that WebGPU implementations behave in ways that one would expect across all platforms. For example, if Firefox's WebGPU implementation were to break when running scripts and shaders that worked just fine in Chrome, that would mean sad users for both application authors _and_ browser authors.
+
+[nodejs-webgpu-interest]: https://github.com/orgs/nodejs/discussions/41994
+[deno_webgpu-crate-manifest]: https://github.com/gfx-rs/wgpu/tree/64a61ee5c69569bbb3db03563997e88a229eba17/deno_webgpu#deno_webgpu
+[eat-the-world-meaning]: https://www.quora.com/What-did-Marc-Andreessen-mean-when-he-said-that-software-is-eating-the-world
+
+WGPU also benefits from standard, portable behavior in the same way as web browsers. Because of this behavior, it's generally fairly easy to port over usage of WebGPU in JavaScript to WGPU. It is also what lets WGPU go full circle: WGPU can be an implementation of WebGPU on native targets, but _also_ it can use _other implementations of WebGPU_ as a backend in JavaScript when compiled to WASM. Therefore, the same dynamic applies: if WGPU's own behavior were significantly different, then WGPU and end users would be _sad, sad humans_ as soon as they discover places where their nice apps are breaking, right?
+
+The answer is: yes, we _do_ have sad, sad humans that really want their WGPU code to work _everywhere_. As Firefox and others use WGPU to implement WebGPU, the above example of Firefox diverging from standard is, unfortunately, today's reality. It _mostly_ behaves the same as a standards-compliant WebGPU, but it still doesn't in many important ways. Of particular note is Naga, its implementation of the WebGPU Shader Language. Shaders are pretty much a black-and-white point of failure in GPU programming; if they don't compile, then you can't use the rest of the API! And yet, it's extremely easy to run into this:
+
+```wgsl
+fn gimme_a_float() -> f32 {
+  return 42; // fails in Naga, but standard WGSL happily converts to `f32`
+}
+```
+
+We intend to continue making visible strides in converging with specifications for WebGPU and WGSL, as this release has. This is, unfortunately, one of the major reasons that WGPU has no plans to work hard at keeping a SemVer-stable interface for the foreseeable future; we have an entire platform of GPU programming functionality we have to catch up with, and SemVer stability is unfortunately in tension with that. So, for now, you're going to keep seeing major releases and breaking changes. Where possible, we'll try to make that painless, but compromises to do so don't always make sense with our limited resources.
+
+This is also the last planned major version release of 2024; the next milestone is set for January 1st, 2025, according to our regular 12-week cadence (offset from the originally planned date of 2024-10-09 for _this_ release 😅). We'll see you next year!
+
+### Contributor spotlight: @sagudev
+
+This release, we'd like to spotlight the work of @sagudev, who has made significant contributions to the WGPU ecosystem this release. Among other things, they contributed a particularly notable feature where runtime-known indices are finally allowed for use with `const` array values. For example, this WGSL shader previously wasn't allowed:
+
+```wgsl
+const arr: array<u32, 4> = array(1, 2, 3, 4);
+
+fn what_number_should_i_use(idx: u32) -> u32 {
+  return arr[idx];
+}
+```
+
+…but now it works! This is significant because this sort of shader rejection was one of the most impactful issues we are aware of for converging with the WGSL specification. There are more still to go—some of which we expect to even more drastically change how folks author shaders—but we suspect that many more will come in the next few releases, including with @sagudev's help.
+
+We're excited for more of @sagudev's contributions via the Servo community. Oh, did we forget to mention that these contributions were motivated by their work on Servo? That's right, a _third_ well-known JavaScript runtime is now using WGPU to implement its WebGPU implementation. We're excited to support Servo to becoming another fully fledged browsing environment this way.
+
 ### Major Changes
+
+In addition to the above spotlight, we have the following particularly interesting items to call out for this release:
 
 #### `wgpu-core` is no longer generic over `wgpu-hal` backends
 
