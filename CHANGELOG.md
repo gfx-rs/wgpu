@@ -137,20 +137,20 @@ By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### General
 
-- Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170)
-- Add `wgpu::util::new_instance_with_webgpu_detection` & `wgpu::util::is_browser_webgpu_supported` to make it easier to support WebGPU & WebGL in the same binary. By @wumpf in [#6371](https://github.com/gfx-rs/wgpu/pull/6371)
+- Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170).
+- Add `wgpu::util::new_instance_with_webgpu_detection` & `wgpu::util::is_browser_webgpu_supported` to make it easier to support WebGPU & WebGL in the same binary. By @wumpf in [#6371](https://github.com/gfx-rs/wgpu/pull/6371).
 
 #### Vulkan
 
-- Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely with the `VULKAN_GOOGLE_DISPLAY_TIMING` feature. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149)
+- Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely with the `VULKAN_GOOGLE_DISPLAY_TIMING` feature. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149).
 
 #### Metal
 
-- Implement `atomicCompareExchangeWeak`. By @AsherJingkongChen in [#6265](https://github.com/gfx-rs/wgpu/pull/6265)
+- Implement `atomicCompareExchangeWeak`. By @AsherJingkongChen in [#6265](https://github.com/gfx-rs/wgpu/pull/6265).
 
 ### Bug Fixes
 
-- Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
+- Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123).
 
 #### Naga
 
@@ -170,28 +170,28 @@ By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### General
 
-- If GL context creation fails retry with GLES. By @Rapdorian in [#5996](https://github.com/gfx-rs/wgpu/pull/5996)
-- Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988)
-- As a workaround for [issue #4905](https://github.com/gfx-rs/wgpu/issues/4905), `wgpu-core` is undocumented unless `--cfg wgpu_core_doc` feature is enabled. By @kpreid in [#5987](https://github.com/gfx-rs/wgpu/pull/5987)
-- Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003)
-- Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007)
-- Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
-- Deduplicate bind group layouts that are created from pipelines with "auto" layouts. By @teoxoy [#6049](https://github.com/gfx-rs/wgpu/pull/6049)
-- Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
-- Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
-- Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201)
+- If GL context creation fails retry with GLES. By @Rapdorian in [#5996](https://github.com/gfx-rs/wgpu/pull/5996).
+- Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988).
+- As a workaround for [issue #4905](https://github.com/gfx-rs/wgpu/issues/4905), `wgpu-core` is undocumented unless `--cfg wgpu_core_doc` feature is enabled. By @kpreid in [#5987](https://github.com/gfx-rs/wgpu/pull/5987).
+- Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003).
+- Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007).
+- Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012).
+- Deduplicate bind group layouts that are created from pipelines with "auto" layouts. By @teoxoy [#6049](https://github.com/gfx-rs/wgpu/pull/6049).
+- Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052).
+- Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041).
+- Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201).
 - Raise validation error instead of panicking in `{Render,Compute}Pipeline::get_bind_group_layout` on native / WebGL. By @bgr360 in [#6280](https://github.com/gfx-rs/wgpu/pull/6280).
 - **BREAKING**: Remove the last exposed C symbols in project, located in `wgpu_core::render::bundle::bundle_ffi`, to allow multiple versions of WGPU to compile together. By @ErichDonGubler in [#6272](https://github.com/gfx-rs/wgpu/pull/6272).
 - Call `flush_mapped_ranges` when unmapping write-mapped buffers. By @teoxoy in [#6089](https://github.com/gfx-rs/wgpu/pull/6089).
 - When mapping buffers for reading, mark buffers as initialized only when they have `MAP_WRITE` usage. By @teoxoy in [#6178](https://github.com/gfx-rs/wgpu/pull/6178).
 - Add a separate pipeline constants error. By @teoxoy in [#6094](https://github.com/gfx-rs/wgpu/pull/6094).
-- Ensure safety of indirect dispatch by injecting a compute shader that validates the content of the indirect buffer. By @teoxoy in [#5714](https://github.com/gfx-rs/wgpu/pull/5714)
+- Ensure safety of indirect dispatch by injecting a compute shader that validates the content of the indirect buffer. By @teoxoy in [#5714](https://github.com/gfx-rs/wgpu/pull/5714).
 
 #### GLES / OpenGL
 
-- Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
-- Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341)
-- Optimise fence checking when `Queue::submit` is called many times per frame. By @dinnerbone in [#6427](https://github.com/gfx-rs/wgpu/pull/6427)
+- Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
+- Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341).
+- Optimise fence checking when `Queue::submit` is called many times per frame. By @dinnerbone in [#6427](https://github.com/gfx-rs/wgpu/pull/6427).
 
 #### WebGPU
 
@@ -199,14 +199,14 @@ By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### Vulkan
 
-- Avoid undefined behaviour with adversarial debug label. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257)
-- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` in the raytraced triangle example to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282)
+- Avoid undefined behaviour with adversarial debug label. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257).
+- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` in the raytraced triangle example to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282).
 
 ### Changes
 
 - `wgpu_hal::gles::Adapter::new_external` now requires the context to be current when dropping the adapter and related objects. By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
-- Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
-- Rename `Rg11b10Float` to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
+- Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065).
+- Rename `Rg11b10Float` to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108).
 - Invalidate the device when we encounter driver-induced device loss or on unexpected errors. By @teoxoy in [#6229](https://github.com/gfx-rs/wgpu/pull/6229).
 - Make Vulkan error handling more robust. By @teoxoy in [#6119](https://github.com/gfx-rs/wgpu/pull/6119).
 - Add bounds checking to Buffer slice method. By @beholdnec in [#6432](https://github.com/gfx-rs/wgpu/pull/6432).
@@ -222,29 +222,29 @@ By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### HAL
 
-- Change the inconsistent `DropGuard` based API on Vulkan and GLES to a consistent, callback-based one. By @jerzywilczek in [#6164](https://github.com/gfx-rs/wgpu/pull/6164)
+- Change the inconsistent `DropGuard` based API on Vulkan and GLES to a consistent, callback-based one. By @jerzywilczek in [#6164](https://github.com/gfx-rs/wgpu/pull/6164).
 
 ### Documentation
 
-- Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271)
+- Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271).
 - Used `wgpu::include_wgsl!(…)` more in examples and tests. By @ErichDonGubler in [#6326](https://github.com/gfx-rs/wgpu/pull/6326).
 
 ### Dependency Updates
 
 #### GLES
 
-- Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006)
-- Update `glutin` to `0.31` with `glutin-winit` crate. By @MarijnS95 in [#6150](https://github.com/gfx-rs/wgpu/pull/6150) and [#6176](https://github.com/gfx-rs/wgpu/pull/6176)
-- Implement `Adapter::new_external()` for WGL (just like EGL) to import an external OpenGL ES context. By @MarijnS95 in [#6152](https://github.com/gfx-rs/wgpu/pull/6152)
+- Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
+- Update `glutin` to `0.31` with `glutin-winit` crate. By @MarijnS95 in [#6150](https://github.com/gfx-rs/wgpu/pull/6150) and [#6176](https://github.com/gfx-rs/wgpu/pull/6176).
+- Implement `Adapter::new_external()` for WGL (just like EGL) to import an external OpenGL ES context. By @MarijnS95 in [#6152](https://github.com/gfx-rs/wgpu/pull/6152).
 
 #### DX12
 
-- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956) and [#6173](https://github.com/gfx-rs/wgpu/pull/6173)
-- Get `num_workgroups` builtin working for indirect dispatches. By @teoxoy in [#5730](https://github.com/gfx-rs/wgpu/pull/5730)
+- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956) and [#6173](https://github.com/gfx-rs/wgpu/pull/6173).
+- Get `num_workgroups` builtin working for indirect dispatches. By @teoxoy in [#5730](https://github.com/gfx-rs/wgpu/pull/5730).
 
 #### HAL
 
-- Update `parking_lot` to `0.12`. By @mahkoh in [#6287](https://github.com/gfx-rs/wgpu/pull/6287)
+- Update `parking_lot` to `0.12`. By @mahkoh in [#6287](https://github.com/gfx-rs/wgpu/pull/6287).
 
 ## 22.0.0 (2024-07-17)
 
