@@ -1,5 +1,11 @@
 //! [`DiagnosticFilter`]s and supporting functionality.
 
+use crate::Handle;
+#[cfg(feature = "wgsl-in")]
+use crate::Span;
+#[cfg(feature = "wgsl-in")]
+use indexmap::IndexMap;
+
 /// A severity set on a [`DiagnosticFilter`].
 ///
 /// <https://www.w3.org/TR/WGSL/#diagnostic-severity>
@@ -94,4 +100,89 @@ impl FilterableTriggeringRule {
 pub struct DiagnosticFilter {
     pub new_severity: Severity,
     pub triggering_rule: FilterableTriggeringRule,
+}
+
+/// A map of diagnostic filters to their severity and first occurrence's span.
+///
+/// Intended for front ends' first step into storing parsed [`DiagnosticFilter`]s.
+#[derive(Clone, Debug, Default)]
+#[cfg(feature = "wgsl-in")]
+pub(crate) struct DiagnosticFilterMap(IndexMap<FilterableTriggeringRule, (Severity, Span)>);
+
+#[cfg(feature = "wgsl-in")]
+impl DiagnosticFilterMap {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add the given `diagnostic_filter` parsed at the given `span` to this map.
+    pub(crate) fn add(
+        &mut self,
+        diagnostic_filter: DiagnosticFilter,
+        span: Span,
+    ) -> Result<(), ConflictingDiagnosticRuleError> {
+        use indexmap::map::Entry;
+
+        let &mut Self(ref mut diagnostic_filters) = self;
+        let DiagnosticFilter {
+            new_severity,
+            triggering_rule,
+        } = diagnostic_filter;
+
+        match diagnostic_filters.entry(triggering_rule) {
+            Entry::Vacant(entry) => {
+                entry.insert((new_severity, span));
+            }
+            Entry::Occupied(entry) => {
+                let &(first_severity, first_span) = entry.get();
+                if first_severity != new_severity {
+                    return Err(ConflictingDiagnosticRuleError {
+                        triggering_rule,
+                        triggering_rule_spans: [first_span, span],
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// An error returned by [`DiagnosticFilterMap::add`] when it encounters conflicting rules.
+#[cfg(feature = "wgsl-in")]
+#[derive(Clone, Debug)]
+pub(crate) struct ConflictingDiagnosticRuleError {
+    pub triggering_rule: FilterableTriggeringRule,
+    pub triggering_rule_spans: [Span; 2],
+}
+
+/// Represents a single parent-linking node in a tree of [`DiagnosticFilter`]s backed by a
+/// [`crate::Arena`].
+///
+/// A single element of a _tree_ of diagnostic filter rules stored in
+/// [`crate::Module::diagnostic_filters`]. When nodes are built by a front-end, module-applicable
+/// filter rules are chained together in runs based on parse site.  For instance, given the
+/// following:
+///
+/// - Module-applicable rules `a` and `b`.
+/// - Rules `c` and `d`, applicable to an entry point called `c_and_d_func`.
+/// - Rule `e`, applicable to an entry point called `e_func`.
+///
+/// The tree would be represented as follows:
+///
+/// ```text
+/// a <- b
+///      ^
+///      |- c <- d
+///      |
+///      \- e
+/// ```
+///
+/// ...where:
+///
+/// - `d` is the first leaf consulted by validation in `c_and_d_func`.
+/// - `e` is the first leaf consulted by validation in `e_func`.
+#[derive(Clone, Debug)]
+pub struct DiagnosticFilterNode {
+    pub inner: DiagnosticFilter,
+    pub parent: Option<Handle<DiagnosticFilterNode>>,
 }

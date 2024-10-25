@@ -1,4 +1,6 @@
-use crate::diagnostic_filter::{self, DiagnosticFilter, FilterableTriggeringRule};
+use crate::diagnostic_filter::{
+    self, DiagnosticFilter, DiagnosticFilterMap, FilterableTriggeringRule,
+};
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, EnableExtensions, UnimplementedEnableExtension,
@@ -2522,6 +2524,7 @@ impl Parser {
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
         let mut enable_extensions = EnableExtensions::empty();
+        let mut diagnostic_filters = DiagnosticFilterMap::new();
 
         // Parse directives.
         while let Ok((ident, _directive_ident_span)) = lexer.peek_ident_with_span() {
@@ -2533,6 +2536,7 @@ impl Parser {
                         if let Some(diagnostic_filter) = self.diagnostic_filter(&mut lexer)? {
                             let triggering_rule = diagnostic_filter.triggering_rule;
                             let span = self.peek_rule_span(&lexer);
+                            diagnostic_filters.add(diagnostic_filter, span)?;
                             Err(Error::DiagnosticNotYetImplemented {
                                 triggering_rule,
                                 span,
