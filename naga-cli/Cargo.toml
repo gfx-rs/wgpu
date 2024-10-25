@@ -23,6 +23,7 @@ codespan-reporting.workspace = true
 env_logger.workspace = true
 argh.workspace = true
 anyhow.workspace = true
+log.workspace = true
 
 [dependencies.naga]
 version = "22.0.0"

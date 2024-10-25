@@ -375,7 +375,10 @@ impl fmt::Display for CliError {
 impl std::error::Error for CliError {}
 
 fn run() -> anyhow::Result<()> {
-    env_logger::init();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .init();
 
     // Parse commandline arguments
     let args: Args = argh::from_env();
