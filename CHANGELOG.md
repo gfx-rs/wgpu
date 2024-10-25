@@ -40,6 +40,8 @@ Bottom level categories:
 
 ## Unreleased
 
+## 23.0.0 (2024-10-25)
+
 ### Themes of this release
 
 This release's theme is one that is likely to repeat for a few releases: convergence with the WebGPU specification! WGPU's design and base functionality are actually determined by two specifications: one for WebGPU, and one for the WebGPU Shading Language.
