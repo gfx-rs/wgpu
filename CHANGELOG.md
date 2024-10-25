@@ -107,7 +107,7 @@ completely. This is a step in that direction.
 Current users of `.global_id()` are encouraged to make use of the `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord`
 traits that have now been implemented for `wgpu` resources.
 
-By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
+By @teoxoy in [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 #### `set_bind_group` now takes an `Option` for the bind group argument.
 
@@ -119,7 +119,7 @@ needs to be implemented by backends.
 For convenience, the `set_bind_group` on compute/render passes & encoders takes `impl Into<Option<&BindGroup>>`,
 so most code should still work the same.
 
-By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
+By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 ### New Features
 
