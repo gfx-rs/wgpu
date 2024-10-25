@@ -43,6 +43,7 @@ Bottom level categories:
 ### Major Changes
 
 #### `wgpu-core` is no longer generic over `wgpu-hal` backends
+
 Dynamic dispatch between different backends has been moved from the user facing `wgpu` crate,
 to a new dynamic dispatch mechanism inside the backend abstraction layer `wgpu-hal`.
 
@@ -72,6 +73,7 @@ https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that 
 is nullable. This change is the start of implementing this part of the spec.
 Callers that specify a `Some()` value should have unchanged behavior. Handling of `None` values still
 needs to be implemented by backends.
+
 For convenience, the `set_bind_group` on compute/render passes & encoders takes `impl Into<Option<&BindGroup>>`,
 so most code should still work the same.
 
