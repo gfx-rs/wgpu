@@ -121,6 +121,12 @@ so most code should still work the same.
 
 By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
+#### WGPU's DX12 backend is now based on the `windows` crate ecosystem, instead of the `d3d12` crate
+
+WGPU has retired the `d3d12` crate (based on `winapi`), and now uses the `windows` crate for interfacing with Windows. For many, this may not be a change that affects day-to-day work. However, for users who need to vet their dependencies, or who may vendor in dependencies, this may be a nontrivial migration.
+
+By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
+
 ### New Features
 
 #### Naga
