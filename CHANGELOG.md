@@ -86,38 +86,27 @@ In addition to the above spotlight, we have the following particularly interesti
 
 #### `wgpu-core` is no longer generic over `wgpu-hal` backends
 
-Dynamic dispatch between different backends has been moved from the user facing `wgpu` crate,
-to a new dynamic dispatch mechanism inside the backend abstraction layer `wgpu-hal`.
+Dynamic dispatch between different backends has been moved from the user facing `wgpu` crate, to a new dynamic dispatch mechanism inside the backend abstraction layer `wgpu-hal`.
 
-Whenever targeting more than a single backend (default on Windows & Linux) this leads to faster compile times and smaller binaries!
-This also solves a long standing issue with `cargo doc` failing to run for `wgpu-core`.
+Whenever targeting more than a single backend (default on Windows & Linux) this leads to faster compile times and smaller binaries! This also solves a long standing issue with `cargo doc` failing to run for `wgpu-core`.
 
-Benchmarking indicated that compute pass recording is slower as a consequence,
-whereas on render passes speed improvements have been observed.
-However, this effort simplifies many of the internals of the wgpu family of crates
-which we're hoping to build performance improvements upon in the future.
+Benchmarking indicated that compute pass recording is slower as a consequence, whereas on render passes speed improvements have been observed. However, this effort simplifies many of the internals of the wgpu family of crates which we're hoping to build performance improvements upon in the future.
 
 By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://github.com/gfx-rs/wgpu/pull/6099), [#6100](https://github.com/gfx-rs/wgpu/pull/6100).
 
 #### `wgpu`'s resources no longer have `.global_id()` getters
 
-`wgpu-core`'s internals no longer use nor need IDs and we are moving towards removing IDs
-completely. This is a step in that direction.
+`wgpu-core`'s internals no longer use nor need IDs and we are moving towards removing IDs completely. This is a step in that direction.
 
-Current users of `.global_id()` are encouraged to make use of the `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord`
-traits that have now been implemented for `wgpu` resources.
+Current users of `.global_id()` are encouraged to make use of the `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord` traits that have now been implemented for `wgpu` resources.
 
 By @teoxoy in [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 #### `set_bind_group` now takes an `Option` for the bind group argument.
 
-https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup
-is nullable. This change is the start of implementing this part of the spec.
-Callers that specify a `Some()` value should have unchanged behavior. Handling of `None` values still
-needs to be implemented by backends.
+https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup is nullable. This change is the start of implementing this part of the spec. Callers that specify a `Some()` value should have unchanged behavior. Handling of `None` values still needs to be implemented by backends.
 
-For convenience, the `set_bind_group` on compute/render passes & encoders takes `impl Into<Option<&BindGroup>>`,
-so most code should still work the same.
+For convenience, the `set_bind_group` on compute/render passes & encoders takes `impl Into<Option<&BindGroup>>`, so most code should still work the same.
 
 By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
