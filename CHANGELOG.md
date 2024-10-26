@@ -121,6 +121,49 @@ so most code should still work the same.
 
 By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
+#### `entry_point`s are now `Option`al
+
+One of the changes in the WebGPU spec. (from [about this time last year][optional-entrypoint-in-spec] 😅) was to allow optional entry points in `GPUProgrammableStage`. In `wgpu`, this corresponds to a subset of fields in `FragmentState`, `VertexState`, and `ComputeState` as the `entry_point` member:
+
+```wgsl
+let render_pipeline = device.createRenderPipeline(wgpu::RenderPipelineDescriptor {
+    module,
+    entry_point: Some("cs_main"), // This is now `Option`al.
+    // …
+});
+
+let compute_pipeline = device.createComputePipeline(wgpu::ComputePipelineDescriptor {
+    module,
+    entry_point: None, // This is now `Option`al.
+    // …
+});
+```
+
+When set to `None`, it's assumed that the shader only has a single entry point associated with the pipeline stage (i.e., `@compute`, `@fragment`, or `@vertex`). If there is not one and only one candidate entry point, then a validation error is returned. To continue the example, we might have written the above API usage with the following shader module:
+
+```wgsl
+// We can't use `entry_point: None` for compute pipelines with this module,
+// because there are two `@compute` entry points.
+
+@compute
+fn cs_main() { /* … */ }
+
+@compute
+fn other_cs_main() { /* … */ }
+
+// The following entry points _can_ be inferred from `entry_point: None` in a
+// render pipeline, because they're the only `@vertex` and `@fragment` entry
+// points:
+
+@vertex
+fn vs_main() { /* … */ }
+
+@fragment
+fn fs_main() { /* … */ }
+```
+
+[optional-entrypoint-in-spec]: https://github.com/gpuweb/gpuweb/issues/4342
+
 #### WGPU's DX12 backend is now based on the `windows` crate ecosystem, instead of the `d3d12` crate
 
 WGPU has retired the `d3d12` crate (based on `winapi`), and now uses the `windows` crate for interfacing with Windows. For many, this may not be a change that affects day-to-day work. However, for users who need to vet their dependencies, or who may vendor in dependencies, this may be a nontrivial migration.
