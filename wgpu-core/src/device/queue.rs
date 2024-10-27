@@ -1413,10 +1413,7 @@ impl Global {
         let result = queue.on_submitted_work_done(closure);
         match result {
             Some(submission_index) => submission_index,
-            None => queue
-                .device
-                .last_successful_submission_index
-                .load(Ordering::Acquire),
+            None => 0, // meaning no wait is necessary
         }
     }
 }

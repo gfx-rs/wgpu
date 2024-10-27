@@ -27,7 +27,7 @@ use std::{
     mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
 };
 
 /// Information about the wgpu-core resource.
@@ -635,7 +635,7 @@ impl Buffer {
 
         let submit_index = match device.lock_life().map(self) {
             Some(index) => index,
-            None => device.active_submission_index.load(Ordering::SeqCst),
+            None => 0, // meaning no wait is necessary
         };
 
         Ok(submit_index)

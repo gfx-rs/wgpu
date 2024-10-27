@@ -815,6 +815,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
+        max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
         max_color_attachments: limits.max_color_attachments(),
         max_color_attachment_bytes_per_sample: limits.max_color_attachment_bytes_per_sample(),
         max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
@@ -828,7 +829,6 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_subgroup_size: wgt::Limits::default().max_subgroup_size,
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
-        max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
     }
 }
 
@@ -875,6 +875,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxBufferSize, max_buffer_size),
         (maxVertexAttributes, max_vertex_attributes),
         (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
+        (maxInterStageShaderComponents, max_inter_stage_shader_components),
         (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
         (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
         (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
@@ -1087,12 +1088,8 @@ pub struct BrowserGpuPropertyInaccessible;
 /// Returns the browser's gpu object or `Err(BrowserGpuPropertyInaccessible)` if
 /// the current context is neither the main thread nor a dedicated worker.
 ///
-/// If WebGPU is not supported, the Gpu property may (!) be `undefined`,
-/// and so this function will return `Ok(None)`.
-/// Note that this check is insufficient to determine whether WebGPU is
-/// supported, as the browser may define the Gpu property, but be unable to
-/// create any WebGPU adapters.
-/// To detect whether WebGPU is supported, use the [`crate::utils::is_browser_webgpu_supported`] function.
+/// If WebGPU is not supported, the Gpu property is `undefined`, and so this
+/// function will return `Ok(None)`.
 ///
 /// See:
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>
@@ -1161,8 +1158,6 @@ impl crate::context::Context for ContextWebGpu {
         wasm_bindgen_futures::JsFuture,
         Box<dyn Fn(JsFutureResult) -> CompilationInfo>,
     >;
-
-    type WgpuFuture = wasm_bindgen_futures::JsFuture;
 
     fn init(_instance_desc: wgt::InstanceDescriptor) -> Self {
         let Ok(gpu) = get_browser_gpu_property() else {
@@ -1251,16 +1246,6 @@ impl crate::context::Context for ContextWebGpu {
             // Gpu is undefined; WebGPU is not supported in this browser.
             OptionFuture::none()
         }
-    }
-
-    fn instance_wait_any(
-        &self,
-        _futures: &[&Self::WgpuFuture],
-        _timeout_ns: u64,
-    ) -> crate::WaitStatus {
-        // TODO: Yield back to the browser, run the equivalent of the following JavaScript:
-        // > await Promise.any([ ...futures, new Promise(resolve => setTimeout(timeout_ns, resolve) ]))
-        crate::WaitStatus::UnsupportedTimeout
     }
 
     fn adapter_request_device(
@@ -2162,7 +2147,7 @@ impl crate::context::Context for ContextWebGpu {
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
-    ) -> Self::WgpuFuture {
+    ) {
         let map_promise = buffer_data.0.buffer.map_async_with_f64_and_f64(
             map_map_mode(mode),
             range.start as f64,
@@ -2172,7 +2157,6 @@ impl crate::context::Context for ContextWebGpu {
         buffer_data.0.set_mapped_range(range);
 
         register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
-        map_promise.into()
     }
 
     fn buffer_get_mapped_range(
@@ -2786,7 +2770,7 @@ impl crate::context::Context for ContextWebGpu {
         &self,
         _queue_data: &Self::QueueData,
         _callback: crate::context::SubmittedWorkDoneCallback,
-    ) -> Self::WgpuFuture {
+    ) {
         unimplemented!()
     }
 
