@@ -201,9 +201,9 @@ impl LifetimeTracker {
             .active
             .iter_mut()
             .rev()
-            .find(|a| a.contains_buffer(&buffer));
+            .find(|a| a.contains_buffer(buffer));
 
-        let maybe_submission_index = submission.as_ref().map(|s| s.index.clone());
+        let maybe_submission_index = submission.as_ref().map(|s| s.index);
 
         submission
             .map_or(&mut self.ready_to_map, |a| &mut a.mapped)

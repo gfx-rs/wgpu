@@ -1411,10 +1411,7 @@ impl Global {
         //TODO: flush pending writes
         let queue = self.hub.queues.get(queue_id);
         let result = queue.on_submitted_work_done(closure);
-        match result {
-            Some(submission_index) => submission_index,
-            None => 0, // meaning no wait is necessary
-        }
+        result.unwrap_or(0) // '0' means no wait is necessary
     }
 }
 

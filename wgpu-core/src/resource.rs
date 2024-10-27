@@ -633,10 +633,7 @@ impl Buffer {
             .buffers
             .set_single(self, internal_use);
 
-        let submit_index = match device.lock_life().map(self) {
-            Some(index) => index,
-            None => 0, // meaning no wait is necessary
-        };
+        let submit_index = device.lock_life().map(self).unwrap_or(0); // '0' means no wait is necessary
 
         Ok(submit_index)
     }
