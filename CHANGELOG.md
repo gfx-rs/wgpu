@@ -69,9 +69,11 @@ By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 #### `set_bind_group` now takes an `Option` for the bind group argument.
 
 https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup
-is nullable. This change is the start of implementing this part of the spec. Callers that
-specify a `Some()` value should have unchanged behavior. Handling of `None` values still
+is nullable. This change is the start of implementing this part of the spec.
+Callers that specify a `Some()` value should have unchanged behavior. Handling of `None` values still
 needs to be implemented by backends.
+For convenience, the `set_bind_group` on compute/render passes & encoders takes `impl Into<Option<&BindGroup>>`,
+so most code should still work the same.
 
 By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
@@ -85,7 +87,9 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Support local `const` declarations in WGSL. By @sagudev in [#6156](https://github.com/gfx-rs/wgpu/pull/6156).
 - Implemented `const_assert` in WGSL. By @sagudev in [#6198](https://github.com/gfx-rs/wgpu/pull/6198).
 - Support polyfilling `inverse` in WGSL. By @chyyran in [#6385](https://github.com/gfx-rs/wgpu/pull/6385).
-- Add an internal skeleton for parsing `requires`, `enable`, and `diagnostic` directives that don't yet do anything besides emit nicer errors. By @ErichDonGubler in [#6352](https://github.com/gfx-rs/wgpu/pull/6352).
+- Add base support for parsing `requires`, `enable`, and `diagnostic` directives. No extensions or diagnostic filters are yet supported, but diagnostics have improved dramatically. By @ErichDonGubler in [#6352](https://github.com/gfx-rs/wgpu/pull/6352), [#6424](https://github.com/gfx-rs/wgpu/pull/6424), [#6437](https://github.com/gfx-rs/wgpu/pull/6437).
+- Include error chain information as a message and notes in shader compilation messages. By @ErichDonGubler in [#6436](https://github.com/gfx-rs/wgpu/pull/6436).
+- Unify Naga CLI error output with the format of shader compilation messages. By @ErichDonGubler in [#6436](https://github.com/gfx-rs/wgpu/pull/6436).
 
 #### General
 
@@ -163,6 +167,7 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 - Invalidate the device when we encounter driver-induced device loss or on unexpected errors. By @teoxoy in [#6229](https://github.com/gfx-rs/wgpu/pull/6229).
 - Make Vulkan error handling more robust. By @teoxoy in [#6119](https://github.com/gfx-rs/wgpu/pull/6119).
 - Add bounds checking to Buffer slice method. By @beholdnec in [#6432](https://github.com/gfx-rs/wgpu/pull/6432).
+- Replace `impl From<StorageFormat> for ScalarKind` with `impl From<StorageFormat> for Scalar` so that byte width is included. By @atlv24 in [#6451](https://github.com/gfx-rs/wgpu/pull/6451).
 
 #### Internal
 

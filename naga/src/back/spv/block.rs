@@ -357,8 +357,11 @@ impl<'w> BlockContext<'w> {
                     }
                     crate::TypeInner::Array { .. } | crate::TypeInner::Matrix { .. } => {
                         // See if `index` is known at compile time.
-                        match GuardedIndex::from_expression(index, self.ir_function, self.ir_module)
-                        {
+                        match GuardedIndex::from_expression(
+                            index,
+                            &self.ir_function.expressions,
+                            self.ir_module,
+                        ) {
                             GuardedIndex::Known(value) => {
                                 // If `index` is known and in bounds, we can just use
                                 // `OpCompositeExtract`.

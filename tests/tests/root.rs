@@ -28,6 +28,7 @@ mod life_cycle;
 mod mem_leaks;
 mod nv12_texture;
 mod occlusion_query;
+mod oob_indexing;
 mod partially_bounded_arrays;
 mod pipeline;
 mod pipeline_cache;

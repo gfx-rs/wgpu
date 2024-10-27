@@ -16,5 +16,6 @@
 		special_constants_binding: Some((space: 1, register: 0)),
 		push_constants_target: Some((space: 0, register: 0)),
 		zero_initialize_workgroup_memory: true,
+		restrict_indexing: true
 	),
 )

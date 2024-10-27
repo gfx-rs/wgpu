@@ -46,7 +46,7 @@ fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
     let mut cpass = cmd_buf.begin_compute_pass(&ComputePassDescriptor::default());
-    cpass.set_bind_group(0, Some(&bind_group), &[]);
+    cpass.set_bind_group(0, &bind_group, &[]);
     drop(cpass);
 
     cmd_buf.finish()

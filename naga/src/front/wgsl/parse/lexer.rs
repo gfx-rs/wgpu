@@ -1,5 +1,6 @@
 use super::{number::consume_number, Error, ExpectedToken};
 use crate::front::wgsl::error::NumberError;
+use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
@@ -204,6 +205,8 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     pub(in crate::front::wgsl) source: &'a str,
     // The byte offset of the end of the last non-trivia token.
     last_end_offset: usize,
+    #[allow(dead_code)]
+    pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 
 impl<'a> Lexer<'a> {
@@ -212,6 +215,7 @@ impl<'a> Lexer<'a> {
             input,
             source: input,
             last_end_offset: 0,
+            enable_extensions: EnableExtensions::empty(),
         }
     }
 

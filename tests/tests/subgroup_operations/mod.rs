@@ -90,7 +90,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&compute_pipeline);
-            cpass.set_bind_group(0, Some(&bind_group), &[]);
+            cpass.set_bind_group(0, &bind_group, &[]);
             cpass.dispatch_workgroups(1, 1, 1);
         }
         ctx.queue.submit(Some(encoder.finish()));

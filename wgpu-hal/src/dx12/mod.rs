@@ -953,6 +953,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
+    runtime_checks: bool,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
