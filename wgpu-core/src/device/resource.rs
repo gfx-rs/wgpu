@@ -493,8 +493,6 @@ impl Device {
         let submission_closures =
             life_tracker.triage_submissions(submission_index, &self.command_allocator);
 
-        life_tracker.triage_mapped();
-
         let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
 
         let queue_empty = life_tracker.queue_empty();
