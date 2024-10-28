@@ -70,7 +70,7 @@ path = "./naga"
 version = "22.0.0"
 
 [workspace.dependencies]
-anyhow = "1.0.90"
+anyhow = "1.0.91"
 argh = "0.1.5"
 arrayvec = "0.7"
 bincode = "1"
@@ -125,7 +125,7 @@ smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
 tracy-client = "0.17"
-thiserror = "1.0.64"
+thiserror = "1.0.65"
 wgpu = { version = "22.0.0", path = "./wgpu", default-features = false }
 wgpu-core = { version = "22.0.0", path = "./wgpu-core" }
 wgpu-macros = { version = "22.0.0", path = "./wgpu-macros" }
@@ -178,7 +178,7 @@ deno_url = "0.143.0"
 deno_web = "0.174.0"
 deno_webidl = "0.143.0"
 deno_webgpu = { version = "0.118.0", path = "./deno_webgpu" }
-tokio = "1.40.0"
+tokio = "1.41.0"
 termcolor = "1.4.1"
 
 # android dependencies
