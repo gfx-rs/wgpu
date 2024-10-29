@@ -185,6 +185,7 @@ By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
 #### Metal
 
 - Implement `atomicCompareExchangeWeak`. By @AsherJingkongChen in [#6265](https://github.com/gfx-rs/wgpu/pull/6265).
+- Unless an explicit `CAMetalLayer` is provided, surfaces now render to a sublayer. This improves resizing behavior, fixing glitches during on window resize. By @madsmtm in [#6107](https://github.com/gfx-rs/wgpu/pull/6107).
 
 ### Bug Fixes
 
