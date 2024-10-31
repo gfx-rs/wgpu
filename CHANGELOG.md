@@ -46,6 +46,12 @@ Bottom level categories:
 
 - Parse `diagnostic(…)` directives, but don't implement any triggering rules yet. By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456).
 
+### Changes
+
+#### HAL
+
+- Change the `DropCallback` API to use `FnOnce` instead of `FnMut`. By @jerzywilczek in [#6482](https://github.com/gfx-rs/wgpu/pull/6482)
+
 ## 23.0.0 (2024-10-25)
 
 ### Themes of this release
