@@ -557,49 +557,38 @@ impl<'a, W> Writer<'a, W> {
     }
 
     fn varying_required_features(&mut self, binding: Option<&Binding>, ty: Handle<Type>) {
-        match self.module.types[ty].inner {
-            TypeInner::Struct { ref members, .. } => {
-                for member in members {
-                    self.varying_required_features(member.binding.as_ref(), member.ty);
-                }
+        if let TypeInner::Struct { ref members, .. } = self.module.types[ty].inner {
+            for member in members {
+                self.varying_required_features(member.binding.as_ref(), member.ty);
             }
-            _ => {
-                if let Some(binding) = binding {
-                    match *binding {
-                        Binding::BuiltIn(built_in) => match built_in {
-                            crate::BuiltIn::ClipDistance => {
-                                self.features.request(Features::CLIP_DISTANCE)
-                            }
-                            crate::BuiltIn::CullDistance => {
-                                self.features.request(Features::CULL_DISTANCE)
-                            }
-                            crate::BuiltIn::SampleIndex => {
-                                self.features.request(Features::SAMPLE_VARIABLES)
-                            }
-                            crate::BuiltIn::ViewIndex => {
-                                self.features.request(Features::MULTI_VIEW)
-                            }
-                            crate::BuiltIn::InstanceIndex | crate::BuiltIn::DrawID => {
-                                self.features.request(Features::INSTANCE_INDEX)
-                            }
-                            _ => {}
-                        },
-                        Binding::Location {
-                            location: _,
-                            interpolation,
-                            sampling,
-                            second_blend_source,
-                        } => {
-                            if interpolation == Some(Interpolation::Linear) {
-                                self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
-                            }
-                            if sampling == Some(Sampling::Sample) {
-                                self.features.request(Features::SAMPLE_QUALIFIER);
-                            }
-                            if second_blend_source {
-                                self.features.request(Features::DUAL_SOURCE_BLENDING);
-                            }
-                        }
+        } else if let Some(binding) = binding {
+            match *binding {
+                Binding::BuiltIn(built_in) => match built_in {
+                    crate::BuiltIn::ClipDistance => self.features.request(Features::CLIP_DISTANCE),
+                    crate::BuiltIn::CullDistance => self.features.request(Features::CULL_DISTANCE),
+                    crate::BuiltIn::SampleIndex => {
+                        self.features.request(Features::SAMPLE_VARIABLES)
+                    }
+                    crate::BuiltIn::ViewIndex => self.features.request(Features::MULTI_VIEW),
+                    crate::BuiltIn::InstanceIndex | crate::BuiltIn::DrawID => {
+                        self.features.request(Features::INSTANCE_INDEX)
+                    }
+                    _ => {}
+                },
+                Binding::Location {
+                    location: _,
+                    interpolation,
+                    sampling,
+                    second_blend_source,
+                } => {
+                    if interpolation == Some(Interpolation::Linear) {
+                        self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
+                    }
+                    if sampling == Some(Sampling::Sample) {
+                        self.features.request(Features::SAMPLE_QUALIFIER);
+                    }
+                    if second_blend_source {
+                        self.features.request(Features::DUAL_SOURCE_BLENDING);
                     }
                 }
             }

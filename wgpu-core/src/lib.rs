@@ -67,6 +67,8 @@ mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
+#[cfg(feature = "indirect-validation")]
+mod indirect_validation;
 mod init_tracker;
 pub mod instance;
 mod lock;
@@ -79,6 +81,7 @@ pub mod resource;
 mod snatch;
 pub mod storage;
 mod track;
+mod weak_vec;
 // This is public for users who pre-compile shaders while still wanting to
 // preserve all run-time checks that `wgpu-core` does.
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be

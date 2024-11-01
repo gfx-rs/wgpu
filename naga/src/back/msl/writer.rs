@@ -215,14 +215,15 @@ impl<'a> Display for TypeContext<'a> {
                     crate::ImageDimension::D3 => "3d",
                     crate::ImageDimension::Cube => "cube",
                 };
-                let (texture_str, msaa_str, kind, access) = match class {
+                let (texture_str, msaa_str, scalar, access) = match class {
                     crate::ImageClass::Sampled { kind, multi } => {
                         let (msaa_str, access) = if multi {
                             ("_ms", "read")
                         } else {
                             ("", "sample")
                         };
-                        ("texture", msaa_str, kind, access)
+                        let scalar = crate::Scalar { kind, width: 4 };
+                        ("texture", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Depth { multi } => {
                         let (msaa_str, access) = if multi {
@@ -230,7 +231,11 @@ impl<'a> Display for TypeContext<'a> {
                         } else {
                             ("", "sample")
                         };
-                        ("depth", msaa_str, crate::ScalarKind::Float, access)
+                        let scalar = crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                        };
+                        ("depth", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Storage { format, .. } => {
                         let access = if self
@@ -254,7 +259,7 @@ impl<'a> Display for TypeContext<'a> {
                         ("texture", "", format.into(), access)
                     }
                 };
-                let base_name = crate::Scalar { kind, width: 4 }.to_msl_name();
+                let base_name = scalar.to_msl_name();
                 let array_str = if arrayed { "_array" } else { "" };
                 write!(
                     out,
@@ -630,7 +635,13 @@ impl<'a> ExpressionContext<'a> {
         base: Handle<crate::Expression>,
         index: index::GuardedIndex,
     ) -> Option<index::IndexableLength> {
-        index::access_needs_check(base, index, self.module, self.function, self.info)
+        index::access_needs_check(
+            base,
+            index,
+            self.module,
+            &self.function.expressions,
+            self.info,
+        )
     }
 
     fn get_packed_vec_kind(&self, expr_handle: Handle<crate::Expression>) -> Option<crate::Scalar> {
@@ -3323,7 +3334,10 @@ impl<W: Write> Writer<W> {
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
-                    write!(self.out, "uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    write!(
+                        self.out,
+                        "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
+                    )?;
                     if let Some(predicate) = predicate {
                         self.put_expression(predicate, &context.expression, true)?;
                     } else {
@@ -4487,7 +4501,7 @@ template <typename A>
                 let name = self.namer.call("unpackUint32x4");
                 writeln!(
                     self.out,
-                    "uint4 {name}(uint b0, \
+                    "{NAMESPACE}::uint4 {name}(uint b0, \
                                   uint b1, \
                                   uint b2, \
                                   uint b3, \
@@ -4506,7 +4520,7 @@ template <typename A>
                 )?;
                 writeln!(
                     self.out,
-                    "{}return uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                    "{}return {NAMESPACE}::uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
                                     (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
                                     (b11 << 24 | b10 << 16 | b9 << 8 | b8), \
                                     (b15 << 24 | b14 << 16 | b13 << 8 | b12));",
@@ -5060,7 +5074,7 @@ template <typename A>
             // a struct type named `<fun>Input` to hold them. If we are doing
             // vertex pulling, we instead update our attribute mapping to
             // note the types, names, and zero values of the attributes.
-            let stage_in_name = format!("{fun_name}Input");
+            let stage_in_name = self.namer.call(&format!("{fun_name}Input"));
             let varyings_member_name = self.namer.call("varyings");
             let mut has_varyings = false;
             if !flattened_arguments.is_empty() {
@@ -5112,7 +5126,7 @@ template <typename A>
 
             // Define a struct type named for the return value, if any, named
             // `<fun>Output`.
-            let stage_out_name = format!("{fun_name}Output");
+            let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
                 Some(ref result) => {

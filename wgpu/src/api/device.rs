@@ -252,7 +252,6 @@ impl Device {
         Texture {
             context: Arc::clone(&self.context),
             data,
-            owned: true,
             descriptor: TextureDescriptor {
                 label: None,
                 view_formats: &[],
@@ -291,7 +290,6 @@ impl Device {
         Texture {
             context: Arc::clone(&self.context),
             data: Box::new(texture),
-            owned: true,
             descriptor: TextureDescriptor {
                 label: None,
                 view_formats: &[],

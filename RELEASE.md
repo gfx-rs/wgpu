@@ -10,7 +10,7 @@ We do a patch releases as needed in the weeks between major releases. Once a new
 
 Anyone can perform most of these steps, except actually publishing the crates.
 
-Currently only @kvark and @cwfitzgerald can publish all crates. @grovesNL can also publish `wgpu` crates. @jimblandy can publish `naga` crates. @msiglreith can publish `d3d12`.
+Currently only @kvark and @cwfitzgerald can publish all crates. @grovesNL can also publish `wgpu` crates. @jimblandy can publish `naga` crates.
 
 ## Major Release Process
 
@@ -24,7 +24,6 @@ Approx 1 Week Before:
 
 Day of Release:
 - Update all crates to be the new version. We bump all versions even if there were no changes.
-  - `d3d12`
   - `naga`
   - `naga-cli`
   - `wgpu-types`
@@ -38,7 +37,6 @@ Day of Release:
 - Checkout `trunk` with the merged PR.
 - Publish! These commands can be pasted directly into your terminal in a single command, and they will publish everything.
   ```bash
-    cargo publish -p d3d12
     cargo publish -p naga
     cargo publish -p naga-cli
     cargo publish -p wgpu-types

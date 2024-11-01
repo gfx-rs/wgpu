@@ -119,7 +119,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
 
         cpass.set_pipeline(&pipeline_read);
         for i in 0..NR_OF_DISPATCHES {
-            cpass.set_bind_group(0, Some(&bg), &[i * BUFFER_BINDING_SIZE]);
+            cpass.set_bind_group(0, &bg, &[i * BUFFER_BINDING_SIZE]);
             cpass.dispatch_workgroups(DISPATCH_SIZE.0, DISPATCH_SIZE.1, DISPATCH_SIZE.2);
         }
         drop(cpass);

@@ -292,6 +292,26 @@ pub fn inject_builtin(
                 f,
             )
         }
+        "textureQueryLevels" => {
+            let f = |kind, dim, arrayed, multi, shadow| {
+                let class = match shadow {
+                    true => ImageClass::Depth { multi },
+                    false => ImageClass::Sampled { kind, multi },
+                };
+
+                let image = TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                };
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(vec![image], MacroCall::TextureQueryLevels))
+            };
+
+            texture_args_generator(TextureArgsOptions::SHADOW | variations.into(), f)
+        }
         "texelFetch" | "texelFetchOffset" => {
             let offset = "texelFetchOffset" == name;
             let f = |kind, dim, arrayed, multi, _shadow| {
@@ -1515,6 +1535,7 @@ pub enum MacroCall {
     TextureSize {
         arrayed: bool,
     },
+    TextureQueryLevels,
     ImageLoad {
         multi: bool,
     },
@@ -1737,6 +1758,24 @@ impl MacroCall {
 
                     expr = ctx.add_expression(Expression::Compose { components, ty }, meta)?
                 }
+
+                ctx.add_expression(
+                    Expression::As {
+                        expr,
+                        kind: Sk::Sint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                )?
+            }
+            MacroCall::TextureQueryLevels => {
+                let expr = ctx.add_expression(
+                    Expression::ImageQuery {
+                        image: args[0],
+                        query: ImageQuery::NumLevels,
+                    },
+                    Span::default(),
+                )?;
 
                 ctx.add_expression(
                     Expression::As {

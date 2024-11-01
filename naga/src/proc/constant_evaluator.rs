@@ -1175,8 +1175,8 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
             crate::MathFunction::Round => {
-                // TODO: Use `f{32,64}.round_ties_even()` when available on stable. This polyfill
-                // is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
+                // TODO: this hit stable on 1.77, but MSRV hasn't caught up yet
+                // This polyfill is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
                 // which has licensing compatible with ours. See also
                 // <https://github.com/rust-lang/rust/issues/96710>.
                 //

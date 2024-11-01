@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "22.0.0"
+version = "23.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -50,6 +50,10 @@ renderdoc = ["hal/renderdoc"]
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
+
+## Validates indirect draw/dispatch calls. This will also enable naga's
+## WGSL frontend since we use a WGSL compute shader to do the validation.
+indirect-validation = ["naga/wgsl-in"]
 
 ## Enables serialization via `serde` on common wgpu types.
 serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
@@ -125,17 +129,17 @@ thiserror.workspace = true
 
 [dependencies.naga]
 path = "../naga"
-version = "22.0.0"
+version = "23.0.0"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "22.0.0"
+version = "23.0.0"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "22.0.0"
+version = "23.0.0"
 default-features = false
 
 [build-dependencies]

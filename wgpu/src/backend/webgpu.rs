@@ -1087,8 +1087,12 @@ pub struct BrowserGpuPropertyInaccessible;
 /// Returns the browser's gpu object or `Err(BrowserGpuPropertyInaccessible)` if
 /// the current context is neither the main thread nor a dedicated worker.
 ///
-/// If WebGPU is not supported, the Gpu property is `undefined`, and so this
-/// function will return `Ok(None)`.
+/// If WebGPU is not supported, the Gpu property may (!) be `undefined`,
+/// and so this function will return `Ok(None)`.
+/// Note that this check is insufficient to determine whether WebGPU is
+/// supported, as the browser may define the Gpu property, but be unable to
+/// create any WebGPU adapters.
+/// To detect whether WebGPU is supported, use the [`crate::utils::is_browser_webgpu_supported`] function.
 ///
 /// See:
 /// * <https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu>

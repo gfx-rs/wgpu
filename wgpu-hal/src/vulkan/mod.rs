@@ -532,6 +532,8 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
+    #[cfg(windows)]
+    external_memory_win32: bool,
 }
 
 bitflags::bitflags!(
@@ -760,6 +762,7 @@ impl crate::DynAccelerationStructure for AccelerationStructure {}
 pub struct Texture {
     raw: vk::Image,
     drop_guard: Option<crate::DropGuard>,
+    external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
     format: wgt::TextureFormat,

@@ -113,10 +113,6 @@ where
                 _ => None,
             })
     }
-
-    pub(crate) fn len(&self) -> usize {
-        self.map.len()
-    }
 }
 
 impl<T> Storage<T>

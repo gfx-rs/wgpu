@@ -18,7 +18,7 @@ use crate::{
     pipeline::ComputePipeline,
     resource::{
         self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
-        MissingBufferUsageError, ParentDevice, Trackable,
+        MissingBufferUsageError, ParentDevice,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
@@ -215,6 +215,8 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     dynamic_offset_count: usize,
     string_offset: usize,
     active_query: Option<(Arc<resource::QuerySet>, u32)>,
+
+    push_constants: Vec<u32>,
 
     intermediate_trackers: Tracker,
 
@@ -442,6 +444,8 @@ impl Global {
             dynamic_offset_count: 0,
             string_offset: 0,
             active_query: None,
+
+            push_constants: Vec::new(),
 
             intermediate_trackers: Tracker::new(),
 
@@ -746,6 +750,21 @@ fn set_pipeline(
             }
         }
 
+        // TODO: integrate this in the code below once we simplify push constants
+        state.push_constants.clear();
+        // Note that can only be one range for each stage. See the `MoreThanOnePushConstantRangePerStage` error.
+        if let Some(push_constant_range) =
+            pipeline.layout.push_constant_ranges.iter().find_map(|pcr| {
+                pcr.stages
+                    .contains(wgt::ShaderStages::COMPUTE)
+                    .then_some(pcr.range.clone())
+            })
+        {
+            // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
+            let len = push_constant_range.len() / wgt::PUSH_CONSTANT_ALIGNMENT as usize;
+            state.push_constants.extend(core::iter::repeat(0).take(len));
+        }
+
         // Clear push constant ranges
         let non_overlapping =
             super::bind::compute_nonoverlapping_ranges(&pipeline.layout.push_constant_ranges);
@@ -790,6 +809,10 @@ fn set_push_constant(
         offset,
         end_offset_bytes,
     )?;
+
+    let offset_in_elements = (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+    let size_in_elements = (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+    state.push_constants[offset_in_elements..][..size_in_elements].copy_from_slice(data_slice);
 
     unsafe {
         state.raw_encoder.set_push_constants(
@@ -841,10 +864,6 @@ fn dispatch_indirect(
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
-    state
-        .scope
-        .buffers
-        .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
     if offset % 4 != 0 {
@@ -861,7 +880,6 @@ fn dispatch_indirect(
     }
 
     let stride = 3 * 4; // 3 integers, x/y/z group size
-
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
@@ -870,12 +888,132 @@ fn dispatch_indirect(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    state.flush_states(Some(buffer.tracker_index()))?;
+    #[cfg(feature = "indirect-validation")]
+    {
+        let params = state.device.indirect_validation.as_ref().unwrap().params(
+            &state.device.limits,
+            offset,
+            buffer.size,
+        );
 
-    let buf_raw = buffer.try_raw(&state.snatch_guard)?;
-    unsafe {
-        state.raw_encoder.dispatch_indirect(buf_raw, offset);
+        unsafe {
+            state.raw_encoder.set_compute_pipeline(params.pipeline);
+        }
+
+        unsafe {
+            state.raw_encoder.set_push_constants(
+                params.pipeline_layout,
+                wgt::ShaderStages::COMPUTE,
+                0,
+                &[params.offset_remainder as u32 / 4],
+            );
+        }
+
+        unsafe {
+            state.raw_encoder.set_bind_group(
+                params.pipeline_layout,
+                0,
+                Some(params.dst_bind_group),
+                &[],
+            );
+        }
+        unsafe {
+            state.raw_encoder.set_bind_group(
+                params.pipeline_layout,
+                1,
+                Some(
+                    buffer
+                        .raw_indirect_validation_bind_group
+                        .get(&state.snatch_guard)
+                        .unwrap()
+                        .as_ref(),
+                ),
+                &[params.aligned_offset as u32],
+            );
+        }
+
+        let src_transition = state
+            .intermediate_trackers
+            .buffers
+            .set_single(&buffer, hal::BufferUses::STORAGE_READ);
+        let src_barrier =
+            src_transition.map(|transition| transition.into_hal(&buffer, &state.snatch_guard));
+        unsafe {
+            state.raw_encoder.transition_buffers(src_barrier.as_slice());
+        }
+
+        unsafe {
+            state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: params.dst_buffer,
+                usage: hal::BufferUses::INDIRECT..hal::BufferUses::STORAGE_READ_WRITE,
+            }]);
+        }
+
+        unsafe {
+            state.raw_encoder.dispatch([1, 1, 1]);
+        }
+
+        // reset state
+        {
+            let pipeline = state.pipeline.as_ref().unwrap();
+
+            unsafe {
+                state.raw_encoder.set_compute_pipeline(pipeline.raw());
+            }
+
+            if !state.push_constants.is_empty() {
+                unsafe {
+                    state.raw_encoder.set_push_constants(
+                        pipeline.layout.raw(),
+                        wgt::ShaderStages::COMPUTE,
+                        0,
+                        &state.push_constants,
+                    );
+                }
+            }
+
+            for (i, e) in state.binder.list_valid() {
+                let group = e.group.as_ref().unwrap();
+                let raw_bg = group.try_raw(&state.snatch_guard)?;
+                unsafe {
+                    state.raw_encoder.set_bind_group(
+                        pipeline.layout.raw(),
+                        i as u32,
+                        Some(raw_bg),
+                        &e.dynamic_offsets,
+                    );
+                }
+            }
+        }
+
+        unsafe {
+            state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: params.dst_buffer,
+                usage: hal::BufferUses::STORAGE_READ_WRITE..hal::BufferUses::INDIRECT,
+            }]);
+        }
+
+        state.flush_states(None)?;
+        unsafe {
+            state.raw_encoder.dispatch_indirect(params.dst_buffer, 0);
+        }
+    };
+    #[cfg(not(feature = "indirect-validation"))]
+    {
+        state
+            .scope
+            .buffers
+            .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
+
+        use crate::resource::Trackable;
+        state.flush_states(Some(buffer.tracker_index()))?;
+
+        let buf_raw = buffer.try_raw(&state.snatch_guard)?;
+        unsafe {
+            state.raw_encoder.dispatch_indirect(buf_raw, offset);
+        }
     }
+
     Ok(())
 }
 

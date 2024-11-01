@@ -32,6 +32,12 @@ impl<T> Snatchable<T> {
         }
     }
 
+    pub fn empty() -> Self {
+        Snatchable {
+            value: UnsafeCell::new(None),
+        }
+    }
+
     /// Get read access to the value. Requires a the snatchable lock's read guard.
     pub fn get<'a>(&'a self, _guard: &'a SnatchGuard) -> Option<&'a T> {
         unsafe { (*self.value.get()).as_ref() }

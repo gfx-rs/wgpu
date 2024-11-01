@@ -213,7 +213,7 @@ impl Function {
 /// where practical.
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 struct LocalImageType {
-    sampled_type: crate::ScalarKind,
+    sampled_type: crate::Scalar,
     dim: spirv::Dim,
     flags: ImageTypeFlags,
     image_format: spirv::ImageFormat,
@@ -244,19 +244,22 @@ impl LocalImageType {
 
         match class {
             crate::ImageClass::Sampled { kind, multi } => LocalImageType {
-                sampled_type: kind,
+                sampled_type: crate::Scalar { kind, width: 4 },
                 dim,
                 flags: make_flags(multi, ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
             crate::ImageClass::Depth { multi } => LocalImageType {
-                sampled_type: crate::ScalarKind::Float,
+                sampled_type: crate::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                },
                 dim,
                 flags: make_flags(multi, ImageTypeFlags::DEPTH | ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
             crate::ImageClass::Storage { format, access: _ } => LocalImageType {
-                sampled_type: crate::ScalarKind::from(format),
+                sampled_type: format.into(),
                 dim,
                 flags: make_flags(false, ImageTypeFlags::empty()),
                 image_format: format.into(),

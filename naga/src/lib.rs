@@ -255,6 +255,7 @@ pub mod back;
 mod block;
 #[cfg(feature = "compact")]
 pub mod compact;
+pub mod diagnostic_filter;
 pub mod error;
 pub mod front;
 pub mod keywords;

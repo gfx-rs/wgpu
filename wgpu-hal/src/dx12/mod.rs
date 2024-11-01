@@ -564,6 +564,7 @@ struct Idler {
     event: Event,
 }
 
+#[derive(Debug, Clone)]
 struct CommandSignatures {
     draw: Direct3D12::ID3D12CommandSignature,
     draw_indexed: Direct3D12::ID3D12CommandSignature,
@@ -636,8 +637,11 @@ enum RootElement {
     Empty,
     Constant,
     SpecialConstantBuffer {
+        /// The first vertex in an indirect draw call, _or_ the `x` of a compute dispatch.
         first_vertex: i32,
+        /// The first instance in an indirect draw call, _or_ the `y` of a compute dispatch.
         first_instance: u32,
+        /// Unused in an indirect draw call, _or_ the `z` of a compute dispatch.
         other: u32,
     },
     /// Descriptor table.
@@ -681,7 +685,7 @@ impl PassState {
             layout: PipelineLayoutShared {
                 signature: None,
                 total_root_elements: 0,
-                special_constants_root_index: None,
+                special_constants: None,
                 root_constant_info: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
@@ -918,12 +922,21 @@ struct RootConstantInfo {
 struct PipelineLayoutShared {
     signature: Option<Direct3D12::ID3D12RootSignature>,
     total_root_elements: RootIndex,
-    special_constants_root_index: Option<RootIndex>,
+    special_constants: Option<PipelineLayoutSpecialConstants>,
     root_constant_info: Option<RootConstantInfo>,
 }
 
 unsafe impl Send for PipelineLayoutShared {}
 unsafe impl Sync for PipelineLayoutShared {}
+
+#[derive(Debug, Clone)]
+struct PipelineLayoutSpecialConstants {
+    root_index: RootIndex,
+    cmd_signatures: CommandSignatures,
+}
+
+unsafe impl Send for PipelineLayoutSpecialConstants {}
+unsafe impl Sync for PipelineLayoutSpecialConstants {}
 
 #[derive(Debug)]
 pub struct PipelineLayout {
@@ -940,6 +953,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
+    runtime_checks: bool,
 }
 
 impl crate::DynShaderModule for ShaderModule {}

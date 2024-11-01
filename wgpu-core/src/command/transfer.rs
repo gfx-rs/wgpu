@@ -47,8 +47,6 @@ pub enum TransferError {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
     MissingTextureUsage(#[from] MissingTextureUsageError),
-    #[error("Destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
-    MissingRenderAttachmentUsageFlag(TextureId),
     #[error("Copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
@@ -72,7 +70,7 @@ pub enum TransferError {
     #[error("Unable to select texture mip level {level} out of {total}")]
     InvalidTextureMipLevel { level: u32, total: u32 },
     #[error("Texture dimension must be 2D when copying from an external texture")]
-    InvalidDimensionExternal(TextureId),
+    InvalidDimensionExternal,
     #[error("Buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
     #[error("Copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
@@ -156,8 +154,8 @@ impl From<DeviceError> for CopyError {
     }
 }
 
-pub(crate) fn extract_texture_selector(
-    copy_texture: &ImageCopyTexture,
+pub(crate) fn extract_texture_selector<T>(
+    copy_texture: &wgt::ImageCopyTexture<T>,
     copy_size: &Extent3d,
     texture: &Texture,
 ) -> Result<(TextureSelector, hal::TextureCopyBase), TransferError> {
@@ -314,8 +312,8 @@ pub(crate) fn validate_linear_texture_data(
 /// Returns the HAL copy extent and the layer count.
 ///
 /// [vtcr]: https://gpuweb.github.io/gpuweb/#validating-texture-copy-range
-pub(crate) fn validate_texture_copy_range(
-    texture_copy_view: &ImageCopyTexture,
+pub(crate) fn validate_texture_copy_range<T>(
+    texture_copy_view: &wgt::ImageCopyTexture<T>,
     desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     texture_side: CopySide,
     copy_size: &Extent3d,

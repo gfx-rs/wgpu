@@ -8,6 +8,7 @@ homepage.workspace = true
 repository.workspace = true
 version.workspace = true
 authors.workspace = true
+publish = false
 
 [dependencies]
 ron.workspace = true

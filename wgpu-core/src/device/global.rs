@@ -406,12 +406,12 @@ impl Global {
             trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
         }
 
-        let buffer = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
+        let (buffer, err) = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
 
         let id = fid.assign(buffer);
         api_log!("Device::create_buffer -> {id:?}");
 
-        (id, None)
+        (id, err)
     }
 
     pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
