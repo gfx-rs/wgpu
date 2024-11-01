@@ -47,6 +47,14 @@ Bottom level categories:
 - Parse `diagnostic(…)` directives, but don't implement any triggering rules yet. By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456).
 - Fix an issue where `naga` CLI would incorrectly skip the first positional argument when `--stdin-file-path` was specified. By @ErichDonGubler in [#6480](https://github.com/gfx-rs/wgpu/pull/6480).
 
+#### Vulkan
+
+- Allow using some 32-bit floating-point atomic operations (load, store, add, sub, exchange) in shaders. It requires the extension `VK_EXT_shader_atomic_float`. By @AsherJingkongChen in [#6234](https://github.com/gfx-rs/wgpu/pull/6234).
+
+#### Metal
+
+- Allow using some 32-bit floating-point atomic operations (load, store, add, sub, exchange) in shaders. It requires Metal 3.0+ with Apple 7, 8, 9 or Mac 2. By @AsherJingkongChen in [#6234](https://github.com/gfx-rs/wgpu/pull/6234).
+
 ### Changes
 
 #### HAL
