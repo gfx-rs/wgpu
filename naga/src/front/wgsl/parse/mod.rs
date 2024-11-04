@@ -1,3 +1,4 @@
+use crate::diagnostic_filter::{self, DiagnosticFilter, FilterableTriggeringRule};
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, EnableExtensions, UnimplementedEnableExtension,
@@ -2524,11 +2525,22 @@ impl Parser {
         let mut enable_extensions = EnableExtensions::empty();
 
         // Parse directives.
-        while let Ok((ident, span)) = lexer.peek_ident_with_span() {
+        while let Ok((ident, _directive_ident_span)) = lexer.peek_ident_with_span() {
             if let Some(kind) = DirectiveKind::from_ident(ident) {
                 self.push_rule_span(Rule::Directive, &mut lexer);
                 let _ = lexer.next_ident_with_span().unwrap();
                 match kind {
+                    DirectiveKind::Diagnostic => {
+                        if let Some(diagnostic_filter) = self.diagnostic_filter(&mut lexer)? {
+                            let triggering_rule = diagnostic_filter.triggering_rule;
+                            let span = self.peek_rule_span(&lexer);
+                            Err(Error::DiagnosticNotYetImplemented {
+                                triggering_rule,
+                                span,
+                            })?;
+                        }
+                        lexer.expect(Token::Separator(';'))?;
+                    }
                     DirectiveKind::Enable => {
                         self.directive_ident_list(&mut lexer, |ident, span| {
                             let kind = EnableExtension::from_ident(ident, span)?;
@@ -2561,9 +2573,6 @@ impl Parser {
                                 None => Err(Error::UnknownLanguageExtension(span, ident)),
                             }
                         })?;
-                    }
-                    DirectiveKind::Unimplemented(kind) => {
-                        return Err(Error::DirectiveNotYetImplemented { kind, span })
                     }
                 }
                 self.pop_rule_span(&lexer);
@@ -2613,5 +2622,56 @@ impl Parser {
             });
         }
         Ok(brace_nesting_level + 1)
+    }
+
+    fn diagnostic_filter<'a>(
+        &self,
+        lexer: &mut Lexer<'a>,
+    ) -> Result<Option<DiagnosticFilter>, Error<'a>> {
+        lexer.expect(Token::Paren('('))?;
+
+        let (severity_control_name, severity_control_name_span) = lexer.next_ident_with_span()?;
+        let new_severity = diagnostic_filter::Severity::from_ident(severity_control_name).ok_or(
+            Error::DiagnosticInvalidSeverity {
+                severity_control_name_span,
+            },
+        )?;
+
+        lexer.expect(Token::Separator(','))?;
+
+        let (diagnostic_name_token, diagnostic_name_token_span) = lexer.next_ident_with_span()?;
+        let diagnostic_rule_name = if lexer.skip(Token::Separator('.')) {
+            // Don't try to validate these name tokens on two tokens, which is conventionally used
+            // for third-party tooling.
+            lexer.next_ident_with_span()?;
+            None
+        } else {
+            Some(diagnostic_name_token)
+        };
+        let diagnostic_rule_name_span = diagnostic_name_token_span;
+
+        let filter = diagnostic_rule_name
+            .and_then(|name| {
+                FilterableTriggeringRule::from_ident(name)
+                    .map(Ok)
+                    .or_else(|| {
+                        diagnostic_filter::Severity::Warning
+                            .report_wgsl_parse_diag(
+                                Error::UnknownDiagnosticRuleName(diagnostic_rule_name_span),
+                                lexer.source,
+                            )
+                            .err()
+                            .map(Err)
+                    })
+            })
+            .transpose()?
+            .map(|triggering_rule| DiagnosticFilter {
+                new_severity,
+                triggering_rule,
+            });
+        lexer.skip(Token::Separator(','));
+        lexer.expect(Token::Paren(')'))?;
+
+        Ok(filter)
     }
 }

@@ -1,10 +1,10 @@
+use crate::diagnostic_filter::FilterableTriggeringRule;
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, UnimplementedEnableExtension,
 };
 use crate::front::wgsl::parse::directive::language_extension::{
     LanguageExtension, UnimplementedLanguageExtension,
 };
-use crate::front::wgsl::parse::directive::{DirectiveKind, UnimplementedDirectiveKind};
 use crate::front::wgsl::parse::lexer::Token;
 use crate::front::wgsl::Scalar;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
@@ -194,6 +194,7 @@ pub(crate) enum Error<'a> {
     UnknownConservativeDepth(Span),
     UnknownEnableExtension(Span, &'a str),
     UnknownLanguageExtension(Span, &'a str),
+    UnknownDiagnosticRuleName(Span),
     SizeAttributeTooLow(Span, u32),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
@@ -276,10 +277,6 @@ pub(crate) enum Error<'a> {
     PipelineConstantIDValue(Span),
     NotBool(Span),
     ConstAssertFailed(Span),
-    DirectiveNotYetImplemented {
-        kind: UnimplementedDirectiveKind,
-        span: Span,
-    },
     DirectiveAfterFirstGlobalDecl {
         directive_span: Span,
     },
@@ -293,6 +290,13 @@ pub(crate) enum Error<'a> {
     },
     LanguageExtensionNotYetImplemented {
         kind: UnimplementedLanguageExtension,
+        span: Span,
+    },
+    DiagnosticInvalidSeverity {
+        severity_control_name_span: Span,
+    },
+    DiagnosticNotYetImplemented {
+        triggering_rule: FilterableTriggeringRule,
         span: Span,
     },
 }
@@ -559,6 +563,15 @@ impl<'a> Error<'a> {
                 notes: vec![concat!(
                     "See available extensions at ",
                     "<https://www.w3.org/TR/WGSL/#language-extensions-sec>."
+                )
+                .into()],
+            },
+            Error::UnknownDiagnosticRuleName(span) => ParseError {
+                message: format!("unknown `diagnostic(…)` rule name `{}`", &source[span]),
+                labels: vec![(span, "not a valid diagnostic rule name".into())],
+                notes: vec![concat!(
+                    "See available trigger rules at ",
+                    "<https://www.w3.org/TR/WGSL/#filterable-triggering-rules>."
                 )
                 .into()],
             },
@@ -914,24 +927,6 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "evaluates to false".into())],
                 notes: vec![],
             },
-            Error::DirectiveNotYetImplemented { kind, span } => ParseError {
-                message: format!(
-                    "the `{}` directive is not yet implemented",
-                    DirectiveKind::Unimplemented(kind).to_ident()
-                ),
-                labels: vec![(
-                    span,
-                    "this global directive is standard, but not yet implemented".into(),
-                )],
-                notes: vec![format!(
-                    concat!(
-                        "Let Naga maintainers know that you ran into this at ",
-                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
-                        "so they can prioritize it!"
-                    ),
-                    kind.tracking_issue_num()
-                )],
-            },
             Error::DirectiveAfterFirstGlobalDecl { directive_span } => ParseError {
                 message: "expected global declaration, but found a global directive".into(),
                 labels: vec![(
@@ -1006,6 +1001,38 @@ impl<'a> Error<'a> {
                         "so they can prioritize it!"
                     ),
                     kind.tracking_issue_num()
+                )],
+            },
+            Error::DiagnosticInvalidSeverity {
+                severity_control_name_span,
+            } => ParseError {
+                message: "invalid `diagnostic(…)` severity".into(),
+                labels: vec![(
+                    severity_control_name_span,
+                    "not a valid severity level".into(),
+                )],
+                notes: vec![concat!(
+                    "See available severities at ",
+                    "<https://www.w3.org/TR/WGSL/#diagnostic-severity>."
+                )
+                .into()],
+            },
+            Error::DiagnosticNotYetImplemented {
+                triggering_rule,
+                span,
+            } => ParseError {
+                message: format!(
+                    "the `{}` diagnostic filter is not yet supported",
+                    triggering_rule.to_ident()
+                ),
+                labels: vec![(span, "".into())],
+                notes: vec![format!(
+                    concat!(
+                        "Let Naga maintainers know that you ran into this at ",
+                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
+                        "so they can prioritize it!"
+                    ),
+                    triggering_rule.tracking_issue_num()
                 )],
             },
         }
