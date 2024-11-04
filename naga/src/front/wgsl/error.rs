@@ -296,6 +296,14 @@ pub(crate) enum Error<'a> {
         severity_control_name_span: Span,
     },
     DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError),
+    DiagnosticAttributeNotYetImplementedAtParseSite {
+        site_name_plural: &'static str,
+        spans: Vec<Span>,
+    },
+    DiagnosticAttributeNotSupported {
+        on_what_plural: &'static str,
+        spans: Vec<Span>,
+    },
 }
 
 impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
@@ -1043,6 +1051,53 @@ impl<'a> Error<'a> {
                     .into()],
                 }
             }
+            Error::DiagnosticAttributeNotYetImplementedAtParseSite {
+                site_name_plural,
+                ref spans,
+            } => ParseError {
+                message: "`@diagnostic(…)` attribute(s) not yet implemented".into(),
+                labels: {
+                    let mut spans = spans.iter().cloned();
+                    let first = spans
+                        .next()
+                        .map(|span| {
+                            (
+                                span,
+                                format!("can't use this on {site_name_plural} (yet)").into(),
+                            )
+                        })
+                        .expect("internal error: diag. attr. rejection on empty map");
+                    std::iter::once(first)
+                        .chain(spans.map(|span| (span, "".into())))
+                        .collect()
+                },
+                notes: vec![format!(concat!(
+                    "Let Naga maintainers know that you ran into this at ",
+                    "<https://github.com/gfx-rs/wgpu/issues/5320>, ",
+                    "so they can prioritize it!"
+                ))],
+            },
+            Error::DiagnosticAttributeNotSupported {
+                on_what_plural,
+                ref spans,
+            } => ParseError {
+                message: format!(
+                    "`@diagnostic(…)` attribute(s) on {on_what_plural} are not supported",
+                ),
+                labels: spans
+                    .iter()
+                    .cloned()
+                    .map(|span| (span, "".into()))
+                    .collect(),
+                notes: vec![
+                    concat!(
+                        "`@diagnostic(…)` attributes are only permitted on `fn`s, ",
+                        "some statements, and `switch`/`loop` bodies."
+                    )
+                    .into(),
+                    "These attributes are well-formed, you likely just need to move them.".into(),
+                ],
+            },
         }
     }
 }

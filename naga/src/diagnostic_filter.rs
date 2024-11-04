@@ -129,6 +129,18 @@ impl DiagnosticFilterMap {
         }
         Ok(())
     }
+
+    /// Were any rules specified?
+    pub(crate) fn is_empty(&self) -> bool {
+        let &Self(ref map) = self;
+        map.is_empty()
+    }
+
+    /// Returns the spans of all contained rules.
+    pub(crate) fn spans(&self) -> impl Iterator<Item = Span> + '_ {
+        let &Self(ref map) = self;
+        map.iter().map(|(_, &(_, span))| span)
+    }
 }
 
 #[cfg(feature = "wgsl-in")]
