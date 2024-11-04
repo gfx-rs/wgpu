@@ -743,6 +743,17 @@ pub enum RenderPassErrorInner {
         end_count_offset: u64,
         count_buffer_size: u64,
     },
+    #[error(
+        "Requested indirect index buffer bytes {}..{} which overruns indirect buffer of size {}",
+        begin_offset,
+        end_offset,
+        buffer_size
+    )]
+    IndirectIndexBufferOverrun {
+        begin_offset: u64,
+        end_offset: u64,
+        buffer_size: u64,
+    },
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error("Render bundle has incompatible targets, {0}")]
@@ -2403,6 +2414,21 @@ fn set_index_buffer(
         .binding(offset, size, state.pass.base.snatch_guard)
         .map_err(RenderCommandError::from)?;
     let end = offset + resolved_size;
+
+    let check_oob = |bound| {
+        if bound > buffer.size {
+            Err(RenderPassErrorInner::IndirectIndexBufferOverrun {
+                begin_offset: offset,
+                end_offset: end,
+                buffer_size: buffer.size,
+            })
+        } else {
+            Ok(())
+        }
+    };
+    check_oob(offset)?;
+    check_oob(end)?;
+
     state.index.update_buffer(offset..end, index_format);
 
     state.pass.base.buffer_memory_init_actions.extend(
