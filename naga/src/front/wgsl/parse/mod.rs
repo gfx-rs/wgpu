@@ -2327,33 +2327,34 @@ impl Parser {
 
         self.push_rule_span(Rule::Attribute, lexer);
         while lexer.skip(Token::Attribute) {
-            match lexer.next_ident_with_span()? {
-                ("binding", name_span) => {
+            let (name, name_span) = lexer.next_ident_with_span()?;
+            match name {
+                "binding" => {
                     lexer.expect(Token::Paren('('))?;
                     bind_index.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("group", name_span) => {
+                "group" => {
                     lexer.expect(Token::Paren('('))?;
                     bind_group.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("id", name_span) => {
+                "id" => {
                     lexer.expect(Token::Paren('('))?;
                     id.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("vertex", name_span) => {
+                "vertex" => {
                     stage.set(ShaderStage::Vertex, name_span)?;
                 }
-                ("fragment", name_span) => {
+                "fragment" => {
                     stage.set(ShaderStage::Fragment, name_span)?;
                 }
-                ("compute", name_span) => {
+                "compute" => {
                     stage.set(ShaderStage::Compute, name_span)?;
                     compute_span = name_span;
                 }
-                ("workgroup_size", name_span) => {
+                "workgroup_size" => {
                     lexer.expect(Token::Paren('('))?;
                     let mut new_workgroup_size = [None; 3];
                     for (i, size) in new_workgroup_size.iter_mut().enumerate() {
@@ -2371,7 +2372,7 @@ impl Parser {
                     }
                     workgroup_size.set(new_workgroup_size, name_span)?;
                 }
-                ("early_depth_test", name_span) => {
+                "early_depth_test" => {
                     let conservative = if lexer.skip(Token::Paren('(')) {
                         let (ident, ident_span) = lexer.next_ident_with_span()?;
                         let value = conv::map_conservative_depth(ident, ident_span)?;
@@ -2382,7 +2383,7 @@ impl Parser {
                     };
                     early_depth_test.set(crate::EarlyDepthTest { conservative }, name_span)?;
                 }
-                (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
+                _ => return Err(Error::UnknownAttribute(name_span)),
             }
         }
 
