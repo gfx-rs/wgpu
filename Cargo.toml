@@ -70,7 +70,7 @@ path = "./naga"
 version = "23.0.0"
 
 [workspace.dependencies]
-anyhow = "1.0.91"
+anyhow = "1.0.92"
 argh = "0.1.5"
 arrayvec = "0.7"
 bincode = "1"
@@ -125,7 +125,7 @@ smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
 tracy-client = "0.17"
-thiserror = "1.0.65"
+thiserror = "1.0.67"
 wgpu = { version = "23.0.0", path = "./wgpu", default-features = false }
 wgpu-core = { version = "23.0.0", path = "./wgpu-core" }
 wgpu-macros = { version = "23.0.0", path = "./wgpu-macros" }
