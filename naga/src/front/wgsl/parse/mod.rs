@@ -2159,6 +2159,32 @@ impl Parser {
 
         ctx.local_table.push_scope();
 
+        let mut diagnostic_filters = DiagnosticFilterMap::new();
+
+        self.push_rule_span(Rule::Attribute, lexer);
+        while lexer.skip(Token::Attribute) {
+            let (name, name_span) = lexer.next_ident_with_span()?;
+            if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
+                if let Some(filter) = self.diagnostic_filter(lexer)? {
+                    let span = self.peek_rule_span(lexer);
+                    diagnostic_filters.add(filter, span)?;
+                }
+            } else {
+                return Err(Error::Unexpected(
+                    name_span,
+                    ExpectedToken::DiagnosticAttribute,
+                ));
+            }
+        }
+        self.pop_rule_span(lexer);
+
+        if !diagnostic_filters.is_empty() {
+            return Err(Error::DiagnosticAttributeNotYetImplementedAtParseSite {
+                site_name_plural: "compound statements",
+                spans: diagnostic_filters.spans().collect(),
+            });
+        }
+
         let brace_span = lexer.expect_span(Token::Paren('{'))?;
         let brace_nesting_level = Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
         let mut block = ast::Block::default();
