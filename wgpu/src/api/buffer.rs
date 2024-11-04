@@ -311,7 +311,6 @@ impl Buffer {
     #[track_caller]
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds, self.size);
-        check_buffer_bounds(self.size, offset, size);
         BufferSlice {
             buffer: self,
             offset,
@@ -984,31 +983,6 @@ impl Drop for BufferViewMut {
     }
 }
 
-#[track_caller]
-fn check_buffer_bounds(
-    buffer_size: BufferAddress,
-    slice_offset: BufferAddress,
-    slice_size: BufferSize,
-) {
-    // A slice of length 0 is invalid, so the offset must not be equal to or greater than the buffer size.
-    if slice_offset >= buffer_size {
-        panic!(
-            "slice offset {} is out of range for buffer of size {}",
-            slice_offset, buffer_size
-        );
-    }
-
-    // Detect integer overflow.
-    let end = slice_offset.checked_add(slice_size.get());
-    if end.is_none_or(|end| end > buffer_size) {
-        panic!(
-            "slice offset {} size {} is out of range for buffer of size {}",
-            slice_offset, slice_size, buffer_size
-        );
-    }
-}
-
-#[track_caller]
 pub(crate) fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     bounds: S,
     whole_size: BufferAddress,
@@ -1030,9 +1004,7 @@ pub(crate) fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        check_buffer_bounds, range_overlaps, range_to_offset_size, BufferAddress, BufferSize,
-    };
+    use super::{range_overlaps, range_to_offset_size, BufferAddress, BufferSize};
 
     fn bs(value: BufferAddress) -> BufferSize {
         BufferSize::new(value).unwrap()
@@ -1060,27 +1032,6 @@ mod tests {
     #[should_panic = "buffer slices can not be empty"]
     fn range_to_offset_size_panics_for_unbounded_empty_range() {
         range_to_offset_size(..0, 100);
-    }
-
-    #[test]
-    fn check_buffer_bounds_works_for_end_in_range() {
-        check_buffer_bounds(200, 100, bs(50));
-        check_buffer_bounds(200, 100, bs(100));
-        check_buffer_bounds(u64::MAX, u64::MAX - 100, bs(100));
-        check_buffer_bounds(u64::MAX, 0, bs(u64::MAX));
-        check_buffer_bounds(u64::MAX, 1, bs(u64::MAX - 1));
-    }
-
-    #[test]
-    #[should_panic]
-    fn check_buffer_bounds_panics_for_end_over_size() {
-        check_buffer_bounds(200, 100, bs(101));
-    }
-
-    #[test]
-    #[should_panic]
-    fn check_buffer_bounds_panics_for_end_wraparound() {
-        check_buffer_bounds(u64::MAX, 1, bs(u64::MAX));
     }
 
     #[test]
