@@ -1209,6 +1209,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Set index type to NONE in `get_acceleration_structure_build_sizes`. By @Vecvec in [#6802](https://github.com/gfx-rs/wgpu/pull/6802).
 - Fix `wgpu-info` not showing dx12 adapters. By @wumpf in [#6844](https://github.com/gfx-rs/wgpu/pull/6844).
 - Use `transform_buffer_offset` when initialising `transform_buffer`. By @Vecvec in [#6864](https://github.com/gfx-rs/wgpu/pull/6864).
+- Move buffer slice OOB checks to be a validation error in `wgpu-core`, instead of a panic in `wgpu` only. By @ErichDonGubler in [#6493](https://github.com/gfx-rs/wgpu/pull/6493).
 
 #### naga
 
