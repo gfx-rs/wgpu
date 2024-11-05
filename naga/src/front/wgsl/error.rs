@@ -1023,7 +1023,7 @@ impl<'a> Error<'a> {
             } => ParseError {
                 message: format!(
                     "the `{}` diagnostic filter is not yet supported",
-                    triggering_rule.to_ident()
+                    triggering_rule.to_wgsl_ident()
                 ),
                 labels: vec![(span, "".into())],
                 notes: vec![format!(
