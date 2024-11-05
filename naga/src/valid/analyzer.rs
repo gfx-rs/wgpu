@@ -6,6 +6,7 @@
 //! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
+use crate::diagnostic_filter::{DiagnosticFilterNode, FilterableTriggeringRule};
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
@@ -289,6 +290,13 @@ pub struct FunctionInfo {
 
     /// Indicates that the function is using dual source blending.
     pub dual_source_blending: bool,
+
+    /// The leaf of all module-wide diagnostic filter rules tree parsed from directives in this
+    /// module.
+    ///
+    /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
+    /// validation.
+    diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
 }
 
 impl FunctionInfo {
@@ -826,6 +834,7 @@ impl FunctionInfo {
         other_functions: &[FunctionInfo],
         mut disruptor: Option<UniformityDisruptor>,
         expression_arena: &Arena<crate::Expression>,
+        diagnostic_filter_arena: &Arena<DiagnosticFilterNode>,
     ) -> Result<FunctionUniformity, WithSpan<FunctionError>> {
         use crate::Statement as S;
 
@@ -842,8 +851,21 @@ impl FunctionInfo {
                             && !req.is_empty()
                         {
                             if let Some(cause) = disruptor {
-                                return Err(FunctionError::NonUniformControlFlow(req, expr, cause)
-                                    .with_span_handle(expr, expression_arena));
+                                let severity = DiagnosticFilterNode::search(
+                                    self.diagnostic_filter_leaf,
+                                    diagnostic_filter_arena,
+                                    FilterableTriggeringRule::DerivativeUniformity,
+                                );
+                                severity.report_diag(
+                                    FunctionError::NonUniformControlFlow(req, expr, cause)
+                                        .with_span_handle(expr, expression_arena),
+                                    // TODO: Yes, this isn't contextualized with source, because
+                                    // the user is supposed to render what would normally be an
+                                    // error here. Once we actually support warning-level
+                                    // diagnostic items, then we won't need this non-compliant hack:
+                                    // <https://github.com/gfx-rs/wgpu/issues/6458>
+                                    |e, level| log::log!(level, "{e}"),
+                                )?;
                             }
                         }
                         requirements |= req;
@@ -901,9 +923,13 @@ impl FunctionInfo {
                         exit: ExitFlags::empty(),
                     }
                 }
-                S::Block(ref b) => {
-                    self.process_block(b, other_functions, disruptor, expression_arena)?
-                }
+                S::Block(ref b) => self.process_block(
+                    b,
+                    other_functions,
+                    disruptor,
+                    expression_arena,
+                    diagnostic_filter_arena,
+                )?,
                 S::If {
                     condition,
                     ref accept,
@@ -917,12 +943,14 @@ impl FunctionInfo {
                         other_functions,
                         branch_disruptor,
                         expression_arena,
+                        diagnostic_filter_arena,
                     )?;
                     let reject_uniformity = self.process_block(
                         reject,
                         other_functions,
                         branch_disruptor,
                         expression_arena,
+                        diagnostic_filter_arena,
                     )?;
                     accept_uniformity | reject_uniformity
                 }
@@ -941,6 +969,7 @@ impl FunctionInfo {
                             other_functions,
                             case_disruptor,
                             expression_arena,
+                            diagnostic_filter_arena,
                         )?;
                         case_disruptor = if case.fall_through {
                             case_disruptor.or(case_uniformity.exit_disruptor())
@@ -956,14 +985,20 @@ impl FunctionInfo {
                     ref continuing,
                     break_if,
                 } => {
-                    let body_uniformity =
-                        self.process_block(body, other_functions, disruptor, expression_arena)?;
+                    let body_uniformity = self.process_block(
+                        body,
+                        other_functions,
+                        disruptor,
+                        expression_arena,
+                        diagnostic_filter_arena,
+                    )?;
                     let continuing_disruptor = disruptor.or(body_uniformity.exit_disruptor());
                     let continuing_uniformity = self.process_block(
                         continuing,
                         other_functions,
                         continuing_disruptor,
                         expression_arena,
+                        diagnostic_filter_arena,
                     )?;
                     if let Some(expr) = break_if {
                         let _ = self.add_ref(expr);
@@ -1117,6 +1152,7 @@ impl ModuleInfo {
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
             sampling: crate::FastHashSet::default(),
             dual_source_blending: false,
+            diagnostic_filter_leaf: module.diagnostic_filter_leaf,
         };
         let resolve_context =
             ResolveContext::with_locals(module, &fun.local_variables, &fun.arguments);
@@ -1140,7 +1176,13 @@ impl ModuleInfo {
             }
         }
 
-        let uniformity = info.process_block(&fun.body, &self.functions, None, &fun.expressions)?;
+        let uniformity = info.process_block(
+            &fun.body,
+            &self.functions,
+            None,
+            &fun.expressions,
+            &module.diagnostic_filters,
+        )?;
         info.uniformity = uniformity.result;
         info.may_kill = uniformity.exit.contains(ExitFlags::MAY_KILL);
 
@@ -1230,6 +1272,7 @@ fn uniform_control_flow() {
         expressions: vec![ExpressionInfo::new(); expressions.len()].into_boxed_slice(),
         sampling: crate::FastHashSet::default(),
         dual_source_blending: false,
+        diagnostic_filter_leaf: None,
     };
     let resolve_context = ResolveContext {
         constants: &Arena::new(),
@@ -1276,7 +1319,8 @@ fn uniform_control_flow() {
             &vec![stmt_emit1, stmt_if_uniform].into(),
             &[],
             None,
-            &expressions
+            &expressions,
+            &Arena::new(),
         ),
         Ok(FunctionUniformity {
             result: Uniformity {
@@ -1308,6 +1352,7 @@ fn uniform_control_flow() {
             &[],
             None,
             &expressions,
+            &Arena::new(),
         );
         if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE {
             assert_eq!(info[derivative_expr].ref_count, 2);
@@ -1335,7 +1380,8 @@ fn uniform_control_flow() {
             &vec![stmt_emit3, stmt_return_non_uniform].into(),
             &[],
             Some(UniformityDisruptor::Return),
-            &expressions
+            &expressions,
+            &Arena::new(),
         ),
         Ok(FunctionUniformity {
             result: Uniformity {
@@ -1362,7 +1408,8 @@ fn uniform_control_flow() {
             &vec![stmt_emit4, stmt_assign, stmt_kill, stmt_return_pointer].into(),
             &[],
             Some(UniformityDisruptor::Discard),
-            &expressions
+            &expressions,
+            &Arena::new(),
         ),
         Ok(FunctionUniformity {
             result: Uniformity {

@@ -1,4 +1,6 @@
-use crate::diagnostic_filter::{self, DiagnosticFilter, FilterableTriggeringRule};
+use crate::diagnostic_filter::{
+    self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
+};
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, EnableExtensions, UnimplementedEnableExtension,
@@ -1907,10 +1909,8 @@ impl Parser {
                         let _ = lexer.next();
                         let mut body = ast::Block::default();
 
-                        let (condition, span) = lexer.capture_span(|lexer| {
-                            let condition = self.general_expression(lexer, ctx)?;
-                            Ok(condition)
-                        })?;
+                        let (condition, span) =
+                            lexer.capture_span(|lexer| self.general_expression(lexer, ctx))?;
                         let mut reject = ast::Block::default();
                         reject.stmts.push(ast::Statement {
                             kind: ast::StatementKind::Break,
@@ -1966,11 +1966,12 @@ impl Parser {
 
                         let mut body = ast::Block::default();
                         if !lexer.skip(Token::Separator(';')) {
-                            let (condition, span) = lexer.capture_span(|lexer| {
-                                let condition = self.general_expression(lexer, ctx)?;
-                                lexer.expect(Token::Separator(';'))?;
-                                Ok(condition)
-                            })?;
+                            let (condition, span) =
+                                lexer.capture_span(|lexer| -> Result<_, Error<'_>> {
+                                    let condition = self.general_expression(lexer, ctx)?;
+                                    lexer.expect(Token::Separator(';'))?;
+                                    Ok(condition)
+                                })?;
                             let mut reject = ast::Block::default();
                             reject.stmts.push(ast::Statement {
                                 kind: ast::StatementKind::Break,
@@ -2523,6 +2524,7 @@ impl Parser {
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
         let mut enable_extensions = EnableExtensions::empty();
+        let mut diagnostic_filters = DiagnosticFilterMap::new();
 
         // Parse directives.
         while let Ok((ident, _directive_ident_span)) = lexer.peek_ident_with_span() {
@@ -2532,12 +2534,8 @@ impl Parser {
                 match kind {
                     DirectiveKind::Diagnostic => {
                         if let Some(diagnostic_filter) = self.diagnostic_filter(&mut lexer)? {
-                            let triggering_rule = diagnostic_filter.triggering_rule;
                             let span = self.peek_rule_span(&lexer);
-                            Err(Error::DiagnosticNotYetImplemented {
-                                triggering_rule,
-                                span,
-                            })?;
+                            diagnostic_filters.add(diagnostic_filter, span)?;
                         }
                         lexer.expect(Token::Separator(';'))?;
                     }
@@ -2583,6 +2581,8 @@ impl Parser {
 
         lexer.enable_extensions = enable_extensions.clone();
         tu.enable_extensions = enable_extensions;
+        tu.diagnostic_filter_leaf =
+            Self::write_diagnostic_filters(&mut tu.diagnostic_filters, diagnostic_filters, None);
 
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
@@ -2672,5 +2672,26 @@ impl Parser {
         lexer.expect(Token::Paren(')'))?;
 
         Ok(filter)
+    }
+
+    pub(crate) fn write_diagnostic_filters(
+        arena: &mut Arena<DiagnosticFilterNode>,
+        filters: DiagnosticFilterMap,
+        parent: Option<Handle<DiagnosticFilterNode>>,
+    ) -> Option<Handle<DiagnosticFilterNode>> {
+        filters
+            .into_iter()
+            .fold(parent, |parent, (triggering_rule, (new_severity, span))| {
+                Some(arena.append(
+                    DiagnosticFilterNode {
+                        inner: DiagnosticFilter {
+                            new_severity,
+                            triggering_rule,
+                        },
+                        parent,
+                    },
+                    span,
+                ))
+            })
     }
 }
