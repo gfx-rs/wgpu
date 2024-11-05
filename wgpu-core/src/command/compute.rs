@@ -308,6 +308,14 @@ impl Global {
         };
 
         arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
+            let query_set = match hub.query_sets.get(tw.query_set).get() {
+                Ok(query_set) => query_set,
+                Err(e) => return make_err(e.into(), arc_desc),
+            };
+            match query_set.same_device(&cmd_buf.device) {
+                Ok(()) => (),
+                Err(e) => return make_err(e.into(), arc_desc),
+            }
             match cmd_buf
                 .device
                 .require_features(wgt::Features::TIMESTAMP_QUERY)
@@ -315,11 +323,6 @@ impl Global {
                 Ok(()) => (),
                 Err(e) => return make_err(e.into(), arc_desc),
             }
-
-            let query_set = match hub.query_sets.get(tw.query_set).get() {
-                Ok(query_set) => query_set,
-                Err(e) => return make_err(e.into(), arc_desc),
-            };
 
             Some(ArcPassTimestampWrites {
                 query_set,
