@@ -1393,6 +1393,8 @@ impl Global {
                 };
 
             arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
+                device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
+
                 let query_set = query_sets.get(tw.query_set).get()?;
 
                 Some(ArcPassTimestampWrites {

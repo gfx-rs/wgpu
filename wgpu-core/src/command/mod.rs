@@ -26,7 +26,7 @@ pub use timestamp_writes::PassTimestampWrites;
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
-use crate::device::{Device, DeviceError};
+use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
@@ -642,6 +642,8 @@ pub enum CommandEncoderError {
     InvalidColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 impl Global {

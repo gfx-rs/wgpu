@@ -58,6 +58,12 @@ Bottom level categories:
 
 - Change the `DropCallback` API to use `FnOnce` instead of `FnMut`. By @jerzywilczek in [#6482](https://github.com/gfx-rs/wgpu/pull/6482)
 
+### Bug Fixes
+
+#### General
+
+- Ensure that `Features::TIMESTAMP_QUERY` is set when using timestamp writes in render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497).
+
 ## 23.0.0 (2024-10-25)
 
 ### Themes of this release
