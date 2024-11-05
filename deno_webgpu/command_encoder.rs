@@ -126,7 +126,7 @@ impl GPUCommandEncoder {
 
         let (render_pass, err) = self
             .instance
-            .command_encoder_create_render_pass(self.id, &wgpu_descriptor);
+            .command_encoder_begin_render_pass(self.id, &wgpu_descriptor);
 
         self.error_handler.push_error(err);
 
