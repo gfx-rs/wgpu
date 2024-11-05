@@ -2238,7 +2238,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     end_of_pass_write_index: tw.end_of_pass_write_index,
                 });
 
-        let (pass, err) = self.context.0.command_encoder_create_compute_pass(
+        let (pass, err) = self.context.0.command_encoder_begin_compute_pass(
             self.id,
             &wgc::command::ComputePassDescriptor {
                 label: desc.label.map(Borrowed),

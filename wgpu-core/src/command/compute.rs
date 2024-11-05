@@ -281,7 +281,7 @@ impl Global {
     /// If successful, puts the encoder into the [`Locked`] state.
     ///
     /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
-    pub fn command_encoder_create_compute_pass(
+    pub fn command_encoder_begin_compute_pass(
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_>,
@@ -360,7 +360,7 @@ impl Global {
             push_constant_data,
         } = base;
 
-        let (mut compute_pass, encoder_error) = self.command_encoder_create_compute_pass(
+        let (mut compute_pass, encoder_error) = self.command_encoder_begin_compute_pass(
             encoder_id,
             &ComputePassDescriptor {
                 label: label.as_deref().map(std::borrow::Cow::Borrowed),
