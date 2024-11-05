@@ -33,7 +33,7 @@ impl Severity {
     const OFF: &'static str = "off";
 
     /// Convert from a sentinel word in WGSL into its associated [`Severity`], if possible.
-    pub fn from_ident(s: &str) -> Option<Self> {
+    pub fn from_wgsl_ident(s: &str) -> Option<Self> {
         Some(match s {
             Self::ERROR => Self::Error,
             Self::WARNING => Self::Warning,
@@ -82,7 +82,7 @@ impl FilterableTriggeringRule {
     const DERIVATIVE_UNIFORMITY: &'static str = "derivative_uniformity";
 
     /// Convert from a sentinel word in WGSL into its associated [`FilterableTriggeringRule`], if possible.
-    pub fn from_ident(s: &str) -> Option<Self> {
+    pub fn from_wgsl_ident(s: &str) -> Option<Self> {
         Some(match s {
             Self::DERIVATIVE_UNIFORMITY => Self::DerivativeUniformity,
             _ => return None,
@@ -90,7 +90,7 @@ impl FilterableTriggeringRule {
     }
 
     /// Maps this [`FilterableTriggeringRule`] into the sentinel word associated with it in WGSL.
-    pub const fn to_ident(self) -> &'static str {
+    pub const fn to_wgsl_ident(self) -> &'static str {
         match self {
             Self::DerivativeUniformity => Self::DERIVATIVE_UNIFORMITY,
         }

@@ -1028,7 +1028,7 @@ impl<'a> Error<'a> {
                 ParseError {
                     message: format!(
                         "found conflicting `diagnostic(…)` rule(s) for `{}`",
-                        triggering_rule.to_ident()
+                        triggering_rule.to_wgsl_ident()
                     ),
                     labels: vec![
                         (first_span, "first rule".into()),
