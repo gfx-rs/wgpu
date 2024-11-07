@@ -1068,7 +1068,8 @@ impl<A: hal::Api> Example<A> {
             self.device.destroy_shader_module(self.shader_module);
 
             self.surface.unconfigure(&self.device);
-            self.device.exit(self.queue);
+            drop(self.queue);
+            drop(self.device);
             drop(self.surface);
             drop(self.adapter);
         }

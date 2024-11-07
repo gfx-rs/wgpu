@@ -501,14 +501,6 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn exit(self, queue: super::Queue) {
-        let gl = &self.shared.context.lock();
-        unsafe { gl.delete_vertex_array(self.main_vao) };
-        unsafe { gl.delete_framebuffer(queue.draw_fbo) };
-        unsafe { gl.delete_framebuffer(queue.copy_fbo) };
-        unsafe { gl.delete_buffer(queue.zero_buffer) };
-    }
-
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,

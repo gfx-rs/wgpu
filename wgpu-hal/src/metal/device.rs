@@ -320,8 +320,6 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn exit(self, _queue: super::Queue) {}
-
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
         let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);

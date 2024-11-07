@@ -16,8 +16,6 @@ use super::{
 };
 
 pub trait DynDevice: DynResource {
-    unsafe fn exit(self: Box<Self>, queue: Box<dyn DynQueue>);
-
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
@@ -166,10 +164,6 @@ pub trait DynDevice: DynResource {
 }
 
 impl<D: Device + DynResource> DynDevice for D {
-    unsafe fn exit(self: Box<Self>, queue: Box<dyn DynQueue>) {
-        unsafe { D::exit(*self, queue.unbox()) }
-    }
-
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,

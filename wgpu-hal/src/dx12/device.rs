@@ -391,10 +391,6 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn exit(self, _queue: super::Queue) {
-        self.rtv_pool.lock().free_handle(self.null_rtv_handle);
-    }
-
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,

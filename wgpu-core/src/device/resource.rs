@@ -57,10 +57,9 @@ use super::{
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
-    raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
+    raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
     pub(crate) queue: OnceLock<Weak<Queue>>,
-    queue_to_drop: OnceLock<Box<dyn hal::DynQueue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -154,23 +153,19 @@ impl Drop for Device {
             closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
         }
 
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        self.command_allocator.dispose(raw.as_ref());
+        self.command_allocator.dispose(self.raw.as_ref());
         #[cfg(feature = "indirect-validation")]
         self.indirect_validation
             .take()
             .unwrap()
-            .dispose(raw.as_ref());
+            .dispose(self.raw.as_ref());
         unsafe {
-            raw.destroy_buffer(zero_buffer);
-            raw.destroy_fence(fence);
-            let queue = self.queue_to_drop.take().unwrap();
-            raw.exit(queue);
+            self.raw.destroy_buffer(zero_buffer);
+            self.raw.destroy_fence(fence);
         }
     }
 }
@@ -249,10 +244,9 @@ impl Device {
         };
 
         Ok(Self {
-            raw: ManuallyDrop::new(raw_device),
+            raw: raw_device,
             adapter: adapter.clone(),
             queue: OnceLock::new(),
-            queue_to_drop: OnceLock::new(),
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
@@ -323,10 +317,6 @@ impl Device {
             }
         }
         DeviceError::from_hal(error)
-    }
-
-    pub(crate) fn release_queue(&self, queue: Box<dyn hal::DynQueue>) {
-        assert!(self.queue_to_drop.set(queue).is_ok());
     }
 
     /// Run some destroy operations that were deferred.

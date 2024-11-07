@@ -676,7 +676,7 @@ pub trait Adapter: WasmNotSendSync {
 /// 1)  Free resources with methods like [`Device::destroy_texture`] or
 ///     [`Device::destroy_shader_module`].
 ///
-/// 1)  Shut down the device by calling [`Device::exit`].
+/// 1)  Drop the device.
 ///
 /// [`vkDevice`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VkDevice
 /// [`ID3D12Device`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device
@@ -706,8 +706,6 @@ pub trait Adapter: WasmNotSendSync {
 pub trait Device: WasmNotSendSync {
     type A: Api;
 
-    /// Exit connection to this logical device.
-    unsafe fn exit(self, queue: <Self::A as Api>::Queue);
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUses::empty()`.

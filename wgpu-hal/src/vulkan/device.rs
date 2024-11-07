@@ -289,18 +289,6 @@ impl super::DeviceShared {
                 .size((range.end - range.start + mask) & !mask)
         }))
     }
-
-    unsafe fn free_resources(&self) {
-        for &raw in self.render_passes.lock().values() {
-            unsafe { self.raw.destroy_render_pass(raw, None) };
-        }
-        for &raw in self.framebuffers.lock().values() {
-            unsafe { self.raw.destroy_framebuffer(raw, None) };
-        }
-        if self.drop_guard.is_none() {
-            unsafe { self.raw.destroy_device(None) };
-        }
-    }
 }
 
 impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
@@ -1022,18 +1010,6 @@ impl super::Device {
 
 impl crate::Device for super::Device {
     type A = super::Api;
-
-    unsafe fn exit(self, queue: super::Queue) {
-        unsafe { self.mem_allocator.into_inner().cleanup(&*self.shared) };
-        unsafe { self.desc_allocator.into_inner().cleanup(&*self.shared) };
-        unsafe {
-            queue
-                .relay_semaphores
-                .into_inner()
-                .destroy(&self.shared.raw)
-        };
-        unsafe { self.shared.free_resources() };
-    }
 
     unsafe fn create_buffer(
         &self,

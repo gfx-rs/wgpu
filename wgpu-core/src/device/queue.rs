@@ -41,7 +41,7 @@ use thiserror::Error;
 use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
-    raw: ManuallyDrop<Box<dyn hal::DynQueue>>,
+    raw: Box<dyn hal::DynQueue>,
     pub(crate) device: Arc<Device>,
     pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
     life_tracker: Mutex<LifetimeTracker>,
@@ -60,7 +60,6 @@ impl Queue {
         let pending_encoder = match pending_encoder {
             Ok(pending_encoder) => pending_encoder,
             Err(e) => {
-                device.release_queue(raw);
                 return Err(e);
             }
         };
@@ -93,7 +92,7 @@ impl Queue {
         );
 
         Ok(Queue {
-            raw: ManuallyDrop::new(raw),
+            raw,
             device,
             pending_writes,
             life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
@@ -198,9 +197,6 @@ impl Drop for Queue {
         // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
         let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         pending_writes.dispose(self.device.raw());
-        // SAFETY: we never access `self.raw` beyond this point.
-        let queue = unsafe { ManuallyDrop::take(&mut self.raw) };
-        self.device.release_queue(queue);
 
         closures.fire();
     }

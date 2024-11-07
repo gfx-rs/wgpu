@@ -646,6 +646,20 @@ struct DeviceShared {
     memory_allocations_counter: InternalCounter,
 }
 
+impl Drop for DeviceShared {
+    fn drop(&mut self) {
+        for &raw in self.render_passes.lock().values() {
+            unsafe { self.raw.destroy_render_pass(raw, None) };
+        }
+        for &raw in self.framebuffers.lock().values() {
+            unsafe { self.raw.destroy_framebuffer(raw, None) };
+        }
+        if self.drop_guard.is_none() {
+            unsafe { self.raw.destroy_device(None) };
+        }
+    }
+}
+
 pub struct Device {
     shared: Arc<DeviceShared>,
     mem_allocator: Mutex<gpu_alloc::GpuAllocator<vk::DeviceMemory>>,
@@ -656,6 +670,13 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     counters: wgt::HalCounters,
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe { self.mem_allocator.lock().cleanup(&*self.shared) };
+        unsafe { self.desc_allocator.lock().cleanup(&*self.shared) };
+    }
 }
 
 /// Semaphores for forcing queue submissions to run in order.
@@ -739,6 +760,12 @@ pub struct Queue {
     device: Arc<DeviceShared>,
     family_index: u32,
     relay_semaphores: Mutex<RelaySemaphores>,
+}
+
+impl Drop for Queue {
+    fn drop(&mut self) {
+        unsafe { self.relay_semaphores.lock().destroy(&self.device.raw) };
+    }
 }
 
 #[derive(Debug)]
