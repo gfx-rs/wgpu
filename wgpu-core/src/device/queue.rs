@@ -149,37 +149,75 @@ impl Drop for Queue {
             .load(Ordering::Acquire);
 
         let fence = self.device.fence.read();
-        let wait_res = unsafe {
-            self.device.raw().wait(
-                fence.as_ref(),
-                last_successful_submission_index,
-                #[cfg(not(target_arch = "wasm32"))]
-                crate::device::CLEANUP_WAIT_MS,
-                #[cfg(target_arch = "wasm32")]
-                0, // WebKit and Chromium don't support a non-0 timeout
-            )
-        };
-        drop(fence);
 
-        match wait_res {
-            Ok(true) => {}
-            // Note: If we don't panic here we are in UB land (destroying resources while they are still in use by the GPU).
-            Ok(false) => {
-                // It's fine that we timed out on WebGL; GL objects can be deleted early as they
-                // will be kept around by the driver if GPU work hasn't finished.
-                // Moreover, the way we emulate read mappings on WebGL allows us to execute map_buffer earlier than on other
-                // backends since getBufferSubData is synchronous with respect to the other previously enqueued GL commands.
-                // Relying on this behavior breaks the clean abstraction wgpu-hal tries to maintain and
-                // we should find ways to improve this. See https://github.com/gfx-rs/wgpu/issues/6538.
-                #[cfg(not(target_arch = "wasm32"))]
-                panic!("We timed out while waiting on the last successful submission to complete!");
-            }
-            Err(e) => {
-                panic!(
-                    "We ran into an error while waiting on the last successful submission to complete! - {e}"
-                );
+        // Try waiting on the last submission using the following sequence of timeouts
+        let timeouts_in_ms = [100, 200, 400, 800, 1600, 3200];
+
+        for (i, timeout_ms) in timeouts_in_ms.into_iter().enumerate() {
+            let is_last_iter = i == timeouts_in_ms.len() - 1;
+
+            api_log!(
+                "Waiting on last submission. try: {}/{}. timeout: {}ms",
+                i + 1,
+                timeouts_in_ms.len(),
+                timeout_ms
+            );
+
+            let wait_res = unsafe {
+                self.device.raw().wait(
+                    fence.as_ref(),
+                    last_successful_submission_index,
+                    #[cfg(not(target_arch = "wasm32"))]
+                    timeout_ms,
+                    #[cfg(target_arch = "wasm32")]
+                    0, // WebKit and Chromium don't support a non-0 timeout
+                )
+            };
+            // Note: If we don't panic below we are in UB land (destroying resources while they are still in use by the GPU).
+            match wait_res {
+                Ok(true) => break,
+                Ok(false) => {
+                    // It's fine that we timed out on WebGL; GL objects can be deleted early as they
+                    // will be kept around by the driver if GPU work hasn't finished.
+                    // Moreover, the way we emulate read mappings on WebGL allows us to execute map_buffer earlier than on other
+                    // backends since getBufferSubData is synchronous with respect to the other previously enqueued GL commands.
+                    // Relying on this behavior breaks the clean abstraction wgpu-hal tries to maintain and
+                    // we should find ways to improve this. See https://github.com/gfx-rs/wgpu/issues/6538.
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        break;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if is_last_iter {
+                            panic!(
+                                "We timed out while waiting on the last successful submission to complete!"
+                            );
+                        }
+                    }
+                }
+                Err(e) => match e {
+                    hal::DeviceError::OutOfMemory => {
+                        if is_last_iter {
+                            panic!(
+                                "We ran into an OOM error while waiting on the last successful submission to complete!"
+                            );
+                        }
+                    }
+                    hal::DeviceError::Lost => {
+                        self.device.handle_hal_error(e); // will lose the device
+                        break;
+                    }
+                    hal::DeviceError::ResourceCreationFailed => unreachable!(),
+                    hal::DeviceError::Unexpected => {
+                        panic!(
+                            "We ran into an unexpected error while waiting on the last successful submission to complete!"
+                        );
+                    }
+                },
             }
         }
+        drop(fence);
 
         let snatch_guard = self.device.snatchable_lock.read();
         let (submission_closures, mapping_closures, queue_empty) =
