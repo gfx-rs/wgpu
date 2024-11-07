@@ -58,7 +58,6 @@ pub trait DynDevice: DynResource {
         &self,
         desc: &CommandEncoderDescriptor<dyn DynQueue>,
     ) -> Result<Box<dyn DynCommandEncoder>, DeviceError>;
-    unsafe fn destroy_command_encoder(&self, pool: Box<dyn DynCommandEncoder>);
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -266,10 +265,6 @@ impl<D: Device + DynResource> DynDevice for D {
         };
         unsafe { D::create_command_encoder(self, &desc) }
             .map(|b| -> Box<dyn DynCommandEncoder> { Box::new(b) })
-    }
-
-    unsafe fn destroy_command_encoder(&self, encoder: Box<dyn DynCommandEncoder>) {
-        unsafe { D::destroy_command_encoder(self, encoder.unbox()) };
     }
 
     unsafe fn create_bind_group_layout(

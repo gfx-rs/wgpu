@@ -1373,18 +1373,8 @@ impl crate::Device for super::Device {
             discarded: Vec::new(),
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
+            counters: Arc::clone(&self.counters),
         })
-    }
-    unsafe fn destroy_command_encoder(&self, cmd_encoder: super::CommandEncoder) {
-        unsafe {
-            // `vkDestroyCommandPool` also frees any command buffers allocated
-            // from that pool, so there's no need to explicitly call
-            // `vkFreeCommandBuffers` on `cmd_encoder`'s `free` and `discarded`
-            // fields.
-            self.shared.raw.destroy_command_pool(cmd_encoder.raw, None);
-        }
-
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -2556,7 +2546,7 @@ impl crate::Device for super::Device {
             .memory_allocations
             .set(self.shared.memory_allocations_counter.read());
 
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {

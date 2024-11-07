@@ -31,8 +31,7 @@ use smallvec::SmallVec;
 use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
 use crate::scratch::ScratchBuffer;
 use std::{
-    iter,
-    mem::{self, ManuallyDrop},
+    iter, mem,
     ptr::NonNull,
     sync::{atomic::Ordering, Arc},
 };
@@ -42,9 +41,10 @@ use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
-    pub(crate) device: Arc<Device>,
-    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
+    pub(crate) pending_writes: Mutex<PendingWrites>,
     life_tracker: Mutex<LifetimeTracker>,
+    // The device needs to be dropped last (`Device.zero_buffer` might be referenced by the encoder in pending writes).
+    pub(crate) device: Arc<Device>,
 }
 
 impl Queue {
@@ -86,15 +86,10 @@ impl Queue {
                 }]);
         }
 
-        let pending_writes = Mutex::new(
-            rank::QUEUE_PENDING_WRITES,
-            ManuallyDrop::new(pending_writes),
-        );
-
         Ok(Queue {
             raw,
             device,
-            pending_writes,
+            pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),
             life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
         })
     }
@@ -232,10 +227,6 @@ impl Drop for Queue {
             device_lost_invocations: SmallVec::new(),
         };
 
-        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
-        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
-        pending_writes.dispose(self.device.raw());
-
         closures.fire();
     }
 }
@@ -327,6 +318,7 @@ impl EncoderInFlight {
 /// All uses of [`StagingBuffer`]s end up here.
 #[derive(Debug)]
 pub(crate) struct PendingWrites {
+    // The command encoder needs to be destroyed before any other resource in pending writes.
     pub command_encoder: Box<dyn hal::DynCommandEncoder>,
 
     /// True if `command_encoder` is in the "recording" state, as
@@ -354,17 +346,6 @@ impl PendingWrites {
             dst_blas_s: FastHashMap::default(),
             dst_tlas_s: FastHashMap::default(),
         }
-    }
-
-    pub fn dispose(mut self, device: &dyn hal::DynDevice) {
-        unsafe {
-            if self.is_recording {
-                self.command_encoder.discard_encoding();
-            }
-            device.destroy_command_encoder(self.command_encoder);
-        }
-
-        self.temp_resources.clear();
     }
 
     pub fn insert_buffer(&mut self, buffer: &Arc<Buffer>) {
@@ -457,6 +438,16 @@ impl PendingWrites {
             self.is_recording = true;
         }
         self.command_encoder.as_mut()
+    }
+}
+
+impl Drop for PendingWrites {
+    fn drop(&mut self) {
+        unsafe {
+            if self.is_recording {
+                self.command_encoder.discard_encoding();
+            }
+        }
     }
 }
 
@@ -1154,7 +1145,7 @@ impl Queue {
 
                         if first_error.is_some() {
                             if let Ok(cmd_buf_data) = cmd_buf_data {
-                                cmd_buf_data.destroy(&command_buffer.device);
+                                cmd_buf_data.destroy();
                             }
                             continue;
                         }
@@ -1171,7 +1162,7 @@ impl Queue {
                                 );
                                 if let Err(err) = res {
                                     first_error.get_or_insert(err);
-                                    cmd_buf_data.destroy(&command_buffer.device);
+                                    cmd_buf_data.destroy();
                                     continue;
                                 }
                                 cmd_buf_data.into_baked_commands()
