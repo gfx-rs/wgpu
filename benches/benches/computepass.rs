@@ -389,7 +389,7 @@ impl ComputepassState {
         let end_idx = start_idx + dispatch_per_pass;
         for dispatch_idx in start_idx..end_idx {
             compute_pass.set_pipeline(&self.pipeline);
-            compute_pass.set_bind_group(0, Some(&self.bind_groups[dispatch_idx]), &[]);
+            compute_pass.set_bind_group(0, &self.bind_groups[dispatch_idx], &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
 

@@ -1095,12 +1095,16 @@ impl<'a, W: Write> Writer<'a, W> {
         // - Array - used if it's an image array
         // - Shadow - used if it's a depth image
         use crate::ImageClass as Ic;
-
-        let (base, kind, ms, comparison) = match class {
-            Ic::Sampled { kind, multi: true } => ("sampler", kind, "MS", ""),
-            Ic::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
-            Ic::Depth { multi: true } => ("sampler", crate::ScalarKind::Float, "MS", ""),
-            Ic::Depth { multi: false } => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
+        use crate::Scalar as S;
+        let float = S {
+            kind: crate::ScalarKind::Float,
+            width: 4,
+        };
+        let (base, scalar, ms, comparison) = match class {
+            Ic::Sampled { kind, multi: true } => ("sampler", S { kind, width: 4 }, "MS", ""),
+            Ic::Sampled { kind, multi: false } => ("sampler", S { kind, width: 4 }, "", ""),
+            Ic::Depth { multi: true } => ("sampler", float, "MS", ""),
+            Ic::Depth { multi: false } => ("sampler", float, "", "Shadow"),
             Ic::Storage { format, .. } => ("image", format.into(), "", ""),
         };
 
@@ -1114,7 +1118,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.out,
             "{}{}{}{}{}{}{}",
             precision,
-            glsl_scalar(crate::Scalar { kind, width: 4 })?.prefix,
+            glsl_scalar(scalar)?.prefix,
             base,
             glsl_dimension(dim),
             ms,
@@ -3091,7 +3095,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(image, ctx)?;
                         // All textureSize calls requires an lod argument
                         // except for multisampled samplers
-                        if class.is_multisampled() {
+                        if !class.is_multisampled() {
                             write!(self.out, ", 0")?;
                         }
                         write!(self.out, ")")?;

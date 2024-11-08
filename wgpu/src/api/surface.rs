@@ -159,7 +159,7 @@ impl Surface<'_> {
     /// - The raw handle obtained from the hal Surface must not be manually destroyed
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
-        &mut self,
+        &self,
         hal_surface_callback: F,
     ) -> Option<R> {
         self.context

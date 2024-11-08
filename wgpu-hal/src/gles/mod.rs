@@ -120,7 +120,7 @@ use glow::HasContext;
 
 use naga::FastHashMap;
 use parking_lot::Mutex;
-use std::sync::atomic::{AtomicU32, AtomicU8};
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -718,7 +718,7 @@ impl crate::DynQuerySet for QuerySet {}
 
 #[derive(Debug)]
 pub struct Fence {
-    last_completed: crate::FenceValue,
+    last_completed: crate::AtomicFenceValue,
     pending: Vec<(crate::FenceValue, glow::Fence)>,
 }
 
@@ -743,13 +743,24 @@ unsafe impl Sync for Fence {}
 
 impl Fence {
     fn get_latest(&self, gl: &glow::Context) -> crate::FenceValue {
-        let mut max_value = self.last_completed;
+        let mut max_value = self.last_completed.load(Ordering::Relaxed);
         for &(value, sync) in self.pending.iter() {
+            if value <= max_value {
+                // We already know this was good, no need to check again
+                continue;
+            }
             let status = unsafe { gl.get_sync_status(sync) };
             if status == glow::SIGNALED {
                 max_value = value;
+            } else {
+                // Anything after the first unsignalled is guaranteed to also be unsignalled
+                break;
             }
         }
+
+        // Track the latest value, to save ourselves some querying later
+        self.last_completed.fetch_max(max_value, Ordering::Relaxed);
+
         max_value
     }
 
@@ -763,7 +774,6 @@ impl Fence {
             }
         }
         self.pending.retain(|&(value, _)| value > latest);
-        self.last_completed = latest;
     }
 }
 

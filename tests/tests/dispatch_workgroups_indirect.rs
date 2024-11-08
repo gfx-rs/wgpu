@@ -82,7 +82,7 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
             compute_pass.set_pipeline(&test_resources.pipeline);
             compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
-            // compute_pass.set_bind_group(0, Some(&test_resources.bind_group), &[]);
+            // compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0);
         }
         ctx.queue.submit(Some(encoder.finish()));
@@ -124,7 +124,7 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
             compute_pass.set_pipeline(&test_resources.pipeline);
             compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
-            compute_pass.set_bind_group(0, Some(&test_resources.bind_group), &[]);
+            compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0);
         }
         ctx.queue.submit(Some(encoder.finish()));
@@ -281,7 +281,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
             compute_pass.set_pipeline(&test_resources.pipeline);
             compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
-            compute_pass.set_bind_group(0, Some(&test_resources.bind_group), &[]);
+            compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, indirect_offset);
         }
 

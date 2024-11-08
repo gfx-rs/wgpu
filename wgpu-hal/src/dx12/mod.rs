@@ -777,6 +777,12 @@ pub struct Texture {
     allocation: Option<suballocation::AllocationWrapper>,
 }
 
+impl Texture {
+    pub unsafe fn raw_resource(&self) -> &Direct3D12::ID3D12Resource {
+        &self.resource
+    }
+}
+
 impl crate::DynTexture for Texture {}
 impl crate::DynSurfaceTexture for Texture {}
 
@@ -953,6 +959,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
+    runtime_checks: bool,
 }
 
 impl crate::DynShaderModule for ShaderModule {}

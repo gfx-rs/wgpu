@@ -315,7 +315,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
 
         rpass.set_vertex_buffer(0, buffer_input.slice(..));
         rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, Some(&bg), &[]);
+        rpass.set_bind_group(0, &bg, &[]);
 
         // Draw three vertices and no instance, which is enough to generate the
         // checksums.

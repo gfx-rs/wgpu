@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "22.0.0"
+version = "23.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU types"

@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "22.0.0"
+version = "23.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -129,17 +129,17 @@ thiserror.workspace = true
 
 [dependencies.naga]
 path = "../naga"
-version = "22.0.0"
+version = "23.0.0"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "22.0.0"
+version = "23.0.0"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "22.0.0"
+version = "23.0.0"
 default-features = false
 
 [build-dependencies]

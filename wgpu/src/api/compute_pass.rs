@@ -45,13 +45,13 @@ impl<'encoder> ComputePass<'encoder> {
     /// If the bind group have dynamic offsets, provide them in the binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
-    pub fn set_bind_group(
+    pub fn set_bind_group<'a>(
         &mut self,
         index: u32,
-        bind_group: Option<&BindGroup>,
+        bind_group: impl Into<Option<&'a BindGroup>>,
         offsets: &[DynamicOffset],
     ) {
-        let bg = bind_group.map(|x| x.data.as_ref());
+        let bg = bind_group.into().map(|x| x.data.as_ref());
         DynContext::compute_pass_set_bind_group(
             &*self.inner.context,
             self.inner.data.as_mut(),

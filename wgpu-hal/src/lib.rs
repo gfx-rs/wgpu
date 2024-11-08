@@ -305,24 +305,28 @@ pub type AtomicFenceValue = std::sync::atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(any(gles, vulkan))]
-pub type DropCallback = Box<dyn FnMut() + Send + Sync + 'static>;
+pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
 
 #[cfg(any(gles, vulkan))]
 pub struct DropGuard {
-    callback: DropCallback,
+    callback: Option<DropCallback>,
 }
 
 #[cfg(all(any(gles, vulkan), any(native, Emscripten)))]
 impl DropGuard {
     fn from_option(callback: Option<DropCallback>) -> Option<Self> {
-        callback.map(|callback| Self { callback })
+        callback.map(|callback| Self {
+            callback: Some(callback),
+        })
     }
 }
 
 #[cfg(any(gles, vulkan))]
 impl Drop for DropGuard {
     fn drop(&mut self) {
-        (self.callback)();
+        if let Some(cb) = self.callback.take() {
+            (cb)();
+        }
     }
 }
 

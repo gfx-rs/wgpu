@@ -125,7 +125,7 @@ async fn execute(
             timestamp_writes: None,
         });
         compute_pass.set_pipeline(&patient_pipeline);
-        compute_pass.set_bind_group(0, Some(&bind_group), &[]);
+        compute_pass.set_bind_group(0, &bind_group, &[]);
         compute_pass.dispatch_workgroups(local_patient_workgroup_results.len() as u32, 1, 1);
     }
     queue.submit(Some(command_encoder.finish()));
@@ -147,7 +147,7 @@ async fn execute(
             timestamp_writes: None,
         });
         compute_pass.set_pipeline(&hasty_pipeline);
-        compute_pass.set_bind_group(0, Some(&bind_group), &[]);
+        compute_pass.set_bind_group(0, &bind_group, &[]);
         compute_pass.dispatch_workgroups(local_patient_workgroup_results.len() as u32, 1, 1);
     }
     queue.submit(Some(command_encoder.finish()));

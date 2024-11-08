@@ -292,7 +292,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, Some(&self.particle_bind_groups[self.frame_num % 2]), &[]);
+            cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch_workgroups(self.work_group_count, 1, 1);
         }
         command_encoder.pop_debug_group();

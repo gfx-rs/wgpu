@@ -512,7 +512,7 @@ impl<'w> BlockContext<'w> {
         block: &mut Block,
     ) -> Result<BoundsCheckResult, Error> {
         // If the value of `index` is known at compile time, find it now.
-        index.try_resolve_to_constant(self.ir_function, self.ir_module);
+        index.try_resolve_to_constant(&self.ir_function.expressions, self.ir_module);
 
         let policy = self.writer.bounds_check_policies.choose_policy(
             base,

@@ -1430,7 +1430,7 @@ impl crate::Context for ContextWgpuCore {
             Some(range.end - range.start),
             operation,
         ) {
-            Ok(()) => (),
+            Ok(_) => (),
             Err(cause) => {
                 self.handle_error_nolabel(&buffer_data.error_sink, cause, "Buffer::map_async")
             }
