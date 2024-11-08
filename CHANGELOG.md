@@ -64,6 +64,10 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### General
+
+- Handle query set creation as an internal error that loses the `Device`, rather than panicking. By @ErichDonGubler in [#6505](https://github.com/gfx-rs/wgpu/pull/6505).
+
 #### Naga
 
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)

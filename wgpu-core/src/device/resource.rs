@@ -3605,7 +3605,8 @@ impl Device {
 
         let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
 
-        let raw = unsafe { self.raw().create_query_set(&hal_desc).unwrap() };
+        let raw = unsafe { self.raw().create_query_set(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let query_set = QuerySet {
             raw: ManuallyDrop::new(raw),
