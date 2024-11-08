@@ -31,7 +31,8 @@ use smallvec::SmallVec;
 use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
 use crate::scratch::ScratchBuffer;
 use std::{
-    iter, mem,
+    iter,
+    mem::{self, ManuallyDrop},
     ptr::NonNull,
     sync::{atomic::Ordering, Arc},
 };
@@ -113,8 +114,7 @@ impl Queue {
         bool,
     ) {
         let mut life_tracker = self.lock_life();
-        let submission_closures =
-            life_tracker.triage_submissions(submission_index, &self.device.command_allocator);
+        let submission_closures = life_tracker.triage_submissions(submission_index);
 
         let mapping_closures = life_tracker.handle_mapping(snatch_guard);
 
@@ -274,27 +274,6 @@ pub(crate) struct EncoderInFlight {
     pub(crate) pending_tlas_s: FastHashMap<TrackerIndex, Arc<Tlas>>,
 }
 
-impl EncoderInFlight {
-    /// Free all of our command buffers.
-    ///
-    /// Return the command encoder, fully reset and ready to be
-    /// reused.
-    pub(crate) unsafe fn land(mut self) -> Box<dyn hal::DynCommandEncoder> {
-        unsafe { self.inner.raw.reset_all(self.inner.list) };
-        {
-            // This involves actually decrementing the ref count of all command buffer
-            // resources, so can be _very_ expensive.
-            profiling::scope!("drop command buffer trackers");
-            drop(self.trackers);
-            drop(self.pending_buffers);
-            drop(self.pending_textures);
-            drop(self.pending_blas_s);
-            drop(self.pending_tlas_s);
-        }
-        self.inner.raw
-    }
-}
-
 /// A private command encoder for writes made directly on the device
 /// or queue.
 ///
@@ -393,7 +372,7 @@ impl PendingWrites {
     fn pre_submit(
         &mut self,
         command_allocator: &CommandAllocator,
-        device: &Device,
+        device: &Arc<Device>,
         queue: &Queue,
     ) -> Result<Option<EncoderInFlight>, DeviceError> {
         if self.is_recording {
@@ -412,8 +391,9 @@ impl PendingWrites {
 
             let encoder = EncoderInFlight {
                 inner: crate::command::CommandEncoder {
-                    raw: mem::replace(&mut self.command_encoder, new_encoder),
+                    raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
+                    device: device.clone(),
                     is_open: false,
                     hal_label: None,
                 },
@@ -1134,7 +1114,7 @@ impl Queue {
                         // Note that we are required to invalidate all command buffers in both the success and failure paths.
                         // This is why we `continue` and don't early return via `?`.
                         #[allow(unused_mut)]
-                        let mut cmd_buf_data = command_buffer.try_take();
+                        let mut cmd_buf_data = command_buffer.take_finished();
 
                         #[cfg(feature = "trace")]
                         if let Some(ref mut trace) = *self.device.trace.lock() {
@@ -1147,9 +1127,6 @@ impl Queue {
                         }
 
                         if first_error.is_some() {
-                            if let Ok(cmd_buf_data) = cmd_buf_data {
-                                cmd_buf_data.destroy();
-                            }
                             continue;
                         }
 
@@ -1165,7 +1142,6 @@ impl Queue {
                                 );
                                 if let Err(err) = res {
                                     first_error.get_or_insert(err);
-                                    cmd_buf_data.destroy();
                                     continue;
                                 }
                                 cmd_buf_data.into_baked_commands()
@@ -1558,7 +1534,6 @@ fn validate_command_buffer(
     used_surface_textures: &mut track::TextureUsageScope,
 ) -> Result<(), QueueSubmitError> {
     command_buffer.same_device_as(queue)?;
-    cmd_buf_data.check_finished()?;
 
     {
         profiling::scope!("check resource state");

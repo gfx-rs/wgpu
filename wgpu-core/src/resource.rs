@@ -1368,9 +1368,10 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
-        let cmd_buf_data = cmd_buf.try_get();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.record();
 
-        if let Ok(mut cmd_buf_data) = cmd_buf_data {
+        if let Ok(cmd_buf_data) = cmd_buf_data {
             let cmd_buf_raw = cmd_buf_data
                 .encoder
                 .open(&cmd_buf.device)
