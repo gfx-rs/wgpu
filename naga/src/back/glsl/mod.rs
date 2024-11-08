@@ -3095,7 +3095,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(image, ctx)?;
                         // All textureSize calls requires an lod argument
                         // except for multisampled samplers
-                        if class.is_multisampled() {
+                        if !class.is_multisampled() {
                             write!(self.out, ", 0")?;
                         }
                         write!(self.out, ")")?;

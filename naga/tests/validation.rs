@@ -606,3 +606,40 @@ fn binding_arrays_cannot_hold_scalars() {
 
     assert!(t.validator.validate(&t.module).is_err());
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn validation_error_messages() {
+    let cases = [(
+        r#"@group(0) @binding(0) var my_sampler: sampler;
+
+                fn foo(tex: texture_2d<f32>) -> vec4<f32> {
+                    return textureSampleLevel(tex, my_sampler, vec2f(0, 0), 0.0);
+                }
+
+                fn main() {
+                    foo();
+                }
+            "#,
+        "\
+error: Function [1] 'main' is invalid
+  ┌─ wgsl:7:17
+  │  \n7 │ ╭                 fn main() {
+8 │ │                     foo();
+  │ │                     ^^^^ invalid function call
+  │ ╰──────────────────────────^ naga::Function [1]
+  │  \n  = Call to [0] is invalid
+  = Requires 1 arguments, but 0 are provided
+
+",
+    )];
+
+    for (source, expected_err) in cases {
+        let module = naga::front::wgsl::parse_str(source).unwrap();
+        let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+            .validate_no_overrides(&module)
+            .expect_err("module should be invalid");
+        println!("{}", err.emit_to_string(source));
+        assert_eq!(err.emit_to_string(source), expected_err);
+    }
+}

@@ -1,16 +1,11 @@
-#version 310 es
-#extension GL_EXT_texture_cube_map_array : require
+#version 430 core
+uniform sampler2D _group_0_binding_1_fs;
 
-precision highp float;
-precision highp int;
+uniform usampler2D _group_0_binding_2_fs;
 
-uniform highp sampler2D _group_0_binding_1_fs;
+uniform isampler2D _group_0_binding_3_fs;
 
-uniform highp usampler2D _group_0_binding_2_fs;
-
-uniform highp isampler2D _group_0_binding_3_fs;
-
-uniform highp sampler2DShadow _group_1_binding_2_fs;
+uniform sampler2DShadow _group_1_binding_2_fs;
 
 layout(location = 0) out vec4 _fs2p_location0;
 

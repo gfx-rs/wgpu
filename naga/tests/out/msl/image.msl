@@ -94,8 +94,9 @@ vertex levels_queriesOutput levels_queries(
 , metal::texture2d_ms<float, metal::access::read> image_aa [[user(fake0)]]
 ) {
     uint num_levels_2d = image_2d.get_num_mip_levels();
-    uint num_levels_2d_array = image_2d_array.get_num_mip_levels();
     uint num_layers_2d = image_2d_array.get_array_size();
+    uint num_levels_2d_array = image_2d_array.get_num_mip_levels();
+    uint num_layers_2d_array = image_2d_array.get_array_size();
     uint num_levels_cube = image_cube.get_num_mip_levels();
     uint num_levels_cube_array = image_cube_array.get_num_mip_levels();
     uint num_layers_cube = image_cube_array.get_array_size();

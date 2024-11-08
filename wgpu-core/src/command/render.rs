@@ -1358,9 +1358,11 @@ impl Global {
                 }) = color_attachment
                 {
                     let view = texture_views.get(*view_id).get()?;
+                    view.same_device(device)?;
 
                     let resolve_target = if let Some(resolve_target_id) = resolve_target {
                         let rt_arc = texture_views.get(*resolve_target_id).get()?;
+                        rt_arc.same_device(device)?;
 
                         Some(rt_arc)
                     } else {
@@ -1382,6 +1384,7 @@ impl Global {
             arc_desc.depth_stencil_attachment =
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
                     let view = texture_views.get(depth_stencil_attachment.view).get()?;
+                    view.same_device(device)?;
 
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
@@ -1394,6 +1397,9 @@ impl Global {
 
             arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
                 let query_set = query_sets.get(tw.query_set).get()?;
+                query_set.same_device(device)?;
+
+                device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
 
                 Some(ArcPassTimestampWrites {
                     query_set,
@@ -1407,6 +1413,7 @@ impl Global {
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {
                     let query_set = query_sets.get(occlusion_query_set).get()?;
+                    query_set.same_device(device)?;
 
                     Some(query_set)
                 } else {

@@ -1296,10 +1296,13 @@ impl Queue {
         unsafe { self.raw().get_timestamp_period() }
     }
 
-    pub fn on_submitted_work_done(&self, closure: SubmittedWorkDoneClosure) {
+    pub fn on_submitted_work_done(
+        &self,
+        closure: SubmittedWorkDoneClosure,
+    ) -> Option<SubmissionIndex> {
         api_log!("Queue::on_submitted_work_done");
         //TODO: flush pending writes
-        self.device.lock_life().add_work_done_closure(closure);
+        self.device.lock_life().add_work_done_closure(closure)
     }
 }
 
@@ -1442,9 +1445,13 @@ impl Global {
         &self,
         queue_id: QueueId,
         closure: SubmittedWorkDoneClosure,
-    ) {
+    ) -> SubmissionIndex {
+        api_log!("Queue::on_submitted_work_done {queue_id:?}");
+
+        //TODO: flush pending writes
         let queue = self.hub.queues.get(queue_id);
-        queue.on_submitted_work_done(closure);
+        let result = queue.on_submitted_work_done(closure);
+        result.unwrap_or(0) // '0' means no wait is necessary
     }
 }
 
