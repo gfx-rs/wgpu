@@ -54,7 +54,7 @@ impl Severity {
 /// A filterable triggering rule in a [`DiagnosticFilter`].
 ///
 /// <https://www.w3.org/TR/WGSL/#filterable-triggering-rules>
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -140,7 +140,7 @@ impl DiagnosticFilterMap {
             triggering_rule,
         } = diagnostic_filter;
 
-        match diagnostic_filters.entry(triggering_rule) {
+        match diagnostic_filters.entry(triggering_rule.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert((new_severity, span));
             }
@@ -245,11 +245,11 @@ impl DiagnosticFilterNode {
             let node = &arena[handle];
             let &Self { ref inner, parent } = node;
             let &DiagnosticFilter {
-                triggering_rule: rule,
+                triggering_rule: ref rule,
                 new_severity,
             } = inner;
 
-            if rule == triggering_rule {
+            if rule == &triggering_rule {
                 return new_severity;
             }
 

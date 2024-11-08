@@ -30,7 +30,7 @@ impl FilterableTriggeringRule {
     }
 
     /// Maps this [`FilterableTriggeringRule`] into the sentinel word associated with it in WGSL.
-    pub const fn to_wgsl_ident(self) -> &'static str {
+    pub const fn to_wgsl_ident(&self) -> &'static str {
         match self {
             Self::DerivativeUniformity => Self::DERIVATIVE_UNIFORMITY,
         }
