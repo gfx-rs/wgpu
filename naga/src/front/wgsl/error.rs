@@ -1050,7 +1050,7 @@ impl<'a> Error<'a> {
                     notes: vec![
                         concat!(
                             "Multiple `diagnostic(…)` rules with the same rule name ",
-                            "conflict unless it is a directive and the severity is the same.",
+                            "conflict unless they are directives and the severity is the same.",
                         )
                         .into(),
                         "You should delete the rule you don't want.".into(),
