@@ -187,7 +187,7 @@ impl Global {
 
             if !device
                 .features
-                .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+                .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             {
                 break 'error CreateBlasError::MissingFeature;
             }
@@ -238,7 +238,7 @@ impl Global {
 
             if !device
                 .features
-                .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+                .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             {
                 break 'error CreateTlasError::MissingFeature;
             }

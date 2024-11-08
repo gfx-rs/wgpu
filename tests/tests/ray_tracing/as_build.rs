@@ -86,7 +86,7 @@ static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(unbuilt_blas);
 
@@ -114,7 +114,7 @@ static OUT_OF_ORDER_AS_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(out_of_order_as_build);
 
@@ -183,12 +183,12 @@ fn out_of_order_as_build(ctx: TestingContext) {
 }
 
 #[gpu_test]
-static OUT_OF_ORDER_AS_BUILD_USE: GpuTestConfiguration =
-    GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits().features(
-            wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE | wgpu::Features::RAY_QUERY,
-        ))
-        .run_sync(out_of_order_as_build_use);
+static OUT_OF_ORDER_AS_BUILD_USE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits().features(
+        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+            | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
+    ))
+    .run_sync(out_of_order_as_build_use);
 
 fn out_of_order_as_build_use(ctx: TestingContext) {
     //

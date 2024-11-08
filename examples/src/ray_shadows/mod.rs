@@ -102,8 +102,8 @@ fn create_matrix(config: &wgpu::SurfaceConfiguration) -> Uniforms {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::RAY_QUERY
-            | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY
+            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
             | wgpu::Features::PUSH_CONSTANTS
     }
 

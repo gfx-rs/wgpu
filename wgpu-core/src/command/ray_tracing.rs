@@ -89,7 +89,7 @@ impl Global {
 
         if !device
             .features
-            .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+            .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
         {
             return Err(BuildAccelerationStructureError::MissingFeature);
         }
@@ -375,7 +375,7 @@ impl Global {
 
         if !device
             .features
-            .contains(Features::RAY_TRACING_ACCELERATION_STRUCTURE)
+            .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
         {
             return Err(BuildAccelerationStructureError::MissingFeature);
         }

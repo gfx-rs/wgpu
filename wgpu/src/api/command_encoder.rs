@@ -349,7 +349,7 @@ impl CommandEncoder {
     }
 }
 
-/// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
+/// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
     /// Build bottom and top level acceleration structures.
     ///
@@ -370,7 +370,7 @@ impl CommandEncoder {
     ///     - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
     ///     - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
     ///
-    /// If the device the command encoder is created from does not have [Features::RAY_TRACING_ACCELERATION_STRUCTURE] enabled then a validation error is generated
+    /// If the device the command encoder is created from does not have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled then a validation error is generated
     ///
     /// A bottom level acceleration structure may be build and used as a reference in a top level acceleration structure in the same invocation of this function.
     ///
@@ -381,7 +381,7 @@ impl CommandEncoder {
     ///    - All the bottom level acceleration structures referenced by the top level acceleration structure are valid and have been built prior,
     ///      or at same time as the containing top level acceleration structure.
     ///
-    /// [Features::RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     pub fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,

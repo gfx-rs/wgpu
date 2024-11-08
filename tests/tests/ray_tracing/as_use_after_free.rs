@@ -13,7 +13,8 @@ use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
 fn required_features() -> wgpu::Features {
-    wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+    wgpu::Features::EXPERIMENTAL_RAY_QUERY
+        | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
 }
 
 /// This test creates a blas, puts a reference to it in a tlas instance inside a tlas package,

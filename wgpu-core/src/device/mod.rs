@@ -547,7 +547,7 @@ pub fn create_validator(
     );
     caps.set(
         Caps::RAY_QUERY,
-        features.intersects(wgt::Features::RAY_QUERY),
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY),
     );
     caps.set(
         Caps::SUBGROUP_VERTEX_STAGE,

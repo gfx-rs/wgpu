@@ -103,7 +103,7 @@ static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConf
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(|ctx| {
         acceleration_structure_build(&ctx, false);
@@ -114,7 +114,7 @@ static ACCELERATION_STRUCTURE_BUILD_WITH_INDEX: GpuTestConfiguration = GpuTestCo
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(|ctx| {
         acceleration_structure_build(&ctx, true);

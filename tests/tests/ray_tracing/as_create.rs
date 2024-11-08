@@ -12,7 +12,7 @@ static BLAS_INVALID_VERTEX_FORMAT: GpuTestConfiguration = GpuTestConfiguration::
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(invalid_vertex_format_blas_create);
 
@@ -52,7 +52,7 @@ static BLAS_MISMATCHED_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
     )
     .run_sync(mismatched_index_blas_create);
 
