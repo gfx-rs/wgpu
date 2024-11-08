@@ -1,6 +1,6 @@
 use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
-    ShouldConflictOnFullDuplicate,
+    ShouldConflictOnFullDuplicate, StandardFilterableTriggeringRule,
 };
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
@@ -2166,10 +2166,9 @@ impl Parser {
         while lexer.skip(Token::Attribute) {
             let (name, name_span) = lexer.next_ident_with_span()?;
             if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
-                if let Some(filter) = self.diagnostic_filter(lexer)? {
-                    let span = self.peek_rule_span(lexer);
-                    diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
-                }
+                let filter = self.diagnostic_filter(lexer)?;
+                let span = self.peek_rule_span(lexer);
+                diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
             } else {
                 return Err(Error::Unexpected(
                     name_span,
@@ -2370,10 +2369,9 @@ impl Parser {
         while lexer.skip(Token::Attribute) {
             let (name, name_span) = lexer.next_ident_with_span()?;
             if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
-                if let Some(filter) = self.diagnostic_filter(lexer)? {
-                    let span = self.peek_rule_span(lexer);
-                    diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
-                }
+                let filter = self.diagnostic_filter(lexer)?;
+                let span = self.peek_rule_span(lexer);
+                diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
                 continue;
             }
             match name {
@@ -2603,14 +2601,13 @@ impl Parser {
                 let _ = lexer.next_ident_with_span().unwrap();
                 match kind {
                     DirectiveKind::Diagnostic => {
-                        if let Some(diagnostic_filter) = self.diagnostic_filter(&mut lexer)? {
-                            let span = self.peek_rule_span(&lexer);
-                            diagnostic_filters.add(
-                                diagnostic_filter,
-                                span,
-                                ShouldConflictOnFullDuplicate::No,
-                            )?;
-                        }
+                        let diagnostic_filter = self.diagnostic_filter(&mut lexer)?;
+                        let span = self.peek_rule_span(&lexer);
+                        diagnostic_filters.add(
+                            diagnostic_filter,
+                            span,
+                            ShouldConflictOnFullDuplicate::No,
+                        )?;
                         lexer.expect(Token::Separator(';'))?;
                     }
                     DirectiveKind::Enable => {
@@ -2698,10 +2695,7 @@ impl Parser {
         Ok(brace_nesting_level + 1)
     }
 
-    fn diagnostic_filter<'a>(
-        &self,
-        lexer: &mut Lexer<'a>,
-    ) -> Result<Option<DiagnosticFilter>, Error<'a>> {
+    fn diagnostic_filter<'a>(&self, lexer: &mut Lexer<'a>) -> Result<DiagnosticFilter, Error<'a>> {
         lexer.expect(Token::Paren('('))?;
 
         let (severity_control_name, severity_control_name_span) = lexer.next_ident_with_span()?;
@@ -2713,35 +2707,28 @@ impl Parser {
         lexer.expect(Token::Separator(','))?;
 
         let (diagnostic_name_token, diagnostic_name_token_span) = lexer.next_ident_with_span()?;
-        let diagnostic_rule_name = if lexer.skip(Token::Separator('.')) {
-            // Don't try to validate these name tokens on two tokens, which is conventionally used
-            // for third-party tooling.
-            lexer.next_ident_with_span()?;
-            None
+        let triggering_rule = if lexer.skip(Token::Separator('.')) {
+            let (ident, _span) = lexer.next_ident_with_span()?;
+            FilterableTriggeringRule::User(Box::new([diagnostic_name_token.into(), ident.into()]))
         } else {
-            Some(diagnostic_name_token)
+            let diagnostic_rule_name = diagnostic_name_token;
+            let diagnostic_rule_name_span = diagnostic_name_token_span;
+            if let Some(triggering_rule) =
+                StandardFilterableTriggeringRule::from_wgsl_ident(diagnostic_rule_name)
+            {
+                FilterableTriggeringRule::Standard(triggering_rule)
+            } else {
+                diagnostic_filter::Severity::Warning.report_wgsl_parse_diag(
+                    Error::UnknownDiagnosticRuleName(diagnostic_rule_name_span),
+                    lexer.source,
+                )?;
+                FilterableTriggeringRule::Unknown(diagnostic_rule_name.into())
+            }
         };
-        let diagnostic_rule_name_span = diagnostic_name_token_span;
-
-        let filter = diagnostic_rule_name
-            .and_then(|name| {
-                FilterableTriggeringRule::from_wgsl_ident(name)
-                    .map(Ok)
-                    .or_else(|| {
-                        diagnostic_filter::Severity::Warning
-                            .report_wgsl_parse_diag(
-                                Error::UnknownDiagnosticRuleName(diagnostic_rule_name_span),
-                                lexer.source,
-                            )
-                            .err()
-                            .map(Err)
-                    })
-            })
-            .transpose()?
-            .map(|triggering_rule| DiagnosticFilter {
-                new_severity,
-                triggering_rule,
-            });
+        let filter = DiagnosticFilter {
+            triggering_rule,
+            new_severity,
+        };
         lexer.skip(Token::Separator(','));
         lexer.expect(Token::Paren(')'))?;
 
