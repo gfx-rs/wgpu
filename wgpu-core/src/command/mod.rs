@@ -122,7 +122,7 @@ pub(crate) struct CommandEncoder {
     ///
     /// [`CommandEncoder`]: hal::Api::CommandEncoder
     /// [`CommandAllocator`]: crate::command::CommandAllocator
-    raw: Box<dyn hal::DynCommandEncoder>,
+    pub(crate) raw: Box<dyn hal::DynCommandEncoder>,
 
     /// All the raw command buffers for our owning [`CommandBuffer`], in
     /// submission order.
@@ -135,7 +135,7 @@ pub(crate) struct CommandEncoder {
     ///
     /// [CE::ra]: hal::CommandEncoder::reset_all
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
-    list: Vec<Box<dyn hal::DynCommandBuffer>>,
+    pub(crate) list: Vec<Box<dyn hal::DynCommandBuffer>>,
 
     /// True if `raw` is in the "recording" state.
     ///
@@ -143,9 +143,9 @@ pub(crate) struct CommandEncoder {
     /// details on the states `raw` can be in.
     ///
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
-    is_open: bool,
+    pub(crate) is_open: bool,
 
-    hal_label: Option<String>,
+    pub(crate) hal_label: Option<String>,
 }
 
 //TODO: handle errors better
@@ -248,8 +248,7 @@ impl CommandEncoder {
 /// Look at the documentation for [`CommandBufferMutable`] for an explanation of
 /// the fields in this struct. This is the "built" counterpart to that type.
 pub(crate) struct BakedCommands {
-    pub(crate) encoder: Box<dyn hal::DynCommandEncoder>,
-    pub(crate) list: Vec<Box<dyn hal::DynCommandBuffer>>,
+    pub(crate) encoder: CommandEncoder,
     pub(crate) trackers: Tracker,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
@@ -380,8 +379,7 @@ impl CommandBufferMutable {
 
     pub(crate) fn into_baked_commands(self) -> BakedCommands {
         BakedCommands {
-            encoder: self.encoder.raw,
-            list: self.encoder.list,
+            encoder: self.encoder,
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,

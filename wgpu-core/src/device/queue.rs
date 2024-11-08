@@ -261,8 +261,7 @@ pub enum TempResource {
 /// [`CommandBuffer`]: hal::Api::CommandBuffer
 /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
 pub(crate) struct EncoderInFlight {
-    raw: Box<dyn hal::DynCommandEncoder>,
-    cmd_buffers: Vec<Box<dyn hal::DynCommandBuffer>>,
+    inner: crate::command::CommandEncoder,
     pub(crate) trackers: Tracker,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
@@ -281,7 +280,7 @@ impl EncoderInFlight {
     /// Return the command encoder, fully reset and ready to be
     /// reused.
     pub(crate) unsafe fn land(mut self) -> Box<dyn hal::DynCommandEncoder> {
-        unsafe { self.raw.reset_all(self.cmd_buffers) };
+        unsafe { self.inner.raw.reset_all(self.inner.list) };
         {
             // This involves actually decrementing the ref count of all command buffer
             // resources, so can be _very_ expensive.
@@ -292,7 +291,7 @@ impl EncoderInFlight {
             drop(self.pending_blas_s);
             drop(self.pending_tlas_s);
         }
-        self.raw
+        self.inner.raw
     }
 }
 
@@ -412,8 +411,12 @@ impl PendingWrites {
                 .map_err(|e| device.handle_hal_error(e))?;
 
             let encoder = EncoderInFlight {
-                raw: mem::replace(&mut self.command_encoder, new_encoder),
-                cmd_buffers: vec![cmd_buf],
+                inner: crate::command::CommandEncoder {
+                    raw: mem::replace(&mut self.command_encoder, new_encoder),
+                    list: vec![cmd_buf],
+                    is_open: false,
+                    hal_label: None,
+                },
                 trackers: Tracker::new(),
                 pending_buffers,
                 pending_textures,
@@ -1175,7 +1178,7 @@ impl Queue {
 
                         // execute resource transitions
                         if let Err(e) = unsafe {
-                            baked.encoder.begin_encoding(hal_label(
+                            baked.encoder.raw.begin_encoding(hal_label(
                                 Some("(wgpu internal) Transit"),
                                 self.device.instance_flags,
                             ))
@@ -1202,21 +1205,21 @@ impl Queue {
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_device_tracker(
-                            baked.encoder.as_mut(),
+                            baked.encoder.raw.as_mut(),
                             &mut trackers,
                             &baked.trackers,
                             &snatch_guard,
                         );
 
-                        let transit = unsafe { baked.encoder.end_encoding().unwrap() };
-                        baked.list.insert(0, transit);
+                        let transit = unsafe { baked.encoder.raw.end_encoding().unwrap() };
+                        baked.encoder.list.insert(0, transit);
 
                         // Transition surface textures into `Present` state.
                         // Note: we could technically do it after all of the command buffers,
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
                             if let Err(e) = unsafe {
-                                baked.encoder.begin_encoding(hal_label(
+                                baked.encoder.raw.begin_encoding(hal_label(
                                     Some("(wgpu internal) Present"),
                                     self.device.instance_flags,
                                 ))
@@ -1233,17 +1236,16 @@ impl Queue {
                                 )
                                 .collect::<Vec<_>>();
                             let present = unsafe {
-                                baked.encoder.transition_textures(&texture_barriers);
-                                baked.encoder.end_encoding().unwrap()
+                                baked.encoder.raw.transition_textures(&texture_barriers);
+                                baked.encoder.raw.end_encoding().unwrap()
                             };
-                            baked.list.push(present);
+                            baked.encoder.list.push(present);
                             used_surface_textures = track::TextureUsageScope::default();
                         }
 
                         // done
                         active_executions.push(EncoderInFlight {
-                            raw: baked.encoder,
-                            cmd_buffers: baked.list,
+                            inner: baked.encoder,
                             trackers: baked.trackers,
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),
@@ -1307,7 +1309,7 @@ impl Queue {
             }
             let hal_command_buffers = active_executions
                 .iter()
-                .flat_map(|e| e.cmd_buffers.iter().map(|b| b.as_ref()))
+                .flat_map(|e| e.inner.list.iter().map(|b| b.as_ref()))
                 .collect::<Vec<_>>();
 
             {
