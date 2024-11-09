@@ -84,7 +84,7 @@ pub struct PhysicalDeviceFeatures {
     /// leaving this `None`.
     ///
     /// However, we do populate this when creating a device if
-    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
     ///
     /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
     /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
