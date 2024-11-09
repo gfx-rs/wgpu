@@ -66,7 +66,7 @@ Bottom level categories:
 
 #### General
 
-- Handle query set creation as an internal error that loses the `Device`, rather than panicking. By @ErichDonGubler in [#6505](https://github.com/gfx-rs/wgpu/pull/6505).
+- Handle query set creation failure as an internal error that loses the `Device`, rather than panicking. By @ErichDonGubler in [#6505](https://github.com/gfx-rs/wgpu/pull/6505).
 
 #### Naga
 
