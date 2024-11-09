@@ -116,7 +116,7 @@ impl ActiveSubmission {
                 return true;
             }
 
-            if encoder.pending_buffers.contains_key(&blas.tracker_index()) {
+            if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
                 return true;
             }
         }
@@ -135,7 +135,7 @@ impl ActiveSubmission {
                 return true;
             }
 
-            if encoder.pending_buffers.contains_key(&tlas.tracker_index()) {
+            if encoder.pending_tlas_s.contains_key(&tlas.tracker_index()) {
                 return true;
             }
         }
@@ -165,35 +165,20 @@ pub enum WaitIdleError {
 /// -   Each buffer's `ResourceInfo::submission_index` records the index of the
 ///     most recent queue submission that uses that buffer.
 ///
-/// -   Calling `Global::buffer_map_async` adds the buffer to
-///     `self.mapped`, and changes `Buffer::map_state` to prevent it
-///     from being used in any new submissions.
-///
 /// -   When the device is polled, the following `LifetimeTracker` methods decide
 ///     what should happen next:
 ///
-///     1)  `triage_mapped` drains `self.mapped`, checking the submission index
-///         of each buffer against the queue submissions that have finished
-///         execution. Buffers used by submissions still in flight go in
-///         `self.active[index].mapped`, and the rest go into
-///         `self.ready_to_map`.
-///
-///     2)  `triage_submissions` moves entries in `self.active[i]` for completed
+///     1)  `triage_submissions` moves entries in `self.active[i]` for completed
 ///         submissions to `self.ready_to_map`.  At this point, both
 ///         `self.active` and `self.ready_to_map` are up to date with the given
 ///         submission index.
 ///
-///     3)  `handle_mapping` drains `self.ready_to_map` and actually maps the
+///     2)  `handle_mapping` drains `self.ready_to_map` and actually maps the
 ///         buffers, collecting a list of notification closures to call.
 ///
 /// Only calling `Global::buffer_map_async` clones a new `Arc` for the
 /// buffer. This new `Arc` is only dropped by `handle_mapping`.
 pub(crate) struct LifetimeTracker {
-    /// Buffers for which a call to [`Buffer::map_async`] has succeeded, but
-    /// which haven't been examined by `triage_mapped` yet to decide when they
-    /// can be mapped.
-    mapped: Vec<Arc<Buffer>>,
-
     /// Resources used by queue submissions still in flight. One entry per
     /// submission, with older submissions appearing before younger.
     ///
@@ -221,7 +206,6 @@ pub(crate) struct LifetimeTracker {
 impl LifetimeTracker {
     pub fn new() -> Self {
         Self {
-            mapped: Vec::new(),
             active: Vec::new(),
             ready_to_map: Vec::new(),
             work_done_closures: SmallVec::new(),
@@ -250,8 +234,21 @@ impl LifetimeTracker {
         });
     }
 
-    pub(crate) fn map(&mut self, value: &Arc<Buffer>) {
-        self.mapped.push(value.clone());
+    pub(crate) fn map(&mut self, buffer: &Arc<Buffer>) -> Option<SubmissionIndex> {
+        // Determine which buffers are ready to map, and which must wait for the GPU.
+        let submission = self
+            .active
+            .iter_mut()
+            .rev()
+            .find(|a| a.contains_buffer(buffer));
+
+        let maybe_submission_index = submission.as_ref().map(|s| s.index);
+
+        submission
+            .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
+            .push(buffer.clone());
+
+        maybe_submission_index
     }
 
     /// Returns the submission index of the most recent submission that uses the
@@ -283,7 +280,7 @@ impl LifetimeTracker {
     }
 
     /// Returns the submission index of the most recent submission that uses the
-    /// given blas.
+    /// given tlas.
     pub fn get_tlas_latest_submission_index(&self, tlas: &Tlas) -> Option<SubmissionIndex> {
         // We iterate in reverse order, so that we can bail out early as soon
         // as we find a hit.
@@ -371,38 +368,21 @@ impl LifetimeTracker {
         }
     }
 
-    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) {
+    pub fn add_work_done_closure(
+        &mut self,
+        closure: SubmittedWorkDoneClosure,
+    ) -> Option<SubmissionIndex> {
         match self.active.last_mut() {
             Some(active) => {
                 active.work_done_closures.push(closure);
+                Some(active.index)
             }
             // We must defer the closure until all previously occurring map_async closures
             // have fired. This is required by the spec.
             None => {
                 self.work_done_closures.push(closure);
+                None
             }
-        }
-    }
-
-    /// Determine which buffers are ready to map, and which must wait for the
-    /// GPU.
-    ///
-    /// See the documentation for [`LifetimeTracker`] for details.
-    pub(crate) fn triage_mapped(&mut self) {
-        if self.mapped.is_empty() {
-            return;
-        }
-
-        for buffer in self.mapped.drain(..) {
-            let submission = self
-                .active
-                .iter_mut()
-                .rev()
-                .find(|a| a.contains_buffer(&buffer));
-
-            submission
-                .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
-                .push(buffer);
         }
     }
 

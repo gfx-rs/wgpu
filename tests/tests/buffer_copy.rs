@@ -8,31 +8,62 @@ fn try_copy(
     ctx: &wgpu_test::TestingContext,
     offset: BufferAddress,
     size: BufferAddress,
-    should_fail: bool,
+    error_message: Option<&'static str>,
 ) {
     let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR);
     let data = vec![255; size as usize];
+
     fail_if(
         &ctx.device,
-        should_fail,
+        error_message.is_some(),
         || ctx.queue.write_buffer(&buffer, offset, &data),
-        None,
+        error_message,
     );
 }
 
 #[gpu_test]
 static COPY_ALIGNMENT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    try_copy(&ctx, 0, 0, false);
-    try_copy(&ctx, 4, 16 + 1, true);
-    try_copy(&ctx, 64, 20 + 2, true);
-    try_copy(&ctx, 256, 44 + 3, true);
-    try_copy(&ctx, 1024, 8 + 4, false);
+    try_copy(&ctx, 0, 0, None);
+    try_copy(
+        &ctx,
+        4,
+        16 + 1,
+        Some("copy size 17 does not respect `copy_buffer_alignment`"),
+    );
+    try_copy(
+        &ctx,
+        64,
+        20 + 2,
+        Some("copy size 22 does not respect `copy_buffer_alignment`"),
+    );
+    try_copy(
+        &ctx,
+        256,
+        44 + 3,
+        Some("copy size 47 does not respect `copy_buffer_alignment`"),
+    );
+    try_copy(&ctx, 1024, 8 + 4, None);
 
-    try_copy(&ctx, 0, 4, false);
-    try_copy(&ctx, 4 + 1, 8, true);
-    try_copy(&ctx, 64 + 2, 12, true);
-    try_copy(&ctx, 256 + 3, 16, true);
-    try_copy(&ctx, 1024 + 4, 4, false);
+    try_copy(&ctx, 0, 4, None);
+    try_copy(
+        &ctx,
+        4 + 1,
+        8,
+        Some("buffer offset 5 is not aligned to block size or `copy_buffer_alignment`"),
+    );
+    try_copy(
+        &ctx,
+        64 + 2,
+        12,
+        Some("buffer offset 66 is not aligned to block size or `copy_buffer_alignment`"),
+    );
+    try_copy(
+        &ctx,
+        256 + 3,
+        16,
+        Some("buffer offset 259 is not aligned to block size or `copy_buffer_alignment`"),
+    );
+    try_copy(&ctx, 1024 + 4, 4, None);
 });
 
 const BUFFER_SIZE: BufferAddress = 1234;

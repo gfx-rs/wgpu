@@ -47,7 +47,7 @@ pub use features::Features;
 
 use crate::{
     back::{self, Baked},
-    proc::{self, NameKey},
+    proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
@@ -238,7 +238,7 @@ bitflags::bitflags! {
         /// additional functions on shadows and arrays of shadows.
         const TEXTURE_SHADOW_LOD = 0x2;
         /// Supports ARB_shader_draw_parameters on the host, which provides
-        /// support for `gl_BaseInstanceARB`, `gl_BaseVertexARB`, and `gl_DrawIDARB`.
+        /// support for `gl_BaseInstanceARB`, `gl_BaseVertexARB`, `gl_DrawIDARB`, and `gl_DrawID`.
         const DRAW_PARAMETERS = 0x4;
         /// Include unused global variables, constants and functions. By default the output will exclude
         /// global variables that are not used in the specified entrypoint (including indirect use),
@@ -498,6 +498,9 @@ pub enum Error {
     Custom(String),
     #[error("overrides should not be present at this stage")]
     Override,
+    /// [`crate::Sampling::First`] is unsupported.
+    #[error("`{:?}` sampling is unsupported", crate::Sampling::First)]
+    FirstSamplingNotSupported,
 }
 
 /// Binary operation with a different logic on the GLSL side.
@@ -1092,12 +1095,16 @@ impl<'a, W: Write> Writer<'a, W> {
         // - Array - used if it's an image array
         // - Shadow - used if it's a depth image
         use crate::ImageClass as Ic;
-
-        let (base, kind, ms, comparison) = match class {
-            Ic::Sampled { kind, multi: true } => ("sampler", kind, "MS", ""),
-            Ic::Sampled { kind, multi: false } => ("sampler", kind, "", ""),
-            Ic::Depth { multi: true } => ("sampler", crate::ScalarKind::Float, "MS", ""),
-            Ic::Depth { multi: false } => ("sampler", crate::ScalarKind::Float, "", "Shadow"),
+        use crate::Scalar as S;
+        let float = S {
+            kind: crate::ScalarKind::Float,
+            width: 4,
+        };
+        let (base, scalar, ms, comparison) = match class {
+            Ic::Sampled { kind, multi: true } => ("sampler", S { kind, width: 4 }, "MS", ""),
+            Ic::Sampled { kind, multi: false } => ("sampler", S { kind, width: 4 }, "", ""),
+            Ic::Depth { multi: true } => ("sampler", float, "MS", ""),
+            Ic::Depth { multi: false } => ("sampler", float, "", "Shadow"),
             Ic::Storage { format, .. } => ("image", format.into(), "", ""),
         };
 
@@ -1111,7 +1118,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.out,
             "{}{}{}{}{}{}{}",
             precision,
-            glsl_scalar(crate::Scalar { kind, width: 4 })?.prefix,
+            glsl_scalar(scalar)?.prefix,
             base,
             glsl_dimension(dim),
             ms,
@@ -1534,7 +1541,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // here, regardless of the version.
         if let Some(sampling) = sampling {
             if emit_interpolation_and_auxiliary {
-                if let Some(qualifier) = glsl_sampling(sampling) {
+                if let Some(qualifier) = glsl_sampling(sampling)? {
                     write!(self.out, "{qualifier} ")?;
                 }
             }
@@ -1584,6 +1591,7 @@ impl<'a, W: Write> Writer<'a, W> {
             info,
             expressions: &func.expressions,
             named_expressions: &func.named_expressions,
+            expr_kind_tracker: ExpressionKindTracker::from_arena(&func.expressions),
         };
 
         self.named_expressions.clear();
@@ -2641,15 +2649,15 @@ impl<'a, W: Write> Writer<'a, W> {
                 match literal {
                     // Floats are written using `Debug` instead of `Display` because it always appends the
                     // decimal part even it's zero which is needed for a valid glsl float constant
-                    crate::Literal::F64(value) => write!(self.out, "{:?}LF", value)?,
-                    crate::Literal::F32(value) => write!(self.out, "{:?}", value)?,
+                    crate::Literal::F64(value) => write!(self.out, "{value:?}LF")?,
+                    crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
                     // Unsigned integers need a `u` at the end
                     //
                     // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we
                     // always write it as the extra branch wouldn't have any benefit in readability
-                    crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
-                    crate::Literal::I32(value) => write!(self.out, "{}", value)?,
-                    crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::U32(value) => write!(self.out, "{value}u")?,
+                    crate::Literal::I32(value) => write!(self.out, "{value}")?,
+                    crate::Literal::Bool(value) => write!(self.out, "{value}")?,
                     crate::Literal::I64(_) => {
                         return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
                     }
@@ -3087,7 +3095,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(image, ctx)?;
                         // All textureSize calls requires an lod argument
                         // except for multisampled samplers
-                        if class.is_multisampled() {
+                        if !class.is_multisampled() {
                             write!(self.out, ", 0")?;
                         }
                         write!(self.out, ")")?;
@@ -4610,7 +4618,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 for i in 0..count.get() {
                     // Add the array accessor and recurse.
-                    segments.push(format!("[{}]", i));
+                    segments.push(format!("[{i}]"));
                     self.collect_push_constant_items(base, segments, layouter, offset, items);
                     segments.pop();
                 }
@@ -4715,6 +4723,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         }
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
+        Bi::DrawID => "gl_DrawID",
         // fragment
         Bi::FragDepth => "gl_FragDepth",
         Bi::PointCoord => "gl_PointCoord",
@@ -4770,14 +4779,15 @@ const fn glsl_interpolation(interpolation: crate::Interpolation) -> &'static str
 }
 
 /// Return the GLSL auxiliary qualifier for the given sampling value.
-const fn glsl_sampling(sampling: crate::Sampling) -> Option<&'static str> {
+const fn glsl_sampling(sampling: crate::Sampling) -> BackendResult<Option<&'static str>> {
     use crate::Sampling as S;
 
-    match sampling {
-        S::Center => None,
+    Ok(match sampling {
+        S::First => return Err(Error::FirstSamplingNotSupported),
+        S::Center | S::Either => None,
         S::Centroid => Some("centroid"),
         S::Sample => Some("sample"),
-    }
+    })
 }
 
 /// Helper function that returns the glsl dimension string of [`ImageDimension`](crate::ImageDimension)
@@ -4820,7 +4830,7 @@ fn glsl_storage_format(format: crate::StorageFormat) -> Result<&'static str, Err
         Sf::Rgba8Sint => "rgba8i",
         Sf::Rgb10a2Uint => "rgb10_a2ui",
         Sf::Rgb10a2Unorm => "rgb10_a2",
-        Sf::Rg11b10UFloat => "r11f_g11f_b10f",
+        Sf::Rg11b10Ufloat => "r11f_g11f_b10f",
         Sf::Rg32Uint => "rg32ui",
         Sf::Rg32Sint => "rg32i",
         Sf::Rg32Float => "rg32f",

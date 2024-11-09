@@ -19,8 +19,6 @@ pub enum ExpressionError {
     NegativeIndex(Handle<crate::Expression>),
     #[error("Accessing index {1} is out of {0:?} bounds")]
     IndexOutOfBounds(Handle<crate::Expression>, u32),
-    #[error("The expression {0:?} may only be indexed by a constant")]
-    IndexMustBeConstant(Handle<crate::Expression>),
     #[error("Function argument {0:?} doesn't exist")]
     FunctionArgumentDoesntExist(u32),
     #[error("Loading of {0:?} can't be done")]
@@ -238,11 +236,11 @@ impl super::Validator {
         let stages = match *expression {
             E::Access { base, index } => {
                 let base_type = &resolver[base];
-                // See the documentation for `Expression::Access`.
-                let dynamic_indexing_restricted = match *base_type {
-                    Ti::Vector { .. } => false,
-                    Ti::Matrix { .. } | Ti::Array { .. } => true,
-                    Ti::Pointer { .. }
+                match *base_type {
+                    Ti::Matrix { .. }
+                    | Ti::Vector { .. }
+                    | Ti::Array { .. }
+                    | Ti::Pointer { .. }
                     | Ti::ValuePointer { size: Some(_), .. }
                     | Ti::BindingArray { .. } => false,
                     ref other => {
@@ -260,9 +258,6 @@ impl super::Validator {
                         log::error!("Indexing by {:?}", other);
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
-                }
-                if dynamic_indexing_restricted && function.expressions[index].is_dynamic_index() {
-                    return Err(ExpressionError::IndexMustBeConstant(base));
                 }
 
                 // If we know both the length and the index, we can do the
@@ -1161,7 +1156,7 @@ impl super::Validator {
                             ));
                         }
                     }
-                    Mf::Outer | Mf::Cross | Mf::Reflect => {
+                    Mf::Outer | Mf::Reflect => {
                         let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
                             (Some(ty1), None, None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
@@ -1173,6 +1168,29 @@ impl super::Validator {
                                         kind: Sk::Float, ..
                                     },
                                 ..
+                            } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                        if arg1_ty != arg_ty {
+                            return Err(ExpressionError::InvalidArgumentType(
+                                fun,
+                                1,
+                                arg1.unwrap(),
+                            ));
+                        }
+                    }
+                    Mf::Cross => {
+                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), None, None) => ty1,
+                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
+                        };
+                        match *arg_ty {
+                            Ti::Vector {
+                                scalar:
+                                    Sc {
+                                        kind: Sk::Float, ..
+                                    },
+                                size: crate::VectorSize::Tri,
                             } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }

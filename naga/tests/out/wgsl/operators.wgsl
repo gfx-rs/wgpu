@@ -11,7 +11,7 @@ fn builtins() -> vec4<f32> {
     let m2_ = mix(v_f32_zero, v_f32_one, 0.1f);
     let b1_ = bitcast<f32>(1i);
     let b2_ = bitcast<vec4<f32>>(v_i32_one);
-    let v_i32_zero = vec4<i32>(0i, 0i, 0i, 0i);
+    const v_i32_zero = vec4<i32>(0i, 0i, 0i, 0i);
     return (((((vec4<f32>((vec4(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
 }
 
@@ -40,8 +40,8 @@ fn bool_cast(x: vec3<f32>) -> vec3<f32> {
 }
 
 fn logical() {
-    let neg0_ = !(true);
-    let neg1_ = !(vec2(true));
+    const neg0_ = !(true);
+    const neg1_ = !(vec2(true));
     let or = (true || false);
     let and = (true && false);
     let bitwise_or0_ = (true | false);
@@ -51,9 +51,9 @@ fn logical() {
 }
 
 fn arithmetic() {
-    let neg0_1 = -(1f);
-    let neg1_1 = -(vec2(1i));
-    let neg2_ = -(vec2(1f));
+    const neg0_1 = -(1f);
+    const neg1_1 = -(vec2(1i));
+    const neg2_ = -(vec2(1f));
     let add0_ = (2i + 1i);
     let add1_ = (2u + 1u);
     let add2_ = (2f + 1f);
@@ -126,10 +126,10 @@ fn arithmetic() {
 }
 
 fn bit() {
-    let flip0_ = ~(1i);
-    let flip1_ = ~(1u);
-    let flip2_ = ~(vec2(1i));
-    let flip3_ = ~(vec3(1u));
+    const flip0_ = ~(1i);
+    const flip1_ = ~(1u);
+    const flip2_ = ~(vec2(1i));
+    const flip3_ = ~(vec3(1u));
     let or0_ = (2i | 1i);
     let or1_ = (2u | 1u);
     let or2_ = (vec2(2i) | vec2(1i));
@@ -230,14 +230,14 @@ fn assignment() {
 }
 
 fn negation_avoids_prefix_decrement() {
-    let p0_ = -(1i);
-    let p1_ = -(-(1i));
-    let p2_ = -(-(1i));
-    let p3_ = -(-(1i));
-    let p4_ = -(-(-(1i)));
-    let p5_ = -(-(-(-(1i))));
-    let p6_ = -(-(-(-(-(1i)))));
-    let p7_ = -(-(-(-(-(1i)))));
+    const p0_ = -(1i);
+    const p1_ = -(-(1i));
+    const p2_ = -(-(1i));
+    const p3_ = -(-(1i));
+    const p4_ = -(-(-(1i)));
+    const p5_ = -(-(-(-(1i))));
+    const p6_ = -(-(-(-(-(1i)))));
+    const p7_ = -(-(-(-(-(1i)))));
 }
 
 @compute @workgroup_size(1, 1, 1) 

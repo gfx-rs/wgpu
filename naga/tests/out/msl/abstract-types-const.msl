@@ -4,7 +4,7 @@
 
 using metal::uint;
 
-struct type_5 {
+struct type_7 {
     float inner[2];
 };
 struct S {
@@ -32,12 +32,12 @@ constant metal::int2 ivis_ai = metal::int2(1);
 constant metal::uint2 ivus_ai = metal::uint2(1u);
 constant metal::float2 ivfs_ai = metal::float2(1.0);
 constant metal::float2 ivfs_af = metal::float2(1.0);
-constant type_5 iafafaf = type_5 {1.0, 2.0};
-constant type_5 iafaiai = type_5 {1.0, 2.0};
-constant type_5 iafpafaf = type_5 {1.0, 2.0};
-constant type_5 iafpaiaf = type_5 {1.0, 2.0};
-constant type_5 iafpafai = type_5 {1.0, 2.0};
-constant type_5 xafpafaf = type_5 {1.0, 2.0};
+constant type_7 iafafaf = type_7 {1.0, 2.0};
+constant type_7 iafaiai = type_7 {1.0, 2.0};
+constant type_7 iafpafaf = type_7 {1.0, 2.0};
+constant type_7 iafpaiaf = type_7 {1.0, 2.0};
+constant type_7 iafpafai = type_7 {1.0, 2.0};
+constant type_7 xafpafaf = type_7 {1.0, 2.0};
 constant S s_f_i_u = S {1.0, 1, 1u};
 constant S s_f_iai = S {1.0, 1, 1u};
 constant S s_fai_u = S {1.0, 1, 1u};

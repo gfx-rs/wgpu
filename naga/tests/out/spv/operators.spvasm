@@ -9,47 +9,47 @@ OpEntryPoint GLCompute %374 "main" %371
 OpExecutionMode %374 LocalSize 1 1 1
 OpDecorate %371 BuiltIn WorkgroupId
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 4
-%6 = OpTypeInt 32 1
-%5 = OpTypeVector %6 4
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 4
+%5 = OpTypeInt 32 1
+%6 = OpTypeVector %5 4
 %8 = OpTypeBool
 %7 = OpTypeVector %8 4
-%9 = OpTypeVector %4 2
-%10 = OpTypeVector %4 3
+%9 = OpTypeVector %3 2
+%10 = OpTypeVector %3 3
 %11 = OpTypeMatrix %10 3
 %12 = OpTypeMatrix %10 4
-%13 = OpTypeMatrix %3 3
-%14 = OpTypeVector %6 3
+%13 = OpTypeMatrix %4 3
+%14 = OpTypeVector %5 3
 %16 = OpTypeInt 32 0
 %15 = OpTypeVector %16 3
-%17 = OpConstant  %4  1.0
-%18 = OpConstantComposite  %3  %17 %17 %17 %17
-%19 = OpConstant  %4  0.0
-%20 = OpConstantComposite  %3  %19 %19 %19 %19
-%21 = OpConstant  %4  0.5
-%22 = OpConstantComposite  %3  %21 %21 %21 %21
-%23 = OpConstant  %6  1
-%24 = OpConstantComposite  %5  %23 %23 %23 %23
-%27 = OpTypeFunction %3
+%17 = OpConstant  %3  1.0
+%18 = OpConstantComposite  %4  %17 %17 %17 %17
+%19 = OpConstant  %3  0.0
+%20 = OpConstantComposite  %4  %19 %19 %19 %19
+%21 = OpConstant  %3  0.5
+%22 = OpConstantComposite  %4  %21 %21 %21 %21
+%23 = OpConstant  %5  1
+%24 = OpConstantComposite  %6  %23 %23 %23 %23
+%27 = OpTypeFunction %4
 %28 = OpConstantTrue  %8
-%29 = OpConstant  %6  0
+%29 = OpConstant  %5  0
 %30 = OpConstantFalse  %8
 %31 = OpConstantComposite  %7  %30 %30 %30 %30
-%32 = OpConstant  %4  0.1
-%33 = OpConstantComposite  %5  %29 %29 %29 %29
-%57 = OpTypeFunction %3 %4 %6
-%58 = OpConstant  %4  2.0
+%32 = OpConstant  %3  0.1
+%33 = OpConstantComposite  %6  %29 %29 %29 %29
+%57 = OpTypeFunction %4 %3 %5
+%58 = OpConstant  %3  2.0
 %59 = OpConstantComposite  %9  %58 %58
-%60 = OpConstant  %4  4.0
+%60 = OpConstant  %3  4.0
 %61 = OpConstantComposite  %9  %60 %60
-%62 = OpConstant  %4  8.0
+%62 = OpConstant  %3  8.0
 %63 = OpConstantComposite  %9  %62 %62
-%64 = OpConstant  %6  2
-%65 = OpConstantComposite  %5  %64 %64 %64 %64
+%64 = OpConstant  %5  2
+%65 = OpConstantComposite  %6  %64 %64 %64 %64
 %78 = OpTypeFunction %9
 %79 = OpConstantComposite  %9  %17 %17
-%80 = OpConstant  %4  3.0
+%80 = OpConstant  %3  3.0
 %81 = OpConstantComposite  %9  %80 %80
 %83 = OpTypePointer Function %9
 %95 = OpTypeFunction %10 %10
@@ -65,13 +65,13 @@ OpDecorate %371 BuiltIn WorkgroupId
 %110 = OpConstantComposite  %7  %30 %30 %30 %30
 %122 = OpConstant  %16  1
 %123 = OpConstant  %16  2
-%124 = OpTypeVector %6 2
+%124 = OpTypeVector %5 2
 %125 = OpConstantComposite  %124  %23 %23
 %126 = OpConstantComposite  %124  %64 %64
 %127 = OpConstantComposite  %15  %123 %123 %123
 %128 = OpConstantComposite  %15  %122 %122 %122
-%129 = OpConstantComposite  %3  %58 %58 %58 %58
-%130 = OpConstantComposite  %3  %17 %17 %17 %17
+%129 = OpConstantComposite  %4  %58 %58 %58 %58
+%130 = OpConstantComposite  %4  %17 %17 %17 %17
 %131 = OpTypeVector %16 2
 %132 = OpConstantComposite  %131  %123 %123
 %133 = OpConstantComposite  %131  %122 %122
@@ -80,40 +80,40 @@ OpDecorate %371 BuiltIn WorkgroupId
 %136 = OpConstantComposite  %10  %58 %58 %58
 %137 = OpConstantNull  %13
 %301 = OpConstantNull  %14
-%303 = OpTypePointer Function %6
-%304 = OpConstantNull  %6
+%303 = OpTypePointer Function %5
+%304 = OpConstantNull  %5
 %306 = OpTypePointer Function %14
-%334 = OpTypePointer Function %6
+%334 = OpTypePointer Function %5
 %372 = OpTypePointer Input %15
 %371 = OpVariable  %372  Input
 %375 = OpConstantComposite  %10  %17 %17 %17
-%26 = OpFunction  %3  None %27
+%26 = OpFunction  %4  None %27
 %25 = OpLabel
 OpBranch %34
 %34 = OpLabel
-%35 = OpSelect  %6  %28 %23 %29
+%35 = OpSelect  %5  %28 %23 %29
 %37 = OpCompositeConstruct  %7  %28 %28 %28 %28
-%36 = OpSelect  %3  %37 %18 %20
-%38 = OpSelect  %3  %31 %20 %18
-%39 = OpExtInst  %3  %1 FMix %20 %18 %22
-%41 = OpCompositeConstruct  %3  %32 %32 %32 %32
-%40 = OpExtInst  %3  %1 FMix %20 %18 %41
-%42 = OpBitcast  %4  %23
-%43 = OpBitcast  %3  %24
-%44 = OpCompositeConstruct  %5  %35 %35 %35 %35
-%45 = OpIAdd  %5  %44 %33
-%46 = OpConvertSToF  %3  %45
-%47 = OpFAdd  %3  %46 %36
-%48 = OpFAdd  %3  %47 %39
-%49 = OpFAdd  %3  %48 %40
-%50 = OpCompositeConstruct  %3  %42 %42 %42 %42
-%51 = OpFAdd  %3  %49 %50
-%52 = OpFAdd  %3  %51 %43
+%36 = OpSelect  %4  %37 %18 %20
+%38 = OpSelect  %4  %31 %20 %18
+%39 = OpExtInst  %4  %1 FMix %20 %18 %22
+%41 = OpCompositeConstruct  %4  %32 %32 %32 %32
+%40 = OpExtInst  %4  %1 FMix %20 %18 %41
+%42 = OpBitcast  %3  %23
+%43 = OpBitcast  %4  %24
+%44 = OpCompositeConstruct  %6  %35 %35 %35 %35
+%45 = OpIAdd  %6  %44 %33
+%46 = OpConvertSToF  %4  %45
+%47 = OpFAdd  %4  %46 %36
+%48 = OpFAdd  %4  %47 %39
+%49 = OpFAdd  %4  %48 %40
+%50 = OpCompositeConstruct  %4  %42 %42 %42 %42
+%51 = OpFAdd  %4  %49 %50
+%52 = OpFAdd  %4  %51 %43
 OpReturnValue %52
 OpFunctionEnd
-%56 = OpFunction  %3  None %57
-%54 = OpFunctionParameter  %4
-%55 = OpFunctionParameter  %6
+%56 = OpFunction  %4  None %57
+%54 = OpFunctionParameter  %3
+%55 = OpFunctionParameter  %5
 %53 = OpLabel
 OpBranch %66
 %66 = OpLabel
@@ -121,11 +121,11 @@ OpBranch %66
 %68 = OpFAdd  %9  %59 %67
 %69 = OpFSub  %9  %68 %61
 %70 = OpFDiv  %9  %69 %63
-%71 = OpCompositeConstruct  %5  %55 %55 %55 %55
-%72 = OpSRem  %5  %71 %65
-%73 = OpVectorShuffle  %3  %70 %70 0 1 0 1
-%74 = OpConvertSToF  %3  %72
-%75 = OpFAdd  %3  %73 %74
+%71 = OpCompositeConstruct  %6  %55 %55 %55 %55
+%72 = OpSRem  %6  %71 %65
+%73 = OpVectorShuffle  %4  %70 %70 0 1 0 1
+%74 = OpConvertSToF  %4  %72
+%75 = OpFAdd  %4  %73 %74
 OpReturnValue %75
 OpFunctionEnd
 %77 = OpFunction  %9  None %78
@@ -172,39 +172,39 @@ OpFunctionEnd
 %120 = OpLabel
 OpBranch %138
 %138 = OpLabel
-%139 = OpFNegate  %4  %17
+%139 = OpFNegate  %3  %17
 %140 = OpSNegate  %124  %125
 %141 = OpFNegate  %9  %79
-%142 = OpIAdd  %6  %64 %23
+%142 = OpIAdd  %5  %64 %23
 %143 = OpIAdd  %16  %123 %122
-%144 = OpFAdd  %4  %58 %17
+%144 = OpFAdd  %3  %58 %17
 %145 = OpIAdd  %124  %126 %125
 %146 = OpIAdd  %15  %127 %128
-%147 = OpFAdd  %3  %129 %130
-%148 = OpISub  %6  %64 %23
+%147 = OpFAdd  %4  %129 %130
+%148 = OpISub  %5  %64 %23
 %149 = OpISub  %16  %123 %122
-%150 = OpFSub  %4  %58 %17
+%150 = OpFSub  %3  %58 %17
 %151 = OpISub  %124  %126 %125
 %152 = OpISub  %15  %127 %128
-%153 = OpFSub  %3  %129 %130
-%154 = OpIMul  %6  %64 %23
+%153 = OpFSub  %4  %129 %130
+%154 = OpIMul  %5  %64 %23
 %155 = OpIMul  %16  %123 %122
-%156 = OpFMul  %4  %58 %17
+%156 = OpFMul  %3  %58 %17
 %157 = OpIMul  %124  %126 %125
 %158 = OpIMul  %15  %127 %128
-%159 = OpFMul  %3  %129 %130
-%160 = OpSDiv  %6  %64 %23
+%159 = OpFMul  %4  %129 %130
+%160 = OpSDiv  %5  %64 %23
 %161 = OpUDiv  %16  %123 %122
-%162 = OpFDiv  %4  %58 %17
+%162 = OpFDiv  %3  %58 %17
 %163 = OpSDiv  %124  %126 %125
 %164 = OpUDiv  %15  %127 %128
-%165 = OpFDiv  %3  %129 %130
-%166 = OpSRem  %6  %64 %23
+%165 = OpFDiv  %4  %129 %130
+%166 = OpSRem  %5  %64 %23
 %167 = OpUMod  %16  %123 %122
-%168 = OpFRem  %4  %58 %17
+%168 = OpFRem  %3  %58 %17
 %169 = OpSRem  %124  %126 %125
 %170 = OpUMod  %15  %127 %128
-%171 = OpFRem  %3  %129 %130
+%171 = OpFRem  %4  %129 %130
 OpBranch %172
 %172 = OpLabel
 %174 = OpIAdd  %124  %126 %125
@@ -266,7 +266,7 @@ OpBranch %173
 %228 = OpMatrixTimesScalar  %11  %134 %17
 %229 = OpMatrixTimesScalar  %11  %134 %58
 %230 = OpMatrixTimesVector  %10  %135 %130
-%231 = OpVectorTimesMatrix  %3  %136 %135
+%231 = OpVectorTimesMatrix  %4  %136 %135
 %232 = OpMatrixTimesMatrix  %11  %135 %137
 OpReturn
 OpFunctionEnd
@@ -274,27 +274,27 @@ OpFunctionEnd
 %233 = OpLabel
 OpBranch %235
 %235 = OpLabel
-%236 = OpNot  %6  %23
+%236 = OpNot  %5  %23
 %237 = OpNot  %16  %122
 %238 = OpNot  %124  %125
 %239 = OpNot  %15  %128
-%240 = OpBitwiseOr  %6  %64 %23
+%240 = OpBitwiseOr  %5  %64 %23
 %241 = OpBitwiseOr  %16  %123 %122
 %242 = OpBitwiseOr  %124  %126 %125
 %243 = OpBitwiseOr  %15  %127 %128
-%244 = OpBitwiseAnd  %6  %64 %23
+%244 = OpBitwiseAnd  %5  %64 %23
 %245 = OpBitwiseAnd  %16  %123 %122
 %246 = OpBitwiseAnd  %124  %126 %125
 %247 = OpBitwiseAnd  %15  %127 %128
-%248 = OpBitwiseXor  %6  %64 %23
+%248 = OpBitwiseXor  %5  %64 %23
 %249 = OpBitwiseXor  %16  %123 %122
 %250 = OpBitwiseXor  %124  %126 %125
 %251 = OpBitwiseXor  %15  %127 %128
-%252 = OpShiftLeftLogical  %6  %64 %122
+%252 = OpShiftLeftLogical  %5  %64 %122
 %253 = OpShiftLeftLogical  %16  %123 %122
 %254 = OpShiftLeftLogical  %124  %126 %133
 %255 = OpShiftLeftLogical  %15  %127 %128
-%256 = OpShiftRightArithmetic  %6  %64 %122
+%256 = OpShiftRightArithmetic  %5  %64 %122
 %257 = OpShiftRightLogical  %16  %123 %122
 %258 = OpShiftRightArithmetic  %124  %126 %133
 %259 = OpShiftRightLogical  %15  %127 %128
@@ -349,53 +349,53 @@ OpFunctionEnd
 OpBranch %307
 %307 = OpLabel
 OpStore %302 %23
-%308 = OpLoad  %6  %302
-%309 = OpIAdd  %6  %308 %23
+%308 = OpLoad  %5  %302
+%309 = OpIAdd  %5  %308 %23
 OpStore %302 %309
-%310 = OpLoad  %6  %302
-%311 = OpISub  %6  %310 %23
+%310 = OpLoad  %5  %302
+%311 = OpISub  %5  %310 %23
 OpStore %302 %311
-%312 = OpLoad  %6  %302
-%313 = OpLoad  %6  %302
-%314 = OpIMul  %6  %313 %312
+%312 = OpLoad  %5  %302
+%313 = OpLoad  %5  %302
+%314 = OpIMul  %5  %313 %312
 OpStore %302 %314
-%315 = OpLoad  %6  %302
-%316 = OpLoad  %6  %302
-%317 = OpSDiv  %6  %316 %315
+%315 = OpLoad  %5  %302
+%316 = OpLoad  %5  %302
+%317 = OpSDiv  %5  %316 %315
 OpStore %302 %317
-%318 = OpLoad  %6  %302
-%319 = OpSRem  %6  %318 %23
+%318 = OpLoad  %5  %302
+%319 = OpSRem  %5  %318 %23
 OpStore %302 %319
-%320 = OpLoad  %6  %302
-%321 = OpBitwiseAnd  %6  %320 %29
+%320 = OpLoad  %5  %302
+%321 = OpBitwiseAnd  %5  %320 %29
 OpStore %302 %321
-%322 = OpLoad  %6  %302
-%323 = OpBitwiseOr  %6  %322 %29
+%322 = OpLoad  %5  %302
+%323 = OpBitwiseOr  %5  %322 %29
 OpStore %302 %323
-%324 = OpLoad  %6  %302
-%325 = OpBitwiseXor  %6  %324 %29
+%324 = OpLoad  %5  %302
+%325 = OpBitwiseXor  %5  %324 %29
 OpStore %302 %325
-%326 = OpLoad  %6  %302
-%327 = OpShiftLeftLogical  %6  %326 %123
+%326 = OpLoad  %5  %302
+%327 = OpShiftLeftLogical  %5  %326 %123
 OpStore %302 %327
-%328 = OpLoad  %6  %302
-%329 = OpShiftRightArithmetic  %6  %328 %122
+%328 = OpLoad  %5  %302
+%329 = OpShiftRightArithmetic  %5  %328 %122
 OpStore %302 %329
-%330 = OpLoad  %6  %302
-%331 = OpIAdd  %6  %330 %23
+%330 = OpLoad  %5  %302
+%331 = OpIAdd  %5  %330 %23
 OpStore %302 %331
-%332 = OpLoad  %6  %302
-%333 = OpISub  %6  %332 %23
+%332 = OpLoad  %5  %302
+%333 = OpISub  %5  %332 %23
 OpStore %302 %333
-%335 = OpAccessChain  %334  %305 %23
-%336 = OpLoad  %6  %335
-%337 = OpIAdd  %6  %336 %23
-%338 = OpAccessChain  %334  %305 %23
+%335 = OpAccessChain  %334  %305 %122
+%336 = OpLoad  %5  %335
+%337 = OpIAdd  %5  %336 %23
+%338 = OpAccessChain  %334  %305 %122
 OpStore %338 %337
-%339 = OpAccessChain  %334  %305 %23
-%340 = OpLoad  %6  %339
-%341 = OpISub  %6  %340 %23
-%342 = OpAccessChain  %334  %305 %23
+%339 = OpAccessChain  %334  %305 %122
+%340 = OpLoad  %5  %339
+%341 = OpISub  %5  %340 %23
+%342 = OpAccessChain  %334  %305 %122
 OpStore %342 %341
 OpReturn
 OpFunctionEnd
@@ -403,30 +403,30 @@ OpFunctionEnd
 %343 = OpLabel
 OpBranch %345
 %345 = OpLabel
-%346 = OpSNegate  %6  %23
-%347 = OpSNegate  %6  %23
-%348 = OpSNegate  %6  %347
-%349 = OpSNegate  %6  %23
-%350 = OpSNegate  %6  %349
-%351 = OpSNegate  %6  %23
-%352 = OpSNegate  %6  %351
-%353 = OpSNegate  %6  %23
-%354 = OpSNegate  %6  %353
-%355 = OpSNegate  %6  %354
-%356 = OpSNegate  %6  %23
-%357 = OpSNegate  %6  %356
-%358 = OpSNegate  %6  %357
-%359 = OpSNegate  %6  %358
-%360 = OpSNegate  %6  %23
-%361 = OpSNegate  %6  %360
-%362 = OpSNegate  %6  %361
-%363 = OpSNegate  %6  %362
-%364 = OpSNegate  %6  %363
-%365 = OpSNegate  %6  %23
-%366 = OpSNegate  %6  %365
-%367 = OpSNegate  %6  %366
-%368 = OpSNegate  %6  %367
-%369 = OpSNegate  %6  %368
+%346 = OpSNegate  %5  %23
+%347 = OpSNegate  %5  %23
+%348 = OpSNegate  %5  %347
+%349 = OpSNegate  %5  %23
+%350 = OpSNegate  %5  %349
+%351 = OpSNegate  %5  %23
+%352 = OpSNegate  %5  %351
+%353 = OpSNegate  %5  %23
+%354 = OpSNegate  %5  %353
+%355 = OpSNegate  %5  %354
+%356 = OpSNegate  %5  %23
+%357 = OpSNegate  %5  %356
+%358 = OpSNegate  %5  %357
+%359 = OpSNegate  %5  %358
+%360 = OpSNegate  %5  %23
+%361 = OpSNegate  %5  %360
+%362 = OpSNegate  %5  %361
+%363 = OpSNegate  %5  %362
+%364 = OpSNegate  %5  %363
+%365 = OpSNegate  %5  %23
+%366 = OpSNegate  %5  %365
+%367 = OpSNegate  %5  %366
+%368 = OpSNegate  %5  %367
+%369 = OpSNegate  %5  %368
 OpReturn
 OpFunctionEnd
 %374 = OpFunction  %2  None %104
@@ -434,12 +434,12 @@ OpFunctionEnd
 %373 = OpLoad  %15  %371
 OpBranch %376
 %376 = OpLabel
-%377 = OpFunctionCall  %3  %26
+%377 = OpFunctionCall  %4  %26
 %378 = OpCompositeExtract  %16  %373 0
-%379 = OpConvertUToF  %4  %378
+%379 = OpConvertUToF  %3  %378
 %380 = OpCompositeExtract  %16  %373 1
-%381 = OpBitcast  %6  %380
-%382 = OpFunctionCall  %3  %56 %379 %381
+%381 = OpBitcast  %5  %380
+%382 = OpFunctionCall  %4  %56 %379 %381
 %383 = OpFunctionCall  %10  %94 %375
 %384 = OpFunctionCall  %2  %103
 %385 = OpFunctionCall  %2  %121

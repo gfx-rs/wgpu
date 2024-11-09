@@ -4,10 +4,10 @@
 
 using metal::uint;
 
-struct type_5 {
+struct type_7 {
     float inner[2];
 };
-struct type_7 {
+struct type_8 {
     int inner[2];
 };
 
@@ -35,17 +35,17 @@ void all_constant_arguments(
     metal::uint2 xvus_ai = metal::uint2(1u);
     metal::float2 xvfs_ai = metal::float2(1.0);
     metal::float2 xvfs_af = metal::float2(1.0);
-    type_5 xafafaf = type_5 {1.0, 2.0};
-    type_5 xaf_faf = type_5 {1.0, 2.0};
-    type_5 xafaf_f = type_5 {1.0, 2.0};
-    type_5 xafaiai = type_5 {1.0, 2.0};
-    type_7 xai_iai = type_7 {1, 2};
-    type_7 xaiai_i = type_7 {1, 2};
-    type_7 xaipaiai = type_7 {1, 2};
-    type_5 xafpaiai = type_5 {1.0, 2.0};
-    type_5 xafpaiaf = type_5 {1.0, 2.0};
-    type_5 xafpafai = type_5 {1.0, 2.0};
-    type_5 xafpafaf = type_5 {1.0, 2.0};
+    type_7 xafafaf = type_7 {1.0, 2.0};
+    type_7 xaf_faf = type_7 {1.0, 2.0};
+    type_7 xafaf_f = type_7 {1.0, 2.0};
+    type_7 xafaiai = type_7 {1.0, 2.0};
+    type_8 xai_iai = type_8 {1, 2};
+    type_8 xaiai_i = type_8 {1, 2};
+    type_8 xaipaiai = type_8 {1, 2};
+    type_7 xafpaiai = type_7 {1.0, 2.0};
+    type_7 xafpaiaf = type_7 {1.0, 2.0};
+    type_7 xafpafai = type_7 {1.0, 2.0};
+    type_7 xafpafaf = type_7 {1.0, 2.0};
 }
 
 void mixed_constant_and_runtime_arguments(
@@ -61,18 +61,18 @@ void mixed_constant_and_runtime_arguments(
     metal::float2x2 xmfpai_faiai_1 = {};
     metal::float2x2 xmfpaiai_fai_1 = {};
     metal::float2x2 xmfpaiaiai_f_1 = {};
-    type_5 xaf_faf_1 = {};
-    type_5 xafaf_f_1 = {};
-    type_5 xaf_fai = {};
-    type_5 xafai_f = {};
-    type_7 xai_iai_1 = {};
-    type_7 xaiai_i_1 = {};
-    type_5 xafp_faf = {};
-    type_5 xafpaf_f = {};
-    type_5 xafp_fai = {};
-    type_5 xafpai_f = {};
-    type_7 xaip_iai = {};
-    type_7 xaipai_i = {};
+    type_7 xaf_faf_1 = {};
+    type_7 xafaf_f_1 = {};
+    type_7 xaf_fai = {};
+    type_7 xafai_f = {};
+    type_8 xai_iai_1 = {};
+    type_8 xaiai_i_1 = {};
+    type_7 xafp_faf = {};
+    type_7 xafpaf_f = {};
+    type_7 xafp_fai = {};
+    type_7 xafpai_f = {};
+    type_8 xaip_iai = {};
+    type_8 xaipai_i = {};
     uint _e3 = u;
     xvupuai_1 = metal::uint2(_e3, 43u);
     uint _e7 = u;
@@ -90,28 +90,28 @@ void mixed_constant_and_runtime_arguments(
     float _e43 = f;
     xmfpaiaiai_f_1 = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, _e43));
     float _e51 = f;
-    xaf_faf_1 = type_5 {_e51, 2.0};
+    xaf_faf_1 = type_7 {_e51, 2.0};
     float _e55 = f;
-    xafaf_f_1 = type_5 {1.0, _e55};
+    xafaf_f_1 = type_7 {1.0, _e55};
     float _e59 = f;
-    xaf_fai = type_5 {_e59, 2.0};
+    xaf_fai = type_7 {_e59, 2.0};
     float _e63 = f;
-    xafai_f = type_5 {1.0, _e63};
+    xafai_f = type_7 {1.0, _e63};
     int _e67 = i;
-    xai_iai_1 = type_7 {_e67, 2};
+    xai_iai_1 = type_8 {_e67, 2};
     int _e71 = i;
-    xaiai_i_1 = type_7 {1, _e71};
+    xaiai_i_1 = type_8 {1, _e71};
     float _e75 = f;
-    xafp_faf = type_5 {_e75, 2.0};
+    xafp_faf = type_7 {_e75, 2.0};
     float _e79 = f;
-    xafpaf_f = type_5 {1.0, _e79};
+    xafpaf_f = type_7 {1.0, _e79};
     float _e83 = f;
-    xafp_fai = type_5 {_e83, 2.0};
+    xafp_fai = type_7 {_e83, 2.0};
     float _e87 = f;
-    xafpai_f = type_5 {1.0, _e87};
+    xafpai_f = type_7 {1.0, _e87};
     int _e91 = i;
-    xaip_iai = type_7 {_e91, 2};
+    xaip_iai = type_8 {_e91, 2};
     int _e95 = i;
-    xaipai_i = type_7 {1, _e95};
+    xaipai_i = type_8 {1, _e95};
     return;
 }

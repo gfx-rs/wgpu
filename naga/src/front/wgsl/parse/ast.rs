@@ -1,3 +1,4 @@
+use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
 use crate::{Arena, FastIndexSet, Handle, Span};
@@ -5,6 +6,7 @@ use std::hash::Hash;
 
 #[derive(Debug, Default)]
 pub struct TranslationUnit<'a> {
+    pub enable_extensions: EnableExtensions,
     pub decls: Arena<GlobalDecl<'a>>,
     /// The common expressions arena for the entire translation unit.
     ///
@@ -85,6 +87,7 @@ pub enum GlobalDeclKind<'a> {
     Override(Override<'a>),
     Struct(Struct<'a>),
     Type(TypeAlias<'a>),
+    ConstAssert(Handle<Expression<'a>>),
 }
 
 #[derive(Debug)]
@@ -109,7 +112,7 @@ pub struct EntryPoint<'a> {
 }
 
 #[cfg(doc)]
-use crate::front::wgsl::lower::{RuntimeExpressionContext, StatementContext};
+use crate::front::wgsl::lower::{LocalExpressionContext, StatementContext};
 
 #[derive(Debug)]
 pub struct Function<'a> {
@@ -142,7 +145,7 @@ pub struct GlobalVariable<'a> {
     pub name: Ident<'a>,
     pub space: crate::AddressSpace,
     pub binding: Option<ResourceBinding<'a>>,
-    pub ty: Handle<Type<'a>>,
+    pub ty: Option<Handle<Type<'a>>>,
     pub init: Option<Handle<Expression<'a>>>,
 }
 
@@ -198,12 +201,14 @@ pub enum Type<'a> {
     Scalar(Scalar),
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
     Atomic(Scalar),
     Pointer {
@@ -281,7 +286,8 @@ pub enum StatementKind<'a> {
     },
     Increment(Handle<Expression<'a>>),
     Decrement(Handle<Expression<'a>>),
-    Ignore(Handle<Expression<'a>>),
+    Phony(Handle<Expression<'a>>),
+    ConstAssert(Handle<Expression<'a>>),
 }
 
 #[derive(Debug)]
@@ -330,7 +336,8 @@ pub enum ConstructorType<'a> {
     /// `vec3<f32>(1.0)`.
     Vector {
         size: crate::VectorSize,
-        scalar: Scalar,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// A matrix construction whose component type is inferred from the
@@ -345,7 +352,8 @@ pub enum ConstructorType<'a> {
     Matrix {
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
     },
 
     /// An array whose component type and size are inferred from the arguments:
@@ -461,13 +469,22 @@ pub struct Let<'a> {
 }
 
 #[derive(Debug)]
+pub struct LocalConst<'a> {
+    pub name: Ident<'a>,
+    pub ty: Option<Handle<Type<'a>>>,
+    pub init: Handle<Expression<'a>>,
+    pub handle: Handle<Local>,
+}
+
+#[derive(Debug)]
 pub enum LocalDecl<'a> {
     Var(LocalVariable<'a>),
     Let(Let<'a>),
+    Const(LocalConst<'a>),
 }
 
 #[derive(Debug)]
 /// A placeholder for a local variable declaration.
 ///
-/// See [`Function::locals`] for more information.
+/// See [`super::ExpressionContext::locals`] for more information.
 pub struct Local;

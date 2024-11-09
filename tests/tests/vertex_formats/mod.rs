@@ -1,6 +1,6 @@
 //! Tests that vertex formats pass through to vertex shaders accurately.
 
-use std::num::NonZeroU64;
+use std::{mem::size_of_val, num::NonZeroU64};
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
@@ -273,7 +273,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
         let expected = test.checksums;
-        let buffer_size = (std::mem::size_of_val(&expected[0]) * expected.len()) as u64;
+        let buffer_size = (size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size,
@@ -352,10 +352,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
 
         let mut deltas = data.iter().zip(expected.iter()).map(|(d, e)| (d - e).abs());
         if deltas.any(|x| x > EPSILON) {
-            eprintln!(
-                "Failed: Got: {:?} Expected: {:?} - {case_name}",
-                data, expected,
-            );
+            eprintln!("Failed: Got: {data:?} Expected: {expected:?} - {case_name}",);
             failed = true;
             continue;
         }

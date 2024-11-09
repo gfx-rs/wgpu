@@ -1,6 +1,6 @@
 use super::conv;
 
-use ash::{amd, ext, khr, vk};
+use ash::{amd, ext, google, khr, vk};
 use parking_lot::Mutex;
 
 use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
@@ -77,17 +77,17 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_buffer_device_address`, promoted to Vulkan 1.2.
     ///
     /// We only use this feature for
-    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`], which requires
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`], which requires
     /// `VK_KHR_acceleration_structure`, which depends on
     /// `VK_KHR_buffer_device_address`, so [`Instance::expose_adapter`] only
     /// bothers to check if `VK_KHR_acceleration_structure` is available,
     /// leaving this `None`.
     ///
     /// However, we do populate this when creating a device if
-    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
     ///
     /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
-    /// [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_ray_query`,
@@ -342,9 +342,6 @@ impl PhysicalDeviceFeatures {
                 None
             },
             robustness2: if enabled_extensions.contains(&ext::robustness2::NAME) {
-                // Note: enabling `robust_buffer_access2` isn't requires, strictly speaking
-                // since we can enable `robust_buffer_access` all the time. But it improves
-                // program portability, so we opt into it if they are supported.
                 Some(
                     vk::PhysicalDeviceRobustness2FeaturesEXT::default()
                         .robust_buffer_access2(private_caps.robust_buffer_access2)
@@ -725,13 +722,16 @@ impl PhysicalDeviceFeatures {
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         features.set(
-            F::RAY_TRACING_ACCELERATION_STRUCTURE,
+            F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
             caps.supports_extension(khr::deferred_host_operations::NAME)
                 && caps.supports_extension(khr::acceleration_structure::NAME)
                 && caps.supports_extension(khr::buffer_device_address::NAME),
         );
 
-        features.set(F::RAY_QUERY, caps.supports_extension(khr::ray_query::NAME));
+        features.set(
+            F::EXPERIMENTAL_RAY_QUERY,
+            caps.supports_extension(khr::ray_query::NAME),
+        );
 
         let rg11b10ufloat_renderable = supports_format(
             instance,
@@ -770,6 +770,11 @@ impl PhysicalDeviceFeatures {
                     .unwrap_or_default(),
             );
         }
+
+        features.set(
+            F::VULKAN_GOOGLE_DISPLAY_TIMING,
+            caps.supports_extension(google::display_timing::NAME),
+        );
 
         (features, dl_flags)
     }
@@ -836,6 +841,10 @@ pub struct PhysicalDeviceProperties {
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_EXT_subgroup_size_control` extension, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlProperties<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_robustness2` extension.
+    robustness2: Option<vk::PhysicalDeviceRobustness2PropertiesEXT<'static>>,
 
     /// The device API version.
     ///
@@ -964,6 +973,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::robustness2::NAME);
         }
 
+        // Optional `VK_KHR_external_memory_win32`
+        if self.supports_extension(khr::external_memory_win32::NAME) {
+            extensions.push(khr::external_memory_win32::NAME);
+        }
+
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
         // Even though Vulkan 1.2 has promoted the extension to core, we must require the extension to avoid
         // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.
@@ -972,14 +986,16 @@ impl PhysicalDeviceProperties {
         }
 
         // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
-        if requested_features.contains(wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE) {
+        if requested_features
+            .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+        {
             extensions.push(khr::deferred_host_operations::NAME);
             extensions.push(khr::acceleration_structure::NAME);
             extensions.push(khr::buffer_device_address::NAME);
         }
 
         // Require `VK_KHR_ray_query` if the associated feature was requested
-        if requested_features.contains(wgt::Features::RAY_QUERY) {
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
             extensions.push(khr::ray_query::NAME);
         }
 
@@ -1002,6 +1018,11 @@ impl PhysicalDeviceProperties {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
         ) {
             extensions.push(khr::shader_atomic_int64::NAME);
+        }
+
+        // Require VK_GOOGLE_display_timing if the associated feature was requested
+        if requested_features.contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING) {
+            extensions.push(google::display_timing::NAME);
         }
 
         extensions
@@ -1087,19 +1108,43 @@ impl PhysicalDeviceProperties {
         }
     }
 
-    fn to_hal_alignments(&self) -> crate::Alignments {
+    /// Return a `wgpu_hal::Alignments` structure describing this adapter.
+    ///
+    /// The `using_robustness2` argument says how this adapter will implement
+    /// `wgpu_hal`'s guarantee that shaders can only read the [accessible
+    /// region][ar] of bindgroup's buffer bindings:
+    ///
+    /// - If this adapter will depend on `VK_EXT_robustness2`'s
+    ///   `robustBufferAccess2` feature to apply bounds checks to shader buffer
+    ///   access, `using_robustness2` must be `true`.
+    ///
+    /// - Otherwise, this adapter must use Naga to inject bounds checks on
+    ///   buffer accesses, and `using_robustness2` must be `false`.
+    ///
+    /// [ar]: ../../struct.BufferBinding.html#accessible-region
+    fn to_hal_alignments(&self, using_robustness2: bool) -> crate::Alignments {
         let limits = &self.properties.limits;
         crate::Alignments {
             buffer_copy_offset: wgt::BufferSize::new(limits.optimal_buffer_copy_offset_alignment)
                 .unwrap(),
             buffer_copy_pitch: wgt::BufferSize::new(limits.optimal_buffer_copy_row_pitch_alignment)
                 .unwrap(),
+            uniform_bounds_check_alignment: {
+                let alignment = if using_robustness2 {
+                    self.robustness2
+                        .unwrap() // if we're using it, we should have its properties
+                        .robust_uniform_buffer_access_size_alignment
+                } else {
+                    // If the `robustness2` properties are unavailable, then `robustness2` is not available either Naga-injected bounds checks are precise.
+                    1
+                };
+                wgt::BufferSize::new(alignment).unwrap()
+            },
         }
     }
 }
 
 impl super::InstanceShared {
-    #[allow(trivial_casts)] // false positives
     fn inspect(
         &self,
         phd: vk::PhysicalDevice,
@@ -1124,6 +1169,7 @@ impl super::InstanceShared {
                 let supports_subgroup_size_control = capabilities.device_api_version
                     >= vk::API_VERSION_1_3
                     || capabilities.supports_extension(ext::subgroup_size_control::NAME);
+                let supports_robustness2 = capabilities.supports_extension(ext::robustness2::NAME);
 
                 let supports_acceleration_structure =
                     capabilities.supports_extension(khr::acceleration_structure::NAME);
@@ -1171,6 +1217,13 @@ impl super::InstanceShared {
                     properties2 = properties2.push_next(next);
                 }
 
+                if supports_robustness2 {
+                    let next = capabilities
+                        .robustness2
+                        .insert(vk::PhysicalDeviceRobustness2PropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
                 unsafe {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                 };
@@ -1182,6 +1235,7 @@ impl super::InstanceShared {
                     capabilities
                         .supported_extensions
                         .retain(|&x| x.extension_name_as_c_str() != Ok(ext::robustness2::NAME));
+                    capabilities.robustness2 = None;
                 }
             };
             capabilities
@@ -1495,10 +1549,13 @@ impl super::Instance {
                 }),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(khr::image_format_list::NAME),
+            #[cfg(windows)]
+            external_memory_win32: phd_capabilities
+                .supports_extension(khr::external_memory_win32::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
-            alignments: phd_capabilities.to_hal_alignments(),
+            alignments: phd_capabilities.to_hal_alignments(private_caps.robust_buffer_access2),
             downlevel: wgt::DownlevelCapabilities {
                 flags: downlevel_flags,
                 limits: wgt::DownlevelLimits {},
@@ -1594,11 +1651,13 @@ impl super::Adapter {
     /// - `raw_device` must be created from this adapter.
     /// - `raw_device` must be created using `family_index`, `enabled_extensions` and `physical_device_features()`
     /// - `enabled_extensions` must be a superset of `required_device_extensions()`.
+    /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `raw_device`. If
+    ///   `drop_callback` is [`Some`], `raw_device` must be valid until the callback is called.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn device_from_raw(
         &self,
         raw_device: ash::Device,
-        handle_is_owned: bool,
+        drop_callback: Option<crate::DropCallback>,
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
         memory_hints: &wgt::MemoryHints,
@@ -1725,7 +1784,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
             }
 
-            if features.contains(wgt::Features::RAY_QUERY) {
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
             }
 
@@ -1756,7 +1815,7 @@ impl super::Adapter {
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
-            if features.contains(wgt::Features::RAY_QUERY) {
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
             }
             spv::Options {
@@ -1771,7 +1830,7 @@ impl super::Adapter {
                 capabilities: Some(capabilities.iter().cloned().collect()),
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {
                     index: naga::proc::BoundsCheckPolicy::Restrict,
-                    buffer: if self.private_caps.robust_buffer_access {
+                    buffer: if self.private_caps.robust_buffer_access2 {
                         naga::proc::BoundsCheckPolicy::Unchecked
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
@@ -1816,12 +1875,14 @@ impl super::Adapter {
             0, 0, 0, 0,
         ];
 
+        let drop_guard = crate::DropGuard::from_option(drop_callback);
+
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
             family_index,
             queue_index,
             raw_queue,
-            handle_is_owned,
+            drop_guard,
             instance: Arc::clone(&self.instance),
             physical_device: self.raw,
             enabled_extensions: enabled_extensions.into(),
@@ -1988,13 +2049,28 @@ impl crate::Adapter for super::Adapter {
         let info = enabled_phd_features.add_to_device_create(pre_info);
         let raw_device = {
             profiling::scope!("vkCreateDevice");
-            unsafe { self.instance.raw.create_device(self.raw, &info, None)? }
+            unsafe {
+                self.instance
+                    .raw
+                    .create_device(self.raw, &info, None)
+                    .map_err(map_err)?
+            }
         };
+        fn map_err(err: vk::Result) -> crate::DeviceError {
+            match err {
+                vk::Result::ERROR_TOO_MANY_OBJECTS => crate::DeviceError::OutOfMemory,
+                vk::Result::ERROR_INITIALIZATION_FAILED => crate::DeviceError::Lost,
+                vk::Result::ERROR_EXTENSION_NOT_PRESENT | vk::Result::ERROR_FEATURE_NOT_PRESENT => {
+                    crate::hal_usage_error(err)
+                }
+                other => super::map_host_device_oom_and_lost_err(other),
+            }
+        }
 
         unsafe {
             self.device_from_raw(
                 raw_device,
-                true,
+                None,
                 &enabled_extensions,
                 features,
                 memory_hints,

@@ -7,8 +7,9 @@ using metal::uint;
 
 void breakIfEmpty(
 ) {
+#define LOOP_IS_REACHABLE if (volatile bool unpredictable_jump_over_loop = true; unpredictable_jump_over_loop)
     bool loop_init = true;
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         if (!loop_init) {
             if (true) {
                 break;
@@ -25,7 +26,7 @@ void breakIfEmptyBody(
     bool b = {};
     bool c = {};
     bool loop_init_1 = true;
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         if (!loop_init_1) {
             b = a;
             bool _e2 = b;
@@ -46,7 +47,7 @@ void breakIf(
     bool d = {};
     bool e = {};
     bool loop_init_2 = true;
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         if (!loop_init_2) {
             bool _e5 = e;
             if (a_1 == e) {
@@ -65,7 +66,7 @@ void breakIfSeparateVariable(
 ) {
     uint counter = 0u;
     bool loop_init_3 = true;
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         if (!loop_init_3) {
             uint _e5 = counter;
             if (counter == 5u) {

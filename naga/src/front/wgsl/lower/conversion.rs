@@ -1,5 +1,8 @@
 //! WGSL's automatic conversions for abstract types.
 
+use crate::front::wgsl::error::{
+    AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
+};
 use crate::{Handle, Span};
 
 impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
@@ -39,15 +42,17 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
                 Some(scalars) => scalars,
                 None => {
                     let gctx = &self.module.to_ctx();
-                    let source_type = expr_resolution.to_wgsl(gctx);
-                    let dest_type = goal_ty.to_wgsl(gctx);
+                    let source_type = expr_resolution.to_wgsl(gctx).into();
+                    let dest_type = goal_ty.to_wgsl(gctx).into();
 
-                    return Err(super::Error::AutoConversion {
-                        dest_span: goal_span,
-                        dest_type,
-                        source_span: expr_span,
-                        source_type,
-                    });
+                    return Err(super::Error::AutoConversion(Box::new(
+                        AutoConversionError {
+                            dest_span: goal_span,
+                            dest_type,
+                            source_span: expr_span,
+                            source_type,
+                        },
+                    )));
                 }
             };
 
@@ -79,13 +84,13 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
 
         let make_error = || {
             let gctx = &self.module.to_ctx();
-            let source_type = expr_resolution.to_wgsl(gctx);
-            super::Error::AutoConversionLeafScalar {
+            let source_type = expr_resolution.to_wgsl(gctx).into();
+            super::Error::AutoConversionLeafScalar(Box::new(AutoConversionLeafScalarError {
                 dest_span: goal_span,
-                dest_scalar: goal_scalar.to_wgsl(),
+                dest_scalar: goal_scalar.to_wgsl().into(),
                 source_span: expr_span,
                 source_type,
-            }
+            }))
         };
 
         let expr_scalar = match expr_inner.scalar() {
@@ -116,7 +121,7 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
         if let crate::TypeInner::Array { .. } = *expr_inner {
             self.as_const_evaluator()
                 .cast_array(expr, goal_scalar, expr_span)
-                .map_err(|err| super::Error::ConstantEvaluatorError(err, expr_span))
+                .map_err(|err| super::Error::ConstantEvaluatorError(err.into(), expr_span))
         } else {
             let cast = crate::Expression::As {
                 expr,
@@ -254,12 +259,12 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
                         // it has one. Also, avoid holding the borrow of `inner`
                         // across the call to `cast_array`.
                         let expr_type = &self.typifier()[expr];
-                        super::Error::ConcretizationFailed {
+                        super::Error::ConcretizationFailed(Box::new(ConcretizationFailedError {
                             expr_span,
-                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()),
-                            scalar: concretized.to_wgsl(),
+                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()).into(),
+                            scalar: concretized.to_wgsl().into(),
                             inner: err,
-                        }
+                        }))
                     })?;
             }
         }

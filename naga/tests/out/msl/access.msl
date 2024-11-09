@@ -17,33 +17,33 @@ struct GlobalConst {
 struct AlignedWrapper {
     int value;
 };
-struct type_5 {
+struct type_6 {
     metal::float2x2 inner[2];
 };
-struct type_7 {
+struct type_8 {
     metal::atomic_int inner[10];
 };
-struct type_9 {
+struct type_10 {
     metal::uint2 inner[2];
 };
-typedef AlignedWrapper type_10[1];
+typedef AlignedWrapper type_11[1];
 struct Bar {
     metal::float4x3 _matrix;
-    type_5 matrix_array;
+    type_6 matrix_array;
     metal::atomic_int atom;
-    type_7 atom_arr;
+    type_8 atom_arr;
     char _pad4[4];
-    type_9 arr;
-    type_10 data;
+    type_10 arr;
+    type_11 data;
 };
 struct Baz {
     metal::float3x2 m;
 };
-struct type_14 {
+struct type_15 {
     metal::float4x2 inner[2];
 };
 struct MatCx2InArray {
-    type_14 am;
+    type_15 am;
 };
 struct type_17 {
     float inner[10];
@@ -56,6 +56,12 @@ struct type_20 {
 };
 struct type_22 {
     metal::float4 inner[2];
+};
+struct AssignToMember {
+    uint x;
+};
+struct type_25 {
+    uint inner[4];
 };
 
 void test_matrix_within_struct_accesses(
@@ -98,10 +104,10 @@ void test_matrix_within_array_within_struct_accesses(
     constant MatCx2InArray& nested_mat_cx2_
 ) {
     int idx_1 = 1;
-    MatCx2InArray t_1 = MatCx2InArray {type_14 {}};
+    MatCx2InArray t_1 = MatCx2InArray {type_15 {}};
     int _e3 = idx_1;
     idx_1 = _e3 - 1;
-    type_14 l0_1 = nested_mat_cx2_.am;
+    type_15 l0_1 = nested_mat_cx2_.am;
     metal::float4x2 l1_1 = nested_mat_cx2_.am.inner[0];
     metal::float2 l2_1 = nested_mat_cx2_.am.inner[0][0];
     int _e20 = idx_1;
@@ -116,7 +122,7 @@ void test_matrix_within_array_within_struct_accesses(
     float l7_ = nested_mat_cx2_.am.inner[0][_e46][_e48];
     int _e55 = idx_1;
     idx_1 = _e55 + 1;
-    t_1.am = type_14 {};
+    t_1.am = type_15 {};
     t_1.am.inner[0] = metal::float4x2(metal::float2(8.0), metal::float2(7.0), metal::float2(6.0), metal::float2(5.0));
     t_1.am.inner[0][0] = metal::float2(9.0);
     int _e77 = idx_1;
@@ -159,6 +165,34 @@ void assign_array_through_ptr_fn(
     return;
 }
 
+uint fetch_arg_ptr_member(
+    thread AssignToMember& p_1
+) {
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(
+    thread AssignToMember& p_2
+) {
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(
+    thread type_25& p_3
+) {
+    uint _e2 = p_3.inner[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(
+    thread type_25& p_4
+) {
+    p_4.inner[1] = 10u;
+    return;
+}
+
 struct foo_vertInput {
 };
 struct foo_vertOutput {
@@ -179,7 +213,7 @@ vertex foo_vertOutput foo_vert(
     test_matrix_within_struct_accesses(baz);
     test_matrix_within_array_within_struct_accesses(nested_mat_cx2_);
     metal::float4x3 _matrix = bar._matrix;
-    type_9 arr_1 = bar.arr;
+    type_10 arr_1 = bar.arr;
     float b = bar._matrix[3u].x;
     int a_1 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
@@ -202,7 +236,7 @@ fragment foo_fragOutput foo_frag(
 ) {
     bar._matrix[1].z = 1.0;
     bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
-    bar.arr = type_9 {metal::uint2(0u), metal::uint2(1u)};
+    bar.arr = type_10 {metal::uint2(0u), metal::uint2(1u)};
     bar.data[1].value = 1;
     qux = metal::int2 {};
     return foo_fragOutput { metal::float4(0.0) };
@@ -215,5 +249,17 @@ kernel void assign_through_ptr(
     type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
+    return;
+}
+
+
+kernel void assign_to_ptr_components(
+) {
+    AssignToMember s1_ = {};
+    type_25 a1_ = {};
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }

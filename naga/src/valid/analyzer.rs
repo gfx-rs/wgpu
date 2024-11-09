@@ -421,7 +421,10 @@ impl FunctionInfo {
             let image_storage = match sampling.image {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
-                    let handle = arguments[i as usize];
+                    let Some(handle) = arguments.get(i as usize).cloned() else {
+                        // Argument count mismatch, will be reported later by validate_call
+                        break;
+                    };
                     GlobalOrArgument::from_expression(expression_arena, handle).map_err(
                         |source| {
                             FunctionError::Expression { handle, source }
@@ -434,7 +437,10 @@ impl FunctionInfo {
             let sampler_storage = match sampling.sampler {
                 GlobalOrArgument::Global(var) => GlobalOrArgument::Global(var),
                 GlobalOrArgument::Argument(i) => {
-                    let handle = arguments[i as usize];
+                    let Some(handle) = arguments.get(i as usize).cloned() else {
+                        // Argument count mismatch, will be reported later by validate_call
+                        break;
+                    };
                     GlobalOrArgument::from_expression(expression_arena, handle).map_err(
                         |source| {
                             FunctionError::Expression { handle, source }
@@ -589,23 +595,16 @@ impl FunctionInfo {
                     requirements: UniformityRequirements::empty(),
                 }
             }
-            // depends on the builtin or interpolation
+            // depends on the builtin
             E::FunctionArgument(index) => {
                 let arg = &resolve_context.arguments[index as usize];
                 let uniform = match arg.binding {
                     Some(crate::Binding::BuiltIn(
-                        // per-polygon built-ins are uniform
-                        crate::BuiltIn::FrontFacing
                         // per-work-group built-ins are uniform
-                        | crate::BuiltIn::WorkGroupId
+                        crate::BuiltIn::WorkGroupId
                         | crate::BuiltIn::WorkGroupSize
-                        | crate::BuiltIn::NumWorkGroups)
-                    ) => true,
-                    // only flat inputs are uniform
-                    Some(crate::Binding::Location {
-                        interpolation: Some(crate::Interpolation::Flat),
-                        ..
-                    }) => true,
+                        | crate::BuiltIn::NumWorkGroups,
+                    )) => true,
                     _ => false,
                 };
                 Uniformity {

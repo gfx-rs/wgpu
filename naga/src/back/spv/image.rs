@@ -4,7 +4,7 @@ Generating SPIR-V for image operations.
 
 use super::{
     selection::{MergeTuple, Selection},
-    Block, BlockContext, Error, IdGenerator, Instruction, LocalType, LookupType,
+    Block, BlockContext, Error, IdGenerator, Instruction, LocalType, LookupType, NumericType,
 };
 use crate::arena::Handle;
 use spirv::Word;
@@ -126,11 +126,10 @@ impl Load {
         // the right SPIR-V type for the access instruction here.
         let type_id = match image_class {
             crate::ImageClass::Depth { .. } => {
-                ctx.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: Some(crate::VectorSize::Quad),
+                ctx.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                    size: crate::VectorSize::Quad,
                     scalar: crate::Scalar::F32,
-                    pointer_space: None,
-                }))
+                })))
             }
             _ => result_type_id,
         };
@@ -292,15 +291,15 @@ impl<'w> BlockContext<'w> {
         // Find the component type of `coordinates`, and figure out the size the
         // combined coordinate vector will have.
         let (component_scalar, size) = match *inner_ty {
-            Ti::Scalar(scalar @ crate::Scalar { width: 4, .. }) => (scalar, Some(Vs::Bi)),
+            Ti::Scalar(scalar @ crate::Scalar { width: 4, .. }) => (scalar, Vs::Bi),
             Ti::Vector {
                 scalar: scalar @ crate::Scalar { width: 4, .. },
                 size: Vs::Bi,
-            } => (scalar, Some(Vs::Tri)),
+            } => (scalar, Vs::Tri),
             Ti::Vector {
                 scalar: scalar @ crate::Scalar { width: 4, .. },
                 size: Vs::Tri,
-            } => (scalar, Some(Vs::Quad)),
+            } => (scalar, Vs::Quad),
             Ti::Vector { size: Vs::Quad, .. } => {
                 return Err(Error::Validation("extending vec4 coordinate"));
             }
@@ -340,11 +339,9 @@ impl<'w> BlockContext<'w> {
             }
         };
         let reconciled_array_index_id = if let Some(cast) = cast {
-            let component_ty_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                vector_size: None,
-                scalar: component_scalar,
-                pointer_space: None,
-            }));
+            let component_ty_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                NumericType::Scalar(component_scalar),
+            )));
             let reconciled_id = self.gen_id();
             block.body.push(Instruction::unary(
                 cast,
@@ -358,11 +355,11 @@ impl<'w> BlockContext<'w> {
         };
 
         // Find the SPIR-V type for the combined coordinates/index vector.
-        let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: size,
-            scalar: component_scalar,
-            pointer_space: None,
-        }));
+        let type_id =
+            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                size,
+                scalar: component_scalar,
+            })));
 
         // Schmear the coordinates and index together.
         let value_id = self.gen_id();
@@ -374,7 +371,7 @@ impl<'w> BlockContext<'w> {
         Ok(ImageCoordinates {
             value_id,
             type_id,
-            size,
+            size: Some(size),
         })
     }
 
@@ -529,11 +526,9 @@ impl<'w> BlockContext<'w> {
             &[spirv::Capability::ImageQuery],
         )?;
 
-        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::I32,
-            pointer_space: None,
-        }));
+        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+            NumericType::Scalar(crate::Scalar::I32),
+        )));
 
         // If `level` is `Some`, clamp it to fall within bounds. This must
         // happen first, because we'll use it to query the image size for
@@ -616,11 +611,9 @@ impl<'w> BlockContext<'w> {
         )?;
 
         let bool_type_id = self.writer.get_bool_type_id();
-        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::I32,
-            pointer_space: None,
-        }));
+        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+            NumericType::Scalar(crate::Scalar::I32),
+        )));
 
         let null_id = access.out_of_bounds_value(self);
 
@@ -683,11 +676,15 @@ impl<'w> BlockContext<'w> {
         );
 
         // Compare the coordinates against the bounds.
-        let coords_bool_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: coordinates.size,
-            scalar: crate::Scalar::BOOL,
-            pointer_space: None,
-        }));
+        let coords_numeric_type = match coordinates.size {
+            Some(size) => NumericType::Vector {
+                size,
+                scalar: crate::Scalar::BOOL,
+            },
+            None => NumericType::Scalar(crate::Scalar::BOOL),
+        };
+        let coords_bool_type_id =
+            self.get_type_id(LookupType::Local(LocalType::Numeric(coords_numeric_type)));
         let coords_conds_id = self.gen_id();
         selection.block().body.push(Instruction::binary(
             spirv::Op::ULessThan,
@@ -838,11 +835,10 @@ impl<'w> BlockContext<'w> {
             _ => false,
         };
         let sample_result_type_id = if needs_sub_access {
-            self.get_type_id(LookupType::Local(LocalType::Value {
-                vector_size: Some(crate::VectorSize::Quad),
+            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                size: crate::VectorSize::Quad,
                 scalar: crate::Scalar::F32,
-                pointer_space: None,
-            }))
+            })))
         } else {
             result_type_id
         };
@@ -1038,11 +1034,16 @@ impl<'w> BlockContext<'w> {
                     4 => Some(crate::VectorSize::Quad),
                     _ => None,
                 };
-                let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size,
-                    scalar: crate::Scalar::U32,
-                    pointer_space: None,
-                }));
+                let vector_numeric_type = match vector_size {
+                    Some(size) => NumericType::Vector {
+                        size,
+                        scalar: crate::Scalar::U32,
+                    },
+                    None => NumericType::Scalar(crate::Scalar::U32),
+                };
+
+                let extended_size_type_id =
+                    self.get_type_id(LookupType::Local(LocalType::Numeric(vector_numeric_type)));
 
                 let (query_op, level_id) = match class {
                     Ic::Sampled { multi: true, .. }
@@ -1108,11 +1109,11 @@ impl<'w> BlockContext<'w> {
                     Id::D2 | Id::Cube => crate::VectorSize::Tri,
                     Id::D3 => crate::VectorSize::Quad,
                 };
-                let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: Some(vec_size),
-                    scalar: crate::Scalar::U32,
-                    pointer_space: None,
-                }));
+                let extended_size_type_id =
+                    self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                        size: vec_size,
+                        scalar: crate::Scalar::U32,
+                    })));
                 let id_extended = self.gen_id();
                 let mut inst = Instruction::image_query(
                     spirv::Op::ImageQuerySizeLod,

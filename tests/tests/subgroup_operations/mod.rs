@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU64};
+use std::{mem::size_of, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
@@ -35,7 +35,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: THREAD_COUNT * std::mem::size_of::<u32>() as u64,
+            size: THREAD_COUNT * size_of::<u32>() as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -50,18 +50,13 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(
-                        THREAD_COUNT * std::mem::size_of::<u32>() as u64,
-                    ),
+                    min_binding_size: NonZeroU64::new(THREAD_COUNT * size_of::<u32>() as u64),
                 },
                 count: None,
             }],
         });
 
-        let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
@@ -125,10 +120,10 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                         .enumerate()
                         .filter(|(_, (r, e))| *r != e)
                     {
-                        write!(&mut msg, "thread {} failed tests:", thread).unwrap();
+                        write!(&mut msg, "thread {thread} failed tests:").unwrap();
                         let difference = result ^ expected;
                         for i in (0..u32::BITS).filter(|i| (difference & (1 << i)) != 0) {
-                            write!(&mut msg, " {},", i).unwrap();
+                            write!(&mut msg, " {i},").unwrap();
                         }
                         writeln!(&mut msg).unwrap();
                     }

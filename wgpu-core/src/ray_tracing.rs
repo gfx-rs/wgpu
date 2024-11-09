@@ -1,3 +1,12 @@
+// Ray tracing
+// Major missing optimizations (no api surface changes needed):
+// - use custom tracker to track build state
+// - no forced rebuilt (build mode deduction)
+// - lazy instance buffer allocation
+// - maybe share scratch and instance staging buffer allocation
+// - partial instance buffer uploads (api surface already designed with this in mind)
+// - ([non performance] extract function in build (rust function extraction with guards is a pain))
+
 use crate::{
     command::CommandEncoderError,
     device::DeviceError,
@@ -5,19 +14,11 @@ use crate::{
     resource::CreateBufferError,
 };
 use std::sync::Arc;
-/// Ray tracing
-/// Major missing optimizations (no api surface changes needed):
-/// - use custom tracker to track build state
-/// - no forced rebuilt (build mode deduction)
-/// - lazy instance buffer allocation
-/// - maybe share scratch and instance staging buffer allocation
-/// - partial instance buffer uploads (api surface already designed with this in mind)
-/// - ([non performance] extract function in build (rust function extraction with guards is a pain))
 use std::{num::NonZeroU64, slice};
 
 use crate::resource::{Blas, ResourceErrorIdent, Tlas};
 use thiserror::Error;
-use wgt::BufferAddress;
+use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {
@@ -29,6 +30,10 @@ pub enum CreateBlasError {
         "Only one of 'index_count' and 'index_format' was provided (either provide both or none)"
     )]
     MissingIndexData,
+    #[error("Provided format was not within allowed formats. Provided format: {0:?}. Allowed formats: {1:?}")]
+    InvalidVertexFormat(VertexFormat, Vec<VertexFormat>),
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -37,6 +42,8 @@ pub enum CreateTlasError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     CreateBufferError(#[from] CreateBufferError),
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
     #[error("Unimplemented Tlas error: this error is not yet implemented")]
     Unimplemented,
 }
@@ -105,6 +112,28 @@ pub enum BuildAccelerationStructureError {
     )]
     IncompatibleBlasBuildSizes(ResourceErrorIdent),
 
+    #[error("Blas {0:?} flags are different, creation flags: {1:?}, provided: {2:?}")]
+    IncompatibleBlasFlags(
+        ResourceErrorIdent,
+        AccelerationStructureGeometryFlags,
+        AccelerationStructureGeometryFlags,
+    ),
+
+    #[error("Blas {0:?} build vertex count is greater than creation count (needs to be less than or equal to), creation: {1:?}, build: {2:?}")]
+    IncompatibleBlasVertexCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} vertex formats are different, creation format: {1:?}, provided: {2:?}")]
+    DifferentBlasVertexFormats(ResourceErrorIdent, VertexFormat, VertexFormat),
+
+    #[error("Blas {0:?} index count was provided at creation or building, but not the other")]
+    BlasIndexCountProvidedMismatch(ResourceErrorIdent),
+
+    #[error("Blas {0:?} build index count is greater than creation count (needs to be less than or equal to), creation: {1:?}, build: {2:?}")]
+    IncompatibleBlasIndexCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} index formats are different, creation format: {1:?}, provided: {2:?}")]
+    DifferentBlasIndexFormats(ResourceErrorIdent, Option<IndexFormat>, Option<IndexFormat>),
+
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 
@@ -136,6 +165,9 @@ pub enum BuildAccelerationStructureError {
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(ResourceErrorIdent),
 
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
+
     #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
     MissingTlasInputUsageFlag(ResourceErrorIdent),
 }
@@ -145,7 +177,7 @@ pub enum ValidateBlasActionsError {
     #[error("BlasId is invalid or destroyed")]
     InvalidBlas,
 
-    #[error("Blas {0:?} is used before it is build")]
+    #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 }
 
@@ -154,14 +186,14 @@ pub enum ValidateTlasActionsError {
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(ResourceErrorIdent),
 
-    #[error("Tlas {0:?} is used before it is build")]
+    #[error("Tlas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 
-    #[error("Blas {0:?} is used before it is build (in Tlas {1:?})")]
+    #[error("Blas {0:?} is used before it is built (in Tlas {1:?})")]
     UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
 
-    #[error("BlasId is invalid or destroyed (in Tlas {0:?})")]
-    InvalidBlasId(ResourceErrorIdent),
+    #[error("BlasId is destroyed (in Tlas {0:?})")]
+    InvalidBlas(ResourceErrorIdent),
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),

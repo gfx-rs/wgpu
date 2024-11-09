@@ -326,6 +326,8 @@ trait PrettyResult {
     fn unwrap_pretty(self) -> Self::Target;
 }
 
+#[cold]
+#[inline(never)]
 fn print_err(error: &dyn Error) {
     eprint!("{error}");
 
@@ -373,7 +375,10 @@ impl fmt::Display for CliError {
 impl std::error::Error for CliError {}
 
 fn run() -> anyhow::Result<()> {
-    env_logger::init();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .init();
 
     // Parse commandline arguments
     let args: Args = argh::from_env();
@@ -446,13 +451,15 @@ fn run() -> anyhow::Result<()> {
         return bulk_validate(args, &params);
     }
 
-    let (input_path, input) = if let Some(path) = args.files.first() {
-        let path = Path::new(path);
-        (path, fs::read(path)?)
-    } else if let Some(path) = &args.stdin_file_path {
+    let mut files = args.files.iter();
+
+    let (input_path, input) = if let Some(path) = args.stdin_file_path.as_ref() {
         let mut input = vec![];
         std::io::stdin().lock().read_to_end(&mut input)?;
         (Path::new(path), input)
+    } else if let Some(path) = files.next() {
+        let path = Path::new(path);
+        (path, fs::read(path)?)
     } else {
         return Err(CliError("Input file path is not specified").into());
     };
@@ -463,6 +470,7 @@ fn run() -> anyhow::Result<()> {
     let Parsed {
         mut module,
         input_text,
+        language,
     } = parse_input(input_path, input, &params)?;
 
     // Include debugging information if requested.
@@ -475,6 +483,7 @@ fn run() -> anyhow::Result<()> {
             params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
                 source_code: input_text,
                 file_name: input_path,
+                language,
             })
         } else {
             eprintln!(
@@ -485,12 +494,12 @@ fn run() -> anyhow::Result<()> {
         }
     }
 
-    let output_paths = args.files.get(1..).unwrap_or(&[]);
+    let output_paths = files;
 
     // Decide which capabilities our output formats can support.
     let validation_caps =
         output_paths
-            .iter()
+            .clone()
             .fold(naga::valid::Capabilities::all(), |caps, path| {
                 use naga::valid::Capabilities as C;
                 let missing = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
@@ -512,9 +521,10 @@ fn run() -> anyhow::Result<()> {
             // Validation failure is not fatal. Just report the error.
             if let Some(input) = &input_text {
                 let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+            } else {
+                print_err(&error);
             }
-            print_err(&error);
             None
         }
     };
@@ -540,9 +550,10 @@ fn run() -> anyhow::Result<()> {
                     eprintln!("Error validating compacted module:");
                     if let Some(input) = &input_text {
                         let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
-                        emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                        error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+                    } else {
+                        print_err(&error);
                     }
-                    print_err(&error);
                     None
                 }
             }
@@ -558,7 +569,7 @@ fn run() -> anyhow::Result<()> {
     //
     // If the user asked for output, don't stop: some output formats (".txt",
     // ".dot", ".bin") can be generated even without a `ModuleInfo`.
-    if output_paths.is_empty() {
+    if output_paths.clone().next().is_none() {
         if info.is_some() {
             println!("Validation successful");
             return Ok(());
@@ -577,6 +588,7 @@ fn run() -> anyhow::Result<()> {
 struct Parsed {
     module: naga::Module,
     input_text: Option<String>,
+    language: naga::back::spv::SourceLanguage,
 }
 
 fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow::Result<Parsed> {
@@ -591,16 +603,26 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
             .context("Unable to determine --input-kind from filename")?,
     };
 
-    let (module, input_text) = match input_kind {
-        InputKind::Bincode => (bincode::deserialize(&input)?, None),
-        InputKind::SpirV => {
-            naga::front::spv::parse_u8_slice(&input, &params.spv_in).map(|m| (m, None))?
-        }
+    Ok(match input_kind {
+        InputKind::Bincode => Parsed {
+            module: bincode::deserialize(&input)?,
+            input_text: None,
+            language: naga::back::spv::SourceLanguage::Unknown,
+        },
+        InputKind::SpirV => Parsed {
+            module: naga::front::spv::parse_u8_slice(&input, &params.spv_in)?,
+            input_text: None,
+            language: naga::back::spv::SourceLanguage::Unknown,
+        },
         InputKind::Wgsl => {
             let input = String::from_utf8(input)?;
             let result = naga::front::wgsl::parse_str(&input);
             match result {
-                Ok(v) => (v, Some(input)),
+                Ok(v) => Parsed {
+                    module: v,
+                    input_text: Some(input),
+                    language: naga::back::spv::SourceLanguage::WGSL,
+                },
                 Err(ref e) => {
                     let message = anyhow!(
                         "Could not parse WGSL:\n{}",
@@ -629,8 +651,8 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
             };
             let input = String::from_utf8(input)?;
             let mut parser = naga::front::glsl::Frontend::default();
-            (
-                parser
+            Parsed {
+                module: parser
                     .parse(
                         &naga::front::glsl::Options {
                             stage: shader_stage.0,
@@ -647,12 +669,11 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
                         error.emit_to_writer_with_path(&mut writer, &input, filename);
                         std::process::exit(1);
                     }),
-                Some(input),
-            )
+                input_text: Some(input),
+                language: naga::back::spv::SourceLanguage::GLSL,
+            }
         }
-    };
-
-    Ok(Parsed { module, input_text })
+    })
 }
 
 fn write_output(
@@ -831,11 +852,15 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
         let path = Path::new(&input_path);
         let input = fs::read(path)?;
 
-        let Parsed { module, input_text } = match parse_input(path, input, params) {
+        let Parsed {
+            module,
+            input_text,
+            language: _,
+        } = match parse_input(path, input, params) {
             Ok(parsed) => parsed,
             Err(error) => {
                 invalid.push(input_path.clone());
-                eprintln!("Error validating {}:", input_path);
+                eprintln!("Error validating {input_path}:");
                 eprintln!("{error}");
                 continue;
             }
@@ -848,12 +873,13 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
 
         if let Err(error) = validator.validate(&module) {
             invalid.push(input_path.clone());
-            eprintln!("Error validating {}:", input_path);
+            eprintln!("Error validating {input_path}:");
             if let Some(input) = &input_text {
                 let filename = path.file_name().and_then(std::ffi::OsStr::to_str);
-                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                error.emit_to_stderr_with_path(input, filename.unwrap_or("input"));
+            } else {
+                print_err(&error);
             }
-            print_err(&error);
         }
     }
 
@@ -874,29 +900,5 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
     Ok(())
 }
 
-use codespan_reporting::{
-    diagnostic::{Diagnostic, Label},
-    files::SimpleFile,
-    term::{
-        self,
-        termcolor::{ColorChoice, StandardStream},
-    },
-};
-use naga::{FastHashMap, WithSpan};
-
-pub fn emit_annotated_error<E: Error>(ann_err: &WithSpan<E>, filename: &str, source: &str) {
-    let files = SimpleFile::new(filename, source);
-    let config = codespan_reporting::term::Config::default();
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-
-    let diagnostic = Diagnostic::error().with_labels(
-        ann_err
-            .spans()
-            .map(|(span, desc)| {
-                Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
-            })
-            .collect(),
-    );
-
-    term::emit(&mut writer.lock(), &config, &files, &diagnostic).expect("cannot write error");
-}
+use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
+use naga::FastHashMap;

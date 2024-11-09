@@ -14,8 +14,12 @@ const BASE_DIR_OUT: &str = "tests/out";
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
     struct Targets: u32 {
+        /// A serialization of the `naga::Module`, in RON format.
         const IR = 1;
+
+        /// A serialization of the `naga::valid::ModuleInfo`, in RON format.
         const ANALYSIS = 1 << 1;
+
         const SPIRV = 1 << 2;
         const METAL = 1 << 3;
         const GLSL = 1 << 4;
@@ -354,6 +358,10 @@ fn check_targets(
         let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
             source_code: code,
             file_name: name.as_ref(),
+            // wgpu#6266: we technically know all the information here to
+            // produce the valid language but it's not too important for
+            // validation purposes
+            language: naga::back::spv::SourceLanguage::Unknown,
         });
 
         if targets.contains(Targets::SPIRV) {
@@ -745,6 +753,10 @@ fn convert_wgsl() {
         ("functions-webgl", Targets::GLSL),
         (
             "interpolate",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "interpolate_compat",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
@@ -761,7 +773,10 @@ fn convert_wgsl() {
             "atomicOps",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
+        (
+            "atomicCompareExchange",
+            Targets::SPIRV | Targets::METAL | Targets::WGSL,
+        ),
         (
             "padding",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -818,6 +833,7 @@ fn convert_wgsl() {
             "use-gl-ext-over-grad-workaround-if-instructed",
             Targets::GLSL,
         ),
+        ("local-const", Targets::IR | Targets::WGSL),
         (
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -863,6 +879,7 @@ fn convert_wgsl() {
             "const-exprs",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        ("const_assert", Targets::WGSL | Targets::IR),
         ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
         (
             "struct-layout",
@@ -903,13 +920,27 @@ fn convert_wgsl() {
         ),
         (
             "overrides-atomicCompareExchangeWeak",
-            Targets::IR | Targets::SPIRV,
+            Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
         (
             "overrides-ray-query",
             Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
         ("vertex-pulling-transform", Targets::METAL),
+        (
+            "cross",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "phony_assignment",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        ("6220-break-from-loop", Targets::SPIRV),
+        ("index-by-value", Targets::SPIRV | Targets::IR),
+        (
+            "6438-conflicting-idents",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -1036,11 +1067,11 @@ fn convert_spv_all() {
         false,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+    convert_spv("atomic_i_increment", false, Targets::IR);
     convert_spv(
-        "atomic_i_increment",
+        "fetch_depth",
         false,
-        // TODO(@schell): remove Targets::NO_VALIDATION when OpAtomicIIncrement lands
-        Targets::IR | Targets::NO_VALIDATION,
+        Targets::IR | Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
     );
 }
 

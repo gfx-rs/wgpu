@@ -167,3 +167,34 @@ fn assign_through_ptr() {
 	var arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
     assign_array_through_ptr_fn(&arr);
 }
+
+struct AssignToMember {
+  x: u32,
+}
+
+fn fetch_arg_ptr_member(p: ptr<function, AssignToMember>) -> u32 {
+  return (*p).x;
+}
+
+fn assign_to_arg_ptr_member(p: ptr<function, AssignToMember>) {
+  (*p).x = 10u;
+}
+
+fn fetch_arg_ptr_array_element(p: ptr<function, array<u32, 4>>) -> u32 {
+  return (*p)[1];
+}
+
+fn assign_to_arg_ptr_array_element(p: ptr<function, array<u32, 4>>) {
+  (*p)[1] = 10u;
+}
+
+@compute @workgroup_size(1)
+fn assign_to_ptr_components() {
+   var s1: AssignToMember;
+   assign_to_arg_ptr_member(&s1);
+   fetch_arg_ptr_member(&s1);
+
+   var a1: array<u32, 4>;
+   assign_to_arg_ptr_array_element(&a1);
+   fetch_arg_ptr_array_element(&a1);
+}

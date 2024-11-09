@@ -63,10 +63,20 @@ macro_rules! define_lock_ranks {
         }
 
         impl LockRankSet {
-            pub fn name(self) -> &'static str {
+            pub fn member_name(self) -> &'static str {
                 match self {
                     $(
                         LockRankSet:: $name => $member,
+                    )*
+                    _ => "<unrecognized LockRankSet bit>",
+                }
+            }
+
+            #[cfg_attr(not(feature = "observe_locks"), allow(dead_code))]
+            pub fn const_name(self) -> &'static str {
+                match self {
+                    $(
+                        LockRankSet:: $name => stringify!($name),
                     )*
                     _ => "<unrecognized LockRankSet bit>",
                 }
@@ -138,6 +148,7 @@ define_lock_ranks! {
     rank BLAS_BEING_BUILT "Blas::being_built" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
+    rank TLAS_BIND_GROUPS "Tlas::bind_groups" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

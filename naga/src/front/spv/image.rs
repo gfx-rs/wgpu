@@ -377,36 +377,61 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let coord_handle =
             self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index) = match ctx.type_arena[image_ty].inner {
+        let (coordinate, array_index, is_depth) = match ctx.type_arena[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
-                class: _,
-            } => extract_image_coordinates(
-                dim,
-                if arrayed {
-                    ExtraCoordinate::ArrayLayer
-                } else {
-                    ExtraCoordinate::Garbage
-                },
-                coord_handle,
-                coord_type_handle,
-                ctx,
-            ),
+                class,
+            } => {
+                let (coord, array_index) = extract_image_coordinates(
+                    dim,
+                    if arrayed {
+                        ExtraCoordinate::ArrayLayer
+                    } else {
+                        ExtraCoordinate::Garbage
+                    },
+                    coord_handle,
+                    coord_type_handle,
+                    ctx,
+                );
+                (coord, array_index, class.is_depth())
+            }
             _ => return Err(Error::InvalidImage(image_ty)),
         };
 
-        let expr = crate::Expression::ImageLoad {
+        let image_load_expr = crate::Expression::ImageLoad {
             image: image_lexp.handle,
             coordinate,
             array_index,
             sample,
             level,
         };
+        let image_load_handle = ctx
+            .expressions
+            .append(image_load_expr, self.span_from_with_op(start));
+
+        let handle = if is_depth {
+            let result_ty = self.lookup_type.lookup(result_type_id)?;
+            // The return type of `OpImageRead` can be a scalar or vector.
+            match ctx.type_arena[result_ty.handle].inner {
+                crate::TypeInner::Vector { size, .. } => {
+                    let splat_expr = crate::Expression::Splat {
+                        size,
+                        value: image_load_handle,
+                    };
+                    ctx.expressions
+                        .append(splat_expr, self.span_from_with_op(start))
+                }
+                _ => image_load_handle,
+            }
+        } else {
+            image_load_handle
+        };
+
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: ctx.expressions.append(expr, self.span_from_with_op(start)),
+                handle,
                 type_id: result_type_id,
                 block_id,
             },
@@ -593,11 +618,12 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
         }
 
-        let ((coordinate, array_index), depth_ref) = match ctx.type_arena[image_ty].inner {
+        let ((coordinate, array_index), depth_ref, is_depth) = match ctx.type_arena[image_ty].inner
+        {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
-                class: _,
+                class,
             } => (
                 extract_image_coordinates(
                     dim,
@@ -642,6 +668,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         None => None,
                     }
                 },
+                class.is_depth(),
             ),
             _ => return Err(Error::InvalidImage(image_ty)),
         };
@@ -656,10 +683,21 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             level,
             depth_ref,
         };
+        let image_sample_handle = ctx.expressions.append(expr, self.span_from_with_op(start));
+        let handle = if is_depth && depth_ref.is_none() {
+            let splat_expr = crate::Expression::Splat {
+                size: crate::VectorSize::Quad,
+                value: image_sample_handle,
+            };
+            ctx.expressions
+                .append(splat_expr, self.span_from_with_op(start))
+        } else {
+            image_sample_handle
+        };
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: ctx.expressions.append(expr, self.span_from_with_op(start)),
+                handle,
                 type_id: result_type_id,
                 block_id,
             },

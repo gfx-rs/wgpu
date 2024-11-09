@@ -1,9 +1,16 @@
+use std::{mem::size_of_val, sync::Arc};
+
 use parking_lot::RwLock;
-use winapi::shared::{dxgi1_5, minwindef};
+use windows::{
+    core::Interface as _,
+    Win32::{
+        Foundation,
+        Graphics::{Direct3D12, Dxgi},
+    },
+};
 
 use super::SurfaceTarget;
-use crate::auxil::{self, dxgi::result::HResult as _};
-use std::{mem, sync::Arc};
+use crate::{auxil, dx12::D3D12Lib};
 
 impl Drop for super::Instance {
     fn drop(&mut self) {
@@ -18,7 +25,7 @@ impl crate::Instance for super::Instance {
 
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init DX12 Backend");
-        let lib_main = d3d12::D3D12Lib::new().map_err(|e| {
+        let lib_main = D3D12Lib::new().map_err(|e| {
             crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
         })?;
 
@@ -27,67 +34,42 @@ impl crate::Instance for super::Instance {
             .intersects(wgt::InstanceFlags::VALIDATION | wgt::InstanceFlags::GPU_BASED_VALIDATION)
         {
             // Enable debug layer
-            match lib_main.get_debug_interface() {
-                Ok(pair) => match pair.into_result() {
-                    Ok(debug_controller) => {
-                        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
-                            debug_controller.enable_layer();
-                        }
-                        if desc
-                            .flags
-                            .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
-                        {
-                            #[allow(clippy::collapsible_if)]
-                            if !debug_controller.enable_gpu_based_validation() {
-                                log::warn!("Failed to enable GPU-based validation");
-                            }
-                        }
+            if let Ok(Some(debug_controller)) = lib_main.debug_interface() {
+                if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
+                    unsafe { debug_controller.EnableDebugLayer() }
+                }
+                if desc
+                    .flags
+                    .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
+                {
+                    #[allow(clippy::collapsible_if)]
+                    if let Ok(debug1) = debug_controller.cast::<Direct3D12::ID3D12Debug1>() {
+                        unsafe { debug1.SetEnableGPUBasedValidation(true) }
+                    } else {
+                        log::warn!("Failed to enable GPU-based validation");
                     }
-                    Err(err) => {
-                        log::warn!("Unable to enable D3D12 debug interface: {}", err);
-                    }
-                },
-                Err(err) => {
-                    log::warn!("Debug interface function for D3D12 not found: {:?}", err);
                 }
             }
         }
 
-        // Create DXGIFactory4
-        let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(
-            auxil::dxgi::factory::DxgiFactoryType::Factory4,
-            desc.flags,
-        )?;
+        let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(desc.flags)?;
 
         // Create IDXGIFactoryMedia
-        let factory_media = match lib_dxgi.create_factory_media() {
-            Ok(pair) => match pair.into_result() {
-                Ok(factory_media) => Some(factory_media),
-                Err(err) => {
-                    log::error!("Failed to create IDXGIFactoryMedia: {}", err);
-                    None
-                }
-            },
-            Err(err) => {
-                log::warn!("IDXGIFactory1 creation function not found: {:?}", err);
-                None
-            }
-        };
+        let factory_media = lib_dxgi.create_factory_media().ok();
 
         let mut supports_allow_tearing = false;
-        #[allow(trivial_casts)]
         if let Some(factory5) = factory.as_factory5() {
-            let mut allow_tearing: minwindef::BOOL = minwindef::FALSE;
+            let mut allow_tearing = Foundation::FALSE;
             let hr = unsafe {
                 factory5.CheckFeatureSupport(
-                    dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
-                    std::ptr::from_mut(&mut allow_tearing).cast(),
-                    mem::size_of::<minwindef::BOOL>() as _,
+                    Dxgi::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+                    <*mut _>::cast(&mut allow_tearing),
+                    size_of_val(&allow_tearing) as u32,
                 )
             };
 
-            match hr.into_result() {
-                Err(err) => log::warn!("Unable to check for tearing support: {}", err),
+            match hr {
+                Err(err) => log::warn!("Unable to check for tearing support: {err}"),
                 Ok(()) => supports_allow_tearing = true,
             }
         }
@@ -134,7 +116,8 @@ impl crate::Instance for super::Instance {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory.clone(),
                 factory_media: self.factory_media.clone(),
-                target: SurfaceTarget::WndHandle(handle.hwnd.get() as *mut _),
+                // https://github.com/rust-windowing/raw-window-handle/issues/171
+                target: SurfaceTarget::WndHandle(Foundation::HWND(handle.hwnd.get() as *mut _)),
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: RwLock::new(None),
             }),

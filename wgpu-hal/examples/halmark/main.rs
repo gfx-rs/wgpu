@@ -14,7 +14,9 @@ use winit::{
 
 use std::{
     borrow::{Borrow, Cow},
-    iter, mem, ptr,
+    iter,
+    mem::size_of,
+    ptr,
     time::Instant,
 };
 
@@ -193,7 +195,7 @@ impl<A: hal::Api> Example<A> {
                     ty: wgt::BindingType::Buffer {
                         ty: wgt::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: wgt::BufferSize::new(mem::size_of::<Globals>() as _),
+                        min_binding_size: wgt::BufferSize::new(size_of::<Globals>() as _),
                     },
                     count: None,
                 },
@@ -228,7 +230,7 @@ impl<A: hal::Api> Example<A> {
                 ty: wgt::BindingType::Buffer {
                     ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
-                    min_binding_size: wgt::BufferSize::new(mem::size_of::<Locals>() as _),
+                    min_binding_size: wgt::BufferSize::new(size_of::<Locals>() as _),
                 },
                 count: None,
             }],
@@ -394,7 +396,7 @@ impl<A: hal::Api> Example<A> {
 
         let global_buffer_desc = hal::BufferDescriptor {
             label: Some("global"),
-            size: mem::size_of::<Globals>() as wgt::BufferAddress,
+            size: size_of::<Globals>() as wgt::BufferAddress,
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
         };
@@ -406,7 +408,7 @@ impl<A: hal::Api> Example<A> {
             ptr::copy_nonoverlapping(
                 &globals as *const Globals as *const u8,
                 mapping.ptr.as_ptr(),
-                mem::size_of::<Globals>(),
+                size_of::<Globals>(),
             );
             device.unmap_buffer(&buffer);
             assert!(mapping.is_coherent);
@@ -414,7 +416,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         let local_alignment = wgt::math::align_to(
-            mem::size_of::<Locals>() as u32,
+            size_of::<Locals>() as u32,
             capabilities.limits.min_uniform_buffer_offset_alignment,
         );
         let local_buffer_desc = hal::BufferDescriptor {
@@ -476,7 +478,7 @@ impl<A: hal::Api> Example<A> {
             let local_buffer_binding = hal::BufferBinding {
                 buffer: &local_buffer,
                 offset: 0,
-                size: wgt::BufferSize::new(mem::size_of::<Locals>() as _),
+                size: wgt::BufferSize::new(size_of::<Locals>() as _),
             };
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),

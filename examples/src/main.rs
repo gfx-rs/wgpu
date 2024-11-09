@@ -164,6 +164,18 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false,  // No Ray-tracing extensions
         webgpu: false, // No Ray-tracing extensions (yet)
     },
+    ExampleDesc {
+        name: "ray_shadows",
+        function: wgpu_examples::ray_shadows::main,
+        webgl: false,  // No Ray-tracing extensions
+        webgpu: false, // No Ray-tracing extensions (yet)
+    },
+    ExampleDesc {
+        name: "ray_traced_triangle",
+        function: wgpu_examples::ray_traced_triangle::main,
+        webgl: false,
+        webgpu: false,
+    },
 ];
 
 fn get_example_name() -> Option<String> {
@@ -219,7 +231,7 @@ fn print_unknown_example(_result: Option<String>) {}
 #[cfg(not(target_arch = "wasm32"))]
 fn print_unknown_example(result: Option<String>) {
     if let Some(example) = result {
-        println!("Unknown example: {}", example);
+        println!("Unknown example: {example}");
     } else {
         println!("Please specify an example as the first argument!");
     }

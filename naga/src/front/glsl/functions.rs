@@ -622,7 +622,7 @@ impl Frontend {
                     // check that the format scalar kind matches
                     let good_format = overload_format == call_format
                         || (overload.internal
-                            && ScalarKind::from(overload_format) == ScalarKind::from(call_format));
+                            && Scalar::from(overload_format) == Scalar::from(call_format));
                     if !(good_size && good_format) {
                         continue 'outer;
                     }
@@ -634,7 +634,8 @@ impl Frontend {
                         self.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 format!(
-                                    "'{name}': image needs {overload_access:?} access but only {call_access:?} was provided"
+                                    "'{}': image needs {:?} access but only {:?} was provided",
+                                    name, overload_access, call_access
                                 )
                                 .into(),
                             ),

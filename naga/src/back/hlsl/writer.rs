@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     back::{self, Baked},
-    proc::{self, NameKey},
+    proc::{self, index, ExpressionKindTracker, NameKey},
     valid, Handle, Module, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
 use std::{fmt, mem};
@@ -346,6 +346,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 info,
                 expressions: &function.expressions,
                 named_expressions: &function.named_expressions,
+                expr_kind_tracker: ExpressionKindTracker::from_arena(&function.expressions),
             };
             let name = self.names[&NameKey::Function(handle)].clone();
 
@@ -386,6 +387,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 info,
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
+                expr_kind_tracker: ExpressionKindTracker::from_arena(&ep.function.expressions),
             };
 
             self.write_wrapped_functions(module, &ctx)?;
@@ -963,7 +965,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let constant = &module.constants[handle];
         self.write_type(module, constant.ty)?;
         let name = &self.names[&NameKey::Constant(handle)];
-        write!(self.out, " {}", name)?;
+        write!(self.out, " {name}")?;
         // Write size for array type
         if let TypeInner::Array { base, size, .. } = module.types[constant.ty].inner {
             self.write_array_size(module, base, size)?;
@@ -2381,11 +2383,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // decimal part even it's zero
                 crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
-                crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
-                crate::Literal::I32(value) => write!(self.out, "{}", value)?,
-                crate::Literal::U64(value) => write!(self.out, "{}uL", value)?,
-                crate::Literal::I64(value) => write!(self.out, "{}L", value)?,
-                crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                crate::Literal::U32(value) => write!(self.out, "{value}u")?,
+                crate::Literal::I32(value) => write!(self.out, "{value}")?,
+                crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
+                crate::Literal::I64(value) => write!(self.out, "{value}L")?,
+                crate::Literal::Bool(value) => write!(self.out, "{value}")?,
                 crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
                     return Err(Error::Custom(
                         "Abstract types should not appear in IR presented to backends".into(),
@@ -2585,24 +2587,66 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                     let resolved = func_ctx.resolve_type(base, &module.types);
 
-                    let non_uniform_qualifier = match *resolved {
+                    let (indexing_binding_array, non_uniform_qualifier) = match *resolved {
                         TypeInner::BindingArray { .. } => {
                             let uniformity = &func_ctx.info[index].uniformity;
 
-                            uniformity.non_uniform_result.is_some()
+                            (true, uniformity.non_uniform_result.is_some())
                         }
-                        _ => false,
+                        _ => (false, false),
                     };
 
                     self.write_expr(module, base, func_ctx)?;
                     write!(self.out, "[")?;
-                    if non_uniform_qualifier {
-                        write!(self.out, "NonUniformResourceIndex(")?;
-                    }
-                    self.write_expr(module, index, func_ctx)?;
-                    if non_uniform_qualifier {
+
+                    let needs_bound_check = self.options.restrict_indexing
+                        && !indexing_binding_array
+                        && match resolved.pointer_space() {
+                            Some(
+                                crate::AddressSpace::Function
+                                | crate::AddressSpace::Private
+                                | crate::AddressSpace::WorkGroup
+                                | crate::AddressSpace::PushConstant,
+                            )
+                            | None => true,
+                            Some(crate::AddressSpace::Uniform) => false, // TODO: needs checks for dynamic uniform buffers, see https://github.com/gfx-rs/wgpu/issues/4483
+                            Some(
+                                crate::AddressSpace::Handle | crate::AddressSpace::Storage { .. },
+                            ) => unreachable!(),
+                        };
+                    // Decide whether this index needs to be clamped to fall within range.
+                    let restriction_needed = if needs_bound_check {
+                        index::access_needs_check(
+                            base,
+                            index::GuardedIndex::Expression(index),
+                            module,
+                            func_ctx.expressions,
+                            func_ctx.info,
+                        )
+                    } else {
+                        None
+                    };
+                    if let Some(limit) = restriction_needed {
+                        write!(self.out, "min(uint(")?;
+                        self.write_expr(module, index, func_ctx)?;
+                        write!(self.out, "), ")?;
+                        match limit {
+                            index::IndexableLength::Known(limit) => {
+                                write!(self.out, "{}u", limit - 1)?;
+                            }
+                            index::IndexableLength::Dynamic => unreachable!(),
+                        }
                         write!(self.out, ")")?;
+                    } else {
+                        if non_uniform_qualifier {
+                            write!(self.out, "NonUniformResourceIndex(")?;
+                        }
+                        self.write_expr(module, index, func_ctx)?;
+                        if non_uniform_qualifier {
+                            write!(self.out, ")")?;
+                        }
                     }
+
                     write!(self.out, "]")?;
                 }
             }

@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, mem};
+use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -70,7 +70,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
         _queue: &wgpu::Queue,
     ) -> Self {
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
 
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -103,10 +103,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
             label: None,
         });
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,

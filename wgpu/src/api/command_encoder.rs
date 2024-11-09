@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, ops::Range, sync::Arc, thread};
 
-use crate::context::{DynContext, ObjectId};
+use crate::context::DynContext;
 use crate::*;
 
 /// Encodes a series of GPU operations.
@@ -15,7 +15,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct CommandEncoder {
     pub(crate) context: Arc<C>,
-    pub(crate) id: Option<ObjectId>,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
@@ -24,9 +23,7 @@ static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
 impl Drop for CommandEncoder {
     fn drop(&mut self) {
         if !thread::panicking() {
-            if let Some(id) = self.id.take() {
-                self.context.command_encoder_drop(&id, self.data.as_ref());
-            }
+            self.context.command_encoder_drop(self.data.as_ref());
         }
     }
 }
@@ -58,7 +55,15 @@ pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 
+use crate::api::blas::{
+    BlasBuildEntry, BlasGeometries, BlasTriangleGeometry, DynContextBlasBuildEntry,
+    DynContextBlasGeometries, DynContextBlasTriangleGeometry, DynContextTlasInstance, TlasInstance,
+};
+use crate::api::tlas::{
+    DynContextTlasBuildEntry, DynContextTlasPackage, TlasBuildEntry, TlasPackage,
+};
 pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
+
 /// View of a texture which can be used to copy to a texture, including
 /// color space and alpha premultiplication information.
 ///
@@ -71,14 +76,9 @@ static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
     pub fn finish(mut self) -> CommandBuffer {
-        let (id, data) = DynContext::command_encoder_finish(
-            &*self.context,
-            self.id.take().unwrap(),
-            self.data.as_mut(),
-        );
+        let data = DynContext::command_encoder_finish(&*self.context, self.data.as_mut());
         CommandBuffer {
             context: Arc::clone(&self.context),
-            id: Some(id),
             data: Some(data),
         }
     }
@@ -97,16 +97,10 @@ impl CommandEncoder {
         &'encoder mut self,
         desc: &RenderPassDescriptor<'_>,
     ) -> RenderPass<'encoder> {
-        let id = self.id.as_ref().unwrap();
-        let (id, data) = DynContext::command_encoder_begin_render_pass(
-            &*self.context,
-            id,
-            self.data.as_ref(),
-            desc,
-        );
+        let data =
+            DynContext::command_encoder_begin_render_pass(&*self.context, self.data.as_ref(), desc);
         RenderPass {
             inner: RenderPassInner {
-                id,
                 data,
                 context: self.context.clone(),
             },
@@ -128,16 +122,13 @@ impl CommandEncoder {
         &'encoder mut self,
         desc: &ComputePassDescriptor<'_>,
     ) -> ComputePass<'encoder> {
-        let id = self.id.as_ref().unwrap();
-        let (id, data) = DynContext::command_encoder_begin_compute_pass(
+        let data = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
-            id,
             self.data.as_ref(),
             desc,
         );
         ComputePass {
             inner: ComputePassInner {
-                id,
                 data,
                 context: self.context.clone(),
             },
@@ -162,12 +153,9 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_buffer_to_buffer(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            &source.id,
             source.data.as_ref(),
             source_offset,
-            &destination.id,
             destination.data.as_ref(),
             destination_offset,
             copy_size,
@@ -183,7 +171,6 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_buffer_to_texture(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
             source,
             destination,
@@ -200,7 +187,6 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_texture_to_buffer(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
             source,
             destination,
@@ -223,7 +209,6 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_copy_texture_to_texture(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
             source,
             destination,
@@ -247,9 +232,8 @@ impl CommandEncoder {
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
         DynContext::command_encoder_clear_texture(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            texture,
+            texture.data.as_ref(),
             subresource_range,
         );
     }
@@ -268,9 +252,8 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            buffer,
+            buffer.data.as_ref(),
             offset,
             size,
         );
@@ -278,25 +261,17 @@ impl CommandEncoder {
 
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
-        let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_insert_debug_marker(
-            &*self.context,
-            id,
-            self.data.as_ref(),
-            label,
-        );
+        DynContext::command_encoder_insert_debug_marker(&*self.context, self.data.as_ref(), label);
     }
 
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
-        let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_push_debug_group(&*self.context, id, self.data.as_ref(), label);
+        DynContext::command_encoder_push_debug_group(&*self.context, self.data.as_ref(), label);
     }
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        let id = self.id.as_ref().unwrap();
-        DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
+        DynContext::command_encoder_pop_debug_group(&*self.context, self.data.as_ref());
     }
 
     /// Resolves a query set, writing the results into the supplied destination buffer.
@@ -312,13 +287,10 @@ impl CommandEncoder {
     ) {
         DynContext::command_encoder_resolve_query_set(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_ref(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_range.start,
             query_range.end - query_range.start,
-            &destination.id,
             destination.data.as_ref(),
             destination_offset,
         )
@@ -341,14 +313,12 @@ impl CommandEncoder {
         &mut self,
         hal_command_encoder_callback: F,
     ) -> Option<R> {
-        use wgc::id::CommandEncoderId;
-
         self.context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
             .map(|ctx| unsafe {
                 ctx.command_encoder_as_hal_mut::<A, F, R>(
-                    CommandEncoderId::from(self.id.unwrap()),
+                    crate::context::downcast_ref(self.data.as_ref()),
                     hal_command_encoder_callback,
                 )
             })
@@ -372,11 +342,170 @@ impl CommandEncoder {
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
         DynContext::command_encoder_write_timestamp(
             &*self.context,
-            self.id.as_ref().unwrap(),
             self.data.as_mut(),
-            &query_set.id,
             query_set.data.as_ref(),
             query_index,
         )
+    }
+}
+
+/// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
+impl CommandEncoder {
+    /// Build bottom and top level acceleration structures.
+    ///
+    /// Builds the BLASes then the TLASes, but does ***not*** build the BLASes into the TLASes,
+    /// that must be done by setting a TLAS instance in the TLAS package to one that contains the BLAS (and with an appropriate transform)
+    ///
+    /// # Validation
+    ///
+    /// - blas: Iterator of bottom level acceleration structure entries to build.
+    ///     For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at BLAS creation, this means:
+    ///     - Less or equal number of geometries
+    ///     - Same kind of geometry (with index buffer or without) (same vertex/index format)
+    ///     - Same flags
+    ///     - Less or equal number of vertices
+    ///     - Less or equal number of indices (if applicable)
+    /// - tlas: iterator of top level acceleration structure packages to build
+    ///     For each entry:
+    ///     - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
+    ///     - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
+    ///
+    /// If the device the command encoder is created from does not have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled then a validation error is generated
+    ///
+    /// A bottom level acceleration structure may be build and used as a reference in a top level acceleration structure in the same invocation of this function.
+    ///
+    /// # Bind group usage
+    ///
+    /// When a top level acceleration structure is used in a bind group, some validation takes place:
+    ///    - The top level acceleration structure is valid and has been built.
+    ///    - All the bottom level acceleration structures referenced by the top level acceleration structure are valid and have been built prior,
+    ///      or at same time as the containing top level acceleration structure.
+    ///
+    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    pub fn build_acceleration_structures<'a>(
+        &mut self,
+        blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
+        tlas: impl IntoIterator<Item = &'a TlasPackage>,
+    ) {
+        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
+            let geometries = match &e.geometry {
+                BlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter = triangle_geometries
+                        .iter()
+                        .map(
+                            |tg: &BlasTriangleGeometry<'_>| DynContextBlasTriangleGeometry {
+                                size: tg.size,
+                                vertex_buffer: tg.vertex_buffer.data.as_ref(),
+
+                                index_buffer: tg
+                                    .index_buffer
+                                    .map(|index_buffer| index_buffer.data.as_ref()),
+
+                                transform_buffer: tg
+                                    .transform_buffer
+                                    .map(|transform_buffer| transform_buffer.data.as_ref()),
+
+                                first_vertex: tg.first_vertex,
+                                vertex_stride: tg.vertex_stride,
+                                index_buffer_offset: tg.index_buffer_offset,
+                                transform_buffer_offset: tg.transform_buffer_offset,
+                            },
+                        );
+                    DynContextBlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            DynContextBlasBuildEntry {
+                blas_data: e.blas.shared.data.as_ref(),
+                geometries,
+            }
+        });
+
+        let mut tlas = tlas.into_iter().map(|e: &TlasPackage| {
+            let instances = e.instances.iter().map(|instance: &Option<TlasInstance>| {
+                instance.as_ref().map(|instance| DynContextTlasInstance {
+                    blas: instance.blas.data.as_ref(),
+                    transform: &instance.transform,
+                    custom_index: instance.custom_index,
+                    mask: instance.mask,
+                })
+            });
+            DynContextTlasPackage {
+                tlas_data: e.tlas.data.as_ref(),
+                instances: Box::new(instances),
+                lowest_unmodified: e.lowest_unmodified,
+            }
+        });
+
+        DynContext::command_encoder_build_acceleration_structures(
+            &*self.context,
+            self.data.as_ref(),
+            &mut blas,
+            &mut tlas,
+        );
+    }
+
+    /// Build bottom and top level acceleration structures.
+    /// See [`CommandEncoder::build_acceleration_structures`] for the safe version and more details. All validation in [`CommandEncoder::build_acceleration_structures`] except that
+    /// listed under tlas applies here as well.
+    ///
+    /// # Safety
+    ///
+    ///    - The contents of the raw instance buffer must be valid for the underling api.
+    ///    - All bottom level acceleration structures, referenced in the raw instance buffer must be valid and built,
+    ///       when the corresponding top level acceleration structure is built. (builds may happen in the same invocation of this function).
+    ///    - At the time when the top level acceleration structure is used in a bind group, all associated bottom level acceleration structures must be valid,
+    ///      and built (no later than the time when the top level acceleration structure was built).
+    pub unsafe fn build_acceleration_structures_unsafe_tlas<'a>(
+        &mut self,
+        blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
+        tlas: impl IntoIterator<Item = &'a TlasBuildEntry<'a>>,
+    ) {
+        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
+            let geometries = match &e.geometry {
+                BlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let iter = triangle_geometries
+                        .iter()
+                        .map(
+                            |tg: &BlasTriangleGeometry<'_>| DynContextBlasTriangleGeometry {
+                                size: tg.size,
+                                vertex_buffer: tg.vertex_buffer.data.as_ref(),
+
+                                index_buffer: tg
+                                    .index_buffer
+                                    .map(|index_buffer| index_buffer.data.as_ref()),
+
+                                transform_buffer: tg
+                                    .transform_buffer
+                                    .map(|transform_buffer| transform_buffer.data.as_ref()),
+
+                                first_vertex: tg.first_vertex,
+                                vertex_stride: tg.vertex_stride,
+                                index_buffer_offset: tg.index_buffer_offset,
+                                transform_buffer_offset: tg.transform_buffer_offset,
+                            },
+                        );
+                    DynContextBlasGeometries::TriangleGeometries(Box::new(iter))
+                }
+            };
+            DynContextBlasBuildEntry {
+                blas_data: e.blas.shared.data.as_ref(),
+                geometries,
+            }
+        });
+
+        let mut tlas = tlas
+            .into_iter()
+            .map(|e: &TlasBuildEntry<'_>| DynContextTlasBuildEntry {
+                tlas_data: e.tlas.data.as_ref(),
+                instance_buffer_data: e.instance_buffer.data.as_ref(),
+                instance_count: e.instance_count,
+            });
+
+        DynContext::command_encoder_build_acceleration_structures_unsafe_tlas(
+            &*self.context,
+            self.data.as_ref(),
+            &mut blas,
+            &mut tlas,
+        );
     }
 }

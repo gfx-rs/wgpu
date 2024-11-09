@@ -1,0 +1,24 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+int five(
+) {
+    return 5;
+}
+
+struct main_Input {
+};
+kernel void main_(
+  metal::uint3 id [[thread_position_in_grid]]
+, constant float& binding [[user(fake0)]]
+) {
+    float phony = binding;
+    float phony_1 = binding;
+    int _e6 = five();
+    int _e7 = five();
+    float phony_2 = binding;
+}

@@ -28,7 +28,7 @@ uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
 
 uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
 
-layout(std430) readonly buffer type_6_block_2Fragment { Light _group_0_binding_1_fs[]; };
+layout(std430) readonly buffer type_8_block_2Fragment { Light _group_0_binding_1_fs[]; };
 
 uniform highp sampler2DArrayShadow _group_0_binding_2_fs;
 

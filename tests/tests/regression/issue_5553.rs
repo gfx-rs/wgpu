@@ -24,7 +24,8 @@ static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration =
                 push_constant_ranges: &[],
             });
 
-        ctx.device
+        let _ = ctx
+            .device
             .create_render_pipeline(&RenderPipelineDescriptor {
                 label: Some("Pipeline"),
                 layout: Some(&pipeline_layout),

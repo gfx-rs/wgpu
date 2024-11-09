@@ -3,5 +3,11 @@
 		version: (1, 1),
 		debug: true,
 	),
-	glsl_exclude_list: ["depth_load", "depth_no_comparison", "levels_queries"]
+	glsl: (
+		version: Desktop(430),
+		writer_flags: (""),
+		binding_map: {},
+		zero_initialize_workgroup_memory: true,
+	),
+	glsl_exclude_list: ["depth_load", "depth_no_comparison"]
 )

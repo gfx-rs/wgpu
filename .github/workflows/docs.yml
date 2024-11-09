@@ -41,7 +41,7 @@ jobs:
         if: ${{ failure() }}
 
       - name: Deploy the docs
-        uses: JamesIves/github-pages-deploy-action@v4.6.3
+        uses: JamesIves/github-pages-deploy-action@v4.6.8
         if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}

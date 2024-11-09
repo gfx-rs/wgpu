@@ -401,10 +401,7 @@ pub fn op_webgpu_request_adapter(
         force_fallback_adapter,
         compatible_surface: None, // windowless
     };
-    let res = instance.request_adapter(
-        &descriptor,
-        wgpu_core::instance::AdapterInputs::Mask(backends, |_| None),
-    );
+    let res = instance.request_adapter(&descriptor, backends, None);
 
     let adapter = match res {
         Ok(adapter) => adapter,
@@ -414,9 +411,9 @@ pub fn op_webgpu_request_adapter(
             })
         }
     };
-    let adapter_features = instance.adapter_features(adapter)?;
+    let adapter_features = instance.adapter_features(adapter);
     let features = deserialize_features(&adapter_features);
-    let adapter_limits = instance.adapter_limits(adapter)?;
+    let adapter_limits = instance.adapter_limits(adapter);
 
     let instance = instance.clone();
 
@@ -649,7 +646,7 @@ pub fn op_webgpu_request_device(
         memory_hints: wgpu_types::MemoryHints::default(),
     };
 
-    let (device, queue, maybe_err) = instance.adapter_request_device(
+    let res = instance.adapter_request_device(
         adapter,
         &descriptor,
         std::env::var("DENO_WEBGPU_TRACE")
@@ -660,13 +657,12 @@ pub fn op_webgpu_request_device(
         None,
     );
     adapter_resource.close();
-    if let Some(err) = maybe_err {
-        return Err(DomExceptionOperationError::new(&err.to_string()).into());
-    }
 
-    let device_features = instance.device_features(device)?;
+    let (device, queue) = res.map_err(|err| DomExceptionOperationError::new(&err.to_string()))?;
+
+    let device_features = instance.device_features(device);
     let features = deserialize_features(&device_features);
-    let limits = instance.device_limits(device)?;
+    let limits = instance.device_limits(device);
 
     let instance = instance.clone();
     let instance2 = instance.clone();
@@ -705,7 +701,7 @@ pub fn op_webgpu_request_adapter_info(
     let adapter = adapter_resource.1;
     let instance = state.borrow::<Instance>();
 
-    let info = instance.adapter_get_info(adapter)?;
+    let info = instance.adapter_get_info(adapter);
     adapter_resource.close();
 
     Ok(GPUAdapterInfo {

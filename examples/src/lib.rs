@@ -18,6 +18,8 @@ pub mod msaa_line;
 pub mod ray_cube_compute;
 pub mod ray_cube_fragment;
 pub mod ray_scene;
+pub mod ray_shadows;
+pub mod ray_traced_triangle;
 pub mod render_to_texture;
 pub mod repeated_compute;
 pub mod shadow;

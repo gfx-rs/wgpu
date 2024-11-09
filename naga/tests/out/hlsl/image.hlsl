@@ -3,9 +3,9 @@ Texture2DMS<uint4> image_multisampled_src : register(t3);
 Texture2DMS<float> image_depth_multisampled_src : register(t4);
 RWTexture2D<uint4> image_storage_src : register(u1);
 Texture2DArray<uint4> image_array_src : register(t5);
-RWTexture1D<uint4> image_dup_src : register(u6);
+RWTexture1D<uint> image_dup_src : register(u6);
 Texture1D<uint4> image_1d_src : register(t7);
-RWTexture1D<uint4> image_dst : register(u2);
+RWTexture1D<uint> image_dst : register(u2);
 Texture1D<float4> image_1d : register(t0);
 Texture2D<float4> image_2d : register(t1);
 Texture2D<uint4> image_2d_u32_ : register(t2);
@@ -177,14 +177,14 @@ uint NagaNumLevels2D(Texture2D<float4> tex)
     return ret.z;
 }
 
-uint NagaNumLevels2DArray(Texture2DArray<float4> tex)
+uint NagaNumLayers2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
     return ret.w;
 }
 
-uint NagaNumLayers2DArray(Texture2DArray<float4> tex)
+uint NagaNumLevels2DArray(Texture2DArray<float4> tex)
 {
     uint4 ret;
     tex.GetDimensions(0, ret.x, ret.y, ret.z, ret.w);
@@ -229,8 +229,9 @@ uint NagaMSNumSamples2D(Texture2DMS<float4> tex)
 float4 levels_queries() : SV_Position
 {
     uint num_levels_2d = NagaNumLevels2D(image_2d);
-    uint num_levels_2d_array = NagaNumLevels2DArray(image_2d_array);
     uint num_layers_2d = NagaNumLayers2DArray(image_2d_array);
+    uint num_levels_2d_array = NagaNumLevels2DArray(image_2d_array);
+    uint num_layers_2d_array = NagaNumLayers2DArray(image_2d_array);
     uint num_levels_cube = NagaNumLevelsCube(image_cube);
     uint num_levels_cube_array = NagaNumLevelsCubeArray(image_cube_array);
     uint num_layers_cube = NagaNumLayersCubeArray(image_cube_array);

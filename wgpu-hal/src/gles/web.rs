@@ -64,9 +64,10 @@ impl Instance {
                 // “not supported” could include “insufficient GPU resources” or “the GPU process
                 // previously crashed”. So, we must return it as an `Err` since it could occur
                 // for circumstances outside the application author's control.
-                return Err(crate::InstanceError::new(String::from(
-                    "canvas.getContext() returned null; webgl2 not available or canvas already in use"
-                )));
+                return Err(crate::InstanceError::new(String::from(concat!(
+                    "canvas.getContext() returned null; ",
+                    "webgl2 not available or canvas already in use"
+                ))));
             }
             Err(js_error) => {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
@@ -95,12 +96,8 @@ impl Instance {
 
     fn create_context_options() -> js_sys::Object {
         let context_options = js_sys::Object::new();
-        js_sys::Reflect::set(
-            &context_options,
-            &"antialias".into(),
-            &wasm_bindgen::JsValue::FALSE,
-        )
-        .expect("Cannot create context options");
+        js_sys::Reflect::set(&context_options, &"antialias".into(), &JsValue::FALSE)
+            .expect("Cannot create context options");
         context_options
     }
 }

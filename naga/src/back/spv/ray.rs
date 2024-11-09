@@ -2,7 +2,7 @@
 Generating SPIR-V for ray query operations.
 */
 
-use super::{Block, BlockContext, Instruction, LocalType, LookupType};
+use super::{Block, BlockContext, Instruction, LocalType, LookupType, NumericType};
 use crate::arena::Handle;
 
 impl<'w> BlockContext<'w> {
@@ -22,11 +22,9 @@ impl<'w> BlockContext<'w> {
                 let desc_id = self.cached[descriptor];
                 let acc_struct_id = self.get_handle_id(acceleration_structure);
 
-                let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    scalar: crate::Scalar::U32,
-                    pointer_space: None,
-                }));
+                let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                    NumericType::Scalar(crate::Scalar::U32),
+                )));
                 let ray_flags_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     flag_type_id,
@@ -42,11 +40,9 @@ impl<'w> BlockContext<'w> {
                     &[1],
                 ));
 
-                let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: None,
-                    scalar: crate::Scalar::F32,
-                    pointer_space: None,
-                }));
+                let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                    NumericType::Scalar(crate::Scalar::F32),
+                )));
                 let tmin_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     scalar_type_id,
@@ -62,11 +58,11 @@ impl<'w> BlockContext<'w> {
                     &[3],
                 ));
 
-                let vector_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                    vector_size: Some(crate::VectorSize::Tri),
-                    scalar: crate::Scalar::F32,
-                    pointer_space: None,
-                }));
+                let vector_type_id =
+                    self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                        size: crate::VectorSize::Tri,
+                        scalar: crate::Scalar::F32,
+                    })));
                 let ray_origin_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     vector_type_id,
@@ -116,11 +112,9 @@ impl<'w> BlockContext<'w> {
             spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as _,
         ));
 
-        let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::U32,
-            pointer_space: None,
-        }));
+        let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+            NumericType::Scalar(crate::Scalar::U32),
+        )));
         let kind_id = self.gen_id();
         block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionTypeKHR,
@@ -170,11 +164,9 @@ impl<'w> BlockContext<'w> {
             intersection_id,
         ));
 
-        let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::F32,
-            pointer_space: None,
-        }));
+        let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+            NumericType::Scalar(crate::Scalar::F32),
+        )));
         let t_id = self.gen_id();
         block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionTKHR,
@@ -184,11 +176,11 @@ impl<'w> BlockContext<'w> {
             intersection_id,
         ));
 
-        let barycentrics_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: Some(crate::VectorSize::Bi),
-            scalar: crate::Scalar::F32,
-            pointer_space: None,
-        }));
+        let barycentrics_type_id =
+            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                size: crate::VectorSize::Bi,
+                scalar: crate::Scalar::F32,
+            })));
         let barycentrics_id = self.gen_id();
         block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionBarycentricsKHR,
@@ -198,11 +190,9 @@ impl<'w> BlockContext<'w> {
             intersection_id,
         ));
 
-        let bool_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-            vector_size: None,
-            scalar: crate::Scalar::BOOL,
-            pointer_space: None,
-        }));
+        let bool_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+            NumericType::Scalar(crate::Scalar::BOOL),
+        )));
         let front_face_id = self.gen_id();
         block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionFrontFaceKHR,
@@ -212,11 +202,12 @@ impl<'w> BlockContext<'w> {
             intersection_id,
         ));
 
-        let transform_type_id = self.get_type_id(LookupType::Local(LocalType::Matrix {
-            columns: crate::VectorSize::Quad,
-            rows: crate::VectorSize::Tri,
-            width: 4,
-        }));
+        let transform_type_id =
+            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Matrix {
+                columns: crate::VectorSize::Quad,
+                rows: crate::VectorSize::Tri,
+                scalar: crate::Scalar::F32,
+            })));
         let object_to_world_id = self.gen_id();
         block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionObjectToWorldKHR,

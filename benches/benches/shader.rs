@@ -40,7 +40,7 @@ impl Inputs {
                     _ => continue,
                 },
                 Err(e) => {
-                    eprintln!("Skipping file: {:?}", e);
+                    eprintln!("Skipping file: {e:?}");
                     continue;
                 }
             }

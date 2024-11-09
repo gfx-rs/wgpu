@@ -1,6 +1,6 @@
 use super::{conv, AsNative, TimestampQuerySupport};
 use crate::{AccelerationStructureCopy, CommandEncoder as _};
-use std::{borrow::Cow, mem, ops::Range};
+use std::{borrow::Cow, mem::size_of, ops::Range};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -499,7 +499,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             wgt::QueryType::Timestamp => {
                 encoder.resolve_counters(
                     set.counter_sample_buffer.as_ref().unwrap(),
-                    metal::NSRange::new(range.start as u64, range.end as u64),
+                    metal::NSRange::new(range.start as u64, (range.end - range.start) as u64),
                     &buffer.raw,
                     offset,
                 );
@@ -1092,7 +1092,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             encoder.draw_primitives_indirect(self.state.raw_primitive_type, &buffer.raw, offset);
-            offset += mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+            offset += size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
         }
     }
 
@@ -1113,7 +1113,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 &buffer.raw,
                 offset,
             );
-            offset += mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+            offset += size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
         }
     }
 
@@ -1249,13 +1249,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
-        let encoder = self.state.compute.as_ref().unwrap();
-        let raw_count = metal::MTLSize {
-            width: count[0] as u64,
-            height: count[1] as u64,
-            depth: count[2] as u64,
-        };
-        encoder.dispatch_thread_groups(raw_count, self.state.raw_wg_size);
+        if count[0] > 0 && count[1] > 0 && count[2] > 0 {
+            let encoder = self.state.compute.as_ref().unwrap();
+            let raw_count = metal::MTLSize {
+                width: count[0] as u64,
+                height: count[1] as u64,
+                depth: count[2] as u64,
+            };
+            encoder.dispatch_thread_groups(raw_count, self.state.raw_wg_size);
+        }
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {

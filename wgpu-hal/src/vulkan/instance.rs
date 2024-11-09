@@ -161,7 +161,11 @@ impl super::Swapchain {
             profiling::scope!("vkDeviceWaitIdle");
             // We need to also wait until all presentation work is done. Because there is no way to portably wait until
             // the presentation work is done, we are forced to wait until the device is idle.
-            let _ = unsafe { device.device_wait_idle() };
+            let _ = unsafe {
+                device
+                    .device_wait_idle()
+                    .map_err(super::map_host_device_oom_and_lost_err)
+            };
         };
 
         // We cannot take this by value, as the function returns `self`.
@@ -306,6 +310,8 @@ impl super::Instance {
     /// - `extensions` must be a superset of `desired_extensions()` and must be created from the
     ///   same entry, `instance_api_version`` and flags.
     /// - `android_sdk_version` is ignored and can be `0` for all platforms besides Android
+    /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `raw_instance`. If
+    ///   `drop_callback` is [`Some`], `raw_instance` must be valid until the callback is called.
     ///
     /// If `debug_utils_user_data` is `Some`, then the validation layer is
     /// available, so create a [`vk::DebugUtilsMessengerEXT`].
@@ -319,7 +325,7 @@ impl super::Instance {
         extensions: Vec<&'static CStr>,
         flags: wgt::InstanceFlags,
         has_nv_optimus: bool,
-        drop_guard: Option<crate::DropGuard>,
+        drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
         log::debug!("Instance version: 0x{:x}", instance_api_version);
 
@@ -359,6 +365,8 @@ impl super::Instance {
             } else {
                 None
             };
+
+        let drop_guard = crate::DropGuard::from_option(drop_callback);
 
         Ok(Self {
             shared: Arc::new(super::InstanceShared {
@@ -506,7 +514,7 @@ impl super::Instance {
     #[cfg(metal)]
     fn create_surface_from_view(
         &self,
-        view: *mut c_void,
+        view: std::ptr::NonNull<c_void>,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::metal_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
@@ -514,16 +522,17 @@ impl super::Instance {
             )));
         }
 
-        let layer = unsafe {
-            crate::metal::Surface::get_metal_layer(view.cast::<objc::runtime::Object>(), None)
-        };
+        let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast()) };
+        // NOTE: The layer is retained by Vulkan's `vkCreateMetalSurfaceEXT`,
+        // so no need to retain it beyond the scope of this function.
+        let layer_ptr = (*layer).cast();
 
         let surface = {
             let metal_loader =
                 ext::metal_surface::Instance::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::default()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
-                .layer(layer.cast());
+                .layer(layer_ptr);
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
@@ -546,12 +555,11 @@ impl Drop for super::InstanceShared {
     fn drop(&mut self) {
         unsafe {
             // Keep du alive since destroy_instance may also log
-            let _du = self.debug_utils.take().map(|du| {
+            let _du = self.debug_utils.take().inspect(|du| {
                 du.extension
                     .destroy_debug_utils_messenger(du.messenger, None);
-                du
             });
-            if let Some(_drop_guard) = self.drop_guard.take() {
+            if self.drop_guard.is_none() {
                 self.raw.destroy_instance(None);
             }
         }
@@ -737,7 +745,12 @@ impl crate::Instance for super::Instance {
                     Ok(sdk_ver) => sdk_ver,
                     Err(err) => {
                         log::error!(
-                            "Couldn't parse Android's ro.build.version.sdk system property ({val}): {err}"
+                            concat!(
+                                "Couldn't parse Android's ",
+                                "ro.build.version.sdk system property ({}): {}",
+                            ),
+                            val,
+                            err,
                         );
                         0
                     }
@@ -825,7 +838,7 @@ impl crate::Instance for super::Instance {
                 extensions,
                 desc.flags,
                 has_nv_optimus,
-                Some(Box::new(())), // `Some` signals that wgpu-hal is in charge of destroying vk_instance
+                None,
             )
         }
     }
@@ -866,13 +879,13 @@ impl crate::Instance for super::Instance {
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ns_view.as_ptr())
+                self.create_surface_from_view(handle.ns_view)
             }
             #[cfg(all(target_os = "ios", feature = "metal"))]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ui_view.as_ptr())
+                self.create_surface_from_view(handle.ui_view)
             }
             (_, _) => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Vulkan-compatible handle"
@@ -923,7 +936,10 @@ impl crate::Instance for super::Instance {
                         if version < (21, 2) {
                             // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
                             log::warn!(
-                                "Disabling presentation on '{}' (id {:?}) due to NV Optimus and Intel Mesa < v21.2",
+                                concat!(
+                                    "Disabling presentation on '{}' (id {:?}) ",
+                                    "due to NV Optimus and Intel Mesa < v21.2"
+                                ),
                                 exposed.info.name,
                                 exposed.adapter.raw
                             );
@@ -1046,8 +1062,10 @@ impl crate::Surface for super::Surface {
                         Err(crate::SurfaceError::Outdated)
                     }
                     vk::Result::ERROR_SURFACE_LOST_KHR => Err(crate::SurfaceError::Lost),
-                    other => Err(crate::DeviceError::from(other).into()),
-                }
+                    // We don't use VK_EXT_full_screen_exclusive
+                    // VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
+                    other => Err(super::map_host_device_oom_and_lost_err(other).into()),
+                };
             }
         };
 
@@ -1077,6 +1095,7 @@ impl crate::Surface for super::Surface {
                 raw: swapchain.images[index as usize],
                 drop_guard: None,
                 block: None,
+                external_memory: None,
                 usage: swapchain.config.usage,
                 format: swapchain.config.format,
                 raw_flags,

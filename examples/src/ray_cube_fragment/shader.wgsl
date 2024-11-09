@@ -70,5 +70,5 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         color = vec4<f32>(intersection.barycentrics, 1.0 - intersection.barycentrics.x - intersection.barycentrics.y, 1.0);
     }
 
-    return color; // vec4<f32>(vertex.tex_coords, 1.0, 1.0);
+    return color;
 }

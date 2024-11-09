@@ -350,7 +350,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     self.write_store_value(module, &value, func_ctx)?;
                     writeln!(self.out, "));")?;
                 } else {
-                    write!(self.out, "{}{}.Store(", level, var_name)?;
+                    write!(self.out, "{level}{var_name}.Store(")?;
                     self.write_storage_address(module, &chain, func_ctx)?;
                     write!(self.out, ", ")?;
                     self.write_store_value(module, &value, func_ctx)?;

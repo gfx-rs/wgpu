@@ -1,0 +1,265 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 1,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 4,
+                space: Storage(
+                    access: ("LOAD | STORE"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 6,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 7,
+                space: Storage(
+                    access: ("LOAD | STORE"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Depth(
+                    multi: false,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 1,
+                space: Storage(
+                    access: ("LOAD | STORE"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 6,
+                space: Storage(
+                    access: ("LOAD | STORE"),
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: None,
+            ty: 0,
+            init: 0,
+        ),
+        (
+            name: None,
+            ty: 3,
+            init: 1,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 4,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 7,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 2,
+            )),
+            ty: 10,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(U32(0)),
+        Literal(I32(0)),
+    ],
+    functions: [
+        (
+            name: None,
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [
+                GlobalVariable(2),
+                GlobalVariable(0),
+                GlobalVariable(1),
+                Constant(1),
+                Constant(0),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 2,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 6,
+                ),
+                ImageLoad(
+                    image: 0,
+                    coordinate: 7,
+                    array_index: None,
+                    sample: None,
+                    level: Some(3),
+                ),
+                Splat(
+                    size: Quad,
+                    value: 8,
+                ),
+                AccessIndex(
+                    base: 9,
+                    index: 0,
+                ),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 5,
+                    end: 11,
+                )),
+                Store(
+                    pointer: 5,
+                    value: 10,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            name: "cull::fetch_depth",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (32, 1, 1),
+            function: (
+                name: Some("cull::fetch_depth_wrap"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)

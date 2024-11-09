@@ -1,6 +1,3 @@
-// Box casts are needed, alternative would be a temporaries which are more verbose and not more expressive.
-#![allow(trivial_casts)]
-
 use crate::{
     AccelerationStructureBuildSizes, AccelerationStructureDescriptor, Api, BindGroupDescriptor,
     BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,
@@ -27,6 +24,7 @@ pub trait DynDevice: DynResource {
     ) -> Result<Box<dyn DynBuffer>, DeviceError>;
 
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>);
+    unsafe fn add_raw_buffer(&self, buffer: &dyn DynBuffer);
 
     unsafe fn map_buffer(
         &self,
@@ -44,6 +42,8 @@ pub trait DynDevice: DynResource {
         desc: &TextureDescriptor,
     ) -> Result<Box<dyn DynTexture>, DeviceError>;
     unsafe fn destroy_texture(&self, texture: Box<dyn DynTexture>);
+    unsafe fn add_raw_texture(&self, texture: &dyn DynTexture);
+
     unsafe fn create_texture_view(
         &self,
         texture: &dyn DynTexture,
@@ -180,6 +180,10 @@ impl<D: Device + DynResource> DynDevice for D {
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>) {
         unsafe { D::destroy_buffer(self, buffer.unbox()) };
     }
+    unsafe fn add_raw_buffer(&self, buffer: &dyn DynBuffer) {
+        let buffer = buffer.expect_downcast_ref();
+        unsafe { D::add_raw_buffer(self, buffer) };
+    }
 
     unsafe fn map_buffer(
         &self,
@@ -218,6 +222,11 @@ impl<D: Device + DynResource> DynDevice for D {
 
     unsafe fn destroy_texture(&self, texture: Box<dyn DynTexture>) {
         unsafe { D::destroy_texture(self, texture.unbox()) };
+    }
+
+    unsafe fn add_raw_texture(&self, texture: &dyn DynTexture) {
+        let texture = texture.expect_downcast_ref();
+        unsafe { D::add_raw_texture(self, texture) };
     }
 
     unsafe fn create_texture_view(
@@ -261,7 +270,7 @@ impl<D: Device + DynResource> DynDevice for D {
             queue: desc.queue.expect_downcast_ref(),
         };
         unsafe { D::create_command_encoder(self, &desc) }
-            .map(|b| Box::new(b) as Box<dyn DynCommandEncoder>)
+            .map(|b| -> Box<dyn DynCommandEncoder> { Box::new(b) })
     }
 
     unsafe fn destroy_command_encoder(&self, encoder: Box<dyn DynCommandEncoder>) {
@@ -273,7 +282,7 @@ impl<D: Device + DynResource> DynDevice for D {
         desc: &BindGroupLayoutDescriptor,
     ) -> Result<Box<dyn DynBindGroupLayout>, DeviceError> {
         unsafe { D::create_bind_group_layout(self, desc) }
-            .map(|b| Box::new(b) as Box<dyn DynBindGroupLayout>)
+            .map(|b| -> Box<dyn DynBindGroupLayout> { Box::new(b) })
     }
 
     unsafe fn destroy_bind_group_layout(&self, bg_layout: Box<dyn DynBindGroupLayout>) {
@@ -297,7 +306,7 @@ impl<D: Device + DynResource> DynDevice for D {
         };
 
         unsafe { D::create_pipeline_layout(self, &desc) }
-            .map(|b| Box::new(b) as Box<dyn DynPipelineLayout>)
+            .map(|b| -> Box<dyn DynPipelineLayout> { Box::new(b) })
     }
 
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Box<dyn DynPipelineLayout>) {
@@ -345,7 +354,8 @@ impl<D: Device + DynResource> DynDevice for D {
             acceleration_structures: &acceleration_structures,
         };
 
-        unsafe { D::create_bind_group(self, &desc) }.map(|b| Box::new(b) as Box<dyn DynBindGroup>)
+        unsafe { D::create_bind_group(self, &desc) }
+            .map(|b| -> Box<dyn DynBindGroup> { Box::new(b) })
     }
 
     unsafe fn destroy_bind_group(&self, group: Box<dyn DynBindGroup>) {
@@ -358,7 +368,7 @@ impl<D: Device + DynResource> DynDevice for D {
         shader: ShaderInput,
     ) -> Result<Box<dyn DynShaderModule>, ShaderError> {
         unsafe { D::create_shader_module(self, desc, shader) }
-            .map(|b| Box::new(b) as Box<dyn DynShaderModule>)
+            .map(|b| -> Box<dyn DynShaderModule> { Box::new(b) })
     }
 
     unsafe fn destroy_shader_module(&self, module: Box<dyn DynShaderModule>) {
@@ -388,7 +398,7 @@ impl<D: Device + DynResource> DynDevice for D {
         };
 
         unsafe { D::create_render_pipeline(self, &desc) }
-            .map(|b| Box::new(b) as Box<dyn DynRenderPipeline>)
+            .map(|b| -> Box<dyn DynRenderPipeline> { Box::new(b) })
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: Box<dyn DynRenderPipeline>) {
@@ -411,7 +421,7 @@ impl<D: Device + DynResource> DynDevice for D {
         };
 
         unsafe { D::create_compute_pipeline(self, &desc) }
-            .map(|b| Box::new(b) as Box<dyn DynComputePipeline>)
+            .map(|b| -> Box<dyn DynComputePipeline> { Box::new(b) })
     }
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: Box<dyn DynComputePipeline>) {
@@ -423,7 +433,7 @@ impl<D: Device + DynResource> DynDevice for D {
         desc: &PipelineCacheDescriptor<'_>,
     ) -> Result<Box<dyn DynPipelineCache>, PipelineCacheError> {
         unsafe { D::create_pipeline_cache(self, desc) }
-            .map(|b| Box::new(b) as Box<dyn DynPipelineCache>)
+            .map(|b| -> Box<dyn DynPipelineCache> { Box::new(b) })
     }
 
     fn pipeline_cache_validation_key(&self) -> Option<[u8; 16]> {
@@ -438,7 +448,7 @@ impl<D: Device + DynResource> DynDevice for D {
         &self,
         desc: &wgt::QuerySetDescriptor<Label>,
     ) -> Result<Box<dyn DynQuerySet>, DeviceError> {
-        unsafe { D::create_query_set(self, desc) }.map(|b| Box::new(b) as Box<dyn DynQuerySet>)
+        unsafe { D::create_query_set(self, desc) }.map(|b| -> Box<dyn DynQuerySet> { Box::new(b) })
     }
 
     unsafe fn destroy_query_set(&self, query_set: Box<dyn DynQuerySet>) {
@@ -446,7 +456,7 @@ impl<D: Device + DynResource> DynDevice for D {
     }
 
     unsafe fn create_fence(&self) -> Result<Box<dyn DynFence>, DeviceError> {
-        unsafe { D::create_fence(self) }.map(|f| Box::new(f) as Box<dyn DynFence>)
+        unsafe { D::create_fence(self) }.map(|b| -> Box<dyn DynFence> { Box::new(b) })
     }
 
     unsafe fn destroy_fence(&self, fence: Box<dyn DynFence>) {
@@ -486,7 +496,7 @@ impl<D: Device + DynResource> DynDevice for D {
         desc: &AccelerationStructureDescriptor,
     ) -> Result<Box<dyn DynAccelerationStructure>, DeviceError> {
         unsafe { D::create_acceleration_structure(self, desc) }
-            .map(|b| Box::new(b) as Box<dyn DynAccelerationStructure>)
+            .map(|b| -> Box<dyn DynAccelerationStructure> { Box::new(b) })
     }
 
     unsafe fn get_acceleration_structure_build_sizes(

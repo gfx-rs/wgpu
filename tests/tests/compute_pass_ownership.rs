@@ -1,7 +1,7 @@
 //! Tests that compute passes take ownership of resources that are associated with.
 //! I.e. once a resource is passed in to a compute pass, it can be dropped.
 
-use std::num::NonZeroU64;
+use std::{mem::size_of, num::NonZeroU64};
 
 use wgpu::util::DeviceExt as _;
 use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
@@ -253,7 +253,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
             source: wgpu::ShaderSource::Wgsl(SHADER_SRC.into()),
         });
 
-    let buffer_size = 4 * std::mem::size_of::<f32>() as u64;
+    let buffer_size = 4 * size_of::<f32>() as u64;
 
     let bgl = ctx
         .device

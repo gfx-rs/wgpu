@@ -19,15 +19,16 @@ struct NativeTest {
 }
 
 impl NativeTest {
+    /// Adapter index is only used for naming the test, the adapters are matched based on the adapter info.
     fn from_configuration(
         config: GpuTestConfiguration,
-        adapter: &AdapterReport,
+        adapter_report: AdapterReport,
         adapter_index: usize,
     ) -> Self {
-        let backend = adapter.info.backend;
-        let device_name = &adapter.info.name;
+        let backend = adapter_report.info.backend;
+        let device_name = &adapter_report.info.name;
 
-        let test_info = TestInfo::from_configuration(&config, adapter);
+        let test_info = TestInfo::from_configuration(&config, &adapter_report);
 
         let full_name = format!(
             "[{running_msg}] [{backend:?}/{device_name}/{adapter_index}] {base_name}",
@@ -50,10 +51,12 @@ impl NativeTest {
 
                 let env_value = if metal_validation { "1" } else { "0" };
                 std::env::set_var("MTL_DEBUG_LAYER", env_value);
-                // Metal Shader Validation is entirely broken in the paravirtualized CI environment.
-                // std::env::set_var("MTL_SHADER_VALIDATION", env_value);
+                if std::env::var("GITHUB_ACTIONS").as_deref() != Ok("true") {
+                    // Metal Shader Validation is entirely broken in the paravirtualized CI environment.
+                    std::env::set_var("MTL_SHADER_VALIDATION", env_value);
+                }
 
-                execute_test(config, Some(test_info), adapter_index).await;
+                execute_test(Some(&adapter_report), config, Some(test_info)).await;
             }),
         }
     }
@@ -83,16 +86,24 @@ pub fn main() -> MainResult {
         &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
             .context("Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?")?
     };
-    let report = GpuReport::from_json(config_text).context("Could not parse .gpuconfig JSON")?;
+    let mut report =
+        GpuReport::from_json(config_text).context("Could not parse .gpuconfig JSON")?;
+
+    // Filter out the adapters that are not part of WGPU_BACKEND.
+    let wgpu_backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all());
+    report
+        .devices
+        .retain(|report| wgpu_backends.contains(wgpu::Backends::from(report.info.backend)));
 
     let mut test_guard = TEST_LIST.lock();
+    // Iterate through all the tests. Creating a test per adapter.
     execute_native(test_guard.drain(..).flat_map(|test| {
         report
             .devices
             .iter()
             .enumerate()
-            .map(move |(adapter_index, adapter)| {
-                NativeTest::from_configuration(test.clone(), adapter, adapter_index)
+            .map(move |(adapter_index, adapter_report)| {
+                NativeTest::from_configuration(test.clone(), adapter_report.clone(), adapter_index)
             })
     }));
 

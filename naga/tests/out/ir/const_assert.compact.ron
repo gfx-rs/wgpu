@@ -1,0 +1,54 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: Some("x"),
+            ty: 0,
+            init: 0,
+        ),
+        (
+            name: Some("y"),
+            ty: 0,
+            init: 1,
+        ),
+    ],
+    overrides: [],
+    global_variables: [],
+    global_expressions: [
+        Literal(I32(1)),
+        Literal(I32(2)),
+    ],
+    functions: [
+        (
+            name: Some("foo"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [
+                Literal(I32(1)),
+            ],
+            named_expressions: {
+                0: "z",
+            },
+            body: [
+                Return(
+                    value: None,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [],
+)

@@ -1,11 +1,8 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
-
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
+use std::ops::IndexMut;
+use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
 use wgpu::util::DeviceExt;
-
-use rt::traits::*;
-use wgpu::ray_tracing as rt;
 
 // from cube
 #[repr(C)]
@@ -71,8 +68,8 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniforms {
-    view_inverse: [[f32; 4]; 4],
-    proj_inverse: [[f32; 4]; 4],
+    view_inverse: Mat4,
+    proj_inverse: Mat4,
 }
 
 /// A wrapper for `pop_error_scope` futures that panics if an error occurs.
@@ -97,14 +94,11 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
     }
 }
 
-#[allow(dead_code)]
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
-    blas: rt::Blas,
-    tlas_package: rt::TlasPackage,
+    blas: wgpu::Blas,
+    tlas_package: wgpu::TlasPackage,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     start_inst: Instant,
@@ -112,7 +106,8 @@ struct Example {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY
+            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -140,8 +135,8 @@ impl crate::framework::Example for Example {
             );
 
             Uniforms {
-                view_inverse: view.inverse().to_cols_array_2d(),
-                proj_inverse: proj.inverse().to_cols_array_2d(),
+                view_inverse: view.inverse(),
+                proj_inverse: proj.inverse(),
             }
         };
 
@@ -165,29 +160,29 @@ impl crate::framework::Example for Example {
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
         });
 
-        let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
-            vertex_format: wgpu::VertexFormat::Float32x4,
+        let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
+            vertex_format: wgpu::VertexFormat::Float32x3,
             vertex_count: vertex_data.len() as u32,
             index_format: Some(wgpu::IndexFormat::Uint16),
             index_count: Some(index_data.len() as u32),
-            flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
         let blas = device.create_blas(
-            &rt::CreateBlasDescriptor {
+            &wgpu::CreateBlasDescriptor {
                 label: None,
-                flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: rt::AccelerationStructureUpdateMode::Build,
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
-            rt::BlasGeometrySizeDescriptors::Triangles {
-                desc: vec![blas_geo_size_desc.clone()],
+            wgpu::BlasGeometrySizeDescriptors::Triangles {
+                descriptors: vec![blas_geo_size_desc.clone()],
             },
         );
 
-        let tlas = device.create_tlas(&rt::CreateTlasDescriptor {
+        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
-            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: rt::AccelerationStructureUpdateMode::Build,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
         });
 
@@ -238,24 +233,26 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
+        let tlas_package = wgpu::TlasPackage::new(tlas);
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         encoder.build_acceleration_structures(
-            iter::once(&rt::BlasBuildEntry {
+            iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: rt::BlasGeometries::TriangleGeometries(vec![rt::BlasTriangleGeometry {
-                    size: &blas_geo_size_desc,
-                    vertex_buffer: &vertex_buf,
-                    first_vertex: 0,
-                    vertex_stride: mem::size_of::<Vertex>() as u64,
-                    index_buffer: Some(&index_buf),
-                    index_buffer_offset: Some(0),
-                    transform_buffer: None,
-                    transform_buffer_offset: None,
-                }]),
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
+                    wgpu::BlasTriangleGeometry {
+                        size: &blas_geo_size_desc,
+                        vertex_buffer: &vertex_buf,
+                        first_vertex: 0,
+                        vertex_stride: mem::size_of::<Vertex>() as u64,
+                        index_buffer: Some(&index_buf),
+                        index_buffer_offset: Some(0),
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    },
+                ]),
             }),
             // iter::empty(),
             iter::once(&tlas_package),
@@ -268,8 +265,6 @@ impl crate::framework::Example for Example {
         Example {
             uniforms,
             uniform_buf,
-            vertex_buf,
-            index_buf,
             blas,
             tlas_package,
             pipeline,
@@ -293,7 +288,7 @@ impl crate::framework::Example for Example {
             1000.0,
         );
 
-        self.uniforms.proj_inverse = proj.inverse().to_cols_array_2d();
+        self.uniforms.proj_inverse = proj.inverse();
 
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(&[self.uniforms]));
     }
@@ -311,10 +306,7 @@ impl crate::framework::Example for Example {
 
             for x in 0..side_count {
                 for y in 0..side_count {
-                    let instance = self
-                        .tlas_package
-                        .get_mut_single((x + y * side_count) as usize)
-                        .unwrap();
+                    let instance = self.tlas_package.index_mut((x + y * side_count) as usize);
 
                     let x = x as f32 / (side_count - 1) as f32;
                     let y = y as f32 / (side_count - 1) as f32;
@@ -338,7 +330,7 @@ impl crate::framework::Example for Example {
                         .try_into()
                         .unwrap();
 
-                    *instance = Some(rt::TlasInstance::new(&self.blas, transform, 0, 0xff));
+                    *instance = Some(wgpu::TlasInstance::new(&self.blas, transform, 0, 0xff));
                 }
             }
         }
@@ -365,7 +357,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
             rpass.draw(0..3, 0..1);
         }
 

@@ -21,11 +21,11 @@ fn main_1() {
     vec = _e21;
     vec_target = _e21;
     let _e32 = mat;
-    let _e34 = vec3(1f);
+    const _e34 = vec3(1f);
     mat = (_e32 + mat4x3<f32>(_e34, _e34, _e34, _e34));
     mat_target = _e32;
     let _e37 = mat;
-    let _e39 = vec3(1f);
+    const _e39 = vec3(1f);
     let _e41 = (_e37 - mat4x3<f32>(_e39, _e39, _e39, _e39));
     mat = _e41;
     mat_target = _e41;

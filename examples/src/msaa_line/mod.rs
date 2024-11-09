@@ -7,7 +7,7 @@
 //! *   Set the primitive_topology to PrimitiveTopology::LineList.
 //! *   Vertices and Indices describe the two points that make up a line.
 
-use std::{borrow::Cow, iter};
+use std::{iter, mem::size_of};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
@@ -56,7 +56,7 @@ impl Example {
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4],
                 }],
@@ -156,10 +156,7 @@ impl crate::framework::Example for Example {
 
         let sample_count = max_sample_count;
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,

@@ -27,11 +27,6 @@ impl<T: Clone> ResourceMetadata<T> {
         }
     }
 
-    /// Returns the number of indices we can accommodate.
-    pub(super) fn size(&self) -> usize {
-        self.owned.len()
-    }
-
     pub(super) fn set_size(&mut self, size: usize) {
         self.resources.resize(size, None);
         resize_bitvec(&mut self.owned, size);

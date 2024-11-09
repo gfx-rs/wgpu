@@ -1,4 +1,4 @@
-use std::{borrow::Cow, f32::consts, iter, mem, ops::Range, sync::Arc};
+use std::{f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{align_to, DeviceExt};
@@ -219,7 +219,7 @@ impl crate::framework::Example for Example {
             && device.limits().max_storage_buffers_per_shader_stage > 0;
 
         // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
+        let vertex_size = size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
         let cube_vertex_buf = Arc::new(device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -283,7 +283,7 @@ impl crate::framework::Example for Example {
             },
         ];
 
-        let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
+        let entity_uniform_size = size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let num_entities = 1 + cube_descs.len() as wgpu::BufferAddress;
         // Make the `uniform_alignment` >= `entity_uniform_size` and aligned to `min_uniform_buffer_offset_alignment`.
         let uniform_alignment = {
@@ -427,8 +427,7 @@ impl crate::framework::Example for Example {
                 target_view: shadow_target_views[1].take().unwrap(),
             },
         ];
-        let light_uniform_size =
-            (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as wgpu::BufferAddress;
+        let light_uniform_size = (Self::MAX_LIGHTS * size_of::<LightRaw>()) as wgpu::BufferAddress;
         let light_storage_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: light_uniform_size,
@@ -448,13 +447,10 @@ impl crate::framework::Example for Example {
             attributes: &vertex_attr,
         };
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let shadow_pass = {
-            let uniform_size = mem::size_of::<GlobalUniforms>() as wgpu::BufferAddress;
+            let uniform_size = size_of::<GlobalUniforms>() as wgpu::BufferAddress;
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -548,7 +544,7 @@ impl crate::framework::Example for Example {
                                 ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
                                 min_binding_size: wgpu::BufferSize::new(
-                                    mem::size_of::<GlobalUniforms>() as _,
+                                    size_of::<GlobalUniforms>() as _,
                                 ),
                             },
                             count: None,
@@ -737,7 +733,7 @@ impl crate::framework::Example for Example {
             for (i, light) in self.lights.iter().enumerate() {
                 queue.write_buffer(
                     &self.light_storage_buf,
-                    (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
+                    (i * size_of::<LightRaw>()) as wgpu::BufferAddress,
                     bytemuck::bytes_of(&light.to_raw()),
                 );
             }
@@ -757,7 +753,7 @@ impl crate::framework::Example for Example {
             // let's just copy it over to the shadow uniform buffer.
             encoder.copy_buffer_to_buffer(
                 &self.light_storage_buf,
-                (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
+                (i * size_of::<LightRaw>()) as wgpu::BufferAddress,
                 &self.shadow_pass.uniform_buf,
                 0,
                 64,

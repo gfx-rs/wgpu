@@ -16,7 +16,7 @@ mod selection;
 mod subgroup;
 mod writer;
 
-pub use spirv::Capability;
+pub use spirv::{Capability, SourceLanguage};
 
 use crate::arena::{Handle, HandleVec};
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
@@ -89,6 +89,7 @@ impl IdGenerator {
 pub struct DebugInfo<'a> {
     pub source_code: &'a str,
     pub file_name: &'a std::path::Path,
+    pub language: SourceLanguage,
 }
 
 /// A SPIR-V block to which we are still adding instructions.
@@ -143,6 +144,41 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<FunctionArgument>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+
+    /// A map taking an expression that yields a composite value (array, matrix)
+    /// to the temporary variables we have spilled it to, if any. Spilling
+    /// allows us to render an arbitrary chain of [`Access`] and [`AccessIndex`]
+    /// expressions as an `OpAccessChain` and an `OpLoad` (plus bounds checks).
+    /// This supports dynamic indexing of by-value arrays and matrices, which
+    /// SPIR-V does not.
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    spilled_composites: crate::FastIndexMap<Handle<crate::Expression>, LocalVariable>,
+
+    /// A set of expressions that are either in [`spilled_composites`] or refer
+    /// to some component/element of such.
+    ///
+    /// [`spilled_composites`]: Function::spilled_composites
+    spilled_accesses: crate::arena::HandleSet<crate::Expression>,
+
+    /// A map taking each expression to the number of [`Access`] and
+    /// [`AccessIndex`] expressions that uses it as a base value. If an
+    /// expression has no entry, its count is zero: it is never used as a
+    /// [`Access`] or [`AccessIndex`] base.
+    ///
+    /// We use this, together with [`ExpressionInfo::ref_count`], to recognize
+    /// the tips of chains of [`Access`] and [`AccessIndex`] expressions that
+    /// access spilled values --- expressions in [`spilled_composites`]. We
+    /// defer generating code for the chain until we reach its tip, so we can
+    /// handle it with a single instruction.
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    /// [`ExpressionInfo::ref_count`]: crate::valid::ExpressionInfo
+    /// [`spilled_composites`]: Function::spilled_composites
+    access_uses: crate::FastHashMap<Handle<crate::Expression>, usize>,
+
     blocks: Vec<TerminatedBlock>,
     entry_point_context: Option<EntryPointContext>,
 }
@@ -177,7 +213,7 @@ impl Function {
 /// where practical.
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 struct LocalImageType {
-    sampled_type: crate::ScalarKind,
+    sampled_type: crate::Scalar,
     dim: spirv::Dim,
     flags: ImageTypeFlags,
     image_format: spirv::ImageFormat,
@@ -208,23 +244,62 @@ impl LocalImageType {
 
         match class {
             crate::ImageClass::Sampled { kind, multi } => LocalImageType {
-                sampled_type: kind,
+                sampled_type: crate::Scalar { kind, width: 4 },
                 dim,
                 flags: make_flags(multi, ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
             crate::ImageClass::Depth { multi } => LocalImageType {
-                sampled_type: crate::ScalarKind::Float,
+                sampled_type: crate::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                },
                 dim,
                 flags: make_flags(multi, ImageTypeFlags::DEPTH | ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
             crate::ImageClass::Storage { format, access: _ } => LocalImageType {
-                sampled_type: crate::ScalarKind::from(format),
+                sampled_type: format.into(),
                 dim,
                 flags: make_flags(false, ImageTypeFlags::empty()),
                 image_format: format.into(),
             },
+        }
+    }
+}
+
+/// A numeric type, for use in [`LocalType`].
+#[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
+enum NumericType {
+    Scalar(crate::Scalar),
+    Vector {
+        size: crate::VectorSize,
+        scalar: crate::Scalar,
+    },
+    Matrix {
+        columns: crate::VectorSize,
+        rows: crate::VectorSize,
+        scalar: crate::Scalar,
+    },
+}
+
+impl NumericType {
+    const fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
+        match *inner {
+            crate::TypeInner::Scalar(scalar) | crate::TypeInner::Atomic(scalar) => {
+                Some(NumericType::Scalar(scalar))
+            }
+            crate::TypeInner::Vector { size, scalar } => Some(NumericType::Vector { size, scalar }),
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Some(NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            }),
+            _ => None,
         }
     }
 }
@@ -244,9 +319,9 @@ impl LocalImageType {
 /// never synthesizes new struct types, so `LocalType` has nothing for that.
 ///
 /// Each `LocalType` variant should be handled identically to its analogous
-/// `TypeInner` variant. You can use the [`make_local`] function to help with
-/// this, by converting everything possible to a `LocalType` before inspecting
-/// it.
+/// `TypeInner` variant. You can use the [`LocalType::from_inner`] function to
+/// help with this, by converting everything possible to a `LocalType` before
+/// inspecting it.
 ///
 /// ## `LocalType` equality and SPIR-V `OpType` uniqueness
 ///
@@ -274,19 +349,11 @@ impl LocalImageType {
 /// [`TypeInner`]: crate::TypeInner
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum LocalType {
-    /// A scalar, vector, or pointer to one of those.
-    Value {
-        /// If `None`, this represents a scalar type. If `Some`, this represents
-        /// a vector type of the given size.
-        vector_size: Option<crate::VectorSize>,
-        scalar: crate::Scalar,
-        pointer_space: Option<spirv::StorageClass>,
-    },
-    /// A matrix of floating-point values.
-    Matrix {
-        columns: crate::VectorSize,
-        rows: crate::VectorSize,
-        width: crate::Bytes,
+    /// A numeric type.
+    Numeric(NumericType),
+    LocalPointer {
+        base: NumericType,
+        class: spirv::StorageClass,
     },
     Pointer {
         base: Handle<crate::Type>,
@@ -355,52 +422,50 @@ struct LookupFunctionType {
     return_type_id: Word,
 }
 
-fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
-    Some(match *inner {
-        crate::TypeInner::Scalar(scalar) | crate::TypeInner::Atomic(scalar) => LocalType::Value {
-            vector_size: None,
-            scalar,
-            pointer_space: None,
-        },
-        crate::TypeInner::Vector { size, scalar } => LocalType::Value {
-            vector_size: Some(size),
-            scalar,
-            pointer_space: None,
-        },
-        crate::TypeInner::Matrix {
-            columns,
-            rows,
-            scalar,
-        } => LocalType::Matrix {
-            columns,
-            rows,
-            width: scalar.width,
-        },
-        crate::TypeInner::Pointer { base, space } => LocalType::Pointer {
-            base,
-            class: helpers::map_storage_class(space),
-        },
-        crate::TypeInner::ValuePointer {
-            size,
-            scalar,
-            space,
-        } => LocalType::Value {
-            vector_size: size,
-            scalar,
-            pointer_space: Some(helpers::map_storage_class(space)),
-        },
-        crate::TypeInner::Image {
-            dim,
-            arrayed,
-            class,
-        } => LocalType::Image(LocalImageType::from_inner(dim, arrayed, class)),
-        crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
-        crate::TypeInner::AccelerationStructure => LocalType::AccelerationStructure,
-        crate::TypeInner::RayQuery => LocalType::RayQuery,
-        crate::TypeInner::Array { .. }
-        | crate::TypeInner::Struct { .. }
-        | crate::TypeInner::BindingArray { .. } => return None,
-    })
+impl LocalType {
+    fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
+        Some(match *inner {
+            crate::TypeInner::Scalar(_)
+            | crate::TypeInner::Atomic(_)
+            | crate::TypeInner::Vector { .. }
+            | crate::TypeInner::Matrix { .. } => {
+                // We expect `NumericType::from_inner` to handle all
+                // these cases, so unwrap.
+                LocalType::Numeric(NumericType::from_inner(inner).unwrap())
+            }
+            crate::TypeInner::Pointer { base, space } => LocalType::Pointer {
+                base,
+                class: helpers::map_storage_class(space),
+            },
+            crate::TypeInner::ValuePointer {
+                size: Some(size),
+                scalar,
+                space,
+            } => LocalType::LocalPointer {
+                base: NumericType::Vector { size, scalar },
+                class: helpers::map_storage_class(space),
+            },
+            crate::TypeInner::ValuePointer {
+                size: None,
+                scalar,
+                space,
+            } => LocalType::LocalPointer {
+                base: NumericType::Scalar(scalar),
+                class: helpers::map_storage_class(space),
+            },
+            crate::TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => LocalType::Image(LocalImageType::from_inner(dim, arrayed, class)),
+            crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
+            crate::TypeInner::AccelerationStructure => LocalType::AccelerationStructure,
+            crate::TypeInner::RayQuery => LocalType::RayQuery,
+            crate::TypeInner::Array { .. }
+            | crate::TypeInner::Struct { .. }
+            | crate::TypeInner::BindingArray { .. } => return None,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -465,38 +530,75 @@ enum CachedConstant {
     ZeroValue(Word),
 }
 
+/// The SPIR-V representation of a [`crate::GlobalVariable`].
+///
+/// In the Vulkan spec 1.3.296, the section [Descriptor Set Interface][dsi] says:
+///
+/// > Variables identified with the `Uniform` storage class are used to access
+/// > transparent buffer backed resources. Such variables *must* be:
+/// >
+/// > -   typed as `OpTypeStruct`, or an array of this type,
+/// >
+/// > -   identified with a `Block` or `BufferBlock` decoration, and
+/// >
+/// > -   laid out explicitly using the `Offset`, `ArrayStride`, and `MatrixStride`
+/// >     decorations as specified in "Offset and Stride Assignment".
+///
+/// This is followed by identical language for the `StorageBuffer`,
+/// except that a `BufferBlock` decoration is not allowed.
+///
+/// When we encounter a global variable in the [`Storage`] or [`Uniform`]
+/// address spaces whose type is not already [`Struct`], this backend implicitly
+/// wraps the global variable in a struct: we generate a SPIR-V global variable
+/// holding an `OpTypeStruct` with a single member, whose type is what the Naga
+/// global's type would suggest, decorated as required above.
+///
+/// The [`helpers::global_needs_wrapper`] function determines whether a given
+/// [`crate::GlobalVariable`] needs to be wrapped.
+///
+/// [dsi]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#interfaces-resources-descset
+/// [`Storage`]: crate::AddressSpace::Storage
+/// [`Uniform`]: crate::AddressSpace::Uniform
+/// [`Struct`]: crate::TypeInner::Struct
 #[derive(Clone)]
 struct GlobalVariable {
-    /// ID of the OpVariable that declares the global.
+    /// The SPIR-V id of the `OpVariable` that declares the global.
     ///
-    /// If you need the variable's value, use [`access_id`] instead of this
-    /// field. If we wrapped the Naga IR `GlobalVariable`'s type in a struct to
-    /// comply with Vulkan's requirements, then this points to the `OpVariable`
-    /// with the synthesized struct type, whereas `access_id` points to the
-    /// field of said struct that holds the variable's actual value.
+    /// If this global has been implicitly wrapped in an `OpTypeStruct`, this id
+    /// refers to the wrapper, not the original Naga value it contains. If you
+    /// need the Naga value, use [`access_id`] instead of this field.
+    ///
+    /// If this global is not implicitly wrapped, this is the same as
+    /// [`access_id`].
     ///
     /// This is used to compute the `access_id` pointer in function prologues,
-    /// and used for `ArrayLength` expressions, which do need the struct.
+    /// and used for `ArrayLength` expressions, which need to pass the wrapper
+    /// struct.
     ///
     /// [`access_id`]: GlobalVariable::access_id
     var_id: Word,
 
-    /// For `AddressSpace::Handle` variables, this ID is recorded in the function
-    /// prelude block (and reset before every function) as `OpLoad` of the variable.
-    /// It is then used for all the global ops, such as `OpImageSample`.
+    /// The loaded value of a `AddressSpace::Handle` global variable.
+    ///
+    /// If the current function uses this global variable, this is the id of an
+    /// `OpLoad` instruction in the function's prologue that loads its value.
+    /// (This value is assigned as we write the prologue code of each function.)
+    /// It is then used for all operations on the global, such as `OpImageSample`.
     handle_id: Word,
 
-    /// Actual ID used to access this variable.
-    /// For wrapped buffer variables, this ID is `OpAccessChain` into the
-    /// wrapper. Otherwise, the same as `var_id`.
+    /// The SPIR-V id of a pointer to this variable's Naga IR value.
     ///
-    /// Vulkan requires that globals in the `StorageBuffer` and `Uniform` storage
-    /// classes must be structs with the `Block` decoration, but WGSL and Naga IR
-    /// make no such requirement. So for such variables, we generate a wrapper struct
-    /// type with a single element of the type given by Naga, generate an
-    /// `OpAccessChain` for that member in the function prelude, and use that pointer
-    /// to refer to the global in the function body. This is the id of that access,
-    /// updated for each function in `write_function`.
+    /// If the current function uses this global variable, and it has been
+    /// implicitly wrapped in an `OpTypeStruct`, this is the id of an
+    /// `OpAccessChain` instruction in the function's prologue that refers to
+    /// the wrapped value inside the struct. (This value is assigned as we write
+    /// the prologue code of each function.) If you need the wrapper struct
+    /// itself, use [`var_id`] instead of this field.
+    ///
+    /// If this global is not implicitly wrapped, this is the same as
+    /// [`var_id`].
+    ///
+    /// [`var_id`]: GlobalVariable::var_id
     access_id: Word,
 }
 
@@ -616,20 +718,9 @@ impl BlockContext<'_> {
             .get_constant_scalar(crate::Literal::I32(scope as _))
     }
 
-    fn get_pointer_id(
-        &mut self,
-        handle: Handle<crate::Type>,
-        class: spirv::StorageClass,
-    ) -> Result<Word, Error> {
-        self.writer
-            .get_pointer_id(&self.ir_module.types, handle, class)
+    fn get_pointer_id(&mut self, handle: Handle<crate::Type>, class: spirv::StorageClass) -> Word {
+        self.writer.get_pointer_id(handle, class)
     }
-}
-
-#[derive(Clone, Copy, Default)]
-struct LoopContext {
-    continuing_id: Option<Word>,
-    break_id: Option<Word>,
 }
 
 pub struct Writer {

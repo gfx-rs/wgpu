@@ -183,3 +183,22 @@ void set_in_bounds(
     globals.m[2].w = v_7;
     return;
 }
+
+float index_dynamic_array_constant_index(
+    device Globals const& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e3 = uint(1000) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4 ? globals.d[1000] : DefaultConstructible();
+    return _e3;
+}
+
+void set_dynamic_array_constant_index(
+    float v_8,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    if (uint(1000) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4) {
+        globals.d[1000] = v_8;
+    }
+    return;
+}

@@ -33,7 +33,8 @@ kernel void main_(
     rq.intersector.force_opacity((desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);
     rq.intersector.accept_any_intersection((desc.flags & 4) != 0);
     rq.intersection = rq.intersector.intersect(metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax), acc_struct, desc.cull_mask);    rq.ready = true;
-    while(true) {
+#define LOOP_IS_REACHABLE if (volatile bool unpredictable_jump_over_loop = true; unpredictable_jump_over_loop)
+    LOOP_IS_REACHABLE while(true) {
         bool _e31 = rq.ready;
         rq.ready = false;
         if (_e31) {

@@ -1,22 +1,22 @@
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use hal::{AccelerationStructureTriangleIndices, BufferUses, MemoryFlags};
-
 #[cfg(feature = "trace")]
 use crate::device::trace;
-use crate::lock::rank;
-use crate::resource::TrackingData;
+use crate::lock::{rank, Mutex};
+use crate::resource::{Fallible, TrackingData};
+use crate::snatch::Snatchable;
+use crate::weak_vec::WeakVec;
 use crate::{
-    device::{queue::TempResource, Device, DeviceError},
+    device::{Device, DeviceError},
     global::Global,
     id::{self, BlasId, TlasId},
     lock::RwLock,
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
-use std::mem;
-use wgt::{AccelerationStructureFlags, BufferAddress};
+use hal::AccelerationStructureTriangleIndices;
+use wgt::Features;
 
 impl Device {
     fn create_blas(
@@ -25,34 +25,44 @@ impl Device {
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         let size_info = match &sizes {
-            wgt::BlasGeometrySizeDescriptors::Triangles { desc } => {
+            wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
                 let mut entries =
                     Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::with_capacity(
-                        desc.len(),
+                        descriptors.len(),
                     );
-                for x in desc {
-                    if x.index_count.is_some() != x.index_format.is_some() {
+                for desc in descriptors {
+                    if desc.index_count.is_some() != desc.index_format.is_some() {
                         return Err(CreateBlasError::MissingIndexData);
                     }
                     let indices =
-                        x.index_count
+                        desc.index_count
                             .map(|count| AccelerationStructureTriangleIndices::<
                                 dyn hal::DynBuffer,
                             > {
-                                format: x.index_format.unwrap(),
+                                format: desc.index_format.unwrap(),
                                 buffer: None,
                                 offset: 0,
                                 count,
                             });
+                    if !self
+                        .features
+                        .allowed_vertex_formats_for_blas()
+                        .contains(&desc.vertex_format)
+                    {
+                        return Err(CreateBlasError::InvalidVertexFormat(
+                            desc.vertex_format,
+                            self.features.allowed_vertex_formats_for_blas(),
+                        ));
+                    }
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
                         vertex_buffer: None,
-                        vertex_format: x.vertex_format,
+                        vertex_format: desc.vertex_format,
                         first_vertex: 0,
-                        vertex_count: x.vertex_count,
+                        vertex_count: desc.vertex_count,
                         vertex_stride: 0,
                         indices,
                         transform: None,
-                        flags: x.flags,
+                        flags: desc.flags,
                     });
                 }
                 unsafe {
@@ -77,7 +87,7 @@ impl Device {
                         .contains(wgt::AccelerationStructureFlags::ALLOW_COMPACTION),
                 })
         }
-        .map_err(DeviceError::from)?;
+        .map_err(DeviceError::from_hal)?;
 
         let handle = unsafe {
             self.raw()
@@ -107,7 +117,7 @@ impl Device {
         };
 
         Ok(Arc::new(resource::Blas {
-            raw: ManuallyDrop::new(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             size_info,
             sizes,
@@ -150,10 +160,10 @@ impl Device {
                     allow_compaction: false,
                 })
         }
-        .map_err(DeviceError::from)?;
+        .map_err(DeviceError::from_hal)?;
 
-        let instance_buffer_size = get_raw_tlas_instance_size(self.backend())
-            * std::cmp::max(desc.max_instances, 1) as usize;
+        let instance_buffer_size =
+            get_raw_tlas_instance_size(self.backend()) * desc.max_instances.max(1) as usize;
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),
@@ -163,10 +173,10 @@ impl Device {
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
             })
         }
-        .map_err(DeviceError::from)?;
+        .map_err(DeviceError::from_hal)?;
 
         Ok(Arc::new(resource::Tlas {
-            raw: ManuallyDrop::new(raw),
+            raw: Snatchable::new(raw),
             device: self.clone(),
             size_info,
             flags: desc.flags,
@@ -177,6 +187,7 @@ impl Device {
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
+            bind_groups: Mutex::new(rank::TLAS_BIND_GROUPS, WeakVec::new()),
         }))
     }
 }
@@ -192,16 +203,21 @@ impl Global {
         profiling::scope!("Device::create_blas");
 
         let hub = &self.hub;
-        let fid = hub.blas_s.prepare(device_id.backend(), id_in);
+        let fid = hub.blas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
         let error = 'error: {
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
+            let device = device_guard.get(device_id);
+            match device.check_is_valid() {
+                Ok(_) => {}
+                Err(err) => break 'error CreateBlasError::Device(err),
             };
-            if !device.is_valid() {
-                break 'error DeviceError::Lost.into();
+
+            if !device
+                .features
+                .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            {
+                break 'error CreateBlasError::MissingFeature;
             }
 
             #[cfg(feature = "trace")]
@@ -219,13 +235,13 @@ impl Global {
             };
             let handle = blas.handle;
 
-            let id = fid.assign(blas.clone());
+            let id = fid.assign(Fallible::Valid(blas.clone()));
             log::info!("Created blas {:?} with {:?}", id, desc);
 
             return (id, Some(handle), None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
         (id, None, Some(error))
     }
 
@@ -238,14 +254,23 @@ impl Global {
         profiling::scope!("Device::create_tlas");
 
         let hub = &self.hub;
-        let fid = hub.tlas_s.prepare(device_id.backend(), id_in);
+        let fid = hub.tlas_s.prepare(id_in);
 
         let device_guard = hub.devices.read();
         let error = 'error: {
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break 'error DeviceError::InvalidDeviceId.into(),
-            };
+            let device = device_guard.get(device_id);
+            match device.check_is_valid() {
+                Ok(_) => {}
+                Err(e) => break 'error CreateTlasError::Device(e),
+            }
+
+            if !device
+                .features
+                .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            {
+                break 'error CreateTlasError::MissingFeature;
+            }
+
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
                 trace.add(trace::Action::CreateTlas {
@@ -259,45 +284,31 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(tlas.clone());
+            let id = fid.assign(Fallible::Valid(tlas));
             log::info!("Created tlas {:?} with {:?}", id, desc);
 
             return (id, None);
         };
 
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
         (id, Some(error))
     }
 
     pub fn blas_destroy(&self, blas_id: BlasId) -> Result<(), resource::DestroyError> {
         profiling::scope!("Blas::destroy");
+        log::info!("Blas::destroy {blas_id:?}");
 
         let hub = &self.hub;
 
-        log::info!("Blas {:?} is destroyed", blas_id);
-        let blas_guard = hub.blas_s.write();
-        let blas = blas_guard
-            .get(blas_id)
-            .map_err(|_| resource::DestroyError::Invalid)?
-            .clone();
-        drop(blas_guard);
-        let device = &blas.device;
+        let blas = hub.blas_s.get(blas_id).get()?;
+        let _device = &blas.device;
 
         #[cfg(feature = "trace")]
-        if let Some(trace) = device.trace.lock().as_mut() {
+        if let Some(trace) = _device.trace.lock().as_mut() {
             trace.add(trace::Action::FreeBlas(blas_id));
         }
 
-        let temp = TempResource::Blas(blas.clone());
-        {
-            let mut device_lock = device.lock_life();
-            let last_submit_index = device_lock.get_blas_latest_submission_index(blas.as_ref());
-            if let Some(last_submit_index) = last_submit_index {
-                device_lock.schedule_resource_destruction(temp, last_submit_index);
-            }
-        }
-
-        Ok(())
+        blas.destroy()
     }
 
     pub fn blas_drop(&self, blas_id: BlasId) {
@@ -306,9 +317,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _blas = match hub.blas_s.unregister(blas_id) {
-            Some(blas) => blas,
-            None => {
+        let _blas = match hub.blas_s.remove(blas_id).get() {
+            Ok(blas) => blas,
+            Err(_) => {
                 return;
             }
         };
@@ -332,27 +343,19 @@ impl Global {
         let tlas_guard = hub.tlas_s.write();
         let tlas = tlas_guard
             .get(tlas_id)
-            .map_err(|_| resource::DestroyError::Invalid)?
+            .get()
+            .map_err(resource::DestroyError::InvalidResource)?
             .clone();
         drop(tlas_guard);
 
-        let device = &mut tlas.device.clone();
+        let _device = &mut tlas.device.clone();
 
         #[cfg(feature = "trace")]
-        if let Some(trace) = device.trace.lock().as_mut() {
+        if let Some(trace) = _device.trace.lock().as_mut() {
             trace.add(trace::Action::FreeTlas(tlas_id));
         }
 
-        let temp = TempResource::Tlas(tlas.clone());
-        {
-            let mut device_lock = device.lock_life();
-            let last_submit_index = device_lock.get_tlas_latest_submission_index(tlas.as_ref());
-            if let Some(last_submit_index) = last_submit_index {
-                device_lock.schedule_resource_destruction(temp, last_submit_index);
-            }
-        }
-
-        Ok(())
+        tlas.destroy()
     }
 
     pub fn tlas_drop(&self, tlas_id: TlasId) {
@@ -361,9 +364,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let _tlas = match hub.tlas_s.unregister(tlas_id) {
-            Some(tlas) => tlas,
-            None => {
+        let _tlas = match hub.tlas_s.remove(tlas_id).get() {
+            Ok(tlas) => tlas,
+            Err(_) => {
                 return;
             }
         };
