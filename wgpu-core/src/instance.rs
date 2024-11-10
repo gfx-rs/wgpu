@@ -412,13 +412,13 @@ impl Surface {
         &self,
         adapter: &hal::DynExposedAdapter,
     ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
+        let backend = adapter.backend();
         let suf = self
-            .raw(adapter.backend())
-            .ok_or(GetSurfaceSupportError::Unsupported)?;
+            .raw(backend)
+            .ok_or(GetSurfaceSupportError::NotSupportedByBackend(backend))?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe { adapter.adapter.surface_capabilities(suf) }
-            .ok_or(GetSurfaceSupportError::Unsupported)?;
-
+            .ok_or(GetSurfaceSupportError::FailedToRetrieveSurfaceCapabilitiesForAdapter)?;
         Ok(caps)
     }
 
@@ -649,8 +649,10 @@ crate::impl_storage_item!(Adapter);
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum GetSurfaceSupportError {
-    #[error("Surface is not supported by the adapter")]
-    Unsupported,
+    #[error("Surface is not supported for the specified backend {0}")]
+    NotSupportedByBackend(Backend),
+    #[error("Failed to retrieve surface capabilities for the specified adapter.")]
+    FailedToRetrieveSurfaceCapabilitiesForAdapter,
 }
 
 #[derive(Clone, Debug, Error)]

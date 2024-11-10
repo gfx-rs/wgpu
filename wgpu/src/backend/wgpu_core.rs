@@ -716,10 +716,7 @@ impl crate::Context for ContextWgpuCore {
             .surface_get_capabilities(surface_data.id, *adapter_data)
         {
             Ok(caps) => caps,
-            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
-                wgt::SurfaceCapabilities::default()
-            }
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
+            Err(_) => wgt::SurfaceCapabilities::default(),
         }
     }
 
