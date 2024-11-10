@@ -8,7 +8,11 @@ layout(set = 1, binding = 3) uniform texture2DArray tex2DArray;
 layout(set = 1, binding = 4) uniform textureCube texCube;
 layout(set = 1, binding = 5) uniform textureCubeArray texCubeArray;
 layout(set = 1, binding = 6) uniform texture3D tex3D;
-layout(set = 1, binding = 7) uniform sampler samp;
+
+layout(set = 1, binding = 7) uniform utexture2D utex2D;
+layout(set = 1, binding = 8) uniform itexture2D itex2D;
+
+layout(set = 2, binding = 0) uniform sampler samp;
 
 // WGSL doesn't have 1D depth samplers.
 #define HAS_1D_DEPTH_TEXTURES 0
@@ -42,6 +46,7 @@ void testTex1D(in float coord) {
     vec4 c;
     c = texture(sampler1D(tex1D, samp), coord);
     c = texture(sampler1D(tex1D, samp), coord, 2.0);
+    c = texture(usampler1D(utex1D, samp), coord);
     c = textureGrad(sampler1D(tex1D, samp), coord, 4.0, 4.0);
     c = textureGradOffset(sampler1D(tex1D, samp), coord, 4.0, 4.0, 5);
     c = textureLod(sampler1D(tex1D, samp), coord, 3.0);
@@ -129,16 +134,39 @@ void testTex2D(in vec2 coord) {
     vec4 c;
     c = texture(sampler2D(tex2D, samp), coord);
     c = texture(sampler2D(tex2D, samp), coord, 2.0);
+    c = vec4(texture(usampler2D(utex2D, samp), coord));
+    c = vec4(texture(usampler2D(utex2D, samp), coord, 2.0));
+    c = vec4(texture(isampler2D(itex2D, samp), coord));
+    c = vec4(texture(sampler2D(itex2D, samp), coord, 2.0));
+
     c = textureGrad(sampler2D(tex2D, samp), coord, vec2(4.0), vec2(4.0));
+    c = vec4(textureGrad(usampler2D(utex2D, samp), coord, vec2(4.0), vec2(4.0)));
+    c = vec4(textureGrad(isampler2D(itex2D, samp), coord, vec2(4.0), vec2(4.0)));
+
     c = textureGradOffset(sampler2D(tex2D, samp), coord, vec2(4.0), vec2(4.0), ivec2(5));
+    c = vec4(textureGradOffset(usampler2D(utex2D, samp), coord, vec2(4.0), vec2(4.0), ivec2(5)));
+    c = vec4(textureGradOffset(isampler2D(itex2D, samp), coord, vec2(4.0), vec2(4.0), ivec2(5)));
+
     c = textureLod(sampler2D(tex2D, samp), coord, 3.0);
+    c = vec4(textureLod(usampler2D(utex2D, samp), coord, 3.0));
+    c = vec4(textureLod(isampler2D(itex2D, samp), coord, 3.0));
+
     c = textureLodOffset(sampler2D(tex2D, samp), coord, 3.0, ivec2(5));
+    c = vec4(textureLodOffset(usampler2D(utex2D, samp), coord, 3.0, ivec2(5)));
+    c = vec4(textureLodOffset(isampler2D(itex2D, samp), coord, 3.0, ivec2(5)));
+
     c = textureOffset(sampler2D(tex2D, samp), coord, ivec2(5));
     c = textureOffset(sampler2D(tex2D, samp), coord, ivec2(5), 2.0);
+    c = vec4(textureOffset(usampler2D(utex2D, samp), coord, ivec2(5)));
+    c = vec4(textureOffset(usampler2D(utex2D, samp), coord, ivec2(5)), 2.0);
+    c = vec4(textureOffset(isampler2D(itex2D, samp), coord, ivec2(5)));
+    c = vec4(textureOffset(isampler2D(itex2D, samp), coord, ivec2(5)), 2.0);
+
     c = textureProj(sampler2D(tex2D, samp), vec3(coord, 6.0));
     c = textureProj(sampler2D(tex2D, samp), vec4(coord, 0.0, 6.0));
     c = textureProj(sampler2D(tex2D, samp), vec3(coord, 6.0), 2.0);
     c = textureProj(sampler2D(tex2D, samp), vec4(coord, 0.0, 6.0), 2.0);
+
     c = textureProjGrad(sampler2D(tex2D, samp), vec3(coord, 6.0), vec2(4.0), vec2(4.0));
     c = textureProjGrad(sampler2D(tex2D, samp), vec4(coord, 0.0, 6.0), vec2(4.0), vec2(4.0));
     c = textureProjGradOffset(sampler2D(tex2D, samp), vec3(coord, 6.0), vec2(4.0), vec2(4.0), ivec2(5));
