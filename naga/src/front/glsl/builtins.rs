@@ -462,77 +462,85 @@ fn inject_standard_builtins(
     module: &mut Module,
     name: &str,
 ) {
-    let kind = match &name[0..1] {
-        "u" => Sk::Uint,
-        "i" => Sk::Sint,
-        _ => Sk::Float
+    let sampler_info = if name.starts_with("sampler") {
+        Some((name, Sk::Float))
+    } else if name.starts_with("usampler") {
+        Some((&name[1..], Sk::Uint))
+    } else if name.starts_with("isampler") {
+        Some((&name[1..], Sk::Sint))
+    } else {
+        None
     };
-    match name {
-        "usampler1D" | "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
-        | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
-            declaration.overloads.push(module.add_builtin(
-                vec![
-                    TypeInner::Image {
-                        dim: match name {
-                            "usampler1D" | "sampler1D" | "sampler1DArray" => Dim::D1,
-                            "sampler2D" | "sampler2DArray" | "sampler2DMS" | "sampler2DMSArray" => {
-                                Dim::D2
-                            }
-                            "sampler3D" => Dim::D3,
-                            _ => Dim::Cube,
-                        },
-                        arrayed: matches!(
-                            name,
-                            "sampler1DArray"
-                                | "sampler2DArray"
-                                | "sampler2DMSArray"
-                                | "samplerCubeArray"
-                        ),
-                        class: ImageClass::Sampled {
-                            kind,
-                            multi: matches!(name, "sampler2DMS" | "sampler2DMSArray"),
-                        },
-                    },
-                    TypeInner::Sampler { comparison: false },
-                ],
-                MacroCall::Sampler,
-            ))
-        }
-        "sampler1DShadow"
-        | "sampler1DArrayShadow"
-        | "sampler2DShadow"
-        | "sampler2DArrayShadow"
-        | "samplerCubeShadow"
-        | "samplerCubeArrayShadow" => {
-            let dim = match name {
-                "sampler1DShadow" | "sampler1DArrayShadow" => Dim::D1,
-                "sampler2DShadow" | "sampler2DArrayShadow" => Dim::D2,
-                _ => Dim::Cube,
-            };
-            let arrayed = matches!(
-                name,
-                "sampler1DArrayShadow" | "sampler2DArrayShadow" | "samplerCubeArrayShadow"
-            );
 
-            for i in 0..2 {
-                let ty = TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class: match i {
-                        0 => ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: false,
-                        },
-                        _ => ImageClass::Depth { multi: false },
-                    },
-                };
-
+    if let Some((sampler, kind)) = sampler_info {
+        match sampler {
+            "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
+            | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
                 declaration.overloads.push(module.add_builtin(
-                    vec![ty, TypeInner::Sampler { comparison: true }],
-                    MacroCall::SamplerShadow,
+                    vec![
+                        TypeInner::Image {
+                            dim: match sampler {
+                                "sampler1D" | "sampler1DArray" => Dim::D1,
+                                "sampler2D" | "sampler2DArray" | "sampler2DMS"
+                                | "sampler2DMSArray" => Dim::D2,
+                                "sampler3D" => Dim::D3,
+                                _ => Dim::Cube,
+                            },
+                            arrayed: matches!(
+                                sampler,
+                                "sampler1DArray"
+                                    | "sampler2DArray"
+                                    | "sampler2DMSArray"
+                                    | "samplerCubeArray"
+                            ),
+                            class: ImageClass::Sampled {
+                                kind,
+                                multi: matches!(sampler, "sampler2DMS" | "sampler2DMSArray"),
+                            },
+                        },
+                        TypeInner::Sampler { comparison: false },
+                    ],
+                    MacroCall::Sampler,
                 ))
             }
+            "sampler1DShadow"
+            | "sampler1DArrayShadow"
+            | "sampler2DShadow"
+            | "sampler2DArrayShadow"
+            | "samplerCubeShadow"
+            | "samplerCubeArrayShadow" => {
+                let dim = match sampler {
+                    "sampler1DShadow" | "sampler1DArrayShadow" => Dim::D1,
+                    "sampler2DShadow" | "sampler2DArrayShadow" => Dim::D2,
+                    _ => Dim::Cube,
+                };
+                let arrayed = matches!(
+                    sampler,
+                    "sampler1DArrayShadow" | "sampler2DArrayShadow" | "samplerCubeArrayShadow"
+                );
+
+                for i in 0..2 {
+                    let ty = TypeInner::Image {
+                        dim,
+                        arrayed,
+                        class: match i {
+                            0 => ImageClass::Sampled { kind, multi: false },
+                            _ => ImageClass::Depth { multi: false },
+                        },
+                    };
+
+                    declaration.overloads.push(module.add_builtin(
+                        vec![ty, TypeInner::Sampler { comparison: true }],
+                        MacroCall::SamplerShadow,
+                    ))
+                }
+            }
+            _ => unreachable!(),
         }
+        return;
+    }
+
+    match name {
         "sin" | "exp" | "exp2" | "sinh" | "cos" | "cosh" | "tan" | "tanh" | "acos" | "asin"
         | "log" | "log2" | "radians" | "degrees" | "asinh" | "acosh" | "atanh"
         | "floatBitsToInt" | "floatBitsToUint" | "dFdx" | "dFdxFine" | "dFdxCoarse" | "dFdy"
