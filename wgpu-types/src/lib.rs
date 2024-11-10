@@ -221,6 +221,7 @@ pub struct RequestAdapterOptions<S> {
     pub force_fallback_adapter: bool,
     /// Surface that is required to be presentable with the requested adapter. This does not
     /// create the surface, only guarantees that the adapter can present to said surface.
+    /// For WebGL, this is strictly required, as an adapter can not be created without a surface.
     pub compatible_surface: Option<S>,
 }
 
