@@ -2262,7 +2262,8 @@ impl crate::Adapter for super::Adapter {
                 Ok(present_modes) => present_modes,
                 Err(e) => {
                     log::error!("get_physical_device_surface_present_modes: {}", e);
-                    Vec::new()
+                    // Per definition of `SurfaceCapabilities`, there must be at least one present mode.
+                    return None;
                 }
             }
         };
@@ -2277,7 +2278,8 @@ impl crate::Adapter for super::Adapter {
                 Ok(formats) => formats,
                 Err(e) => {
                     log::error!("get_physical_device_surface_formats: {}", e);
-                    Vec::new()
+                    // Per definition of `SurfaceCapabilities`, there must be at least one present format.
+                    return None;
                 }
             }
         };
