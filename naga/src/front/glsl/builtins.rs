@@ -462,14 +462,19 @@ fn inject_standard_builtins(
     module: &mut Module,
     name: &str,
 ) {
+    let kind = match &name[0..1] {
+        "u" => Sk::Uint,
+        "i" => Sk::Sint,
+        _ => Sk::Float
+    };
     match name {
-        "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
+        "usampler1D" | "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
         | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
             declaration.overloads.push(module.add_builtin(
                 vec![
                     TypeInner::Image {
                         dim: match name {
-                            "sampler1D" | "sampler1DArray" => Dim::D1,
+                            "usampler1D" | "sampler1D" | "sampler1DArray" => Dim::D1,
                             "sampler2D" | "sampler2DArray" | "sampler2DMS" | "sampler2DMSArray" => {
                                 Dim::D2
                             }
@@ -484,7 +489,7 @@ fn inject_standard_builtins(
                                 | "samplerCubeArray"
                         ),
                         class: ImageClass::Sampled {
-                            kind: Sk::Float,
+                            kind,
                             multi: matches!(name, "sampler2DMS" | "sampler2DMSArray"),
                         },
                     },
