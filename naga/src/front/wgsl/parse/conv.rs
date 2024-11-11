@@ -230,6 +230,7 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "inverseSqrt" => Mf::InverseSqrt,
         "transpose" => Mf::Transpose,
         "determinant" => Mf::Determinant,
+        "quantizeToF16" => Mf::QuantizeToF16,
         // bits
         "countTrailingZeros" => Mf::CountTrailingZeros,
         "countLeadingZeros" => Mf::CountLeadingZeros,

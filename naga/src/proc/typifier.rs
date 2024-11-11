@@ -665,7 +665,8 @@ impl<'a> ResolveContext<'a> {
                     | Mf::Exp2
                     | Mf::Log
                     | Mf::Log2
-                    | Mf::Pow => res_arg.clone(),
+                    | Mf::Pow
+                    | Mf::QuantizeToF16 => res_arg.clone(),
                     Mf::Modf | Mf::Frexp => {
                         let (size, width) = match res_arg.inner_with(types) {
                             &Ti::Scalar(crate::Scalar {

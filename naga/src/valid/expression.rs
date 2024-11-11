@@ -1363,6 +1363,26 @@ impl super::Validator {
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }
+                    Mf::QuantizeToF16 => {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Scalar(Sc {
+                                kind: Sk::Float,
+                                width: 4,
+                            })
+                            | Ti::Vector {
+                                scalar:
+                                    Sc {
+                                        kind: Sk::Float,
+                                        width: 4,
+                                    },
+                                ..
+                            } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
                     // Remove once fixed https://github.com/gfx-rs/wgpu/issues/5276
                     Mf::CountLeadingZeros
                     | Mf::CountTrailingZeros

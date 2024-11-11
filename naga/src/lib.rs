@@ -1199,6 +1199,7 @@ pub enum MathFunction {
     Inverse,
     Transpose,
     Determinant,
+    QuantizeToF16,
     // bits
     CountTrailingZeros,
     CountLeadingZeros,
