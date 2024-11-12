@@ -91,7 +91,7 @@ pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 /// Alignment all push constants need
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
 /// Maximum queries in a query set
-pub const QUERY_SET_MAX_QUERIES: u32 = 8192;
+pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
 /// Size of a single piece of query data.
 pub const QUERY_SIZE: u32 = 8;
 

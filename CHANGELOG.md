@@ -129,6 +129,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 - Ensure that `Features::TIMESTAMP_QUERY` is set when using timestamp writes in render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497).
 - Check for device mismatches when beginning render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497). 
+- Lower `QUERY_SET_MAX_QUERIES` (and enforced limits) from 8192 to 4096 to match WebGPU spec. By @ErichDonGubler in [#6525](https://github.com/gfx-rs/wgpu/pull/6525).
 
 ## 23.0.0 (2024-10-25)
 
