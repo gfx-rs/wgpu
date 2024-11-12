@@ -39,12 +39,21 @@ pub enum ExpressionError {
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
     InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
-    #[error("Operation {0:?} can't work with {1:?} and {2:?}")]
-    InvalidBinaryOperandTypes(
-        crate::BinaryOperator,
-        Handle<crate::Expression>,
-        Handle<crate::Expression>,
-    ),
+    #[error(
+        "Operation {:?} can't work with {:?} (of type {:?}) and {:?} (of type {:?})",
+        op,
+        lhs_expr,
+        lhs_type,
+        rhs_expr,
+        rhs_type
+    )]
+    InvalidBinaryOperandTypes {
+        op: crate::BinaryOperator,
+        lhs_expr: Handle<crate::Expression>,
+        lhs_type: crate::TypeInner,
+        rhs_expr: Handle<crate::Expression>,
+        rhs_type: crate::TypeInner,
+    },
     #[error("Selecting is not possible")]
     InvalidSelectTypes,
     #[error("Relational argument {0:?} is not a boolean vector")]
@@ -847,7 +856,13 @@ impl super::Validator {
                         function.expressions[right],
                         right_inner
                     );
-                    return Err(ExpressionError::InvalidBinaryOperandTypes(op, left, right));
+                    return Err(ExpressionError::InvalidBinaryOperandTypes {
+                        op,
+                        lhs_expr: left,
+                        lhs_type: left_inner.clone(),
+                        rhs_expr: right,
+                        rhs_type: right_inner.clone(),
+                    });
                 }
                 ShaderStages::all()
             }
@@ -1360,6 +1375,26 @@ impl super::Validator {
                         }
                         match *arg_ty {
                             Ti::Matrix { .. } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
+                    Mf::QuantizeToF16 => {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Scalar(Sc {
+                                kind: Sk::Float,
+                                width: 4,
+                            })
+                            | Ti::Vector {
+                                scalar:
+                                    Sc {
+                                        kind: Sk::Float,
+                                        width: 4,
+                                    },
+                                ..
+                            } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }

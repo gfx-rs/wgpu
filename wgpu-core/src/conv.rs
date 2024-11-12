@@ -93,6 +93,14 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         hal::BufferUses::QUERY_RESOLVE,
         usage.contains(wgt::BufferUsages::QUERY_RESOLVE),
     );
+    u.set(
+        hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+        usage.contains(wgt::BufferUsages::BLAS_INPUT),
+    );
+    u.set(
+        hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+        usage.contains(wgt::BufferUsages::TLAS_INPUT),
+    );
     u
 }
 

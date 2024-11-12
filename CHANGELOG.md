@@ -40,12 +40,69 @@ Bottom level categories:
 
 ## Unreleased
 
+## Major changes
+
+### The `diagnostic(…);` directive is now supported in WGSL
+
+Naga now parses `diagnostic(…);` directives according to the WGSL spec. This allows users to control certain lints, similar to Rust's `allow`, `warn`, and `deny` attributes. For example, in standard WGSL (but, notably, not Naga yet—see <https://github.com/gfx-rs/wgpu/issues/4369>) this snippet would emit a uniformity error:
+
+```wgsl
+@group(0) @binding(0) var s : sampler;
+@group(0) @binding(2) var tex : texture_2d<f32>;
+@group(1) @binding(0) var<storage, read> ro_buffer : array<f32, 4>;
+
+@fragment
+fn main(@builtin(position) p : vec4f) -> @location(0) vec4f {
+  if ro_buffer[0] == 0 {
+    // Emits a derivative uniformity error during validation.
+    return textureSample(tex, s, vec2(0.,0.));
+  }
+
+  return vec4f(0.);
+}
+```
+
+…but we can now silence it with the `off` severity level, like so:
+
+```wgsl
+// Disable the diagnosic with this…
+diagnostic(off, derivative_uniformity);
+
+@group(0) @binding(0) var s : sampler;
+@group(0) @binding(2) var tex : texture_2d<f32>;
+@group(1) @binding(0) var<storage, read> ro_buffer : array<f32, 4>;
+
+@fragment
+fn main(@builtin(position) p : vec4f) -> @location(0) vec4f {
+  if ro_buffer[0] == 0 {
+    // Look ma, no error!
+    return textureSample(tex, s, vec2(0.,0.));
+  }
+
+  return vec4f(0.);
+}
+```
+
+There are some limitations to keep in mind with this new functionality:
+
+- We do not yet support `diagnostic(…)` rules in attribute position (i.e., `@diagnostic(…) fn my_func { … }`). This is being tracked in <https://github.com/gfx-rs/wgpu/issues/5320>. We expect that rules in `fn` attribute position will be relaxed shortly (see <https://github.com/gfx-rs/wgpu/pull/6353>), but the prioritization for statement positions is unclear. If you are blocked by not being able to parse `diagnostic(…)` rules in statement positions, please let us know in that issue, so we can determine how to prioritize it!
+- Standard WGSL specifies `error`, `warning`, `info`, and `off` severity levels. These are all technically usable now! A caveat, though: warning- and info-level are only emitted to `stderr` via the `log` façade, rather than being reported through a `Result::Err` in Naga or the `CompilationInfo` interface in `wgpu{,-core}`. This will require breaking changes in Naga to fix, and is being tracked by <https://github.com/gfx-rs/wgpu/issues/6458>.
+- Not all lints can be controlled with `diagnostic(…)` rules. In fact, only the `derivative_uniformity` triggering rule exists in the WGSL standard. That said, Naga contributors are excited to see how this level of control unlocks a new ecosystem of configurable diagnostics.
+- Finally, `diagnostic(…)` rules are not yet emitted in WGSL output. This means that `wgsl-in` → `wgsl-out` is currently a lossy process. We felt that it was important to unblock users who needed `diagnostic(…)` rules (i.e., <https://github.com/gfx-rs/wgpu/issues/3135>) before we took significant effort to fix this (tracked in <https://github.com/gfx-rs/wgpu/issues/6496>).
+
+By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148](https://github.com/gfx-rs/wgpu/pull/6148).
+
 ### New Features
 
 #### Naga
 
-- Parse `diagnostic(…)` directives, but don't implement any triggering rules yet. By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456).
 - Fix an issue where `naga` CLI would incorrectly skip the first positional argument when `--stdin-file-path` was specified. By @ErichDonGubler in [#6480](https://github.com/gfx-rs/wgpu/pull/6480).
+- Fix textureNumLevels in the GLSL backend. By @magcius in [#6483](https://github.com/gfx-rs/wgpu/pull/6483).
+- Implement `quantizeToF16()` for WGSL frontend, and WGSL, SPIR-V, HLSL, MSL, and GLSL backends. By @jamienicol in [#6519](https://github.com/gfx-rs/wgpu/pull/6519).
+
+#### General
+
+- Return submission index in `map_async` and `on_submitted_work_done` to track down completion of async callbacks. By @eliemichel in [#6360](https://github.com/gfx-rs/wgpu/pull/6360).
 
 #### Vulkan
 
@@ -57,9 +114,34 @@ Bottom level categories:
 
 ### Changes
 
+#### Naga
+
+- Show types of LHS and RHS in binary operation type mismatch errors. By @ErichDonGubler in [#6450](https://github.com/gfx-rs/wgpu/pull/6450).
+
+#### General
+
+- Make `Surface::as_hal` take an immutable reference to the surface. By @jerzywilczek in [#9999](https://github.com/gfx-rs/wgpu/pull/9999)
+
 #### HAL
 
 - Change the `DropCallback` API to use `FnOnce` instead of `FnMut`. By @jerzywilczek in [#6482](https://github.com/gfx-rs/wgpu/pull/6482)
+
+### Bug Fixes
+
+#### General
+
+- Handle query set creation failure as an internal error that loses the `Device`, rather than panicking. By @ErichDonGubler in [#6505](https://github.com/gfx-rs/wgpu/pull/6505).
+
+#### Naga
+
+- Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
+- Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
+
+#### General
+
+- Ensure that `Features::TIMESTAMP_QUERY` is set when using timestamp writes in render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497).
+- Check for device mismatches when beginning render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497). 
+- Lower `QUERY_SET_MAX_QUERIES` (and enforced limits) from 8192 to 4096 to match WebGPU spec. By @ErichDonGubler in [#6525](https://github.com/gfx-rs/wgpu/pull/6525).
 
 ## 23.0.0 (2024-10-25)
 
@@ -75,7 +157,7 @@ This may not sound exciting, but let us convince you otherwise! All major web br
 
 WGPU also benefits from standard, portable behavior in the same way as web browsers. Because of this behavior, it's generally fairly easy to port over usage of WebGPU in JavaScript to WGPU. It is also what lets WGPU go full circle: WGPU can be an implementation of WebGPU on native targets, but _also_ it can use _other implementations of WebGPU_ as a backend in JavaScript when compiled to WASM. Therefore, the same dynamic applies: if WGPU's own behavior were significantly different, then WGPU and end users would be _sad, sad humans_ as soon as they discover places where their nice apps are breaking, right?
 
-The answer is: yes, we _do_ have sad, sad humans that really want their WGPU code to work _everywhere_. As Firefox and others use WGPU to implement WebGPU, the above example of Firefox diverging from standard is, unfortunately, today's reality. It _mostly_ behaves the same as a standards-compliant WebGPU, but it still doesn't in many important ways. Of particular note is Naga, its implementation of the WebGPU Shader Language. Shaders are pretty much a black-and-white point of failure in GPU programming; if they don't compile, then you can't use the rest of the API! And yet, it's extremely easy to run into this:
+The answer is: yes, we _do_ have sad, sad humans that really want their WGPU code to work _everywhere_. As Firefox and others use WGPU to implement WebGPU, the above example of Firefox diverging from standard is, unfortunately, today's reality. It _mostly_ behaves the same as a standards-compliant WebGPU, but it still doesn't in many important ways. Of particular note is Naga, its implementation of the WebGPU Shader Language. Shaders are pretty much a black-and-white point of failure in GPU programming; if they don't compile, then you can't use the rest of the API! And yet, it's extremely easy to run into a case like that from <https://github.com/gfx-rs/wgpu/issues/4400>:
 
 ```wgsl
 fn gimme_a_float() -> f32 {
@@ -183,6 +265,10 @@ WGPU has retired the `d3d12` crate (based on `winapi`), and now uses the `window
 By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
 
 ### New Features
+
+#### Wgpu
+
+- Added initial acceleration structure and ray query support into wgpu. By @expenses @daniel-keitel @Vecvec @JMS55 @atlv24 in [#6291](https://github.com/gfx-rs/wgpu/pull/6291)
 
 #### Naga
 

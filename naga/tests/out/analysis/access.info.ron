@@ -1191,6 +1191,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2516,6 +2517,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2555,6 +2557,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2603,6 +2606,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2645,6 +2649,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2738,6 +2743,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2789,6 +2795,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2843,6 +2850,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2894,6 +2902,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2948,6 +2957,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -3623,6 +3633,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -4074,6 +4085,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -4194,6 +4206,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -4257,6 +4270,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
     ],
     const_expression_types: [

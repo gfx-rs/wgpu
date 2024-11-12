@@ -1075,14 +1075,7 @@ impl crate::Device for super::Device {
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
 
-        let alignment_mask = if desc.usage.intersects(
-            crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
-                | crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-        ) {
-            16
-        } else {
-            req.alignment
-        } - 1;
+        let alignment_mask = req.alignment - 1;
 
         let block = unsafe {
             self.mem_allocator.lock().alloc(

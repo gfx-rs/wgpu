@@ -1,4 +1,4 @@
-use crate::diagnostic_filter::FilterableTriggeringRule;
+use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, UnimplementedEnableExtension,
 };
@@ -295,10 +295,13 @@ pub(crate) enum Error<'a> {
     DiagnosticInvalidSeverity {
         severity_control_name_span: Span,
     },
-    DiagnosticNotYetImplemented {
-        triggering_rule: FilterableTriggeringRule,
-        span: Span,
-    },
+    DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError),
+}
+
+impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
+    fn from(value: ConflictingDiagnosticRuleError) -> Self {
+        Self::DiagnosticDuplicateTriggeringRule(value)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1017,24 +1020,29 @@ impl<'a> Error<'a> {
                 )
                 .into()],
             },
-            Error::DiagnosticNotYetImplemented {
+            Error::DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError {
                 triggering_rule,
-                span,
-            } => ParseError {
-                message: format!(
-                    "the `{}` diagnostic filter is not yet supported",
-                    triggering_rule.to_ident()
-                ),
-                labels: vec![(span, "".into())],
-                notes: vec![format!(
-                    concat!(
-                        "Let Naga maintainers know that you ran into this at ",
-                        "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
-                        "so they can prioritize it!"
+                triggering_rule_spans,
+            }) => {
+                let [first_span, second_span] = triggering_rule_spans;
+                ParseError {
+                    message: format!(
+                        "found conflicting `diagnostic(…)` rule(s) for `{}`",
+                        triggering_rule.to_ident()
                     ),
-                    triggering_rule.tracking_issue_num()
-                )],
-            },
+                    labels: vec![
+                        (first_span, "first rule".into()),
+                        (second_span, "second rule".into()),
+                    ],
+                    notes: vec![concat!(
+                        "multiple `diagnostic(…)` rules with the same rule name ",
+                        "conflict unless the severity is the same; ",
+                        "delete the rule you don't want, or ",
+                        "ensure that all severities with the same rule name match"
+                    )
+                    .into()],
+                }
+            }
         }
     }
 }

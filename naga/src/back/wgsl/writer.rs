@@ -1723,6 +1723,7 @@ impl<W: Write> Writer<W> {
                     Mf::InverseSqrt => Function::Regular("inverseSqrt"),
                     Mf::Transpose => Function::Regular("transpose"),
                     Mf::Determinant => Function::Regular("determinant"),
+                    Mf::QuantizeToF16 => Function::Regular("quantizeToF16"),
                     // bits
                     Mf::CountTrailingZeros => Function::Regular("countTrailingZeros"),
                     Mf::CountLeadingZeros => Function::Regular("countLeadingZeros"),

@@ -2,6 +2,8 @@ use std::{error, fmt, future::Future, sync::Arc, thread};
 
 use parking_lot::Mutex;
 
+use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, BlasShared, CreateBlasDescriptor};
+use crate::api::tlas::{CreateTlasDescriptor, Tlas};
 use crate::context::DynContext;
 use crate::*;
 
@@ -510,6 +512,64 @@ impl Device {
         PipelineCache {
             context: Arc::clone(&self.context),
             data,
+        }
+    }
+}
+
+/// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
+impl Device {
+    /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
+    /// - `desc`: The descriptor of the acceleration structure.
+    /// - `sizes`: Size descriptor limiting what can be built into the acceleration structure.
+    ///
+    /// # Validation
+    /// If any of the following is not satisfied a validation error is generated
+    ///
+    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
+    /// if `sizes` is [BlasGeometrySizeDescriptors::Triangles] then the following must be satisfied
+    /// - For every geometry descriptor (for the purposes this is called `geo_desc`) of `sizes.descriptors` the following must be satisfied:
+    ///     - `geo_desc.vertex_format` must be within allowed formats (allowed formats for a given feature set
+    /// may be queried with [Features::allowed_vertex_formats_for_blas]).
+    ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
+    ///
+    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [Features::allowed_vertex_formats_for_blas]: wgt::Features::allowed_vertex_formats_for_blas
+    #[must_use]
+    pub fn create_blas(
+        &self,
+        desc: &CreateBlasDescriptor<'_>,
+        sizes: BlasGeometrySizeDescriptors,
+    ) -> Blas {
+        let (handle, data) =
+            DynContext::device_create_blas(&*self.context, self.data.as_ref(), desc, sizes);
+
+        Blas {
+            #[allow(clippy::arc_with_non_send_sync)]
+            shared: Arc::new(BlasShared {
+                context: Arc::clone(&self.context),
+                data,
+            }),
+            handle,
+        }
+    }
+
+    /// Create a top level acceleration structure, used for ray tracing.
+    /// - `desc`: The descriptor of the acceleration structure.
+    ///
+    /// # Validation
+    /// If any of the following is not satisfied a validation error is generated
+    ///
+    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
+    ///
+    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    #[must_use]
+    pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
+        let data = DynContext::device_create_tlas(&*self.context, self.data.as_ref(), desc);
+
+        Tlas {
+            context: Arc::clone(&self.context),
+            data,
+            max_instances: desc.max_instances,
         }
     }
 }

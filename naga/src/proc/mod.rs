@@ -478,6 +478,7 @@ impl super::MathFunction {
             Self::Inverse => 1,
             Self::Transpose => 1,
             Self::Determinant => 1,
+            Self::QuantizeToF16 => 1,
             // bits
             Self::CountTrailingZeros => 1,
             Self::CountLeadingZeros => 1,

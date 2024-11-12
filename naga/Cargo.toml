@@ -77,7 +77,7 @@ indexmap.workspace = true
 log = "0.4"
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.213", features = ["derive"], optional = true }
+serde = { version = "1.0.214", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }

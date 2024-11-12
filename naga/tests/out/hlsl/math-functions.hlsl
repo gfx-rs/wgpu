@@ -101,4 +101,8 @@ void main()
     float frexp_b = naga_frexp(1.5).fract;
     int frexp_c = naga_frexp(1.5).exp_;
     int frexp_d = naga_frexp(float4(1.5, 1.5, 1.5, 1.5)).exp_.x;
+    float quantizeToF16_a = f16tof32(f32tof16(1.0));
+    float2 quantizeToF16_b = f16tof32(f32tof16(float2(1.0, 1.0)));
+    float3 quantizeToF16_c = f16tof32(f32tof16(float3(1.0, 1.0, 1.0)));
+    float4 quantizeToF16_d = f16tof32(f32tof16(float4(1.0, 1.0, 1.0, 1.0)));
 }

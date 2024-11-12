@@ -732,6 +732,7 @@ impl Global {
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
                 sampler_storage: &Storage<Fallible<resource::Sampler>>,
                 texture_view_storage: &Storage<Fallible<resource::TextureView>>,
+                tlas_storage: &Storage<Fallible<resource::Tlas>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
@@ -753,6 +754,12 @@ impl Global {
                 };
                 let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
+                };
+                let resolve_tlas = |id: &id::TlasId| {
+                    tlas_storage
                         .get(*id)
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
@@ -788,6 +795,9 @@ impl Global {
                             .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
+                    BindingResource::AccelerationStructure(ref tlas) => {
+                        ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
+                    }
                 };
                 Ok(ResolvedBindGroupEntry {
                     binding: e.binding,
@@ -799,9 +809,18 @@ impl Global {
                 let buffer_guard = hub.buffers.read();
                 let texture_view_guard = hub.texture_views.read();
                 let sampler_guard = hub.samplers.read();
+                let tlas_guard = hub.tlas_s.read();
                 desc.entries
                     .iter()
-                    .map(|e| resolve_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard))
+                    .map(|e| {
+                        resolve_entry(
+                            e,
+                            &buffer_guard,
+                            &sampler_guard,
+                            &texture_view_guard,
+                            &tlas_guard,
+                        )
+                    })
                     .collect::<Result<Vec<_>, _>>()
             };
             let entries = match entries {
@@ -2147,33 +2166,27 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
         op: BufferMapOperation,
-    ) -> BufferAccessResult {
+    ) -> Result<crate::SubmissionIndex, BufferAccessError> {
         profiling::scope!("Buffer::map_async");
         api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 
         let hub = &self.hub;
 
-        let op_and_err = 'error: {
-            let buffer = match hub.buffers.get(buffer_id).get() {
-                Ok(buffer) => buffer,
-                Err(e) => break 'error Some((op, e.into())),
-            };
-
-            buffer.map_async(offset, size, op).err()
+        let map_result = match hub.buffers.get(buffer_id).get() {
+            Ok(buffer) => buffer.map_async(offset, size, op),
+            Err(e) => Err((op, e.into())),
         };
 
-        // User callbacks must not be called while holding `buffer.map_async`'s locks, so we
-        // defer the error callback if it needs to be called immediately (typically when running
-        // into errors).
-        if let Some((mut operation, err)) = op_and_err {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(Err(err.clone()));
+        match map_result {
+            Ok(submission_index) => Ok(submission_index),
+            Err((mut operation, err)) => {
+                if let Some(callback) = operation.callback.take() {
+                    callback.call(Err(err.clone()));
+                }
+                log::error!("Buffer::map_async error: {err}");
+                Err(err)
             }
-            log::error!("Buffer::map_async error: {err}");
-            return Err(err);
         }
-
-        Ok(())
     }
 
     pub fn buffer_get_mapped_range(

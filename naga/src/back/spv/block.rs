@@ -1032,6 +1032,12 @@ impl<'w> BlockContext<'w> {
                         arg0_id,
                     )),
                     Mf::Determinant => MathOp::Ext(spirv::GLOp::Determinant),
+                    Mf::QuantizeToF16 => MathOp::Custom(Instruction::unary(
+                        spirv::Op::QuantizeToF16,
+                        result_type_id,
+                        id,
+                        arg0_id,
+                    )),
                     Mf::ReverseBits => MathOp::Custom(Instruction::unary(
                         spirv::Op::BitReverse,
                         result_type_id,

@@ -1936,6 +1936,7 @@ impl<W: Write> Writer<W> {
                     Mf::Inverse => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
+                    Mf::QuantizeToF16 => "",
                     // bits
                     Mf::CountTrailingZeros => "ctz",
                     Mf::CountLeadingZeros => "clz",
@@ -2143,6 +2144,22 @@ impl<W: Write> Writer<W> {
                         write!(self.out, " >> 16, ")?;
                         self.put_expression(arg, context, true)?;
                         write!(self.out, " >> 24) << 24 >> 24")?;
+                    }
+                    Mf::QuantizeToF16 => {
+                        match *context.resolve_type(arg) {
+                            crate::TypeInner::Scalar { .. } => write!(self.out, "float(half(")?,
+                            crate::TypeInner::Vector { size, .. } => write!(
+                                self.out,
+                                "{NAMESPACE}::float{size}({NAMESPACE}::half{size}(",
+                                size = back::vector_size_str(size),
+                            )?,
+                            _ => unreachable!(
+                                "Correct TypeInner for QuantizeToF16 should be already validated"
+                            ),
+                        };
+
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "))")?;
                     }
                     _ => {
                         write!(self.out, "{NAMESPACE}::{fun_name}")?;

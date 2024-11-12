@@ -7,6 +7,7 @@ mod regression {
     mod issue_4514;
     mod issue_5553;
     mod issue_6317;
+    mod issue_6467;
 }
 
 mod bgra8unorm_storage;
@@ -36,6 +37,7 @@ mod poll;
 mod push_constants;
 mod query_set;
 mod queue_transfer;
+mod ray_tracing;
 mod render_pass_ownership;
 mod resource_descriptor_accessor;
 mod resource_error;

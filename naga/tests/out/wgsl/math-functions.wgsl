@@ -32,4 +32,8 @@ fn main() {
     let frexp_b = frexp(1.5f).fract;
     let frexp_c = frexp(1.5f).exp;
     let frexp_d = frexp(vec4<f32>(1.5f, 1.5f, 1.5f, 1.5f)).exp.x;
+    let quantizeToF16_a = quantizeToF16(1f);
+    let quantizeToF16_b = quantizeToF16(vec2<f32>(1f, 1f));
+    let quantizeToF16_c = quantizeToF16(vec3<f32>(1f, 1f, 1f));
+    let quantizeToF16_d = quantizeToF16(vec4<f32>(1f, 1f, 1f, 1f));
 }
