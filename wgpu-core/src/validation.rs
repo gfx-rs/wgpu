@@ -497,7 +497,10 @@ impl Resource {
         Ok(())
     }
 
-    fn derive_binding_type(&self) -> Result<BindingType, BindingError> {
+    fn derive_binding_type(
+        &self,
+        is_reffed_by_sampler_in_entrypoint: bool,
+    ) -> Result<BindingType, BindingError> {
         Ok(match self.ty {
             ResourceType::Buffer { size } => BindingType::Buffer {
                 ty: match self.class {
@@ -531,9 +534,9 @@ impl Resource {
                 match class {
                     naga::ImageClass::Sampled { multi, kind } => BindingType::Texture {
                         sample_type: match kind {
-                            naga::ScalarKind::Float => {
-                                wgt::TextureSampleType::Float { filterable: true }
-                            }
+                            naga::ScalarKind::Float => wgt::TextureSampleType::Float {
+                                filterable: is_reffed_by_sampler_in_entrypoint,
+                            },
                             naga::ScalarKind::Sint => wgt::TextureSampleType::Sint,
                             naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
                             naga::ScalarKind::AbstractInt
@@ -1009,7 +1012,12 @@ impl Interface {
                             break 'err Err(BindingError::Missing);
                         };
 
-                        let ty = match res.derive_binding_type() {
+                        let ty = match res.derive_binding_type(
+                            entry_point
+                                .sampling_pairs
+                                .iter()
+                                .any(|&(im, _samp)| im == handle),
+                        ) {
                             Ok(ty) => ty,
                             Err(error) => break 'err Err(error),
                         };
