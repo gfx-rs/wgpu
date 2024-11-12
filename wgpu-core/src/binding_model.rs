@@ -142,11 +142,18 @@ pub enum CreateBindGroupError {
         layout_multisampled: bool,
         view_samples: u32,
     },
-    #[error("Texture binding {binding} expects sample type = {layout_sample_type:?}, but given a view with format = {view_format:?}")]
+    #[error(
+        "Texture binding {} expects sample type = {:?}, but given a view with format = {:?} (sample type = {:?})",
+        binding,
+        layout_sample_type,
+        view_format,
+        view_sample_type
+    )]
     InvalidTextureSampleType {
         binding: u32,
         layout_sample_type: wgt::TextureSampleType,
         view_format: wgt::TextureFormat,
+        view_sample_type: wgt::TextureSampleType,
     },
     #[error("Texture binding {binding} expects dimension = {layout_dimension:?}, but given a view with dimension = {view_dimension:?}")]
     InvalidTextureDimension {

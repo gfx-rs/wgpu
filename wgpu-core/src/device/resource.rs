@@ -2519,6 +2519,7 @@ impl Device {
                             binding,
                             layout_sample_type: sample_type,
                             view_format: view.desc.format,
+                            view_sample_type: compat_sample_type,
                         })
                     }
                 }
