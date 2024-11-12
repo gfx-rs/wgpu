@@ -106,7 +106,7 @@ pub enum ExpressionError {
     InvalidGatherComponent(crate::SwizzleComponent),
     #[error("Gather can't be done for image dimension {0:?}")]
     InvalidGatherDimension(crate::ImageDimension),
-    #[error("Sample level (exact) type {0:?} is not a scalar float")]
+    #[error("Sample level (exact) type {0:?} has an invalid type")]
     InvalidSampleLevelExactType(Handle<crate::Expression>),
     #[error("Sample level (bias) type {0:?} is not a scalar float")]
     InvalidSampleLevelBiasType(Handle<crate::Expression>),
@@ -530,11 +530,24 @@ impl super::Validator {
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
                     crate::SampleLevel::Zero => ShaderStages::all(),
                     crate::SampleLevel::Exact(expr) => {
-                        match resolver[expr] {
-                            Ti::Scalar(Sc {
-                                kind: Sk::Float, ..
-                            }) => {}
-                            _ => return Err(ExpressionError::InvalidSampleLevelExactType(expr)),
+                        match class {
+                            crate::ImageClass::Depth { .. } => match resolver[expr] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    ..
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidSampleLevelExactType(expr))
+                                }
+                            },
+                            _ => match resolver[expr] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Float, ..
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidSampleLevelExactType(expr))
+                                }
+                            },
                         }
                         ShaderStages::all()
                     }
