@@ -1209,6 +1209,13 @@ impl Queue {
                             }
                         }
 
+                        if first_error.is_some() {
+                            if let Ok(cmd_buf_data) = cmd_buf_data {
+                                cmd_buf_data.destroy(&command_buffer.device);
+                            }
+                            continue;
+                        }
+
                         let mut baked = match cmd_buf_data {
                             Ok(cmd_buf_data) => {
                                 let res = validate_command_buffer(
@@ -1231,10 +1238,6 @@ impl Queue {
                                 continue;
                             }
                         };
-
-                        if first_error.is_some() {
-                            continue;
-                        }
 
                         // execute resource transitions
                         if let Err(e) = unsafe {
