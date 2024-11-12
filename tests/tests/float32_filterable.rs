@@ -64,9 +64,9 @@ static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfigu
                 create_texture_binding(device, wgpu::TextureFormat::R32Float, true);
             },
             Some(concat!(
-                "texture binding 0 expects sample type = float { filterable: true }, ",
-                "but given a view with format = r32float ",
-                "(sample type = float { filterable: false })"
+                "texture binding 0 expects sample type float { filterable: true }, ",
+                "but was given a view with format r32float ",
+                "(sample type float { filterable: false })"
             )),
         );
     });

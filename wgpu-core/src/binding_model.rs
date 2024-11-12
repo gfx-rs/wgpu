@@ -143,7 +143,7 @@ pub enum CreateBindGroupError {
         view_samples: u32,
     },
     #[error(
-        "Texture binding {} expects sample type = {:?}, but given a view with format = {:?} (sample type = {:?})",
+        "Texture binding {} expects sample type {:?}, but was given a view with format {:?} (sample type {:?})",
         binding,
         layout_sample_type,
         view_format,
