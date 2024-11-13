@@ -128,6 +128,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Check for device mismatches when beginning render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497). 
 - Lower `QUERY_SET_MAX_QUERIES` (and enforced limits) from 8192 to 4096 to match WebGPU spec. By @ErichDonGubler in [#6525](https://github.com/gfx-rs/wgpu/pull/6525).
 - Allow non-filterable float on texture bindings never used with samplers when using a derived bind group layout. By @ErichDonGubler in [#6531](https://github.com/gfx-rs/wgpu/pull/6531/).
+- Replace potentially unsound usage of `PreHashedMap` with `FastHashMap`. By @jamienicol in [#6541](https://github.com/gfx-rs/wgpu/pull/6541).
 
 #### Naga
 

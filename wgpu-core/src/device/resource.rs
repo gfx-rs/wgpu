@@ -32,7 +32,7 @@ use crate::{
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, PreHashedKey, PreHashedMap,
+    FastHashMap, LabelHelpers,
 };
 
 use arrayvec::ArrayVec;
@@ -2712,18 +2712,18 @@ impl Device {
             derived_group_layouts.pop();
         }
 
-        let mut unique_bind_group_layouts = PreHashedMap::default();
+        let mut unique_bind_group_layouts = FastHashMap::default();
 
         let bind_group_layouts = derived_group_layouts
             .into_iter()
             .map(|mut bgl_entry_map| {
                 bgl_entry_map.sort();
-                match unique_bind_group_layouts.entry(PreHashedKey::from_key(&bgl_entry_map)) {
+                match unique_bind_group_layouts.entry(bgl_entry_map) {
                     std::collections::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
                     std::collections::hash_map::Entry::Vacant(e) => {
                         match self.create_bind_group_layout(
                             &None,
-                            bgl_entry_map,
+                            e.key().clone(),
                             bgl::Origin::Derived,
                         ) {
                             Ok(bgl) => {
