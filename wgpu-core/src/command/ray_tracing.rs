@@ -689,7 +689,7 @@ impl Global {
                 if let Some(ref staging_buffer) = staging_buffer {
                     cmd_buf_raw.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: staging_buffer.raw(),
-                        usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                        usage: BufferUses::MAP_WRITE..BufferUses::COPY_SRC,
                     }]);
                 }
             }
@@ -711,7 +711,7 @@ impl Global {
                 unsafe {
                     cmd_buf_raw.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: tlas.instance_buffer.as_ref(),
-                        usage: hal::BufferUses::MAP_READ..hal::BufferUses::COPY_DST,
+                        usage: BufferUses::MAP_READ..BufferUses::COPY_DST,
                     }]);
                     let temp = hal::BufferCopy {
                         src_offset: range.start as u64,
@@ -951,7 +951,7 @@ fn iter_blas<'a>(
                         }
                         let data = cmd_buf_data.trackers.buffers.set_single(
                             &index_buffer,
-                            hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                            BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
                         Some((index_buffer.clone(), data))
                     } else {
