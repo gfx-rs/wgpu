@@ -13,7 +13,7 @@ use crate::{
     id::{BlasId, BufferId, TlasId},
     resource::CreateBufferError,
 };
-use std::sync::Arc;
+use std::{mem::size_of, sync::Arc};
 use std::{num::NonZeroU64, slice};
 
 use crate::resource::{Blas, ResourceErrorIdent, Tlas};
@@ -325,11 +325,8 @@ pub(crate) fn tlas_instance_into_bytes(
             };
             let temp: *const _ = &temp;
             unsafe {
-                slice::from_raw_parts::<u8>(
-                    temp.cast::<u8>(),
-                    std::mem::size_of::<RawTlasInstance>(),
-                )
-                .to_vec()
+                slice::from_raw_parts::<u8>(temp.cast::<u8>(), size_of::<RawTlasInstance>())
+                    .to_vec()
             }
         }
         _ => unimplemented!(),
