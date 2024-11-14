@@ -36,6 +36,7 @@ pub mod assertions;
 mod cast_utils;
 mod counters;
 mod env;
+pub mod error;
 mod features;
 pub mod instance;
 pub mod math;
