@@ -550,7 +550,8 @@ impl Global {
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.record()?;
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
@@ -652,6 +653,7 @@ impl Global {
 
         if size == 0 {
             log::trace!("Ignoring copy_buffer_to_buffer of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -685,6 +687,8 @@ impl Global {
             cmd_buf_raw.transition_buffers(&barriers);
             cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
         }
+
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
@@ -708,7 +712,8 @@ impl Global {
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.record()?;
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
@@ -724,6 +729,7 @@ impl Global {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_buffer_to_texture of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -838,6 +844,8 @@ impl Global {
             cmd_buf_raw.transition_buffers(src_barrier.as_slice());
             cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, &regions);
         }
+
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
@@ -861,7 +869,8 @@ impl Global {
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.record()?;
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
@@ -877,6 +886,7 @@ impl Global {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_buffer of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -1005,6 +1015,8 @@ impl Global {
                 &regions,
             );
         }
+
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
@@ -1028,7 +1040,8 @@ impl Global {
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.record()?;
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
@@ -1046,6 +1059,7 @@ impl Global {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_texture of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -1165,6 +1179,7 @@ impl Global {
             );
         }
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 }

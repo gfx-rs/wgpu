@@ -170,7 +170,8 @@ impl Global {
         let mut scratch_buffer_blas_size = 0;
         let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.record()?;
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         iter_blas(
             blas_iter,
@@ -276,7 +277,10 @@ impl Global {
 
         let scratch_size =
             match wgt::BufferSize::new(max(scratch_buffer_blas_size, scratch_buffer_tlas_size)) {
-                None => return Ok(()),
+                None => {
+                    cmd_buf_data_guard.mark_successful();
+                    return Ok(());
+                }
                 Some(size) => size,
             };
 
@@ -353,6 +357,7 @@ impl Global {
                 .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
         }
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
@@ -486,7 +491,8 @@ impl Global {
         let mut scratch_buffer_blas_size = 0;
         let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.record()?;
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         iter_blas(
             blas_iter,
@@ -611,7 +617,10 @@ impl Global {
         let scratch_size =
             match wgt::BufferSize::new(max(scratch_buffer_blas_size, scratch_buffer_tlas_size)) {
                 // if the size is zero there is nothing to build
-                None => return Ok(()),
+                None => {
+                    cmd_buf_data_guard.mark_successful();
+                    return Ok(());
+                }
                 Some(size) => size,
             };
 
@@ -763,6 +772,7 @@ impl Global {
                 .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
         }
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 }
