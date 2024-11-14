@@ -8,7 +8,10 @@ use core::{
 };
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::AccelerationStructureFlags;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    AccelerationStructureFlags,
+};
 
 use super::{life::LifetimeTracker, Device};
 use crate::device::resource::CommandIndices;
@@ -455,6 +458,19 @@ pub enum QueueWriteError {
     InvalidResource(#[from] InvalidResourceError),
 }
 
+impl WebGpuError for QueueWriteError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Queue(e) => e,
+            Self::Transfer(e) => e,
+            Self::MemoryInitFailure(e) => e,
+            Self::DestroyedResource(e) => e,
+            Self::InvalidResource(e) => e,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum QueueSubmitError {
@@ -472,6 +488,22 @@ pub enum QueueSubmitError {
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
     ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
+}
+
+impl WebGpuError for QueueSubmitError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Queue(e) => e,
+            Self::Unmap(e) => e,
+            Self::CommandEncoder(e) => e,
+            Self::ValidateAsActionsError(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::DestroyedResource(_) | Self::BufferStillMapped(_) => {
+                return ErrorType::Validation
+            }
+        };
+        e.webgpu_error_type()
+    }
 }
 
 //TODO: move out common parts of write_xxx.

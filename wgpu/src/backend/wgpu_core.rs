@@ -361,6 +361,7 @@ impl ContextWgpuCore {
                     source: source_error,
                 };
             }
+            ErrorType::DeviceLost { reason: _ } => return,
         };
         sink.handle_error(error);
     }

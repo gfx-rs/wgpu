@@ -449,6 +449,12 @@ impl fmt::Display for RequestAdapterError {
     }
 }
 
+impl error::WebGpuError for RequestAdapterError {
+    fn webgpu_error_type(&self) -> error::ErrorType {
+        error::ErrorType::Validation
+    }
+}
+
 /// Represents the sets of limits an adapter/device supports.
 ///
 /// We provide three different defaults.
@@ -7743,9 +7749,10 @@ mod send_sync {
     impl<T> WasmNotSync for T {}
 }
 
-/// Reason for "lose the device".
+/// Corresponds to a [`GPUDeviceLostReason`]; usually seen by implementers of WebGPU with
+/// [`error::ErrorType::DeviceLost::reason`].
 ///
-/// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
+/// [`GPUDeviceLostReason`]: https://www.w3.org/TR/webgpu/#enumdef-gpudevicelostreason
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

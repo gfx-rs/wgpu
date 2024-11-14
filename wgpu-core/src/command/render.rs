@@ -4,6 +4,7 @@ use core::{fmt, num::NonZeroU32, ops::Range, str};
 use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
+    error::{ErrorType, WebGpuError},
     BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
     TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
@@ -620,6 +621,12 @@ pub enum ColorAttachmentError {
     },
 }
 
+impl WebGpuError for ColorAttachmentError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum AttachmentError {
@@ -637,6 +644,12 @@ pub enum AttachmentError {
     NoClearValue,
     #[error("Clear value ({0}) must be between 0.0 and 1.0, inclusive")]
     ClearValueOutOfRange(f32),
+}
+
+impl WebGpuError for AttachmentError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 /// Error encountered when performing a render pass.
@@ -813,6 +826,54 @@ impl<E: Into<RenderPassErrorInner>> MapPassErr<RenderPassError> for E {
             scope,
             inner: self.into(),
         }
+    }
+}
+
+impl WebGpuError for RenderPassError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let Self { scope: _, inner } = self;
+        let e: &dyn WebGpuError = match inner {
+            RenderPassErrorInner::Device(e) => e,
+            RenderPassErrorInner::ColorAttachment(e) => e,
+            RenderPassErrorInner::EncoderState(e) => e,
+            RenderPassErrorInner::MissingFeatures(e) => e,
+            RenderPassErrorInner::MissingDownlevelFlags(e) => e,
+            RenderPassErrorInner::RenderCommand(e) => e,
+            RenderPassErrorInner::Draw(e) => e,
+            RenderPassErrorInner::Bind(e) => e,
+            RenderPassErrorInner::QueryUse(e) => e,
+            RenderPassErrorInner::DestroyedResource(e) => e,
+            RenderPassErrorInner::InvalidResource(e) => e,
+            RenderPassErrorInner::IncompatibleBundleTargets(e) => e,
+            RenderPassErrorInner::InvalidAttachment(e) => e,
+            RenderPassErrorInner::TimestampWrites(e) => e,
+            RenderPassErrorInner::InvalidValuesOffset(e) => e,
+            RenderPassErrorInner::InvalidPopDebugGroup(e) => e,
+
+            RenderPassErrorInner::InvalidParentEncoder
+            | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
+            | RenderPassErrorInner::MissingAttachments
+            | RenderPassErrorInner::TextureViewIsNotRenderable { .. }
+            | RenderPassErrorInner::AttachmentsDimensionMismatch { .. }
+            | RenderPassErrorInner::AttachmentSampleCountMismatch { .. }
+            | RenderPassErrorInner::InvalidResolveSampleCounts { .. }
+            | RenderPassErrorInner::MismatchedResolveTextureFormat { .. }
+            | RenderPassErrorInner::InvalidDepthOps
+            | RenderPassErrorInner::InvalidStencilOps
+            | RenderPassErrorInner::UnalignedIndirectBufferOffset(..)
+            | RenderPassErrorInner::IndirectBufferOverrun { .. }
+            | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
+            | RenderPassErrorInner::ResourceUsageCompatibility(..)
+            | RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil { .. }
+            | RenderPassErrorInner::PushConstantOffsetAlignment
+            | RenderPassErrorInner::PushConstantSizeAlignment
+            | RenderPassErrorInner::PushConstantOutOfMemory
+            | RenderPassErrorInner::MultiViewMismatch
+            | RenderPassErrorInner::MultiViewDimensionMismatch
+            | RenderPassErrorInner::MissingOcclusionQuerySet
+            | RenderPassErrorInner::PassEnded => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
     }
 }
 

@@ -125,7 +125,10 @@ pub(crate) use texture::{
     DeviceTextureTracker, TextureTracker, TextureTrackerSetSingle, TextureUsageScope,
     TextureViewBindGroupState,
 };
-use wgt::strict_assert_ne;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    strict_assert_ne,
+};
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -356,6 +359,12 @@ pub enum ResourceUsageCompatibilityError {
         array_layers: ops::Range<u32>,
         invalid_use: InvalidUse<wgt::TextureUses>,
     },
+}
+
+impl WebGpuError for ResourceUsageCompatibilityError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 impl ResourceUsageCompatibilityError {

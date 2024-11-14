@@ -2,7 +2,10 @@ use alloc::{sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsages, Extent3d, TextureSelector, TextureUsages};
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    BufferAddress, BufferUsages, Extent3d, TextureSelector, TextureUsages,
+};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
@@ -136,6 +139,46 @@ pub enum TransferError {
     },
     #[error("Requested mip level {requested} does no exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
+}
+
+impl WebGpuError for TransferError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::MissingBufferUsage(e) => e,
+            Self::MissingTextureUsage(e) => e,
+            Self::MemoryInitFailure(e) => e,
+
+            Self::BufferOverrun { .. }
+            | Self::TextureOverrun { .. }
+            | Self::InvalidTextureAspect { .. }
+            | Self::InvalidTextureMipLevel { .. }
+            | Self::InvalidDimensionExternal
+            | Self::UnalignedBufferOffset(..)
+            | Self::UnalignedCopySize(..)
+            | Self::UnalignedCopyWidth
+            | Self::UnalignedCopyHeight
+            | Self::UnalignedCopyOriginX
+            | Self::UnalignedCopyOriginY
+            | Self::UnalignedBytesPerRow
+            | Self::UnspecifiedBytesPerRow
+            | Self::UnspecifiedRowsPerImage
+            | Self::InvalidBytesPerRow
+            | Self::InvalidRowsPerImage
+            | Self::CopySrcMissingAspects
+            | Self::CopyDstMissingAspects
+            | Self::CopyAspectNotOne
+            | Self::CopyFromForbiddenTextureFormat { .. }
+            | Self::CopyToForbiddenTextureFormat { .. }
+            | Self::ExternalCopyToForbiddenTextureFormat(..)
+            | Self::TextureFormatsNotCopyCompatible { .. }
+            | Self::MissingDownlevelFlags(..)
+            | Self::InvalidSampleCount { .. }
+            | Self::SampleCountNotEqual { .. }
+            | Self::InvalidMipLevel { .. }
+            | Self::SameSourceDestinationBuffer => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 pub(crate) fn extract_texture_selector<T>(

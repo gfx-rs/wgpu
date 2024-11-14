@@ -16,6 +16,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::str;
 use thiserror::Error;
+use wgt::error::{ErrorType, WebGpuError};
 use wgt::DynamicOffset;
 
 #[derive(Clone, Debug, Error)]
@@ -35,9 +36,21 @@ pub struct MissingPipeline;
 #[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
 pub struct InvalidValuesOffset;
 
+impl WebGpuError for InvalidValuesOffset {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
 pub struct InvalidPopDebugGroup;
+
+impl WebGpuError for InvalidPopDebugGroup {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
 
 pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     pub(crate) device: &'cmd_buf Arc<Device>,

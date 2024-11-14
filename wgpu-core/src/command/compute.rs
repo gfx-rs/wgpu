@@ -1,5 +1,8 @@
 use thiserror::Error;
-use wgt::{BufferAddress, DynamicOffset};
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    BufferAddress, DynamicOffset,
+};
 
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
@@ -125,6 +128,12 @@ pub enum DispatchError {
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
 }
 
+impl WebGpuError for DispatchError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 /// Error encountered when performing a compute pass.
 #[derive(Clone, Debug, Error)]
 pub enum ComputePassErrorInner {
@@ -206,6 +215,39 @@ where
             scope,
             inner: self.into(),
         }
+    }
+}
+
+impl WebGpuError for ComputePassError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let Self { scope: _, inner } = self;
+        let e: &dyn WebGpuError = match inner {
+            ComputePassErrorInner::Device(e) => e,
+            ComputePassErrorInner::EncoderState(e) => e,
+            ComputePassErrorInner::DestroyedResource(e) => e,
+            ComputePassErrorInner::ResourceUsageCompatibility(e) => e,
+            ComputePassErrorInner::MissingBufferUsage(e) => e,
+            ComputePassErrorInner::Dispatch(e) => e,
+            ComputePassErrorInner::Bind(e) => e,
+            ComputePassErrorInner::PushConstants(e) => e,
+            ComputePassErrorInner::QueryUse(e) => e,
+            ComputePassErrorInner::MissingFeatures(e) => e,
+            ComputePassErrorInner::MissingDownlevelFlags(e) => e,
+            ComputePassErrorInner::InvalidResource(e) => e,
+            ComputePassErrorInner::TimestampWrites(e) => e,
+            ComputePassErrorInner::InvalidValuesOffset(e) => e,
+            ComputePassErrorInner::InvalidPopDebugGroup(e) => e,
+
+            ComputePassErrorInner::InvalidParentEncoder
+            | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
+            | ComputePassErrorInner::UnalignedIndirectBufferOffset(_)
+            | ComputePassErrorInner::IndirectBufferOverrun { .. }
+            | ComputePassErrorInner::PushConstantOffsetAlignment
+            | ComputePassErrorInner::PushConstantSizeAlignment
+            | ComputePassErrorInner::PushConstantOutOfMemory
+            | ComputePassErrorInner::PassEnded => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
     }
 }
 

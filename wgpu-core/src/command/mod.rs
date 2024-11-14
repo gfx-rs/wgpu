@@ -47,6 +47,8 @@ use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, Usag
 use crate::{api_log, global::Global, id, resource_log, Label};
 use crate::{hal_label, LabelHelpers};
 
+use wgt::error::{ErrorType, WebGpuError};
+
 use thiserror::Error;
 
 #[cfg(feature = "trace")]
@@ -1000,6 +1002,18 @@ pub enum EncoderStateError {
     Submitted,
 }
 
+impl WebGpuError for EncoderStateError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            EncoderStateError::Invalid
+            | EncoderStateError::Ended
+            | EncoderStateError::Locked
+            | EncoderStateError::Unlocked
+            | EncoderStateError::Submitted => ErrorType::Validation,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CommandEncoderError {
@@ -1050,6 +1064,27 @@ impl CommandEncoderError {
     }
 }
 
+impl WebGpuError for CommandEncoderError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::MissingFeatures(e) => e,
+            Self::State(e) => e,
+            Self::DestroyedResource(e) => e,
+            Self::Transfer(e) => e,
+            Self::Clear(e) => e,
+            Self::Query(e) => e,
+            Self::BuildAccelerationStructure(e) => e,
+            Self::TransitionResources(e) => e,
+            Self::ResourceUsage(e) => e,
+            Self::ComputePass(e) => e,
+            Self::RenderPass(e) => e,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TimestampWritesError {
@@ -1059,6 +1094,14 @@ pub enum TimestampWritesError {
     IndicesEqual { idx: u32 },
     #[error("no begin or end indices were specified for pass timestamp writes, expected at least one to be set")]
     IndicesMissing,
+}
+
+impl WebGpuError for TimestampWritesError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::IndicesEqual { .. } | Self::IndicesMissing => ErrorType::Validation,
+        }
+    }
 }
 
 impl Global {
@@ -1425,4 +1468,11 @@ pub struct PassStateError {
     pub scope: PassErrorScope,
     #[source]
     pub(super) inner: EncoderStateError,
+}
+
+impl WebGpuError for PassStateError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let Self { scope: _, inner } = self;
+        inner.webgpu_error_type()
+    }
 }

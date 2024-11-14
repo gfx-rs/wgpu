@@ -93,6 +93,8 @@ use core::{
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
+use wgt::error::{ErrorType, WebGpuError};
+
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
@@ -847,6 +849,15 @@ pub enum CreateRenderBundleError {
     InvalidSampleCount(u32),
 }
 
+impl WebGpuError for CreateRenderBundleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::ColorAttachment(e) => e.webgpu_error_type(),
+            Self::InvalidSampleCount(_) => ErrorType::Validation,
+        }
+    }
+}
+
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -1513,6 +1524,21 @@ pub struct RenderBundleError {
     pub scope: PassErrorScope,
     #[source]
     inner: RenderBundleErrorInner,
+}
+
+impl WebGpuError for RenderBundleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let Self { scope: _, inner } = self;
+        let e: &dyn WebGpuError = match inner {
+            RenderBundleErrorInner::Device(e) => e,
+            RenderBundleErrorInner::RenderCommand(e) => e,
+            RenderBundleErrorInner::Draw(e) => e,
+            RenderBundleErrorInner::MissingDownlevelFlags(e) => e,
+            RenderBundleErrorInner::Bind(e) => e,
+            RenderBundleErrorInner::InvalidResource(e) => e,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 impl RenderBundleError {

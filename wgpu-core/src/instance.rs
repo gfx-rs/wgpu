@@ -9,6 +9,7 @@ use alloc::{
 
 use hashbrown::HashMap;
 use thiserror::Error;
+use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     api_log, api_log_debug,
@@ -35,6 +36,12 @@ pub struct FailedLimit {
     name: Cow<'static, str>,
     requested: u64,
     allowed: u64,
+}
+
+impl WebGpuError for FailedLimit {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
@@ -859,6 +866,18 @@ pub enum RequestDeviceError {
     TimestampNormalizerInitFailed(#[from] TimestampNormalizerInitError),
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
+}
+
+impl WebGpuError for RequestDeviceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::LimitsExceeded(e) => e,
+            Self::TimestampNormalizerInitFailed(e) => e,
+            Self::UnsupportedFeature(_) => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Clone, Debug, Error)]

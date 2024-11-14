@@ -21,8 +21,9 @@ use crate::{
 
 use thiserror::Error;
 use wgt::{
-    math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, TextureAspect,
-    TextureSelector,
+    error::{ErrorType, WebGpuError},
+    math::align_to,
+    BufferAddress, BufferUsages, ImageSubresourceRange, TextureAspect, TextureSelector,
 };
 
 /// Error encountered while attempting a clear.
@@ -77,6 +78,28 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     EncoderState(#[from] EncoderStateError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for ClearError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::DestroyedResource(e) => e,
+            Self::MissingBufferUsage(e) => e,
+            Self::Device(e) => e,
+            Self::EncoderState(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::NoValidTextureClearMode(..)
+            | Self::MissingClearTextureFeature
+            | Self::UnalignedFillSize(..)
+            | Self::UnalignedBufferOffset(..)
+            | Self::OffsetPlusSizeExceeds64BitBounds { .. }
+            | Self::BufferOverrun { .. }
+            | Self::MissingTextureAspect { .. }
+            | Self::InvalidTextureLevelRange { .. }
+            | Self::InvalidTextureLayerRange { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 impl Global {
