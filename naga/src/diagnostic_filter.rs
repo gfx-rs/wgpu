@@ -86,6 +86,18 @@ pub struct DiagnosticFilter {
     pub triggering_rule: FilterableTriggeringRule,
 }
 
+/// Determines whether [`DiagnosticFilterMap::add`] should consider full duplicates a conflict.
+///
+/// In WGSL, directive position does not consider this case a conflict, while attribute position
+/// does.
+#[cfg(feature = "wgsl-in")]
+pub(crate) enum ShouldConflictOnFullDuplicate {
+    /// Use this for attributes in WGSL.
+    Yes,
+    /// Use this for directives in WGSL.
+    No,
+}
+
 /// A map of diagnostic filters to their severity and first occurrence's span.
 ///
 /// Intended for front ends' first step into storing parsed [`DiagnosticFilter`]s.
@@ -104,6 +116,7 @@ impl DiagnosticFilterMap {
         &mut self,
         diagnostic_filter: DiagnosticFilter,
         span: Span,
+        should_conflict_on_full_duplicate: ShouldConflictOnFullDuplicate,
     ) -> Result<(), ConflictingDiagnosticRuleError> {
         use indexmap::map::Entry;
 
@@ -119,7 +132,11 @@ impl DiagnosticFilterMap {
             }
             Entry::Occupied(entry) => {
                 let &(first_severity, first_span) = entry.get();
-                if first_severity != new_severity {
+                let should_conflict_on_full_duplicate = match should_conflict_on_full_duplicate {
+                    ShouldConflictOnFullDuplicate::Yes => true,
+                    ShouldConflictOnFullDuplicate::No => false,
+                };
+                if first_severity != new_severity || should_conflict_on_full_duplicate {
                     return Err(ConflictingDiagnosticRuleError {
                         triggering_rule,
                         triggering_rule_spans: [first_span, span],

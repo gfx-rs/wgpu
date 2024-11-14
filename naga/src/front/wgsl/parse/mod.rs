@@ -1,5 +1,6 @@
 use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
+    ShouldConflictOnFullDuplicate,
 };
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
@@ -2167,7 +2168,7 @@ impl Parser {
             if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
                 if let Some(filter) = self.diagnostic_filter(lexer)? {
                     let span = self.peek_rule_span(lexer);
-                    diagnostic_filters.add(filter, span)?;
+                    diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
                 }
             } else {
                 return Err(Error::Unexpected(
@@ -2369,7 +2370,7 @@ impl Parser {
             if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
                 if let Some(filter) = self.diagnostic_filter(lexer)? {
                     let span = self.peek_rule_span(lexer);
-                    diagnostic_filters.add(filter, span)?;
+                    diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
                 }
                 continue;
             }
@@ -2602,7 +2603,11 @@ impl Parser {
                     DirectiveKind::Diagnostic => {
                         if let Some(diagnostic_filter) = self.diagnostic_filter(&mut lexer)? {
                             let span = self.peek_rule_span(&lexer);
-                            diagnostic_filters.add(diagnostic_filter, span)?;
+                            diagnostic_filters.add(
+                                diagnostic_filter,
+                                span,
+                                ShouldConflictOnFullDuplicate::No,
+                            )?;
                         }
                         lexer.expect(Token::Separator(';'))?;
                     }

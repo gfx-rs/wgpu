@@ -1047,13 +1047,14 @@ impl<'a> Error<'a> {
                         (first_span, "first rule".into()),
                         (second_span, "second rule".into()),
                     ],
-                    notes: vec![concat!(
-                        "multiple `diagnostic(…)` rules with the same rule name ",
-                        "conflict unless the severity is the same; ",
-                        "delete the rule you don't want, or ",
-                        "ensure that all severities with the same rule name match"
-                    )
-                    .into()],
+                    notes: vec![
+                        concat!(
+                            "Multiple `diagnostic(…)` rules with the same rule name ",
+                            "conflict unless it is a directive and the severity is the same.",
+                        )
+                        .into(),
+                        "You should delete the rule you don't want.".into(),
+                    ],
                 }
             }
             Error::DiagnosticAttributeNotYetImplementedAtParseSite {
