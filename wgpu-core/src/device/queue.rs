@@ -268,6 +268,7 @@ pub enum TempResource {
 pub(crate) struct EncoderInFlight {
     inner: crate::command::CommandEncoder,
     pub(crate) trackers: Tracker,
+    pub(crate) temp_resources: Vec<TempResource>,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
     pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
@@ -377,6 +378,7 @@ impl PendingWrites {
                     hal_label: None,
                 },
                 trackers: Tracker::new(),
+                temp_resources: mem::take(&mut self.temp_resources),
                 pending_buffers,
                 pending_textures,
             };
@@ -1195,6 +1197,7 @@ impl Queue {
                         active_executions.push(EncoderInFlight {
                             inner: baked.encoder,
                             trackers: baked.trackers,
+                            temp_resources: baked.temp_resources,
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),
                         });
@@ -1293,11 +1296,8 @@ impl Queue {
             profiling::scope!("cleanup");
 
             // this will register the new submission to the life time tracker
-            self.lock_life().track_submission(
-                submit_index,
-                pending_writes.temp_resources.drain(..),
-                active_executions,
-            );
+            self.lock_life()
+                .track_submission(submit_index, active_executions);
             drop(pending_writes);
 
             // This will schedule destruction of all resources that are no longer needed

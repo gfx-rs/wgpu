@@ -29,9 +29,6 @@ struct ActiveSubmission {
     /// submission has completed.
     index: SubmissionIndex,
 
-    /// Temporary resources to be freed once this queue submission has completed.
-    temp_resources: Vec<TempResource>,
-
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer>>,
 
@@ -107,11 +104,6 @@ impl ActiveSubmission {
 
     pub fn contains_blas(&self, blas: &Blas) -> bool {
         for encoder in &self.encoders {
-            // The ownership location of blas's depends on where the command encoder
-            // came from. If it is the staging command encoder on the queue, it is
-            // in the pending buffer list. If it came from a user command encoder,
-            // it is in the tracker.
-
             if encoder.trackers.blas_s.contains(blas) {
                 return true;
             }
@@ -122,11 +114,6 @@ impl ActiveSubmission {
 
     pub fn contains_tlas(&self, tlas: &Tlas) -> bool {
         for encoder in &self.encoders {
-            // The ownership location of tlas's depends on where the command encoder
-            // came from. If it is the staging command encoder on the queue, it is
-            // in the pending buffer list. If it came from a user command encoder,
-            // it is in the tracker.
-
             if encoder.trackers.tlas_s.contains(tlas) {
                 return true;
             }
@@ -203,15 +190,9 @@ impl LifetimeTracker {
     }
 
     /// Start tracking resources associated with a new queue submission.
-    pub fn track_submission(
-        &mut self,
-        index: SubmissionIndex,
-        temp_resources: impl Iterator<Item = TempResource>,
-        encoders: Vec<EncoderInFlight>,
-    ) {
+    pub fn track_submission(&mut self, index: SubmissionIndex, encoders: Vec<EncoderInFlight>) {
         self.active.push(ActiveSubmission {
             index,
-            temp_resources: temp_resources.collect(),
             mapped: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
@@ -332,7 +313,6 @@ impl LifetimeTracker {
                 profiling::scope!("drop command buffer trackers");
                 drop(encoder);
             }
-            drop(a.temp_resources);
             work_done_closures.extend(a.work_done_closures);
         }
         work_done_closures
@@ -347,7 +327,12 @@ impl LifetimeTracker {
             .active
             .iter_mut()
             .find(|a| a.index == last_submit_index)
-            .map(|a| &mut a.temp_resources);
+            .map(|a| {
+                // Because this resource's `last_submit_index` matches `a.index`,
+                // we know that we must have done something with the resource,
+                // so `a.encoders` should not be empty.
+                &mut a.encoders.last_mut().unwrap().temp_resources
+            });
         if let Some(resources) = resources {
             resources.push(temp_resource);
         }

@@ -329,12 +329,9 @@ impl Global {
             }
         }
 
-        if let Some(queue) = device.get_queue() {
-            queue
-                .pending_writes
-                .lock()
-                .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
-        }
+        cmd_buf_data
+            .temp_resources
+            .push(TempResource::ScratchBuffer(scratch_buffer));
 
         cmd_buf_data_guard.mark_successful();
         Ok(())
@@ -725,21 +722,15 @@ impl Global {
             }
 
             if let Some(staging_buffer) = staging_buffer {
-                if let Some(queue) = device.get_queue() {
-                    queue
-                        .pending_writes
-                        .lock()
-                        .consume_temp(TempResource::StagingBuffer(staging_buffer));
-                }
+                cmd_buf_data
+                    .temp_resources
+                    .push(TempResource::StagingBuffer(staging_buffer));
             }
         }
 
-        if let Some(queue) = device.get_queue() {
-            queue
-                .pending_writes
-                .lock()
-                .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
-        }
+        cmd_buf_data
+            .temp_resources
+            .push(TempResource::ScratchBuffer(scratch_buffer));
 
         cmd_buf_data_guard.mark_successful();
         Ok(())
