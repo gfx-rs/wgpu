@@ -30,20 +30,20 @@ pub enum BindingTypeName {
 
 fn map_resource_to_type_name(ty: &ResourceType) -> BindingTypeName {
     match ty {
-        ResourceType::Buffer{ .. } => BindingTypeName::Buffer,
-        ResourceType::Texture{ .. } => BindingTypeName::Texture,
-        ResourceType::Sampler{ .. } => BindingTypeName::Sampler,
-        ResourceType::AccelerationStructure{ .. } => BindingTypeName::AccelerationStructure,
+        ResourceType::Buffer { .. } => BindingTypeName::Buffer,
+        ResourceType::Texture { .. } => BindingTypeName::Texture,
+        ResourceType::Sampler { .. } => BindingTypeName::Sampler,
+        ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
     }
 }
 
 fn map_binding_to_type_name(ty: &BindingType) -> BindingTypeName {
     match ty {
-        BindingType::Buffer{ .. } => BindingTypeName::Buffer,
-        BindingType::Texture{ .. } => BindingTypeName::Texture,
-        BindingType::StorageTexture{ .. } => BindingTypeName::Texture,
-        BindingType::Sampler{ .. } => BindingTypeName::Sampler,
-        BindingType::AccelerationStructure{ .. } => BindingTypeName::AccelerationStructure,
+        BindingType::Buffer { .. } => BindingTypeName::Buffer,
+        BindingType::Texture { .. } => BindingTypeName::Texture,
+        BindingType::StorageTexture { .. } => BindingTypeName::Texture,
+        BindingType::Sampler { .. } => BindingTypeName::Sampler,
+        BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
     }
 }
 
@@ -167,7 +167,9 @@ pub enum BindingError {
     Missing,
     #[error("Visibility flags don't include the shader stage")]
     Invisible,
-    #[error("Type on the shader side ({shader:?}) does not match the pipeline binding ({binding:?})")]
+    #[error(
+        "Type on the shader side ({shader:?}) does not match the pipeline binding ({binding:?})"
+    )]
     WrongType {
         binding: BindingTypeName,
         shader: BindingTypeName,
@@ -178,9 +180,7 @@ pub enum BindingError {
         shader: naga::AddressSpace,
     },
     #[error("Address space {space:?} is not a valid Buffer address space")]
-    WrongBufferAddressSpace {
-        space: naga::AddressSpace,
-    },
+    WrongBufferAddressSpace { space: naga::AddressSpace },
     #[error("Buffer structure size {buffer_size}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`, which is {min_binding_size}")]
     WrongBufferSize {
         buffer_size: wgt::BufferSize,
@@ -561,11 +561,7 @@ impl Resource {
                     naga::AddressSpace::Storage { access } => wgt::BufferBindingType::Storage {
                         read_only: access == naga::StorageAccess::LOAD,
                     },
-                    _ => {
-                        return Err(BindingError::WrongBufferAddressSpace {
-                            space: self.class,
-                        })
-                    }
+                    _ => return Err(BindingError::WrongBufferAddressSpace { space: self.class }),
                 },
                 has_dynamic_offset: false,
                 min_binding_size: Some(size),
