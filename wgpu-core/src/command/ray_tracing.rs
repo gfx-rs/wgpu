@@ -223,7 +223,7 @@ impl Global {
             };
 
             let tlas = hub.tlas_s.get(entry.tlas_id).get()?;
-            cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
+            cmd_buf_data.trackers.tlas_s.insert_single(tlas.clone());
 
             cmd_buf_data.tlas_actions.push(TlasAction {
                 tlas: tlas.clone(),
@@ -489,7 +489,7 @@ impl Global {
         for package in tlas_iter {
             let tlas = hub.tlas_s.get(package.tlas_id).get()?;
 
-            cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
+            cmd_buf_data.trackers.tlas_s.insert_single(tlas.clone());
 
             tlas_lock_store.push((Some(package), tlas))
         }
@@ -520,7 +520,7 @@ impl Global {
                 }
                 let blas = hub.blas_s.get(instance.blas_id).get()?;
 
-                cmd_buf_data.trackers.blas_s.set_single(blas.clone());
+                cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
 
                 instance_buffer_staging_source.extend(device.raw().tlas_instance_to_bytes(
                     hal::TlasInstance {
@@ -820,7 +820,7 @@ fn iter_blas<'a>(
     let mut temp_buffer = Vec::new();
     for entry in blas_iter {
         let blas = hub.blas_s.get(entry.blas_id).get()?;
-        cmd_buf_data.trackers.blas_s.set_single(blas.clone());
+        cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
 
         cmd_buf_data.blas_actions.push(BlasAction {
             blas: blas.clone(),
