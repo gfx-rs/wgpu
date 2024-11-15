@@ -1,5 +1,6 @@
 #![allow(unused_variables)]
 
+use crate::TlasInstance;
 use std::ops::Range;
 
 #[derive(Clone, Debug)]
@@ -305,6 +306,10 @@ impl crate::Device for Context {
         Default::default()
     }
     unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: Resource) {}
+
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        vec![]
+    }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()

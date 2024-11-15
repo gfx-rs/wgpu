@@ -971,6 +971,7 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8>;
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
 
@@ -1771,6 +1772,12 @@ pub struct Alignments {
     /// [`Uniform`]: wgt::BufferBindingType::Uniform
     /// [size]: BufferBinding::size
     pub uniform_bounds_check_alignment: wgt::BufferSize,
+
+    /// The size of the raw TLAS instance
+    pub raw_tlas_instance_size: usize,
+
+    /// What the scratch buffer for building an acceleration structure must be aligned to
+    pub ray_tracing_scratch_buffer_alignment: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -2518,4 +2525,12 @@ bitflags::bitflags! {
 #[derive(Debug, Clone)]
 pub struct AccelerationStructureBarrier {
     pub usage: Range<AccelerationStructureUses>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct TlasInstance {
+    pub transform: [f32; 12],
+    pub custom_index: u32,
+    pub mask: u8,
+    pub blas_address: u64,
 }

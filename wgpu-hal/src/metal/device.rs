@@ -8,6 +8,7 @@ use std::{
 
 use super::conv;
 use crate::auxil::map_naga_stage;
+use crate::TlasInstance;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -1423,6 +1424,10 @@ impl crate::Device for super::Device {
         &self,
         _acceleration_structure: super::AccelerationStructure,
     ) {
+        unimplemented!()
+    }
+
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
         unimplemented!()
     }
 

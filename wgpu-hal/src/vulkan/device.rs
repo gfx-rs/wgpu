@@ -1,16 +1,18 @@
-use super::conv;
+use super::{conv, RawTlasInstance};
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
 use parking_lot::Mutex;
 
+use crate::TlasInstance;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     ffi::{CStr, CString},
+    mem,
     mem::MaybeUninit,
     num::NonZeroU32,
-    ptr,
+    ptr, slice,
     sync::Arc,
 };
 
@@ -2556,6 +2558,22 @@ impl crate::Device for super::Device {
             .set(self.shared.memory_allocations_counter.read());
 
         self.counters.clone()
+    }
+
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+        let temp = RawTlasInstance {
+            transform: instance.transform,
+            custom_index_and_mask: (instance.custom_index & MAX_U24)
+                | (u32::from(instance.mask) << 24),
+            shader_binding_table_record_offset_and_flags: 0,
+            acceleration_structure_reference: instance.blas_address,
+        };
+        let temp: *const _ = &temp;
+        unsafe {
+            slice::from_raw_parts::<u8>(temp.cast::<u8>(), mem::size_of::<RawTlasInstance>())
+                .to_vec()
+        }
     }
 }
 

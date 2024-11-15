@@ -21,6 +21,7 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{self, dxgi::result::HResult},
     dx12::{borrow_optional_interface_temporarily, shader_compilation, Event},
+    TlasInstance,
 };
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
@@ -1938,5 +1939,9 @@ impl crate::Device for super::Device {
             total_allocated_bytes: upstream.total_allocated_bytes,
             total_reserved_bytes: upstream.total_reserved_bytes,
         })
+    }
+
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+        todo!()
     }
 }

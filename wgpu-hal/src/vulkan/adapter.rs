@@ -1140,6 +1140,13 @@ impl PhysicalDeviceProperties {
                 };
                 wgt::BufferSize::new(alignment).unwrap()
             },
+            raw_tlas_instance_size: 64,
+            ray_tracing_scratch_buffer_alignment: self.acceleration_structure.map_or(
+                0,
+                |acceleration_structure| {
+                    acceleration_structure.min_acceleration_structure_scratch_offset_alignment
+                },
+            ),
         }
     }
 }

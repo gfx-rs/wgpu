@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::AtomicFenceValue;
+use crate::{AtomicFenceValue, TlasInstance};
 use arrayvec::ArrayVec;
 use std::sync::atomic::Ordering;
 
@@ -1631,6 +1631,10 @@ impl crate::Device for super::Device {
         &self,
         _acceleration_structure: super::AccelerationStructure,
     ) {
+    }
+
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+        unimplemented!()
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

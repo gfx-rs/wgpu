@@ -1423,3 +1423,12 @@ fn get_lost_err() -> crate::DeviceError {
     #[allow(unreachable_code)]
     crate::DeviceError::Lost
 }
+
+#[derive(Clone)]
+#[repr(C)]
+struct RawTlasInstance {
+    transform: [f32; 12],
+    custom_index_and_mask: u32,
+    shader_binding_table_record_offset_and_flags: u32,
+    acceleration_structure_reference: u64,
+}
