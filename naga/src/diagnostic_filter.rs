@@ -152,7 +152,6 @@ impl DiagnosticFilterMap {
                 };
                 if first_severity != new_severity || should_conflict_on_full_duplicate {
                     return Err(ConflictingDiagnosticRuleError {
-                        triggering_rule,
                         triggering_rule_spans: [first_span, span],
                     });
                 }
@@ -190,7 +189,6 @@ impl IntoIterator for DiagnosticFilterMap {
 #[cfg(feature = "wgsl-in")]
 #[derive(Clone, Debug)]
 pub(crate) struct ConflictingDiagnosticRuleError {
-    pub triggering_rule: FilterableTriggeringRule,
     pub triggering_rule_spans: [Span; 2],
 }
 

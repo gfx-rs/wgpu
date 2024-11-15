@@ -1034,15 +1034,11 @@ impl<'a> Error<'a> {
                 .into()],
             },
             Error::DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError {
-                ref triggering_rule,
                 triggering_rule_spans,
             }) => {
                 let [first_span, second_span] = triggering_rule_spans;
                 ParseError {
-                    message: format!(
-                        "found conflicting `diagnostic(…)` rule(s) for `{}`",
-                        triggering_rule.to_wgsl_ident()
-                    ),
+                    message: "found conflicting `diagnostic(…)` rule(s)".into(),
                     labels: vec![
                         (first_span, "first rule".into()),
                         (second_span, "second rule".into()),
