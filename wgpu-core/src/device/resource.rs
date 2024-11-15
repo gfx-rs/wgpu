@@ -38,7 +38,7 @@ use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
 
-use crate::resource::{AccelerationStructure, DestroyedResourceError, Tlas};
+use crate::resource::{AccelerationStructure, Tlas};
 use std::{
     borrow::Cow,
     mem::{self, ManuallyDrop},
@@ -2186,9 +2186,7 @@ impl Device {
             }
         }
 
-        Ok(tlas
-            .raw(snatch_guard)
-            .ok_or(DestroyedResourceError(tlas.error_ident()))?)
+        Ok(tlas.try_raw(snatch_guard)?)
     }
 
     // This function expects the provided bind group layout to be resolved
