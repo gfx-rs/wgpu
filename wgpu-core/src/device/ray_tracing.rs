@@ -4,10 +4,9 @@ use std::sync::Arc;
 use crate::api_log;
 #[cfg(feature = "trace")]
 use crate::device::trace;
-use crate::lock::{rank, Mutex};
+use crate::lock::rank;
 use crate::resource::{Fallible, TrackingData};
 use crate::snatch::Snatchable;
-use crate::weak_vec::WeakVec;
 use crate::{
     device::{Device, DeviceError},
     global::Global,
@@ -166,7 +165,6 @@ impl Device {
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
-            bind_groups: Mutex::new(rank::TLAS_BIND_GROUPS, WeakVec::new()),
         }))
     }
 }
@@ -247,20 +245,6 @@ impl Global {
         (id, Some(error))
     }
 
-    pub fn blas_destroy(&self, blas_id: BlasId) -> Result<(), resource::DestroyError> {
-        profiling::scope!("Blas::destroy");
-        api_log!("Blas::destroy {blas_id:?}");
-
-        let blas = self.hub.blas_s.get(blas_id).get()?;
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = blas.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeBlas(blas_id));
-        }
-
-        blas.destroy()
-    }
-
     pub fn blas_drop(&self, blas_id: BlasId) {
         profiling::scope!("Blas::drop");
         api_log!("Blas::drop {blas_id:?}");
@@ -273,20 +257,6 @@ impl Global {
                 t.add(trace::Action::DestroyBlas(blas_id));
             }
         }
-    }
-
-    pub fn tlas_destroy(&self, tlas_id: TlasId) -> Result<(), resource::DestroyError> {
-        profiling::scope!("Tlas::destroy");
-        api_log!("Tlas::destroy {tlas_id:?}");
-
-        let tlas = self.hub.tlas_s.get(tlas_id).get()?;
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = tlas.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeTlas(tlas_id));
-        }
-
-        tlas.destroy()
     }
 
     pub fn tlas_drop(&self, tlas_id: TlasId) {

@@ -27,7 +27,6 @@ use crate::{
 
 use smallvec::SmallVec;
 
-use crate::resource::DestroyedAccelerationStructure;
 use crate::scratch::ScratchBuffer;
 use std::{
     iter,
@@ -257,7 +256,6 @@ pub enum TempResource {
     ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
-    DestroyedAccelerationStructure(DestroyedAccelerationStructure),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a

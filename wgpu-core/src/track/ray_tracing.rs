@@ -46,12 +46,6 @@ impl<T: AccelerationStructure> AccelerationStructureTracker<T> {
         }
     }
 
-    /// Returns true if the given buffer is tracked.
-    pub fn contains(&self, acceleration_structure: &T) -> bool {
-        self.metadata
-            .contains(acceleration_structure.tracker_index().as_usize())
-    }
-
     /// Inserts a single resource into the resource tracker.
     pub fn set_single(&mut self, resource: Arc<T>) {
         let index: usize = resource.tracker_index().as_usize();
