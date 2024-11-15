@@ -140,8 +140,13 @@ pub enum BindingError {
     Missing,
     #[error("Visibility flags don't include the shader stage")]
     Invisible,
-    #[error("Type on the shader side does not match the pipeline binding")]
-    WrongType,
+    #[error(
+        "Type on the shader side ({shader:?}) does not match the pipeline binding ({binding:?})"
+    )]
+    WrongType {
+        binding: BindingType,
+        shader: ResourceType,
+    },
     #[error("Storage class {binding:?} doesn't match the shader {shader:?}")]
     WrongAddressSpace {
         binding: naga::AddressSpace,
@@ -378,7 +383,12 @@ impl Resource {
                         }
                         min_binding_size
                     }
-                    _ => return Err(BindingError::WrongType),
+                    _ => {
+                        return Err(BindingError::WrongType {
+                            binding: entry.ty,
+                            shader: self.ty,
+                        })
+                    }
                 };
                 match min_size {
                     Some(non_zero) if non_zero < size => {
@@ -396,7 +406,12 @@ impl Resource {
                         return Err(BindingError::WrongSamplerComparison);
                     }
                 }
-                _ => return Err(BindingError::WrongType),
+                _ => {
+                    return Err(BindingError::WrongType {
+                        binding: entry.ty,
+                        shader: self.ty,
+                    })
+                }
             },
             ResourceType::Texture {
                 dim,
@@ -478,7 +493,12 @@ impl Resource {
                             access: naga_access,
                         }
                     }
-                    _ => return Err(BindingError::WrongType),
+                    _ => {
+                        return Err(BindingError::WrongType {
+                            binding: entry.ty,
+                            shader: self.ty,
+                        })
+                    }
                 };
                 if class != expected_class {
                     return Err(BindingError::WrongTextureClass {
@@ -504,7 +524,12 @@ impl Resource {
                     naga::AddressSpace::Storage { access } => wgt::BufferBindingType::Storage {
                         read_only: access == naga::StorageAccess::LOAD,
                     },
-                    _ => return Err(BindingError::WrongType),
+                    _ => {
+                        return Err(BindingError::WrongType {
+                            binding: entry.ty,
+                            shader: self.ty,
+                        })
+                    }
                 },
                 has_dynamic_offset: false,
                 min_binding_size: Some(size),
