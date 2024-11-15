@@ -1962,7 +1962,10 @@ pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
 pub(crate) trait AccelerationStructure: Trackable {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure>;
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&dyn hal::DynAccelerationStructure, DestroyedResourceError>;
 }
 
 #[derive(Debug)]
@@ -1993,8 +1996,14 @@ impl Drop for Blas {
 }
 
 impl AccelerationStructure for Blas {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
-        Some(self.raw.get(guard)?.as_ref())
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&dyn hal::DynAccelerationStructure, DestroyedResourceError> {
+        self.raw
+            .get(guard)
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 }
 
@@ -2076,8 +2085,14 @@ impl Drop for Tlas {
 }
 
 impl AccelerationStructure for Tlas {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&dyn hal::DynAccelerationStructure> {
-        Some(self.raw.get(guard)?.as_ref())
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&dyn hal::DynAccelerationStructure, DestroyedResourceError> {
+        self.raw
+            .get(guard)
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 }
 
