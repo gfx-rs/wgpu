@@ -537,12 +537,6 @@ pub enum QueueSubmitError {
     Unmap(#[from] BufferAccessError),
     #[error("{0} is still mapped")]
     BufferStillMapped(ResourceErrorIdent),
-    #[error("Surface output was dropped before the command buffer got submitted")]
-    SurfaceOutputDropped,
-    #[error("Surface was unconfigured before the command buffer got submitted")]
-    SurfaceUnconfigured,
-    #[error("GPU got stuck :(")]
-    StuckGpu,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
@@ -1430,7 +1424,6 @@ impl Queue {
                     Err(WaitIdleError::Device(err)) => {
                         break 'error Err(QueueSubmitError::Queue(err))
                     }
-                    Err(WaitIdleError::StuckGpu) => break 'error Err(QueueSubmitError::StuckGpu),
                     Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
                 };
 

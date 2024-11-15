@@ -44,8 +44,6 @@ pub enum CreateTlasError {
     CreateBufferError(#[from] CreateBufferError),
     #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
     MissingFeature,
-    #[error("Unimplemented Tlas error: this error is not yet implemented")]
-    Unimplemented,
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -132,9 +130,6 @@ pub enum BuildAccelerationStructureError {
     #[error("BlasId is invalid or destroyed (for instance)")]
     InvalidBlasIdForInstance,
 
-    #[error("Blas {0:?} is invalid or destroyed (for instance)")]
-    InvalidBlasForInstance(ResourceErrorIdent),
-
     #[error("TlasId is invalid or destroyed")]
     InvalidTlasId,
 
@@ -150,18 +145,12 @@ pub enum BuildAccelerationStructureError {
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateBlasActionsError {
-    #[error("BlasId is invalid or destroyed")]
-    InvalidBlas,
-
     #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateTlasActionsError {
-    #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(ResourceErrorIdent),
-
     #[error("Tlas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 

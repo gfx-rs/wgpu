@@ -169,10 +169,6 @@ pub enum BindingError {
     InconsistentlyDerivedType,
     #[error("Texture format {0:?} is not supported for storage use")]
     BadStorageFormat(wgt::TextureFormat),
-    #[error(
-        "Storage texture with access {0:?} doesn't have a matching supported `StorageTextureAccess`"
-    )]
-    UnsupportedTextureStorageAccess(naga::StorageAccess),
 }
 
 #[derive(Clone, Debug, Error)]

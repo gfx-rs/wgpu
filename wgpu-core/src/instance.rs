@@ -660,8 +660,6 @@ pub enum RequestDeviceError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
-    #[error("Device has no queue supporting graphics")]
-    NoGraphicsQueue,
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }

@@ -206,9 +206,6 @@ pub enum BufferMapAsyncStatus {
     MapAlreadyPending,
     /// An unknown error.
     Error,
-    /// Mapping was aborted (by unmapping or destroying the buffer before mapping
-    /// happened).
-    Aborted,
     /// The context is Lost.
     ContextLost,
     /// The buffer is in an invalid state.
@@ -1746,8 +1743,6 @@ pub enum CreateTextureViewError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("Not enough memory left to create texture view")]
-    OutOfMemory,
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
         view: wgt::TextureViewDimension,
@@ -1896,9 +1891,6 @@ pub enum CreateSamplerError {
         filter_mode: wgt::FilterMode,
         anisotropic_clamp: u16,
     },
-    #[error("Cannot create any more samplers")]
-    TooManyObjects,
-    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }

@@ -151,8 +151,6 @@ pub enum WaitIdleError {
     Device(#[from] DeviceError),
     #[error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")]
     WrongSubmissionIndex(SubmissionIndex, SubmissionIndex),
-    #[error("GPU got stuck :(")]
-    StuckGpu,
 }
 
 /// Resource tracking for a device.
