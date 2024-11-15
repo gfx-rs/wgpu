@@ -28,22 +28,26 @@ pub enum BindingTypeName {
     AccelerationStructure,
 }
 
-fn map_resource_to_type_name(ty: &ResourceType) -> BindingTypeName {
-    match ty {
-        ResourceType::Buffer { .. } => BindingTypeName::Buffer,
-        ResourceType::Texture { .. } => BindingTypeName::Texture,
-        ResourceType::Sampler { .. } => BindingTypeName::Sampler,
-        ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+impl From<&ResourceType> for BindingTypeName {
+    fn from(ty: &ResourceType) -> BindingTypeName {
+        match ty {
+            ResourceType::Buffer { .. } => BindingTypeName::Buffer,
+            ResourceType::Texture { .. } => BindingTypeName::Texture,
+            ResourceType::Sampler { .. } => BindingTypeName::Sampler,
+            ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+        }
     }
 }
 
-fn map_binding_to_type_name(ty: &BindingType) -> BindingTypeName {
-    match ty {
-        BindingType::Buffer { .. } => BindingTypeName::Buffer,
-        BindingType::Texture { .. } => BindingTypeName::Texture,
-        BindingType::StorageTexture { .. } => BindingTypeName::Texture,
-        BindingType::Sampler { .. } => BindingTypeName::Sampler,
-        BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+impl From<&BindingType> for BindingTypeName {
+    fn from(ty: &BindingType) -> BindingTypeName {
+        match ty {
+            BindingType::Buffer { .. } => BindingTypeName::Buffer,
+            BindingType::Texture { .. } => BindingTypeName::Texture,
+            BindingType::StorageTexture { .. } => BindingTypeName::Texture,
+            BindingType::Sampler { .. } => BindingTypeName::Sampler,
+            BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+        }
     }
 }
 
@@ -414,8 +418,8 @@ impl Resource {
                     }
                     _ => {
                         return Err(BindingError::WrongType {
-                            binding: map_binding_to_type_name(&entry.ty),
-                            shader: map_resource_to_type_name(&self.ty),
+                            binding: (&entry.ty).into(),
+                            shader: (&self.ty).into(),
                         })
                     }
                 };
@@ -437,8 +441,8 @@ impl Resource {
                 }
                 _ => {
                     return Err(BindingError::WrongType {
-                        binding: map_binding_to_type_name(&entry.ty),
-                        shader: map_resource_to_type_name(&self.ty),
+                        binding: (&entry.ty).into(),
+                        shader: (&self.ty).into(),
                     })
                 }
             },
@@ -524,8 +528,8 @@ impl Resource {
                     }
                     _ => {
                         return Err(BindingError::WrongType {
-                            binding: map_binding_to_type_name(&entry.ty),
-                            shader: map_resource_to_type_name(&self.ty),
+                            binding: (&entry.ty).into(),
+                            shader: (&self.ty).into(),
                         })
                     }
                 };
@@ -540,8 +544,8 @@ impl Resource {
                 BindingType::AccelerationStructure => (),
                 _ => {
                     return Err(BindingError::WrongType {
-                        binding: map_binding_to_type_name(&entry.ty),
-                        shader: map_resource_to_type_name(&self.ty),
+                        binding: (&entry.ty).into(),
+                        shader: (&self.ty).into(),
                     })
                 }
             },
