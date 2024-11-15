@@ -1,5 +1,5 @@
 use crate::{
-    device::{queue::TempResource, Device},
+    device::queue::TempResource,
     global::Global,
     hub::Hub,
     id::CommandEncoderId,
@@ -174,7 +174,6 @@ impl Global {
             build_command_index,
             &mut buf_storage,
             hub,
-            device,
         )?;
 
         let snatch_guard = device.snatchable_lock.read();
@@ -225,9 +224,6 @@ impl Global {
 
             let tlas = hub.tlas_s.get(entry.tlas_id).get()?;
             cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
-            if let Some(queue) = device.get_queue() {
-                queue.pending_writes.lock().insert_tlas(&tlas);
-            }
 
             cmd_buf_data.tlas_actions.push(TlasAction {
                 tlas: tlas.clone(),
@@ -478,7 +474,6 @@ impl Global {
             build_command_index,
             &mut buf_storage,
             hub,
-            device,
         )?;
 
         let snatch_guard = device.snatchable_lock.read();
@@ -496,9 +491,6 @@ impl Global {
 
         for package in tlas_iter {
             let tlas = hub.tlas_s.get(package.tlas_id).get()?;
-            if let Some(queue) = device.get_queue() {
-                queue.pending_writes.lock().insert_tlas(&tlas);
-            }
 
             cmd_buf_data.trackers.tlas_s.set_single(tlas.clone());
 
@@ -833,15 +825,11 @@ fn iter_blas<'a>(
     build_command_index: NonZeroU64,
     buf_storage: &mut Vec<TriangleBufferStore<'a>>,
     hub: &Hub,
-    device: &Device,
 ) -> Result<(), BuildAccelerationStructureError> {
     let mut temp_buffer = Vec::new();
     for entry in blas_iter {
         let blas = hub.blas_s.get(entry.blas_id).get()?;
         cmd_buf_data.trackers.blas_s.set_single(blas.clone());
-        if let Some(queue) = device.get_queue() {
-            queue.pending_writes.lock().insert_blas(&blas);
-        }
 
         cmd_buf_data.blas_actions.push(BlasAction {
             blas: blas.clone(),

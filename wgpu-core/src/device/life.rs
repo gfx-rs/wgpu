@@ -115,10 +115,6 @@ impl ActiveSubmission {
             if encoder.trackers.blas_s.contains(blas) {
                 return true;
             }
-
-            if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
-                return true;
-            }
         }
 
         false
@@ -132,10 +128,6 @@ impl ActiveSubmission {
             // it is in the tracker.
 
             if encoder.trackers.tlas_s.contains(tlas) {
-                return true;
-            }
-
-            if encoder.pending_tlas_s.contains_key(&tlas.tracker_index()) {
                 return true;
             }
         }

@@ -1959,15 +1959,10 @@ impl Blas {
         };
 
         if let Some(queue) = device.get_queue() {
-            let mut pending_writes = queue.pending_writes.lock();
-            if pending_writes.contains_blas(self) {
-                pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_blas_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
-                }
+            let mut life_lock = queue.lock_life();
+            let last_submit_index = life_lock.get_blas_latest_submission_index(self);
+            if let Some(last_submit_index) = last_submit_index {
+                life_lock.schedule_resource_destruction(temp, last_submit_index);
             }
         }
 
@@ -2054,15 +2049,10 @@ impl Tlas {
         };
 
         if let Some(queue) = device.get_queue() {
-            let mut pending_writes = queue.pending_writes.lock();
-            if pending_writes.contains_tlas(self) {
-                pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
-                }
+            let mut life_lock = queue.lock_life();
+            let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
+            if let Some(last_submit_index) = last_submit_index {
+                life_lock.schedule_resource_destruction(temp, last_submit_index);
             }
         }
 
