@@ -17,13 +17,23 @@ use crate::{
     FastHashSet,
 };
 
-use wgt::{math::align_to, BufferUsages, Features};
+use wgt::{
+    math::align_to, AccelerationStructureFlags, BlasGeometrySizeDescriptors, BufferAddress,
+    BufferUsages, Features, Maintain,
+};
 
 use super::CommandBufferMutable;
+use crate::device::global::DevicePoll;
 use crate::device::queue::PendingWrites;
+use crate::device::Device;
+use crate::id::BlasId;
+use crate::lock::{rank, RwLock};
+use crate::ray_tracing::CompactBlasError;
+use crate::resource::{Fallible, TrackingData};
+use crate::snatch::Snatchable;
 use hal::BufferUses;
-use std::mem::ManuallyDrop;
-use std::ops::DerefMut;
+use std::mem::{size_of, ManuallyDrop};
+use std::ops::{Add, DerefMut};
 use std::{
     cmp::max,
     num::NonZeroU64,
@@ -42,6 +52,7 @@ struct TriangleBufferStore<'a> {
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
+    raw: &'a dyn hal::DynAccelerationStructure,
     entries: hal::AccelerationStructureEntries<'a, dyn hal::DynBuffer>,
     scratch_buffer_offset: u64,
 }
@@ -70,6 +81,7 @@ impl Global {
     fn internal_command_encoder_compact_blas(
         &self,
         src_blas: &Arc<Blas>,
+        device: &Arc<Device>,
         raw_device: &dyn hal::DynDevice,
         cmd_buf_data: &mut CommandBufferMutable,
     ) -> Result<Arc<Blas>, CompactBlasError> {
@@ -80,9 +92,12 @@ impl Global {
         if let None = *src_blas.built_index.read() {
             return Err(CompactBlasError::UsedUnbuilt(src_blas.error_ident()));
         }
+        cmd_buf_data
+            .check_recording()
+            .map_err(CompactBlasError::from)?;
         let encoder = cmd_buf_data
             .encoder
-            .open()
+            .open(device)
             .map_err(CompactBlasError::from)?;
         let buffer = src_blas
             .compacted_size_buffer
@@ -92,7 +107,7 @@ impl Global {
             let buf_mapping = raw_device
                 .map_buffer(
                     buffer.as_ref(),
-                    0..mem::size_of::<BufferAddress>() as BufferAddress,
+                    0..size_of::<BufferAddress>() as BufferAddress,
                 )
                 .map_err(CompactBlasError::from)?;
             assert!(buf_mapping.is_coherent);
@@ -102,7 +117,7 @@ impl Global {
         };
 
         assert_ne!(acc_struct_size, 0);
-
+        let snatch_lock = device.snatchable_lock.read();
         let acc_struct = unsafe {
             raw_device
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
@@ -122,7 +137,11 @@ impl Global {
 
         unsafe {
             encoder.copy_acceleration_structure_to_acceleration_structure(
-                src_blas.raw.as_ref(),
+                src_blas
+                    .raw
+                    .get(&snatch_lock)
+                    .ok_or(CompactBlasError::InvalidBlas)?
+                    .as_ref(),
                 acc_struct.as_ref(),
                 hal::AccelerationStructureCopy {
                     copy_flags: wgt::AccelerationStructureCopy::Compact,
@@ -134,7 +153,7 @@ impl Global {
             unsafe { raw_device.get_acceleration_structure_device_address(acc_struct.as_ref()) };
 
         let mut blas = Blas {
-            raw: ManuallyDrop::new(acc_struct),
+            raw: Snatchable::new(acc_struct),
             device: src_blas.device.clone(),
             size_info: src_blas.size_info,
             sizes: src_blas.sizes.clone(),
@@ -165,11 +184,12 @@ impl Global {
         id_in: Option<BlasId>,
     ) -> (BlasId, Option<u64>, Option<CompactBlasError>) {
         let hub = &self.hub;
-        let fid = hub.blas_s.prepare(encoder_id.backend(), id_in);
+        let fid = hub.blas_s.prepare(id_in);
         let err = 'err: {
             let blas_guard = hub.blas_s.read();
             let src_blas = match blas_guard
                 .get(blas_id)
+                .get()
                 .map_err(|_| CompactBlasError::InvalidBlas)
             {
                 Ok(blas) => blas.clone(),
@@ -184,22 +204,30 @@ impl Global {
             {
                 break 'err CompactBlasError::BlasMissingAllowCompaction(src_blas.error_ident());
             }
-            let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-                Ok(cmd_buf) => cmd_buf,
-                Err(_) => break 'err CommandEncoderError::Invalid.into(),
-            };
+
+            let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-            let device = &mut &cmd_buf.device;
+            let device = &cmd_buf.device;
+            let DevicePoll {
+                closures,
+                queue_empty: _,
+            } = match Self::poll_single_device(device, Maintain::Wait) {
+                Ok(poll) => poll,
+                Err(err) => break 'err err.into(),
+            };
+
+            closures.fire();
             let raw_device = device.raw();
             return match self.internal_command_encoder_compact_blas(
                 &src_blas,
+                device,
                 raw_device,
                 cmd_buf_data,
             ) {
                 Ok(blas) => {
                     let handle = blas.handle;
-                    let id = fid.assign(blas.clone());
+                    let id = fid.assign(Fallible::Valid(blas.clone()));
 
                     #[cfg(feature = "trace")]
                     if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
@@ -213,7 +241,7 @@ impl Global {
                     let build_command_index = NonZeroU64::new(
                         device
                             .last_acceleration_structure_build_command_index
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                            .fetch_add(1, Ordering::Relaxed)
                             + 1,
                     )
                     .unwrap();
@@ -229,7 +257,7 @@ impl Global {
                 }
             };
         };
-        let id = fid.assign_error();
+        let id = fid.assign(Fallible::Invalid(Arc::new(format!("{err:?}"))));
         (id, None, Some(err))
     }
 
@@ -655,6 +683,7 @@ impl Global {
         let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let snatch_guard = device.snatchable_lock.read();
 
         iter_blas(
             blas_iter,
@@ -665,7 +694,6 @@ impl Global {
             device.pending_writes.lock().deref_mut(),
         )?;
 
-        let snatch_guard = device.snatchable_lock.read();
         iter_buffers(
             &mut buf_storage,
             &snatch_guard,
@@ -1348,7 +1376,7 @@ fn iter_buffers<'a, 'b>(
             flags: mesh.size.flags,
         };
         triangle_entries.push(triangles);
-        if let Some(blas) = buf.ending_blas.take() {
+        if let Some(blas) = buf.ending_blas.as_ref() {
             let scratch_buffer_offset = *scratch_buffer_blas_size;
             *scratch_buffer_blas_size += align_to(
                 blas.size_info.build_scratch_size as u32,
@@ -1356,7 +1384,12 @@ fn iter_buffers<'a, 'b>(
             ) as u64;
 
             blas_storage.push(BlasStore {
-                blas,
+                raw: blas
+                    .raw(snatch_guard)
+                    .ok_or(BuildAccelerationStructureError::InvalidBlas(
+                        blas.error_ident(),
+                    ))?,
+                blas: blas.clone(),
                 entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
                 scratch_buffer_offset,
             });
@@ -1382,6 +1415,7 @@ fn map_blas<'a>(
         blas,
         entries,
         scratch_buffer_offset,
+        ..
     } = storage;
     if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
         log::info!("only rebuild implemented")
@@ -1414,13 +1448,13 @@ fn build_blas<'a>(
         dyn hal::DynAccelerationStructure,
     >],
     scratch_buffer_barrier: hal::BufferBarrier<dyn hal::DynBuffer>,
-    blas_storage: &BlasStorage,
+    blas_storage: &Vec<BlasStore>,
 ) {
     unsafe {
         cmd_buf_raw.transition_buffers(&input_barriers);
     }
 
-    for (blas, _, _) in blas_storage {
+    for BlasStore { blas, .. } in blas_storage {
         *blas.being_built.write() = true;
     }
 
@@ -1435,7 +1469,7 @@ fn build_blas<'a>(
         }
     }
 
-    for (blas, _, _) in blas_storage {
+    for BlasStore { blas, raw, .. } in blas_storage {
         if let Some(buf) = &blas.compacted_size_buffer {
             unsafe {
                 cmd_buf_raw.place_acceleration_structure_barrier(
@@ -1444,8 +1478,7 @@ fn build_blas<'a>(
                             ..hal::AccelerationStructureUses::QUERY_INPUT,
                     },
                 );
-                cmd_buf_raw
-                    .read_acceleration_structure_compact_size(blas.raw.as_ref(), buf.as_ref());
+                cmd_buf_raw.read_acceleration_structure_compact_size(*raw, buf.as_ref());
                 cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
                     buffer: buf.as_ref(),
                     usage: hal::BufferUses::QUERY_RESOLVE | hal::BufferUses::COPY_DST

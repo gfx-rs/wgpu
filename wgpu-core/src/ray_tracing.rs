@@ -16,6 +16,7 @@ use crate::{
 use std::sync::Arc;
 use std::{num::NonZeroU64, slice};
 
+use crate::device::WaitIdleError;
 use crate::resource::{Blas, ResourceErrorIdent, Tlas};
 use thiserror::Error;
 use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
@@ -60,6 +61,8 @@ pub enum CompactBlasError {
     CreateBlasError(#[from] CreateBlasError),
     #[error(transparent)]
     EncoderError(#[from] CommandEncoderError),
+    #[error(transparent)]
+    WaitIdleError(#[from] WaitIdleError),
     #[error("Blas is destroyed")]
     InvalidBlas,
     #[error("Blas {0:?} is missing 'ALLOW_COMPACTION' flag")]

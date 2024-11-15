@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
 
-use wgpu::StoreOp;
+use wgpu::{CommandEncoderDescriptor, StoreOp};
 
 // from cube
 #[repr(C)]
@@ -346,27 +346,27 @@ impl crate::framework::Example for Example {
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
 
         encoder.build_acceleration_structures(
-            iter::once(&rt::BlasBuildEntry {
+            iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: rt::BlasGeometries::TriangleGeometries(vec![rt::BlasTriangleGeometry {
-                    size: &blas_geo_size_desc,
-                    vertex_buffer: &vertex_buf,
-                    first_vertex: 0,
-                    vertex_stride: mem::size_of::<Vertex>() as u64,
-                    index_buffer: Some(&index_buf),
-                    index_buffer_offset: Some(0),
-                    transform_buffer: None,
-                    transform_buffer_offset: None,
-                }]),
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
+                    wgpu::BlasTriangleGeometry {
+                        size: &blas_geo_size_desc,
+                        vertex_buffer: &vertex_buf,
+                        first_vertex: 0,
+                        vertex_stride: mem::size_of::<Vertex>() as u64,
+                        index_buffer: Some(&index_buf),
+                        index_buffer_offset: Some(0),
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    },
+                ]),
             }),
             iter::empty(),
         );
         queue.submit(Some(encoder.finish()));
-        let timer = Instant::now();
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
         let blas = encoder.compact_blas(&blas);
         queue.submit(Some(encoder.finish()));
-        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
         for x in 0..side_count {
             for y in 0..side_count {
                 tlas_package[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
@@ -388,24 +388,7 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(
-            iter::once(&wgpu::BlasBuildEntry {
-                blas: &blas,
-                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
-                    wgpu::BlasTriangleGeometry {
-                        size: &blas_geo_size_desc,
-                        vertex_buffer: &vertex_buf,
-                        first_vertex: 0,
-                        vertex_stride: mem::size_of::<Vertex>() as u64,
-                        index_buffer: Some(&index_buf),
-                        index_buffer_offset: Some(0),
-                        transform_buffer: None,
-                        transform_buffer_offset: None,
-                    },
-                ]),
-            }),
-            iter::once(&tlas_package),
-        );
+        encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
 
         queue.submit(Some(encoder.finish()));
 

@@ -728,10 +728,9 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     fn tlas_drop(&self, tlas_data: &Self::TlasData);
     fn command_encoder_compact_blas(
         &self,
-        encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        blas_id: &Self::BlasId,
-    ) -> (Self::BlasId, Option<u64>, Self::BlasData);
+        blas_id: &Self::BlasData,
+    ) -> (Option<u64>, Self::BlasData);
 }
 
 pub(crate) fn downcast_ref<T: Debug + WasmNotSendSync + 'static>(data: &crate::Data) -> &T {
@@ -1391,10 +1390,9 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     ) -> Box<crate::Data>;
     fn command_encoder_compact_blas(
         &self,
-        encoder: &ObjectId,
         encoder_data: &crate::Data,
-        blas: &ObjectId,
-    ) -> (ObjectId, Option<u64>, Box<crate::Data>);
+        blas: &crate::Data,
+    ) -> (Option<u64>, Box<crate::Data>);
     fn command_encoder_build_acceleration_structures_unsafe_tlas(
         &self,
         encoder_data: &crate::Data,
@@ -2775,16 +2773,13 @@ where
 
     fn command_encoder_compact_blas(
         &self,
-        encoder: &ObjectId,
         encoder_data: &crate::Data,
-        blas: &ObjectId,
-    ) -> (ObjectId, Option<u64>, Box<crate::Data>) {
-        let blas = <T::BlasId>::from(*blas);
-        let encoder = <T::CommandEncoderId>::from(*encoder);
+        blas: &crate::Data,
+    ) -> (Option<u64>, Box<crate::Data>) {
+        let blas = downcast_ref(blas);
         let encoder_data = downcast_ref(encoder_data);
-        let (blas, handle, data) =
-            Context::command_encoder_compact_blas(self, &encoder, encoder_data, &blas);
-        (blas.into(), handle, Box::new(data) as _)
+        let (handle, data) = Context::command_encoder_compact_blas(self, encoder_data, blas);
+        (handle, Box::new(data) as _)
     }
 
     fn command_encoder_build_acceleration_structures_unsafe_tlas(

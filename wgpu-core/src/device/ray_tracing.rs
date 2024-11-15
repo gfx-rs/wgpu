@@ -1,4 +1,4 @@
-use std::mem::ManuallyDrop;
+use std::mem::{size_of, ManuallyDrop};
 use std::sync::Arc;
 
 #[cfg(feature = "trace")]
@@ -15,8 +15,8 @@ use crate::{
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
-use hal::AccelerationStructureTriangleIndices;
-use wgt::Features;
+use hal::{AccelerationStructureTriangleIndices, BufferUses, MemoryFlags};
+use wgt::{AccelerationStructureFlags, BufferAddress, Features};
 
 impl Device {
     fn create_blas(
@@ -102,13 +102,13 @@ impl Device {
                 self.raw()
                     .create_buffer(&hal::BufferDescriptor {
                         label: None,
-                        size: mem::size_of::<BufferAddress>() as BufferAddress,
+                        size: size_of::<BufferAddress>() as BufferAddress,
                         usage: BufferUses::MAP_READ
                             | BufferUses::COPY_DST
                             | BufferUses::ACCELERATION_STRUCTURE_QUERY,
                         memory_flags: MemoryFlags::PREFER_COHERENT,
                     })
-                    .map_err(DeviceError::from)
+                    .map_err(DeviceError::from_hal)
                     .map_err(CreateBlasError::from)?
             };
             Some(buf)

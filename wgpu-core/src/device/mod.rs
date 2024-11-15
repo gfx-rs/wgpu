@@ -168,7 +168,7 @@ impl UserClosures {
             .extend(other.device_lost_invocations);
     }
 
-    fn fire(self) {
+    pub(crate) fn fire(self) {
         // Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
 

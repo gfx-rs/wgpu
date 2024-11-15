@@ -3443,10 +3443,9 @@ impl crate::context::Context for ContextWebGpu {
 
     fn command_encoder_compact_blas(
         &self,
-        _encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _blas_id: &Self::BlasId,
-    ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
+        _blas_id: &Self::BlasData,
+    ) -> (Option<u64>, Self::BlasData) {
         unimplemented!("Raytracing not implemented for web");
     }
 }

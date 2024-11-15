@@ -508,4 +508,24 @@ impl CommandEncoder {
             &mut tlas,
         );
     }
+    /// Creates a new blas and copies (in a compacting way) the contents of the provided blas into the new one (compaction flag must be set).
+    ///
+    /// The blas that is being compacted must have been built in a previously submitted command buffer
+    ///
+    /// ***This function is very slow*** and will block until the input blas is built
+    pub fn compact_blas(&mut self, blas: &Blas) -> Blas {
+        let (handle, data) = DynContext::command_encoder_compact_blas(
+            &*self.context,
+            self.data.as_ref(),
+            blas.shared.data.as_ref(),
+        );
+        Blas {
+            handle,
+            #[allow(clippy::arc_with_non_send_sync)]
+            shared: Arc::new(BlasShared {
+                context: Arc::clone(&self.context),
+                data,
+            }),
+        }
+    }
 }

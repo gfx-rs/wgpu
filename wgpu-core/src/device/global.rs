@@ -1950,7 +1950,7 @@ impl Global {
         Ok(queue_empty)
     }
 
-    fn poll_single_device(
+    pub(crate) fn poll_single_device(
         device: &crate::device::Device,
         maintain: wgt::Maintain<crate::SubmissionIndex>,
     ) -> Result<DevicePoll, WaitIdleError> {
@@ -2287,7 +2287,7 @@ impl Global {
     }
 }
 
-struct DevicePoll {
-    closures: UserClosures,
-    queue_empty: bool,
+pub(crate) struct DevicePoll {
+    pub(crate) closures: UserClosures,
+    pub(crate) queue_empty: bool,
 }

@@ -3058,16 +3058,16 @@ impl crate::Context for ContextWgpuCore {
 
     fn command_encoder_compact_blas(
         &self,
-        encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        blas_id: &Self::BlasId,
-    ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
+        blas_data: &Self::BlasData,
+    ) -> (Option<u64>, Self::BlasData) {
         let global = &self.0;
-        let (id, handle, error) = global.command_encoder_compact_blas(*encoder, *blas_id, None);
+        let (id, handle, error) =
+            global.command_encoder_compact_blas(encoder_data.id, blas_data.id, None);
         if let Some(cause) = error {
             self.handle_error(&encoder_data.error_sink, cause, None, "Device::create_blas");
         }
-        (id, handle, Blas {})
+        (handle, Blas { id })
     }
 
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
