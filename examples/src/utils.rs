@@ -158,6 +158,9 @@ fn create_output_image_element(document: &web_sys::Document) -> web_sys::HtmlIma
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+/// If the environment variable `WGPU_ADAPTER_NAME` is set, this function will attempt to
+/// initialize the adapter with that name. If it is not set, it will attempt to initialize
+/// the adapter which supports the required features.
 pub(crate) async fn get_adapter_with_capabilities_or_from_env(
     instance: &wgpu::Instance,
     required_features: &wgpu::Features,
