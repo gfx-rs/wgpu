@@ -4,8 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
 
-use rt::traits::*;
-use wgpu::{ray_tracing as rt, StoreOp};
+use wgpu::StoreOp;
 
 // from cube
 #[repr(C)]
@@ -250,8 +249,8 @@ struct Example {
     uniform_buf: wgpu::Buffer,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    blas: rt::Blas,
-    tlas_package: rt::TlasPackage,
+    blas: wgpu::Blas,
+    tlas_package: wgpu::TlasPackage,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     blit_pipeline: wgpu::RenderPipeline,
@@ -264,8 +263,8 @@ impl crate::framework::Example for Example {
         wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
             | wgpu::Features::VERTEX_WRITABLE_STORAGE
-            | wgpu::Features::RAY_QUERY
-            | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+            | wgpu::Features::EXPERIMENTAL_RAY_QUERY
+            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
             | wgpu::Features::RAY_HIT_VERTEX_RETURN
     }
 
@@ -356,31 +355,31 @@ impl crate::framework::Example for Example {
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
         });
 
-        let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
-            vertex_format: wgpu::VertexFormat::Float32x4,
+        let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
+            vertex_format: wgpu::VertexFormat::Float32x3,
             vertex_count: vertex_data.len() as u32,
             index_format: Some(wgpu::IndexFormat::Uint16),
             index_count: Some(index_data.len() as u32),
-            flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
+            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
         let blas = device.create_blas(
-            &rt::CreateBlasDescriptor {
+            &wgpu::CreateBlasDescriptor {
                 label: None,
-                flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE
-                    | rt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
-                update_mode: rt::AccelerationStructureUpdateMode::Build,
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                    | wgpu::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
-            rt::BlasGeometrySizeDescriptors::Triangles {
-                desc: vec![blas_geo_size_desc.clone()],
+            wgpu::BlasGeometrySizeDescriptors::Triangles {
+                descriptors: vec![blas_geo_size_desc.clone()],
             },
         );
 
-        let tlas = device.create_tlas(&rt::CreateTlasDescriptor {
+        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
-            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE
-                | rt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
-            update_mode: rt::AccelerationStructureUpdateMode::Build,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                | wgpu::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
         });
 
@@ -466,7 +465,7 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let mut tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
+        let mut tlas_package = wgpu::TlasPackage::new(tlas);
 
         let dist = 3.0;
 
@@ -474,7 +473,7 @@ impl crate::framework::Example for Example {
             for y in 0..side_count {
                 *tlas_package
                     .get_mut_single((x + y * side_count) as usize)
-                    .unwrap() = Some(rt::TlasInstance::new(
+                    .unwrap() = Some(wgpu::TlasInstance::new(
                     &blas,
                     AccelerationStructureInstance::affine_to_rows(
                         &Affine3A::from_rotation_translation(
@@ -496,9 +495,9 @@ impl crate::framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         encoder.build_acceleration_structures(
-            iter::once(&rt::BlasBuildEntry {
+            iter::once(&wgpu::BlasBuildEntry {
                 blas: &blas,
-                geometry: rt::BlasGeometries::TriangleGeometries(vec![rt::BlasTriangleGeometry {
+                geometry: wgpu::BlasGeometries::TriangleGeometries(vec![wgpu::BlasTriangleGeometry {
                     size: &blas_geo_size_desc,
                     vertex_buffer: &vertex_buf,
                     first_vertex: 0,
@@ -619,7 +618,7 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_cube_normals",
-    image_path: "/examples/ray_cube_normals/screenshot.png",
+    image_path: "/examples/src/ray_cube_normals/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),

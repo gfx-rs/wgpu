@@ -1,11 +1,6 @@
-use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
-
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
-
-use rt::traits::*;
-use wgpu::ray_tracing as rt;
 
 // from cube
 #[repr(C)]
@@ -56,7 +51,6 @@ struct RawSceneComponents {
     instances: Vec<(Range<usize>, Range<usize>)>, // vertex range, geometry range
 }
 
-#[allow(dead_code)]
 struct SceneComponents {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
@@ -305,7 +299,6 @@ fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
     upload_scene_components(device, queue, &scene)
 }
 
-#[allow(dead_code)]
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,

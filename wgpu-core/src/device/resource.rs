@@ -1896,7 +1896,7 @@ impl Device {
                         },
                     )
                 }
-                Bt::AccelerationStructure => (None, WritableStorage::No),
+                Bt::AccelerationStructure { .. } => (None, WritableStorage::No),
             };
 
             // Validate the count parameter
@@ -2240,7 +2240,7 @@ impl Device {
         tlas.same_device(self)?;
 
         match decl.ty {
-            wgt::BindingType::AccelerationStructure => (),
+            wgt::BindingType::AccelerationStructure { .. } => (),
             _ => {
                 return Err(Error::WrongBindingType {
                     binding,
