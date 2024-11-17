@@ -3440,61 +3440,6 @@ impl crate::context::Context for ContextWebGpu {
     fn tlas_drop(&self, _tlas_data: &Self::TlasData) {
         unimplemented!("Raytracing not implemented for web");
     }
-
-    fn device_create_blas(
-        &self,
-        _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
-        _desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
-        _sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn device_create_tlas(
-        &self,
-        _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
-        _desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
-    ) -> (Self::TlasId, Self::TlasData) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
-        &'a self,
-        _encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
-        _blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        _tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<Self>>,
-    ) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn command_encoder_build_acceleration_structures<'a>(
-        &'a self,
-        _encoder: &Self::CommandEncoderId,
-        _encoder_data: &Self::CommandEncoderData,
-        _blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        _tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
-    ) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn blas_destroy(&self, _blas: &Self::BlasId, _blas_data: &Self::BlasData) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn blas_drop(&self, _blas: &Self::BlasId, _blas_data: &Self::BlasData) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn tlas_destroy(&self, _tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
-    fn tlas_drop(&self, _tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
-        unimplemented!("Raytracing not implemented for web");
-    }
 }
 
 pub(crate) type SurfaceOutputDetail = ();

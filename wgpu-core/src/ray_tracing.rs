@@ -158,7 +158,6 @@ pub enum ValidateBlasActionsError {
     #[error("BlasId is invalid or destroyed")]
     InvalidBlas,
 
-    #[error("Blas {0:?} is used before it is build")]
     #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 }

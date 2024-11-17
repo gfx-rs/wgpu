@@ -192,7 +192,7 @@ impl crate::framework::Example for Example {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::AccelerationStructure,
+                    ty: wgpu::BindingType::AccelerationStructure { vertex_return: false },
                     count: None,
                 },
             ],

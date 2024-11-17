@@ -108,7 +108,7 @@ pub fn map_binding_type(ty: &wgt::BindingType) -> Direct3D12::D3D12_DESCRIPTOR_R
             ..
         }
         | Bt::StorageTexture { .. } => Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-        Bt::AccelerationStructure => todo!(),
+        Bt::AccelerationStructure { .. } => todo!(),
     }
 }
 

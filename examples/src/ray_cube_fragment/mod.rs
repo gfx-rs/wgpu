@@ -1,13 +1,8 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
-
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use std::ops::IndexMut;
 use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
 use wgpu::util::DeviceExt;
-
-use rt::traits::*;
-use wgpu::ray_tracing as rt;
 
 // from cube
 #[repr(C)]
@@ -99,7 +94,6 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
     }
 }
 
-#[allow(dead_code)]
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,
@@ -271,8 +265,6 @@ impl crate::framework::Example for Example {
         Example {
             uniforms,
             uniform_buf,
-            vertex_buf,
-            index_buf,
             blas,
             tlas_package,
             pipeline,

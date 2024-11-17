@@ -9,11 +9,15 @@
         ),
         (
             name: None,
-            inner: AccelerationStructure,
+            inner: AccelerationStructure(
+                vertex_return: false,
+            ),
         ),
         (
             name: None,
-            inner: RayQuery,
+            inner: RayQuery(
+                vertex_return: false,
+            ),
         ),
         (
             name: None,
@@ -80,6 +84,7 @@
     special_types: (
         ray_desc: Some(5),
         ray_intersection: None,
+        ray_vertex_return: None,
         predeclared_types: {},
     ),
     constants: [],

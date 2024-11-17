@@ -4,7 +4,6 @@ use crate::{
     hub::Hub,
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
-    lock::RwLockReadGuard,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
         BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
@@ -180,8 +179,6 @@ impl Global {
             blas_iter,
             cmd_buf_data,
             build_command_index,
-            &buffer_guard,
-            &blas_guard,
             &mut buf_storage,
             hub,
             device,
@@ -193,7 +190,6 @@ impl Global {
             &snatch_guard,
             &mut input_barriers,
             cmd_buf_data,
-            &buffer_guard,
             &mut scratch_buffer_blas_size,
             &mut blas_storage,
             hub,
@@ -498,8 +494,6 @@ impl Global {
             blas_iter,
             cmd_buf_data,
             build_command_index,
-            &buffer_guard,
-            &blas_guard,
             &mut buf_storage,
             hub,
             device,
@@ -511,7 +505,6 @@ impl Global {
             &snatch_guard,
             &mut input_barriers,
             cmd_buf_data,
-            &buffer_guard,
             &mut scratch_buffer_blas_size,
             &mut blas_storage,
             hub,
@@ -628,10 +621,6 @@ impl Global {
             usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH
                 ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
         };
-
-        let blas_descriptors = blas_storage
-            .iter()
-            .map(|storage| map_blas(storage, scratch_buffer.raw()));
 
         let mut tlas_descriptors = Vec::with_capacity(tlas_storage.len());
 
@@ -1021,7 +1010,6 @@ fn iter_buffers<'a, 'b>(
     snatch_guard: &'a SnatchGuard,
     input_barriers: &mut Vec<hal::BufferBarrier<'a, dyn hal::DynBuffer>>,
     cmd_buf_data: &mut CommandBufferMutable,
-    buffer_guard: &RwLockReadGuard<Storage<Buffer>>,
     scratch_buffer_blas_size: &mut u64,
     blas_storage: &mut Vec<BlasStore<'a>>,
     hub: &Hub,

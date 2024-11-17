@@ -766,11 +766,6 @@ impl Global {
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
                 };
-                let map_tlas = |id: &id::TlasId| {
-                    tlas_storage
-                        .get_owned(*id)
-                        .map_err(|_| binding_model::CreateBindGroupError::InvalidTlasId(*id))
-                };
                 let resource = match e.resource {
                     BindingResource::Buffer(ref buffer) => {
                         ResolvedBindingResource::Buffer(resolve_buffer(buffer)?)

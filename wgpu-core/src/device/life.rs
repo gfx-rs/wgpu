@@ -272,34 +272,6 @@ impl LifetimeTracker {
     }
 
     /// Returns the submission index of the most recent submission that uses the
-    /// given blas.
-    pub fn get_tlas_latest_submission_index(&self, tlas: &Tlas) -> Option<SubmissionIndex> {
-        // We iterate in reverse order, so that we can bail out early as soon
-        // as we find a hit.
-        self.active.iter().rev().find_map(|submission| {
-            if submission.contains_tlas(tlas) {
-                Some(submission.index)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Returns the submission index of the most recent submission that uses the
-    /// given blas.
-    pub fn get_blas_latest_submission_index(&self, blas: &Blas) -> Option<SubmissionIndex> {
-        // We iterate in reverse order, so that we can bail out early as soon
-        // as we find a hit.
-        self.active.iter().rev().find_map(|submission| {
-            if submission.contains_blas(blas) {
-                Some(submission.index)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Returns the submission index of the most recent submission that uses the
     /// given tlas.
     pub fn get_tlas_latest_submission_index(&self, tlas: &Tlas) -> Option<SubmissionIndex> {
         // We iterate in reverse order, so that we can bail out early as soon

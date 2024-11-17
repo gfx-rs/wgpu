@@ -547,11 +547,6 @@ impl crate::Context for ContextWgpuCore {
     type BlasData = Blas;
     type TlasData = Tlas;
 
-    type BlasId = wgc::id::BlasId;
-    type BlasData = Blas;
-    type TlasId = wgc::id::TlasId;
-    type TlasData = Tlas;
-
     #[allow(clippy::type_complexity)]
     type RequestDeviceFuture =
         Ready<Result<(Self::DeviceData, Self::QueueData), crate::RequestDeviceError>>;
@@ -1003,9 +998,6 @@ impl crate::Context for ContextWgpuCore {
                         bm::BindingResource::AccelerationStructure(
                             downcast_tlas(acceleration_structure).id,
                         )
-                    }
-                    BindingResource::AccelerationStructure(acceleration_structure) => {
-                        bm::BindingResource::AccelerationStructure(acceleration_structure.id.into())
                     }
                 },
             })

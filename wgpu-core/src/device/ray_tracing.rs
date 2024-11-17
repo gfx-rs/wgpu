@@ -1,8 +1,6 @@
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use hal::AccelerationStructureTriangleIndices;
-
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::{rank, Mutex};
