@@ -74,7 +74,8 @@ impl RenderDoc {
                 Err(e) => {
                     return RenderDoc::NotAvailable {
                         reason: format!(
-                            "Unable to get RENDERDOC_GetAPI from renderdoc library '{renderdoc_filename}': {e:?}"
+                            "Unable to get RENDERDOC_GetAPI from renderdoc library '{}': {e:?}",
+                            renderdoc_filename
                         ),
                     }
                 }
@@ -89,7 +90,8 @@ impl RenderDoc {
             },
             return_value => RenderDoc::NotAvailable {
                 reason: format!(
-                    "Unable to get API from renderdoc library '{renderdoc_filename}': {return_value}"
+                    "Unable to get API from renderdoc library '{}': {}",
+                    renderdoc_filename, return_value
                 ),
             },
         }
@@ -106,7 +108,7 @@ impl Default for RenderDoc {
         unsafe { Self::new() }
     }
 }
-/// A implementation specific handle
+/// An implementation specific handle
 pub type Handle = *mut os::raw::c_void;
 
 impl RenderDoc {

@@ -65,6 +65,35 @@ pub(crate) struct InitTracker<Idx: Ord + Copy + Default> {
     uninitialized_ranges: UninitializedRangeVec<Idx>,
 }
 
+pub(crate) struct UninitializedIter<'a, Idx: fmt::Debug + Ord + Copy> {
+    uninitialized_ranges: &'a UninitializedRangeVec<Idx>,
+    drain_range: Range<Idx>,
+    next_index: usize,
+}
+
+impl<'a, Idx> Iterator for UninitializedIter<'a, Idx>
+where
+    Idx: fmt::Debug + Ord + Copy,
+{
+    type Item = Range<Idx>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.uninitialized_ranges
+            .get(self.next_index)
+            .and_then(|range| {
+                if range.start < self.drain_range.end {
+                    self.next_index += 1;
+                    Some(
+                        range.start.max(self.drain_range.start)
+                            ..range.end.min(self.drain_range.end),
+                    )
+                } else {
+                    None
+                }
+            })
+    }
+}
+
 pub(crate) struct InitTrackerDrain<'a, Idx: fmt::Debug + Ord + Copy> {
     uninitialized_ranges: &'a mut UninitializedRangeVec<Idx>,
     drain_range: Range<Idx>,
@@ -188,6 +217,18 @@ where
                     None
                 }
             })
+    }
+
+    // Returns an iterator over the uninitialized ranges in a query range.
+    pub(crate) fn uninitialized(&mut self, drain_range: Range<Idx>) -> UninitializedIter<Idx> {
+        let index = self
+            .uninitialized_ranges
+            .partition_point(|r| r.end <= drain_range.start);
+        UninitializedIter {
+            drain_range,
+            uninitialized_ranges: &self.uninitialized_ranges,
+            next_index: index,
+        }
     }
 
     // Drains uninitialized ranges in a query range.

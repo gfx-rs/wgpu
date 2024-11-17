@@ -58,6 +58,8 @@ pub fn map_sampling(word: &str, span: Span) -> Result<crate::Sampling, Error<'_>
         "center" => Ok(crate::Sampling::Center),
         "centroid" => Ok(crate::Sampling::Centroid),
         "sample" => Ok(crate::Sampling::Sample),
+        "first" => Ok(crate::Sampling::First),
+        "either" => Ok(crate::Sampling::Either),
         _ => Err(Error::UnknownAttribute(span)),
     }
 }
@@ -92,7 +94,7 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<crate::StorageFormat
         "rgba8sint" => Sf::Rgba8Sint,
         "rgb10a2uint" => Sf::Rgb10a2Uint,
         "rgb10a2unorm" => Sf::Rgb10a2Unorm,
-        "rg11b10float" => Sf::Rg11b10UFloat,
+        "rg11b10float" => Sf::Rg11b10Ufloat,
         "rg32uint" => Sf::Rg32Uint,
         "rg32sint" => Sf::Rg32Sint,
         "rg32float" => Sf::Rg32Float,
@@ -228,6 +230,7 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "inverseSqrt" => Mf::InverseSqrt,
         "transpose" => Mf::Transpose,
         "determinant" => Mf::Determinant,
+        "quantizeToF16" => Mf::QuantizeToF16,
         // bits
         "countTrailingZeros" => Mf::CountTrailingZeros,
         "countLeadingZeros" => Mf::CountLeadingZeros,

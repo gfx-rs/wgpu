@@ -104,13 +104,14 @@ use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::{queue::Queue, Device},
-    instance::{Adapter, Surface},
+    instance::Adapter,
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
-    resource::{Blas, Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas},
-    storage::{Element, Storage},
+    resource::{
+        Blas, Buffer, Fallible, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
+    },
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct HubReport {
@@ -159,29 +160,28 @@ impl HubReport {
 /// Inside the `Registry` there are `Arc<T>` where `T` is a Resource
 /// Lock of `Registry` happens only when accessing to get the specific resource
 ///
-///
-/// [`A::hub(global)`]: HalApi::hub
+/// [`Storage`]: crate::storage::Storage
 pub struct Hub {
-    pub(crate) adapters: Registry<Adapter>,
-    pub(crate) devices: Registry<Device>,
-    pub(crate) queues: Registry<Queue>,
-    pub(crate) pipeline_layouts: Registry<PipelineLayout>,
-    pub(crate) shader_modules: Registry<ShaderModule>,
-    pub(crate) bind_group_layouts: Registry<BindGroupLayout>,
-    pub(crate) bind_groups: Registry<BindGroup>,
-    pub(crate) command_buffers: Registry<CommandBuffer>,
-    pub(crate) render_bundles: Registry<RenderBundle>,
-    pub(crate) render_pipelines: Registry<RenderPipeline>,
-    pub(crate) compute_pipelines: Registry<ComputePipeline>,
-    pub(crate) pipeline_caches: Registry<PipelineCache>,
-    pub(crate) query_sets: Registry<QuerySet>,
-    pub(crate) buffers: Registry<Buffer>,
+    pub(crate) adapters: Registry<Arc<Adapter>>,
+    pub(crate) devices: Registry<Arc<Device>>,
+    pub(crate) queues: Registry<Arc<Queue>>,
+    pub(crate) pipeline_layouts: Registry<Fallible<PipelineLayout>>,
+    pub(crate) shader_modules: Registry<Fallible<ShaderModule>>,
+    pub(crate) bind_group_layouts: Registry<Fallible<BindGroupLayout>>,
+    pub(crate) bind_groups: Registry<Fallible<BindGroup>>,
+    pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,
+    pub(crate) render_bundles: Registry<Fallible<RenderBundle>>,
+    pub(crate) render_pipelines: Registry<Fallible<RenderPipeline>>,
+    pub(crate) compute_pipelines: Registry<Fallible<ComputePipeline>>,
+    pub(crate) pipeline_caches: Registry<Fallible<PipelineCache>>,
+    pub(crate) query_sets: Registry<Fallible<QuerySet>>,
+    pub(crate) buffers: Registry<Fallible<Buffer>>,
     pub(crate) staging_buffers: Registry<StagingBuffer>,
-    pub(crate) textures: Registry<Texture>,
-    pub(crate) texture_views: Registry<TextureView>,
-    pub(crate) samplers: Registry<Sampler>,
-    pub(crate) blas_s: Registry<Blas>,
-    pub(crate) tlas_s: Registry<Tlas>,
+    pub(crate) textures: Registry<Fallible<Texture>>,
+    pub(crate) texture_views: Registry<Fallible<TextureView>>,
+    pub(crate) samplers: Registry<Fallible<Sampler>>,
+    pub(crate) blas_s: Registry<Fallible<Blas>>,
+    pub(crate) tlas_s: Registry<Fallible<Tlas>>,
 }
 
 impl Hub {
@@ -208,46 +208,6 @@ impl Hub {
             blas_s: Registry::new(),
             tlas_s: Registry::new(),
         }
-    }
-
-    pub(crate) fn clear(&self, surface_guard: &Storage<Surface>) {
-        let mut devices = self.devices.write();
-        for element in devices.map.iter() {
-            if let Element::Occupied(ref device, _) = *element {
-                device.prepare_to_die();
-            }
-        }
-
-        self.command_buffers.write().map.clear();
-        self.samplers.write().map.clear();
-        self.texture_views.write().map.clear();
-        self.textures.write().map.clear();
-        self.buffers.write().map.clear();
-        self.bind_groups.write().map.clear();
-        self.shader_modules.write().map.clear();
-        self.bind_group_layouts.write().map.clear();
-        self.pipeline_layouts.write().map.clear();
-        self.compute_pipelines.write().map.clear();
-        self.render_pipelines.write().map.clear();
-        self.pipeline_caches.write().map.clear();
-        self.query_sets.write().map.clear();
-
-        for element in surface_guard.map.iter() {
-            if let Element::Occupied(ref surface, _epoch) = *element {
-                if let Some(ref mut present) = surface.presentation.lock().take() {
-                    let suf = surface.raw(present.device.backend());
-                    unsafe {
-                        suf.unwrap().unconfigure(present.device.raw());
-                    }
-                }
-            }
-        }
-
-        self.queues.write().map.clear();
-        devices.map.clear();
-
-        drop(devices);
-        self.adapters.write().map.clear();
     }
 
     pub fn generate_report(&self) -> HubReport {

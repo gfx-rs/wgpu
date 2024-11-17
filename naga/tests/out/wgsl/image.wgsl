@@ -95,8 +95,9 @@ fn queries() -> @builtin(position) vec4<f32> {
 @vertex 
 fn levels_queries() -> @builtin(position) vec4<f32> {
     let num_levels_2d = textureNumLevels(image_2d);
-    let num_levels_2d_array = textureNumLevels(image_2d_array);
     let num_layers_2d = textureNumLayers(image_2d_array);
+    let num_levels_2d_array = textureNumLevels(image_2d_array);
+    let num_layers_2d_array = textureNumLayers(image_2d_array);
     let num_levels_cube = textureNumLevels(image_cube);
     let num_levels_cube_array = textureNumLevels(image_cube_array);
     let num_layers_cube = textureNumLayers(image_cube_array);
@@ -110,8 +111,8 @@ fn levels_queries() -> @builtin(position) vec4<f32> {
 fn texture_sample() -> @location(0) vec4<f32> {
     var a: vec4<f32>;
 
-    let tc = vec2(0.5f);
-    let tc3_ = vec3(0.5f);
+    const tc = vec2(0.5f);
+    const tc3_ = vec3(0.5f);
     let _e9 = textureSample(image_1d, sampler_reg, tc.x);
     let _e10 = a;
     a = (_e10 + _e9);
@@ -186,8 +187,8 @@ fn texture_sample() -> @location(0) vec4<f32> {
 fn texture_sample_comparison() -> @location(0) f32 {
     var a_1: f32;
 
-    let tc_1 = vec2(0.5f);
-    let tc3_1 = vec3(0.5f);
+    const tc_1 = vec2(0.5f);
+    const tc3_1 = vec3(0.5f);
     let _e8 = textureSampleCompare(image_2d_depth, sampler_cmp, tc_1, 0.5f);
     let _e9 = a_1;
     a_1 = (_e9 + _e8);
@@ -218,7 +219,7 @@ fn texture_sample_comparison() -> @location(0) f32 {
 
 @fragment 
 fn gather() -> @location(0) vec4<f32> {
-    let tc_2 = vec2(0.5f);
+    const tc_2 = vec2(0.5f);
     let s2d = textureGather(1, image_2d, sampler_reg, tc_2);
     let s2d_offset = textureGather(3, image_2d, sampler_reg, tc_2, vec2<i32>(3i, 1i));
     let s2d_depth = textureGatherCompare(image_2d_depth, sampler_cmp, tc_2, 0.5f);
@@ -231,7 +232,7 @@ fn gather() -> @location(0) vec4<f32> {
 
 @fragment 
 fn depth_no_comparison() -> @location(0) vec4<f32> {
-    let tc_3 = vec2(0.5f);
+    const tc_3 = vec2(0.5f);
     let s2d_1 = textureSample(image_2d_depth, sampler_reg, tc_3);
     let s2d_gather = textureGather(image_2d_depth, sampler_reg, tc_3);
     return (vec4(s2d_1) + s2d_gather);

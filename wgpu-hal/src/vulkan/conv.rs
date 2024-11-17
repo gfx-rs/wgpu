@@ -36,7 +36,7 @@ impl super::PrivateCapabilities {
             Tf::Rgba8Sint => F::R8G8B8A8_SINT,
             Tf::Rgb10a2Uint => F::A2B10G10R10_UINT_PACK32,
             Tf::Rgb10a2Unorm => F::A2B10G10R10_UNORM_PACK32,
-            Tf::Rg11b10UFloat => F::B10G11R11_UFLOAT_PACK32,
+            Tf::Rg11b10Ufloat => F::B10G11R11_UFLOAT_PACK32,
             Tf::Rg32Uint => F::R32G32_UINT,
             Tf::Rg32Sint => F::R32G32_SINT,
             Tf::Rg32Float => F::R32G32_SFLOAT,
@@ -949,6 +949,7 @@ pub fn map_acceleration_structure_geometry_flags(
 
 pub fn map_acceleration_structure_usage_to_barrier(
     usage: crate::AccelerationStructureUses,
+    features: wgt::Features,
 ) -> (vk::PipelineStageFlags, vk::AccessFlags) {
     let mut stages = vk::PipelineStageFlags::empty();
     let mut access = vk::AccessFlags::empty();
@@ -961,7 +962,9 @@ pub fn map_acceleration_structure_usage_to_barrier(
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
     }
-    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT) {
+    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT)
+        && features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+    {
         stages |= vk::PipelineStageFlags::VERTEX_SHADER
             | vk::PipelineStageFlags::FRAGMENT_SHADER
             | vk::PipelineStageFlags::COMPUTE_SHADER;

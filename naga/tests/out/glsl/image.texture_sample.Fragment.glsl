@@ -1,16 +1,11 @@
-#version 310 es
-#extension GL_EXT_texture_cube_map_array : require
+#version 430 core
+uniform sampler1D _group_0_binding_0_fs;
 
-precision highp float;
-precision highp int;
+uniform sampler2D _group_0_binding_1_fs;
 
-uniform highp sampler2D _group_0_binding_0_fs;
+uniform sampler2DArray _group_0_binding_4_fs;
 
-uniform highp sampler2D _group_0_binding_1_fs;
-
-uniform highp sampler2DArray _group_0_binding_4_fs;
-
-uniform highp samplerCubeArray _group_0_binding_6_fs;
+uniform samplerCubeArray _group_0_binding_6_fs;
 
 layout(location = 0) out vec4 _fs2p_location0;
 
@@ -18,7 +13,7 @@ void main() {
     vec4 a = vec4(0.0);
     vec2 tc = vec2(0.5);
     vec3 tc3_ = vec3(0.5);
-    vec4 _e9 = texture(_group_0_binding_0_fs, vec2(tc.x, 0.0));
+    vec4 _e9 = texture(_group_0_binding_0_fs, tc.x);
     vec4 _e10 = a;
     a = (_e10 + _e9);
     vec4 _e14 = texture(_group_0_binding_1_fs, vec2(tc));

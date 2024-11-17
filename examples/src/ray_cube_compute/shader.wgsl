@@ -1,4 +1,5 @@
 /*
+The contents of the RayQuery struct are roughly as follows
 let RAY_FLAG_NONE = 0x00u;
 let RAY_FLAG_OPAQUE = 0x01u;
 let RAY_FLAG_NO_OPAQUE = 0x02u;

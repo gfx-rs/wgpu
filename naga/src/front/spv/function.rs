@@ -60,6 +60,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                 ),
                 named_expressions: crate::NamedExpressions::default(),
                 body: crate::Block::new(),
+                diagnostic_filter_leaf: None,
             }
         };
 
@@ -311,6 +312,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             expressions: Arena::new(),
             named_expressions: crate::NamedExpressions::default(),
             body: crate::Block::new(),
+            diagnostic_filter_leaf: None,
         };
 
         // 1. copy the inputs from arguments to privates

@@ -1,6 +1,3 @@
-// Box casts are needed, alternative would be a temporaries which are more verbose and not more expressive.
-#![allow(trivial_casts)]
-
 use crate::{Api, Capabilities, ExposedAdapter, Instance, InstanceError};
 
 use super::{DynAdapter, DynResource, DynResourceExt as _, DynSurface};
@@ -50,7 +47,7 @@ impl<I: Instance + DynResource> DynInstance for I {
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Box<dyn DynSurface>, InstanceError> {
         unsafe { I::create_surface(self, display_handle, window_handle) }
-            .map(|surface| Box::new(surface) as Box<dyn DynSurface>)
+            .map(|surface| -> Box<dyn DynSurface> { Box::new(surface) })
     }
 
     unsafe fn enumerate_adapters(

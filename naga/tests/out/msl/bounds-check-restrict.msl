@@ -163,3 +163,20 @@ void set_in_bounds(
     globals.m[2].w = v_7;
     return;
 }
+
+float index_dynamic_array_constant_index(
+    device Globals const& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    float _e3 = globals.d[metal::min(unsigned(1000), (_buffer_sizes.size0 - 112 - 4) / 4)];
+    return _e3;
+}
+
+void set_dynamic_array_constant_index(
+    float v_8,
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    globals.d[metal::min(unsigned(1000), (_buffer_sizes.size0 - 112 - 4) / 4)] = v_8;
+    return;
+}

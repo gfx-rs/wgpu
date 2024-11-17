@@ -268,12 +268,12 @@ fn testUnaryOpMat(a_16: mat3x3<f32>) {
     let _e3 = a_17;
     v_8 = -(_e3);
     let _e5 = a_17;
-    let _e7 = vec3(1f);
+    const _e7 = vec3(1f);
     let _e9 = (_e5 - mat3x3<f32>(_e7, _e7, _e7));
     a_17 = _e9;
     v_8 = _e9;
     let _e10 = a_17;
-    let _e12 = vec3(1f);
+    const _e12 = vec3(1f);
     a_17 = (_e10 - mat3x3<f32>(_e12, _e12, _e12));
     v_8 = _e10;
     return;

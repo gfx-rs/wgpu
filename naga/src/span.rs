@@ -11,6 +11,7 @@ pub struct Span {
 
 impl Span {
     pub const UNDEFINED: Self = Self { start: 0, end: 0 };
+
     /// Creates a new `Span` from a range of byte indices
     ///
     /// Note: end is exclusive, it doesn't belong to the `Span`
@@ -238,7 +239,7 @@ impl<E> WithSpan<E> {
         Some(self.spans[0].0.location(source))
     }
 
-    fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
+    pub(crate) fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
     where
         E: Error,
     {

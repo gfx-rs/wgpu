@@ -10,7 +10,7 @@
     ],
     actions: [
         CreateBuffer(
-            Id(0, 1, Empty),
+            Id(0, 1),
             (
                 label: Some("dummy"),
                 size: 16,
@@ -19,7 +19,7 @@
             ),
         ),
         WriteBuffer(
-            id: Id(0, 1, Empty),
+            id: Id(0, 1),
             data: "data1.bin",
             range: (
                 start: 0,

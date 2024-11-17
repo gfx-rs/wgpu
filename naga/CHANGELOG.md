@@ -689,7 +689,7 @@ MSL-OUT
 
 API
 
-- Make `WithSpan` clonable ([#1620](https://github.com/gfx-rs/naga/pull/1620)) **@jakobhellermann**
+- Make `WithSpan` cloneable ([#1620](https://github.com/gfx-rs/naga/pull/1620)) **@jakobhellermann**
 
 MSL-OUT
 

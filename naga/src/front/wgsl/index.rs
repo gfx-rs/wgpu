@@ -20,13 +20,16 @@ impl<'a> Index<'a> {
         // While doing so, reject conflicting definitions.
         let mut globals = FastHashMap::with_capacity_and_hasher(tu.decls.len(), Default::default());
         for (handle, decl) in tu.decls.iter() {
-            let ident = decl_ident(decl);
-            let name = ident.name;
-            if let Some(old) = globals.insert(name, handle) {
-                return Err(Error::Redefinition {
-                    previous: decl_ident(&tu.decls[old]).span,
-                    current: ident.span,
-                });
+            if let Some(ident) = decl_ident(decl) {
+                let name = ident.name;
+                if let Some(old) = globals.insert(name, handle) {
+                    return Err(Error::Redefinition {
+                        previous: decl_ident(&tu.decls[old])
+                            .expect("decl should have ident for redefinition")
+                            .span,
+                        current: ident.span,
+                    });
+                }
             }
         }
 
@@ -130,7 +133,7 @@ impl<'a> DependencySolver<'a, '_> {
                     return if dep_id == id {
                         // A declaration refers to itself directly.
                         Err(Error::RecursiveDeclaration {
-                            ident: decl_ident(decl).span,
+                            ident: decl_ident(decl).expect("decl should have ident").span,
                             usage: dep.usage,
                         })
                     } else {
@@ -146,14 +149,19 @@ impl<'a> DependencySolver<'a, '_> {
                             .unwrap_or(0);
 
                         Err(Error::CyclicDeclaration {
-                            ident: decl_ident(&self.module.decls[dep_id]).span,
+                            ident: decl_ident(&self.module.decls[dep_id])
+                                .expect("decl should have ident")
+                                .span,
                             path: self.path[start_at..]
                                 .iter()
                                 .map(|curr_dep| {
                                     let curr_id = curr_dep.decl;
                                     let curr_decl = &self.module.decls[curr_id];
 
-                                    (decl_ident(curr_decl).span, curr_dep.usage)
+                                    (
+                                        decl_ident(curr_decl).expect("decl should have ident").span,
+                                        curr_dep.usage,
+                                    )
                                 })
                                 .collect(),
                         })
@@ -182,13 +190,14 @@ impl<'a> DependencySolver<'a, '_> {
     }
 }
 
-const fn decl_ident<'a>(decl: &ast::GlobalDecl<'a>) -> ast::Ident<'a> {
+const fn decl_ident<'a>(decl: &ast::GlobalDecl<'a>) -> Option<ast::Ident<'a>> {
     match decl.kind {
-        ast::GlobalDeclKind::Fn(ref f) => f.name,
-        ast::GlobalDeclKind::Var(ref v) => v.name,
-        ast::GlobalDeclKind::Const(ref c) => c.name,
-        ast::GlobalDeclKind::Override(ref o) => o.name,
-        ast::GlobalDeclKind::Struct(ref s) => s.name,
-        ast::GlobalDeclKind::Type(ref t) => t.name,
+        ast::GlobalDeclKind::Fn(ref f) => Some(f.name),
+        ast::GlobalDeclKind::Var(ref v) => Some(v.name),
+        ast::GlobalDeclKind::Const(ref c) => Some(c.name),
+        ast::GlobalDeclKind::Override(ref o) => Some(o.name),
+        ast::GlobalDeclKind::Struct(ref s) => Some(s.name),
+        ast::GlobalDeclKind::Type(ref t) => Some(t.name),
+        ast::GlobalDeclKind::ConstAssert(_) => None,
     }
 }

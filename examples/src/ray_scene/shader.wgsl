@@ -22,6 +22,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 }
 
 /*
+The contents of the RayQuery struct are roughly as follows
 let RAY_FLAG_NONE = 0x00u;
 let RAY_FLAG_OPAQUE = 0x01u;
 let RAY_FLAG_NO_OPAQUE = 0x02u;
@@ -69,9 +70,9 @@ struct Uniforms {
 };
 
 struct Vertex {
-    pos:     vec3<f32>,
-    normal:  vec3<f32>,
-    uv:      vec2<f32>,
+    pos: vec3<f32>,
+    normal: vec3<f32>,
+    uv: vec2<f32>,
 };
 
 
@@ -83,9 +84,9 @@ struct Instance {
 };
 
 struct Material{
-    r: f32,
-    m: f32,
-    s: f32,
+    roughness_exponent: f32,
+    metalness: f32,
+    specularity: f32,
     albedo: vec3<f32>
 }
 
@@ -159,10 +160,5 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
 
-    // let vertex = vertices[0];
-    // let index = indices[0];
-    // let geometry = geometries[0];
-    // let instance = instances[0];
-
-    return color; // vec4<f32>(vertex.tex_coords, 1.0, 1.0);
+    return color;
 }

@@ -50,6 +50,11 @@ pub enum VaryingError {
     NotIOShareableType(Handle<crate::Type>),
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
+    #[error("Cannot combine {interpolation:?} interpolation with the {sampling:?} sample type")]
+    InvalidInterpolationSamplingCombination {
+        interpolation: crate::Interpolation,
+        sampling: crate::Sampling,
+    },
     #[error("Interpolation must be specified on vertex shader outputs and fragment shader inputs")]
     MissingInterpolation,
     #[error("Built-in {0:?} is not available at this stage")]
@@ -189,7 +194,11 @@ impl VaryingContext<'_> {
                 }
 
                 let (visible, type_good) = match built_in {
-                    Bi::BaseInstance | Bi::BaseVertex | Bi::InstanceIndex | Bi::VertexIndex => (
+                    Bi::BaseInstance
+                    | Bi::BaseVertex
+                    | Bi::InstanceIndex
+                    | Bi::VertexIndex
+                    | Bi::DrawID => (
                         self.stage == St::Vertex && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
@@ -336,6 +345,31 @@ impl VaryingContext<'_> {
                 } else if !self.location_mask.insert(location as usize) {
                     if self.flags.contains(super::ValidationFlags::BINDINGS) {
                         return Err(VaryingError::BindingCollision { location });
+                    }
+                }
+
+                if let Some(interpolation) = interpolation {
+                    let invalid_sampling = match (interpolation, sampling) {
+                        (_, None)
+                        | (
+                            crate::Interpolation::Perspective | crate::Interpolation::Linear,
+                            Some(
+                                crate::Sampling::Center
+                                | crate::Sampling::Centroid
+                                | crate::Sampling::Sample,
+                            ),
+                        )
+                        | (
+                            crate::Interpolation::Flat,
+                            Some(crate::Sampling::First | crate::Sampling::Either),
+                        ) => None,
+                        (_, Some(invalid_sampling)) => Some(invalid_sampling),
+                    };
+                    if let Some(sampling) = invalid_sampling {
+                        return Err(VaryingError::InvalidInterpolationSamplingCombination {
+                            interpolation,
+                            sampling,
+                        });
                     }
                 }
 

@@ -8,7 +8,7 @@ struct Foo {
     metal::float4 a;
     int b;
 };
-struct type_5 {
+struct type_6 {
     metal::float2x2 inner[1];
 };
 struct type_10 {
@@ -19,7 +19,7 @@ struct type_11 {
 };
 constant metal::float3 const2_ = metal::float3(0.0, 1.0, 2.0);
 constant metal::float2x2 const3_ = metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0));
-constant type_5 const4_ = type_5 {metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0))};
+constant type_6 const4_ = type_6 {metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0))};
 constant bool cz0_ = bool {};
 constant int cz1_ = int {};
 constant uint cz2_ = uint {};

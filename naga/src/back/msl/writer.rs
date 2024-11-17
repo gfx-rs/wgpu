@@ -6,6 +6,8 @@ use crate::{
     proc::{self, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
+#[cfg(test)]
+use std::ptr;
 use std::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
@@ -31,6 +33,7 @@ const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
+pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
@@ -212,14 +215,15 @@ impl<'a> Display for TypeContext<'a> {
                     crate::ImageDimension::D3 => "3d",
                     crate::ImageDimension::Cube => "cube",
                 };
-                let (texture_str, msaa_str, kind, access) = match class {
+                let (texture_str, msaa_str, scalar, access) = match class {
                     crate::ImageClass::Sampled { kind, multi } => {
                         let (msaa_str, access) = if multi {
                             ("_ms", "read")
                         } else {
                             ("", "sample")
                         };
-                        ("texture", msaa_str, kind, access)
+                        let scalar = crate::Scalar { kind, width: 4 };
+                        ("texture", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Depth { multi } => {
                         let (msaa_str, access) = if multi {
@@ -227,7 +231,11 @@ impl<'a> Display for TypeContext<'a> {
                         } else {
                             ("", "sample")
                         };
-                        ("depth", msaa_str, crate::ScalarKind::Float, access)
+                        let scalar = crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                        };
+                        ("depth", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Storage { format, .. } => {
                         let access = if self
@@ -251,7 +259,7 @@ impl<'a> Display for TypeContext<'a> {
                         ("texture", "", format.into(), access)
                     }
                 };
-                let base_name = crate::Scalar { kind, width: 4 }.to_msl_name();
+                let base_name = scalar.to_msl_name();
                 let array_str = if arrayed { "_array" } else { "" };
                 write!(
                     out,
@@ -380,6 +388,11 @@ pub struct Writer<W> {
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+
+    /// Name of the loop reachability macro.
+    ///
+    /// See `emit_loop_reachable_macro` for details.
+    loop_reachable_macro_name: String,
 }
 
 impl crate::Scalar {
@@ -628,7 +641,13 @@ impl<'a> ExpressionContext<'a> {
         base: Handle<crate::Expression>,
         index: index::GuardedIndex,
     ) -> Option<index::IndexableLength> {
-        index::access_needs_check(base, index, self.module, self.function, self.info)
+        index::access_needs_check(
+            base,
+            index,
+            self.module,
+            &self.function.expressions,
+            self.info,
+        )
     }
 
     fn get_packed_vec_kind(&self, expr_handle: Handle<crate::Expression>) -> Option<crate::Scalar> {
@@ -669,6 +688,7 @@ impl<W: Write> Writer<W> {
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
+            loop_reachable_macro_name: String::default(),
         }
     }
 
@@ -677,6 +697,128 @@ impl<W: Write> Writer<W> {
     #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
+    }
+
+    /// Define a macro to invoke before loops, to defeat MSL infinite loop
+    /// reasoning.
+    ///
+    /// If we haven't done so already, emit the definition of a preprocessor
+    /// macro to be invoked before each loop in the generated MSL, to ensure
+    /// that the MSL compiler's optimizations do not remove bounds checks.
+    ///
+    /// Only the first call to this function for a given module actually causes
+    /// the macro definition to be written. Subsequent loops can simply use the
+    /// prior macro definition, since macros aren't block-scoped.
+    ///
+    /// # What is this trying to solve?
+    ///
+    /// In Metal Shading Language, an infinite loop has undefined behavior.
+    /// (This rule is inherited from C++14.) This means that, if the MSL
+    /// compiler determines that a given loop will never exit, it may assume
+    /// that it is never reached. It may thus assume that any conditions
+    /// sufficient to cause the loop to be reached must be false. Like many
+    /// optimizing compilers, MSL uses this kind of analysis to establish limits
+    /// on the range of values variables involved in those conditions might
+    /// hold.
+    ///
+    /// For example, suppose the MSL compiler sees the code:
+    ///
+    /// ```ignore
+    /// if (i >= 10) {
+    ///     while (true) { }
+    /// }
+    /// ```
+    ///
+    /// It will recognize that the `while` loop will never terminate, conclude
+    /// that it must be unreachable, and thus infer that, if this code is
+    /// reached, then `i < 10` at that point.
+    ///
+    /// Now suppose that, at some point where `i` has the same value as above,
+    /// the compiler sees the code:
+    ///
+    /// ```ignore
+    /// if (i < 10) {
+    ///     a[i] = 1;
+    /// }
+    /// ```
+    ///
+    /// Because the compiler is confident that `i < 10`, it will make the
+    /// assignment to `a[i]` unconditional, rewriting this code as, simply:
+    ///
+    /// ```ignore
+    /// a[i] = 1;
+    /// ```
+    ///
+    /// If that `if` condition was injected by Naga to implement a bounds check,
+    /// the MSL compiler's optimizations could allow out-of-bounds array
+    /// accesses to occur.
+    ///
+    /// Naga cannot feasibly anticipate whether the MSL compiler will determine
+    /// that a loop is infinite, so an attacker could craft a Naga module
+    /// containing an infinite loop protected by conditions that cause the Metal
+    /// compiler to remove bounds checks that Naga injected elsewhere in the
+    /// function.
+    ///
+    /// This rewrite could occur even if the conditional assignment appears
+    /// *before* the `while` loop, as long as `i < 10` by the time the loop is
+    /// reached. This would allow the attacker to save the results of
+    /// unauthorized reads somewhere accessible before entering the infinite
+    /// loop. But even worse, the MSL compiler has been observed to simply
+    /// delete the infinite loop entirely, so that even code dominated by the
+    /// loop becomes reachable. This would make the attack even more flexible,
+    /// since shaders that would appear to never terminate would actually exit
+    /// nicely, after having stolen data from elsewhere in the GPU address
+    /// space.
+    ///
+    /// Ideally, Naga would prevent UB entirely via some means that persuades
+    /// the MSL compiler that no loop Naga generates is infinite. One approach
+    /// would be to add inline assembly to each loop that is annotated as
+    /// potentially branching out of the loop, but which in fact generates no
+    /// instructions. Unfortunately, inline assembly is not handled correctly by
+    /// some Metal device drivers. Further experimentation hasn't produced a
+    /// satisfactory approach.
+    ///
+    /// Instead, we accept that the MSL compiler may determine that some loops
+    /// are infinite, and focus instead on preventing the range analysis from
+    /// being affected. We transform *every* loop into something like this:
+    ///
+    /// ```ignore
+    /// if (volatile bool unpredictable = true; unpredictable)
+    ///     while (true) { }
+    /// ```
+    ///
+    /// Since the `volatile` qualifier prevents the compiler from assuming that
+    /// the `if` condition is true, it cannot be sure the infinite loop is
+    /// reached, and thus it cannot assume the entire structure is unreachable.
+    /// This prevents the range analysis impact described above.
+    ///
+    /// Unfortunately, what makes this a kludge, not a hack, is that this
+    /// solution leaves the GPU executing a pointless conditional branch, at
+    /// runtime, before each loop. There's no part of the system that has a
+    /// global enough view to be sure that `unpredictable` is true, and remove
+    /// it from the code.
+    ///
+    /// To make our output a bit more legible, we pull the condition out into a
+    /// preprocessor macro defined at the top of the module.
+    ///
+    /// This approach is also used by Chromium WebGPU's Dawn shader compiler, as of
+    /// <https://github.com/google/dawn/commit/ffd485c685040edb1e678165dcbf0e841cfa0298>.
+    fn emit_loop_reachable_macro(&mut self) -> BackendResult {
+        if !self.loop_reachable_macro_name.is_empty() {
+            return Ok(());
+        }
+
+        self.loop_reachable_macro_name = self.namer.call("LOOP_IS_REACHABLE");
+        let loop_reachable_volatile_name = self.namer.call("unpredictable_jump_over_loop");
+        writeln!(
+            self.out,
+            "#define {} if (volatile bool {} = true; {})",
+            self.loop_reachable_macro_name,
+            loop_reachable_volatile_name,
+            loop_reachable_volatile_name,
+        )?;
+
+        Ok(())
     }
 
     fn put_call_parameters(
@@ -1155,42 +1297,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_atomic_operation(
-        &mut self,
-        pointer: Handle<crate::Expression>,
-        key: &str,
-        value: Handle<crate::Expression>,
-        context: &ExpressionContext,
-    ) -> BackendResult {
-        // If the pointer we're passing to the atomic operation needs to be conditional
-        // for `ReadZeroSkipWrite`, the condition needs to *surround* the atomic op, and
-        // the pointer operand should be unchecked.
-        let policy = context.choose_bounds_check_policy(pointer);
-        let checked = policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
-            && self.put_bounds_checks(pointer, context, back::Level(0), "")?;
-
-        // If requested and successfully put bounds checks, continue the ternary expression.
-        if checked {
-            write!(self.out, " ? ")?;
-        }
-
-        write!(
-            self.out,
-            "{NAMESPACE}::atomic_{key}_explicit({ATOMIC_REFERENCE}"
-        )?;
-        self.put_access_chain(pointer, policy, context)?;
-        write!(self.out, ", ")?;
-        self.put_expression(value, context, true)?;
-        write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
-
-        // Finish the ternary expression.
-        if checked {
-            write!(self.out, " : DefaultConstructible()")?;
-        }
-
-        Ok(())
-    }
-
     /// Emit code for the arithmetic expression of the dot product.
     ///
     fn put_dot_product(
@@ -1417,9 +1523,8 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
-        #[allow(trivial_casts)]
         self.put_expression_stack_pointers
-            .insert(&expr_handle as *const _ as *const ());
+            .insert(ptr::from_ref(&expr_handle).cast());
 
         if let Some(name) = self.named_expressions.get(&expr_handle) {
             write!(self.out, "{name}")?;
@@ -1837,6 +1942,7 @@ impl<W: Write> Writer<W> {
                     Mf::Inverse => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
+                    Mf::QuantizeToF16 => "",
                     // bits
                     Mf::CountTrailingZeros => "ctz",
                     Mf::CountLeadingZeros => "clz",
@@ -2044,6 +2150,22 @@ impl<W: Write> Writer<W> {
                         write!(self.out, " >> 16, ")?;
                         self.put_expression(arg, context, true)?;
                         write!(self.out, " >> 24) << 24 >> 24")?;
+                    }
+                    Mf::QuantizeToF16 => {
+                        match *context.resolve_type(arg) {
+                            crate::TypeInner::Scalar { .. } => write!(self.out, "float(half(")?,
+                            crate::TypeInner::Vector { size, .. } => write!(
+                                self.out,
+                                "{NAMESPACE}::float{size}({NAMESPACE}::half{size}(",
+                                size = back::vector_size_str(size),
+                            )?,
+                            _ => unreachable!(
+                                "Correct TypeInner for QuantizeToF16 should be already validated"
+                            ),
+                        };
+
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "))")?;
                     }
                     _ => {
                         write!(self.out, "{NAMESPACE}::{fun_name}")?;
@@ -2801,9 +2923,8 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Add to the set in order to track the stack size.
         #[cfg(test)]
-        #[allow(trivial_casts)]
         self.put_block_stack_pointers
-            .insert(&level as *const _ as *const ());
+            .insert(ptr::from_ref(&level).cast());
 
         for statement in statements {
             log::trace!("statement[{}] {:?}", level.0, statement);
@@ -2933,10 +3054,15 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                     break_if,
                 } => {
+                    self.emit_loop_reachable_macro()?;
                     if !continuing.is_empty() || break_if.is_some() {
                         let gate_name = self.namer.call("loop_init");
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                        writeln!(self.out, "{level}while(true) {{")?;
+                        writeln!(
+                            self.out,
+                            "{level}{} while(true) {{",
+                            self.loop_reachable_macro_name,
+                        )?;
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
@@ -2951,7 +3077,11 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
                     } else {
-                        writeln!(self.out, "{level}while(true) {{")?;
+                        writeln!(
+                            self.out,
+                            "{level}{} while(true) {{",
+                            self.loop_reachable_macro_name,
+                        )?;
                     }
                     self.put_block(level.next(), body, context)?;
                     writeln!(self.out, "{level}}}")?;
@@ -3054,24 +3184,65 @@ impl<W: Write> Writer<W> {
                     value,
                     result,
                 } => {
+                    let context = &context.expression;
+
                     // This backend supports `SHADER_INT64_ATOMIC_MIN_MAX` but not
                     // `SHADER_INT64_ATOMIC_ALL_OPS`, so we can assume that if `result` is
                     // `Some`, we are not operating on a 64-bit value, and that if we are
                     // operating on a 64-bit value, `result` is `None`.
                     write!(self.out, "{level}")?;
-                    let fun_str = if let Some(result) = result {
+                    let fun_key = if let Some(result) = result {
                         let res_name = Baked(result).to_string();
-                        self.start_baking_expression(result, &context.expression, &res_name)?;
+                        self.start_baking_expression(result, context, &res_name)?;
                         self.named_expressions.insert(result, res_name);
-                        fun.to_msl()?
-                    } else if context.expression.resolve_type(value).scalar_width() == Some(8) {
+                        fun.to_msl()
+                    } else if context.resolve_type(value).scalar_width() == Some(8) {
                         fun.to_msl_64_bit()?
                     } else {
-                        fun.to_msl()?
+                        fun.to_msl()
                     };
 
-                    self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
-                    // done
+                    // If the pointer we're passing to the atomic operation needs to be conditional
+                    // for `ReadZeroSkipWrite`, the condition needs to *surround* the atomic op, and
+                    // the pointer operand should be unchecked.
+                    let policy = context.choose_bounds_check_policy(pointer);
+                    let checked = policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
+                        && self.put_bounds_checks(pointer, context, back::Level(0), "")?;
+
+                    // If requested and successfully put bounds checks, continue the ternary expression.
+                    if checked {
+                        write!(self.out, " ? ")?;
+                    }
+
+                    // Put the atomic function invocation.
+                    match *fun {
+                        crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
+                            write!(self.out, "{ATOMIC_COMP_EXCH_FUNCTION}({ATOMIC_REFERENCE}")?;
+                            self.put_access_chain(pointer, policy, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(cmp, context, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(value, context, true)?;
+                            write!(self.out, ")")?;
+                        }
+                        _ => {
+                            write!(
+                                self.out,
+                                "{NAMESPACE}::atomic_{fun_key}_explicit({ATOMIC_REFERENCE}"
+                            )?;
+                            self.put_access_chain(pointer, policy, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(value, context, true)?;
+                            write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
+                        }
+                    }
+
+                    // Finish the ternary expression.
+                    if checked {
+                        write!(self.out, " : DefaultConstructible()")?;
+                    }
+
+                    // Done
                     writeln!(self.out, ";")?;
                 }
                 crate::Statement::WorkGroupUniformLoad { pointer, result } => {
@@ -3189,7 +3360,10 @@ impl<W: Write> Writer<W> {
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
-                    write!(self.out, "uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    write!(
+                        self.out,
+                        "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
+                    )?;
                     if let Some(predicate) = predicate {
                         self.put_expression(predicate, &context.expression, true)?;
                     } else {
@@ -3388,6 +3562,7 @@ impl<W: Write> Writer<W> {
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
+        self.loop_reachable_macro_name.clear();
         self.struct_member_pads.clear();
 
         writeln!(
@@ -3691,15 +3866,40 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out)?;
                     writeln!(
                         self.out,
-                        "{} {defined_func_name}({arg_type_name} arg) {{
+                        "{struct_name} {defined_func_name}({arg_type_name} arg) {{
     {other_type_name} other;
     {arg_type_name} fract = {NAMESPACE}::{called_func_name}(arg, other);
-    return {}{{ fract, other }};
-}}",
-                        struct_name, struct_name
+    return {struct_name}{{ fract, other }};
+}}"
                     )?;
                 }
-                &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
+                &crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
+                    let arg_type_name = scalar.to_msl_name();
+                    let called_func_name = "atomic_compare_exchange_weak_explicit";
+                    let defined_func_name = ATOMIC_COMP_EXCH_FUNCTION;
+                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
+
+                    writeln!(self.out)?;
+
+                    for address_space_name in ["device", "threadgroup"] {
+                        writeln!(
+                            self.out,
+                            "\
+template <typename A>
+{struct_name} {defined_func_name}(
+    {address_space_name} A *atomic_ptr,
+    {arg_type_name} cmp,
+    {arg_type_name} v
+) {{
+    bool swapped = {NAMESPACE}::{called_func_name}(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return {struct_name}{{cmp, swapped}};
+}}"
+                        )?;
+                    }
+                }
             }
         }
 
@@ -4327,7 +4527,7 @@ impl<W: Write> Writer<W> {
                 let name = self.namer.call("unpackUint32x4");
                 writeln!(
                     self.out,
-                    "uint4 {name}(uint b0, \
+                    "{NAMESPACE}::uint4 {name}(uint b0, \
                                   uint b1, \
                                   uint b2, \
                                   uint b3, \
@@ -4346,7 +4546,7 @@ impl<W: Write> Writer<W> {
                 )?;
                 writeln!(
                     self.out,
-                    "{}return uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                    "{}return {NAMESPACE}::uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
                                     (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
                                     (b11 << 24 | b10 << 16 | b9 << 8 | b8), \
                                     (b15 << 24 | b14 << 16 | b13 << 8 | b12));",
@@ -4900,7 +5100,7 @@ impl<W: Write> Writer<W> {
             // a struct type named `<fun>Input` to hold them. If we are doing
             // vertex pulling, we instead update our attribute mapping to
             // note the types, names, and zero values of the attributes.
-            let stage_in_name = format!("{fun_name}Input");
+            let stage_in_name = self.namer.call(&format!("{fun_name}Input"));
             let varyings_member_name = self.namer.call("varyings");
             let mut has_varyings = false;
             if !flattened_arguments.is_empty() {
@@ -4952,7 +5152,7 @@ impl<W: Write> Writer<W> {
 
             // Define a struct type named for the return value, if any, named
             // `<fun>Output`.
-            let stage_out_name = format!("{fun_name}Output");
+            let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
                 Some(ref result) => {
@@ -5937,8 +6137,8 @@ fn test_stack_size() {
 }
 
 impl crate::AtomicFunction {
-    fn to_msl(self) -> Result<&'static str, Error> {
-        Ok(match self {
+    const fn to_msl(self) -> &'static str {
+        match self {
             Self::Add => "fetch_add",
             Self::Subtract => "fetch_sub",
             Self::And => "fetch_and",
@@ -5947,10 +6147,8 @@ impl crate::AtomicFunction {
             Self::Min => "fetch_min",
             Self::Max => "fetch_max",
             Self::Exchange { compare: None } => "exchange",
-            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
-                "atomic CompareExchange".to_string(),
-            ))?,
-        })
+            Self::Exchange { compare: Some(_) } => ATOMIC_COMP_EXCH_FUNCTION,
+        }
     }
 
     fn to_msl_64_bit(self) -> Result<&'static str, Error> {

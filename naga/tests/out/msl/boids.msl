@@ -55,8 +55,9 @@ kernel void main_(
     vPos = _e8;
     metal::float2 _e14 = particlesSrc.particles[index].vel;
     vVel = _e14;
+#define LOOP_IS_REACHABLE if (volatile bool unpredictable_jump_over_loop = true; unpredictable_jump_over_loop)
     bool loop_init = true;
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         if (!loop_init) {
             uint _e91 = i;
             i = _e91 + 1u;

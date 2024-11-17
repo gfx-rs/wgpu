@@ -17,6 +17,9 @@ struct Baz {
 struct MatCx2InArray {
     mat4x2 am[2];
 };
+struct AssignToMember {
+    uint x;
+};
 layout(std430) buffer Bar_block_0Fragment {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -26,7 +29,7 @@ layout(std430) buffer Bar_block_0Fragment {
     AlignedWrapper data[];
 } _group_0_binding_0_fs;
 
-layout(std430) buffer type_12_block_1Fragment { ivec2 _group_0_binding_2_fs; };
+layout(std430) buffer type_13_block_1Fragment { ivec2 _group_0_binding_2_fs; };
 
 layout(location = 0) out vec4 _fs2p_location0;
 
@@ -46,6 +49,26 @@ void assign_through_ptr_fn(inout uint p) {
 
 void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
     foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+    return;
+}
+
+uint fetch_arg_ptr_member(inout AssignToMember p_1) {
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(inout AssignToMember p_2) {
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
+    uint _e2 = p_3[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
+    p_4[1] = 10u;
     return;
 }
 

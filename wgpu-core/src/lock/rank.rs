@@ -63,10 +63,20 @@ macro_rules! define_lock_ranks {
         }
 
         impl LockRankSet {
-            pub fn name(self) -> &'static str {
+            pub fn member_name(self) -> &'static str {
                 match self {
                     $(
                         LockRankSet:: $name => $member,
+                    )*
+                    _ => "<unrecognized LockRankSet bit>",
+                }
+            }
+
+            #[cfg_attr(not(feature = "observe_locks"), allow(dead_code))]
+            pub fn const_name(self) -> &'static str {
+                match self {
+                    $(
+                        LockRankSet:: $name => stringify!($name),
                     )*
                     _ => "<unrecognized LockRankSet bit>",
                 }
@@ -101,16 +111,16 @@ define_lock_ranks! {
         // COMMAND_BUFFER_DATA,
     }
     rank BUFFER_MAP_STATE "Buffer::map_state" followed by {
-        DEVICE_PENDING_WRITES,
+        QUEUE_PENDING_WRITES,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
         DEVICE_TRACE,
     }
-    rank DEVICE_PENDING_WRITES "Device::pending_writes" followed by {
+    rank QUEUE_PENDING_WRITES "Queue::pending_writes" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
-        DEVICE_LIFE_TRACKER,
+        QUEUE_LIFE_TRACKER,
     }
-    rank DEVICE_LIFE_TRACKER "Device::life_tracker" followed by {
+    rank QUEUE_LIFE_TRACKER "Queue::life_tracker" followed by {
         COMMAND_ALLOCATOR_FREE_ENCODERS,
         DEVICE_TRACE,
     }
@@ -125,6 +135,7 @@ define_lock_ranks! {
     #[allow(dead_code)]
     rank DEVICE_TRACE "Device::trace" followed by { }
     rank DEVICE_TRACKERS "Device::trackers" followed by { }
+    rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
     rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
@@ -137,6 +148,7 @@ define_lock_ranks! {
     rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
+    rank TLAS_BIND_GROUPS "Tlas::bind_groups" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

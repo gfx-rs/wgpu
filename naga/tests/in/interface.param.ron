@@ -13,6 +13,7 @@
 		fake_missing_bindings: false,
 		special_constants_binding: Some((space: 1, register: 0)),
 		zero_initialize_workgroup_memory: true,
+		restrict_indexing: true
 	),
 	wgsl: (
 		explicit_types: true,

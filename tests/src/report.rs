@@ -25,8 +25,8 @@ impl GpuReport {
 /// A single report of the capabilities of an Adapter.
 ///
 /// Must be synchronized with the definition on wgpu-info/src/report.rs.
-#[derive(Deserialize)]
-pub(crate) struct AdapterReport {
+#[derive(Deserialize, Clone)]
+pub struct AdapterReport {
     pub info: AdapterInfo,
     pub features: Features,
     pub limits: Limits,

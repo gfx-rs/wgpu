@@ -202,6 +202,7 @@ impl Frontend {
                     "gl_VertexIndex" => BuiltIn::VertexIndex,
                     "gl_SampleID" => BuiltIn::SampleIndex,
                     "gl_LocalInvocationIndex" => BuiltIn::LocalInvocationIndex,
+                    "gl_DrawID" => BuiltIn::DrawID,
                     _ => return Ok(None),
                 };
 
@@ -294,14 +295,17 @@ impl Frontend {
                             .any(|i| components[i..].contains(&components[i - 1]));
                         if not_unique {
                             self.errors.push(Error {
-                                kind:
-                                ErrorKind::SemanticError(
-                                format!(
-                                    "swizzle cannot have duplicate components in left-hand-side expression for \"{name:?}\""
-                                )
-                                .into(),
-                            ),
-                                meta ,
+                                kind: ErrorKind::SemanticError(
+                                    format!(
+                                        concat!(
+                                            "swizzle cannot have duplicate components in ",
+                                            "left-hand-side expression for \"{:?}\""
+                                        ),
+                                        name
+                                    )
+                                    .into(),
+                                ),
+                                meta,
                             })
                         }
                     }

@@ -21,11 +21,11 @@ OpDecorate %22 BuiltIn LocalInvocationIndex
 OpDecorate %25 BuiltIn WorkgroupId
 OpDecorate %27 BuiltIn NumWorkgroups
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 4
-%5 = OpTypeStruct %3 %4
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 4
+%5 = OpTypeStruct %4 %3
 %6 = OpTypeInt 32 0
-%7 = OpTypeStruct %4 %6 %4
+%7 = OpTypeStruct %3 %6 %3
 %8 = OpTypeBool
 %10 = OpConstant  %6  1
 %9 = OpTypeArray %6 %10

@@ -1,23 +1,24 @@
+// Ray tracing
+// Major missing optimizations (no api surface changes needed):
+// - use custom tracker to track build state
+// - no forced rebuilt (build mode deduction)
+// - lazy instance buffer allocation
+// - maybe share scratch and instance staging buffer allocation
+// - partial instance buffer uploads (api surface already designed with this in mind)
+// - ([non performance] extract function in build (rust function extraction with guards is a pain))
+
 use crate::{
     command::CommandEncoderError,
     device::DeviceError,
     id::{BlasId, BufferId, TlasId},
     resource::CreateBufferError,
 };
-use std::sync::Arc;
-/// Ray tracing
-/// Major missing optimizations (no api surface changes needed):
-/// - use custom tracker to track build state
-/// - no forced rebuilt (build mode deduction)
-/// - lazy instance buffer allocation
-/// - maybe share scratch and instance staging buffer allocation
-/// - partial instance buffer uploads (api surface already designed with this in mind)
-/// - ([non performance] extract function in build (rust function extraction with guards is a pain))
+use std::{mem::size_of, sync::Arc};
 use std::{num::NonZeroU64, slice};
 
 use crate::resource::{Blas, ResourceErrorIdent, Tlas};
 use thiserror::Error;
-use wgt::BufferAddress;
+use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {
@@ -29,6 +30,10 @@ pub enum CreateBlasError {
         "Only one of 'index_count' and 'index_format' was provided (either provide both or none)"
     )]
     MissingIndexData,
+    #[error("Provided format was not within allowed formats. Provided format: {0:?}. Allowed formats: {1:?}")]
+    InvalidVertexFormat(VertexFormat, Vec<VertexFormat>),
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
     #[error("To use flag ALLOW_RAY_HIT_VERTEX_RETURN device feature RAY_HIT_VERTEX_RETURN must be used too")]
     MissingVertexReturnFeature,
 }
@@ -39,10 +44,10 @@ pub enum CreateTlasError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     CreateBufferError(#[from] CreateBufferError),
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
     #[error("To use flag ALLOW_RAY_HIT_VERTEX_RETURN device feature RAY_HIT_VERTEX_RETURN must be used too")]
     MissingVertexReturnFeature,
-    #[error("Unimplemented Tlas error: this error is not yet implemented")]
-    Unimplemented,
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -85,6 +90,28 @@ pub enum BuildAccelerationStructureError {
     )]
     IncompatibleBlasBuildSizes(ResourceErrorIdent),
 
+    #[error("Blas {0:?} flags are different, creation flags: {1:?}, provided: {2:?}")]
+    IncompatibleBlasFlags(
+        ResourceErrorIdent,
+        AccelerationStructureGeometryFlags,
+        AccelerationStructureGeometryFlags,
+    ),
+
+    #[error("Blas {0:?} build vertex count is greater than creation count (needs to be less than or equal to), creation: {1:?}, build: {2:?}")]
+    IncompatibleBlasVertexCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} vertex formats are different, creation format: {1:?}, provided: {2:?}")]
+    DifferentBlasVertexFormats(ResourceErrorIdent, VertexFormat, VertexFormat),
+
+    #[error("Blas {0:?} index count was provided at creation or building, but not the other")]
+    BlasIndexCountProvidedMismatch(ResourceErrorIdent),
+
+    #[error("Blas {0:?} build index count is greater than creation count (needs to be less than or equal to), creation: {1:?}, build: {2:?}")]
+    IncompatibleBlasIndexCount(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} index formats are different, creation format: {1:?}, provided: {2:?}")]
+    DifferentBlasIndexFormats(ResourceErrorIdent, Option<IndexFormat>, Option<IndexFormat>),
+
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 
@@ -116,6 +143,9 @@ pub enum BuildAccelerationStructureError {
     #[error("Tlas {0:?} is invalid or destroyed")]
     InvalidTlas(ResourceErrorIdent),
 
+    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
+    MissingFeature,
+
     #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
     MissingTlasInputUsageFlag(ResourceErrorIdent),
 
@@ -129,22 +159,20 @@ pub enum ValidateBlasActionsError {
     InvalidBlas,
 
     #[error("Blas {0:?} is used before it is build")]
+    #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateTlasActionsError {
-    #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(ResourceErrorIdent),
-
-    #[error("Tlas {0:?} is used before it is build")]
+    #[error("Tlas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 
-    #[error("Blas {0:?} is used before it is build (in Tlas {1:?})")]
+    #[error("Blas {0:?} is used before it is built (in Tlas {1:?})")]
     UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
 
-    #[error("BlasId is invalid or destroyed (in Tlas {0:?})")]
-    InvalidBlasId(ResourceErrorIdent),
+    #[error("BlasId is destroyed (in Tlas {0:?})")]
+    InvalidBlas(ResourceErrorIdent),
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
@@ -263,9 +291,13 @@ pub struct TraceTlasPackage {
     pub lowest_unmodified: u32,
 }
 
-pub(crate) fn get_raw_tlas_instance_size() -> usize {
+pub(crate) fn get_raw_tlas_instance_size(backend: wgt::Backend) -> usize {
     // TODO: this should be provided by the backend
-    64
+    match backend {
+        wgt::Backend::Empty => 0,
+        wgt::Backend::Vulkan => 64,
+        _ => unimplemented!(),
+    }
 }
 
 #[derive(Clone)]
@@ -277,18 +309,29 @@ struct RawTlasInstance {
     acceleration_structure_reference: u64,
 }
 
-pub(crate) fn tlas_instance_into_bytes(instance: &TlasInstance, blas_address: u64) -> Vec<u8> {
+pub(crate) fn tlas_instance_into_bytes(
+    instance: &TlasInstance,
+    blas_address: u64,
+    backend: wgt::Backend,
+) -> Vec<u8> {
     // TODO: get the device to do this
-    const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
-    let temp = RawTlasInstance {
-        transform: *instance.transform,
-        custom_index_and_mask: (instance.custom_index & MAX_U24) | (u32::from(instance.mask) << 24),
-        shader_binding_table_record_offset_and_flags: 0,
-        acceleration_structure_reference: blas_address,
-    };
-    let temp: *const _ = &temp;
-    unsafe {
-        slice::from_raw_parts::<u8>(temp.cast::<u8>(), std::mem::size_of::<RawTlasInstance>())
-            .to_vec()
+    match backend {
+        wgt::Backend::Empty => vec![],
+        wgt::Backend::Vulkan => {
+            const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+            let temp = RawTlasInstance {
+                transform: *instance.transform,
+                custom_index_and_mask: (instance.custom_index & MAX_U24)
+                    | (u32::from(instance.mask) << 24),
+                shader_binding_table_record_offset_and_flags: 0,
+                acceleration_structure_reference: blas_address,
+            };
+            let temp: *const _ = &temp;
+            unsafe {
+                slice::from_raw_parts::<u8>(temp.cast::<u8>(), size_of::<RawTlasInstance>())
+                    .to_vec()
+            }
+        }
+        _ => unimplemented!(),
     }
 }

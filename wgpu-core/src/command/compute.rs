@@ -17,8 +17,8 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice,
-        Trackable,
+        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
+        MissingBufferUsageError, ParentDevice,
     },
     snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
@@ -31,7 +31,7 @@ use wgt::{BufferAddress, DynamicOffset};
 use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 use crate::ray_tracing::TlasAction;
 use std::sync::Arc;
-use std::{fmt, mem, str};
+use std::{fmt, mem::size_of, str};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -132,24 +132,18 @@ pub enum ComputePassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
-    #[error("BindGroupId {0:?} is invalid")]
-    InvalidBindGroupId(id::BindGroupId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
-    #[error("ComputePipelineId {0:?} is invalid")]
-    InvalidPipelineId(id::ComputePipelineId),
-    #[error("QuerySet {0:?} is invalid")]
-    InvalidQuerySet(id::QuerySetId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
+    UnalignedIndirectBufferOffset(BufferAddress),
     #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
     IndirectBufferOverrun {
         offset: u64,
         end_offset: u64,
         buffer_size: u64,
     },
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(id::BufferId),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
@@ -176,6 +170,8 @@ pub enum ComputePassErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("The compute pass has already been ended and no further commands can be recorded")]
     PassEnded,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 /// Error encountered when performing a compute pass.
@@ -220,6 +216,8 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     dynamic_offset_count: usize,
     string_offset: usize,
     active_query: Option<(Arc<resource::QuerySet>, u32)>,
+
+    push_constants: Vec<u32>,
 
     intermediate_trackers: Tracker,
 
@@ -299,23 +297,33 @@ impl Global {
 
         let make_err = |e, arc_desc| (ComputePass::new(None, arc_desc), Some(e));
 
-        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return make_err(CommandEncoderError::Invalid, arc_desc),
-        };
+        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        match cmd_buf.lock_encoder() {
+        match cmd_buf
+            .try_get()
+            .map_err(|e| e.into())
+            .and_then(|mut cmd_buf_data| cmd_buf_data.lock_encoder())
+        {
             Ok(_) => {}
             Err(e) => return make_err(e, arc_desc),
         };
 
         arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-            let Ok(query_set) = hub.query_sets.get(tw.query_set) else {
-                return make_err(
-                    CommandEncoderError::InvalidTimestampWritesQuerySetId(tw.query_set),
-                    arc_desc,
-                );
+            let query_set = match hub.query_sets.get(tw.query_set).get() {
+                Ok(query_set) => query_set,
+                Err(e) => return make_err(e.into(), arc_desc),
             };
+            match query_set.same_device(&cmd_buf.device) {
+                Ok(()) => (),
+                Err(e) => return make_err(e.into(), arc_desc),
+            }
+            match cmd_buf
+                .device
+                .require_features(wgt::Features::TIMESTAMP_QUERY)
+            {
+                Ok(()) => (),
+                Err(e) => return make_err(e.into(), arc_desc),
+            }
 
             Some(ArcPassTimestampWrites {
                 query_set,
@@ -329,25 +337,8 @@ impl Global {
         (ComputePass::new(Some(cmd_buf), arc_desc), None)
     }
 
-    pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), ComputePassError> {
-        let scope = PassErrorScope::Pass;
-
-        let cmd_buf = pass
-            .parent
-            .as_ref()
-            .ok_or(ComputePassErrorInner::InvalidParentEncoder)
-            .map_pass_err(scope)?;
-
-        cmd_buf.unlock_encoder().map_pass_err(scope)?;
-
-        let base = pass
-            .base
-            .take()
-            .ok_or(ComputePassErrorInner::PassEnded)
-            .map_pass_err(scope)?;
-        self.compute_pass_end_impl(cmd_buf, base, pass.timestamp_writes.take())
-    }
-
+    /// Note that this differs from [`Self::compute_pass_end`], it will
+    /// create a new pass, replay the commands and end the pass.
     #[doc(hidden)]
     #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn compute_pass_end_with_unresolved_commands(
@@ -356,19 +347,16 @@ impl Global {
         base: BasePass<super::ComputeCommand>,
         timestamp_writes: Option<&PassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
-        let hub = &self.hub;
-        let scope = PassErrorScope::Pass;
-
-        let cmd_buf = match hub.command_buffers.get(encoder_id.into_command_buffer_id()) {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid).map_pass_err(scope),
-        };
-        cmd_buf.check_recording().map_pass_err(scope)?;
+        let pass_scope = PassErrorScope::Pass;
 
         #[cfg(feature = "trace")]
         {
-            let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            let cmd_buf = self
+                .hub
+                .command_buffers
+                .get(encoder_id.into_command_buffer_id());
+            let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunComputePass {
                     base: BasePass {
@@ -383,50 +371,61 @@ impl Global {
             }
         }
 
-        let commands =
-            super::ComputeCommand::resolve_compute_command_ids(&self.hub, &base.commands)?;
+        let BasePass {
+            label,
+            commands,
+            dynamic_offsets,
+            string_data,
+            push_constant_data,
+        } = base;
 
-        let timestamp_writes = if let Some(tw) = timestamp_writes {
-            Some(ArcPassTimestampWrites {
-                query_set: hub
-                    .query_sets
-                    .get(tw.query_set)
-                    .map_err(|_| ComputePassErrorInner::InvalidQuerySet(tw.query_set))
-                    .map_pass_err(scope)?,
-                beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                end_of_pass_write_index: tw.end_of_pass_write_index,
-            })
-        } else {
-            None
+        let (mut compute_pass, encoder_error) = self.command_encoder_create_compute_pass(
+            encoder_id,
+            &ComputePassDescriptor {
+                label: label.as_deref().map(std::borrow::Cow::Borrowed),
+                timestamp_writes,
+            },
+        );
+        if let Some(err) = encoder_error {
+            return Err(ComputePassError {
+                scope: pass_scope,
+                inner: err.into(),
+            });
         };
 
-        self.compute_pass_end_impl(
-            &cmd_buf,
-            BasePass {
-                label: base.label,
-                commands,
-                dynamic_offsets: base.dynamic_offsets,
-                string_data: base.string_data,
-                push_constant_data: base.push_constant_data,
-            },
-            timestamp_writes,
-        )
+        compute_pass.base = Some(BasePass {
+            label,
+            commands: super::ComputeCommand::resolve_compute_command_ids(&self.hub, &commands)?,
+            dynamic_offsets,
+            string_data,
+            push_constant_data,
+        });
+
+        self.compute_pass_end(&mut compute_pass)
     }
 
-    fn compute_pass_end_impl(
-        &self,
-        cmd_buf: &CommandBuffer,
-        base: BasePass<ArcComputeCommand>,
-        mut timestamp_writes: Option<ArcPassTimestampWrites>,
-    ) -> Result<(), ComputePassError> {
+    pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
         let pass_scope = PassErrorScope::Pass;
+
+        let cmd_buf = pass
+            .parent
+            .as_ref()
+            .ok_or(ComputePassErrorInner::InvalidParentEncoder)
+            .map_pass_err(pass_scope)?;
+
+        let base = pass
+            .base
+            .take()
+            .ok_or(ComputePassErrorInner::PassEnded)
+            .map_pass_err(pass_scope)?;
 
         let device = &cmd_buf.device;
         device.check_is_valid().map_pass_err(pass_scope)?;
 
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+        cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
+        let cmd_buf_data = &mut *cmd_buf_data;
 
         let encoder = &mut cmd_buf_data.encoder;
         let status = &mut cmd_buf_data.status;
@@ -434,10 +433,10 @@ impl Global {
         // We automatically keep extending command buffers over time, and because
         // we want to insert a command buffer _before_ what we're about to record,
         // we need to make sure to close the previous one.
-        encoder.close().map_pass_err(pass_scope)?;
+        encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
         // will be reset to true if recording is done without errors
         *status = CommandEncoderStatus::Error;
-        let raw_encoder = encoder.open().map_pass_err(pass_scope)?;
+        let raw_encoder = encoder.open(&cmd_buf.device).map_pass_err(pass_scope)?;
 
         let mut state = State {
             binder: Binder::new(),
@@ -459,6 +458,8 @@ impl Global {
             string_offset: 0,
             active_query: None,
 
+            push_constants: Vec::new(),
+
             intermediate_trackers: Tracker::new(),
 
             pending_discard_init_fixups: SurfacesInDiscardState::new(),
@@ -469,9 +470,9 @@ impl Global {
         state.tracker.textures.set_size(indices.textures.size());
 
         let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
-            if let Some(tw) = timestamp_writes.take() {
+            if let Some(tw) = pass.timestamp_writes.take() {
                 tw.query_set
-                    .same_device_as(cmd_buf)
+                    .same_device_as(cmd_buf.as_ref())
                     .map_pass_err(pass_scope)?;
 
                 let query_set = state.tracker.query_sets.insert_single(tw.query_set);
@@ -505,7 +506,7 @@ impl Global {
             };
 
         let hal_desc = hal::ComputePassDescriptor {
-            label: hal_label(base.label.as_deref(), self.instance.flags),
+            label: hal_label(base.label.as_deref(), device.instance_flags),
             timestamp_writes,
         };
 
@@ -513,8 +514,6 @@ impl Global {
             state.raw_encoder.begin_compute_pass(&hal_desc);
         }
 
-        // TODO: We should be draining the commands here, avoiding extra copies in the process.
-        //       (A command encoder can't be executed twice!)
         for command in base.commands {
             match command {
                 ArcComputeCommand::SetBindGroup {
@@ -619,12 +618,12 @@ impl Global {
         } = state;
 
         // Stop the current command buffer.
-        encoder.close().map_pass_err(pass_scope)?;
+        encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
 
         // Create a new command buffer, which we will insert _before_ the body of the compute pass.
         //
         // Use that buffer to insert barriers and clear discarded images.
-        let transit = encoder.open().map_pass_err(pass_scope)?;
+        let transit = encoder.open(&cmd_buf.device).map_pass_err(pass_scope)?;
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             transit,
@@ -639,7 +638,9 @@ impl Global {
             &snatch_guard,
         );
         // Close the command buffer, and swap it with the previous.
-        encoder.close_and_swap().map_pass_err(pass_scope)?;
+        encoder
+            .close_and_swap(&cmd_buf.device)
+            .map_pass_err(pass_scope)?;
 
         Ok(())
     }
@@ -651,10 +652,8 @@ fn set_bind_group(
     dynamic_offsets: &[DynamicOffset],
     index: u32,
     num_dynamic_offsets: usize,
-    bind_group: Arc<BindGroup>,
+    bind_group: Option<Arc<BindGroup>>,
 ) -> Result<(), ComputePassErrorInner> {
-    bind_group.same_device_as(cmd_buf)?;
-
     let max_bind_groups = state.device.limits.max_bind_groups;
     if index >= max_bind_groups {
         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
@@ -670,7 +669,16 @@ fn set_bind_group(
     );
     state.dynamic_offset_count += num_dynamic_offsets;
 
+    if bind_group.is_none() {
+        // TODO: Handle bind_group None.
+        return Ok(());
+    }
+
+    let bind_group = bind_group.unwrap();
     let bind_group = state.tracker.bind_groups.insert_single(bind_group);
+
+    bind_group.same_device_as(cmd_buf)?;
+
     bind_group.validate_dynamic_bindings(index, &state.temp_offsets)?;
 
     state
@@ -713,7 +721,7 @@ fn set_bind_group(
                     state.raw_encoder.set_bind_group(
                         pipeline_layout,
                         index + i as u32,
-                        raw_bg,
+                        Some(raw_bg),
                         &e.dynamic_offsets,
                     );
                 }
@@ -758,12 +766,27 @@ fn set_pipeline(
                         state.raw_encoder.set_bind_group(
                             pipeline.layout.raw(),
                             start_index as u32 + i as u32,
-                            raw_bg,
+                            Some(raw_bg),
                             &e.dynamic_offsets,
                         );
                     }
                 }
             }
+        }
+
+        // TODO: integrate this in the code below once we simplify push constants
+        state.push_constants.clear();
+        // Note that can only be one range for each stage. See the `MoreThanOnePushConstantRangePerStage` error.
+        if let Some(push_constant_range) =
+            pipeline.layout.push_constant_ranges.iter().find_map(|pcr| {
+                pcr.stages
+                    .contains(wgt::ShaderStages::COMPUTE)
+                    .then_some(pcr.range.clone())
+            })
+        {
+            // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
+            let len = push_constant_range.len() / wgt::PUSH_CONSTANT_ALIGNMENT as usize;
+            state.push_constants.extend(core::iter::repeat(0).take(len));
         }
 
         // Clear push constant ranges
@@ -800,7 +823,7 @@ fn set_push_constant(
         .binder
         .pipeline_layout
         .as_ref()
-        //TODO: don't error here, lazily update the push constants
+        // TODO: don't error here, lazily update the push constants using `state.push_constants`
         .ok_or(ComputePassErrorInner::Dispatch(
             DispatchError::MissingPipeline,
         ))?;
@@ -810,6 +833,10 @@ fn set_push_constant(
         offset,
         end_offset_bytes,
     )?;
+
+    let offset_in_elements = (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+    let size_in_elements = (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+    state.push_constants[offset_in_elements..][..size_in_elements].copy_from_slice(data_slice);
 
     unsafe {
         state.raw_encoder.set_push_constants(
@@ -861,13 +888,13 @@ fn dispatch_indirect(
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
-    state
-        .scope
-        .buffers
-        .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
-    let end_offset = offset + mem::size_of::<wgt::DispatchIndirectArgs>() as u64;
+    if offset % 4 != 0 {
+        return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
+    }
+
+    let end_offset = offset + size_of::<wgt::DispatchIndirectArgs>() as u64;
     if end_offset > buffer.size {
         return Err(ComputePassErrorInner::IndirectBufferOverrun {
             offset,
@@ -877,7 +904,6 @@ fn dispatch_indirect(
     }
 
     let stride = 3 * 4; // 3 integers, x/y/z group size
-
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
@@ -886,12 +912,132 @@ fn dispatch_indirect(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    state.flush_states(Some(buffer.tracker_index()))?;
+    #[cfg(feature = "indirect-validation")]
+    {
+        let params = state.device.indirect_validation.as_ref().unwrap().params(
+            &state.device.limits,
+            offset,
+            buffer.size,
+        );
 
-    let buf_raw = buffer.try_raw(&state.snatch_guard)?;
-    unsafe {
-        state.raw_encoder.dispatch_indirect(buf_raw, offset);
+        unsafe {
+            state.raw_encoder.set_compute_pipeline(params.pipeline);
+        }
+
+        unsafe {
+            state.raw_encoder.set_push_constants(
+                params.pipeline_layout,
+                wgt::ShaderStages::COMPUTE,
+                0,
+                &[params.offset_remainder as u32 / 4],
+            );
+        }
+
+        unsafe {
+            state.raw_encoder.set_bind_group(
+                params.pipeline_layout,
+                0,
+                Some(params.dst_bind_group),
+                &[],
+            );
+        }
+        unsafe {
+            state.raw_encoder.set_bind_group(
+                params.pipeline_layout,
+                1,
+                Some(
+                    buffer
+                        .raw_indirect_validation_bind_group
+                        .get(&state.snatch_guard)
+                        .unwrap()
+                        .as_ref(),
+                ),
+                &[params.aligned_offset as u32],
+            );
+        }
+
+        let src_transition = state
+            .intermediate_trackers
+            .buffers
+            .set_single(&buffer, hal::BufferUses::STORAGE_READ);
+        let src_barrier =
+            src_transition.map(|transition| transition.into_hal(&buffer, &state.snatch_guard));
+        unsafe {
+            state.raw_encoder.transition_buffers(src_barrier.as_slice());
+        }
+
+        unsafe {
+            state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: params.dst_buffer,
+                usage: hal::BufferUses::INDIRECT..hal::BufferUses::STORAGE_READ_WRITE,
+            }]);
+        }
+
+        unsafe {
+            state.raw_encoder.dispatch([1, 1, 1]);
+        }
+
+        // reset state
+        {
+            let pipeline = state.pipeline.as_ref().unwrap();
+
+            unsafe {
+                state.raw_encoder.set_compute_pipeline(pipeline.raw());
+            }
+
+            if !state.push_constants.is_empty() {
+                unsafe {
+                    state.raw_encoder.set_push_constants(
+                        pipeline.layout.raw(),
+                        wgt::ShaderStages::COMPUTE,
+                        0,
+                        &state.push_constants,
+                    );
+                }
+            }
+
+            for (i, e) in state.binder.list_valid() {
+                let group = e.group.as_ref().unwrap();
+                let raw_bg = group.try_raw(&state.snatch_guard)?;
+                unsafe {
+                    state.raw_encoder.set_bind_group(
+                        pipeline.layout.raw(),
+                        i as u32,
+                        Some(raw_bg),
+                        &e.dynamic_offsets,
+                    );
+                }
+            }
+        }
+
+        unsafe {
+            state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
+                buffer: params.dst_buffer,
+                usage: hal::BufferUses::STORAGE_READ_WRITE..hal::BufferUses::INDIRECT,
+            }]);
+        }
+
+        state.flush_states(None)?;
+        unsafe {
+            state.raw_encoder.dispatch_indirect(params.dst_buffer, 0);
+        }
+    };
+    #[cfg(not(feature = "indirect-validation"))]
+    {
+        state
+            .scope
+            .buffers
+            .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
+
+        use crate::resource::Trackable;
+        state.flush_states(Some(buffer.tracker_index()))?;
+
+        let buf_raw = buffer.try_raw(&state.snatch_guard)?;
+        unsafe {
+            state.raw_encoder.dispatch_indirect(buf_raw, offset);
+        }
     }
+
     Ok(())
 }
 
@@ -965,7 +1111,7 @@ impl Global {
         &self,
         pass: &mut ComputePass,
         index: u32,
-        bind_group_id: id::BindGroupId,
+        bind_group_id: Option<id::BindGroupId>,
         offsets: &[DynamicOffset],
     ) -> Result<(), ComputePassError> {
         let scope = PassErrorScope::SetBindGroup;
@@ -986,12 +1132,18 @@ impl Global {
             return Ok(());
         }
 
-        let hub = &self.hub;
-        let bind_group = hub
-            .bind_groups
-            .get(bind_group_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBindGroupId(bind_group_id))
-            .map_pass_err(scope)?;
+        let mut bind_group = None;
+        if bind_group_id.is_some() {
+            let bind_group_id = bind_group_id.unwrap();
+
+            let hub = &self.hub;
+            let bg = hub
+                .bind_groups
+                .get(bind_group_id)
+                .get()
+                .map_pass_err(scope)?;
+            bind_group = Some(bg);
+        }
 
         base.commands.push(ArcComputeCommand::SetBindGroup {
             index,
@@ -1021,7 +1173,7 @@ impl Global {
         let pipeline = hub
             .compute_pipelines
             .get(pipeline_id)
-            .map_err(|_| ComputePassErrorInner::InvalidPipelineId(pipeline_id))
+            .get()
             .map_pass_err(scope)?;
 
         base.commands.push(ArcComputeCommand::SetPipeline(pipeline));
@@ -1092,11 +1244,7 @@ impl Global {
         let scope = PassErrorScope::Dispatch { indirect: true };
         let base = pass.base_mut(scope)?;
 
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
-            .map_err(|_| ComputePassErrorInner::InvalidBufferId(buffer_id))
-            .map_pass_err(scope)?;
+        let buffer = hub.buffers.get(buffer_id).get().map_pass_err(scope)?;
 
         base.commands
             .push(ArcComputeCommand::DispatchIndirect { buffer, offset });
@@ -1163,11 +1311,7 @@ impl Global {
         let base = pass.base_mut(scope)?;
 
         let hub = &self.hub;
-        let query_set = hub
-            .query_sets
-            .get(query_set_id)
-            .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
-            .map_pass_err(scope)?;
+        let query_set = hub.query_sets.get(query_set_id).get().map_pass_err(scope)?;
 
         base.commands.push(ArcComputeCommand::WriteTimestamp {
             query_set,
@@ -1187,11 +1331,7 @@ impl Global {
         let base = pass.base_mut(scope)?;
 
         let hub = &self.hub;
-        let query_set = hub
-            .query_sets
-            .get(query_set_id)
-            .map_err(|_| ComputePassErrorInner::InvalidQuerySet(query_set_id))
-            .map_pass_err(scope)?;
+        let query_set = hub.query_sets.get(query_set_id).get().map_pass_err(scope)?;
 
         base.commands
             .push(ArcComputeCommand::BeginPipelineStatisticsQuery {

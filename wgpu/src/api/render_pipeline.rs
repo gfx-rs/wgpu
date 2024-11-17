@@ -1,6 +1,5 @@
 use std::{num::NonZeroU32, sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a rendering (graphics) pipeline.
@@ -12,37 +11,34 @@ use crate::*;
 #[derive(Debug)]
 pub struct RenderPipeline {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
+super::impl_partialeq_eq_hash!(RenderPipeline);
+
 impl Drop for RenderPipeline {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .render_pipeline_drop(&self.id, self.data.as_ref());
+            self.context.render_pipeline_drop(self.data.as_ref());
         }
     }
 }
 
 impl RenderPipeline {
-    /// Returns a globally-unique identifier for this `RenderPipeline`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-
     /// Get an object representing the bind group layout at a given index.
+    ///
+    /// If this pipeline was created with a [default layout][RenderPipelineDescriptor::layout], then
+    /// bind groups created with the returned `BindGroupLayout` can only be used with this pipeline.
+    ///
+    /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
         let context = Arc::clone(&self.context);
-        let (id, data) =
-            self.context
-                .render_pipeline_get_bind_group_layout(&self.id, self.data.as_ref(), index);
-        BindGroupLayout { context, id, data }
+        let data = self
+            .context
+            .render_pipeline_get_bind_group_layout(self.data.as_ref(), index);
+        BindGroupLayout { context, data }
     }
 }
 
@@ -130,6 +126,24 @@ pub struct RenderPipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
+    ///
+    /// If this is set, then [`Device::create_render_pipeline`] will raise a validation error if
+    /// the layout doesn't match what the shader module(s) expect.
+    ///
+    /// Using the same [`PipelineLayout`] for many [`RenderPipeline`] or [`ComputePipeline`]
+    /// pipelines guarantees that you don't have to rebind any resources when switching between
+    /// those pipelines.
+    ///
+    /// ## Default pipeline layout
+    ///
+    /// If `layout` is `None`, then the pipeline has a [default layout] created and used instead.
+    /// The default layout is deduced from the shader modules.
+    ///
+    /// You can use [`RenderPipeline::get_bind_group_layout`] to create bind groups for use with the
+    /// default layout. However, these bind groups cannot be used with any other pipelines. This is
+    /// convenient for simple pipelines, but using an explicit layout is recommended in most cases.
+    ///
+    /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled vertex stage, its entry point, and the input buffers layout.
     pub vertex: VertexState<'a>,

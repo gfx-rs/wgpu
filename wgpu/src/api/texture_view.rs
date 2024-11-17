@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a texture view.
@@ -12,21 +11,14 @@ use crate::*;
 #[derive(Debug)]
 pub struct TextureView {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
-impl TextureView {
-    /// Returns a globally-unique identifier for this `TextureView`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
+super::impl_partialeq_eq_hash!(TextureView);
 
+impl TextureView {
     /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
     /// backend type argument does not match with this wgpu Texture
     ///
@@ -38,17 +30,16 @@ impl TextureView {
         &self,
         hal_texture_view_callback: F,
     ) -> R {
-        use wgc::id::TextureViewId;
-
-        let texture_view_id = TextureViewId::from(self.id);
-
         if let Some(ctx) = self
             .context
             .as_any()
             .downcast_ref::<crate::backend::ContextWgpuCore>()
         {
             unsafe {
-                ctx.texture_view_as_hal::<A, F, R>(texture_view_id, hal_texture_view_callback)
+                ctx.texture_view_as_hal::<A, F, R>(
+                    crate::context::downcast_ref(self.data.as_ref()),
+                    hal_texture_view_callback,
+                )
             }
         } else {
             hal_texture_view_callback(None)
@@ -59,7 +50,7 @@ impl TextureView {
 impl Drop for TextureView {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.texture_view_drop(&self.id, self.data.as_ref());
+            self.context.texture_view_drop(self.data.as_ref());
         }
     }
 }

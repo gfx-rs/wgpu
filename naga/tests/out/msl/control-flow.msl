@@ -31,7 +31,8 @@ void switch_case_break(
 void loop_switch_continue(
     int x
 ) {
-    while(true) {
+#define LOOP_IS_REACHABLE if (volatile bool unpredictable_jump_over_loop = true; unpredictable_jump_over_loop)
+    LOOP_IS_REACHABLE while(true) {
         switch(x) {
             case 1: {
                 continue;
@@ -49,7 +50,7 @@ void loop_switch_continue_nesting(
     int y,
     int z
 ) {
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         switch(x_1) {
             case 1: {
                 continue;
@@ -60,7 +61,7 @@ void loop_switch_continue_nesting(
                         continue;
                     }
                     default: {
-                        while(true) {
+                        LOOP_IS_REACHABLE while(true) {
                             switch(z) {
                                 case 1: {
                                     continue;
@@ -85,7 +86,7 @@ void loop_switch_continue_nesting(
             }
         }
     }
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         switch(y) {
             case 1:
             default: {
@@ -108,7 +109,7 @@ void loop_switch_omit_continue_variable_checks(
     int w
 ) {
     int pos_1 = 0;
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         switch(x_2) {
             case 1: {
                 pos_1 = 1;
@@ -119,7 +120,7 @@ void loop_switch_omit_continue_variable_checks(
             }
         }
     }
-    while(true) {
+    LOOP_IS_REACHABLE while(true) {
         switch(x_2) {
             case 1: {
                 break;

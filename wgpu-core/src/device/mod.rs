@@ -37,7 +37,7 @@ pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 // See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
 const CLEANUP_WAIT_MS: u32 = 60000;
 
-const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
+pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
@@ -298,24 +298,25 @@ impl DeviceLostClosure {
     }
 }
 
-fn map_buffer(
-    raw: &dyn hal::DynDevice,
+pub(crate) fn map_buffer(
     buffer: &Buffer,
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
     snatch_guard: &SnatchGuard,
 ) -> Result<hal::BufferMapping, BufferAccessError> {
+    let raw_device = buffer.device.raw();
     let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
-        raw.map_buffer(raw_buffer, offset..offset + size)
-            .map_err(DeviceError::from)?
+        raw_device
+            .map_buffer(raw_buffer, offset..offset + size)
+            .map_err(|e| buffer.device.handle_hal_error(e))?
     };
 
     if !mapping.is_coherent && kind == HostMap::Read {
         #[allow(clippy::single_range_in_vec_init)]
         unsafe {
-            raw.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
+            raw_device.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
         }
     }
 
@@ -337,19 +338,41 @@ fn map_buffer(
 
     let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
-    for uninitialized in buffer
-        .initialization_status
-        .write()
-        .drain(offset..(size + offset))
+    // We can't call flush_mapped_ranges in this case, so we can't drain the uninitialized ranges either
+    if !mapping.is_coherent
+        && kind == HostMap::Read
+        && !buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
     {
-        // The mapping's pointer is already offset, however we track the
-        // uninitialized range relative to the buffer's start.
-        let fill_range =
-            (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
-        mapped[fill_range].fill(0);
+        for uninitialized in buffer
+            .initialization_status
+            .write()
+            .uninitialized(offset..(size + offset))
+        {
+            // The mapping's pointer is already offset, however we track the
+            // uninitialized range relative to the buffer's start.
+            let fill_range =
+                (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+            mapped[fill_range].fill(0);
+        }
+    } else {
+        for uninitialized in buffer
+            .initialization_status
+            .write()
+            .drain(offset..(size + offset))
+        {
+            // The mapping's pointer is already offset, however we track the
+            // uninitialized range relative to the buffer's start.
+            let fill_range =
+                (uninitialized.start - offset) as usize..(uninitialized.end - offset) as usize;
+            mapped[fill_range].fill(0);
 
-        if !mapping.is_coherent && kind == HostMap::Read {
-            unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
+            // NOTE: This is only possible when MAPPABLE_PRIMARY_BUFFERS is enabled.
+            if !mapping.is_coherent
+                && kind == HostMap::Read
+                && buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
+            {
+                unsafe { raw_device.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
+            }
         }
     }
 
@@ -393,18 +416,20 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
-    #[error("DeviceId is invalid")]
-    InvalidDeviceId,
     #[error(transparent)]
     DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
 
-impl From<hal::DeviceError> for DeviceError {
-    fn from(error: hal::DeviceError) -> Self {
+impl DeviceError {
+    /// Only use this function in contexts where there is no `Device`.
+    ///
+    /// Use [`Device::handle_hal_error`] otherwise.
+    pub fn from_hal(error: hal::DeviceError) -> Self {
         match error {
-            hal::DeviceError::Lost => DeviceError::Lost,
-            hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
+            hal::DeviceError::Lost => Self::Lost,
+            hal::DeviceError::OutOfMemory => Self::OutOfMemory,
+            hal::DeviceError::ResourceCreationFailed => Self::ResourceCreationFailed,
+            hal::DeviceError::Unexpected => Self::Lost,
         }
     }
 }
@@ -434,20 +459,12 @@ pub struct ImplicitPipelineIds<'a> {
 
 impl ImplicitPipelineIds<'_> {
     fn prepare(self, hub: &Hub) -> ImplicitPipelineContext {
-        let backend = self.root_id.backend();
         ImplicitPipelineContext {
-            root_id: hub
-                .pipeline_layouts
-                .prepare(backend, Some(self.root_id))
-                .into_id(),
+            root_id: hub.pipeline_layouts.prepare(Some(self.root_id)).id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| {
-                    hub.bind_group_layouts
-                        .prepare(backend, Some(*id_in))
-                        .into_id()
-                })
+                .map(|id_in| hub.bind_group_layouts.prepare(Some(*id_in)).id())
                 .collect(),
         }
     }
@@ -531,7 +548,7 @@ pub fn create_validator(
     );
     caps.set(
         Caps::RAY_QUERY,
-        features.intersects(wgt::Features::RAY_QUERY),
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY),
     );
     caps.set(
         Caps::SUBGROUP_VERTEX_STAGE,

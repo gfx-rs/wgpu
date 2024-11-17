@@ -11,8 +11,8 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        DestroyedResourceError, Labeled, MissingBufferUsageError, ParentDevice, ResourceErrorIdent,
-        Texture, TextureClearMode,
+        DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        ParentDevice, ResourceErrorIdent, Texture, TextureClearMode,
     },
     snatch::SnatchGuard,
     track::{TextureSelector, TextureTrackerSetSingle},
@@ -27,10 +27,6 @@ use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, Te
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,
-    #[error("BufferId {0:?} is invalid")]
-    InvalidBufferId(BufferId),
-    #[error("TextureId {0:?} is invalid")]
-    InvalidTextureId(TextureId),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("{0} can not be cleared")]
@@ -75,6 +71,8 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     Device(#[from] DeviceError),
     #[error(transparent)]
     CommandEncoderError(#[from] CommandEncoderError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl Global {
@@ -90,27 +88,18 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            .get(command_encoder_id.into_command_buffer_id());
+        let mut cmd_buf_data = cmd_buf.try_get()?;
+        cmd_buf_data.check_recording()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        let dst_buffer = hub
-            .buffers
-            .get(dst)
-            .map_err(|_| ClearError::InvalidBufferId(dst))?;
+        let dst_buffer = hub.buffers.get(dst).get()?;
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -163,7 +152,7 @@ impl Global {
 
         // actual hal barrier & operation
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
@@ -182,17 +171,11 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = match hub
+        let cmd_buf = hub
             .command_buffers
-            .get(command_encoder_id.into_command_buffer_id())
-        {
-            Ok(cmd_buf) => cmd_buf,
-            Err(_) => return Err(CommandEncoderError::Invalid.into()),
-        };
-        cmd_buf.check_recording()?;
-
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+            .get(command_encoder_id.into_command_buffer_id());
+        let mut cmd_buf_data = cmd_buf.try_get()?;
+        cmd_buf_data.check_recording()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -206,10 +189,7 @@ impl Global {
             return Err(ClearError::MissingClearTextureFeature);
         }
 
-        let dst_texture = hub
-            .textures
-            .get(dst)
-            .map_err(|_| ClearError::InvalidTextureId(dst))?;
+        let dst_texture = hub.textures.get(dst).get()?;
 
         dst_texture.same_device_as(cmd_buf.as_ref())?;
 
@@ -249,7 +229,7 @@ impl Global {
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
-        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
+        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker(&cmd_buf.device)?;
 
         let snatch_guard = device.snatchable_lock.read();
         clear_texture(

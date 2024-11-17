@@ -4,12 +4,9 @@ use crate::{
     binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
     device::{
-        bgl, create_validator,
-        life::{LifetimeTracker, WaitIdleError},
-        map_buffer,
-        queue::PendingWrites,
-        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
-        RenderPassContext, CLEANUP_WAIT_MS,
+        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
+        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        CLEANUP_WAIT_MS,
     },
     hal_label,
     init_tracker::{
@@ -17,11 +14,11 @@ use crate::{
         TextureInitTrackerAction,
     },
     instance::Adapter,
-    lock::{rank, Mutex, MutexGuard, RwLock},
+    lock::{rank, Mutex, RwLock},
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, Buffer, Labeled, ParentDevice, QuerySet, Sampler, StagingBuffer, Texture,
+        self, Buffer, Fallible, Labeled, ParentDevice, QuerySet, Sampler, StagingBuffer, Texture,
         TextureView, TextureViewNotRenderableReason, TrackingData,
     },
     resource_log,
@@ -31,57 +28,38 @@ use crate::{
         UsageScopePool,
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
-    FastHashMap, LabelHelpers as _, PreHashedKey, PreHashedMap,
+    weak_vec::WeakVec,
+    FastHashMap, LabelHelpers,
 };
 
 use arrayvec::ArrayVec;
-use once_cell::sync::OnceCell;
-
 use smallvec::SmallVec;
-use thiserror::Error;
-use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension};
+use wgt::{
+    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
+};
 
-use crate::resource::{AccelerationStructure, Tlas};
+use crate::resource::{AccelerationStructure, DestroyedResourceError, Tlas};
 use std::{
     borrow::Cow,
-    mem::ManuallyDrop,
+    mem::{self, ManuallyDrop},
     num::NonZeroU32,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Weak,
+        Arc, OnceLock, Weak,
     },
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR,
-    ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
+    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
-///
-/// TODO: establish clear order of locking for these:
-/// `life_tracker`, `trackers`, `render_passes`, `pending_writes`, `trace`.
-///
-/// Currently, the rules are:
-/// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
-/// 1. `self.trackers` is locked last (unenforced)
-/// 1. `self.trace` is locked last (unenforced)
-///
-/// Right now avoid locking twice same resource or registry in a call execution
-/// and minimize the locking to the minimum scope possible
-/// Unless otherwise specified, no lock may be acquired while holding another lock.
-/// This means that you must inspect function calls made while a lock is held
-/// to see what locks the callee may try to acquire.
-///
-/// Important:
-/// When locking pending_writes please check that trackers is not locked
-/// trackers should be locked only when needed for the shortest time possible
 pub struct Device {
-    raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
+    raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceCell<Weak<Queue>>,
-    queue_to_drop: OnceCell<Box<dyn hal::DynQueue>>,
+    pub(crate) queue: OnceLock<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -126,14 +104,14 @@ pub struct Device {
     /// using ref-counted references for internal access.
     pub(crate) valid: AtomicBool,
 
-    /// All live resources allocated with this [`Device`].
-    ///
-    /// Has to be locked temporarily only (locked last)
-    /// and never before pending_writes
+    /// Closure to be called on "lose the device". This is invoked directly by
+    /// device.lose or by the UserCallbacks returned from maintain when the device
+    /// has been destroyed and its queues are empty.
+    pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
+
+    /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
-    // Life tracker should be locked right after the device and before anything else.
-    life_tracker: Mutex<LifetimeTracker>,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
     pub(crate) alignments: hal::Alignments,
@@ -141,17 +119,19 @@ pub struct Device {
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
-    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
-    #[cfg(feature = "trace")]
-    pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
+    #[cfg(feature = "indirect-validation")]
+    pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    // needs to be dropped last
+    #[cfg(feature = "trace")]
+    pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
 
 pub(crate) enum DeferredDestroy {
-    TextureView(Weak<TextureView>),
-    BindGroup(Weak<BindGroup>),
+    TextureViews(WeakVec<TextureView>),
+    BindGroups(WeakVec<BindGroup>),
 }
 
 impl std::fmt::Debug for Device {
@@ -168,31 +148,26 @@ impl std::fmt::Debug for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+
+        if let Some(closure) = self.device_lost_closure.lock().take() {
+            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
+        }
+
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
-        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
-        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        pending_writes.dispose(raw.as_ref());
-        self.command_allocator.dispose(raw.as_ref());
+        self.command_allocator.dispose(self.raw.as_ref());
+        #[cfg(feature = "indirect-validation")]
+        self.indirect_validation
+            .take()
+            .unwrap()
+            .dispose(self.raw.as_ref());
         unsafe {
-            raw.destroy_buffer(zero_buffer);
-            raw.destroy_fence(fence);
-            let queue = self.queue_to_drop.take().unwrap();
-            raw.exit(queue);
+            self.raw.destroy_buffer(zero_buffer);
+            self.raw.destroy_fence(fence);
         }
     }
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum CreateDeviceError {
-    #[error("Not enough memory left to create device")]
-    OutOfMemory,
-    #[error("Failed to create internal buffer for initializing textures")]
-    FailedToCreateZeroBuffer(#[from] DeviceError),
 }
 
 impl Device {
@@ -222,63 +197,56 @@ impl Device {
 impl Device {
     pub(crate) fn new(
         raw_device: Box<dyn hal::DynDevice>,
-        raw_queue: &dyn hal::DynQueue,
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         instance_flags: wgt::InstanceFlags,
-    ) -> Result<Self, CreateDeviceError> {
+    ) -> Result<Self, DeviceError> {
         #[cfg(not(feature = "trace"))]
         if let Some(_) = trace_path {
             log::error!("Feature 'trace' is not enabled");
         }
-        let fence =
-            unsafe { raw_device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
+        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
-        let pending_encoder = command_allocator
-            .acquire_encoder(raw_device.as_ref(), raw_queue)
-            .map_err(|_| CreateDeviceError::OutOfMemory)?;
-        let mut pending_writes = PendingWrites::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
-            raw_device
-                .create_buffer(&hal::BufferDescriptor {
-                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                    size: ZERO_BUFFER_SIZE,
-                    usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-                .map_err(DeviceError::from)?
-        };
-        pending_writes.activate();
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                }]);
-            pending_writes
-                .command_encoder
-                .clear_buffer(zero_buffer.as_ref(), 0..ZERO_BUFFER_SIZE);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
-                }]);
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                size: ZERO_BUFFER_SIZE,
+                usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
+                memory_flags: hal::MemoryFlags::empty(),
+            })
         }
+        .map_err(DeviceError::from_hal)?;
 
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
 
+        #[cfg(feature = "indirect-validation")]
+        let indirect_validation = if downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+        {
+            match crate::indirect_validation::IndirectValidation::new(
+                raw_device.as_ref(),
+                &desc.required_limits,
+            ) {
+                Ok(indirect_validation) => Some(indirect_validation),
+                Err(e) => {
+                    log::error!("indirect-validation error: {e:?}");
+                    return Err(DeviceError::Lost);
+                }
+            }
+        } else {
+            None
+        };
+
         Ok(Self {
-            raw: ManuallyDrop::new(raw_device),
+            raw: raw_device,
             adapter: adapter.clone(),
-            queue: OnceCell::new(),
-            queue_to_drop: OnceCell::new(),
+            queue: OnceLock::new(),
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
@@ -287,9 +255,9 @@ impl Device {
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
+            device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
-            life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(
@@ -298,7 +266,7 @@ impl Device {
                     Ok(mut trace) => {
                         trace.add(trace::Action::Init {
                             desc: desc.clone(),
-                            backend: adapter.raw.backend(),
+                            backend: adapter.backend(),
                         });
                         Some(trace)
                     }
@@ -313,19 +281,18 @@ impl Device {
             features: desc.required_features,
             downlevel,
             instance_flags,
-            pending_writes: Mutex::new(
-                rank::DEVICE_PENDING_WRITES,
-                ManuallyDrop::new(pending_writes),
-            ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            last_acceleration_structure_build_command_index: AtomicU64::new(0),
+            // By starting at one, we can put the result in a NonZeroU64.
+            last_acceleration_structure_build_command_index: AtomicU64::new(1),
+            #[cfg(feature = "indirect-validation")]
+            indirect_validation,
         })
     }
 
     /// Returns the backend this device is using.
     pub fn backend(&self) -> wgt::Backend {
-        self.adapter.raw.backend()
+        self.adapter.backend()
     }
 
     pub fn is_valid(&self) -> bool {
@@ -340,12 +307,16 @@ impl Device {
         }
     }
 
-    pub(crate) fn release_queue(&self, queue: Box<dyn hal::DynQueue>) {
-        assert!(self.queue_to_drop.set(queue).is_ok());
-    }
-
-    pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
-        self.life_tracker.lock()
+    pub fn handle_hal_error(&self, error: hal::DeviceError) -> DeviceError {
+        match error {
+            hal::DeviceError::OutOfMemory => {}
+            hal::DeviceError::Lost
+            | hal::DeviceError::ResourceCreationFailed
+            | hal::DeviceError::Unexpected => {
+                self.lose(&error.to_string());
+            }
+        }
+        DeviceError::from_hal(error)
     }
 
     /// Run some destroy operations that were deferred.
@@ -356,35 +327,42 @@ impl Device {
     /// implementation of a reference-counted structure).
     /// The snatch lock must not be held while this function is called.
     pub(crate) fn deferred_resource_destruction(&self) {
-        while let Some(item) = self.deferred_destroy.lock().pop() {
+        let deferred_destroy = mem::take(&mut *self.deferred_destroy.lock());
+        for item in deferred_destroy {
             match item {
-                DeferredDestroy::TextureView(view) => {
-                    let Some(view) = view.upgrade() else {
-                        continue;
-                    };
-                    let Some(raw_view) = view.raw.snatch(self.snatchable_lock.write()) else {
-                        continue;
-                    };
+                DeferredDestroy::TextureViews(views) => {
+                    for view in views {
+                        let Some(view) = view.upgrade() else {
+                            continue;
+                        };
+                        let Some(raw_view) = view.raw.snatch(&mut self.snatchable_lock.write())
+                        else {
+                            continue;
+                        };
 
-                    resource_log!("Destroy raw {}", view.error_ident());
+                        resource_log!("Destroy raw {}", view.error_ident());
 
-                    unsafe {
-                        self.raw().destroy_texture_view(raw_view);
+                        unsafe {
+                            self.raw().destroy_texture_view(raw_view);
+                        }
                     }
                 }
-                DeferredDestroy::BindGroup(bind_group) => {
-                    let Some(bind_group) = bind_group.upgrade() else {
-                        continue;
-                    };
-                    let Some(raw_bind_group) = bind_group.raw.snatch(self.snatchable_lock.write())
-                    else {
-                        continue;
-                    };
+                DeferredDestroy::BindGroups(bind_groups) => {
+                    for bind_group in bind_groups {
+                        let Some(bind_group) = bind_group.upgrade() else {
+                            continue;
+                        };
+                        let Some(raw_bind_group) =
+                            bind_group.raw.snatch(&mut self.snatchable_lock.write())
+                        else {
+                            continue;
+                        };
 
-                    resource_log!("Destroy raw {}", bind_group.error_ident());
+                        resource_log!("Destroy raw {}", bind_group.error_ident());
 
-                    unsafe {
-                        self.raw().destroy_bind_group(raw_bind_group);
+                        unsafe {
+                            self.raw().destroy_bind_group(raw_bind_group);
+                        }
                     }
                 }
             }
@@ -427,13 +405,11 @@ impl Device {
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
 
-                if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
-                    if submission_index > last_successful_submission_index {
-                        return Err(WaitIdleError::WrongSubmissionIndex(
-                            submission_index,
-                            last_successful_submission_index,
-                        ));
-                    }
+                if submission_index > last_successful_submission_index {
+                    return Err(WaitIdleError::WrongSubmissionIndex(
+                        submission_index,
+                        last_successful_submission_index,
+                    ));
                 }
 
                 submission_index
@@ -441,32 +417,26 @@ impl Device {
             wgt::Maintain::Wait => self
                 .last_successful_submission_index
                 .load(Ordering::Acquire),
-            wgt::Maintain::Poll => unsafe {
-                self.raw()
-                    .get_fence_value(fence.as_ref())
-                    .map_err(DeviceError::from)?
-            },
+            wgt::Maintain::Poll => unsafe { self.raw().get_fence_value(fence.as_ref()) }
+                .map_err(|e| self.handle_hal_error(e))?,
         };
 
         // If necessary, wait for that submission to complete.
         if maintain.is_wait() {
+            log::trace!("Device::maintain: waiting for submission index {submission_index}");
             unsafe {
                 self.raw()
                     .wait(fence.as_ref(), submission_index, CLEANUP_WAIT_MS)
-                    .map_err(DeviceError::from)?
-            };
+            }
+            .map_err(|e| self.handle_hal_error(e))?;
         }
-        log::trace!("Device::maintain: waiting for submission index {submission_index}");
 
-        let mut life_tracker = self.lock_life();
-        let submission_closures =
-            life_tracker.triage_submissions(submission_index, &self.command_allocator);
-
-        life_tracker.triage_mapped();
-
-        let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
-
-        let queue_empty = life_tracker.queue_empty();
+        let (submission_closures, mapping_closures, queue_empty) =
+            if let Some(queue) = self.get_queue() {
+                queue.maintain(submission_index, &snatch_guard)
+            } else {
+                (SmallVec::new(), Vec::new(), true)
+            };
 
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
@@ -482,9 +452,9 @@ impl Device {
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
-            if life_tracker.device_lost_closure.is_some() {
+            if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
                 device_lost_invocations.push(DeviceLostInvocation {
-                    closure: life_tracker.device_lost_closure.take().unwrap(),
+                    closure: device_lost_closure,
                     reason: DeviceLostReason::Destroyed,
                     message: String::new(),
                 });
@@ -492,7 +462,6 @@ impl Device {
         }
 
         // Don't hold the locks while calling release_gpu_resources.
-        drop(life_tracker);
         drop(fence);
         drop(snatch_guard);
 
@@ -552,6 +521,13 @@ impl Device {
 
         let mut usage = conv::map_buffer_usage(desc.usage);
 
+        if desc.usage.contains(wgt::BufferUsages::INDIRECT) {
+            self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+            // We are going to be reading from it, internally;
+            // when validating the content of the buffer
+            usage |= hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_READ_WRITE;
+        }
+
         if desc.mapped_at_creation {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(resource::CreateBufferError::UnalignedSize);
@@ -588,7 +564,12 @@ impl Device {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
+        let buffer =
+            unsafe { self.raw().create_buffer(&hal_desc) }.map_err(|e| self.handle_hal_error(e))?;
+
+        #[cfg(feature = "indirect-validation")]
+        let raw_indirect_validation_bind_group =
+            self.create_indirect_validation_bind_group(buffer.as_ref(), desc.size, desc.usage)?;
 
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
@@ -602,7 +583,9 @@ impl Device {
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
-            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
+            #[cfg(feature = "indirect-validation")]
+            raw_indirect_validation_bind_group,
         };
 
         let buffer = Arc::new(buffer);
@@ -619,14 +602,7 @@ impl Device {
                 }
             } else {
                 let snatch_guard: SnatchGuard = self.snatchable_lock.read();
-                map_buffer(
-                    self.raw(),
-                    &buffer,
-                    0,
-                    map_size,
-                    HostMap::Write,
-                    &snatch_guard,
-                )?
+                map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
             };
             *buffer.map_state.lock() = resource::BufferMapState::Active {
                 mapping,
@@ -664,6 +640,8 @@ impl Device {
             .describe_format_features(desc.format)
             .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
 
+        unsafe { self.raw().add_raw_texture(&*hal_texture) };
+
         let texture = Texture::new(
             self,
             resource::TextureInner::Native { raw: hal_texture },
@@ -684,11 +662,23 @@ impl Device {
         Ok(texture)
     }
 
-    pub fn create_buffer_from_hal(
+    pub(crate) fn create_buffer_from_hal(
         self: &Arc<Self>,
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
-    ) -> Arc<Buffer> {
+    ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
+        #[cfg(feature = "indirect-validation")]
+        let raw_indirect_validation_bind_group = match self.create_indirect_validation_bind_group(
+            hal_buffer.as_ref(),
+            desc.size,
+            desc.usage,
+        ) {
+            Ok(ok) => ok,
+            Err(e) => return (Fallible::Invalid(Arc::new(desc.label.to_string())), Some(e)),
+        };
+
+        unsafe { self.raw().add_raw_buffer(&*hal_buffer) };
+
         let buffer = Buffer {
             raw: Snatchable::new(hal_buffer),
             device: self.clone(),
@@ -701,7 +691,9 @@ impl Device {
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
-            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, Vec::new()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
+            #[cfg(feature = "indirect-validation")]
+            raw_indirect_validation_bind_group,
         };
 
         let buffer = Arc::new(buffer);
@@ -711,7 +703,28 @@ impl Device {
             .buffers
             .insert_single(&buffer, hal::BufferUses::empty());
 
-        buffer
+        (Fallible::Valid(buffer), None)
+    }
+
+    #[cfg(feature = "indirect-validation")]
+    fn create_indirect_validation_bind_group(
+        &self,
+        raw_buffer: &dyn hal::DynBuffer,
+        buffer_size: u64,
+        usage: wgt::BufferUsages,
+    ) -> Result<Snatchable<Box<dyn hal::DynBindGroup>>, resource::CreateBufferError> {
+        if usage.contains(wgt::BufferUsages::INDIRECT) {
+            let indirect_validation = self.indirect_validation.as_ref().unwrap();
+            let bind_group = indirect_validation
+                .create_src_bind_group(self.raw(), &self.limits, buffer_size, raw_buffer)
+                .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
+            match bind_group {
+                Some(bind_group) => Ok(Snatchable::new(bind_group)),
+                None => Ok(Snatchable::empty()),
+            }
+        } else {
+            Ok(Snatchable::empty())
+        }
     }
 
     pub(crate) fn create_texture(
@@ -931,11 +944,8 @@ impl Device {
             view_formats: hal_view_formats,
         };
 
-        let raw_texture = unsafe {
-            self.raw()
-                .create_texture(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let clear_mode = if hal_usage
             .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
@@ -978,7 +988,7 @@ impl Device {
                                 unsafe {
                                     self.raw().create_texture_view(raw_texture.as_ref(), &desc)
                                 }
-                                .map_err(DeviceError::from)?,
+                                .map_err(|e| self.handle_hal_error(e))?,
                             ));
                         };
                     }
@@ -1284,11 +1294,8 @@ impl Device {
             range: resolved_range,
         };
 
-        let raw = unsafe {
-            self.raw()
-                .create_texture_view(texture_raw, &hal_desc)
-                .map_err(|_| resource::CreateTextureViewError::OutOfMemory)?
-        };
+        let raw = unsafe { self.raw().create_texture_view(texture_raw, &hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let selector = TextureSelector {
             mips: desc.range.base_mip_level..mip_level_end,
@@ -1317,10 +1324,6 @@ impl Device {
 
         {
             let mut views = texture.views.lock();
-
-            // Remove stale weak references
-            views.retain(|view| view.strong_count() > 0);
-
             views.push(Arc::downgrade(&view));
         }
 
@@ -1419,11 +1422,8 @@ impl Device {
             border_color: desc.border_color,
         };
 
-        let raw = unsafe {
-            self.raw()
-                .create_sampler(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw = unsafe { self.raw().create_sampler(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let sampler = Sampler {
             raw: ManuallyDrop::new(raw),
@@ -1547,7 +1547,7 @@ impl Device {
             Err(error) => {
                 return Err(match error {
                     hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(error.into())
+                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
                         log::error!("Shader error: {}", msg);
@@ -1588,7 +1588,7 @@ impl Device {
             Err(error) => {
                 return Err(match error {
                     hal::ShaderError::Device(error) => {
-                        pipeline::CreateShaderModuleError::Device(error.into())
+                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
                         log::error!("Shader error: {}", msg);
@@ -1620,7 +1620,8 @@ impl Device {
 
         let encoder = self
             .command_allocator
-            .acquire_encoder(self.raw(), queue.raw())?;
+            .acquire_encoder(self.raw(), queue.raw())
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let command_buffer = command::CommandBuffer::new(encoder, self, label);
 
@@ -1631,7 +1632,7 @@ impl Device {
 
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
-    pub(crate) fn make_late_sized_buffer_groups(
+    fn make_late_sized_buffer_groups(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         layout: &binding_model::PipelineLayout,
     ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
@@ -1793,7 +1794,7 @@ impl Device {
                         },
                     )
                 }
-                Bt::AccelerationStructure { .. } => (None, WritableStorage::No),
+                Bt::AccelerationStructure => (None, WritableStorage::No),
             };
 
             // Validate the count parameter
@@ -1852,11 +1853,9 @@ impl Device {
             flags: bgl_flags,
             entries: &hal_bindings,
         };
-        let raw = unsafe {
-            self.raw()
-                .create_bind_group_layout(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+
+        let raw = unsafe { self.raw().create_bind_group_layout(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
         for entry in entry_map.values() {
@@ -1873,7 +1872,7 @@ impl Device {
             device: self.clone(),
             entries: entry_map,
             origin,
-            exclusive_pipeline: OnceCell::new(),
+            exclusive_pipeline: OnceLock::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
         };
@@ -1883,8 +1882,8 @@ impl Device {
         Ok(bgl)
     }
 
-    pub(crate) fn create_buffer_binding<'a>(
-        self: &Arc<Self>,
+    fn create_buffer_binding<'a>(
+        &self,
         bb: &'a binding_model::ResolvedBufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -1892,7 +1891,6 @@ impl Device {
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates,
-        limits: &wgt::Limits,
         snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, binding_model::CreateBindGroupError>
     {
@@ -1917,7 +1915,7 @@ impl Device {
             wgt::BufferBindingType::Uniform => (
                 wgt::BufferUsages::UNIFORM,
                 hal::BufferUses::UNIFORM,
-                limits.max_uniform_buffer_binding_size,
+                self.limits.max_uniform_buffer_binding_size,
             ),
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsages::STORAGE,
@@ -1926,12 +1924,12 @@ impl Device {
                 } else {
                     hal::BufferUses::STORAGE_READ_WRITE
                 },
-                limits.max_storage_buffer_binding_size,
+                self.limits.max_storage_buffer_binding_size,
             ),
         };
 
         let (align, align_limit_name) =
-            binding_model::buffer_binding_type_alignment(limits, binding_ty);
+            binding_model::buffer_binding_type_alignment(&self.limits, binding_ty);
         if bb.offset % align as u64 != 0 {
             return Err(Error::UnalignedBufferOffset(
                 bb.offset,
@@ -2007,10 +2005,21 @@ impl Device {
             late_buffer_binding_sizes.insert(binding, late_size);
         }
 
+        // This was checked against the device's alignment requirements above,
+        // which should always be a multiple of `COPY_BUFFER_ALIGNMENT`.
         assert_eq!(bb.offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
+
+        // `wgpu_hal` only restricts shader access to bound buffer regions with
+        // a certain resolution. For the sake of lazy initialization, round up
+        // the size of the bound range to reflect how much of the buffer is
+        // actually going to be visible to the shader.
+        let bounds_check_alignment =
+            binding_model::buffer_binding_type_bounds_check_alignment(&self.alignments, binding_ty);
+        let visible_size = align_to(bind_size, bounds_check_alignment);
+
         used_buffer_ranges.extend(buffer.initialization_status.read().create_action(
             buffer,
-            bb.offset..bb.offset + bind_size,
+            bb.offset..bb.offset + visible_size,
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
@@ -2022,7 +2031,7 @@ impl Device {
     }
 
     fn create_sampler_binding<'a>(
-        self: &Arc<Self>,
+        &self,
         used: &mut BindGroupStates,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -2070,8 +2079,8 @@ impl Device {
         Ok(sampler.raw())
     }
 
-    pub(crate) fn create_texture_binding<'a>(
-        self: &Arc<Self>,
+    fn create_texture_binding<'a>(
+        &self,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         view: &'a Arc<TextureView>,
@@ -2118,6 +2127,7 @@ impl Device {
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         tlas: &'a Arc<Tlas>,
+        snatch_guard: &'a SnatchGuard<'a>,
     ) -> Result<&'a dyn hal::DynAccelerationStructure, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -2126,7 +2136,7 @@ impl Device {
         tlas.same_device(self)?;
 
         match decl.ty {
-            wgt::BindingType::AccelerationStructure { .. } => (),
+            wgt::BindingType::AccelerationStructure => (),
             _ => {
                 return Err(Error::WrongBindingType {
                     binding,
@@ -2136,7 +2146,9 @@ impl Device {
             }
         }
 
-        Ok(tlas.raw())
+        Ok(tlas
+            .raw(snatch_guard)
+            .ok_or(DestroyedResourceError(tlas.error_ident()))?)
     }
 
     // This function expects the provided bind group layout to be resolved
@@ -2197,7 +2209,6 @@ impl Device {
                         &mut dynamic_binding_info,
                         &mut late_buffer_binding_sizes,
                         &mut used,
-                        &self.limits,
                         &snatch_guard,
                     )?;
 
@@ -2219,7 +2230,6 @@ impl Device {
                             &mut dynamic_binding_info,
                             &mut late_buffer_binding_sizes,
                             &mut used,
-                            &self.limits,
                             &snatch_guard,
                         )?;
                         hal_buffers.push(bb);
@@ -2281,20 +2291,8 @@ impl Device {
                     (res_index, num_bindings)
                 }
                 Br::AccelerationStructure(ref tlas) => {
-                    if let wgt::BindingType::AccelerationStructure {
-                        vertex_return: true,
-                    } = decl.ty
-                    {
-                        if !tlas
-                            .flags
-                            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-                        {
-                            return Err(Error::MissingVertexReturnFlag(tlas.error_ident()));
-                        }
-                    }
-
-                    let tlas = self.create_tlas_binding(&mut used, binding, decl, tlas)?;
-
+                    let tlas =
+                        self.create_tlas_binding(&mut used, binding, decl, tlas, &snatch_guard)?;
                     let res_index = hal_tlas_s.len();
                     hal_tlas_s.push(tlas);
                     (res_index, 1)
@@ -2325,11 +2323,8 @@ impl Device {
             textures: &hal_textures,
             acceleration_structures: &hal_tlas_s,
         };
-        let raw = unsafe {
-            self.raw()
-                .create_bind_group(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw = unsafe { self.raw().create_bind_group(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         // collect in the order of BGL iteration
         let late_buffer_binding_sizes = layout
@@ -2356,25 +2351,17 @@ impl Device {
         let weak_ref = Arc::downgrade(&bind_group);
         for range in &bind_group.used_texture_ranges {
             let mut bind_groups = range.texture.bind_groups.lock();
-
-            // Remove stale weak references
-            bind_groups.retain(|bg| bg.strong_count() > 0);
-
             bind_groups.push(weak_ref.clone());
         }
         for range in &bind_group.used_buffer_ranges {
             let mut bind_groups = range.buffer.bind_groups.lock();
-
-            // Remove stale weak references
-            bind_groups.retain(|bg| bg.strong_count() > 0);
-
             bind_groups.push(weak_ref.clone());
         }
 
         Ok(bind_group)
     }
 
-    pub(crate) fn check_array_binding(
+    fn check_array_binding(
         features: wgt::Features,
         count: Option<NonZeroU32>,
         num_bindings: usize,
@@ -2407,8 +2394,8 @@ impl Device {
         Ok(())
     }
 
-    pub(crate) fn texture_use_parameters(
-        self: &Arc<Self>,
+    fn texture_use_parameters(
+        &self,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         view: &TextureView,
@@ -2461,6 +2448,7 @@ impl Device {
                             binding,
                             layout_sample_type: sample_type,
                             view_format: view.desc.format,
+                            view_sample_type: compat_sample_type,
                         })
                     }
                 }
@@ -2618,16 +2606,14 @@ impl Device {
 
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.to_hal(self.instance_flags),
-            flags: hal::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE,
+            flags: hal::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE
+                | hal::PipelineLayoutFlags::NUM_WORK_GROUPS,
             bind_group_layouts: &raw_bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.as_ref(),
         };
 
-        let raw = unsafe {
-            self.raw()
-                .create_pipeline_layout(&hal_desc)
-                .map_err(DeviceError::from)?
-        };
+        let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         drop(raw_bind_group_layouts);
 
@@ -2655,18 +2641,18 @@ impl Device {
             derived_group_layouts.pop();
         }
 
-        let mut unique_bind_group_layouts = PreHashedMap::default();
+        let mut unique_bind_group_layouts = FastHashMap::default();
 
         let bind_group_layouts = derived_group_layouts
             .into_iter()
             .map(|mut bgl_entry_map| {
                 bgl_entry_map.sort();
-                match unique_bind_group_layouts.entry(PreHashedKey::from_key(&bgl_entry_map)) {
+                match unique_bind_group_layouts.entry(bgl_entry_map) {
                     std::collections::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
                     std::collections::hash_map::Entry::Vacant(e) => {
                         match self.create_bind_group_layout(
                             &None,
-                            bgl_entry_map,
+                            e.key().clone(),
                             bgl::Origin::Derived,
                         ) {
                             Ok(bgl) => {
@@ -2781,7 +2767,7 @@ impl Device {
             unsafe { self.raw().create_compute_pipeline(&pipeline_desc) }.map_err(
                 |err| match err {
                     hal::PipelineError::Device(error) => {
-                        pipeline::CreateComputePipelineError::Device(error.into())
+                        pipeline::CreateComputePipelineError::Device(self.handle_hal_error(error))
                     }
                     hal::PipelineError::Linkage(_stages, msg) => {
                         pipeline::CreateComputePipelineError::Internal(msg)
@@ -3361,7 +3347,7 @@ impl Device {
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
                 |err| match err {
                     hal::PipelineError::Device(error) => {
-                        pipeline::CreateRenderPipelineError::Device(error.into())
+                        pipeline::CreateRenderPipelineError::Device(self.handle_hal_error(error))
                     }
                     hal::PipelineError::Linkage(stage, msg) => {
                         pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
@@ -3484,7 +3470,9 @@ impl Device {
         };
         let raw = match unsafe { self.raw().create_pipeline_cache(&cache_desc) } {
             Ok(raw) => raw,
-            Err(e) => return Err(e.into()),
+            Err(e) => match e {
+                hal::PipelineCacheError::Device(e) => return Err(self.handle_hal_error(e).into()),
+            },
         };
         let cache = pipeline::PipelineCache {
             device: self.clone(),
@@ -3498,10 +3486,7 @@ impl Device {
         Ok(cache)
     }
 
-    pub(crate) fn get_texture_format_features(
-        &self,
-        format: TextureFormat,
-    ) -> wgt::TextureFormatFeatures {
+    fn get_texture_format_features(&self, format: TextureFormat) -> wgt::TextureFormatFeatures {
         // Variant of adapter.get_texture_format_features that takes device features into account
         use wgt::TextureFormatFeatureFlags as tfsc;
         let mut format_features = self.adapter.get_texture_format_features(format);
@@ -3515,7 +3500,7 @@ impl Device {
         format_features
     }
 
-    pub(crate) fn describe_format_features(
+    fn describe_format_features(
         &self,
         format: TextureFormat,
     ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
@@ -3544,17 +3529,21 @@ impl Device {
         submission_index: crate::SubmissionIndex,
     ) -> Result<(), DeviceError> {
         let fence = self.fence.read();
-        let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref())? };
+        let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref()) }
+            .map_err(|e| self.handle_hal_error(e))?;
         if last_done_index < submission_index {
-            unsafe { self.raw().wait(fence.as_ref(), submission_index, !0)? };
+            unsafe { self.raw().wait(fence.as_ref(), submission_index, !0) }
+                .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
-            let closures = self
-                .lock_life()
-                .triage_submissions(submission_index, &self.command_allocator);
-            assert!(
-                closures.is_empty(),
-                "wait_for_submit is not expected to work with closures"
-            );
+            if let Some(queue) = self.get_queue() {
+                let closures = queue
+                    .lock_life()
+                    .triage_submissions(submission_index, &self.command_allocator);
+                assert!(
+                    closures.is_empty(),
+                    "wait_for_submit is not expected to work with closures"
+                );
+            }
         }
         Ok(())
     }
@@ -3590,7 +3579,8 @@ impl Device {
 
         let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
 
-        let raw = unsafe { self.raw().create_query_set(&hal_desc).unwrap() };
+        let raw = unsafe { self.raw().create_query_set(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let query_set = QuerySet {
             raw: ManuallyDrop::new(raw),
@@ -3605,7 +3595,7 @@ impl Device {
         Ok(query_set)
     }
 
-    pub(crate) fn lose(&self, message: &str) {
+    fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
@@ -3613,13 +3603,7 @@ impl Device {
         self.valid.store(false, Ordering::Release);
 
         // 1) Resolve the GPUDevice device.lost promise.
-        let mut life_lock = self.lock_life();
-        let closure = life_lock.device_lost_closure.take();
-        // It's important to not hold the lock while calling the closure and while calling
-        // release_gpu_resources which may take the lock again.
-        drop(life_lock);
-
-        if let Some(device_lost_closure) = closure {
+        if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
         }
 
@@ -3668,44 +3652,6 @@ impl Device {
 
     pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         self.raw().generate_allocator_report()
-    }
-}
-
-impl Device {
-    pub(crate) fn destroy_command_buffer(&self, mut cmd_buf: command::CommandBuffer) {
-        let mut baked = cmd_buf.extract_baked_commands();
-        unsafe {
-            baked.encoder.reset_all(baked.list);
-        }
-        unsafe {
-            self.raw().destroy_command_encoder(baked.encoder);
-        }
-    }
-
-    /// Wait for idle and remove resources that we can, before we die.
-    pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.lock().deactivate();
-        let current_index = self
-            .last_successful_submission_index
-            .load(Ordering::Acquire);
-        if let Err(error) = unsafe {
-            let fence = self.fence.read();
-            self.raw()
-                .wait(fence.as_ref(), current_index, CLEANUP_WAIT_MS)
-        } {
-            log::error!("failed to wait for the device: {error}");
-        }
-        let mut life_tracker = self.lock_life();
-        let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
-        if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_tracker);
-            device_lost_closure.call(DeviceLostReason::Dropped, "Device is dying.".to_string());
-        }
-        #[cfg(feature = "trace")]
-        {
-            *self.trace.lock() = None;
-        }
     }
 }
 

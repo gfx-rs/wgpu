@@ -249,6 +249,7 @@
                     value: Some(23),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -328,7 +329,10 @@
                         value: None,
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
 )

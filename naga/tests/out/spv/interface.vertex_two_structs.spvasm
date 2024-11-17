@@ -20,11 +20,11 @@ OpDecorate %22 Invariant
 OpDecorate %22 BuiltIn Position
 OpDecorate %24 BuiltIn PointSize
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 4
-%5 = OpTypeStruct %3 %4
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 4
+%5 = OpTypeStruct %4 %3
 %6 = OpTypeInt 32 0
-%7 = OpTypeStruct %4 %6 %4
+%7 = OpTypeStruct %3 %6 %3
 %8 = OpTypeBool
 %10 = OpConstant  %6  1
 %9 = OpTypeArray %6 %10
@@ -34,14 +34,14 @@ OpDecorate %24 BuiltIn PointSize
 %17 = OpTypePointer Input %6
 %16 = OpVariable  %17  Input
 %20 = OpVariable  %17  Input
-%23 = OpTypePointer Output %3
+%23 = OpTypePointer Output %4
 %22 = OpVariable  %23  Output
-%25 = OpTypePointer Output %4
+%25 = OpTypePointer Output %3
 %24 = OpVariable  %25  Output
-%26 = OpConstant  %4  1.0
+%26 = OpConstant  %3  1.0
 %28 = OpTypeFunction %2
 %29 = OpConstant  %6  2
-%30 = OpConstant  %4  0.0
+%30 = OpConstant  %3  0.0
 %32 = OpTypePointer Function %6
 %27 = OpFunction  %2  None %28
 %14 = OpLabel
@@ -54,12 +54,12 @@ OpStore %24 %26
 OpBranch %33
 %33 = OpLabel
 %34 = OpCompositeExtract  %6  %15 0
-%35 = OpConvertUToF  %4  %34
+%35 = OpConvertUToF  %3  %34
 %36 = OpCompositeExtract  %6  %19 0
-%37 = OpConvertUToF  %4  %36
+%37 = OpConvertUToF  %3  %36
 %38 = OpLoad  %6  %31
-%39 = OpConvertUToF  %4  %38
-%40 = OpCompositeConstruct  %3  %35 %37 %39 %30
+%39 = OpConvertUToF  %3  %38
+%40 = OpCompositeConstruct  %4  %35 %37 %39 %30
 OpStore %22 %40
 OpReturn
 OpFunctionEnd

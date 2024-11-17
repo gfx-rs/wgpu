@@ -410,7 +410,7 @@ impl RenderpassState {
         });
 
         render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());
-        render_pass.set_bind_group(0, self.bindless_bind_group.as_ref().unwrap(), &[]);
+        render_pass.set_bind_group(0, Some(self.bindless_bind_group.as_ref().unwrap()), &[]);
         for i in 0..VERTEX_BUFFERS_PER_DRAW {
             render_pass.set_vertex_buffer(i as u32, self.vertex_buffers[0].slice(..));
         }
@@ -448,7 +448,7 @@ fn run_bench(ctx: &mut Criterion) {
             };
 
             group.bench_function(
-                &format!("{rpasses} renderpasses x {draws_per_pass} draws ({label})"),
+                format!("{rpasses} renderpasses x {draws_per_pass} draws ({label})"),
                 |b| {
                     Lazy::force(&state);
 
@@ -501,41 +501,38 @@ fn run_bench(ctx: &mut Criterion) {
 
     for threads in [2, 4, 8] {
         let draws_per_pass = draw_count / threads;
-        group.bench_function(
-            &format!("{threads} threads x {draws_per_pass} draws"),
-            |b| {
-                Lazy::force(&state);
+        group.bench_function(format!("{threads} threads x {draws_per_pass} draws"), |b| {
+            Lazy::force(&state);
 
-                b.iter_custom(|iters| {
-                    profiling::scope!("benchmark invocation");
+            b.iter_custom(|iters| {
+                profiling::scope!("benchmark invocation");
 
-                    // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
-                    if state.device_state.adapter_info.name.contains("Paravirtual") {
-                        return Duration::from_secs_f32(1.0);
-                    }
+                // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
+                if state.device_state.adapter_info.name.contains("Paravirtual") {
+                    return Duration::from_secs_f32(1.0);
+                }
 
-                    let mut duration = Duration::ZERO;
+                let mut duration = Duration::ZERO;
 
-                    for _ in 0..iters {
-                        profiling::scope!("benchmark iteration");
+                for _ in 0..iters {
+                    profiling::scope!("benchmark iteration");
 
-                        let start = Instant::now();
+                    let start = Instant::now();
 
-                        let buffers = (0..threads)
-                            .into_par_iter()
-                            .map(|i| state.run_subpass(i, threads, draw_count))
-                            .collect::<Vec<_>>();
+                    let buffers = (0..threads)
+                        .into_par_iter()
+                        .map(|i| state.run_subpass(i, threads, draw_count))
+                        .collect::<Vec<_>>();
 
-                        duration += start.elapsed();
+                    duration += start.elapsed();
 
-                        state.device_state.queue.submit(buffers);
-                        state.device_state.device.poll(wgpu::Maintain::Wait);
-                    }
+                    state.device_state.queue.submit(buffers);
+                    state.device_state.device.poll(wgpu::Maintain::Wait);
+                }
 
-                    duration
-                })
-            },
-        );
+                duration
+            })
+        });
     }
     group.finish();
 
@@ -543,7 +540,7 @@ fn run_bench(ctx: &mut Criterion) {
     let mut group = ctx.benchmark_group("Renderpass: Bindless");
     group.throughput(Throughput::Elements(draw_count as _));
 
-    group.bench_function(&format!("{draw_count} draws"), |b| {
+    group.bench_function(format!("{draw_count} draws"), |b| {
         Lazy::force(&state);
 
         b.iter_custom(|iters| {

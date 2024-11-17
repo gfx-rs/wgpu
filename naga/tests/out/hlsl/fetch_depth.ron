@@ -1,0 +1,12 @@
+(
+    vertex:[
+    ],
+    fragment:[
+    ],
+    compute:[
+        (
+            entry_point:"cullfetch_depth",
+            target_profile:"cs_5_1",
+        ),
+    ],
+)

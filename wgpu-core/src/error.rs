@@ -3,6 +3,11 @@ use std::{error::Error, sync::Arc};
 
 use thiserror::Error;
 
+#[cfg(send_sync)]
+pub type ContextErrorSource = Box<dyn Error + Send + Sync + 'static>;
+#[cfg(not(send_sync))]
+pub type ContextErrorSource = Box<dyn Error + 'static>;
+
 #[derive(Debug, Error)]
 #[error(
     "In {fn_ident}{}{}{}",
@@ -13,10 +18,7 @@ use thiserror::Error;
 pub struct ContextError {
     pub fn_ident: &'static str,
     #[source]
-    #[cfg(send_sync)]
-    pub source: Box<dyn Error + Send + Sync + 'static>,
-    #[cfg(not(send_sync))]
-    pub source: Box<dyn Error + 'static>,
+    pub source: ContextErrorSource,
     pub label: String,
 }
 

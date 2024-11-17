@@ -437,8 +437,7 @@ impl Options {
                     })
                 }
                 LocationMode::Uniform => Err(Error::GenericValidation(format!(
-                    "Unexpected Binding::Location({}) for the Uniform mode",
-                    location
+                    "Unexpected Binding::Location({location}) for the Uniform mode"
                 ))),
             },
         }
@@ -569,7 +568,7 @@ impl ResolvedBinding {
                     Bi::SubgroupId => "simdgroup_index_in_threadgroup",
                     Bi::SubgroupSize => "threads_per_simdgroup",
                     Bi::SubgroupInvocationId => "thread_index_in_simdgroup",
-                    Bi::CullDistance | Bi::ViewIndex => {
+                    Bi::CullDistance | Bi::ViewIndex | Bi::DrawID => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
                 };
@@ -627,6 +626,7 @@ impl ResolvedInterpolation {
             (I::Linear, S::Centroid) => Self::CentroidNoPerspective,
             (I::Linear, S::Sample) => Self::SampleNoPerspective,
             (I::Flat, _) => Self::Flat,
+            _ => unreachable!(),
         }
     }
 

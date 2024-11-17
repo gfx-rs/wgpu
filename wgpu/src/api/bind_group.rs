@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a binding group.
@@ -14,26 +13,17 @@ use crate::*;
 #[derive(Debug)]
 pub struct BindGroup {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
-impl BindGroup {
-    /// Returns a globally-unique identifier for this `BindGroup`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-}
+super::impl_partialeq_eq_hash!(BindGroup);
 
 impl Drop for BindGroup {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context.bind_group_drop(&self.id, self.data.as_ref());
+            self.context.bind_group_drop(self.data.as_ref());
         }
     }
 }
@@ -80,8 +70,18 @@ pub enum BindingResource<'a> {
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
-    /// Todo
-    AccelerationStructure(&'a ray_tracing::Tlas),
+    /// Binding is backed by a top level acceleration structure
+    ///
+    /// Corresponds to [`wgt::BindingType::AccelerationStructure`] with [`BindGroupLayoutEntry::count`] set to None.
+    ///
+    /// # Validation
+    /// When using (e.g. with `set_bind_group`) a bind group that has been created with one or more of this binding
+    /// resource certain checks take place.
+    /// - TLAS must have been built, if not a validation error is generated
+    /// - All BLASes that were built into the TLAS must be built before the TLAS, if this was not satisfied and TLAS was
+    /// built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
+    /// safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
+    AccelerationStructure(&'a Tlas),
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);

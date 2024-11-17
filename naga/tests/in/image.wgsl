@@ -92,8 +92,9 @@ fn queries() -> @builtin(position) vec4<f32> {
 @vertex
 fn levels_queries() -> @builtin(position) vec4<f32> {
     let num_levels_2d = textureNumLevels(image_2d);
-    let num_levels_2d_array = textureNumLevels(image_2d_array);
     let num_layers_2d = textureNumLayers(image_2d_array);
+    let num_levels_2d_array = textureNumLevels(image_2d_array);
+    let num_layers_2d_array = textureNumLayers(image_2d_array);
     let num_levels_cube = textureNumLevels(image_cube);
     let num_levels_cube_array = textureNumLevels(image_cube_array);
     let num_layers_cube = textureNumLayers(image_cube_array);

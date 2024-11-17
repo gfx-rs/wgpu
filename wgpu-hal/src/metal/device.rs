@@ -117,7 +117,7 @@ impl super::Device {
         let ep_resources = &layout.per_stage_map[naga_stage];
 
         let bounds_check_policy = if stage.module.runtime_checks {
-            naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite
+            naga::proc::BoundsCheckPolicy::Restrict
         } else {
             naga::proc::BoundsCheckPolicy::Unchecked
         };
@@ -320,8 +320,6 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn exit(self, _queue: super::Queue) {}
-
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
         let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
@@ -354,6 +352,10 @@ impl crate::Device for super::Device {
     }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
         self.counters.buffers.sub(1);
+    }
+
+    unsafe fn add_raw_buffer(&self, _buffer: &super::Buffer) {
+        self.counters.buffers.add(1);
     }
 
     unsafe fn map_buffer(
@@ -434,6 +436,10 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_texture(&self, _texture: super::Texture) {
         self.counters.textures.sub(1);
+    }
+
+    unsafe fn add_raw_texture(&self, _texture: &super::Texture) {
+        self.counters.textures.add(1);
     }
 
     unsafe fn create_texture_view(

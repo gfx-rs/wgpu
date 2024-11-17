@@ -68,7 +68,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
                 renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
                 drop(renderpass);
             },
-            None,
+            Some("viewport has invalid rect"),
         );
 
         // This is the actual interesting error condition. We've created

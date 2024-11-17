@@ -136,7 +136,7 @@ pub fn op_webgpu_compute_pass_set_bind_group(
         .compute_pass_set_bind_group(
             &mut compute_pass_resource.0.borrow_mut(),
             index,
-            bind_group_resource.1,
+            Some(bind_group_resource.1),
             dynamic_offsets_data,
         )?;
 

@@ -13,12 +13,12 @@ OpDecorate %10 ArrayStride 16
 OpDecorate %15 ArrayStride 32
 OpDecorate %17 ArrayStride 4
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 4
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 4
 %5 = OpTypeInt 32 1
-%6 = OpTypeStruct %3 %5
-%7 = OpTypeVector %4 3
-%9 = OpTypeVector %4 2
+%6 = OpTypeStruct %4 %5
+%7 = OpTypeVector %3 3
+%9 = OpTypeVector %3 2
 %8 = OpTypeMatrix %9 2
 %12 = OpTypeInt 32 0
 %11 = OpConstant  %12  1
@@ -29,13 +29,13 @@ OpDecorate %17 ArrayStride 4
 %15 = OpTypeArray %6 %16
 %18 = OpConstant  %12  4
 %17 = OpTypeArray %5 %18
-%19 = OpTypeMatrix %3 4
+%19 = OpTypeMatrix %4 4
 %20 = OpTypeMatrix %7 2
-%21 = OpConstant  %4  0.0
-%22 = OpConstant  %4  1.0
-%23 = OpConstant  %4  2.0
+%21 = OpConstant  %3  0.0
+%22 = OpConstant  %3  1.0
+%23 = OpConstant  %3  2.0
 %24 = OpConstantComposite  %7  %21 %22 %23
-%25 = OpConstant  %4  3.0
+%25 = OpConstant  %3  3.0
 %26 = OpConstantComposite  %9  %21 %22
 %27 = OpConstantComposite  %9  %23 %25
 %28 = OpConstantComposite  %8  %26 %27
@@ -43,7 +43,7 @@ OpDecorate %17 ArrayStride 4
 %30 = OpConstantNull  %13
 %31 = OpConstantNull  %5
 %32 = OpConstantNull  %12
-%33 = OpConstantNull  %4
+%33 = OpConstantNull  %3
 %34 = OpConstantNull  %14
 %35 = OpConstantNull  %8
 %36 = OpConstantNull  %15
@@ -54,14 +54,14 @@ OpDecorate %17 ArrayStride 4
 %41 = OpConstant  %5  3
 %42 = OpConstantComposite  %17  %38 %39 %40 %41
 %45 = OpTypeFunction %2
-%46 = OpConstantComposite  %3  %22 %22 %22 %22
+%46 = OpConstantComposite  %4  %22 %22 %22 %22
 %47 = OpConstantComposite  %6  %46 %39
 %48 = OpConstantComposite  %9  %22 %21
 %49 = OpConstantComposite  %8  %48 %26
-%50 = OpConstantComposite  %3  %22 %21 %21 %21
-%51 = OpConstantComposite  %3  %21 %22 %21 %21
-%52 = OpConstantComposite  %3  %21 %21 %22 %21
-%53 = OpConstantComposite  %3  %21 %21 %21 %22
+%50 = OpConstantComposite  %4  %22 %21 %21 %21
+%51 = OpConstantComposite  %4  %21 %22 %21 %21
+%52 = OpConstantComposite  %4  %21 %21 %22 %21
+%53 = OpConstantComposite  %4  %21 %21 %21 %22
 %54 = OpConstantComposite  %19  %50 %51 %52 %53
 %55 = OpConstant  %12  0
 %56 = OpConstantComposite  %14  %55 %55

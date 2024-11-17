@@ -2,6 +2,9 @@ use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, ti
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
+use std::f32::consts::PI;
+use std::ops::IndexMut;
+use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;
@@ -22,8 +25,8 @@ struct Vertex {
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniforms {
-    view_inverse: [[f32; 4]; 4],
-    proj_inverse: [[f32; 4]; 4],
+    view_inverse: Mat4,
+    proj_inverse: Mat4,
 }
 
 /// A wrapper for `pop_error_scope` futures that panics if an error occurs.
@@ -62,7 +65,7 @@ struct SceneComponents {
     indices: wgpu::Buffer,
     geometries: wgpu::Buffer,
     instances: wgpu::Buffer,
-    bottom_level_acceleration_structures: Vec<rt::Blas>,
+    bottom_level_acceleration_structures: Vec<wgpu::Blas>,
 }
 
 #[repr(C)]
@@ -225,27 +228,27 @@ fn upload_scene_components(
         .instances
         .iter()
         .map(|(vertex_range, geometry_range)| {
-            let size_desc: Vec<rt::BlasTriangleGeometrySizeDescriptor> = (*geometry_range)
+            let size_desc: Vec<wgpu::BlasTriangleGeometrySizeDescriptor> = (*geometry_range)
                 .clone()
-                .map(|i| rt::BlasTriangleGeometrySizeDescriptor {
+                .map(|i| wgpu::BlasTriangleGeometrySizeDescriptor {
                     vertex_format: wgpu::VertexFormat::Float32x3,
                     vertex_count: vertex_range.end as u32 - vertex_range.start as u32,
                     index_format: Some(wgpu::IndexFormat::Uint32),
                     index_count: Some(
                         scene.geometries[i].0.end as u32 - scene.geometries[i].0.start as u32,
                     ),
-                    flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
+                    flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
                 })
                 .collect();
 
             let blas = device.create_blas(
-                &rt::CreateBlasDescriptor {
+                &wgpu::CreateBlasDescriptor {
                     label: None,
-                    flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                    update_mode: rt::AccelerationStructureUpdateMode::Build,
+                    flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                    update_mode: wgpu::AccelerationStructureUpdateMode::Build,
                 },
-                rt::BlasGeometrySizeDescriptors::Triangles {
-                    desc: size_desc.clone(),
+                wgpu::BlasGeometrySizeDescriptors::Triangles {
+                    descriptors: size_desc.clone(),
                 },
             );
             (size_desc, blas)
@@ -261,7 +264,7 @@ fn upload_scene_components(
             let triangle_geometries: Vec<_> = size_desc
                 .iter()
                 .zip(geometry_range.clone())
-                .map(|(size, i)| rt::BlasTriangleGeometry {
+                .map(|(size, i)| wgpu::BlasTriangleGeometry {
                     size,
                     vertex_buffer: &vertices,
                     first_vertex: vertex_range.start as u32,
@@ -273,9 +276,9 @@ fn upload_scene_components(
                 })
                 .collect();
 
-            rt::BlasBuildEntry {
+            wgpu::BlasBuildEntry {
                 blas,
-                geometry: rt::BlasGeometries::TriangleGeometries(triangle_geometries),
+                geometry: wgpu::BlasGeometries::TriangleGeometries(triangle_geometries),
             }
         })
         .collect();
@@ -309,7 +312,7 @@ fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,
-    tlas_package: rt::TlasPackage,
+    tlas_package: wgpu::TlasPackage,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     start_inst: Instant,
@@ -318,7 +321,8 @@ struct Example {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY
+            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -348,8 +352,8 @@ impl crate::framework::Example for Example {
             );
 
             Uniforms {
-                view_inverse: view.inverse().to_cols_array_2d(),
-                proj_inverse: proj.inverse().to_cols_array_2d(),
+                view_inverse: view.inverse(),
+                proj_inverse: proj.inverse(),
             }
         };
 
@@ -359,14 +363,14 @@ impl crate::framework::Example for Example {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let tlas = device.create_tlas(&rt::CreateTlasDescriptor {
+        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
-            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: rt::AccelerationStructureUpdateMode::Build,
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
         });
 
-        let tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
+        let tlas_package = wgpu::TlasPackage::new(tlas);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -459,7 +463,7 @@ impl crate::framework::Example for Example {
             1000.0,
         );
 
-        self.uniforms.proj_inverse = proj.inverse().to_cols_array_2d();
+        self.uniforms.proj_inverse = proj.inverse();
 
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(&[self.uniforms]));
     }
@@ -477,10 +481,7 @@ impl crate::framework::Example for Example {
 
             for x in 0..side_count {
                 for y in 0..side_count {
-                    let instance = self
-                        .tlas_package
-                        .get_mut_single(x + y * side_count)
-                        .unwrap();
+                    let instance = self.tlas_package.index_mut(x + y * side_count);
 
                     let blas_index = (x + y)
                         % self
@@ -498,7 +499,7 @@ impl crate::framework::Example for Example {
                             glam::EulerRot::XYZ,
                             anim_time * 0.5 * 0.342,
                             anim_time * 0.5 * 0.254,
-                            anim_time * 0.5 * 0.832,
+                            anim_time * 0.5 * 0.832 + PI,
                         ),
                         Vec3 {
                             x: x * dist,
@@ -509,7 +510,7 @@ impl crate::framework::Example for Example {
                     let transform = transform.transpose().to_cols_array()[..12]
                         .try_into()
                         .unwrap();
-                    *instance = Some(rt::TlasInstance::new(
+                    *instance = Some(wgpu::TlasInstance::new(
                         &self.scene_components.bottom_level_acceleration_structures[blas_index],
                         transform,
                         blas_index as u32,
@@ -541,7 +542,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
             rpass.draw(0..3, 0..1);
         }
 
@@ -556,8 +557,8 @@ pub fn main() {
 #[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
-    name: "ray_cube_fragment",
-    image_path: "/examples/src/ray_cube_fragment/screenshot.png",
+    name: "ray_scene",
+    image_path: "/examples/src/ray_scene/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),

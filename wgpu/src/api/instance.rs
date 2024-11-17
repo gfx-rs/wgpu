@@ -93,10 +93,15 @@ impl Instance {
     ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
     ///
     ///   [`Backends::BROWSER_WEBGPU`] takes a special role:
-    ///   If it is set and WebGPU support is detected, this instance will *only* be able to create
-    ///   WebGPU adapters. If you instead want to force use of WebGL, either
-    ///   disable the `webgpu` compile-time feature or do add the [`Backends::BROWSER_WEBGPU`]
-    ///   flag to the the `instance_desc`'s `backends` field.
+    ///   If it is set and a [`navigator.gpu`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu)
+    ///   object is present, this instance will *only* be able to create WebGPU adapters.
+    ///
+    ///   ⚠️ On some browsers this check is insufficient to determine whether WebGPU is supported,
+    ///   as the browser may define the `navigator.gpu` object, but be unable to create any WebGPU adapters.
+    ///   For targeting _both_ WebGPU & WebGL is recommended to use [`crate::util::new_instance_with_webgpu_detection`].
+    ///
+    ///   If you instead want to force use of WebGL, either disable the `webgpu` compile-time feature
+    ///   or don't add the [`Backends::BROWSER_WEBGPU`] flag to the the `instance_desc`'s `backends` field.
     ///   If it is set and WebGPU support is *not* detected, the instance will use wgpu-core
     ///   to create adapters. Meaning that if the `webgl` feature is enabled, it is able to create
     ///   a WebGL adapter.
@@ -118,8 +123,9 @@ impl Instance {
         {
             let is_only_available_backend = !cfg!(wgpu_core);
             let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
-            let support_webgpu =
-                crate::backend::get_browser_gpu_property().map_or(false, |gpu| !gpu.is_undefined());
+            let support_webgpu = crate::backend::get_browser_gpu_property()
+                .map(|maybe_gpu| maybe_gpu.is_some())
+                .unwrap_or(false);
 
             if is_only_available_backend || (requested_webgpu && support_webgpu) {
                 return Self {
@@ -202,8 +208,6 @@ impl Instance {
     /// - `backends` - Backends from which to enumerate adapters.
     #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
-        use crate::context::ObjectId;
-
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
@@ -211,10 +215,9 @@ impl Instance {
             .map(|ctx| {
                 ctx.enumerate_adapters(backends)
                     .into_iter()
-                    .map(move |id| crate::Adapter {
+                    .map(move |adapter| crate::Adapter {
                         context: Arc::clone(&context),
-                        id: ObjectId::from(id),
-                        data: Box::new(()),
+                        data: Box::new(adapter),
                     })
                     .collect()
             })
@@ -234,11 +237,7 @@ impl Instance {
     ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
-        async move {
-            adapter
-                .await
-                .map(|(id, data)| Adapter { context, id, data })
-        }
+        async move { adapter.await.map(|data| Adapter { context, data }) }
     }
 
     /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
@@ -252,18 +251,16 @@ impl Instance {
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
         let context = Arc::clone(&self.context);
-        let id = unsafe {
+        let adapter = unsafe {
             context
                 .as_any()
                 .downcast_ref::<crate::backend::ContextWgpuCore>()
                 .unwrap()
                 .create_adapter_from_hal(hal_adapter)
-                .into()
         };
         Adapter {
             context,
-            id,
-            data: Box::new(()),
+            data: Box::new(adapter),
         }
     }
 
@@ -355,12 +352,11 @@ impl Instance {
         &self,
         target: SurfaceTargetUnsafe,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
-        let (id, data) = unsafe { self.context.instance_create_surface(target) }?;
+        let data = unsafe { self.context.instance_create_surface(target) }?;
 
         Ok(Surface {
             context: Arc::clone(&self.context),
             _handle_source: None,
-            id,
             surface_data: data,
             config: Mutex::new(None),
         })

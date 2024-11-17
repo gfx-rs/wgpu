@@ -6,7 +6,7 @@
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn canvas_get_context_returned_null() {
     // Not using the normal testing infrastructure because that goes straight to creating the canvas for us.
-    let instance = wgpu_test::initialize_instance(false);
+    let instance = wgpu_test::initialize_instance(wgpu::Backends::all(), false);
     // Create canvas
     let canvas = wgpu_test::initialize_html_canvas();
 

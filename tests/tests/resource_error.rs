@@ -14,15 +14,19 @@ static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|
                 mapped_at_creation: false,
             })
         },
-        None,
+        Some("`map` usage can only be combined with the opposite `copy`"),
     );
 
     fail(
         &ctx.device,
         || buffer.slice(..).map_async(wgpu::MapMode::Write, |_| {}),
-        None,
+        Some("Buffer with '' label is invalid"),
     );
-    fail(&ctx.device, || buffer.unmap(), None);
+    fail(
+        &ctx.device,
+        || buffer.unmap(),
+        Some("Buffer with '' label is invalid"),
+    );
     valid(&ctx.device, || buffer.destroy());
     valid(&ctx.device, || buffer.destroy());
 });
@@ -47,7 +51,7 @@ static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(
                 view_formats: &[],
             })
         },
-        None,
+        Some("dimension x is zero"),
     );
 
     fail(
@@ -55,7 +59,7 @@ static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(
         || {
             let _ = texture.create_view(&wgpu::TextureViewDescriptor::default());
         },
-        None,
+        Some("Texture with '' label is invalid"),
     );
     valid(&ctx.device, || texture.destroy());
     valid(&ctx.device, || texture.destroy());

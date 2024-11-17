@@ -45,17 +45,17 @@ OpDecorate %21 Block
 OpMemberDecorate %21 0 Offset 0
 OpDecorate %24 BuiltIn Position
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeVector %4 3
-%5 = OpTypeStruct %3
-%6 = OpTypeStruct %5 %4
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 3
+%5 = OpTypeStruct %4
+%6 = OpTypeStruct %5 %3
 %9 = OpTypeInt 32 0
 %8 = OpConstant  %9  2
-%7 = OpTypeArray %3 %8
-%10 = OpTypeStruct %7 %4
-%11 = OpTypeMatrix %3 4
-%12 = OpTypeStruct %11 %4
-%13 = OpTypeVector %4 4
+%7 = OpTypeArray %4 %8
+%10 = OpTypeStruct %7 %3
+%11 = OpTypeMatrix %4 4
+%12 = OpTypeStruct %11 %3
+%13 = OpTypeVector %3 4
 %15 = OpTypeStruct %6
 %16 = OpTypePointer Uniform %15
 %14 = OpVariable  %16  Uniform
@@ -72,9 +72,9 @@ OpDecorate %24 BuiltIn Position
 %29 = OpConstant  %9  0
 %31 = OpTypePointer Uniform %10
 %33 = OpTypePointer Uniform %12
-%35 = OpConstant  %4  1.0
+%35 = OpConstant  %3  1.0
 %36 = OpConstantComposite  %13  %35 %35 %35 %35
-%38 = OpTypePointer Uniform %4
+%38 = OpTypePointer Uniform %3
 %39 = OpConstant  %9  1
 %26 = OpFunction  %2  None %27
 %23 = OpLabel
@@ -84,13 +84,13 @@ OpDecorate %24 BuiltIn Position
 OpBranch %37
 %37 = OpLabel
 %40 = OpAccessChain  %38  %30 %39
-%41 = OpLoad  %4  %40
+%41 = OpLoad  %3  %40
 %42 = OpVectorTimesScalar  %13  %36 %41
 %43 = OpAccessChain  %38  %32 %39
-%44 = OpLoad  %4  %43
+%44 = OpLoad  %3  %43
 %45 = OpVectorTimesScalar  %13  %42 %44
 %46 = OpAccessChain  %38  %34 %39
-%47 = OpLoad  %4  %46
+%47 = OpLoad  %3  %46
 %48 = OpVectorTimesScalar  %13  %45 %47
 OpStore %24 %48
 OpReturn

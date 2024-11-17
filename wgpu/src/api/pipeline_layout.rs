@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a pipeline layout.
@@ -12,27 +11,17 @@ use crate::*;
 #[derive(Debug)]
 pub struct PipelineLayout {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
-impl PipelineLayout {
-    /// Returns a globally-unique identifier for this `PipelineLayout`.
-    ///
-    /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    pub fn global_id(&self) -> Id<Self> {
-        Id::new(self.id)
-    }
-}
+super::impl_partialeq_eq_hash!(PipelineLayout);
 
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .pipeline_layout_drop(&self.id, self.data.as_ref());
+            self.context.pipeline_layout_drop(self.data.as_ref());
         }
     }
 }
@@ -51,8 +40,8 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
     /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
-    /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
-    /// uniform block.
+    /// must define the range in push constant memory that corresponds to its single `var<push_constant>`
+    /// buffer.
     ///
     /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
     pub push_constant_ranges: &'a [PushConstantRange],

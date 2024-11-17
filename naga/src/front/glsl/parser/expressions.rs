@@ -38,7 +38,13 @@ impl<'source> ParsingContext<'source> {
             TokenValue::FloatConstant(float) => {
                 if float.width != 32 {
                     frontend.errors.push(Error {
-                        kind: ErrorKind::SemanticError("Unsupported floating-point value (expected single-precision floating-point number)".into()),
+                        kind: ErrorKind::SemanticError(
+                            concat!(
+                                "Unsupported floating-point value ",
+                                "(expected single-precision floating-point number)"
+                            )
+                            .into(),
+                        ),
                         meta: token.meta,
                     });
                 }

@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::mem::size_of;
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
@@ -25,10 +25,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         // Setup pipeline using a simple shader with hardcoded vertices
         let shader = ctx
             .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Shader module"),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            });
+            .create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let pipeline = ctx
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -100,7 +97,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         // Resolve query set to buffer
         let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Query buffer"),
-            size: std::mem::size_of::<u64>() as u64 * 3,
+            size: size_of::<u64>() as u64 * 3,
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });

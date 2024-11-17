@@ -16,7 +16,7 @@ updates:
     groups:
       patch-updates:
         patterns:
-          - "*"       
+          - "*"
         update-types:
           - "minor"
           - "patch"

@@ -14,6 +14,7 @@ pub struct InternalCounter {
 impl InternalCounter {
     /// Creates a counter with value 0.
     #[inline]
+    #[must_use]
     pub const fn new() -> Self {
         InternalCounter {
             #[cfg(feature = "counters")]
@@ -33,6 +34,7 @@ impl InternalCounter {
     /// Always returns 0 if the `counters` feature is not enabled.
     #[cfg(not(feature = "counters"))]
     #[inline]
+    #[must_use]
     pub fn read(&self) -> isize {
         0
     }
@@ -51,6 +53,7 @@ impl InternalCounter {
     /// Always returns 0 if the `counters` feature is not enabled.
     #[cfg(not(feature = "counters"))]
     #[inline]
+    #[must_use]
     pub fn take(&self) -> isize {
         0
     }

@@ -1,6 +1,5 @@
 use std::{sync::Arc, thread};
 
-use crate::context::ObjectId;
 use crate::*;
 
 /// Handle to a pipeline cache, which is used to accelerate
@@ -68,7 +67,6 @@ use crate::*;
 #[derive(Debug)]
 pub struct PipelineCache {
     pub(crate) context: Arc<C>,
-    pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
 
@@ -83,16 +81,14 @@ impl PipelineCache {
     ///
     /// This function is unique to the Rust API of `wgpu`.
     pub fn get_data(&self) -> Option<Vec<u8>> {
-        self.context
-            .pipeline_cache_get_data(&self.id, self.data.as_ref())
+        self.context.pipeline_cache_get_data(self.data.as_ref())
     }
 }
 
 impl Drop for PipelineCache {
     fn drop(&mut self) {
         if !thread::panicking() {
-            self.context
-                .pipeline_cache_drop(&self.id, self.data.as_ref());
+            self.context.pipeline_cache_drop(self.data.as_ref());
         }
     }
 }

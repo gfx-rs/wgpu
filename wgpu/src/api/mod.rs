@@ -28,11 +28,11 @@ mod buffer;
 mod command_buffer;
 mod command_encoder;
 // Not a root type, but common descriptor types for pipelines.
+mod blas;
 mod common_pipeline;
 mod compute_pass;
 mod compute_pipeline;
 mod device;
-mod id;
 mod instance;
 mod pipeline_cache;
 mod pipeline_layout;
@@ -48,10 +48,12 @@ mod surface;
 mod surface_texture;
 mod texture;
 mod texture_view;
+mod tlas;
 
 pub use adapter::*;
 pub use bind_group::*;
 pub use bind_group_layout::*;
+pub use blas::*;
 pub use buffer::*;
 pub use command_buffer::*;
 pub use command_encoder::*;
@@ -59,7 +61,6 @@ pub use common_pipeline::*;
 pub use compute_pass::*;
 pub use compute_pipeline::*;
 pub use device::*;
-pub use id::*;
 pub use instance::*;
 pub use pipeline_cache::*;
 pub use pipeline_layout::*;
@@ -75,6 +76,39 @@ pub use surface::*;
 pub use surface_texture::*;
 pub use texture::*;
 pub use texture_view::*;
+pub use tlas::*;
 
 /// Object debugging label.
 pub type Label<'a> = Option<&'a str>;
+
+macro_rules! impl_partialeq_eq_hash {
+    ($ty:ty) => {
+        impl PartialEq for $ty {
+            fn eq(&self, other: &Self) -> bool {
+                std::ptr::addr_eq(self.data.as_ref(), other.data.as_ref())
+            }
+        }
+        impl Eq for $ty {}
+
+        impl std::hash::Hash for $ty {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                let ptr = self.data.as_ref() as *const Data as *const ();
+                ptr.hash(state);
+            }
+        }
+
+        impl PartialOrd for $ty {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+        impl Ord for $ty {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                let a = self.data.as_ref() as *const Data as *const ();
+                let b = other.data.as_ref() as *const Data as *const ();
+                a.cmp(&b)
+            }
+        }
+    };
+}
+pub(crate) use impl_partialeq_eq_hash;

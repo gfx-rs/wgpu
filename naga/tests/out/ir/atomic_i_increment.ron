@@ -241,10 +241,6 @@
                                 ),
                             ],
                             reject: [
-                                Emit((
-                                    start: 14,
-                                    end: 15,
-                                )),
                                 Atomic(
                                     pointer: 8,
                                     fun: Add,
@@ -283,6 +279,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -305,7 +302,10 @@
                         result: None,
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
 )

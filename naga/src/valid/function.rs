@@ -1096,10 +1096,7 @@ impl super::Validator {
                                 crate::ImageClass::Storage { format, .. } => {
                                     crate::TypeInner::Vector {
                                         size: crate::VectorSize::Quad,
-                                        scalar: crate::Scalar {
-                                            kind: format.into(),
-                                            width: 4,
-                                        },
+                                        scalar: format.into(),
                                     }
                                 }
                                 _ => {
