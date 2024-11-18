@@ -259,6 +259,8 @@ struct Example {
 }
 
 impl crate::framework::Example for Example {
+    // Don't want srgb, so normals show up better.
+    const SRGB: bool = false;
     fn required_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
