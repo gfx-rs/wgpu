@@ -110,6 +110,8 @@ pub enum ExpressionError {
     InvalidSampleLevelExactType(Handle<crate::Expression>),
     #[error("Sample level (bias) type {0:?} is not a scalar float")]
     InvalidSampleLevelBiasType(Handle<crate::Expression>),
+    #[error("Bias can't be done for image dimension {0:?}")]
+    InvalidSampleLevelBiasDimension(crate::ImageDimension),
     #[error("Sample level (gradient) of {1:?} doesn't match the image dimension {0:?}")]
     InvalidSampleLevelGradientType(crate::ImageDimension, Handle<crate::Expression>),
     #[error("Unable to cast")]
@@ -557,6 +559,19 @@ impl super::Validator {
                                 kind: Sk::Float, ..
                             }) => {}
                             _ => return Err(ExpressionError::InvalidSampleLevelBiasType(expr)),
+                        }
+                        match class {
+                            crate::ImageClass::Sampled {
+                                kind: Sk::Float,
+                                multi: false,
+                            } => {
+                                if dim == crate::ImageDimension::D1 {
+                                    return Err(ExpressionError::InvalidSampleLevelBiasDimension(
+                                        dim,
+                                    ));
+                                }
+                            }
+                            _ => return Err(ExpressionError::InvalidImageClass(class)),
                         }
                         ShaderStages::FRAGMENT
                     }
