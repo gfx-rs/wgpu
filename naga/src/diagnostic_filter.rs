@@ -98,9 +98,23 @@ pub(crate) enum ShouldConflictOnFullDuplicate {
     No,
 }
 
-/// A map of diagnostic filters to their severity and first occurrence's span.
+/// A map from diagnostic filters to their severity and span.
 ///
-/// Intended for front ends' first step into storing parsed [`DiagnosticFilter`]s.
+/// Front ends can use this to collect the set of filters applied to a
+/// particular language construct, and detect duplicate/conflicting filters.
+///
+/// For example, WGSL has global diagnostic filters that apply to the entire
+/// module, and diagnostic range filter attributes that apply to a specific
+/// function, statement, or other smaller construct. The set of filters applied
+/// to any given construct must not conflict, but they can be overridden by
+/// filters on other constructs nested within it. A front end can use a
+/// `DiagnosticFilterMap` to collect the filters applied to a single construct,
+/// using the [`add`] method's error checking to forbid conflicts.
+///
+/// For each filter it contains, a `DiagnosticFilterMap` records the requested
+/// severity, and the source span of the filter itself.
+///
+/// [`add`]: DiagnosticFilterMap::add
 #[derive(Clone, Debug, Default)]
 #[cfg(feature = "wgsl-in")]
 pub(crate) struct DiagnosticFilterMap(IndexMap<FilterableTriggeringRule, (Severity, Span)>);
