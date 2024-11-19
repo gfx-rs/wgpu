@@ -30,6 +30,7 @@ impl<'function> super::BlockContext<'function> {
         match self.expressions[handle] {
             crate::Expression::GlobalVariable(handle) => Ok(self.global_arena[handle].ty),
             crate::Expression::FunctionArgument(i) => Ok(self.arguments[i as usize].ty),
+            crate::Expression::Access { base, .. } => Ok(self.get_image_expr_ty(base)?),
             ref other => Err(Error::InvalidImageExpression(other.clone())),
         }
     }
@@ -460,6 +461,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         } else {
             None
         };
+        let span = self.span_from_with_op(start);
 
         let mut image_ops = if words_left != 0 {
             words_left -= 1;
@@ -486,9 +488,34 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     let lod_lexp = self.lookup_expression.lookup(lod_expr)?;
                     let lod_handle =
                         self.get_expr_handle(lod_expr, lod_lexp, ctx, emitter, block, body_idx);
+
+                    let is_depth_image = {
+                        let image_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
+                        let image_ty = ctx.get_image_expr_ty(image_lexp.image)?;
+                        matches!(
+                            ctx.type_arena[image_ty].inner,
+                            crate::TypeInner::Image {
+                                class: crate::ImageClass::Depth { .. },
+                                ..
+                            }
+                        )
+                    };
+
                     level = if options.compare {
                         log::debug!("Assuming {:?} is zero", lod_handle);
                         crate::SampleLevel::Zero
+                    } else if is_depth_image {
+                        log::debug!(
+                            "Assuming level {:?} converts losslessly to an integer",
+                            lod_handle
+                        );
+                        let expr = crate::Expression::As {
+                            expr: lod_handle,
+                            kind: crate::ScalarKind::Sint,
+                            convert: Some(4),
+                        };
+                        let s32_lod_handle = ctx.expressions.append(expr, span);
+                        crate::SampleLevel::Exact(s32_lod_handle)
                     } else {
                         crate::SampleLevel::Exact(lod_handle)
                     };
