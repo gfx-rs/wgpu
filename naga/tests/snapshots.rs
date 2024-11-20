@@ -893,6 +893,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
+            "abstract-types-function-calls",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
             "abstract-types-var",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),

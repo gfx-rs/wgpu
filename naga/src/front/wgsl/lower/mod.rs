@@ -2184,7 +2184,25 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             Some(&LoweredGlobalDecl::Function(function)) => {
                 let arguments = arguments
                     .iter()
-                    .map(|&arg| self.expression(arg, ctx))
+                    .enumerate()
+                    .map(|(i, &arg)| {
+                        // Try to convert abstract values to the known argument types
+                        let Some(&crate::FunctionArgument {
+                            ty: parameter_ty, ..
+                        }) = ctx.module.functions[function].arguments.get(i)
+                        else {
+                            // Wrong number of arguments... just concretize the type here
+                            // and let the validator report the error.
+                            return self.expression(arg, ctx);
+                        };
+
+                        let expr = self.expression_for_abstract(arg, ctx)?;
+                        ctx.try_automatic_conversions(
+                            expr,
+                            &crate::proc::TypeResolution::Handle(parameter_ty),
+                            ctx.ast_expressions.get_span(arg),
+                        )
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let has_result = ctx.module.functions[function].result.is_some();
