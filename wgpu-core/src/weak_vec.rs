@@ -47,7 +47,7 @@ impl<T> WeakVec<T> {
         }
         if let Some(i) = self.empty_slots.pop() {
             self.inner[i] = Some(value);
-            self.scan_slots_on_next_push = false;
+            self.scan_slots_on_next_push = self.empty_slots.is_empty();
         } else {
             self.inner.push(Some(value));
             self.scan_slots_on_next_push = self.inner.len() == self.inner.capacity();
