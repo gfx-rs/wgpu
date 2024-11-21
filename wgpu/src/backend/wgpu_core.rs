@@ -716,10 +716,7 @@ impl crate::Context for ContextWgpuCore {
             .surface_get_capabilities(surface_data.id, *adapter_data)
         {
             Ok(caps) => caps,
-            Err(wgc::instance::GetSurfaceSupportError::Unsupported) => {
-                wgt::SurfaceCapabilities::default()
-            }
-            Err(err) => self.handle_error_fatal(err, "Surface::get_supported_formats"),
+            Err(_) => wgt::SurfaceCapabilities::default(),
         }
     }
 
@@ -1347,9 +1344,6 @@ impl crate::Context for ContextWgpuCore {
     fn device_drop(&self, device_data: &Self::DeviceData) {
         #[cfg(any(native, Emscripten))]
         {
-            // Call device_poll, but don't check for errors. We have to use its
-            // return value, but we just drop it.
-            let _ = self.0.device_poll(device_data.id, wgt::Maintain::wait());
             self.0.device_drop(device_data.id);
         }
     }

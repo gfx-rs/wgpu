@@ -269,6 +269,7 @@ pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 pub use crate::span::{SourceLocation, Span, SpanContext, WithSpan};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
+use diagnostic_filter::DiagnosticFilterNode;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -1199,6 +1200,7 @@ pub enum MathFunction {
     Inverse,
     Transpose,
     Determinant,
+    QuantizeToF16,
     // bits
     CountTrailingZeros,
     CountLeadingZeros,
@@ -2119,6 +2121,14 @@ pub struct Function {
     pub named_expressions: NamedExpressions,
     /// Block of instructions comprising the body of the function.
     pub body: Block,
+    /// The leaf of all diagnostic filter rules tree (stored in [`Module::diagnostic_filters`])
+    /// parsed on this function.
+    ///
+    /// In WGSL, this corresponds to `@diagnostic(…)` attributes.
+    ///
+    /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
+    /// validation.
+    pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
 }
 
 /// The main function for a pipeline stage.
@@ -2271,4 +2281,17 @@ pub struct Module {
     pub functions: Arena<Function>,
     /// Entry points.
     pub entry_points: Vec<EntryPoint>,
+    /// Arena for all diagnostic filter rules parsed in this module, including those in functions
+    /// and statements.
+    ///
+    /// This arena contains elements of a _tree_ of diagnostic filter rules. When nodes are built
+    /// by a front-end, they refer to a parent scope
+    pub diagnostic_filters: Arena<DiagnosticFilterNode>,
+    /// The leaf of all diagnostic filter rules tree parsed from directives in this module.
+    ///
+    /// In WGSL, this corresponds to `diagnostic(…);` directives.
+    ///
+    /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
+    /// validation.
+    pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
 }

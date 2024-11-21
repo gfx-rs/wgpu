@@ -1066,6 +1066,7 @@ impl Frontend {
             expressions,
             named_expressions: crate::NamedExpressions::default(),
             body,
+            diagnostic_filter_leaf: None,
         };
 
         'outer: for decl in declaration.overloads.iter_mut() {

@@ -1,4 +1,7 @@
-use crate::diagnostic_filter::{self, DiagnosticFilter, FilterableTriggeringRule};
+use crate::diagnostic_filter::{
+    self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
+    ShouldConflictOnFullDuplicate, StandardFilterableTriggeringRule,
+};
 use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, EnableExtensions, UnimplementedEnableExtension,
@@ -1696,7 +1699,7 @@ impl Parser {
                 let _ = lexer.next();
                 self.pop_rule_span(lexer);
             }
-            (Token::Paren('{'), _) => {
+            (Token::Paren('{') | Token::Attribute, _) => {
                 let (inner, span) = self.block(lexer, ctx, brace_nesting_level)?;
                 block.stmts.push(ast::Statement {
                     kind: ast::StatementKind::Block(inner),
@@ -1907,10 +1910,8 @@ impl Parser {
                         let _ = lexer.next();
                         let mut body = ast::Block::default();
 
-                        let (condition, span) = lexer.capture_span(|lexer| {
-                            let condition = self.general_expression(lexer, ctx)?;
-                            Ok(condition)
-                        })?;
+                        let (condition, span) =
+                            lexer.capture_span(|lexer| self.general_expression(lexer, ctx))?;
                         let mut reject = ast::Block::default();
                         reject.stmts.push(ast::Statement {
                             kind: ast::StatementKind::Break,
@@ -1966,11 +1967,12 @@ impl Parser {
 
                         let mut body = ast::Block::default();
                         if !lexer.skip(Token::Separator(';')) {
-                            let (condition, span) = lexer.capture_span(|lexer| {
-                                let condition = self.general_expression(lexer, ctx)?;
-                                lexer.expect(Token::Separator(';'))?;
-                                Ok(condition)
-                            })?;
+                            let (condition, span) =
+                                lexer.capture_span(|lexer| -> Result<_, Error<'_>> {
+                                    let condition = self.general_expression(lexer, ctx)?;
+                                    lexer.expect(Token::Separator(';'))?;
+                                    Ok(condition)
+                                })?;
                             let mut reject = ast::Block::default();
                             reject.stmts.push(ast::Statement {
                                 kind: ast::StatementKind::Break,
@@ -2158,6 +2160,31 @@ impl Parser {
 
         ctx.local_table.push_scope();
 
+        let mut diagnostic_filters = DiagnosticFilterMap::new();
+
+        self.push_rule_span(Rule::Attribute, lexer);
+        while lexer.skip(Token::Attribute) {
+            let (name, name_span) = lexer.next_ident_with_span()?;
+            if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
+                let filter = self.diagnostic_filter(lexer)?;
+                let span = self.peek_rule_span(lexer);
+                diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
+            } else {
+                return Err(Error::Unexpected(
+                    name_span,
+                    ExpectedToken::DiagnosticAttribute,
+                ));
+            }
+        }
+        self.pop_rule_span(lexer);
+
+        if !diagnostic_filters.is_empty() {
+            return Err(Error::DiagnosticAttributeNotYetImplementedAtParseSite {
+                site_name_plural: "compound statements",
+                spans: diagnostic_filters.spans().collect(),
+            });
+        }
+
         let brace_span = lexer.expect_span(Token::Paren('{'))?;
         let brace_nesting_level = Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
         let mut block = ast::Block::default();
@@ -2191,6 +2218,7 @@ impl Parser {
     fn function_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
+        diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
         out: &mut ast::TranslationUnit<'a>,
         dependencies: &mut FastIndexSet<ast::Dependency<'a>>,
     ) -> Result<ast::Function<'a>, Error<'a>> {
@@ -2263,6 +2291,7 @@ impl Parser {
             arguments,
             result,
             body,
+            diagnostic_filter_leaf,
         };
 
         // done
@@ -2323,36 +2352,55 @@ impl Parser {
             types: &mut out.types,
             unresolved: &mut dependencies,
         };
+        let mut diagnostic_filters = DiagnosticFilterMap::new();
+        let ensure_no_diag_attrs =
+            |on_what_plural, filters: DiagnosticFilterMap| -> Result<(), Error> {
+                if filters.is_empty() {
+                    Ok(())
+                } else {
+                    Err(Error::DiagnosticAttributeNotSupported {
+                        on_what_plural,
+                        spans: filters.spans().collect(),
+                    })
+                }
+            };
 
         self.push_rule_span(Rule::Attribute, lexer);
         while lexer.skip(Token::Attribute) {
-            match lexer.next_ident_with_span()? {
-                ("binding", name_span) => {
+            let (name, name_span) = lexer.next_ident_with_span()?;
+            if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
+                let filter = self.diagnostic_filter(lexer)?;
+                let span = self.peek_rule_span(lexer);
+                diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
+                continue;
+            }
+            match name {
+                "binding" => {
                     lexer.expect(Token::Paren('('))?;
                     bind_index.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("group", name_span) => {
+                "group" => {
                     lexer.expect(Token::Paren('('))?;
                     bind_group.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("id", name_span) => {
+                "id" => {
                     lexer.expect(Token::Paren('('))?;
                     id.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("vertex", name_span) => {
+                "vertex" => {
                     stage.set(ShaderStage::Vertex, name_span)?;
                 }
-                ("fragment", name_span) => {
+                "fragment" => {
                     stage.set(ShaderStage::Fragment, name_span)?;
                 }
-                ("compute", name_span) => {
+                "compute" => {
                     stage.set(ShaderStage::Compute, name_span)?;
                     compute_span = name_span;
                 }
-                ("workgroup_size", name_span) => {
+                "workgroup_size" => {
                     lexer.expect(Token::Paren('('))?;
                     let mut new_workgroup_size = [None; 3];
                     for (i, size) in new_workgroup_size.iter_mut().enumerate() {
@@ -2370,7 +2418,7 @@ impl Parser {
                     }
                     workgroup_size.set(new_workgroup_size, name_span)?;
                 }
-                ("early_depth_test", name_span) => {
+                "early_depth_test" => {
                     let conservative = if lexer.skip(Token::Paren('(')) {
                         let (ident, ident_span) = lexer.next_ident_with_span()?;
                         let value = conv::map_conservative_depth(ident, ident_span)?;
@@ -2381,7 +2429,7 @@ impl Parser {
                     };
                     early_depth_test.set(crate::EarlyDepthTest { conservative }, name_span)?;
                 }
-                (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
+                _ => return Err(Error::UnknownAttribute(name_span)),
             }
         }
 
@@ -2401,17 +2449,24 @@ impl Parser {
         // read item
         let start = lexer.start_byte_offset();
         let kind = match lexer.next() {
-            (Token::Separator(';'), _) => None,
+            (Token::Separator(';'), _) => {
+                ensure_no_diag_attrs("semicolons", diagnostic_filters)?;
+                None
+            }
             (Token::Word(word), directive_span) if DirectiveKind::from_ident(word).is_some() => {
                 return Err(Error::DirectiveAfterFirstGlobalDecl { directive_span });
             }
             (Token::Word("struct"), _) => {
+                ensure_no_diag_attrs("`struct`s", diagnostic_filters)?;
+
                 let name = lexer.next_ident()?;
 
                 let members = self.struct_body(lexer, &mut ctx)?;
                 Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
             }
             (Token::Word("alias"), _) => {
+                ensure_no_diag_attrs("`alias`es", diagnostic_filters)?;
+
                 let name = lexer.next_ident()?;
 
                 lexer.expect(Token::Operation('='))?;
@@ -2420,6 +2475,8 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Type(ast::TypeAlias { name, ty }))
             }
             (Token::Word("const"), _) => {
+                ensure_no_diag_attrs("`const`s", diagnostic_filters)?;
+
                 let name = lexer.next_ident()?;
 
                 let ty = if lexer.skip(Token::Separator(':')) {
@@ -2436,6 +2493,8 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Const(ast::Const { name, ty, init }))
             }
             (Token::Word("override"), _) => {
+                ensure_no_diag_attrs("`override`s", diagnostic_filters)?;
+
                 let name = lexer.next_ident()?;
 
                 let ty = if lexer.skip(Token::Separator(':')) {
@@ -2460,12 +2519,20 @@ impl Parser {
                 }))
             }
             (Token::Word("var"), _) => {
+                ensure_no_diag_attrs("`var`s", diagnostic_filters)?;
+
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
                 Some(ast::GlobalDeclKind::Var(var))
             }
             (Token::Word("fn"), _) => {
-                let function = self.function_decl(lexer, out, &mut dependencies)?;
+                let diagnostic_filter_leaf = Self::write_diagnostic_filters(
+                    &mut out.diagnostic_filters,
+                    diagnostic_filters,
+                    out.diagnostic_filter_leaf,
+                );
+                let function =
+                    self.function_decl(lexer, diagnostic_filter_leaf, out, &mut dependencies)?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
@@ -2483,6 +2550,8 @@ impl Parser {
                 }))
             }
             (Token::Word("const_assert"), _) => {
+                ensure_no_diag_attrs("`const_assert`s", diagnostic_filters)?;
+
                 // parentheses are optional
                 let paren = lexer.skip(Token::Paren('('));
 
@@ -2523,6 +2592,7 @@ impl Parser {
         let mut lexer = Lexer::new(source);
         let mut tu = ast::TranslationUnit::default();
         let mut enable_extensions = EnableExtensions::empty();
+        let mut diagnostic_filters = DiagnosticFilterMap::new();
 
         // Parse directives.
         while let Ok((ident, _directive_ident_span)) = lexer.peek_ident_with_span() {
@@ -2531,14 +2601,13 @@ impl Parser {
                 let _ = lexer.next_ident_with_span().unwrap();
                 match kind {
                     DirectiveKind::Diagnostic => {
-                        if let Some(diagnostic_filter) = self.diagnostic_filter(&mut lexer)? {
-                            let triggering_rule = diagnostic_filter.triggering_rule;
-                            let span = self.peek_rule_span(&lexer);
-                            Err(Error::DiagnosticNotYetImplemented {
-                                triggering_rule,
-                                span,
-                            })?;
-                        }
+                        let diagnostic_filter = self.diagnostic_filter(&mut lexer)?;
+                        let span = self.peek_rule_span(&lexer);
+                        diagnostic_filters.add(
+                            diagnostic_filter,
+                            span,
+                            ShouldConflictOnFullDuplicate::No,
+                        )?;
                         lexer.expect(Token::Separator(';'))?;
                     }
                     DirectiveKind::Enable => {
@@ -2583,6 +2652,8 @@ impl Parser {
 
         lexer.enable_extensions = enable_extensions.clone();
         tu.enable_extensions = enable_extensions;
+        tu.diagnostic_filter_leaf =
+            Self::write_diagnostic_filters(&mut tu.diagnostic_filters, diagnostic_filters, None);
 
         loop {
             match self.global_decl(&mut lexer, &mut tu) {
@@ -2624,54 +2695,64 @@ impl Parser {
         Ok(brace_nesting_level + 1)
     }
 
-    fn diagnostic_filter<'a>(
-        &self,
-        lexer: &mut Lexer<'a>,
-    ) -> Result<Option<DiagnosticFilter>, Error<'a>> {
+    fn diagnostic_filter<'a>(&self, lexer: &mut Lexer<'a>) -> Result<DiagnosticFilter, Error<'a>> {
         lexer.expect(Token::Paren('('))?;
 
         let (severity_control_name, severity_control_name_span) = lexer.next_ident_with_span()?;
-        let new_severity = diagnostic_filter::Severity::from_ident(severity_control_name).ok_or(
-            Error::DiagnosticInvalidSeverity {
+        let new_severity = diagnostic_filter::Severity::from_wgsl_ident(severity_control_name)
+            .ok_or(Error::DiagnosticInvalidSeverity {
                 severity_control_name_span,
-            },
-        )?;
+            })?;
 
         lexer.expect(Token::Separator(','))?;
 
         let (diagnostic_name_token, diagnostic_name_token_span) = lexer.next_ident_with_span()?;
-        let diagnostic_rule_name = if lexer.skip(Token::Separator('.')) {
-            // Don't try to validate these name tokens on two tokens, which is conventionally used
-            // for third-party tooling.
-            lexer.next_ident_with_span()?;
-            None
+        let triggering_rule = if lexer.skip(Token::Separator('.')) {
+            let (ident, _span) = lexer.next_ident_with_span()?;
+            FilterableTriggeringRule::User(Box::new([diagnostic_name_token.into(), ident.into()]))
         } else {
-            Some(diagnostic_name_token)
+            let diagnostic_rule_name = diagnostic_name_token;
+            let diagnostic_rule_name_span = diagnostic_name_token_span;
+            if let Some(triggering_rule) =
+                StandardFilterableTriggeringRule::from_wgsl_ident(diagnostic_rule_name)
+            {
+                FilterableTriggeringRule::Standard(triggering_rule)
+            } else {
+                diagnostic_filter::Severity::Warning.report_wgsl_parse_diag(
+                    Error::UnknownDiagnosticRuleName(diagnostic_rule_name_span),
+                    lexer.source,
+                )?;
+                FilterableTriggeringRule::Unknown(diagnostic_rule_name.into())
+            }
         };
-        let diagnostic_rule_name_span = diagnostic_name_token_span;
-
-        let filter = diagnostic_rule_name
-            .and_then(|name| {
-                FilterableTriggeringRule::from_ident(name)
-                    .map(Ok)
-                    .or_else(|| {
-                        diagnostic_filter::Severity::Warning
-                            .report_wgsl_parse_diag(
-                                Error::UnknownDiagnosticRuleName(diagnostic_rule_name_span),
-                                lexer.source,
-                            )
-                            .err()
-                            .map(Err)
-                    })
-            })
-            .transpose()?
-            .map(|triggering_rule| DiagnosticFilter {
-                new_severity,
-                triggering_rule,
-            });
+        let filter = DiagnosticFilter {
+            triggering_rule,
+            new_severity,
+        };
         lexer.skip(Token::Separator(','));
         lexer.expect(Token::Paren(')'))?;
 
         Ok(filter)
+    }
+
+    pub(crate) fn write_diagnostic_filters(
+        arena: &mut Arena<DiagnosticFilterNode>,
+        filters: DiagnosticFilterMap,
+        parent: Option<Handle<DiagnosticFilterNode>>,
+    ) -> Option<Handle<DiagnosticFilterNode>> {
+        filters
+            .into_iter()
+            .fold(parent, |parent, (triggering_rule, (new_severity, span))| {
+                Some(arena.append(
+                    DiagnosticFilterNode {
+                        inner: DiagnosticFilter {
+                            new_severity,
+                            triggering_rule,
+                        },
+                        parent,
+                    },
+                    span,
+                ))
+            })
     }
 }

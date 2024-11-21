@@ -851,6 +851,8 @@ impl super::Adapter {
                     // being, provide 1 as the value here, to cause as little
                     // trouble as possible.
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
+                    raw_tlas_instance_size: 0,
+                    ray_tracing_scratch_buffer_alignment: 0,
                 },
             },
         })

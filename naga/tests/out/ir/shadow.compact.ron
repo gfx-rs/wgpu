@@ -540,6 +540,7 @@
                     value: Some(34),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("fs_main"),
@@ -948,6 +949,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -1023,7 +1025,10 @@
                         value: Some(5),
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
 )

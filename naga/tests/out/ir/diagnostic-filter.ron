@@ -1,0 +1,60 @@
+(
+    types: [],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [],
+    global_expressions: [],
+    functions: [
+        (
+            name: Some("thing"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [],
+            named_expressions: {},
+            body: [
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: Some(0),
+        ),
+        (
+            name: Some("with_diagnostic"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [],
+            named_expressions: {},
+            body: [
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: Some(1),
+        ),
+    ],
+    entry_points: [],
+    diagnostic_filters: [
+        (
+            inner: (
+                new_severity: Off,
+                triggering_rule: Standard(DerivativeUniformity),
+            ),
+            parent: None,
+        ),
+        (
+            inner: (
+                new_severity: Warning,
+                triggering_rule: Standard(DerivativeUniformity),
+            ),
+            parent: Some(0),
+        ),
+    ],
+    diagnostic_filter_leaf: Some(0),
+)

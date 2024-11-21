@@ -1,16 +1,18 @@
-use super::conv;
+use super::{conv, RawTlasInstance};
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
 use parking_lot::Mutex;
 
+use crate::TlasInstance;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     ffi::{CStr, CString},
+    mem,
     mem::MaybeUninit,
     num::NonZeroU32,
-    ptr,
+    ptr, slice,
     sync::Arc,
 };
 
@@ -288,18 +290,6 @@ impl super::DeviceShared {
                 .offset((block.offset() + range.start) & !mask)
                 .size((range.end - range.start + mask) & !mask)
         }))
-    }
-
-    unsafe fn free_resources(&self) {
-        for &raw in self.render_passes.lock().values() {
-            unsafe { self.raw.destroy_render_pass(raw, None) };
-        }
-        for &raw in self.framebuffers.lock().values() {
-            unsafe { self.raw.destroy_framebuffer(raw, None) };
-        }
-        if self.drop_guard.is_none() {
-            unsafe { self.raw.destroy_device(None) };
-        }
     }
 }
 
@@ -1022,18 +1012,6 @@ impl super::Device {
 
 impl crate::Device for super::Device {
     type A = super::Api;
-
-    unsafe fn exit(self, queue: super::Queue) {
-        unsafe { self.mem_allocator.into_inner().cleanup(&*self.shared) };
-        unsafe { self.desc_allocator.into_inner().cleanup(&*self.shared) };
-        unsafe {
-            queue
-                .relay_semaphores
-                .into_inner()
-                .destroy(&self.shared.raw)
-        };
-        unsafe { self.shared.free_resources() };
-    }
 
     unsafe fn create_buffer(
         &self,
@@ -2595,6 +2573,22 @@ impl crate::Device for super::Device {
             .set(self.shared.memory_allocations_counter.read());
 
         self.counters.clone()
+    }
+
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+        let temp = RawTlasInstance {
+            transform: instance.transform,
+            custom_index_and_mask: (instance.custom_index & MAX_U24)
+                | (u32::from(instance.mask) << 24),
+            shader_binding_table_record_offset_and_flags: 0,
+            acceleration_structure_reference: instance.blas_address,
+        };
+        let temp: *const _ = &temp;
+        unsafe {
+            slice::from_raw_parts::<u8>(temp.cast::<u8>(), mem::size_of::<RawTlasInstance>())
+                .to_vec()
+        }
     }
 }
 

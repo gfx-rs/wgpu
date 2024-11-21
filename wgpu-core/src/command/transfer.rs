@@ -91,8 +91,6 @@ pub enum TransferError {
     UnspecifiedRowsPerImage,
     #[error("Number of bytes per row is less than the number of bytes in a complete row")]
     InvalidBytesPerRow,
-    #[error("Image is 1D and the copy height and depth are not both set to 1")]
-    InvalidCopySize,
     #[error("Number of rows per image is invalid")]
     InvalidRowsPerImage,
     #[error("Copy source aspects must refer to all aspects of the source texture format")]

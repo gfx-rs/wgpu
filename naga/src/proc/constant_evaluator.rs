@@ -137,8 +137,8 @@ macro_rules! gen_component_wise_extractor {
                             for idx in 0..(size as u8).into() {
                                 let group = component_groups
                                     .iter()
-                                    .map(|cs| cs[idx])
-                                    .collect::<ArrayVec<_, N>>()
+                                    .map(|cs| cs.get(idx).cloned().ok_or(err.clone()))
+                                    .collect::<Result<ArrayVec<_, N>, _>>()?
                                     .into_inner()
                                     .unwrap();
                                 new_components.push($ident(

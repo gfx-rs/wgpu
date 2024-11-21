@@ -2,6 +2,7 @@
 
 use crate::{
     arena::{BadHandle, BadRangeError},
+    diagnostic_filter::DiagnosticFilterNode,
     Handle,
 };
 
@@ -39,6 +40,8 @@ impl super::Validator {
             ref types,
             ref special_types,
             ref global_expressions,
+            ref diagnostic_filters,
+            ref diagnostic_filter_leaf,
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
@@ -119,6 +122,7 @@ impl super::Validator {
                 ref expressions,
                 ref named_expressions,
                 ref body,
+                ref diagnostic_filter_leaf,
             } = function;
 
             for arg in arguments.iter() {
@@ -162,6 +166,10 @@ impl super::Validator {
 
             Self::validate_block_handles(body, expressions, functions)?;
 
+            if let Some(handle) = *diagnostic_filter_leaf {
+                handle.check_valid_for(diagnostic_filters)?;
+            }
+
             Ok(())
         };
 
@@ -178,6 +186,14 @@ impl super::Validator {
         }
         if let Some(ty) = special_types.ray_intersection {
             validate_type(ty)?;
+        }
+
+        for (handle, _node) in diagnostic_filters.iter() {
+            let DiagnosticFilterNode { inner: _, parent } = diagnostic_filters[handle];
+            handle.check_dep_opt(parent)?;
+        }
+        if let Some(handle) = *diagnostic_filter_leaf {
+            handle.check_valid_for(diagnostic_filters)?;
         }
 
         Ok(())

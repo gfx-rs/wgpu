@@ -602,6 +602,12 @@ pub struct Device {
     counters: wgt::HalCounters,
 }
 
+impl Drop for Device {
+    fn drop(&mut self) {
+        self.rtv_pool.lock().free_handle(self.null_rtv_handle);
+    }
+}
+
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 

@@ -21,7 +21,7 @@ impl ScratchBuffer {
                     usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
                 })
-                .map_err(crate::device::DeviceError::from_hal)?
+                .map_err(DeviceError::from_hal)?
         };
         Ok(Self {
             raw: ManuallyDrop::new(raw),

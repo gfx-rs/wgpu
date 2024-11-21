@@ -1332,7 +1332,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Unpack4xI8
-                    | crate::MathFunction::Unpack4xU8 => {
+                    | crate::MathFunction::Unpack4xU8
+                    | crate::MathFunction::QuantizeToF16 => {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
@@ -3495,6 +3496,48 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Inverse => "inverse",
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
+                    Mf::QuantizeToF16 => match *ctx.resolve_type(arg, &self.module.types) {
+                        TypeInner::Scalar { .. } => {
+                            write!(self.out, "unpackHalf2x16(packHalf2x16(vec2(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, "))).x")?;
+                            return Ok(());
+                        }
+                        TypeInner::Vector {
+                            size: crate::VectorSize::Bi,
+                            ..
+                        } => {
+                            write!(self.out, "unpackHalf2x16(packHalf2x16(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, "))")?;
+                            return Ok(());
+                        }
+                        TypeInner::Vector {
+                            size: crate::VectorSize::Tri,
+                            ..
+                        } => {
+                            write!(self.out, "vec3(unpackHalf2x16(packHalf2x16(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ".xy)), unpackHalf2x16(packHalf2x16(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ".zz)).x)")?;
+                            return Ok(());
+                        }
+                        TypeInner::Vector {
+                            size: crate::VectorSize::Quad,
+                            ..
+                        } => {
+                            write!(self.out, "vec4(unpackHalf2x16(packHalf2x16(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ".xy)), unpackHalf2x16(packHalf2x16(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ".zw)))")?;
+                            return Ok(());
+                        }
+                        _ => unreachable!(
+                            "Correct TypeInner for QuantizeToF16 should be already validated"
+                        ),
+                    },
                     // bits
                     Mf::CountTrailingZeros => {
                         match *ctx.resolve_type(arg, &self.module.types) {

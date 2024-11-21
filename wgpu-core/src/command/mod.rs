@@ -914,8 +914,6 @@ pub enum PassErrorScope {
     SetScissorRect,
     #[error("In a draw command, kind: {kind:?}")]
     Draw { kind: DrawKind, indexed: bool },
-    #[error("While resetting queries after the renderpass was ran")]
-    QueryReset,
     #[error("In a write_timestamp command")]
     WriteTimestamp,
     #[error("In a begin_occlusion_query command")]

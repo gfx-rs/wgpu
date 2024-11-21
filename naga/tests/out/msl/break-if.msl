@@ -7,15 +7,16 @@ using metal::uint;
 
 void breakIfEmpty(
 ) {
-#define LOOP_IS_REACHABLE if (volatile bool unpredictable_jump_over_loop = true; unpredictable_jump_over_loop)
     bool loop_init = true;
-    LOOP_IS_REACHABLE while(true) {
+    while(true) {
         if (!loop_init) {
             if (true) {
                 break;
             }
         }
         loop_init = false;
+#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
+        LOOP_IS_BOUNDED
     }
     return;
 }
@@ -26,7 +27,7 @@ void breakIfEmptyBody(
     bool b = {};
     bool c = {};
     bool loop_init_1 = true;
-    LOOP_IS_REACHABLE while(true) {
+    while(true) {
         if (!loop_init_1) {
             b = a;
             bool _e2 = b;
@@ -37,6 +38,7 @@ void breakIfEmptyBody(
             }
         }
         loop_init_1 = false;
+        LOOP_IS_BOUNDED
     }
     return;
 }
@@ -47,7 +49,7 @@ void breakIf(
     bool d = {};
     bool e = {};
     bool loop_init_2 = true;
-    LOOP_IS_REACHABLE while(true) {
+    while(true) {
         if (!loop_init_2) {
             bool _e5 = e;
             if (a_1 == e) {
@@ -58,6 +60,7 @@ void breakIf(
         d = a_1;
         bool _e2 = d;
         e = a_1 != _e2;
+        LOOP_IS_BOUNDED
     }
     return;
 }
@@ -66,7 +69,7 @@ void breakIfSeparateVariable(
 ) {
     uint counter = 0u;
     bool loop_init_3 = true;
-    LOOP_IS_REACHABLE while(true) {
+    while(true) {
         if (!loop_init_3) {
             uint _e5 = counter;
             if (counter == 5u) {
@@ -76,6 +79,7 @@ void breakIfSeparateVariable(
         loop_init_3 = false;
         uint _e3 = counter;
         counter = _e3 + 1u;
+        LOOP_IS_BOUNDED
     }
     return;
 }

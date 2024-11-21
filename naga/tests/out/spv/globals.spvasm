@@ -44,10 +44,14 @@ OpDecorate %45 DescriptorSet 0
 OpDecorate %45 Binding 6
 OpDecorate %46 Block
 OpMemberDecorate %46 0 Offset 0
+OpMemberDecorate %46 0 ColMajor
+OpMemberDecorate %46 0 MatrixStride 16
 OpDecorate %48 DescriptorSet 0
 OpDecorate %48 Binding 7
 OpDecorate %49 Block
 OpMemberDecorate %49 0 Offset 0
+OpMemberDecorate %49 0 ColMajor
+OpMemberDecorate %49 0 MatrixStride 8
 OpDecorate %116 BuiltIn LocalInvocationId
 %2 = OpTypeVoid
 %3 = OpTypeBool

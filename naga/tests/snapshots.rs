@@ -941,6 +941,7 @@ fn convert_wgsl() {
             "6438-conflicting-idents",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        ("diagnostic-filter", Targets::IR),
     ];
 
     for &(name, targets) in inputs.iter() {

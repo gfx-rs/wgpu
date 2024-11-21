@@ -13,6 +13,7 @@ use crate::{
     id::{BlasId, BufferId, TlasId},
     resource::CreateBufferError,
 };
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::{num::NonZeroU64, slice};
 

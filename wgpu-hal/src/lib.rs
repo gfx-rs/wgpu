@@ -676,7 +676,7 @@ pub trait Adapter: WasmNotSendSync {
 /// 1)  Free resources with methods like [`Device::destroy_texture`] or
 ///     [`Device::destroy_shader_module`].
 ///
-/// 1)  Shut down the device by calling [`Device::exit`].
+/// 1)  Drop the device.
 ///
 /// [`vkDevice`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VkDevice
 /// [`ID3D12Device`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device
@@ -706,8 +706,6 @@ pub trait Adapter: WasmNotSendSync {
 pub trait Device: WasmNotSendSync {
     type A: Api;
 
-    /// Exit connection to this logical device.
-    unsafe fn exit(self, queue: <Self::A as Api>::Queue);
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUses::empty()`.
@@ -973,6 +971,7 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8>;
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
 
@@ -1787,6 +1786,12 @@ pub struct Alignments {
     /// [`Uniform`]: wgt::BufferBindingType::Uniform
     /// [size]: BufferBinding::size
     pub uniform_bounds_check_alignment: wgt::BufferSize,
+
+    /// The size of the raw TLAS instance
+    pub raw_tlas_instance_size: usize,
+
+    /// What the scratch buffer for building an acceleration structure must be aligned to
+    pub ray_tracing_scratch_buffer_alignment: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -2542,4 +2547,12 @@ bitflags::bitflags! {
 #[derive(Debug, Clone)]
 pub struct AccelerationStructureBarrier {
     pub usage: Range<AccelerationStructureUses>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct TlasInstance {
+    pub transform: [f32; 12],
+    pub custom_index: u32,
+    pub mask: u8,
+    pub blas_address: u64,
 }

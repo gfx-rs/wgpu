@@ -1013,7 +1013,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         tu: &'temp ast::TranslationUnit<'source>,
     ) -> Result<crate::Module, Error<'source>> {
-        let mut module = crate::Module::default();
+        let mut module = crate::Module {
+            diagnostic_filters: tu.diagnostic_filters.clone(),
+            diagnostic_filter_leaf: tu.diagnostic_filter_leaf,
+            ..Default::default()
+        };
 
         let mut ctx = GlobalContext {
             ast_expressions: &tu.expressions,
@@ -1244,7 +1248,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .arguments
             .iter()
             .enumerate()
-            .map(|(i, arg)| {
+            .map(|(i, arg)| -> Result<_, Error<'_>> {
                 let ty = self.resolve_ast_type(arg.ty, ctx)?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
@@ -1263,7 +1267,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let result = f
             .result
             .as_ref()
-            .map(|res| {
+            .map(|res| -> Result<_, Error<'_>> {
                 let ty = self.resolve_ast_type(res.ty, ctx)?;
                 Ok(crate::FunctionResult {
                     ty,
@@ -1280,6 +1284,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             expressions,
             named_expressions: crate::NamedExpressions::default(),
             body: crate::Block::default(),
+            diagnostic_filter_leaf: f.diagnostic_filter_leaf,
         };
 
         let mut typifier = Typifier::default();

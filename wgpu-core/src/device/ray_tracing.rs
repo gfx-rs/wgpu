@@ -124,6 +124,7 @@ impl Device {
             flags: blas_desc.flags,
             update_mode: blas_desc.update_mode,
             handle,
+            label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             compacted_size_buffer,
             being_built: RwLock::new(rank::BLAS_BEING_BUILT, false),
@@ -163,7 +164,7 @@ impl Device {
         .map_err(DeviceError::from_hal)?;
 
         let instance_buffer_size =
-            get_raw_tlas_instance_size(self.backend()) * desc.max_instances.max(1) as usize;
+            self.alignments.raw_tlas_instance_size * desc.max_instances.max(1) as usize;
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),

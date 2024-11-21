@@ -47,8 +47,6 @@ pub enum SurfaceError {
     AlreadyAcquired,
     #[error("Texture has been destroyed")]
     TextureDestroyed,
-    #[error("Acquired frame is still referenced")]
-    StillReferenced,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -94,8 +92,6 @@ pub enum ConfigureSurfaceError {
         requested: hal::TextureUses,
         available: hal::TextureUses,
     },
-    #[error("Gpu got stuck :(")]
-    StuckGpu,
 }
 
 impl From<WaitIdleError> for ConfigureSurfaceError {
@@ -103,7 +99,6 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
         match e {
             WaitIdleError::Device(d) => ConfigureSurfaceError::Device(d),
             WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
-            WaitIdleError::StuckGpu => ConfigureSurfaceError::StuckGpu,
         }
     }
 }
