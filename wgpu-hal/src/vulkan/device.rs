@@ -1664,7 +1664,7 @@ impl crate::Device for super::Device {
                     // Additional safety docs from unstable slice_assume_init_mut
                     // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
                     // mutable reference which is also guaranteed to be valid for writes.
-                    unsafe { std::mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
+                    unsafe { mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
                 };
                 (Self { remainder }, init)
             }
