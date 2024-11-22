@@ -4216,6 +4216,102 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     self.upgrade_atomics
                         .insert(ctx.get_contained_global_variable(p_exp_h)?);
                 }
+                Op::AtomicCompareExchange => {
+                    inst.expect(9)?;
+
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let _memory_scope_id = self.next()?;
+                    let _equal_memory_semantics_id = self.next()?;
+                    let _unequal_memory_semantics_id = self.next()?;
+                    let value_id = self.next()?;
+                    let comparator_id = self.next()?;
+
+                    let (p_exp_h, p_base_ty_h) = self.get_exp_and_base_ty_handles(
+                        pointer_id,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        body_idx,
+                    )?;
+
+                    log::trace!("\t\t\tlooking up value expr {:?}", value_id);
+                    let v_lexp_handle =
+                        get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
+
+                    log::trace!("\t\t\tlooking up comparator expr {:?}", value_id);
+                    let c_lexp_handle = get_expr_handle!(
+                        comparator_id,
+                        self.lookup_expression.lookup(comparator_id)?
+                    );
+
+                    // We know from the SPIR-V spec that the result type must be an integer
+                    // scalar, and we'll need the type itself to get a handle to the atomic
+                    // result struct.
+                    let crate::TypeInner::Scalar(scalar) = ctx.module.types[p_base_ty_h].inner
+                    else {
+                        return Err(
+                            crate::front::atomic_upgrade::Error::CompareExchangeNonScalarBaseType
+                                .into(),
+                        );
+                    };
+
+                    // Get a handle to the atomic result struct type.
+                    let atomic_result_struct_ty_h = ctx.module.generate_predeclared_type(
+                        crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar),
+                    );
+
+                    block.extend(emitter.finish(ctx.expressions));
+
+                    // Create an expression for our atomic result
+                    let atomic_lexp_handle = {
+                        let expr = crate::Expression::AtomicResult {
+                            ty: atomic_result_struct_ty_h,
+                            comparison: true,
+                        };
+                        ctx.expressions.append(expr, span)
+                    };
+
+                    // Create an dot accessor to extract the value from the
+                    // result struct __atomic_compare_exchange_result<T> and use that
+                    // as the expression for the result_id
+                    {
+                        let expr = crate::Expression::AccessIndex {
+                            base: atomic_lexp_handle,
+                            index: 0,
+                        };
+                        let handle = ctx.expressions.append(expr, span);
+                        // Use this dot accessor as the result id's expression
+                        let _ = self.lookup_expression.insert(
+                            result_id,
+                            LookupExpression {
+                                handle,
+                                type_id: result_type_id,
+                                block_id,
+                            },
+                        );
+                    }
+
+                    emitter.start(ctx.expressions);
+
+                    // Create a statement for the op itself
+                    let stmt = crate::Statement::Atomic {
+                        pointer: p_exp_h,
+                        fun: crate::AtomicFunction::Exchange {
+                            compare: Some(c_lexp_handle),
+                        },
+                        value: v_lexp_handle,
+                        result: Some(atomic_lexp_handle),
+                    };
+                    block.push(stmt, span);
+
+                    // Store any associated global variables so we can upgrade their types later
+                    self.upgrade_atomics
+                        .insert(ctx.get_contained_global_variable(p_exp_h)?);
+                }
                 Op::AtomicExchange
                 | Op::AtomicIAdd
                 | Op::AtomicISub
@@ -5912,17 +6008,18 @@ mod test_atomic {
         let m = crate::front::spv::parse_u8_slice(bytes, &Default::default()).unwrap();
 
         let mut wgsl = String::new();
-        let mut should_panic = false;
 
-        for vflags in [
-            crate::valid::ValidationFlags::all(),
-            crate::valid::ValidationFlags::empty(),
+        for (vflags, name) in [
+            (crate::valid::ValidationFlags::empty(), "empty"),
+            (crate::valid::ValidationFlags::all(), "all"),
         ] {
+            log::info!("validating with flags - {name}");
             let mut validator = crate::valid::Validator::new(vflags, Default::default());
             match validator.validate(&m) {
                 Err(e) => {
                     log::error!("SPIR-V validation {}", e.emit_to_string(""));
-                    should_panic = true;
+                    log::info!("types: {:#?}", m.types);
+                    panic!("validation error");
                 }
                 Ok(i) => {
                     wgsl = crate::back::wgsl::write_string(
@@ -5932,13 +6029,8 @@ mod test_atomic {
                     )
                     .unwrap();
                     log::info!("wgsl-out:\n{wgsl}");
-                    break;
                 }
             };
-        }
-
-        if should_panic {
-            panic!("validation error");
         }
 
         let m = match crate::front::wgsl::parse_str(&wgsl) {
@@ -5973,6 +6065,13 @@ mod test_atomic {
     #[test]
     fn atomic_exchange() {
         atomic_test(include_bytes!("../../../tests/in/spv/atomic_exchange.spv"));
+    }
+
+    #[test]
+    fn atomic_compare_exchange() {
+        atomic_test(include_bytes!(
+            "../../../tests/in/spv/atomic_compare_exchange.spv"
+        ));
     }
 
     #[test]
