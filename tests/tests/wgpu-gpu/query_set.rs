@@ -25,3 +25,8 @@ static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfigurat
 
         assert!(pollster::block_on(ctx.device.pop_error_scope()).is_some());
     });
+
+#[gpu_test]
+static VALIDATE_PASS_TIMESTAMP_WRITES: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::TIMESTAMP_QUERY))
+    .run_sync(|ctx| todo!());
