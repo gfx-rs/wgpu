@@ -9,8 +9,7 @@ use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     ffi::{CStr, CString},
-    mem,
-    mem::MaybeUninit,
+    mem::{self, size_of, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,
@@ -2571,8 +2570,7 @@ impl crate::Device for super::Device {
         };
         let temp: *const _ = &temp;
         unsafe {
-            slice::from_raw_parts::<u8>(temp.cast::<u8>(), mem::size_of::<RawTlasInstance>())
-                .to_vec()
+            slice::from_raw_parts::<u8>(temp.cast::<u8>(), size_of::<RawTlasInstance>()).to_vec()
         }
     }
 }
