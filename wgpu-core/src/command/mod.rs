@@ -660,6 +660,8 @@ pub enum CommandEncoderError {
     TimestampWriteIndicesEqual { idx: u32 },
     #[error(transparent)]
     TimestampWritesInvalid(#[from] QueryUseError),
+    #[error("no begin or end indices were specified for pass timestamp writes, expected at least one to be set")]
+    TimestampWriteIndicesMissing,
 }
 
 impl Global {

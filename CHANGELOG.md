@@ -131,10 +131,11 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Lower `QUERY_SET_MAX_QUERIES` (and enforced limits) from 8192 to 4096 to match WebGPU spec. By @ErichDonGubler in [#6525](https://github.com/gfx-rs/wgpu/pull/6525).
 - Allow non-filterable float on texture bindings never used with samplers when using a derived bind group layout. By @ErichDonGubler in [#6531](https://github.com/gfx-rs/wgpu/pull/6531/).
 - Replace potentially unsound usage of `PreHashedMap` with `FastHashMap`. By @jamienicol in [#6541](https://github.com/gfx-rs/wgpu/pull/6541).
-- Add missing validation for timestamp writes in compute and render passes. By @ErichDonGubler in [#6578](https://github.com/gfx-rs/wgpu/pull/6578).
+- Add missing validation for timestamp writes in compute and render passes. By @ErichDonGubler in [#6578](https://github.com/gfx-rs/wgpu/pull/6578), [#6583](https://github.com/gfx-rs/wgpu/pull/6583).
   - Check the status of the `TIMESTAMP_QUERY` feature before other validation.
   - Check that indices are in-bounds for the query set.
   - Check that begin and end indices are not equal.
+  - Check that at least one index is specified.
 - Reject destroyed buffers in query set resolution. By @ErichDonGubler in [#6579](https://github.com/gfx-rs/wgpu/pull/6579).
 
 #### Naga

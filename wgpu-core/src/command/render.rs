@@ -1420,6 +1420,13 @@ impl Global {
                     }
                 }
 
+                if beginning_of_pass_write_index
+                    .or(end_of_pass_write_index)
+                    .is_none()
+                {
+                    return Err(CommandEncoderError::TimestampWriteIndicesMissing);
+                }
+
                 Some(ArcPassTimestampWrites {
                     query_set,
                     beginning_of_pass_write_index,
