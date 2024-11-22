@@ -28,9 +28,7 @@ use crate::{
 use thiserror::Error;
 use wgt::{BufferAddress, DynamicOffset};
 
-use super::{
-    bind::BinderError, memory_init::CommandBufferTextureMemoryActions, SimplifiedQueryType,
-};
+use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 use crate::ray_tracing::TlasAction;
 use std::sync::Arc;
 use std::{fmt, mem::size_of, str};
@@ -310,64 +308,15 @@ impl Global {
             Err(e) => return make_err(e, arc_desc),
         };
 
-        arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-            let &PassTimestampWrites {
-                query_set,
-                beginning_of_pass_write_index,
-                end_of_pass_write_index,
-            } = tw;
-
-            match cmd_buf
-                .device
-                .require_features(wgt::Features::TIMESTAMP_QUERY)
-            {
-                Ok(()) => (),
-                Err(e) => return make_err(e.into(), arc_desc),
-            }
-
-            let query_set = match hub.query_sets.get(query_set).get() {
-                Ok(query_set) => query_set,
-                Err(e) => return make_err(e.into(), arc_desc),
-            };
-
-            match query_set.same_device(&cmd_buf.device) {
-                Ok(()) => (),
-                Err(e) => return make_err(e.into(), arc_desc),
-            }
-
-            for idx in [beginning_of_pass_write_index, end_of_pass_write_index]
-                .into_iter()
-                .flatten()
-            {
-                match query_set.validate_query(SimplifiedQueryType::Timestamp, idx, None) {
-                    Ok(()) => (),
-                    Err(e) => return make_err(e.into(), arc_desc),
-                }
-            }
-
-            if let Some((begin, end)) = beginning_of_pass_write_index.zip(end_of_pass_write_index) {
-                if begin == end {
-                    return make_err(
-                        CommandEncoderError::TimestampWriteIndicesEqual { idx: begin },
-                        arc_desc,
-                    );
-                }
-            }
-
-            if beginning_of_pass_write_index
-                .or(end_of_pass_write_index)
-                .is_none()
-            {
-                return make_err(CommandEncoderError::TimestampWriteIndicesMissing, arc_desc);
-            }
-
-            Some(ArcPassTimestampWrites {
-                query_set,
-                beginning_of_pass_write_index,
-                end_of_pass_write_index,
+        arc_desc.timestamp_writes = match desc
+            .timestamp_writes
+            .map(|tw| {
+                Self::validate_pass_timestamp_writes(&cmd_buf.device, &hub.query_sets.read(), tw)
             })
-        } else {
-            None
+            .transpose()
+        {
+            Ok(ok) => ok,
+            Err(e) => return make_err(e, arc_desc),
         };
 
         (ComputePass::new(Some(cmd_buf), arc_desc), None)

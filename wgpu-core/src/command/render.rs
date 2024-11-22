@@ -1,7 +1,6 @@
 use crate::binding_model::BindGroup;
 use crate::command::{
     validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
-    SimplifiedQueryType,
 };
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::RenderPipeline;
@@ -1392,49 +1391,10 @@ impl Global {
                     None
                 };
 
-            arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                let &PassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index,
-                    end_of_pass_write_index,
-                } = tw;
-
-                let query_set = query_sets.get(query_set).get()?;
-
-                device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
-
-                query_set.same_device(device)?;
-
-                for idx in [beginning_of_pass_write_index, end_of_pass_write_index]
-                    .into_iter()
-                    .flatten()
-                {
-                    query_set.validate_query(SimplifiedQueryType::Timestamp, idx, None)?;
-                }
-
-                if let Some((begin, end)) =
-                    beginning_of_pass_write_index.zip(end_of_pass_write_index)
-                {
-                    if begin == end {
-                        return Err(CommandEncoderError::TimestampWriteIndicesEqual { idx: begin });
-                    }
-                }
-
-                if beginning_of_pass_write_index
-                    .or(end_of_pass_write_index)
-                    .is_none()
-                {
-                    return Err(CommandEncoderError::TimestampWriteIndicesMissing);
-                }
-
-                Some(ArcPassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index,
-                    end_of_pass_write_index,
-                })
-            } else {
-                None
-            };
+            arc_desc.timestamp_writes = desc
+                .timestamp_writes
+                .map(|tw| Global::validate_pass_timestamp_writes(device, &query_sets, tw))
+                .transpose()?;
 
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {

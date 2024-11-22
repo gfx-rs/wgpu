@@ -33,7 +33,8 @@ use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{BlasAction, TlasAction};
-use crate::resource::{InvalidResourceError, Labeled};
+use crate::resource::{Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet};
+use crate::storage::Storage;
 use crate::track::{DeviceTracker, Tracker, UsageScope};
 use crate::LabelHelpers;
 use crate::{api_log, global::Global, id, resource_log, Label};
@@ -781,6 +782,50 @@ impl Global {
             }
         }
         Ok(())
+    }
+
+    fn validate_pass_timestamp_writes(
+        device: &Device,
+        query_sets: &Storage<Fallible<QuerySet>>,
+        timestamp_writes: &PassTimestampWrites,
+    ) -> Result<ArcPassTimestampWrites, CommandEncoderError> {
+        let &PassTimestampWrites {
+            query_set,
+            beginning_of_pass_write_index,
+            end_of_pass_write_index,
+        } = timestamp_writes;
+
+        device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
+
+        let query_set = query_sets.get(query_set).get()?;
+
+        query_set.same_device(device)?;
+
+        for idx in [beginning_of_pass_write_index, end_of_pass_write_index]
+            .into_iter()
+            .flatten()
+        {
+            query_set.validate_query(SimplifiedQueryType::Timestamp, idx, None)?;
+        }
+
+        if let Some((begin, end)) = beginning_of_pass_write_index.zip(end_of_pass_write_index) {
+            if begin == end {
+                return Err(CommandEncoderError::TimestampWriteIndicesEqual { idx: begin });
+            }
+        }
+
+        if beginning_of_pass_write_index
+            .or(end_of_pass_write_index)
+            .is_none()
+        {
+            return Err(CommandEncoderError::TimestampWriteIndicesMissing);
+        }
+
+        Ok(ArcPassTimestampWrites {
+            query_set,
+            beginning_of_pass_write_index,
+            end_of_pass_write_index,
+        })
     }
 }
 
