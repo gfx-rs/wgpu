@@ -661,7 +661,7 @@ impl Parser {
         const fn literal_ray_intersection<'b>(
             intersection: crate::RayQueryIntersection,
         ) -> ast::Expression<'b> {
-            ast::Expression::Literal(ast::Literal::Number(Number::U32(intersection.bits())))
+            ast::Expression::Literal(ast::Literal::Number(Number::U32(intersection as u32)))
         }
 
         let expr = match lexer.peek() {
@@ -739,19 +739,19 @@ impl Parser {
             }
             (Token::Word("RAY_QUERY_INTERSECTION_NONE"), _) => {
                 let _ = lexer.next();
-                literal_ray_intersection(crate::RayQueryIntersection::empty())
+                literal_ray_intersection(crate::RayQueryIntersection::None)
             }
             (Token::Word("RAY_QUERY_INTERSECTION_TRIANGLE"), _) => {
                 let _ = lexer.next();
-                literal_ray_intersection(crate::RayQueryIntersection::TRIANGLE)
+                literal_ray_intersection(crate::RayQueryIntersection::Triangle)
             }
             (Token::Word("RAY_QUERY_INTERSECTION_GENERATED"), _) => {
                 let _ = lexer.next();
-                literal_ray_intersection(crate::RayQueryIntersection::GENERATED)
+                literal_ray_intersection(crate::RayQueryIntersection::Generated)
             }
             (Token::Word("RAY_QUERY_INTERSECTION_AABB"), _) => {
                 let _ = lexer.next();
-                literal_ray_intersection(crate::RayQueryIntersection::AABB)
+                literal_ray_intersection(crate::RayQueryIntersection::Aabb)
             }
             (Token::Word(word), span) => {
                 let start = lexer.start_byte_offset();

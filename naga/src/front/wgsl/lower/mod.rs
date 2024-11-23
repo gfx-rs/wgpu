@@ -2568,10 +2568,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             args.finish()?;
 
                             let _ = ctx.module.generate_ray_intersection_type();
-
                             crate::Expression::RayQueryGetIntersection {
                                 query,
                                 committed: true,
+                            }
+                        }
+                        "rayQueryGetCandidateIntersection" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let _ = ctx.module.generate_ray_intersection_type();
+                            crate::Expression::RayQueryGetIntersection {
+                                query,
+                                committed: false,
                             }
                         }
                         "RayDesc" => {

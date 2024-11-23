@@ -2328,23 +2328,26 @@ bitflags::bitflags! {
     }
 }
 
-bitflags::bitflags! {
-    /// Type of a ray query intersection.
-    /// Matching vulkan constants can be found in
-    /// https://github.com/KhronosGroup/SPIRV-Registry/blob/main/extensions/KHR/SPV_KHR_ray_query.asciidoc
-    #[cfg_attr(feature = "serialize", derive(Serialize))]
-    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-    #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct RayQueryIntersection: u32 {
-        /// Intersecting with triangles..
-        /// Matches RayQueryCommittedIntersectionTriangleKHR and RayQueryCandidateIntersectionTriangleKHR.
-        const TRIANGLE = 0x1;
-        /// Intersecting with generated primitives.
-        /// Matches RayQueryCommittedIntersectionGeneratedKHR.
-        const GENERATED = 0x2;
-        /// Intersecting with Axis Aligned Bounding Boxes.
-        /// Matches RayQueryCandidateIntersectionAABBKHR.
-        const AABB = 0x4;
-    }
+/// Type of a ray query intersection.
+/// Matching vulkan constants can be found in
+/// <https://github.com/KhronosGroup/SPIRV-Registry/blob/main/extensions/KHR/SPV_KHR_ray_query.asciidoc>
+/// but the actual values are different for candidate intersections.
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum RayQueryIntersection {
+    /// No intersection found.
+    /// Matches `RayQueryCommittedIntersectionNoneKHR`.
+    #[default]
+    None = 0,
+    /// Intersecting with triangles.
+    /// Matches `RayQueryCommittedIntersectionTriangleKHR` and `RayQueryCandidateIntersectionTriangleKHR`.
+    Triangle = 1,
+    /// Intersecting with generated primitives.
+    /// Matches `RayQueryCommittedIntersectionGeneratedKHR`.
+    Generated = 2,
+    /// Intersecting with Axis Aligned Bounding Boxes.
+    /// Matches `RayQueryCandidateIntersectionAABBKHR`.
+    Aabb = 3,
 }
