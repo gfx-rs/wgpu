@@ -46,7 +46,7 @@ Bottom level categories:
 
 #### Naga
 
-- Expose Ray Query flags as constants in WGSL. By @kvark in [#5429](https://github.com/gfx-rs/wgpu/pull/5429)
+- Expose Ray Query flags as constants in WGSL. Implement candidate intersections. By @kvark in [#5429](https://github.com/gfx-rs/wgpu/pull/5429)
 
 ## 23.0.1 (2024-11-25)
 
