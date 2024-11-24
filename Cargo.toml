@@ -45,7 +45,6 @@ default-members = [
 ]
 
 [workspace.lints.clippy]
-manual_c_str_literals = "allow"
 ref_as_ptr = "warn"
 # NOTE: disallowed-types is configured in other file: clippy.toml
 
