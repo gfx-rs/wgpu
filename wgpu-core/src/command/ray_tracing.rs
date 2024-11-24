@@ -805,7 +805,7 @@ impl CommandBufferMutable {
                     dependencies,
                 } => {
                     *action.tlas.built_index.write() = Some(*build_index);
-                    *action.tlas.dependencies.write() = dependencies.clone();
+                    action.tlas.dependencies.write().clone_from(dependencies);
                 }
                 crate::ray_tracing::TlasActionKind::Use => {
                     let tlas_build_index = action.tlas.built_index.read();
