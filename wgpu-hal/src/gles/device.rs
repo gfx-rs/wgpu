@@ -826,7 +826,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -846,7 +846,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -899,7 +899,7 @@ impl crate::Device for super::Device {
                                     0,
                                     format_desc.external,
                                     format_desc.data_type,
-                                    None,
+                                    glow::PixelUnpackData::Slice(None),
                                 );
                             }
                             width = max(1, width / 2);
@@ -918,7 +918,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);

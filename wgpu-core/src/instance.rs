@@ -653,7 +653,7 @@ pub enum GetSurfaceSupportError {
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Error when requesting a device from the adaptor
+/// Error when requesting a device from the adapter
 #[non_exhaustive]
 pub enum RequestDeviceError {
     #[error(transparent)]

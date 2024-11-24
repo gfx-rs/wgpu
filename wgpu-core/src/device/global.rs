@@ -2102,6 +2102,14 @@ impl Global {
         }
     }
 
+    pub fn device_unregister_device_lost_closure(&self, device_id: DeviceId) {
+        let device = self.hub.devices.get(device_id);
+        let closure = device.device_lost_closure.lock().take();
+        if let Some(closure) = closure {
+            closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
+        }
+    }
+
     pub fn device_destroy(&self, device_id: DeviceId) {
         api_log!("Device::destroy {device_id:?}");
 

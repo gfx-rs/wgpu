@@ -744,7 +744,7 @@ impl super::Queue {
                             buffer_data = src.data.as_ref().unwrap().lock().unwrap();
                             let src_data =
                                 &buffer_data.as_slice()[copy.buffer_layout.offset as usize..];
-                            glow::PixelUnpackData::Slice(src_data)
+                            glow::PixelUnpackData::Slice(Some(src_data))
                         }
                     };
                     if is_layered_target(dst_target) {
@@ -889,7 +889,7 @@ impl super::Queue {
                         None => {
                             buffer_data = dst.data.as_ref().unwrap().lock().unwrap();
                             let dst_data = &mut buffer_data.as_mut_slice()[offset as usize..];
-                            glow::PixelPackData::Slice(dst_data)
+                            glow::PixelPackData::Slice(Some(dst_data))
                         }
                     };
                     unsafe {
@@ -1549,7 +1549,7 @@ impl super::Queue {
                 unsafe {
                     gl.bind_image_texture(
                         slot,
-                        binding.raw,
+                        Some(binding.raw),
                         binding.mip_level as i32,
                         binding.array_layer.is_none(),
                         binding.array_layer.unwrap_or_default() as i32,

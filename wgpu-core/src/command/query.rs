@@ -160,7 +160,7 @@ pub enum ResolveError {
 }
 
 impl QuerySet {
-    fn validate_query(
+    pub(crate) fn validate_query(
         self: &Arc<Self>,
         query_type: SimplifiedQueryType,
         query_index: u32,
@@ -387,12 +387,13 @@ impl Global {
 
         dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
+        let snatch_guard = dst_buffer.device.snatchable_lock.read();
+        dst_buffer.check_destroyed(&snatch_guard)?;
+
         let dst_pending = cmd_buf_data
             .trackers
             .buffers
             .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
-
-        let snatch_guard = dst_buffer.device.snatchable_lock.read();
 
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 

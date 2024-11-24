@@ -9,8 +9,7 @@ use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     ffi::{CStr, CString},
-    mem,
-    mem::MaybeUninit,
+    mem::{self, size_of, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,
@@ -1664,7 +1663,7 @@ impl crate::Device for super::Device {
                     // Additional safety docs from unstable slice_assume_init_mut
                     // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
                     // mutable reference which is also guaranteed to be valid for writes.
-                    unsafe { std::mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
+                    unsafe { mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
                 };
                 (Self { remainder }, init)
             }
@@ -2586,8 +2585,7 @@ impl crate::Device for super::Device {
         };
         let temp: *const _ = &temp;
         unsafe {
-            slice::from_raw_parts::<u8>(temp.cast::<u8>(), mem::size_of::<RawTlasInstance>())
-                .to_vec()
+            slice::from_raw_parts::<u8>(temp.cast::<u8>(), size_of::<RawTlasInstance>()).to_vec()
         }
     }
 }

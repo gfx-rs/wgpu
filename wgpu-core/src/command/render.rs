@@ -1391,20 +1391,10 @@ impl Global {
                     None
                 };
 
-            arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                let query_set = query_sets.get(tw.query_set).get()?;
-                query_set.same_device(device)?;
-
-                device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
-
-                Some(ArcPassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                    end_of_pass_write_index: tw.end_of_pass_write_index,
-                })
-            } else {
-                None
-            };
+            arc_desc.timestamp_writes = desc
+                .timestamp_writes
+                .map(|tw| Global::validate_pass_timestamp_writes(device, &query_sets, tw))
+                .transpose()?;
 
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {

@@ -308,30 +308,15 @@ impl Global {
             Err(e) => return make_err(e, arc_desc),
         };
 
-        arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-            let query_set = match hub.query_sets.get(tw.query_set).get() {
-                Ok(query_set) => query_set,
-                Err(e) => return make_err(e.into(), arc_desc),
-            };
-            match query_set.same_device(&cmd_buf.device) {
-                Ok(()) => (),
-                Err(e) => return make_err(e.into(), arc_desc),
-            }
-            match cmd_buf
-                .device
-                .require_features(wgt::Features::TIMESTAMP_QUERY)
-            {
-                Ok(()) => (),
-                Err(e) => return make_err(e.into(), arc_desc),
-            }
-
-            Some(ArcPassTimestampWrites {
-                query_set,
-                beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                end_of_pass_write_index: tw.end_of_pass_write_index,
+        arc_desc.timestamp_writes = match desc
+            .timestamp_writes
+            .map(|tw| {
+                Self::validate_pass_timestamp_writes(&cmd_buf.device, &hub.query_sets.read(), tw)
             })
-        } else {
-            None
+            .transpose()
+        {
+            Ok(ok) => ok,
+            Err(e) => return make_err(e, arc_desc),
         };
 
         (ComputePass::new(Some(cmd_buf), arc_desc), None)

@@ -183,7 +183,7 @@ pub enum CreateBindGroupError {
     },
     #[error("Bound texture views can not have both depth and stencil aspects enabled")]
     DepthStencilAspect,
-    #[error("The adapter does not support read access for storages texture of format {0:?}")]
+    #[error("The adapter does not support read access for storage textures of format {0:?}")]
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
