@@ -79,13 +79,13 @@ impl DerefMut for QueueWriteBufferView<'_> {
     }
 }
 
-impl<'a> AsMut<[u8]> for QueueWriteBufferView<'a> {
+impl AsMut<[u8]> for QueueWriteBufferView<'_> {
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl<'a> Drop for QueueWriteBufferView<'a> {
+impl Drop for QueueWriteBufferView<'_> {
     fn drop(&mut self) {
         DynContext::queue_write_staging_buffer(
             &*self.queue.context,

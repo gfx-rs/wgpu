@@ -132,7 +132,7 @@ struct TypeContext<'a> {
     first_time: bool,
 }
 
-impl<'a> TypeContext<'a> {
+impl TypeContext<'_> {
     fn scalar(&self) -> Option<crate::Scalar> {
         let ty = &self.gctx.types[self.handle];
         ty.inner.scalar()
@@ -148,7 +148,7 @@ impl<'a> TypeContext<'a> {
     }
 }
 
-impl<'a> Display for TypeContext<'a> {
+impl Display for TypeContext<'_> {
     fn fmt(&self, out: &mut Formatter<'_>) -> Result<(), FmtError> {
         let ty = &self.gctx.types[self.handle];
         if ty.needs_alias() && !self.first_time {
@@ -307,7 +307,7 @@ struct TypedGlobalVariable<'a> {
     reference: bool,
 }
 
-impl<'a> TypedGlobalVariable<'a> {
+impl TypedGlobalVariable<'_> {
     fn try_fmt<W: Write>(&self, out: &mut W) -> BackendResult {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
