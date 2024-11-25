@@ -24,7 +24,7 @@ use std::{
     sync::Arc,
 };
 use wgc::error::ContextErrorSource;
-use wgc::{command::bundle_ffi::*, device::DeviceLostClosure, pipeline::CreateShaderModuleError};
+use wgc::{command::bundle_ffi::*, pipeline::CreateShaderModuleError};
 use wgt::WasmNotSendSync;
 
 pub struct ContextWgpuCore(wgc::global::Global);
@@ -1352,9 +1352,8 @@ impl crate::Context for ContextWgpuCore {
         device_data: &Self::DeviceData,
         device_lost_callback: crate::context::DeviceLostCallback,
     ) {
-        let device_lost_closure = DeviceLostClosure::from_rust(device_lost_callback);
         self.0
-            .device_set_device_lost_closure(device_data.id, device_lost_closure);
+            .device_set_device_lost_closure(device_data.id, device_lost_callback);
     }
     fn device_destroy(&self, device_data: &Self::DeviceData) {
         self.0.device_destroy(device_data.id);

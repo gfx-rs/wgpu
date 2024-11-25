@@ -3600,7 +3600,7 @@ impl Device {
 
         // 1) Resolve the GPUDevice device.lost promise.
         if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
-            device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
+            device_lost_closure(DeviceLostReason::Unknown, message.to_string());
         }
 
         // 2) Complete any outstanding mapAsync() steps.
