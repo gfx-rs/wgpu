@@ -33,13 +33,13 @@ use crate::snatch::Snatchable;
 use hal::BufferUses;
 use std::mem::size_of;
 use std::ops::Add;
+use std::sync::atomic::AtomicBool;
 use std::{
     cmp::max,
     num::NonZeroU64,
     ops::{Deref, Range},
     sync::{atomic::Ordering, Arc},
 };
-use std::sync::atomic::AtomicBool;
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,

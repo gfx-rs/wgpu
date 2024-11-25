@@ -22,6 +22,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use std::num::NonZeroU64;
+use std::sync::atomic::AtomicBool;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Debug,
@@ -30,7 +31,6 @@ use std::{
     ptr::NonNull,
     sync::Arc,
 };
-use std::sync::atomic::AtomicBool;
 
 /// Information about the wgpu-core resource.
 ///

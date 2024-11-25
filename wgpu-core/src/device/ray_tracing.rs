@@ -1,6 +1,3 @@
-use std::mem::{size_of, ManuallyDrop};
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::{rank, Mutex};
@@ -16,6 +13,9 @@ use crate::{
     resource, LabelHelpers,
 };
 use hal::{AccelerationStructureTriangleIndices, BufferUses, MemoryFlags};
+use std::mem::{size_of, ManuallyDrop};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use wgt::{AccelerationStructureFlags, BufferAddress, Features};
 
 impl Device {

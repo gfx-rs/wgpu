@@ -286,9 +286,11 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
 
 #[gpu_test]
 static COMPACT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits().features(
-        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
-    ))
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+    )
     .run_sync(compact_blas);
 
 fn compact_blas(ctx: TestingContext) {
@@ -306,9 +308,7 @@ fn compact_blas(ctx: TestingContext) {
 
     encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
 
-    ctx.queue.submit([
-        encoder_blas.finish(),
-    ]);
+    ctx.queue.submit([encoder_blas.finish()]);
     let mut encoder_compact = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
@@ -317,16 +317,16 @@ fn compact_blas(ctx: TestingContext) {
 
     let _ = encoder_compact.compact_blas(&as_ctx.blas);
 
-    ctx.queue.submit([
-        encoder_compact.finish(),
-    ]);
+    ctx.queue.submit([encoder_compact.finish()]);
 }
 
 #[gpu_test]
 static INVALID_COMPACT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits().features(
-        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
-    ))
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+    )
     .run_sync(invalid_compact_blas);
 
 fn invalid_compact_blas(ctx: TestingContext) {
@@ -344,20 +344,22 @@ fn invalid_compact_blas(ctx: TestingContext) {
 
     encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
 
-    ctx.queue.submit([
-        encoder_blas.finish(),
-    ]);
+    ctx.queue.submit([encoder_blas.finish()]);
     let mut encoder_compact = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("Compact 1"),
         });
 
-    fail(&ctx.device, || { let _ = encoder_compact.compact_blas(&as_ctx.blas); }, None);
+    fail(
+        &ctx.device,
+        || {
+            let _ = encoder_compact.compact_blas(&as_ctx.blas);
+        },
+        None,
+    );
 
-    ctx.queue.submit([
-        encoder_compact.finish(),
-    ]);
+    ctx.queue.submit([encoder_compact.finish()]);
 
     //
     // Create a clean `AsBuildContext`
@@ -371,9 +373,13 @@ fn invalid_compact_blas(ctx: TestingContext) {
             label: Some("Compact 1"),
         });
 
-    fail(&ctx.device, || { let _ = encoder_compact.compact_blas(&as_ctx.blas); }, None);
+    fail(
+        &ctx.device,
+        || {
+            let _ = encoder_compact.compact_blas(&as_ctx.blas);
+        },
+        None,
+    );
 
-    ctx.queue.submit([
-        encoder_compact.finish(),
-    ]);
+    ctx.queue.submit([encoder_compact.finish()]);
 }
