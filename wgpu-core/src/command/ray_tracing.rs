@@ -1503,7 +1503,7 @@ fn build_blas<'a>(
                 );
                 cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
                     buffer: buf.as_ref(),
-                    usage: hal::BufferUses::QUERY_RESOLVE | hal::BufferUses::COPY_DST
+                    usage: hal::BufferUses::ACCELERATION_STRUCTURE_QUERY
                         ..hal::BufferUses::MAP_READ,
                 }]);
             }

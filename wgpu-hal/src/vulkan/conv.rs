@@ -590,6 +590,10 @@ pub fn map_buffer_usage_to_barrier(
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR
             | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
     }
+    if usage.contains(crate::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
+        stages |= vk::PipelineStageFlags::TRANSFER;
+        access |= vk::AccessFlags::TRANSFER_WRITE;
+    }
 
     (stages, access)
 }
