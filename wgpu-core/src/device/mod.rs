@@ -197,34 +197,16 @@ pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static
 
 pub struct DeviceLostClosureRust {
     pub callback: DeviceLostCallback,
-    consumed: bool,
-}
-
-impl Drop for DeviceLostClosureRust {
-    fn drop(&mut self) {
-        if !self.consumed {
-            panic!("DeviceLostClosureRust must be consumed before it is dropped.");
-        }
-    }
 }
 
 #[repr(C)]
 pub struct DeviceLostClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
     pub user_data: *mut u8,
-    consumed: bool,
 }
 
 #[cfg(send_sync)]
 unsafe impl Send for DeviceLostClosureC {}
-
-impl Drop for DeviceLostClosureC {
-    fn drop(&mut self) {
-        if !self.consumed {
-            panic!("DeviceLostClosureC must be consumed before it is dropped.");
-        }
-    }
-}
 
 pub struct DeviceLostClosure {
     // We wrap this so creating the enum in the C variant can be unsafe,
@@ -245,10 +227,7 @@ enum DeviceLostClosureInner {
 
 impl DeviceLostClosure {
     pub fn from_rust(callback: DeviceLostCallback) -> Self {
-        let inner = DeviceLostClosureRust {
-            callback,
-            consumed: false,
-        };
+        let inner = DeviceLostClosureRust { callback };
         Self {
             inner: DeviceLostClosureInner::Rust { inner },
         }
@@ -261,18 +240,7 @@ impl DeviceLostClosure {
     ///
     /// - Both pointers must point to `'static` data, as the callback may happen at
     ///   an unspecified time.
-    pub unsafe fn from_c(mut closure: DeviceLostClosureC) -> Self {
-        // Build an inner with the values from closure, ensuring that
-        // inner.consumed is false.
-        let inner = DeviceLostClosureC {
-            callback: closure.callback,
-            user_data: closure.user_data,
-            consumed: false,
-        };
-
-        // Mark the original closure as consumed, so we can safely drop it.
-        closure.consumed = true;
-
+    pub unsafe fn from_c(inner: DeviceLostClosureC) -> Self {
         Self {
             inner: DeviceLostClosureInner::C { inner },
         }
@@ -280,15 +248,9 @@ impl DeviceLostClosure {
 
     pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
         match self.inner {
-            DeviceLostClosureInner::Rust { mut inner } => {
-                inner.consumed = true;
-
-                (inner.callback)(reason, message)
-            }
+            DeviceLostClosureInner::Rust { inner } => (inner.callback)(reason, message),
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            DeviceLostClosureInner::C { mut inner } => unsafe {
-                inner.consumed = true;
-
+            DeviceLostClosureInner::C { inner } => unsafe {
                 // Ensure message is structured as a null-terminated C string. It only
                 // needs to live as long as the callback invocation.
                 let message = std::ffi::CString::new(message).unwrap();
