@@ -176,7 +176,7 @@ impl UserClosures {
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
         for (mut operation, status) in self.mappings {
             if let Some(callback) = operation.callback.take() {
-                callback.call(status);
+                callback(status);
             }
         }
         for closure in self.submissions {

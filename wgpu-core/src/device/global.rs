@@ -2170,7 +2170,7 @@ impl Global {
             Ok(submission_index) => Ok(submission_index),
             Err((mut operation, err)) => {
                 if let Some(callback) = operation.callback.take() {
-                    callback.call(Err(err.clone()));
+                    callback(Err(err.clone()));
                 }
                 log::error!("Buffer::map_async error: {err}");
                 Err(err)

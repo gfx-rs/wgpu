@@ -1406,12 +1406,10 @@ impl crate::Context for ContextWgpuCore {
                 MapMode::Read => wgc::device::HostMap::Read,
                 MapMode::Write => wgc::device::HostMap::Write,
             },
-            callback: Some(wgc::resource::BufferMapCallback::from_rust(Box::new(
-                |status| {
-                    let res = status.map_err(|_| crate::BufferAsyncError);
-                    callback(res);
-                },
-            ))),
+            callback: Some(Box::new(|status| {
+                let res = status.map_err(|_| crate::BufferAsyncError);
+                callback(res);
+            })),
         };
 
         match self.0.buffer_map_async(
