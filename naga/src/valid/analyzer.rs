@@ -1054,7 +1054,7 @@ impl FunctionInfo {
                     value,
                     result: _,
                 } => {
-                    let _ = self.add_ref_impl(pointer, GlobalUse::WRITE);
+                    let _ = self.add_ref_impl(pointer, GlobalUse::READ | GlobalUse::WRITE);
                     let _ = self.add_ref(value);
                     if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
                         let _ = self.add_ref(cmp);

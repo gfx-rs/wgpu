@@ -783,8 +783,7 @@ impl super::Queue {
                         .buffer_layout
                         .bytes_per_row
                         .unwrap_or(copy.size.width * block_size);
-                    let minimum_rows_per_image =
-                        (copy.size.height + block_height - 1) / block_height;
+                    let minimum_rows_per_image = copy.size.height.div_ceil(block_height);
                     let rows_per_image = copy
                         .buffer_layout
                         .rows_per_image

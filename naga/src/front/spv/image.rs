@@ -22,7 +22,7 @@ bitflags::bitflags! {
     }
 }
 
-impl<'function> super::BlockContext<'function> {
+impl super::BlockContext<'_> {
     fn get_image_expr_ty(
         &self,
         handle: Handle<crate::Expression>,

@@ -711,13 +711,9 @@ impl crate::Context for ContextWgpuCore {
         surface_data: &Self::SurfaceData,
         adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
-        match self
-            .0
+        self.0
             .surface_get_capabilities(surface_data.id, *adapter_data)
-        {
-            Ok(caps) => caps,
-            Err(_) => wgt::SurfaceCapabilities::default(),
-        }
+            .unwrap_or_default()
     }
 
     fn surface_configure(
