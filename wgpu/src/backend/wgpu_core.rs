@@ -2105,8 +2105,7 @@ impl crate::Context for ContextWgpuCore {
         queue_data: &Self::QueueData,
         callback: crate::context::SubmittedWorkDoneCallback,
     ) {
-        let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
-        self.0.queue_on_submitted_work_done(queue_data.id, closure);
+        self.0.queue_on_submitted_work_done(queue_data.id, callback);
     }
 
     fn device_start_capture(&self, device_data: &Self::DeviceData) {

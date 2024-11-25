@@ -240,61 +240,10 @@ impl Drop for Queue {
     }
 }
 
-#[repr(C)]
-pub struct SubmittedWorkDoneClosureC {
-    pub callback: unsafe extern "C" fn(user_data: *mut u8),
-    pub user_data: *mut u8,
-}
-
 #[cfg(send_sync)]
-unsafe impl Send for SubmittedWorkDoneClosureC {}
-
-pub struct SubmittedWorkDoneClosure {
-    // We wrap this so creating the enum in the C variant can be unsafe,
-    // allowing our call function to be safe.
-    inner: SubmittedWorkDoneClosureInner,
-}
-
-#[cfg(send_sync)]
-type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
+pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + Send + 'static>;
 #[cfg(not(send_sync))]
-type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
-
-enum SubmittedWorkDoneClosureInner {
-    Rust { callback: SubmittedWorkDoneCallback },
-    C { inner: SubmittedWorkDoneClosureC },
-}
-
-impl SubmittedWorkDoneClosure {
-    pub fn from_rust(callback: SubmittedWorkDoneCallback) -> Self {
-        Self {
-            inner: SubmittedWorkDoneClosureInner::Rust { callback },
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The callback pointer must be valid to call with the provided `user_data`
-    ///   pointer.
-    ///
-    /// - Both pointers must point to `'static` data, as the callback may happen at
-    ///   an unspecified time.
-    pub unsafe fn from_c(inner: SubmittedWorkDoneClosureC) -> Self {
-        Self {
-            inner: SubmittedWorkDoneClosureInner::C { inner },
-        }
-    }
-
-    pub(crate) fn call(self) {
-        match self.inner {
-            SubmittedWorkDoneClosureInner::Rust { callback } => callback(),
-            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            SubmittedWorkDoneClosureInner::C { inner } => unsafe {
-                (inner.callback)(inner.user_data)
-            },
-        }
-    }
-}
+pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + 'static>;
 
 /// A texture or buffer to be freed soon.
 ///

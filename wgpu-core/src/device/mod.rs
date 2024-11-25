@@ -180,7 +180,7 @@ impl UserClosures {
             }
         }
         for closure in self.submissions {
-            closure.call();
+            closure();
         }
         for invocation in self.device_lost_invocations {
             invocation
