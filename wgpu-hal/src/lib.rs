@@ -2541,6 +2541,10 @@ bitflags::bitflags! {
         const SHADER_INPUT = 1 << 2;
         // Blas used to query compacted size
         const QUERY_INPUT = 1 << 3;
+        // BLAS used as a src for a copy operation
+        const COPY_SRC = 1 << 4;
+        // BLAS used as a dst for a copy operation
+        const COPY_DST = 1 << 5;
     }
 }
 

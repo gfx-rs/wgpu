@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::{rank, Mutex};
+use crate::ray_tracing::BlasState;
 use crate::resource::{Fallible, TrackingData};
 use crate::snatch::Snatchable;
 use crate::weak_vec::WeakVec;
@@ -14,7 +15,6 @@ use crate::{
 };
 use hal::{AccelerationStructureTriangleIndices, BufferUses, MemoryFlags};
 use std::mem::{size_of, ManuallyDrop};
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use wgt::{AccelerationStructureFlags, BufferAddress, Features};
 
@@ -127,7 +127,7 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             compacted_size_buffer,
-            being_built: AtomicBool::new(false),
+            state: Mutex::new(rank::BLAS_STATE, BlasState::None),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
         }))
     }

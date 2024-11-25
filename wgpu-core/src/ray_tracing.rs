@@ -168,6 +168,9 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
     MissingTlasInputUsageFlag(ResourceErrorIdent),
+
+    #[error("Blas {0:?} is being compacted")]
+    BlasBeingCompacted(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -234,9 +237,13 @@ pub struct TlasPackage<'a> {
     pub lowest_unmodified: u32,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) enum BlasActionKind {
     Build(NonZeroU64),
+    Compact {
+        build_idx: NonZeroU64,
+        src: Arc<Blas>,
+    },
     Use,
 }
 
@@ -302,4 +309,11 @@ pub struct TraceTlasPackage {
     pub tlas_id: TlasId,
     pub instances: Vec<Option<TraceTlasInstance>>,
     pub lowest_unmodified: u32,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum BlasState {
+    None,
+    Building,
+    UsedForCompacting,
 }

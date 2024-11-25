@@ -26,14 +26,13 @@ use super::CommandBufferMutable;
 use crate::device::global::DevicePoll;
 use crate::device::Device;
 use crate::id::BlasId;
-use crate::lock::{rank, RwLock};
-use crate::ray_tracing::CompactBlasError;
+use crate::lock::{rank, Mutex, RwLock};
+use crate::ray_tracing::{BlasState, CompactBlasError};
 use crate::resource::{Fallible, TrackingData};
 use crate::snatch::Snatchable;
 use hal::BufferUses;
 use std::mem::size_of;
 use std::ops::Add;
-use std::sync::atomic::AtomicBool;
 use std::{
     cmp::max,
     num::NonZeroU64,
@@ -82,9 +81,6 @@ impl Global {
         cmd_buf_data: &mut CommandBufferMutable,
     ) -> Result<Arc<Blas>, CompactBlasError> {
         profiling::scope!("CommandEncoder::compact_blas");
-        if src_blas.being_built.load(Ordering::Relaxed) {
-            return Err(CompactBlasError::BlasBeingBuilt(src_blas.error_ident()));
-        }
         if let None = *src_blas.built_index.read() {
             return Err(CompactBlasError::UsedUnbuilt(src_blas.error_ident()));
         }
@@ -161,8 +157,8 @@ impl Global {
             label: src_blas.label.clone().add(" compacted"),
             tracking_data: TrackingData::new(src_blas.device.tracker_indices.blas_s.clone()),
             compacted_size_buffer: None,
-            // technically compaction counts as a build
-            being_built: AtomicBool::new(true),
+            // technically compaction counts as a build, so this happens in validate blas actions
+            state: Mutex::new(rank::BLAS_STATE, BlasState::None),
         };
         blas.size_info.acceleration_structure_size = acc_struct_size;
         log::info!(
@@ -171,6 +167,16 @@ impl Global {
             src_blas.size_info.acceleration_structure_size,
             blas.size_info.acceleration_structure_size,
         );
+        unsafe {
+            encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+                usage: hal::AccelerationStructureUses::COPY_SRC
+                    ..hal::AccelerationStructureUses::BUILD_INPUT,
+            });
+            encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+                usage: hal::AccelerationStructureUses::COPY_DST
+                    ..hal::AccelerationStructureUses::BUILD_INPUT,
+            });
+        }
         Ok(Arc::new(blas))
     }
 
@@ -213,6 +219,14 @@ impl Global {
                 Ok(poll) => poll,
                 Err(err) => break 'err err.into(),
             };
+            // preferably, this small gap between encoders landing and the blas state being
+            // relocked could be removed to prevent a queue.submit occurring here. This isn't
+            // very likely and will generate an error anyway (but could be frustrating for a user).
+            let mut state_lock = src_blas.state.lock();
+
+            if let BlasState::Building = *state_lock {
+                break 'err CompactBlasError::BlasBeingBuilt(src_blas.error_ident());
+            }
 
             closures.fire();
             let raw_device = device.raw();
@@ -234,7 +248,7 @@ impl Global {
                         });
                     }
 
-                    cmd_buf_data.trackers.blas_s.set_single(src_blas);
+                    cmd_buf_data.trackers.blas_s.set_single(src_blas.clone());
                     cmd_buf_data.trackers.blas_s.set_single(blas.clone());
                     if let Some(queue) = device.get_queue() {
                         queue.pending_writes.lock().insert_blas(&blas);
@@ -249,8 +263,12 @@ impl Global {
                     cmd_buf_data.blas_actions.push(BlasAction {
                         blas,
                         // this counts as a build because the old blas is guaranteed to be built
-                        kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
+                        kind: crate::ray_tracing::BlasActionKind::Compact {
+                            build_idx: build_command_index,
+                            src: src_blas.clone(),
+                        },
                     });
+                    *state_lock = BlasState::UsedForCompacting;
                     (id, Some(handle), None)
                 }
                 Err(err) => {
@@ -982,7 +1000,7 @@ impl CommandBufferMutable {
                 crate::ray_tracing::BlasActionKind::Build(id) => {
                     built.insert(action.blas.tracker_index());
                     *action.blas.built_index.write() = Some(*id);
-                    action.blas.being_built.store(false, Ordering::Relaxed);
+                    *action.blas.state.lock() = BlasState::Building;
                 }
                 crate::ray_tracing::BlasActionKind::Use => {
                     if !built.contains(&action.blas.tracker_index())
@@ -992,6 +1010,12 @@ impl CommandBufferMutable {
                             action.blas.error_ident(),
                         ));
                     }
+                }
+                crate::ray_tracing::BlasActionKind::Compact { build_idx, src } => {
+                    *action.blas.built_index.write() = Some(*build_idx);
+                    // technically compaction counts as a build
+                    *action.blas.state.lock() = BlasState::Building;
+                    *src.state.lock() = BlasState::None;
                 }
             }
         }
@@ -1468,10 +1492,6 @@ fn build_blas<'a>(
 ) -> Result<(), BuildAccelerationStructureError> {
     unsafe {
         cmd_buf_raw.transition_buffers(&input_barriers);
-    }
-
-    for BlasStore { blas, .. } in blas_storage {
-        blas.being_built.store(false, Ordering::Relaxed);
     }
 
     if blas_present {

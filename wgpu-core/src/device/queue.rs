@@ -28,6 +28,8 @@ use crate::{
 
 use smallvec::SmallVec;
 
+use super::{life::LifetimeTracker, Device};
+use crate::ray_tracing::BlasState;
 use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
 use crate::scratch::ScratchBuffer;
 use std::{
@@ -37,8 +39,6 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
-
-use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
@@ -346,11 +346,14 @@ impl EncoderInFlight {
             // This involves actually decrementing the ref count of all command buffer
             // resources, so can be _very_ expensive.
             profiling::scope!("drop command buffer trackers");
+            for (_, pending_blas) in self.pending_blas_s {
+                *pending_blas.state.lock() = BlasState::None;
+            }
             drop(self.trackers);
             drop(self.pending_buffers);
             drop(self.pending_textures);
-            drop(self.pending_blas_s);
             drop(self.pending_tlas_s);
+            // we've already dropped the pending BLASes when iterating over them
         }
         self.raw
     }

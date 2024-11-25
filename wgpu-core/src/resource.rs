@@ -21,8 +21,8 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use crate::ray_tracing::BlasState;
 use std::num::NonZeroU64;
-use std::sync::atomic::AtomicBool;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Debug,
@@ -1980,7 +1980,7 @@ pub struct Blas {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) compacted_size_buffer: Option<Box<dyn hal::DynBuffer>>,
-    pub(crate) being_built: AtomicBool,
+    pub(crate) state: Mutex<BlasState>,
 }
 
 impl Drop for Blas {
