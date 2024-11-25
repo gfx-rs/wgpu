@@ -191,9 +191,9 @@ impl UserClosures {
 }
 
 #[cfg(send_sync)]
-pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
 #[cfg(not(send_sync))]
-pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
 
 pub struct DeviceLostClosureRust {
     pub callback: DeviceLostCallback,
