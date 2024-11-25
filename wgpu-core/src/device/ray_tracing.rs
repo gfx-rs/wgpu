@@ -12,7 +12,7 @@ use crate::{
     global::Global,
     id::{self, BlasId, TlasId},
     lock::RwLock,
-    ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
+    ray_tracing::{CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
 use hal::{AccelerationStructureTriangleIndices, BufferUses, MemoryFlags};
@@ -128,7 +128,6 @@ impl Device {
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             compacted_size_buffer,
             being_built: RwLock::new(rank::BLAS_BEING_BUILT, false),
-            label: blas_desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
         }))
     }

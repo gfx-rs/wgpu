@@ -2563,6 +2563,9 @@ impl crate::Device for super::Device {
             self.mem_allocator
                 .lock()
                 .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+            if let Some(query) = acceleration_structure.compacted_size_query {
+                self.shared.raw.destroy_query_pool(query, None)
+            }
         }
     }
 

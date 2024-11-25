@@ -1,5 +1,5 @@
 use crate::{
-    device::{queue::TempResource, Device},
+    device::queue::TempResource,
     global::Global,
     hub::Hub,
     id::CommandEncoderId,
@@ -24,7 +24,6 @@ use wgt::{
 
 use super::CommandBufferMutable;
 use crate::device::global::DevicePoll;
-use crate::device::queue::PendingWrites;
 use crate::device::Device;
 use crate::id::BlasId;
 use crate::lock::{rank, RwLock};
@@ -32,8 +31,8 @@ use crate::ray_tracing::CompactBlasError;
 use crate::resource::{Fallible, TrackingData};
 use crate::snatch::Snatchable;
 use hal::BufferUses;
-use std::mem::{size_of, ManuallyDrop};
-use std::ops::{Add, DerefMut};
+use std::mem::size_of;
+use std::ops::Add;
 use std::{
     cmp::max,
     num::NonZeroU64,
@@ -52,7 +51,6 @@ struct TriangleBufferStore<'a> {
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
-    raw: &'a dyn hal::DynAccelerationStructure,
     entries: hal::AccelerationStructureEntries<'a, dyn hal::DynBuffer>,
     scratch_buffer_offset: u64,
 }
@@ -73,9 +71,6 @@ struct TlasBufferStore {
     transition: Option<PendingTransition<BufferUses>>,
     entry: TlasBuildEntry,
 }
-
-// TODO: Get this from the device (e.g. VkPhysicalDeviceAccelerationStructurePropertiesKHR.minAccelerationStructureScratchOffsetAlignment) this is currently the largest possible some devices have 0, 64, 128 (lower limits) so this could create excess allocation (Note: dx12 has 256).
-const SCRATCH_BUFFER_ALIGNMENT: u32 = 256;
 
 impl Global {
     fn internal_command_encoder_compact_blas(
@@ -532,7 +527,8 @@ impl Global {
             &descriptors,
             scratch_buffer_barrier,
             &blas_storage,
-        );
+            &snatch_guard,
+        )?;
 
         if tlas_present {
             unsafe {
@@ -688,7 +684,6 @@ impl Global {
         let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let snatch_guard = device.snatchable_lock.read();
 
         iter_blas(
             blas_iter,
@@ -877,7 +872,8 @@ impl Global {
             &descriptors,
             scratch_buffer_barrier,
             &blas_storage,
-        );
+            &snatch_guard,
+        )?;
 
         if tlas_present {
             let staging_buffer = if !instance_buffer_staging_source.is_empty() {
@@ -1401,13 +1397,7 @@ fn iter_buffers<'a, 'b>(
                 blas.size_info.build_scratch_size as u32,
                 ray_tracing_scratch_buffer_alignment,
             ) as u64;
-
             blas_storage.push(BlasStore {
-                raw: blas
-                    .raw(snatch_guard)
-                    .ok_or(BuildAccelerationStructureError::InvalidBlas(
-                        blas.error_ident(),
-                    ))?,
                 blas,
                 entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
                 scratch_buffer_offset,
@@ -1468,7 +1458,8 @@ fn build_blas<'a>(
     >],
     scratch_buffer_barrier: hal::BufferBarrier<dyn hal::DynBuffer>,
     blas_storage: &Vec<BlasStore>,
-) {
+    snatch_guard: &SnatchGuard,
+) -> Result<(), BuildAccelerationStructureError> {
     unsafe {
         cmd_buf_raw.transition_buffers(&input_barriers);
     }
@@ -1488,7 +1479,7 @@ fn build_blas<'a>(
         }
     }
 
-    for BlasStore { blas, raw, .. } in blas_storage {
+    for BlasStore { blas, .. } in blas_storage {
         if let Some(buf) = &blas.compacted_size_buffer {
             unsafe {
                 cmd_buf_raw.place_acceleration_structure_barrier(
@@ -1497,7 +1488,13 @@ fn build_blas<'a>(
                             ..hal::AccelerationStructureUses::QUERY_INPUT,
                     },
                 );
-                cmd_buf_raw.read_acceleration_structure_compact_size(*raw, buf.as_ref());
+                cmd_buf_raw.read_acceleration_structure_compact_size(
+                    blas.raw(snatch_guard)
+                        .ok_or(BuildAccelerationStructureError::InvalidBlas(
+                            blas.error_ident(),
+                        ))?,
+                    buf.as_ref(),
+                );
                 cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
                     buffer: buf.as_ref(),
                     usage: hal::BufferUses::QUERY_RESOLVE | hal::BufferUses::COPY_DST
@@ -1528,4 +1525,5 @@ fn build_blas<'a>(
             usage: source_usage..destination_usage,
         });
     }
+    Ok(())
 }
