@@ -8,7 +8,7 @@ use crate::{
     },
     command::{self, CommandBuffer},
     conv,
-    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
+    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -2083,8 +2083,7 @@ impl Global {
         self.hub.devices.remove(device_id);
     }
 
-    // This closure will be called exactly once during "lose the device",
-    // or when it is replaced.
+    /// This closure will be called exactly once during "lose the device".
     pub fn device_set_device_lost_closure(
         &self,
         device_id: DeviceId,
@@ -2092,22 +2091,15 @@ impl Global {
     ) {
         let device = self.hub.devices.get(device_id);
 
-        let old_device_lost_closure = device
+        device
             .device_lost_closure
             .lock()
             .replace(device_lost_closure);
-
-        if let Some(old_device_lost_closure) = old_device_lost_closure {
-            old_device_lost_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-        }
     }
 
     pub fn device_unregister_device_lost_closure(&self, device_id: DeviceId) {
         let device = self.hub.devices.get(device_id);
-        let closure = device.device_lost_closure.lock().take();
-        if let Some(closure) = closure {
-            closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-        }
+        device.device_lost_closure.lock().take();
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {

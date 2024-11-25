@@ -626,56 +626,6 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
     });
 
 #[gpu_test]
-static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
-    .run_sync(|ctx| {
-        // This test checks that when the device is dropped (such as in a GC),
-        // the provided DeviceLostClosure is called with reason DeviceLostReason::Dropped.
-        // Fails on webgl because webgl doesn't implement drop.
-        static WAS_CALLED: std::sync::atomic::AtomicBool = AtomicBool::new(false);
-
-        // Set a LoseDeviceCallback on the device.
-        let callback = Box::new(|reason, message| {
-            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert_eq!(reason, wgt::DeviceLostReason::Dropped);
-            assert_eq!(message, "Device dropped.");
-        });
-        ctx.device.set_device_lost_callback(callback);
-
-        drop(ctx);
-
-        assert!(
-            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
-
-#[gpu_test]
-static DEVICE_LOST_REPLACED_CALLBACK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
-    .run_sync(|ctx| {
-        // This test checks that a device_lost_callback is called when it is
-        // replaced by another callback.
-        static WAS_CALLED: AtomicBool = AtomicBool::new(false);
-
-        // Set a LoseDeviceCallback on the device.
-        let callback = Box::new(|reason, _m| {
-            WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
-            assert_eq!(reason, wgt::DeviceLostReason::ReplacedCallback);
-        });
-        ctx.device.set_device_lost_callback(callback);
-
-        // Replace the callback.
-        let replacement_callback = Box::new(move |_r, _m| {});
-        ctx.device.set_device_lost_callback(replacement_callback);
-
-        assert!(
-            WAS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
-            "Device lost callback should have been called."
-        );
-    });
-
-#[gpu_test]
 static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default())
     .run_sync(|ctx| {
