@@ -161,7 +161,7 @@ impl DeviceExt for crate::Device {
                 let end_offset = binary_offset + data_size as usize;
 
                 queue.write_texture(
-                    crate::ImageCopyTexture {
+                    crate::TexelCopyTextureInfo {
                         texture: &texture,
                         mip_level: mip,
                         origin: crate::Origin3d {
@@ -172,7 +172,7 @@ impl DeviceExt for crate::Device {
                         aspect: wgt::TextureAspect::All,
                     },
                     &data[binary_offset..end_offset],
-                    crate::ImageDataLayout {
+                    crate::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(bytes_per_row),
                         rows_per_image: Some(height_blocks),

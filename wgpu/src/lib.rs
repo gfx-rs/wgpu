@@ -61,23 +61,23 @@ pub use wgt::{
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CoreCounters, DepthBiasState,
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
-    Gles3MinorVersion, HalCounters, ImageDataLayout, ImageSubresourceRange, IndexFormat,
-    InstanceDescriptor, InstanceFlags, InternalCounters, Limits, MaintainResult, MemoryHints,
-    MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
+    InstanceFlags, InternalCounters, Limits, MaintainResult, MemoryHints, MultisampleState,
+    Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
     PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
     ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
-    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect,
+    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
+    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
+    VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(any(webgpu, webgl))]
-pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
+pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};
 
 //
 //

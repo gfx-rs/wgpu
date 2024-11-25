@@ -385,9 +385,9 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             &ctx.device,
             || {
                 encoder_for_buffer_texture_copy.copy_buffer_to_texture(
-                    wgpu::ImageCopyBuffer {
+                    wgpu::TexelCopyBufferInfo {
                         buffer: &buffer_source,
-                        layout: wgpu::ImageDataLayout {
+                        layout: wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(4),
                             rows_per_image: None,
@@ -406,9 +406,9 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             || {
                 encoder_for_texture_buffer_copy.copy_texture_to_buffer(
                     texture_for_read.as_image_copy(),
-                    wgpu::ImageCopyBuffer {
+                    wgpu::TexelCopyBufferInfo {
                         buffer: &buffer_source,
-                        layout: wgpu::ImageDataLayout {
+                        layout: wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(4),
                             rows_per_image: None,

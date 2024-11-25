@@ -363,15 +363,17 @@ impl ContextWgpuCore {
     }
 }
 
-fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> wgc::command::ImageCopyBuffer {
-    wgc::command::ImageCopyBuffer {
+fn map_buffer_copy_view(view: crate::TexelCopyBufferInfo<'_>) -> wgc::command::TexelCopyBufferInfo {
+    wgc::command::TexelCopyBufferInfo {
         buffer: downcast_buffer(view.buffer).id,
         layout: view.layout,
     }
 }
 
-fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> wgc::command::ImageCopyTexture {
-    wgc::command::ImageCopyTexture {
+fn map_texture_copy_view(
+    view: crate::TexelCopyTextureInfo<'_>,
+) -> wgc::command::TexelCopyTextureInfo {
+    wgc::command::TexelCopyTextureInfo {
         texture: downcast_texture(view.texture).id,
         mip_level: view.mip_level,
         origin: view.origin,
@@ -384,9 +386,9 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> wgc::command::Ima
     allow(unused)
 )]
 fn map_texture_tagged_copy_view(
-    view: crate::ImageCopyTextureTagged<'_>,
-) -> wgc::command::ImageCopyTextureTagged {
-    wgc::command::ImageCopyTextureTagged {
+    view: crate::CopyExternalImageDestInfo<'_>,
+) -> wgc::command::CopyExternalImageDestInfo {
+    wgc::command::CopyExternalImageDestInfo {
         texture: downcast_texture(view.texture).id,
         mip_level: view.mip_level,
         origin: view.origin,
@@ -1633,8 +1635,8 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyBuffer<'_>,
-        destination: crate::ImageCopyTexture<'_>,
+        source: crate::TexelCopyBufferInfo<'_>,
+        destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: wgt::Extent3d,
     ) {
         if let Err(cause) = self.0.command_encoder_copy_buffer_to_texture(
@@ -1654,8 +1656,8 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture<'_>,
-        destination: crate::ImageCopyBuffer<'_>,
+        source: crate::TexelCopyTextureInfo<'_>,
+        destination: crate::TexelCopyBufferInfo<'_>,
         copy_size: wgt::Extent3d,
     ) {
         if let Err(cause) = self.0.command_encoder_copy_texture_to_buffer(
@@ -1675,8 +1677,8 @@ impl crate::Context for ContextWgpuCore {
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture<'_>,
-        destination: crate::ImageCopyTexture<'_>,
+        source: crate::TexelCopyTextureInfo<'_>,
+        destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: wgt::Extent3d,
     ) {
         if let Err(cause) = self.0.command_encoder_copy_texture_to_texture(
@@ -2032,9 +2034,9 @@ impl crate::Context for ContextWgpuCore {
     fn queue_write_texture(
         &self,
         queue_data: &Self::QueueData,
-        texture: crate::ImageCopyTexture<'_>,
+        texture: crate::TexelCopyTextureInfo<'_>,
         data: &[u8],
-        data_layout: wgt::ImageDataLayout,
+        data_layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,
     ) {
         match self.0.queue_write_texture(
@@ -2055,8 +2057,8 @@ impl crate::Context for ContextWgpuCore {
     fn queue_copy_external_image_to_texture(
         &self,
         queue_data: &Self::QueueData,
-        source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged<'_>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<'_>,
         size: wgt::Extent3d,
     ) {
         match self.0.queue_copy_external_image_to_texture(

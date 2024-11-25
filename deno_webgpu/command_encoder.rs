@@ -348,15 +348,15 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
         .resource_table
         .get::<super::texture::WebGpuTexture>(destination.texture)?;
 
-    let source = wgpu_core::command::ImageCopyBuffer {
+    let source = wgpu_core::command::TexelCopyBufferInfo {
         buffer: source_buffer_resource.1,
-        layout: wgpu_types::ImageDataLayout {
+        layout: wgpu_types::TexelCopyBufferLayout {
             offset: source.offset,
             bytes_per_row: source.bytes_per_row,
             rows_per_image: source.rows_per_image,
         },
     };
-    let destination = wgpu_core::command::ImageCopyTexture {
+    let destination = wgpu_core::command::TexelCopyTextureInfo {
         texture: destination_texture_resource.id,
         mip_level: destination.mip_level,
         origin: destination.origin,
@@ -391,15 +391,15 @@ pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
         .resource_table
         .get::<super::buffer::WebGpuBuffer>(destination.buffer)?;
 
-    let source = wgpu_core::command::ImageCopyTexture {
+    let source = wgpu_core::command::TexelCopyTextureInfo {
         texture: source_texture_resource.id,
         mip_level: source.mip_level,
         origin: source.origin,
         aspect: source.aspect,
     };
-    let destination = wgpu_core::command::ImageCopyBuffer {
+    let destination = wgpu_core::command::TexelCopyBufferInfo {
         buffer: destination_buffer_resource.1,
-        layout: wgpu_types::ImageDataLayout {
+        layout: wgpu_types::TexelCopyBufferLayout {
             offset: destination.offset,
             bytes_per_row: destination.bytes_per_row,
             rows_per_image: destination.rows_per_image,
@@ -434,13 +434,13 @@ pub fn op_webgpu_command_encoder_copy_texture_to_texture(
         .resource_table
         .get::<super::texture::WebGpuTexture>(destination.texture)?;
 
-    let source = wgpu_core::command::ImageCopyTexture {
+    let source = wgpu_core::command::TexelCopyTextureInfo {
         texture: source_texture_resource.id,
         mip_level: source.mip_level,
         origin: source.origin,
         aspect: source.aspect,
     };
-    let destination = wgpu_core::command::ImageCopyTexture {
+    let destination = wgpu_core::command::TexelCopyTextureInfo {
         texture: destination_texture_resource.id,
         mip_level: destination.mip_level,
         origin: destination.origin,

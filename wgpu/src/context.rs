@@ -2,21 +2,20 @@ use std::{any::Any, fmt::Debug, future::Future, ops::Range, pin::Pin, sync::Arc}
 
 use wgt::{
     strict_assert, AdapterInfo, BufferAddress, BufferSize, Color, DeviceLostReason,
-    DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
+    DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageSubresourceRange, IndexFormat,
+    Limits, ShaderStages, SurfaceStatus, TexelCopyBufferLayout, TextureFormat,
     TextureFormatFeatures, WasmNotSend, WasmNotSendSync,
 };
 
 use crate::{
     AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, CompilationInfo, ComputePassDescriptor,
-    ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer,
-    ImageCopyTexture, Maintain, MaintainResult, MapMode, PipelineCacheDescriptor,
-    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
-    RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
-    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    ComputePipelineDescriptor, DeviceDescriptor, Error, ErrorFilter, Maintain, MaintainResult,
+    MapMode, PipelineCacheDescriptor, PipelineLayoutDescriptor, QuerySetDescriptor,
+    RenderBundleDescriptor, RenderBundleEncoderDescriptor, RenderPassDescriptor,
+    RenderPipelineDescriptor, RequestAdapterOptions, RequestDeviceError, SamplerDescriptor,
+    ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, SurfaceTargetUnsafe, TexelCopyBufferInfo,
+    TexelCopyTextureInfo, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 /// Meta trait for an data associated with an id tracked by a context.
 ///
@@ -282,22 +281,22 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: ImageCopyBuffer<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyBufferInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     );
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyBuffer<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyBufferInfo<'_>,
         copy_size: Extent3d,
     );
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     );
 
@@ -393,17 +392,17 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     fn queue_write_texture(
         &self,
         queue_data: &Self::QueueData,
-        texture: ImageCopyTexture<'_>,
+        texture: TexelCopyTextureInfo<'_>,
         data: &[u8],
-        data_layout: ImageDataLayout,
+        data_layout: TexelCopyBufferLayout,
         size: Extent3d,
     );
     #[cfg(any(webgl, webgpu))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue_data: &Self::QueueData,
-        source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged<'_>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<'_>,
         size: wgt::Extent3d,
     );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferData>>(
@@ -1000,22 +999,22 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder_data: &crate::Data,
-        source: ImageCopyBuffer<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyBufferInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     );
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder_data: &crate::Data,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyBuffer<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyBufferInfo<'_>,
         copy_size: Extent3d,
     );
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder_data: &crate::Data,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     );
 
@@ -1100,17 +1099,17 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn queue_write_texture(
         &self,
         queue_data: &crate::Data,
-        texture: ImageCopyTexture<'_>,
+        texture: TexelCopyTextureInfo<'_>,
         data: &[u8],
-        data_layout: ImageDataLayout,
+        data_layout: TexelCopyBufferLayout,
         size: Extent3d,
     );
     #[cfg(any(webgpu, webgl))]
     fn queue_copy_external_image_to_texture(
         &self,
         queue_data: &crate::Data,
-        source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged<'_>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<'_>,
         size: wgt::Extent3d,
     );
     fn queue_submit(
@@ -1925,8 +1924,8 @@ where
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder_data: &crate::Data,
-        source: ImageCopyBuffer<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyBufferInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     ) {
         let encoder_data = downcast_ref(encoder_data);
@@ -1942,8 +1941,8 @@ where
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder_data: &crate::Data,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyBuffer<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyBufferInfo<'_>,
         copy_size: Extent3d,
     ) {
         let encoder_data = downcast_ref(encoder_data);
@@ -1959,8 +1958,8 @@ where
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder_data: &crate::Data,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     ) {
         let encoder_data = downcast_ref(encoder_data);
@@ -2128,9 +2127,9 @@ where
     fn queue_write_texture(
         &self,
         queue_data: &crate::Data,
-        texture: ImageCopyTexture<'_>,
+        texture: TexelCopyTextureInfo<'_>,
         data: &[u8],
-        data_layout: ImageDataLayout,
+        data_layout: TexelCopyBufferLayout,
         size: Extent3d,
     ) {
         let queue_data = downcast_ref(queue_data);
@@ -2141,8 +2140,8 @@ where
     fn queue_copy_external_image_to_texture(
         &self,
         queue_data: &crate::Data,
-        source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged<'_>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<'_>,
         size: wgt::Extent3d,
     ) {
         let queue_data = downcast_ref(queue_data);

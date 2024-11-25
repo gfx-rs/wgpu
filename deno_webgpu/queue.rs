@@ -62,9 +62,9 @@ pub struct GpuImageDataLayout {
     rows_per_image: Option<u32>,
 }
 
-impl From<GpuImageDataLayout> for wgpu_types::ImageDataLayout {
+impl From<GpuImageDataLayout> for wgpu_types::TexelCopyBufferLayout {
     fn from(layout: GpuImageDataLayout) -> Self {
-        wgpu_types::ImageDataLayout {
+        wgpu_types::TexelCopyBufferLayout {
             offset: layout.offset,
             bytes_per_row: layout.bytes_per_row,
             rows_per_image: layout.rows_per_image,
@@ -119,7 +119,7 @@ pub fn op_webgpu_write_texture(
     let queue_resource = state.resource_table.get::<WebGpuQueue>(queue_rid)?;
     let queue = queue_resource.1;
 
-    let destination = wgpu_core::command::ImageCopyTexture {
+    let destination = wgpu_core::command::TexelCopyTextureInfo {
         texture: texture_resource.id,
         mip_level: destination.mip_level,
         origin: destination.origin,

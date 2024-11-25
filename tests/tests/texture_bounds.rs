@@ -13,7 +13,7 @@ static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().
             should_panic,
             || {
                 ctx.queue.write_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &texture,
                         mip_level: 0,
                         origin,
@@ -108,7 +108,7 @@ const BYTES_PER_PIXEL: u32 = 4;
 
 const BUFFER_SIZE: u32 = TEXTURE_SIZE.width * TEXTURE_SIZE.height * BYTES_PER_PIXEL;
 
-const BUFFER_COPY_LAYOUT: wgpu::ImageDataLayout = wgpu::ImageDataLayout {
+const BUFFER_COPY_LAYOUT: wgpu::TexelCopyBufferLayout = wgpu::TexelCopyBufferLayout {
     offset: 0,
     bytes_per_row: Some(TEXTURE_SIZE.width * BYTES_PER_PIXEL),
     rows_per_image: None,

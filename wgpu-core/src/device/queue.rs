@@ -5,7 +5,7 @@ use crate::{
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
         ClearError, CommandAllocator, CommandBuffer, CommandEncoderError, CopySide,
-        ImageCopyTexture, TransferError,
+        TexelCopyTextureInfo, TransferError,
     },
     conv,
     device::{DeviceError, WaitIdleError},
@@ -731,9 +731,9 @@ impl Queue {
 
     pub fn write_texture(
         &self,
-        destination: wgt::ImageCopyTexture<Fallible<Texture>>,
+        destination: wgt::TexelCopyTextureInfo<Fallible<Texture>>,
         data: &[u8],
-        data_layout: &wgt::ImageDataLayout,
+        data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_texture");
@@ -745,7 +745,7 @@ impl Queue {
         }
 
         let dst = destination.texture.get()?;
-        let destination = wgt::ImageCopyTexture {
+        let destination = wgt::TexelCopyTextureInfo {
             texture: (),
             mip_level: destination.mip_level,
             origin: destination.origin,
@@ -908,7 +908,7 @@ impl Queue {
                 let mut texture_base = dst_base.clone();
                 texture_base.array_layer += array_layer_offset;
                 hal::BufferTextureCopy {
-                    buffer_layout: wgt::ImageDataLayout {
+                    buffer_layout: wgt::TexelCopyBufferLayout {
                         offset: array_layer_offset as u64
                             * rows_per_image as u64
                             * stage_bytes_per_row as u64,
@@ -952,8 +952,8 @@ impl Queue {
     #[cfg(webgl)]
     pub fn copy_external_image_to_texture(
         &self,
-        source: &wgt::ImageCopyExternalImage,
-        destination: wgt::ImageCopyTextureTagged<Fallible<Texture>>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        destination: wgt::CopyExternalImageDestInfo<Fallible<Texture>>,
         size: wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::copy_external_image_to_texture");
@@ -984,7 +984,7 @@ impl Queue {
 
         let dst = destination.texture.get()?;
         let premultiplied_alpha = destination.premultiplied_alpha;
-        let destination = wgt::ImageCopyTexture {
+        let destination = wgt::TexelCopyTextureInfo {
             texture: (),
             mip_level: destination.mip_level,
             origin: destination.origin,
@@ -1525,9 +1525,9 @@ impl Global {
     pub fn queue_write_texture(
         &self,
         queue_id: QueueId,
-        destination: &ImageCopyTexture,
+        destination: &TexelCopyTextureInfo,
         data: &[u8],
-        data_layout: &wgt::ImageDataLayout,
+        data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
@@ -1543,7 +1543,7 @@ impl Global {
             });
         }
 
-        let destination = wgt::ImageCopyTexture {
+        let destination = wgt::TexelCopyTextureInfo {
             texture: self.hub.textures.get(destination.texture),
             mip_level: destination.mip_level,
             origin: destination.origin,
@@ -1556,12 +1556,12 @@ impl Global {
     pub fn queue_copy_external_image_to_texture(
         &self,
         queue_id: QueueId,
-        source: &wgt::ImageCopyExternalImage,
-        destination: crate::command::ImageCopyTextureTagged,
+        source: &wgt::CopyExternalImageSourceInfo,
+        destination: crate::command::CopyExternalImageDestInfo,
         size: wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
-        let destination = wgt::ImageCopyTextureTagged {
+        let destination = wgt::CopyExternalImageDestInfo {
             texture: self.hub.textures.get(destination.texture),
             mip_level: destination.mip_level,
             origin: destination.origin,

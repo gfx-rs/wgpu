@@ -77,7 +77,7 @@ pub type DynamicOffset = u32;
 ///
 /// This doesn't apply to [`Queue::write_texture`][Qwt].
 ///
-/// [`bytes_per_row`]: ImageDataLayout::bytes_per_row
+/// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// An offset into the query resolve buffer has to be aligned to this.
@@ -1692,11 +1692,11 @@ bitflags::bitflags! {
 
         /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
         /// - The source must not be [`web_sys::OffscreenCanvas`]
-        /// - [`ImageCopyExternalImage::origin`] must be zero.
-        /// - [`ImageCopyTextureTagged::color_space`] must be srgb.
+        /// - [`CopyExternalImageSourceInfo::origin`] must be zero.
+        /// - [`CopyExternalImageDestInfo::color_space`] must be srgb.
         /// - If the source is an [`web_sys::ImageBitmap`]:
-        ///   - [`ImageCopyExternalImage::flip_y`] must be false.
-        ///   - [`ImageCopyTextureTagged::premultiplied_alpha`] must be false.
+        ///   - [`CopyExternalImageSourceInfo::flip_y`] must be false.
+        ///   - [`CopyExternalImageDestInfo::premultiplied_alpha`] must be false.
         ///
         /// WebGL doesn't support this. WebGPU does.
         const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 20;
@@ -6365,12 +6365,12 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 /// | 256x256    | BC3    | 16              | 4 * 4 * 1        | 16 * (256 / 4) = 1024 = Some(1024)     | None                         |
 /// | 64x64x8    | BC3    | 16              | 4 * 4 * 1        | 16 * (64 / 4) = 256 = Some(256)        | 64 / 4 = 16 = Some(16)       |
 ///
-/// Corresponds to [WebGPU `GPUImageDataLayout`](
+/// Corresponds to [WebGPU `GPUTexelCopyBufferLayout`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagedatalayout).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageDataLayout {
+pub struct TexelCopyBufferLayout {
     /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
     /// For non-compressed textures, this is 1.
     pub offset: BufferAddress,
@@ -6809,26 +6809,26 @@ pub struct BindGroupLayoutEntry {
 
 /// View of a buffer which can be used to copy to/from a texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyBuffer`](
+/// Corresponds to [WebGPU `GPUTexelCopyBufferInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageCopyBuffer<B> {
+pub struct TexelCopyBufferInfo<B> {
     /// The buffer to be copied to/from.
     pub buffer: B,
     /// The layout of the texture data in this buffer.
-    pub layout: ImageDataLayout,
+    pub layout: TexelCopyBufferLayout,
 }
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyTexture`](
+/// Corresponds to [WebGPU `GPUTexelCopyTextureInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageCopyTexture<T> {
+pub struct TexelCopyTextureInfo<T> {
     /// The texture to be copied to/from.
     pub texture: T,
     /// The target mip level of the texture.
@@ -6843,15 +6843,15 @@ pub struct ImageCopyTexture<T> {
     pub aspect: TextureAspect,
 }
 
-impl<T> ImageCopyTexture<T> {
+impl<T> TexelCopyTextureInfo<T> {
     /// Adds color space and premultiplied alpha information to make this
     /// descriptor tagged.
     pub fn to_tagged(
         self,
         color_space: PredefinedColorSpace,
         premultiplied_alpha: bool,
-    ) -> ImageCopyTextureTagged<T> {
-        ImageCopyTextureTagged {
+    ) -> CopyExternalImageDestInfo<T> {
+        CopyExternalImageDestInfo {
             texture: self.texture,
             mip_level: self.mip_level,
             origin: self.origin,
@@ -6864,11 +6864,11 @@ impl<T> ImageCopyTexture<T> {
 
 /// View of an external texture that can be used to copy to a texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyExternalImage`](
+/// Corresponds to [WebGPU `GPUCopyExternalImageSourceInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Debug)]
-pub struct ImageCopyExternalImage {
+pub struct CopyExternalImageSourceInfo {
     /// The texture to be copied from. The copy source data is captured at the moment
     /// the copy is issued.
     pub source: ExternalImageSource,
@@ -6887,7 +6887,7 @@ pub struct ImageCopyExternalImage {
 
 /// Source of an external texture copy.
 ///
-/// Corresponds to the [implicit union type on WebGPU `GPUImageCopyExternalImage.source`](
+/// Corresponds to the [implicit union type on WebGPU `GPUCopyExternalImageSourceInfo.source`](
 /// https://gpuweb.github.io/gpuweb/#dom-gpuimagecopyexternalimage-source).
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Debug)]
@@ -6990,11 +6990,11 @@ pub enum PredefinedColorSpace {
 /// View of a texture which can be used to copy to a texture, including
 /// color space and alpha premultiplication information.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// Corresponds to [WebGPU `GPUCopyExternalImageDestInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageCopyTextureTagged<T> {
+pub struct CopyExternalImageDestInfo<T> {
     /// The texture to be copied to/from.
     pub texture: T,
     /// The target mip level of the texture.
@@ -7009,10 +7009,10 @@ pub struct ImageCopyTextureTagged<T> {
     pub premultiplied_alpha: bool,
 }
 
-impl<T> ImageCopyTextureTagged<T> {
+impl<T> CopyExternalImageDestInfo<T> {
     /// Removes the colorspace information from the type.
-    pub fn to_untagged(self) -> ImageCopyTexture<T> {
-        ImageCopyTexture {
+    pub fn to_untagged(self) -> TexelCopyTextureInfo<T> {
+        TexelCopyTextureInfo {
             texture: self.texture,
             mip_level: self.mip_level,
             origin: self.origin,
