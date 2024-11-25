@@ -1,6 +1,6 @@
 use std::mem::{size_of, ManuallyDrop};
 use std::sync::Arc;
-
+use std::sync::atomic::AtomicBool;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::{rank, Mutex};
@@ -127,7 +127,7 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             compacted_size_buffer,
-            being_built: RwLock::new(rank::BLAS_BEING_BUILT, false),
+            being_built: AtomicBool::new(false),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
         }))
     }

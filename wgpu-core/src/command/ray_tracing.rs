@@ -39,6 +39,7 @@ use std::{
     ops::{Deref, Range},
     sync::{atomic::Ordering, Arc},
 };
+use std::sync::atomic::AtomicBool;
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -81,7 +82,7 @@ impl Global {
         cmd_buf_data: &mut CommandBufferMutable,
     ) -> Result<Arc<Blas>, CompactBlasError> {
         profiling::scope!("CommandEncoder::compact_blas");
-        if *src_blas.being_built.read() {
+        if src_blas.being_built.load(Ordering::Relaxed) {
             return Err(CompactBlasError::BlasBeingBuilt(src_blas.error_ident()));
         }
         if let None = *src_blas.built_index.read() {
@@ -160,7 +161,8 @@ impl Global {
             label: src_blas.label.clone().add(" compacted"),
             tracking_data: TrackingData::new(src_blas.device.tracker_indices.blas_s.clone()),
             compacted_size_buffer: None,
-            being_built: RwLock::new(rank::BLAS_BEING_BUILT, false),
+            // technically compaction counts as a build
+            being_built: AtomicBool::new(true),
         };
         blas.size_info.acceleration_structure_size = acc_struct_size;
         log::info!(
@@ -976,7 +978,7 @@ impl CommandBufferMutable {
                 crate::ray_tracing::BlasActionKind::Build(id) => {
                     built.insert(action.blas.tracker_index());
                     *action.blas.built_index.write() = Some(*id);
-                    *action.blas.being_built.write() = false;
+                    action.blas.being_built.store(false, Ordering::Relaxed);
                 }
                 crate::ray_tracing::BlasActionKind::Use => {
                     if !built.contains(&action.blas.tracker_index())
@@ -1465,7 +1467,7 @@ fn build_blas<'a>(
     }
 
     for BlasStore { blas, .. } in blas_storage {
-        *blas.being_built.write() = true;
+        *blas.being_built.write().store(false, Ordering::Relaxed);
     }
 
     if blas_present {

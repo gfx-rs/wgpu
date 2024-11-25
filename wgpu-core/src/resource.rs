@@ -30,6 +30,7 @@ use std::{
     ptr::NonNull,
     sync::Arc,
 };
+use std::sync::atomic::AtomicBool;
 
 /// Information about the wgpu-core resource.
 ///
@@ -1979,7 +1980,7 @@ pub struct Blas {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) compacted_size_buffer: Option<Box<dyn hal::DynBuffer>>,
-    pub(crate) being_built: RwLock<bool>,
+    pub(crate) being_built: AtomicBool,
 }
 
 impl Drop for Blas {
