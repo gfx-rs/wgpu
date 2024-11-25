@@ -45,7 +45,7 @@ pub struct RenderPass<'encoder> {
     pub(crate) encoder_guard: PhantomData<&'encoder ()>,
 }
 
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Drops the lifetime relationship to the parent command encoder, making usage of
     /// the encoder while this pass is recorded a run-time error instead.
     ///
@@ -357,7 +357,7 @@ impl<'encoder> RenderPass<'encoder> {
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// `count` draw calls are issued.
     ///
@@ -411,7 +411,7 @@ impl<'encoder> RenderPass<'encoder> {
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
@@ -499,7 +499,7 @@ impl<'encoder> RenderPass<'encoder> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Set push constant data for subsequent draw calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -552,7 +552,7 @@ impl<'encoder> RenderPass<'encoder> {
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
     ///
@@ -570,7 +570,7 @@ impl<'encoder> RenderPass<'encoder> {
     }
 }
 
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Start a occlusion query on this render pass. It can be ended with
     /// `end_occlusion_query`. Occlusion queries may not be nested.
     pub fn begin_occlusion_query(&mut self, query_index: u32) {
@@ -589,7 +589,7 @@ impl<'encoder> RenderPass<'encoder> {
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {

@@ -59,7 +59,7 @@ pub(super) enum MaybeKnown<T> {
     Computed(Word),
 }
 
-impl<'w> BlockContext<'w> {
+impl BlockContext<'_> {
     /// Emit code to compute the length of a run-time array.
     ///
     /// Given `array`, an expression referring a runtime-sized array, return the

@@ -5,7 +5,7 @@ Generating SPIR-V for ray query operations.
 use super::{Block, BlockContext, Instruction, LocalType, LookupType, NumericType};
 use crate::arena::Handle;
 
-impl<'w> BlockContext<'w> {
+impl BlockContext<'_> {
     pub(super) fn write_ray_query_function(
         &mut self,
         query: Handle<crate::Expression>,

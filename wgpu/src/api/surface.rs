@@ -176,7 +176,7 @@ impl Surface<'_> {
 
 // This custom implementation is required because [`Surface::_surface`] doesn't
 // require [`Debug`](fmt::Debug), which we should not require from the user.
-impl<'window> fmt::Debug for Surface<'window> {
+impl fmt::Debug for Surface<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Surface")
             .field("context", &self.context)

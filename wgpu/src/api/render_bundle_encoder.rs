@@ -220,7 +220,7 @@ impl<'a> RenderBundleEncoder<'a> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'a> RenderBundleEncoder<'a> {
+impl RenderBundleEncoder<'_> {
     /// Set push constant data.
     ///
     /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].

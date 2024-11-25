@@ -2822,7 +2822,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
 
         struct TextureFormatVisitor;
 
-        impl<'de> de::Visitor<'de> for TextureFormatVisitor {
+        impl de::Visitor<'_> for TextureFormatVisitor {
             type Value = TextureFormat;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -5901,8 +5901,8 @@ impl Extent3d {
     pub fn physical_size(&self, format: TextureFormat) -> Self {
         let (block_width, block_height) = format.block_dimensions();
 
-        let width = ((self.width + block_width - 1) / block_width) * block_width;
-        let height = ((self.height + block_height - 1) / block_height) * block_height;
+        let width = self.width.div_ceil(block_width) * block_width;
+        let height = self.height.div_ceil(block_height) * block_height;
 
         Self {
             width,

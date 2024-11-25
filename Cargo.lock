@@ -1742,7 +1742,7 @@ checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
 name = "lock-analyzer"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "anyhow",
  "ron",
@@ -2275,7 +2275,7 @@ checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 
 [[package]]
 name = "player"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "env_logger",
  "log",
@@ -3568,7 +3568,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "arrayvec",
  "cfg_aliases",
@@ -3592,7 +3592,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-benchmark"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "arrayvec",
  "bit-vec",
@@ -3635,7 +3635,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -3666,7 +3666,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -3716,7 +3716,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "anyhow",
  "bitflags 2.6.0",
@@ -3729,7 +3729,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "heck 0.5.0",
  "quote",
@@ -3738,7 +3738,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "23.0.0"
+version = "23.0.1"
 dependencies = [
  "anyhow",
  "arrayvec",

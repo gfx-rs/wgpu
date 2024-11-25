@@ -189,7 +189,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         &'t mut self,
         block: &'t mut crate::Block,
         emitter: &'t mut Emitter,
-    ) -> ExpressionContext<'a, 't, '_>
+    ) -> ExpressionContext<'a, 't, 't>
     where
         'temp: 't,
     {
@@ -215,7 +215,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         &'t mut self,
         block: &'t mut crate::Block,
         emitter: &'t mut Emitter,
-    ) -> ExpressionContext<'a, 't, '_>
+    ) -> ExpressionContext<'a, 't, 't>
     where
         'temp: 't,
     {

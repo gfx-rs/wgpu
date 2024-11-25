@@ -5,7 +5,7 @@ use crate::{
     TypeInner,
 };
 
-impl<'w> BlockContext<'w> {
+impl BlockContext<'_> {
     pub(super) fn write_subgroup_ballot(
         &mut self,
         predicate: &Option<Handle<crate::Expression>>,

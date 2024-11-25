@@ -308,7 +308,7 @@ pub(crate) enum Error<'a> {
     },
 }
 
-impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
+impl From<ConflictingDiagnosticRuleError> for Error<'_> {
     fn from(value: ConflictingDiagnosticRuleError) -> Self {
         Self::DiagnosticDuplicateTriggeringRule(value)
     }
@@ -990,6 +990,7 @@ impl<'a> Error<'a> {
                     )
                     .into(),
                 )],
+                #[allow(irrefutable_let_patterns)]
                 notes: if let EnableExtension::Unimplemented(kind) = kind {
                     vec![format!(
                         concat!(

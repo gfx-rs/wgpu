@@ -79,8 +79,8 @@ pub enum BindingResource<'a> {
     /// resource certain checks take place.
     /// - TLAS must have been built, if not a validation error is generated
     /// - All BLASes that were built into the TLAS must be built before the TLAS, if this was not satisfied and TLAS was
-    /// built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
-    /// safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
+    ///   built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
+    ///   safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
     AccelerationStructure(&'a Tlas),
 }
 #[cfg(send_sync)]
