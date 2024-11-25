@@ -15,7 +15,7 @@ struct AsBuildContext {
 }
 
 impl AsBuildContext {
-    fn new(ctx: &TestingContext) -> Self {
+    fn new(ctx: &TestingContext, additional_blas_flags: AccelerationStructureFlags) -> Self {
         let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
@@ -33,7 +33,7 @@ impl AsBuildContext {
         let blas = ctx.device.create_blas(
             &CreateBlasDescriptor {
                 label: Some("BLAS"),
-                flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+                flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_blas_flags,
                 update_mode: AccelerationStructureUpdateMode::Build,
             },
             BlasGeometrySizeDescriptors::Triangles {
@@ -91,7 +91,7 @@ static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(unbuilt_blas);
 
 fn unbuilt_blas(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::empty());
 
     // Build the TLAS package with an unbuilt BLAS.
     let mut encoder = ctx
@@ -119,7 +119,7 @@ static OUT_OF_ORDER_AS_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(out_of_order_as_build);
 
 fn out_of_order_as_build(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::empty());
 
     //
     // Encode the TLAS build before the BLAS build, but submit them in the right order.
@@ -150,7 +150,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
     // Create a clean `AsBuildContext`
     //
 
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::empty());
 
     //
     // Encode the BLAS build before the TLAS build, but submit them in the wrong order.
@@ -195,7 +195,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     // Create a clean `AsBuildContext`
     //
 
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::empty());
 
     //
     // Build in the right order, then rebuild the BLAS so the TLAS is invalid, then use the TLAS.
@@ -282,4 +282,98 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         },
         None,
     );
+}
+
+#[gpu_test]
+static COMPACT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits().features(
+        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+    ))
+    .run_sync(compact_blas);
+
+fn compact_blas(ctx: TestingContext) {
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::ALLOW_COMPACTION);
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    ctx.queue.submit([
+        encoder_blas.finish(),
+    ]);
+    let mut encoder_compact = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Compact 1"),
+        });
+
+    let _ = encoder_compact.compact_blas(&as_ctx.blas);
+
+    ctx.queue.submit([
+        encoder_compact.finish(),
+    ]);
+}
+
+#[gpu_test]
+static INVALID_COMPACT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits().features(
+        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+    ))
+    .run_sync(invalid_compact_blas);
+
+fn invalid_compact_blas(ctx: TestingContext) {
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::empty());
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    ctx.queue.submit([
+        encoder_blas.finish(),
+    ]);
+    let mut encoder_compact = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Compact 1"),
+        });
+
+    fail(&ctx.device, || { let _ = encoder_compact.compact_blas(&as_ctx.blas); }, None);
+
+    ctx.queue.submit([
+        encoder_compact.finish(),
+    ]);
+
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::ALLOW_COMPACTION);
+
+    let mut encoder_compact = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Compact 1"),
+        });
+
+    fail(&ctx.device, || { let _ = encoder_compact.compact_blas(&as_ctx.blas); }, None);
+
+    ctx.queue.submit([
+        encoder_compact.finish(),
+    ]);
 }

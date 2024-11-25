@@ -227,14 +227,18 @@ impl Global {
                     let id = fid.assign(Fallible::Valid(blas.clone()));
 
                     #[cfg(feature = "trace")]
-                    if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
+                    if let Some(ref mut list) = cmd_buf_data.commands {
                         list.push(crate::device::trace::Command::CompactBlas {
                             blas: blas_id,
                             compacted_blas: id,
                         });
                     }
 
+                    cmd_buf_data.trackers.blas_s.set_single(src_blas);
                     cmd_buf_data.trackers.blas_s.set_single(blas.clone());
+                    if let Some(queue) = device.get_queue() {
+                        queue.pending_writes.lock().insert_blas(&blas);
+                    }
                     let build_command_index = NonZeroU64::new(
                         device
                             .last_acceleration_structure_build_command_index
@@ -1467,7 +1471,7 @@ fn build_blas<'a>(
     }
 
     for BlasStore { blas, .. } in blas_storage {
-        *blas.being_built.write().store(false, Ordering::Relaxed);
+        blas.being_built.store(false, Ordering::Relaxed);
     }
 
     if blas_present {
