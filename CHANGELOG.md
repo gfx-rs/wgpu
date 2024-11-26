@@ -98,6 +98,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 - Fix an issue where `naga` CLI would incorrectly skip the first positional argument when `--stdin-file-path` was specified. By @ErichDonGubler in [#6480](https://github.com/gfx-rs/wgpu/pull/6480).
 - Fix textureNumLevels in the GLSL backend. By @magcius in [#6483](https://github.com/gfx-rs/wgpu/pull/6483).
+- Support 64-bit hex literals and unary operations in constants [#6616](https://github.com/gfx-rs/wgpu/pull/6616).
 - Implement `quantizeToF16()` for WGSL frontend, and WGSL, SPIR-V, HLSL, MSL, and GLSL backends. By @jamienicol in [#6519](https://github.com/gfx-rs/wgpu/pull/6519).
 - Add support for GLSL `usampler*` and `isampler*`. By @DavidPeicho in [#6513](https://github.com/gfx-rs/wgpu/pull/6513).
 
@@ -128,7 +129,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 - Handle query set creation failure as an internal error that loses the `Device`, rather than panicking. By @ErichDonGubler in [#6505](https://github.com/gfx-rs/wgpu/pull/6505).
 - Ensure that `Features::TIMESTAMP_QUERY` is set when using timestamp writes in render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497).
-- Check for device mismatches when beginning render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497). 
+- Check for device mismatches when beginning render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497).
 - Lower `QUERY_SET_MAX_QUERIES` (and enforced limits) from 8192 to 4096 to match WebGPU spec. By @ErichDonGubler in [#6525](https://github.com/gfx-rs/wgpu/pull/6525).
 - Allow non-filterable float on texture bindings never used with samplers when using a derived bind group layout. By @ErichDonGubler in [#6531](https://github.com/gfx-rs/wgpu/pull/6531/).
 - Replace potentially unsound usage of `PreHashedMap` with `FastHashMap`. By @jamienicol in [#6541](https://github.com/gfx-rs/wgpu/pull/6541).
