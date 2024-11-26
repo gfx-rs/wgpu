@@ -31,6 +31,24 @@ pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<BufferId>;
 pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<TextureId>;
 pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<TextureId>;
 
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyBufferInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyBuffer = wgt::TexelCopyBufferInfo<BufferId>;
+
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyTextureInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyTexture = wgt::TexelCopyTextureInfo<TextureId>;
+
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyTextureSourceInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyTextureTagged = wgt::CopyExternalImageDestInfo<TextureId>;
+
 #[derive(Clone, Copy, Debug)]
 pub enum CopySide {
     Source,

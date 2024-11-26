@@ -74,8 +74,13 @@ pub use wgt::{
     COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
+#[allow(deprecated)]
+pub use wgt::{ImageCopyBuffer, ImageCopyTexture, ImageCopyTextureTagged, ImageDataLayout};
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
+#[cfg(any(webgpu, webgl))]
+#[allow(deprecated)]
+pub use wgt::ImageCopyExternalImage;
 #[cfg(any(webgpu, webgl))]
 pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};
 
