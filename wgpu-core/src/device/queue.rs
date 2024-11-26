@@ -1396,6 +1396,7 @@ impl Queue {
         unsafe { self.raw().get_timestamp_period() }
     }
 
+    /// `closure` is guaranteed to be called.
     pub fn on_submitted_work_done(
         &self,
         closure: SubmittedWorkDoneClosure,

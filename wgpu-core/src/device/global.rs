@@ -2083,7 +2083,7 @@ impl Global {
         self.hub.devices.remove(device_id);
     }
 
-    /// This closure will be called exactly once during "lose the device".
+    /// `device_lost_closure` might never be called.
     pub fn device_set_device_lost_closure(
         &self,
         device_id: DeviceId,
@@ -2144,6 +2144,7 @@ impl Global {
         self.hub.queues.remove(queue_id);
     }
 
+    /// `op.callback` is guaranteed to be called.
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
