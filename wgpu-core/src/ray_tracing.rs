@@ -177,6 +177,8 @@ pub enum BuildAccelerationStructureError {
 pub enum ValidateBlasActionsError {
     #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
+    #[error("Blas {0:?} is used for compacting while being built")]
+    BuiltUsedCompacting(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]

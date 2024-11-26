@@ -998,6 +998,11 @@ impl CommandBufferMutable {
         for action in &self.blas_actions {
             match &action.kind {
                 crate::ray_tracing::BlasActionKind::Build(id) => {
+                    if let BlasState::UsedForCompacting = *action.blas.state.lock() {
+                        return Err(ValidateBlasActionsError::BuiltUsedCompacting(
+                            action.blas.error_ident(),
+                        ));
+                    }
                     built.insert(action.blas.tracker_index());
                     *action.blas.built_index.write() = Some(*id);
                     *action.blas.state.lock() = BlasState::Building;

@@ -508,9 +508,10 @@ impl CommandEncoder {
             &mut tlas,
         );
     }
-    /// Creates a new blas and copies (in a compacting way) the contents of the provided blas into the new one (compaction flag must be set).
+    /// Creates a new BLAS and copies (in a compacting way) the contents of the provided blas into the new one (compaction flag must be set).
     ///
-    /// The blas that is being compacted must have been built in a previously submitted command buffer
+    /// The BLAS that is being compacted must have been built in a previously submitted command buffer. Any BLAS that is used for compacting
+    /// may not be rebuilt.
     ///
     /// ***This function is very slow*** and will block until the input blas is built
     pub fn compact_blas(&mut self, blas: &Blas) -> Blas {
