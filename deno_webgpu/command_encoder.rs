@@ -311,7 +311,7 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_buffer(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GpuImageCopyBuffer {
+pub struct GpuTexelCopyBufferInfo {
     buffer: ResourceId,
     offset: u64,
     bytes_per_row: Option<u32>,
@@ -320,7 +320,7 @@ pub struct GpuImageCopyBuffer {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GpuImageCopyTexture {
+pub struct GpuTexelCopyTextureInfo {
     pub texture: ResourceId,
     pub mip_level: u32,
     pub origin: wgpu_types::Origin3d,
@@ -332,8 +332,8 @@ pub struct GpuImageCopyTexture {
 pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
     state: &mut OpState,
     #[smi] command_encoder_rid: ResourceId,
-    #[serde] source: GpuImageCopyBuffer,
-    #[serde] destination: GpuImageCopyTexture,
+    #[serde] source: GpuTexelCopyBufferInfo,
+    #[serde] destination: GpuTexelCopyTextureInfo,
     #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -375,8 +375,8 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
 pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
     state: &mut OpState,
     #[smi] command_encoder_rid: ResourceId,
-    #[serde] source: GpuImageCopyTexture,
-    #[serde] destination: GpuImageCopyBuffer,
+    #[serde] source: GpuTexelCopyTextureInfo,
+    #[serde] destination: GpuTexelCopyBufferInfo,
     #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -418,8 +418,8 @@ pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
 pub fn op_webgpu_command_encoder_copy_texture_to_texture(
     state: &mut OpState,
     #[smi] command_encoder_rid: ResourceId,
-    #[serde] source: GpuImageCopyTexture,
-    #[serde] destination: GpuImageCopyTexture,
+    #[serde] source: GpuTexelCopyTextureInfo,
+    #[serde] destination: GpuTexelCopyTextureInfo,
     #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
