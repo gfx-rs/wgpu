@@ -318,6 +318,39 @@ fn compact_blas(ctx: TestingContext) {
     let _ = encoder_compact.compact_blas(&as_ctx.blas);
 
     ctx.queue.submit([encoder_compact.finish()]);
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::ALLOW_COMPACTION);
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    ctx.queue.submit([encoder_blas.finish()]);
+    let mut encoder_compact = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Compact 1"),
+        });
+
+    let _ = encoder_compact.compact_blas(&as_ctx.blas);
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 2"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    ctx.queue
+        .submit([encoder_compact.finish(), encoder_blas.finish()]);
 }
 
 #[gpu_test]
@@ -382,4 +415,43 @@ fn invalid_compact_blas(ctx: TestingContext) {
     );
 
     ctx.queue.submit([encoder_compact.finish()]);
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::ALLOW_COMPACTION);
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    ctx.queue.submit([encoder_blas.finish()]);
+    let mut encoder_compact = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Compact 1"),
+        });
+
+    let _ = encoder_compact.compact_blas(&as_ctx.blas);
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 2"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue
+                .submit([encoder_blas.finish(), encoder_compact.finish()]);
+        },
+        None,
+    );
 }
