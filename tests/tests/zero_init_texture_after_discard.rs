@@ -177,14 +177,14 @@ impl<'ctx> TestCase<'ctx> {
             let buffer_size = texture.height() * bytes_per_row;
             let data = vec![255; buffer_size as usize];
             ctx.queue.write_texture(
-                ImageCopyTexture {
+                TexelCopyTextureInfo {
                     texture: &texture,
                     mip_level: 0,
                     origin: Origin3d { x: 0, y: 0, z: 0 },
                     aspect: TextureAspect::All,
                 },
                 &data,
-                ImageDataLayout {
+                TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(bytes_per_row),
                     rows_per_image: None,

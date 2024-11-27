@@ -1900,22 +1900,22 @@ class GPUQueue {
   }
 
   /**
-   * @param {GPUImageCopyTexture} destination
+   * @param {GPUTexelCopyTextureInfo} destination
    * @param {BufferSource} data
-   * @param {GPUImageDataLayout} dataLayout
+   * @param {GPUTexelCopyBufferLayout} dataLayout
    * @param {GPUExtent3D} size
    */
   writeTexture(destination, data, dataLayout, size) {
     webidl.assertBranded(this, GPUQueuePrototype);
     const prefix = "Failed to execute 'writeTexture' on 'GPUQueue'";
     webidl.requiredArguments(arguments.length, 4, prefix);
-    destination = webidl.converters.GPUImageCopyTexture(
+    destination = webidl.converters.GPUTexelCopyTextureInfo(
       destination,
       prefix,
       "Argument 1",
     );
     data = webidl.converters.BufferSource(data, prefix, "Argument 2");
-    dataLayout = webidl.converters.GPUImageDataLayout(
+    dataLayout = webidl.converters.GPUTexelCopyBufferLayout(
       dataLayout,
       prefix,
       "Argument 3",
@@ -3279,8 +3279,8 @@ class GPUCommandEncoder {
   }
 
   /**
-   * @param {GPUImageCopyBuffer} source
-   * @param {GPUImageCopyTexture} destination
+   * @param {GPUTexelCopyBufferInfo} source
+   * @param {GPUTexelCopyTextureInfo} destination
    * @param {GPUExtent3D} copySize
    */
   copyBufferToTexture(source, destination, copySize) {
@@ -3288,8 +3288,8 @@ class GPUCommandEncoder {
     const prefix =
       "Failed to execute 'copyBufferToTexture' on 'GPUCommandEncoder'";
     webidl.requiredArguments(arguments.length, 3, prefix);
-    source = webidl.converters.GPUImageCopyBuffer(source, prefix, "Argument 1");
-    destination = webidl.converters.GPUImageCopyTexture(
+    source = webidl.converters.GPUTexelCopyBufferInfo(source, prefix, "Argument 1");
+    destination = webidl.converters.GPUTexelCopyTextureInfo(
       destination,
       prefix,
       "Argument 2",
@@ -3329,8 +3329,8 @@ class GPUCommandEncoder {
   }
 
   /**
-   * @param {GPUImageCopyTexture} source
-   * @param {GPUImageCopyBuffer} destination
+   * @param {GPUTexelCopyTextureInfo} source
+   * @param {GPUTexelCopyBufferInfo} destination
    * @param {GPUExtent3D} copySize
    */
   copyTextureToBuffer(source, destination, copySize) {
@@ -3338,12 +3338,12 @@ class GPUCommandEncoder {
     const prefix =
       "Failed to execute 'copyTextureToBuffer' on 'GPUCommandEncoder'";
     webidl.requiredArguments(arguments.length, 3, prefix);
-    source = webidl.converters.GPUImageCopyTexture(
+    source = webidl.converters.GPUTexelCopyTextureInfo(
       source,
       prefix,
       "Argument 1",
     );
-    destination = webidl.converters.GPUImageCopyBuffer(
+    destination = webidl.converters.GPUTexelCopyBufferInfo(
       destination,
       prefix,
       "Argument 2",
@@ -3380,8 +3380,8 @@ class GPUCommandEncoder {
   }
 
   /**
-   * @param {GPUImageCopyTexture} source
-   * @param {GPUImageCopyTexture} destination
+   * @param {GPUTexelCopyTextureInfo} source
+   * @param {GPUTexelCopyTextureInfo} destination
    * @param {GPUExtent3D} copySize
    */
   copyTextureToTexture(source, destination, copySize) {
@@ -3389,12 +3389,12 @@ class GPUCommandEncoder {
     const prefix =
       "Failed to execute 'copyTextureToTexture' on 'GPUCommandEncoder'";
     webidl.requiredArguments(arguments.length, 3, prefix);
-    source = webidl.converters.GPUImageCopyTexture(
+    source = webidl.converters.GPUTexelCopyTextureInfo(
       source,
       prefix,
       "Argument 1",
     );
-    destination = webidl.converters.GPUImageCopyTexture(
+    destination = webidl.converters.GPUTexelCopyTextureInfo(
       destination,
       prefix,
       "Argument 2",
@@ -6549,8 +6549,8 @@ webidl.converters["GPUCommandEncoderDescriptor"] = webidl
     dictMembersGPUCommandEncoderDescriptor,
   );
 
-// DICTIONARY: GPUImageDataLayout
-const dictMembersGPUImageDataLayout = [
+// DICTIONARY: GPUTexelCopyBufferLayout
+const dictMembersGPUTexelCopyBufferLayout = [
   {
     key: "offset",
     converter: webidl.converters["GPUSize64"],
@@ -6559,23 +6559,23 @@ const dictMembersGPUImageDataLayout = [
   { key: "bytesPerRow", converter: webidl.converters["GPUSize32"] },
   { key: "rowsPerImage", converter: webidl.converters["GPUSize32"] },
 ];
-webidl.converters["GPUImageDataLayout"] = webidl.createDictionaryConverter(
-  "GPUImageDataLayout",
-  dictMembersGPUImageDataLayout,
+webidl.converters["GPUTexelCopyBufferLayout"] = webidl.createDictionaryConverter(
+  "GPUTexelCopyBufferLayout",
+  dictMembersGPUTexelCopyBufferLayout,
 );
 
-// DICTIONARY: GPUImageCopyBuffer
-const dictMembersGPUImageCopyBuffer = [
+// DICTIONARY: GPUTexelCopyBufferInfo
+const dictMembersGPUTexelCopyBufferInfo = [
   {
     key: "buffer",
     converter: webidl.converters["GPUBuffer"],
     required: true,
   },
 ];
-webidl.converters["GPUImageCopyBuffer"] = webidl.createDictionaryConverter(
-  "GPUImageCopyBuffer",
-  dictMembersGPUImageDataLayout,
-  dictMembersGPUImageCopyBuffer,
+webidl.converters["GPUTexelCopyBufferInfo"] = webidl.createDictionaryConverter(
+  "GPUTexelCopyBufferInfo",
+  dictMembersGPUTexelCopyBufferLayout,
+  dictMembersGPUTexelCopyBufferInfo,
 );
 
 // DICTIONARY: GPUOrigin3DDict
@@ -6630,8 +6630,8 @@ webidl.converters["GPUOrigin3D"] = (V, opts) => {
   );
 };
 
-// DICTIONARY: GPUImageCopyTexture
-const dictMembersGPUImageCopyTexture = [
+// DICTIONARY: GPUTexelCopyTextureInfo
+const dictMembersGPUTexelCopyTextureInfo = [
   {
     key: "texture",
     converter: webidl.converters["GPUTexture"],
@@ -6655,9 +6655,9 @@ const dictMembersGPUImageCopyTexture = [
     defaultValue: "all",
   },
 ];
-webidl.converters["GPUImageCopyTexture"] = webidl.createDictionaryConverter(
-  "GPUImageCopyTexture",
-  dictMembersGPUImageCopyTexture,
+webidl.converters["GPUTexelCopyTextureInfo"] = webidl.createDictionaryConverter(
+  "GPUTexelCopyTextureInfo",
+  dictMembersGPUTexelCopyTextureInfo,
 );
 
 // DICTIONARY: GPUOrigin2DDict

@@ -37,23 +37,23 @@ impl Drop for CommandEncoder {
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 
-pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
+pub use wgt::TexelCopyBufferInfo as TexelCopyBufferInfoBase;
 /// View of a buffer which can be used to copy to/from a texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyBuffer`](
+/// Corresponds to [WebGPU `GPUTexelCopyBufferInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
-pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
+pub type TexelCopyBufferInfo<'a> = TexelCopyBufferInfoBase<&'a Buffer>;
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(ImageCopyBuffer<'_>: Send, Sync);
+static_assertions::assert_impl_all!(TexelCopyBufferInfo<'_>: Send, Sync);
 
-pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
+pub use wgt::TexelCopyTextureInfo as TexelCopyTextureInfoBase;
 /// View of a texture which can be used to copy to/from a buffer/texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyTexture`](
+/// Corresponds to [WebGPU `GPUTexelCopyTextureInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
-pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
+pub type TexelCopyTextureInfo<'a> = TexelCopyTextureInfoBase<&'a Texture>;
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
+static_assertions::assert_impl_all!(TexelCopyTextureInfo<'_>: Send, Sync);
 
 use crate::api::blas::{
     BlasBuildEntry, BlasGeometries, BlasTriangleGeometry, DynContextBlasBuildEntry,
@@ -62,16 +62,16 @@ use crate::api::blas::{
 use crate::api::tlas::{
     DynContextTlasBuildEntry, DynContextTlasPackage, TlasBuildEntry, TlasPackage,
 };
-pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
+pub use wgt::CopyExternalImageDestInfo as CopyExternalImageDestInfoBase;
 
 /// View of a texture which can be used to copy to a texture, including
 /// color space and alpha premultiplication information.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// Corresponds to [WebGPU `GPUCopyExternalImageDestInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
-pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
+pub type CopyExternalImageDestInfo<'a> = CopyExternalImageDestInfoBase<&'a Texture>;
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
+static_assertions::assert_impl_all!(TexelCopyTextureInfo<'_>: Send, Sync);
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
@@ -165,8 +165,8 @@ impl CommandEncoder {
     /// Copy data from a buffer to a texture.
     pub fn copy_buffer_to_texture(
         &mut self,
-        source: ImageCopyBuffer<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyBufferInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_buffer_to_texture(
@@ -181,8 +181,8 @@ impl CommandEncoder {
     /// Copy data from a texture to a buffer.
     pub fn copy_texture_to_buffer(
         &mut self,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyBuffer<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyBufferInfo<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_texture_to_buffer(
@@ -203,8 +203,8 @@ impl CommandEncoder {
     /// - Copy would overrun either texture
     pub fn copy_texture_to_texture(
         &mut self,
-        source: ImageCopyTexture<'_>,
-        destination: ImageCopyTexture<'_>,
+        source: TexelCopyTextureInfo<'_>,
+        destination: TexelCopyTextureInfo<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_texture_to_texture(

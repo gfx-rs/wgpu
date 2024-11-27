@@ -61,9 +61,9 @@ impl Texture {
         DynContext::texture_destroy(&*self.context, self.data.as_ref());
     }
 
-    /// Make an `ImageCopyTexture` representing the whole texture.
-    pub fn as_image_copy(&self) -> ImageCopyTexture<'_> {
-        ImageCopyTexture {
+    /// Make an `TexelCopyTextureInfo` representing the whole texture.
+    pub fn as_image_copy(&self) -> TexelCopyTextureInfo<'_> {
+        TexelCopyTextureInfo {
             texture: self,
             mip_level: 0,
             origin: Origin3d::ZERO,

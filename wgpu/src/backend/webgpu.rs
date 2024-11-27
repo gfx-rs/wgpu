@@ -629,7 +629,7 @@ fn map_texture_view_dimension(
     }
 }
 
-fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> webgpu_sys::GpuImageCopyBuffer {
+fn map_buffer_copy_view(view: crate::TexelCopyBufferInfo<'_>) -> webgpu_sys::GpuImageCopyBuffer {
     let buffer: &<ContextWebGpu as crate::Context>::BufferData =
         downcast_ref(view.buffer.data.as_ref());
     let mut mapped = webgpu_sys::GpuImageCopyBuffer::new(&buffer.0.buffer);
@@ -643,7 +643,7 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> webgpu_sys::GpuImag
     mapped
 }
 
-fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> webgpu_sys::GpuImageCopyTexture {
+fn map_texture_copy_view(view: crate::TexelCopyTextureInfo<'_>) -> webgpu_sys::GpuImageCopyTexture {
     let texture: &<ContextWebGpu as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
     let mut mapped = webgpu_sys::GpuImageCopyTexture::new(&texture.0);
@@ -653,7 +653,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> webgpu_sys::GpuIm
 }
 
 fn map_tagged_texture_copy_view(
-    view: crate::ImageCopyTextureTagged<'_>,
+    view: crate::CopyExternalImageDestInfo<'_>,
 ) -> webgpu_sys::GpuImageCopyTextureTagged {
     let texture: &<ContextWebGpu as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
@@ -667,7 +667,7 @@ fn map_tagged_texture_copy_view(
 }
 
 fn map_external_texture_copy_view(
-    view: &crate::ImageCopyExternalImage,
+    view: &crate::CopyExternalImageSourceInfo,
 ) -> webgpu_sys::GpuImageCopyExternalImage {
     let mut mapped = webgpu_sys::GpuImageCopyExternalImage::new(&view.source);
     mapped.origin(&map_origin_2d(view.origin));
@@ -2338,8 +2338,8 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyBuffer<'_>,
-        destination: crate::ImageCopyTexture<'_>,
+        source: crate::TexelCopyBufferInfo<'_>,
+        destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: wgt::Extent3d,
     ) {
         encoder_data
@@ -2354,8 +2354,8 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture<'_>,
-        destination: crate::ImageCopyBuffer<'_>,
+        source: crate::TexelCopyTextureInfo<'_>,
+        destination: crate::TexelCopyBufferInfo<'_>,
         copy_size: wgt::Extent3d,
     ) {
         encoder_data
@@ -2370,8 +2370,8 @@ impl crate::context::Context for ContextWebGpu {
     fn command_encoder_copy_texture_to_texture(
         &self,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture<'_>,
-        destination: crate::ImageCopyTexture<'_>,
+        source: crate::TexelCopyTextureInfo<'_>,
+        destination: crate::TexelCopyTextureInfo<'_>,
         copy_size: wgt::Extent3d,
     ) {
         encoder_data
@@ -2709,9 +2709,9 @@ impl crate::context::Context for ContextWebGpu {
     fn queue_write_texture(
         &self,
         queue_data: &Self::QueueData,
-        texture: crate::ImageCopyTexture<'_>,
+        texture: crate::TexelCopyTextureInfo<'_>,
         data: &[u8],
-        data_layout: wgt::ImageDataLayout,
+        data_layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,
     ) {
         let mut mapped_data_layout = webgpu_sys::GpuImageDataLayout::new();
@@ -2744,8 +2744,8 @@ impl crate::context::Context for ContextWebGpu {
     fn queue_copy_external_image_to_texture(
         &self,
         queue_data: &Self::QueueData,
-        source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged<'_>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<'_>,
         size: wgt::Extent3d,
     ) {
         queue_data
