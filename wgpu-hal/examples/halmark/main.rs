@@ -344,7 +344,7 @@ impl<A: hal::Api> Example<A> {
                 usage: hal::TextureUses::COPY_DST..hal::TextureUses::RESOURCE,
             };
             let copy = hal::BufferTextureCopy {
-                buffer_layout: wgt::ImageDataLayout {
+                buffer_layout: wgt::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4),
                     rows_per_image: None,

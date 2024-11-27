@@ -828,6 +828,7 @@ impl super::PrivateCapabilities {
                 && ((device.supports_family(MTLGPUFamily::Apple8)
                     && device.supports_family(MTLGPUFamily::Mac2))
                     || device.supports_family(MTLGPUFamily::Apple9)),
+            supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
         }
     }
 

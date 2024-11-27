@@ -149,10 +149,6 @@ impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
 
-        if let Some(closure) = self.device_lost_closure.lock().take() {
-            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
-        }
-
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
@@ -3604,7 +3600,7 @@ impl Device {
 
         // 1) Resolve the GPUDevice device.lost promise.
         if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
-            device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
+            device_lost_closure(DeviceLostReason::Unknown, message.to_string());
         }
 
         // 2) Complete any outstanding mapAsync() steps.

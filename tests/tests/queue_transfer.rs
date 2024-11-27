@@ -26,14 +26,14 @@ static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
             &ctx.device,
             || {
                 ctx.queue.write_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d { x: 0, y: 0, z: 1 },
                         aspect: wgpu::TextureAspect::All,
                     },
                     &data,
-                    wgpu::ImageDataLayout {
+                    wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(879161360),
                         //bytes_per_image: 4294967295,

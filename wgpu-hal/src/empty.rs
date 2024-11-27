@@ -349,7 +349,7 @@ impl crate::CommandEncoder for Encoder {
     #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
-        src: &wgt::ImageCopyExternalImage,
+        src: &wgt::CopyExternalImageSourceInfo,
         dst: &Resource,
         dst_premultiplication: bool,
         regions: T,

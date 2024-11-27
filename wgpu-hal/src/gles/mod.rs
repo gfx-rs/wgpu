@@ -909,7 +909,7 @@ enum Command {
     },
     #[cfg(webgl)]
     CopyExternalImageToTexture {
-        src: wgt::ImageCopyExternalImage,
+        src: wgt::CopyExternalImageSourceInfo,
         dst: glow::Texture,
         dst_target: BindTarget,
         dst_format: wgt::TextureFormat,
