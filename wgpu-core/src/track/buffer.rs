@@ -134,10 +134,7 @@ impl BufferUsageScope {
             let index = resource.tracker_index().as_usize();
 
             unsafe {
-                insert_or_merge(
-                    None,
-                    &mut self.state,
-                    &mut self.metadata,
+                self.insert_or_merge(
                     index as _,
                     index,
                     BufferStateProvider::Direct { state },
@@ -170,10 +167,7 @@ impl BufferUsageScope {
             scope.tracker_assert_in_bounds(index);
 
             unsafe {
-                insert_or_merge(
-                    None,
-                    &mut self.state,
-                    &mut self.metadata,
+                self.insert_or_merge(
                     index as u32,
                     index,
                     BufferStateProvider::Indirect {
@@ -208,10 +202,7 @@ impl BufferUsageScope {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            insert_or_merge(
-                None,
-                &mut self.state,
-                &mut self.metadata,
+            self.insert_or_merge(
                 index as _,
                 index,
                 BufferStateProvider::Direct { state: new_state },
@@ -220,6 +211,51 @@ impl BufferUsageScope {
         }
 
         Ok(())
+    }
+
+    /// Does an insertion operation if the index isn't tracked
+    /// in the current metadata, otherwise merges the given state
+    /// with the current state. If the merging would cause
+    /// a conflict, returns that usage conflict.
+    ///
+    /// # Safety
+    ///
+    /// Indexes must be valid indexes into all arrays passed in
+    /// to this function, either directly or via metadata or provider structs.
+    #[inline(always)]
+    unsafe fn insert_or_merge(
+        &mut self,
+        index32: u32,
+        index: usize,
+        state_provider: BufferStateProvider<'_>,
+        metadata_provider: ResourceMetadataProvider<'_, Arc<Buffer>>,
+    ) -> Result<(), ResourceUsageCompatibilityError> {
+        let currently_owned = unsafe { self.metadata.contains_unchecked(index) };
+
+        if !currently_owned {
+            unsafe {
+                insert(
+                    None,
+                    &mut self.state,
+                    &mut self.metadata,
+                    index,
+                    state_provider,
+                    None,
+                    metadata_provider,
+                )
+            };
+            return Ok(());
+        }
+
+        unsafe {
+            merge(
+                &mut self.state,
+                index32,
+                index,
+                state_provider,
+                metadata_provider,
+            )
+        }
     }
 }
 
@@ -641,53 +677,6 @@ impl BufferStateProvider<'_> {
                 *unsafe { state.get_unchecked(index) }
             }
         }
-    }
-}
-
-/// Does an insertion operation if the index isn't tracked
-/// in the current metadata, otherwise merges the given state
-/// with the current state. If the merging would cause
-/// a conflict, returns that usage conflict.
-///
-/// # Safety
-///
-/// Indexes must be valid indexes into all arrays passed in
-/// to this function, either directly or via metadata or provider structs.
-#[inline(always)]
-unsafe fn insert_or_merge(
-    start_states: Option<&mut [BufferUses]>,
-    current_states: &mut [BufferUses],
-    resource_metadata: &mut ResourceMetadata<Arc<Buffer>>,
-    index32: u32,
-    index: usize,
-    state_provider: BufferStateProvider<'_>,
-    metadata_provider: ResourceMetadataProvider<'_, Arc<Buffer>>,
-) -> Result<(), ResourceUsageCompatibilityError> {
-    let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
-
-    if !currently_owned {
-        unsafe {
-            insert(
-                start_states,
-                current_states,
-                resource_metadata,
-                index,
-                state_provider,
-                None,
-                metadata_provider,
-            )
-        };
-        return Ok(());
-    }
-
-    unsafe {
-        merge(
-            current_states,
-            index32,
-            index,
-            state_provider,
-            metadata_provider,
-        )
     }
 }
 
