@@ -28,14 +28,16 @@ impl<T> WeakVec<T> {
     /// no longer have strong references to them.
     pub(crate) fn push(&mut self, value: Weak<T>) {
         if self.inner.len() == self.inner.capacity() {
-            let mut i = 0;
-            while let Some(w) = self.inner.get(i) {
-                if w.strong_count() == 0 {
+            // Iterating backwards has the advantage that we don't do more work than we have to.
+            for i in (0..self.inner.len()).rev() {
+                if self.inner[i].strong_count() == 0 {
                     self.inner.swap_remove(i);
-                } else {
-                    i += 1;
                 }
             }
+
+            // Make sure our capacity is twice the number of live elements.
+            // Leaving some spare capacity ensures that we won't re-scan immediately.
+            self.inner.reserve_exact(self.inner.len());
         }
 
         self.inner.push(value);
