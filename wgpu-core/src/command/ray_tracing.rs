@@ -170,11 +170,11 @@ impl Global {
         unsafe {
             encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
                 usage: hal::AccelerationStructureUses::COPY_SRC
-                    ..hal::AccelerationStructureUses::BUILD_INPUT,
+                    ..hal::AccelerationStructureUses::BUILD_INPUT | hal::AccelerationStructureUses::BUILD_OUTPUT,
             });
             encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
                 usage: hal::AccelerationStructureUses::COPY_DST
-                    ..hal::AccelerationStructureUses::BUILD_INPUT,
+                    ..hal::AccelerationStructureUses::BUILD_INPUT | hal::AccelerationStructureUses::BUILD_OUTPUT,
             });
         }
         Ok(Arc::new(blas))
