@@ -155,7 +155,6 @@ impl Blas {
 }
 
 /// Context version of [BlasTriangleGeometry].
-#[allow(dead_code)]
 pub struct ContextBlasTriangleGeometry<'a> {
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
     pub(crate) vertex_buffer: &'a dispatch::DispatchBuffer,
@@ -174,7 +173,6 @@ pub enum ContextBlasGeometries<'a> {
 }
 
 /// Context version see [BlasBuildEntry].
-#[allow(dead_code)]
 pub struct ContextBlasBuildEntry<'a> {
     pub(crate) blas: &'a dispatch::DispatchBlas,
     pub(crate) geometries: ContextBlasGeometries<'a>,
