@@ -192,7 +192,7 @@ impl super::CommandEncoder {
             if dirty_textures & (1 << texture_index) != 0
                 || slot
                     .sampler_index
-                    .map_or(false, |si| dirty_samplers & (1 << si) != 0)
+                    .is_some_and(|si| dirty_samplers & (1 << si) != 0)
             {
                 let sampler = slot
                     .sampler_index

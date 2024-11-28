@@ -5128,7 +5128,7 @@ template <typename A>
                             AttributeMappingResolved {
                                 ty_name: ty_name.to_string(),
                                 dimension: ty_name.vertex_input_dimension(),
-                                ty_is_int: ty_name.scalar().map_or(false, scalar_is_int),
+                                ty_is_int: ty_name.scalar().is_some_and(scalar_is_int),
                                 name: name.to_string(),
                             },
                         );

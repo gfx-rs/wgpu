@@ -2644,7 +2644,7 @@ impl Device {
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
-            .map_or(false, |map| map.is_empty())
+            .is_some_and(|map| map.is_empty())
         {
             derived_group_layouts.pop();
         }

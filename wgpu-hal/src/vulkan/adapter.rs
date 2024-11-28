@@ -1498,7 +1498,7 @@ impl super::Instance {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
                 None => phd_features
                     .imageless_framebuffer
-                    .map_or(false, |ext| ext.imageless_framebuffer != 0),
+                    .is_some_and(|ext| ext.imageless_framebuffer != 0),
             },
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
@@ -1506,7 +1506,7 @@ impl super::Instance {
                 Some(features) => features.timeline_semaphore == vk::TRUE,
                 None => phd_features
                     .timeline_semaphore
-                    .map_or(false, |ext| ext.timeline_semaphore != 0),
+                    .is_some_and(|ext| ext.timeline_semaphore != 0),
             },
             texture_d24: supports_format(
                 &self.shared.raw,
@@ -1537,7 +1537,7 @@ impl super::Instance {
                 Some(ref f) => f.robust_image_access2 != 0,
                 None => phd_features
                     .image_robustness
-                    .map_or(false, |ext| ext.robust_image_access != 0),
+                    .is_some_and(|ext| ext.robust_image_access != 0),
             },
             robust_buffer_access2: phd_features
                 .robustness2
@@ -1551,9 +1551,7 @@ impl super::Instance {
                 .unwrap_or_default(),
             zero_initialize_workgroup_memory: phd_features
                 .zero_initialize_workgroup_memory
-                .map_or(false, |ext| {
-                    ext.shader_zero_initialize_workgroup_memory == vk::TRUE
-                }),
+                .is_some_and(|ext| ext.shader_zero_initialize_workgroup_memory == vk::TRUE),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(khr::image_format_list::NAME),
             #[cfg(windows)]

@@ -5371,7 +5371,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let parent_decor = self.future_decor.remove(&id);
         let is_storage_buffer = parent_decor
             .as_ref()
-            .map_or(false, |decor| decor.storage_buffer);
+            .is_some_and(|decor| decor.storage_buffer);
 
         self.layouter.update(module.to_ctx()).unwrap();
 
