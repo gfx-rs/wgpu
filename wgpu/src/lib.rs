@@ -16,7 +16,12 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
-#![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
+#![warn(
+    clippy::allow_attributes,
+    missing_docs,
+    rust_2018_idioms,
+    unsafe_op_in_unsafe_fn
+)]
 #![allow(clippy::arc_with_non_send_sync)]
 
 //

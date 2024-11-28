@@ -127,7 +127,7 @@ impl Instance {
     ///
     /// If no backend feature for the active target platform is enabled,
     /// this method will panic, see [`Instance::enabled_backend_features()`].
-    #[allow(unreachable_code)]
+    #[allow(clippy::allow_attributes, unreachable_code)]
     pub fn new(_instance_desc: &InstanceDescriptor) -> Self {
         if Self::enabled_backend_features().is_empty() {
             panic!(
