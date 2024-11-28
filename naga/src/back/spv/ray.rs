@@ -106,23 +106,60 @@ impl BlockContext<'_> {
         &mut self,
         query: Handle<crate::Expression>,
         block: &mut Block,
+        is_committed: bool,
     ) -> spirv::Word {
         let query_id = self.cached[query];
-        let intersection_id = self.writer.get_constant_scalar(crate::Literal::U32(
-            spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as _,
-        ));
+        let intersection_id =
+            self.writer
+                .get_constant_scalar(crate::Literal::U32(if is_committed {
+                    spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR
+                } else {
+                    spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR
+                } as _));
 
         let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
             NumericType::Scalar(crate::Scalar::U32),
         )));
-        let kind_id = self.gen_id();
+        let raw_kind_id = self.gen_id();
         block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionTypeKHR,
             flag_type_id,
-            kind_id,
+            raw_kind_id,
             query_id,
             intersection_id,
         ));
+        let kind_id = if is_committed {
+            // Nothing to do: the IR value matches `spirv::RayQueryCommittedIntersectionType`
+            raw_kind_id
+        } else {
+            // Remap from the candidate kind to IR
+            let condition_id = self.gen_id();
+            let committed_triangle_kind_id = self.writer.get_constant_scalar(crate::Literal::U32(
+                spirv::RayQueryCandidateIntersectionType::RayQueryCandidateIntersectionTriangleKHR
+                    as _,
+            ));
+            block.body.push(Instruction::binary(
+                spirv::Op::IEqual,
+                self.writer.get_bool_type_id(),
+                condition_id,
+                raw_kind_id,
+                committed_triangle_kind_id,
+            ));
+            let kind_id = self.gen_id();
+            block.body.push(Instruction::select(
+                flag_type_id,
+                kind_id,
+                condition_id,
+                self.writer.get_constant_scalar(crate::Literal::U32(
+                    crate::RayQueryIntersection::Triangle as _,
+                )),
+                self.writer.get_constant_scalar(crate::Literal::U32(
+                    crate::RayQueryIntersection::Aabb as _,
+                )),
+            ));
+            kind_id
+        };
+
         let instance_custom_index_id = self.gen_id();
         block.body.push(Instruction::ray_query_get_intersection(
             spirv::Op::RayQueryGetIntersectionInstanceCustomIndexKHR,
@@ -201,6 +238,8 @@ impl BlockContext<'_> {
             query_id,
             intersection_id,
         ));
+        //Note: there is also `OpRayQueryGetIntersectionCandidateAABBOpaqueKHR`,
+        // but it's not a property of an intersection.
 
         let transform_type_id =
             self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Matrix {

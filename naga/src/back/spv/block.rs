@@ -1736,10 +1736,7 @@ impl BlockContext<'_> {
             }
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
             crate::Expression::RayQueryGetIntersection { query, committed } => {
-                if !committed {
-                    return Err(Error::FeatureNotImplemented("candidate intersection"));
-                }
-                self.write_ray_query_get_intersection(query, block)
+                self.write_ray_query_get_intersection(query, block, committed)
             }
         };
 

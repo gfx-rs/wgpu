@@ -2254,14 +2254,14 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
             }
-            crate::Expression::RayQueryGetIntersection { query, committed } => {
+            crate::Expression::RayQueryGetIntersection {
+                query,
+                committed: _,
+            } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
-                if !committed {
-                    unimplemented!()
-                }
                 let ty = context.module.special_types.ray_intersection.unwrap();
                 let type_name = &self.names[&NameKey::Type(ty)];
                 write!(self.out, "{type_name} {{{RAY_QUERY_FUN_MAP_INTERSECTION}(")?;

@@ -15,7 +15,7 @@ let RAY_FLAG_SKIP_AABBS = 0x200u;
 let RAY_QUERY_INTERSECTION_NONE = 0u;
 let RAY_QUERY_INTERSECTION_TRIANGLE = 1u;
 let RAY_QUERY_INTERSECTION_GENERATED = 2u;
-let RAY_QUERY_INTERSECTION_AABB = 4u;
+let RAY_QUERY_INTERSECTION_AABB = 3u;
 
 struct RayDesc {
     flags: u32,
@@ -59,7 +59,6 @@ var acc_struct: acceleration_structure;
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let target_size = textureDimensions(output);
     var color =  vec4<f32>(vec2<f32>(global_id.xy) / vec2<f32>(target_size), 0.0, 1.0);
-
 
 	let pixel_center = vec2<f32>(global_id.xy) + vec2<f32>(0.5);
 	let in_uv = pixel_center/vec2<f32>(target_size.xy);
