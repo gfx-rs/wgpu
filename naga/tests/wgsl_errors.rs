@@ -938,6 +938,7 @@ macro_rules! check_validation {
     }
 }
 
+#[track_caller]
 fn validation_error(
     source: &str,
     caps: naga::valid::Capabilities,

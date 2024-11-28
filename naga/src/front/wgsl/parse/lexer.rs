@@ -1,3 +1,4 @@
+use super::word::{self, Word};
 use super::{number::consume_number, Error, ExpectedToken};
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
@@ -13,7 +14,7 @@ pub enum Token<'a> {
     Paren(char),
     Attribute,
     Number(Result<Number, NumberError>),
-    Word(&'a str),
+    Word(Word<'a>),
     Operation(char),
     LogicalOperation(char),
     ShiftOperation(char),
@@ -160,7 +161,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
         }
         _ if is_word_start(cur) => {
             let (word, rest) = consume_any(input, is_word_part);
-            (Token::Word(word), rest)
+            (Token::Word(Word::Ident(word)), rest)
         }
         _ => (Token::Unknown(cur), chars.as_str()),
     }
@@ -207,15 +208,22 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     last_end_offset: usize,
     #[allow(dead_code)]
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
+
+    /// A pointer to the global read-only WGSL word table.
+    ///
+    /// We cache this here to avoid having to synchronize on the
+    /// `OnceLock` every time we want to look up an identifier.
+    word_table: &'static word::WordTable,
 }
 
 impl<'a> Lexer<'a> {
-    pub(in crate::front::wgsl) const fn new(input: &'a str) -> Self {
+    pub(in crate::front::wgsl) fn new(input: &'a str) -> Self {
         Lexer {
             input,
             source: input,
             last_end_offset: 0,
             enable_extensions: EnableExtensions::empty(),
+            word_table: word::get_table(),
         }
     }
 
@@ -289,11 +297,17 @@ impl<'a> Lexer<'a> {
     fn next_impl(&mut self, generic: bool) -> TokenSpan<'a> {
         let mut start_byte_offset = self.current_byte_offset();
         loop {
-            let (token, rest) = consume_token(self.input, generic);
+            let (mut token, rest) = consume_token(self.input, generic);
             self.input = rest;
             match token {
                 Token::Trivia => start_byte_offset = self.current_byte_offset(),
                 _ => {
+                    // Check if `token` is an id with special meaning.
+                    if let Token::Word(Word::Ident(s)) = token {
+                        if let Some(known) = self.word_table.get(s) {
+                            token = Token::Word(*known);
+                        }
+                    }
                     self.last_end_offset = self.current_byte_offset();
                     return (token, self.span_from(start_byte_offset));
                 }
@@ -354,7 +368,7 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
-            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
+            (Token::Word(word), span) => Self::word_as_ident_with_span(word.as_str(), span),
             other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
         }
     }
@@ -363,7 +377,7 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(&'a str, Span), Error<'a>> {
         match self.peek() {
-            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
+            (Token::Word(word), span) => Self::word_as_ident_with_span(word.as_str(), span),
             other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
         }
     }
@@ -397,7 +411,7 @@ impl<'a> Lexer<'a> {
         self.expect_generic_paren('<')?;
         let pair = match self.next() {
             (Token::Word(word), span) => {
-                conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(span))
+                conv::get_scalar_type(word.as_str()).ok_or(Error::UnknownScalarType(span))
             }
             (_, span) => Err(Error::UnknownScalarType(span)),
         }?;
@@ -413,7 +427,7 @@ impl<'a> Lexer<'a> {
     ) -> Result<(Scalar, Span), Error<'a>> {
         self.expect_generic_paren('<')?;
         let pair = match self.next() {
-            (Token::Word(word), span) => conv::get_scalar_type(word)
+            (Token::Word(word), span) => conv::get_scalar_type(word.as_str())
                 .map(|scalar| (scalar, span))
                 .ok_or(Error::UnknownScalarType(span)),
             (_, span) => Err(Error::UnknownScalarType(span)),
@@ -636,19 +650,19 @@ fn double_floats() {
             Token::Number(Ok(Number::F64(0.0625))),
             Token::Number(Ok(Number::F64(10.0))),
             Token::Number(Ok(Number::AbstractInt(10))),
-            Token::Word("l"),
+            Token::Word(Word::Ident("l")),
         ],
     )
 }
 
 #[test]
 fn test_tokens() {
-    sub_test("id123_OK", &[Token::Word("id123_OK")]);
+    sub_test("id123_OK", &[Token::Word(Word::Ident("id123_OK"))]);
     sub_test(
         "92No",
         &[
             Token::Number(Ok(Number::AbstractInt(92))),
-            Token::Word("No"),
+            Token::Word(Word::Ident("No")),
         ],
     );
     sub_test(
@@ -656,7 +670,7 @@ fn test_tokens() {
         &[
             Token::Number(Ok(Number::U32(2))),
             Token::Number(Ok(Number::AbstractInt(3))),
-            Token::Word("o"),
+            Token::Word(Word::Ident("o")),
         ],
     );
     sub_test(
@@ -664,28 +678,31 @@ fn test_tokens() {
         &[
             Token::Number(Ok(Number::F32(2.4))),
             Token::Number(Ok(Number::AbstractInt(44))),
-            Token::Word("po"),
+            Token::Word(Word::Ident("po")),
         ],
     );
     sub_test(
         "Δέλτα réflexion Кызыл 𐰓𐰏𐰇 朝焼け سلام 검정 שָׁלוֹם गुलाबी փիրուզ",
         &[
-            Token::Word("Δέλτα"),
-            Token::Word("réflexion"),
-            Token::Word("Кызыл"),
-            Token::Word("𐰓𐰏𐰇"),
-            Token::Word("朝焼け"),
-            Token::Word("سلام"),
-            Token::Word("검정"),
-            Token::Word("שָׁלוֹם"),
-            Token::Word("गुलाबी"),
-            Token::Word("փիրուզ"),
+            Token::Word(Word::Ident("Δέλτα")),
+            Token::Word(Word::Ident("réflexion")),
+            Token::Word(Word::Ident("Кызыл")),
+            Token::Word(Word::Ident("𐰓𐰏𐰇")),
+            Token::Word(Word::Ident("朝焼け")),
+            Token::Word(Word::Ident("سلام")),
+            Token::Word(Word::Ident("검정")),
+            Token::Word(Word::Ident("שָׁלוֹם")),
+            Token::Word(Word::Ident("गुलाबी")),
+            Token::Word(Word::Ident("փիրուզ")),
         ],
     );
-    sub_test("æNoø", &[Token::Word("æNoø")]);
-    sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
-    sub_test("No好", &[Token::Word("No好")]);
-    sub_test("_No", &[Token::Word("_No")]);
+    sub_test("æNoø", &[Token::Word(Word::Ident("æNoø"))]);
+    sub_test(
+        "No¾",
+        &[Token::Word(Word::Ident("No")), Token::Unknown('¾')],
+    );
+    sub_test("No好", &[Token::Word(Word::Ident("No好"))]);
+    sub_test("_No", &[Token::Word(Word::Ident("_No"))]);
     sub_test(
         "*/*/***/*//=/*****//",
         &[
@@ -705,11 +722,11 @@ fn test_tokens() {
             Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
             Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
             Token::Number(Ok(Number::AbstractFloat(1.125))),
-            Token::Word("h"),
+            Token::Word(Word::Ident("h")),
             Token::Number(Ok(Number::AbstractFloat(1.125))),
-            Token::Word("H"),
+            Token::Word(Word::Ident("H")),
             Token::Number(Ok(Number::AbstractFloat(1.125))),
-            Token::Word("lf"),
+            Token::Word(Word::Ident("lf")),
         ],
     )
 }
@@ -720,19 +737,19 @@ fn test_variable_decl() {
         "@group(0 ) var< uniform> texture:   texture_multisampled_2d <f32 >;",
         &[
             Token::Attribute,
-            Token::Word("group"),
+            Token::Word(Word::Ident("group")),
             Token::Paren('('),
             Token::Number(Ok(Number::AbstractInt(0))),
             Token::Paren(')'),
-            Token::Word("var"),
+            Token::Word(Word::Var),
             Token::Paren('<'),
-            Token::Word("uniform"),
+            Token::Word(Word::Ident("uniform")),
             Token::Paren('>'),
-            Token::Word("texture"),
+            Token::Word(Word::Ident("texture")),
             Token::Separator(':'),
-            Token::Word("texture_multisampled_2d"),
+            Token::Word(Word::Ident("texture_multisampled_2d")),
             Token::Paren('<'),
-            Token::Word("f32"),
+            Token::Word(Word::Ident("f32")),
             Token::Paren('>'),
             Token::Separator(';'),
         ],
@@ -740,17 +757,17 @@ fn test_variable_decl() {
     sub_test(
         "var<storage,read_write> buffer: array<u32>;",
         &[
-            Token::Word("var"),
+            Token::Word(Word::Var),
             Token::Paren('<'),
-            Token::Word("storage"),
+            Token::Word(Word::Ident("storage")),
             Token::Separator(','),
-            Token::Word("read_write"),
+            Token::Word(Word::Ident("read_write")),
             Token::Paren('>'),
-            Token::Word("buffer"),
+            Token::Word(Word::Ident("buffer")),
             Token::Separator(':'),
-            Token::Word("array"),
+            Token::Word(Word::Ident("array")),
             Token::Paren('<'),
-            Token::Word("u32"),
+            Token::Word(Word::Ident("u32")),
             Token::Paren('>'),
             Token::Separator(';'),
         ],

@@ -10,6 +10,7 @@ use crate::front::wgsl::parse::directive::language_extension::LanguageExtension;
 use crate::front::wgsl::parse::directive::DirectiveKind;
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
+use crate::front::wgsl::parse::word::Word;
 use crate::front::wgsl::Scalar;
 use crate::front::SymbolTable;
 use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span};
@@ -19,6 +20,7 @@ pub mod conv;
 pub mod directive;
 pub mod lexer;
 pub mod number;
+pub mod word;
 
 /// State for constructing an AST expression.
 ///
@@ -289,7 +291,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<ast::SwitchValue<'a>, Error<'a>> {
-        if let Token::Word("default") = lexer.peek().0 {
+        if let Token::Word(Word::Default) = lexer.peek().0 {
             let _ = lexer.next();
             return Ok(ast::SwitchValue::Default);
         }
@@ -672,11 +674,11 @@ impl Parser {
                 self.pop_rule_span(lexer);
                 return Ok(expr);
             }
-            (Token::Word("true"), _) => {
+            (Token::Word(Word::Ident("true")), _) => {
                 let _ = lexer.next();
                 ast::Expression::Literal(ast::Literal::Bool(true))
             }
-            (Token::Word("false"), _) => {
+            (Token::Word(Word::Ident("false")), _) => {
                 let _ = lexer.next();
                 ast::Expression::Literal(ast::Literal::Bool(false))
             }
@@ -693,67 +695,67 @@ impl Parser {
                 })?;
                 ast::Expression::Literal(ast::Literal::Number(num))
             }
-            (Token::Word("RAY_FLAG_NONE"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_NONE")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::empty())
             }
-            (Token::Word("RAY_FLAG_FORCE_OPAQUE"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_FORCE_OPAQUE")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::FORCE_OPAQUE)
             }
-            (Token::Word("RAY_FLAG_FORCE_NO_OPAQUE"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_FORCE_NO_OPAQUE")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::FORCE_NO_OPAQUE)
             }
-            (Token::Word("RAY_FLAG_TERMINATE_ON_FIRST_HIT"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_TERMINATE_ON_FIRST_HIT")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::TERMINATE_ON_FIRST_HIT)
             }
-            (Token::Word("RAY_FLAG_SKIP_CLOSEST_HIT_SHADER"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_SKIP_CLOSEST_HIT_SHADER")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::SKIP_CLOSEST_HIT_SHADER)
             }
-            (Token::Word("RAY_FLAG_CULL_BACK_FACING"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_CULL_BACK_FACING")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::CULL_BACK_FACING)
             }
-            (Token::Word("RAY_FLAG_CULL_FRONT_FACING"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_CULL_FRONT_FACING")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::CULL_FRONT_FACING)
             }
-            (Token::Word("RAY_FLAG_CULL_OPAQUE"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_CULL_OPAQUE")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::CULL_OPAQUE)
             }
-            (Token::Word("RAY_FLAG_CULL_NO_OPAQUE"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_CULL_NO_OPAQUE")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::CULL_NO_OPAQUE)
             }
-            (Token::Word("RAY_FLAG_SKIP_TRIANGLES"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_SKIP_TRIANGLES")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::SKIP_TRIANGLES)
             }
-            (Token::Word("RAY_FLAG_SKIP_AABBS"), _) => {
+            (Token::Word(Word::Ident("RAY_FLAG_SKIP_AABBS")), _) => {
                 let _ = lexer.next();
                 literal_ray_flag(crate::RayFlag::SKIP_AABBS)
             }
-            (Token::Word("RAY_QUERY_INTERSECTION_NONE"), _) => {
+            (Token::Word(Word::Ident("RAY_QUERY_INTERSECTION_NONE")), _) => {
                 let _ = lexer.next();
                 literal_ray_intersection(crate::RayQueryIntersection::None)
             }
-            (Token::Word("RAY_QUERY_INTERSECTION_TRIANGLE"), _) => {
+            (Token::Word(Word::Ident("RAY_QUERY_INTERSECTION_TRIANGLE")), _) => {
                 let _ = lexer.next();
                 literal_ray_intersection(crate::RayQueryIntersection::Triangle)
             }
-            (Token::Word("RAY_QUERY_INTERSECTION_GENERATED"), _) => {
+            (Token::Word(Word::Ident("RAY_QUERY_INTERSECTION_GENERATED")), _) => {
                 let _ = lexer.next();
                 literal_ray_intersection(crate::RayQueryIntersection::Generated)
             }
-            (Token::Word("RAY_QUERY_INTERSECTION_AABB"), _) => {
+            (Token::Word(Word::Ident("RAY_QUERY_INTERSECTION_AABB")), _) => {
                 let _ = lexer.next();
                 literal_ray_intersection(crate::RayQueryIntersection::Aabb)
             }
-            (Token::Word(word), span) => {
+            (Token::Word(Word::Ident(word)), span) => {
                 let start = lexer.start_byte_offset();
                 let _ = lexer.next();
 
@@ -1724,7 +1726,7 @@ impl Parser {
     ) -> Result<(), Error<'a>> {
         let span_start = lexer.start_byte_offset();
         match lexer.peek() {
-            (Token::Word(name), span) => {
+            (Token::Word(Word::Ident(name)), span) => {
                 // A little hack for 2 token lookahead.
                 let cloned = lexer.clone();
                 let _ = lexer.next();
@@ -1765,15 +1767,7 @@ impl Parser {
             }
             (Token::Word(word), _) => {
                 let kind = match word {
-                    "_" => {
-                        let _ = lexer.next();
-                        lexer.expect(Token::Operation('='))?;
-                        let expr = self.general_expression(lexer, ctx)?;
-                        lexer.expect(Token::Separator(';'))?;
-
-                        ast::StatementKind::Phony(expr)
-                    }
-                    "let" => {
+                    Word::Let => {
                         let _ = lexer.next();
                         let name = lexer.next_ident()?;
 
@@ -1795,7 +1789,7 @@ impl Parser {
                             handle,
                         }))
                     }
-                    "const" => {
+                    Word::Const => {
                         let _ = lexer.next();
                         let name = lexer.next_ident()?;
 
@@ -1817,7 +1811,7 @@ impl Parser {
                             handle,
                         }))
                     }
-                    "var" => {
+                    Word::Var => {
                         let _ = lexer.next();
 
                         let name = lexer.next_ident()?;
@@ -1845,7 +1839,7 @@ impl Parser {
                             handle,
                         }))
                     }
-                    "return" => {
+                    Word::Return => {
                         let _ = lexer.next();
                         let value = if lexer.peek().0 != Token::Separator(';') {
                             let handle = self.general_expression(lexer, ctx)?;
@@ -1856,7 +1850,7 @@ impl Parser {
                         lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Return { value }
                     }
-                    "if" => {
+                    Word::If => {
                         let _ = lexer.next();
                         let condition = self.general_expression(lexer, ctx)?;
 
@@ -1865,11 +1859,11 @@ impl Parser {
                         let mut elsif_stack = Vec::new();
                         let mut elseif_span_start = lexer.start_byte_offset();
                         let mut reject = loop {
-                            if !lexer.skip(Token::Word("else")) {
+                            if !lexer.skip(Token::Word(Word::Else)) {
                                 break ast::Block::default();
                             }
 
-                            if !lexer.skip(Token::Word("if")) {
+                            if !lexer.skip(Token::Word(Word::If)) {
                                 // ... else { ... }
                                 break self.block(lexer, ctx, brace_nesting_level)?.0;
                             }
@@ -1905,7 +1899,7 @@ impl Parser {
                             reject,
                         }
                     }
-                    "switch" => {
+                    Word::Switch => {
                         let _ = lexer.next();
                         let selector = self.general_expression(lexer, ctx)?;
                         let brace_span = lexer.expect_span(Token::Paren('{'))?;
@@ -1916,7 +1910,7 @@ impl Parser {
                         loop {
                             // cases + default
                             match lexer.next() {
-                                (Token::Word("case"), _) => {
+                                (Token::Word(Word::Case), _) => {
                                     // parse a list of values
                                     let value = loop {
                                         let value = self.switch_value(lexer, ctx)?;
@@ -1943,7 +1937,7 @@ impl Parser {
                                         fall_through: false,
                                     });
                                 }
-                                (Token::Word("default"), _) => {
+                                (Token::Word(Word::Default), _) => {
                                     lexer.skip(Token::Separator(':'));
                                     let body = self.block(lexer, ctx, brace_nesting_level)?.0;
                                     cases.push(ast::SwitchCase {
@@ -1961,8 +1955,8 @@ impl Parser {
 
                         ast::StatementKind::Switch { selector, cases }
                     }
-                    "loop" => self.r#loop(lexer, ctx, brace_nesting_level)?,
-                    "while" => {
+                    Word::Loop => self.r#loop(lexer, ctx, brace_nesting_level)?,
+                    Word::While => {
                         let _ = lexer.next();
                         let mut body = ast::Block::default();
 
@@ -1995,7 +1989,7 @@ impl Parser {
                             break_if: None,
                         }
                     }
-                    "for" => {
+                    Word::For => {
                         let _ = lexer.next();
                         lexer.expect(Token::Paren('('))?;
 
@@ -2068,31 +2062,31 @@ impl Parser {
                             break_if: None,
                         }
                     }
-                    "break" => {
+                    Word::Break => {
                         let (_, span) = lexer.next();
                         // Check if the next token is an `if`, this indicates
                         // that the user tried to type out a `break if` which
                         // is illegal in this position.
                         let (peeked_token, peeked_span) = lexer.peek();
-                        if let Token::Word("if") = peeked_token {
+                        if let Token::Word(Word::If) = peeked_token {
                             let span = span.until(&peeked_span);
                             return Err(Error::InvalidBreakIf(span));
                         }
                         lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Break
                     }
-                    "continue" => {
+                    Word::Continue => {
                         let _ = lexer.next();
                         lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Continue
                     }
-                    "discard" => {
+                    Word::Discard => {
                         let _ = lexer.next();
                         lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::Kill
                     }
                     // https://www.w3.org/TR/WGSL/#const-assert-statement
-                    "const_assert" => {
+                    Word::ConstAssert => {
                         let _ = lexer.next();
                         // parentheses are optional
                         let paren = lexer.skip(Token::Paren('('));
@@ -2104,6 +2098,14 @@ impl Parser {
                         }
                         lexer.expect(Token::Separator(';'))?;
                         ast::StatementKind::ConstAssert(condition)
+                    }
+                    Word::Underscore => {
+                        let _ = lexer.next();
+                        lexer.expect(Token::Operation('='))?;
+                        let expr = self.general_expression(lexer, ctx)?;
+                        lexer.expect(Token::Separator(';'))?;
+
+                        ast::StatementKind::Phony(expr)
                     }
                     // assignment or a function call
                     _ => {
@@ -2143,7 +2145,7 @@ impl Parser {
         ctx.local_table.push_scope();
 
         loop {
-            if lexer.skip(Token::Word("continuing")) {
+            if lexer.skip(Token::Word(Word::Continuing)) {
                 // Branch for the `continuing` block, this must be
                 // the last thing in the loop body
 
@@ -2152,14 +2154,14 @@ impl Parser {
                 let brace_nesting_level =
                     Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
                 loop {
-                    if lexer.skip(Token::Word("break")) {
+                    if lexer.skip(Token::Word(Word::Break)) {
                         // Branch for the `break if` statement, this statement
                         // has the form `break if <expr>;` and must be the last
                         // statement in a continuing block
 
                         // The break must be followed by an `if` to form
                         // the break if
-                        lexer.expect(Token::Word("if"))?;
+                        lexer.expect(Token::Word(Word::If))?;
 
                         let condition = self.general_expression(lexer, ctx)?;
                         // Set the condition of the break if to the newly parsed
@@ -2509,10 +2511,12 @@ impl Parser {
                 ensure_no_diag_attrs("semicolons", diagnostic_filters)?;
                 None
             }
-            (Token::Word(word), directive_span) if DirectiveKind::from_ident(word).is_some() => {
+            (Token::Word(Word::Ident(word)), directive_span)
+                if DirectiveKind::from_ident(word).is_some() =>
+            {
                 return Err(Error::DirectiveAfterFirstGlobalDecl { directive_span });
             }
-            (Token::Word("struct"), _) => {
+            (Token::Word(Word::Struct), _) => {
                 ensure_no_diag_attrs("`struct`s", diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
@@ -2520,7 +2524,7 @@ impl Parser {
                 let members = self.struct_body(lexer, &mut ctx)?;
                 Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
             }
-            (Token::Word("alias"), _) => {
+            (Token::Word(Word::Alias), _) => {
                 ensure_no_diag_attrs("`alias`es", diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
@@ -2530,7 +2534,7 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
                 Some(ast::GlobalDeclKind::Type(ast::TypeAlias { name, ty }))
             }
-            (Token::Word("const"), _) => {
+            (Token::Word(Word::Const), _) => {
                 ensure_no_diag_attrs("`const`s", diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
@@ -2548,7 +2552,7 @@ impl Parser {
 
                 Some(ast::GlobalDeclKind::Const(ast::Const { name, ty, init }))
             }
-            (Token::Word("override"), _) => {
+            (Token::Word(Word::Override), _) => {
                 ensure_no_diag_attrs("`override`s", diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
@@ -2574,14 +2578,14 @@ impl Parser {
                     init,
                 }))
             }
-            (Token::Word("var"), _) => {
+            (Token::Word(Word::Var), _) => {
                 ensure_no_diag_attrs("`var`s", diagnostic_filters)?;
 
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
                 Some(ast::GlobalDeclKind::Var(var))
             }
-            (Token::Word("fn"), _) => {
+            (Token::Word(Word::Fn), _) => {
                 let diagnostic_filter_leaf = Self::write_diagnostic_filters(
                     &mut out.diagnostic_filters,
                     diagnostic_filters,
@@ -2605,7 +2609,7 @@ impl Parser {
                     ..function
                 }))
             }
-            (Token::Word("const_assert"), _) => {
+            (Token::Word(Word::ConstAssert), _) => {
                 ensure_no_diag_attrs("`const_assert`s", diagnostic_filters)?;
 
                 // parentheses are optional
