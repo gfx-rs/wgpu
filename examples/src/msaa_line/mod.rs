@@ -214,7 +214,7 @@ impl crate::framework::Example for Example {
         }
     }
 
-    #[allow(clippy::single_match)]
+    #[expect(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             WindowEvent::KeyboardInput {

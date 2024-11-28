@@ -47,7 +47,10 @@ impl QueryResults {
     // * compute end
     const NUM_QUERIES: u64 = 8;
 
-    #[allow(clippy::redundant_closure)] // False positive
+    #[expect(
+        clippy::redundant_closure,
+        reason = "false positive for `get_next_slot`, which needs to be used by reference"
+    )]
     fn from_raw_results(timestamps: Vec<u64>, timestamps_inside_passes: bool) -> Self {
         assert_eq!(timestamps.len(), Self::NUM_QUERIES as usize);
 
