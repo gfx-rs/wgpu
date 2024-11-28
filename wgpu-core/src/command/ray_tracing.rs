@@ -1021,6 +1021,7 @@ impl CommandBufferMutable {
                 crate::ray_tracing::BlasActionKind::Compact { build_idx, src } => {
                     *action.blas.built_index.write() = Some(*build_idx);
                     // technically compaction counts as a build
+                    built.insert(action.blas.tracker_index());
                     *action.blas.state.lock() = BlasState::Building;
                     *src.state.lock() = BlasState::None;
                 }
