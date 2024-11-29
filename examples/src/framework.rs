@@ -595,15 +595,15 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
                 cmd_buf.copy_texture_to_buffer(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &dst_texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
-                    wgpu::ImageCopyBuffer {
+                    wgpu::TexelCopyBufferInfo {
                         buffer: &dst_buffer,
-                        layout: wgpu::ImageDataLayout {
+                        layout: wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(params.width * 4),
                             rows_per_image: None,

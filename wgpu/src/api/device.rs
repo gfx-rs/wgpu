@@ -529,7 +529,7 @@ impl Device {
     /// if `sizes` is [BlasGeometrySizeDescriptors::Triangles] then the following must be satisfied
     /// - For every geometry descriptor (for the purposes this is called `geo_desc`) of `sizes.descriptors` the following must be satisfied:
     ///     - `geo_desc.vertex_format` must be within allowed formats (allowed formats for a given feature set
-    /// may be queried with [Features::allowed_vertex_formats_for_blas]).
+    ///       may be queried with [Features::allowed_vertex_formats_for_blas]).
     ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
     ///
     /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE

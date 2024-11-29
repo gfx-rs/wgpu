@@ -13,7 +13,7 @@ use crate::{
     Block, Expression, Statement, SwitchCase, UnaryOperator,
 };
 
-impl<'source> ParsingContext<'source> {
+impl ParsingContext<'_> {
     pub fn peek_parameter_qualifier(&mut self, frontend: &mut Frontend) -> bool {
         self.peek(frontend).map_or(false, |t| match t.value {
             TokenValue::In | TokenValue::Out | TokenValue::InOut | TokenValue::Const => true,

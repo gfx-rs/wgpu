@@ -386,7 +386,7 @@ fn clear_texture_via_buffer_copies(
                     let num_rows = num_rows_left.min(max_rows_per_copy);
 
                     zero_buffer_copy_regions.push(hal::BufferTextureCopy {
-                        buffer_layout: wgt::ImageDataLayout {
+                        buffer_layout: wgt::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(bytes_per_row),
                             rows_per_image: None,

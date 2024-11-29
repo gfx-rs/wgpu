@@ -188,36 +188,6 @@ macro_rules! impl_trackable {
     };
 }
 
-/// The status code provided to the buffer mapping callback.
-///
-/// This is very similar to `BufferAccessResult`, except that this is FFI-friendly.
-#[repr(C)]
-#[derive(Debug)]
-pub enum BufferMapAsyncStatus {
-    /// The Buffer is successfully mapped, `get_mapped_range` can be called.
-    ///
-    /// All other variants of this enum represent failures to map the buffer.
-    Success,
-    /// The buffer is already mapped.
-    ///
-    /// While this is treated as an error, it does not prevent mapped range from being accessed.
-    AlreadyMapped,
-    /// Mapping was already requested.
-    MapAlreadyPending,
-    /// An unknown error.
-    Error,
-    /// The context is Lost.
-    ContextLost,
-    /// The buffer is in an invalid state.
-    Invalid,
-    /// The range isn't fully contained in the buffer.
-    InvalidRange,
-    /// The range isn't properly aligned.
-    InvalidAlignment,
-    /// Incompatible usage flags.
-    InvalidUsageFlags,
-}
-
 #[derive(Debug)]
 pub(crate) enum BufferMapState {
     /// Mapped at creation.
@@ -239,105 +209,23 @@ unsafe impl Send for BufferMapState {}
 #[cfg(send_sync)]
 unsafe impl Sync for BufferMapState {}
 
-#[repr(C)]
-pub struct BufferMapCallbackC {
-    pub callback: unsafe extern "C" fn(status: BufferMapAsyncStatus, user_data: *mut u8),
-    pub user_data: *mut u8,
-}
-
 #[cfg(send_sync)]
-unsafe impl Send for BufferMapCallbackC {}
-
-#[derive(Debug)]
-pub struct BufferMapCallback {
-    // We wrap this so creating the enum in the C variant can be unsafe,
-    // allowing our call function to be safe.
-    inner: BufferMapCallbackInner,
-}
-
-#[cfg(send_sync)]
-type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
+pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
 #[cfg(not(send_sync))]
-type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
+pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
-enum BufferMapCallbackInner {
-    Rust { callback: BufferMapCallbackCallback },
-    C { inner: BufferMapCallbackC },
-}
-
-impl Debug for BufferMapCallbackInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            BufferMapCallbackInner::Rust { callback: _ } => f.debug_struct("Rust").finish(),
-            BufferMapCallbackInner::C { inner: _ } => f.debug_struct("C").finish(),
-        }
-    }
-}
-
-impl BufferMapCallback {
-    pub fn from_rust(callback: BufferMapCallbackCallback) -> Self {
-        Self {
-            inner: BufferMapCallbackInner::Rust { callback },
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The callback pointer must be valid to call with the provided user_data
-    ///   pointer.
-    ///
-    /// - Both pointers must point to valid memory until the callback is
-    ///   invoked, which may happen at an unspecified time.
-    pub unsafe fn from_c(inner: BufferMapCallbackC) -> Self {
-        Self {
-            inner: BufferMapCallbackInner::C { inner },
-        }
-    }
-
-    pub(crate) fn call(self, result: BufferAccessResult) {
-        match self.inner {
-            BufferMapCallbackInner::Rust { callback } => {
-                callback(result);
-            }
-            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            BufferMapCallbackInner::C { inner } => unsafe {
-                let status = match result {
-                    Ok(_) => BufferMapAsyncStatus::Success,
-                    Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
-                    Err(BufferAccessError::InvalidResource(_))
-                    | Err(BufferAccessError::DestroyedResource(_)) => BufferMapAsyncStatus::Invalid,
-                    Err(BufferAccessError::AlreadyMapped) => BufferMapAsyncStatus::AlreadyMapped,
-                    Err(BufferAccessError::MapAlreadyPending) => {
-                        BufferMapAsyncStatus::MapAlreadyPending
-                    }
-                    Err(BufferAccessError::MissingBufferUsage(_)) => {
-                        BufferMapAsyncStatus::InvalidUsageFlags
-                    }
-                    Err(BufferAccessError::UnalignedRange)
-                    | Err(BufferAccessError::UnalignedRangeSize { .. })
-                    | Err(BufferAccessError::UnalignedOffset { .. }) => {
-                        BufferMapAsyncStatus::InvalidAlignment
-                    }
-                    Err(BufferAccessError::OutOfBoundsUnderrun { .. })
-                    | Err(BufferAccessError::OutOfBoundsOverrun { .. })
-                    | Err(BufferAccessError::NegativeRange { .. }) => {
-                        BufferMapAsyncStatus::InvalidRange
-                    }
-                    Err(BufferAccessError::Failed)
-                    | Err(BufferAccessError::NotMapped)
-                    | Err(BufferAccessError::MapAborted) => BufferMapAsyncStatus::Error,
-                };
-
-                (inner.callback)(status, inner.user_data);
-            },
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct BufferMapOperation {
     pub host: HostMap,
     pub callback: Option<BufferMapCallback>,
+}
+
+impl Debug for BufferMapOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BufferMapOperation")
+            .field("host", &self.host)
+            .field("callback", &self.callback.as_ref().map(|_| "?"))
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -503,7 +391,7 @@ impl Buffer {
     pub(crate) fn try_raw<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&dyn hal::DynBuffer, DestroyedResourceError> {
+    ) -> Result<&'a dyn hal::DynBuffer, DestroyedResourceError> {
         self.raw
             .get(guard)
             .map(|raw| raw.as_ref())
@@ -637,7 +525,7 @@ impl Buffer {
             // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
             let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
             if let Some(callback) = operation.callback.take() {
-                callback.call(status);
+                callback(status);
             }
             0
         };
@@ -711,7 +599,7 @@ impl Buffer {
             buffer_id,
         )? {
             if let Some(callback) = operation.callback.take() {
-                callback.call(status);
+                callback(status);
             }
         }
 
@@ -2076,7 +1964,7 @@ impl Drop for Tlas {
 }
 
 impl AccelerationStructure for Tlas {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&dyn hal::DynAccelerationStructure> {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
         Some(self.raw.get(guard)?.as_ref())
     }
 }

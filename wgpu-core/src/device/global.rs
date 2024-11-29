@@ -8,7 +8,7 @@ use crate::{
     },
     command::{self, CommandBuffer},
     conv,
-    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
+    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -2083,8 +2083,7 @@ impl Global {
         self.hub.devices.remove(device_id);
     }
 
-    // This closure will be called exactly once during "lose the device",
-    // or when it is replaced.
+    /// `device_lost_closure` might never be called.
     pub fn device_set_device_lost_closure(
         &self,
         device_id: DeviceId,
@@ -2092,22 +2091,10 @@ impl Global {
     ) {
         let device = self.hub.devices.get(device_id);
 
-        let old_device_lost_closure = device
+        device
             .device_lost_closure
             .lock()
             .replace(device_lost_closure);
-
-        if let Some(old_device_lost_closure) = old_device_lost_closure {
-            old_device_lost_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-        }
-    }
-
-    pub fn device_unregister_device_lost_closure(&self, device_id: DeviceId) {
-        let device = self.hub.devices.get(device_id);
-        let closure = device.device_lost_closure.lock().take();
-        if let Some(closure) = closure {
-            closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-        }
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {
@@ -2157,6 +2144,7 @@ impl Global {
         self.hub.queues.remove(queue_id);
     }
 
+    /// `op.callback` is guaranteed to be called.
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
@@ -2178,7 +2166,7 @@ impl Global {
             Ok(submission_index) => Ok(submission_index),
             Err((mut operation, err)) => {
                 if let Some(callback) = operation.callback.take() {
-                    callback.call(Err(err.clone()));
+                    callback(Err(err.clone()));
                 }
                 log::error!("Buffer::map_async error: {err}");
                 Err(err)

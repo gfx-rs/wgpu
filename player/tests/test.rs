@@ -144,9 +144,7 @@ impl Test<'_> {
                     Some(expect.data.len() as u64),
                     wgc::resource::BufferMapOperation {
                         host: wgc::device::HostMap::Read,
-                        callback: Some(wgc::resource::BufferMapCallback::from_rust(Box::new(
-                            map_callback,
-                        ))),
+                        callback: Some(Box::new(map_callback)),
                     },
                 )
                 .unwrap();

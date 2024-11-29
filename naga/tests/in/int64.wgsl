@@ -41,7 +41,7 @@ var<storage, read_write> output_arrays: StorageCompatible;
 fn int64_function(x: i64) -> i64 {
    var val: i64 = i64(constant_variable);
    // A number too big for i32
-   val += 31li - 1002003004005006li;
+   val += 31li - 1002003004005006li + -0x7fffffffffffffffli;
    // Constructing an i64 from an AbstractInt
    val += val + i64(5);
    // Constructing a i64 from other types and other types from u64.
@@ -89,8 +89,8 @@ fn int64_function(x: i64) -> i64 {
 
 fn uint64_function(x: u64) -> u64 {
    var val: u64 = u64(constant_variable);
-   // A number too big for u32
-   val += 31lu + 1002003004005006lu;
+   // Numbers too big for u32 (u64::MAX)
+   val += 31lu + 18446744073709551615lu - 0xfffffffffffffffflu;
    // Constructing a u64 from an AbstractInt
    val += val + u64(5);
    // Constructing a u64 from other types and other types from u64.

@@ -1,7 +1,7 @@
 /*
 let RAY_FLAG_NONE = 0x00u;
-let RAY_FLAG_OPAQUE = 0x01u;
-let RAY_FLAG_NO_OPAQUE = 0x02u;
+let RAY_FLAG_FORCE_OPAQUE = 0x01u;
+let RAY_FLAG_FORCE_NO_OPAQUE = 0x02u;
 let RAY_FLAG_TERMINATE_ON_FIRST_HIT = 0x04u;
 let RAY_FLAG_SKIP_CLOSEST_HIT_SHADER = 0x08u;
 let RAY_FLAG_CULL_BACK_FACING = 0x10u;
@@ -14,7 +14,7 @@ let RAY_FLAG_SKIP_AABBS = 0x200u;
 let RAY_QUERY_INTERSECTION_NONE = 0u;
 let RAY_QUERY_INTERSECTION_TRIANGLE = 1u;
 let RAY_QUERY_INTERSECTION_GENERATED = 2u;
-let RAY_QUERY_INTERSECTION_AABB = 4u;
+let RAY_QUERY_INTERSECTION_AABB = 3u;
 
 struct RayDesc {
     flags: u32,
@@ -77,4 +77,15 @@ fn main() {
 
     output.visible = u32(intersection.kind == RAY_QUERY_INTERSECTION_NONE);
     output.normal = get_torus_normal(dir * intersection.t, intersection);
+}
+
+@compute @workgroup_size(1)
+fn main_candidate() {
+    let pos = vec3<f32>(0.0);
+    let dir = vec3<f32>(0.0, 1.0, 0.0);
+
+    var rq: ray_query;
+    rayQueryInitialize(&rq, acc_struct, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, pos, dir));
+    let intersection = rayQueryGetCandidateIntersection(&rq);
+    output.visible = u32(intersection.kind == RAY_QUERY_INTERSECTION_AABB);
 }

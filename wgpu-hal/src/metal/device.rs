@@ -1326,9 +1326,15 @@ impl crate::Device for super::Device {
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         self.counters.fences.add(1);
+        let shared_event = if self.shared.private_caps.supports_shared_event {
+            Some(self.shared.device.lock().new_shared_event())
+        } else {
+            None
+        };
         Ok(super::Fence {
             completed_value: Arc::new(atomic::AtomicU64::new(0)),
             pending_command_buffers: Vec::new(),
+            shared_event,
         })
     }
 

@@ -79,13 +79,13 @@ impl DerefMut for QueueWriteBufferView<'_> {
     }
 }
 
-impl<'a> AsMut<[u8]> for QueueWriteBufferView<'a> {
+impl AsMut<[u8]> for QueueWriteBufferView<'_> {
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl<'a> Drop for QueueWriteBufferView<'a> {
+impl Drop for QueueWriteBufferView<'_> {
     fn drop(&mut self) {
         DynContext::queue_write_staging_buffer(
             &*self.queue.context,
@@ -207,9 +207,9 @@ impl Queue {
     /// caller may discard it any time after this call completes.
     pub fn write_texture(
         &self,
-        texture: ImageCopyTexture<'_>,
+        texture: TexelCopyTextureInfo<'_>,
         data: &[u8],
-        data_layout: ImageDataLayout,
+        data_layout: TexelCopyBufferLayout,
         size: Extent3d,
     ) {
         DynContext::queue_write_texture(
@@ -226,8 +226,8 @@ impl Queue {
     #[cfg(any(webgpu, webgl))]
     pub fn copy_external_image_to_texture(
         &self,
-        source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged<'_>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<'_>,
         size: Extent3d,
     ) {
         DynContext::queue_copy_external_image_to_texture(

@@ -655,6 +655,14 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
         self.push_rule_span(Rule::PrimaryExpr, lexer);
+        const fn literal_ray_flag<'b>(flag: crate::RayFlag) -> ast::Expression<'b> {
+            ast::Expression::Literal(ast::Literal::Number(Number::U32(flag.bits())))
+        }
+        const fn literal_ray_intersection<'b>(
+            intersection: crate::RayQueryIntersection,
+        ) -> ast::Expression<'b> {
+            ast::Expression::Literal(ast::Literal::Number(Number::U32(intersection as u32)))
+        }
 
         let expr = match lexer.peek() {
             (Token::Paren('('), _) => {
@@ -687,15 +695,63 @@ impl Parser {
             }
             (Token::Word("RAY_FLAG_NONE"), _) => {
                 let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Number(Number::U32(0)))
+                literal_ray_flag(crate::RayFlag::empty())
+            }
+            (Token::Word("RAY_FLAG_FORCE_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::FORCE_OPAQUE)
+            }
+            (Token::Word("RAY_FLAG_FORCE_NO_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::FORCE_NO_OPAQUE)
             }
             (Token::Word("RAY_FLAG_TERMINATE_ON_FIRST_HIT"), _) => {
                 let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Number(Number::U32(4)))
+                literal_ray_flag(crate::RayFlag::TERMINATE_ON_FIRST_HIT)
+            }
+            (Token::Word("RAY_FLAG_SKIP_CLOSEST_HIT_SHADER"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::SKIP_CLOSEST_HIT_SHADER)
+            }
+            (Token::Word("RAY_FLAG_CULL_BACK_FACING"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_BACK_FACING)
+            }
+            (Token::Word("RAY_FLAG_CULL_FRONT_FACING"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_FRONT_FACING)
+            }
+            (Token::Word("RAY_FLAG_CULL_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_OPAQUE)
+            }
+            (Token::Word("RAY_FLAG_CULL_NO_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_NO_OPAQUE)
+            }
+            (Token::Word("RAY_FLAG_SKIP_TRIANGLES"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::SKIP_TRIANGLES)
+            }
+            (Token::Word("RAY_FLAG_SKIP_AABBS"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::SKIP_AABBS)
             }
             (Token::Word("RAY_QUERY_INTERSECTION_NONE"), _) => {
                 let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Number(Number::U32(0)))
+                literal_ray_intersection(crate::RayQueryIntersection::None)
+            }
+            (Token::Word("RAY_QUERY_INTERSECTION_TRIANGLE"), _) => {
+                let _ = lexer.next();
+                literal_ray_intersection(crate::RayQueryIntersection::Triangle)
+            }
+            (Token::Word("RAY_QUERY_INTERSECTION_GENERATED"), _) => {
+                let _ = lexer.next();
+                literal_ray_intersection(crate::RayQueryIntersection::Generated)
+            }
+            (Token::Word("RAY_QUERY_INTERSECTION_AABB"), _) => {
+                let _ = lexer.next();
+                literal_ray_intersection(crate::RayQueryIntersection::Aabb)
             }
             (Token::Word(word), span) => {
                 let start = lexer.start_byte_offset();
