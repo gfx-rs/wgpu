@@ -147,7 +147,7 @@ impl Drop for DisplayOwner {
         match self.display {
             DisplayRef::X11(ptr) => unsafe {
                 let func: libloading::Symbol<XCloseDisplayFun> =
-                    self.library.get(b"XCloseDisplay\0").unwrap();
+                    self.library.get(c"XCloseDisplay".to_bytes()).unwrap();
                 func(ptr.as_ptr());
             },
             DisplayRef::Wayland => {}
@@ -159,7 +159,8 @@ fn open_x_display() -> Option<DisplayOwner> {
     log::debug!("Loading X11 library to get the current display");
     unsafe {
         let library = find_library(&["libX11.so.6", "libX11.so"])?;
-        let func: libloading::Symbol<XOpenDisplayFun> = library.get(b"XOpenDisplay\0").unwrap();
+        let func: libloading::Symbol<XOpenDisplayFun> =
+            library.get(c"XOpenDisplay".to_bytes()).unwrap();
         let result = func(ptr::null());
         ptr::NonNull::new(result).map(|ptr| DisplayOwner {
             display: DisplayRef::X11(ptr),
@@ -185,10 +186,12 @@ fn test_wayland_display() -> Option<DisplayOwner> {
     log::debug!("Loading Wayland library to get the current display");
     let library = unsafe {
         let client_library = find_library(&["libwayland-client.so.0", "libwayland-client.so"])?;
-        let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
-            client_library.get(b"wl_display_connect\0").unwrap();
-        let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
-            client_library.get(b"wl_display_disconnect\0").unwrap();
+        let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> = client_library
+            .get(c"wl_display_connect".to_bytes())
+            .unwrap();
+        let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> = client_library
+            .get(c"wl_display_disconnect".to_bytes())
+            .unwrap();
         let display = ptr::NonNull::new(wl_display_connect(ptr::null()))?;
         wl_display_disconnect(display.as_ptr());
         find_library(&["libwayland-egl.so.1", "libwayland-egl.so"])?
@@ -1317,7 +1320,7 @@ impl crate::Surface for Surface {
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
                         let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
-                            unsafe { library.get(b"wl_egl_window_create\0") }.unwrap();
+                            unsafe { library.get(c"wl_egl_window_create".to_bytes()) }.unwrap();
                         let window =
                             unsafe { wl_egl_window_create(handle.surface.as_ptr(), 640, 480) }
                                 .cast();
@@ -1429,7 +1432,7 @@ impl crate::Surface for Surface {
         if let Some(window) = wl_window {
             let library = &self.wsi.display_owner.as_ref().unwrap().library;
             let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
-                unsafe { library.get(b"wl_egl_window_resize\0") }.unwrap();
+                unsafe { library.get(c"wl_egl_window_resize".to_bytes()) }.unwrap();
             unsafe {
                 wl_egl_window_resize(
                     window,
@@ -1501,7 +1504,7 @@ impl crate::Surface for Surface {
                     .expect("unsupported window")
                     .library;
                 let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> =
-                    unsafe { library.get(b"wl_egl_window_destroy\0") }.unwrap();
+                    unsafe { library.get(c"wl_egl_window_destroy".to_bytes()) }.unwrap();
                 unsafe { wl_egl_window_destroy(window) };
             }
         }
