@@ -6,6 +6,7 @@ use crate::FastHashMap;
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Word<'a> {
     Ident(&'a str),
+    Bool(bool),
     Underscore,
     Alias,
     Break,
@@ -66,6 +67,7 @@ define_keywords! {
     "default" => Default;
     "discard" => Discard;
     "else" => Else;
+    "false" => (Bool(false));
     "fn" => Fn;
     "for" => For;
     "if" => If;
@@ -75,6 +77,7 @@ define_keywords! {
     "return" => Return;
     "struct" => Struct;
     "switch" => Switch;
+    "true" => (Bool(true));
     "var" => Var;
     "while" => While;
 }

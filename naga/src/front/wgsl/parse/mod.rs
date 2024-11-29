@@ -674,13 +674,9 @@ impl Parser {
                 self.pop_rule_span(lexer);
                 return Ok(expr);
             }
-            (Token::Word(Word::Ident("true")), _) => {
+            (Token::Word(Word::Bool(b)), _) => {
                 let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Bool(true))
-            }
-            (Token::Word(Word::Ident("false")), _) => {
-                let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Bool(false))
+                ast::Expression::Literal(ast::Literal::Bool(b))
             }
             (Token::Number(res), span) => {
                 let _ = lexer.next();
