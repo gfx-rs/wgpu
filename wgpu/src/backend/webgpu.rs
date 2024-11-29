@@ -526,22 +526,31 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
     use webgpu_sys::GpuVertexFormat as vf;
     use wgt::VertexFormat;
     match format {
+        VertexFormat::Uint8 => vf::Uint8,
         VertexFormat::Uint8x2 => vf::Uint8x2,
         VertexFormat::Uint8x4 => vf::Uint8x4,
+        VertexFormat::Sint8 => vf::Sint8,
         VertexFormat::Sint8x2 => vf::Sint8x2,
         VertexFormat::Sint8x4 => vf::Sint8x4,
+        VertexFormat::Unorm8 => vf::Unorm8,
         VertexFormat::Unorm8x2 => vf::Unorm8x2,
         VertexFormat::Unorm8x4 => vf::Unorm8x4,
+        VertexFormat::Snorm8 => vf::Snorm8,
         VertexFormat::Snorm8x2 => vf::Snorm8x2,
         VertexFormat::Snorm8x4 => vf::Snorm8x4,
+        VertexFormat::Uint16 => vf::Uint16,
         VertexFormat::Uint16x2 => vf::Uint16x2,
         VertexFormat::Uint16x4 => vf::Uint16x4,
+        VertexFormat::Sint16 => vf::Sint16,
         VertexFormat::Sint16x2 => vf::Sint16x2,
         VertexFormat::Sint16x4 => vf::Sint16x4,
+        VertexFormat::Unorm16 => vf::Unorm16,
         VertexFormat::Unorm16x2 => vf::Unorm16x2,
         VertexFormat::Unorm16x4 => vf::Unorm16x4,
+        VertexFormat::Snorm16 => vf::Snorm16,
         VertexFormat::Snorm16x2 => vf::Snorm16x2,
         VertexFormat::Snorm16x4 => vf::Snorm16x4,
+        VertexFormat::Float16 => vf::Float16,
         VertexFormat::Float16x2 => vf::Float16x2,
         VertexFormat::Float16x4 => vf::Float16x4,
         VertexFormat::Float32 => vf::Float32,
@@ -557,6 +566,7 @@ fn map_vertex_format(format: wgt::VertexFormat) -> webgpu_sys::GpuVertexFormat {
         VertexFormat::Sint32x3 => vf::Sint32x3,
         VertexFormat::Sint32x4 => vf::Sint32x4,
         VertexFormat::Unorm10_10_10_2 => vf::Unorm1010102,
+        VertexFormat::Unorm8x4Bgra => vf::Unorm8x4Bgra,
         VertexFormat::Float64
         | VertexFormat::Float64x2
         | VertexFormat::Float64x3
