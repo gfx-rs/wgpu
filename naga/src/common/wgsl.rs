@@ -67,3 +67,53 @@ impl StandardFilterableTriggeringRule {
         }
     }
 }
+
+/// A table of all [`RayFlag`] values and their WGSL names.
+///
+/// [`RayFlag`]: crate::RayFlag
+pub static RAYFLAG_NAMES: &[(crate::RayFlag, &str)] = &[
+    (crate::RayFlag::FORCE_OPAQUE, "RAY_FLAG_FORCE_OPAQUE"),
+    (crate::RayFlag::FORCE_NO_OPAQUE, "RAY_FLAG_FORCE_NO_OPAQUE"),
+    (
+        crate::RayFlag::TERMINATE_ON_FIRST_HIT,
+        "RAY_FLAG_TERMINATE_ON_FIRST_HIT",
+    ),
+    (
+        crate::RayFlag::SKIP_CLOSEST_HIT_SHADER,
+        "RAY_FLAG_SKIP_CLOSEST_HIT_SHADER",
+    ),
+    (
+        crate::RayFlag::CULL_BACK_FACING,
+        "RAY_FLAG_CULL_BACK_FACING",
+    ),
+    (
+        crate::RayFlag::CULL_FRONT_FACING,
+        "RAY_FLAG_CULL_FRONT_FACING",
+    ),
+    (crate::RayFlag::CULL_OPAQUE, "RAY_FLAG_CULL_OPAQUE"),
+    (crate::RayFlag::CULL_NO_OPAQUE, "RAY_FLAG_CULL_NO_OPAQUE"),
+    (crate::RayFlag::SKIP_TRIANGLES, "RAY_FLAG_SKIP_TRIANGLES"),
+    (crate::RayFlag::SKIP_AABBS, "RAY_FLAG_SKIP_AABBS"),
+];
+
+/// A table of all [`RayQueryIntersection`] values and their WGSL names.
+///
+/// [`RayQueryIntersection`]: crate::RayQueryIntersection
+pub static RAYQUERYINTERSECTION_NAMES: &[(crate::RayQueryIntersection, &str)] = &[
+    (
+        crate::RayQueryIntersection::None,
+        "RAY_QUERY_INTERSECTION_NONE",
+    ),
+    (
+        crate::RayQueryIntersection::Triangle,
+        "RAY_QUERY_INTERSECTION_TRIANGLE",
+    ),
+    (
+        crate::RayQueryIntersection::Generated,
+        "RAY_QUERY_INTERSECTION_GENERATED",
+    ),
+    (
+        crate::RayQueryIntersection::Aabb,
+        "RAY_QUERY_INTERSECTION_AABB",
+    ),
+];

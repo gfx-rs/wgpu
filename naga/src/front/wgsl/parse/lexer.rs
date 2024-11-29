@@ -161,7 +161,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
         }
         _ if is_word_start(cur) => {
             let (word, rest) = consume_any(input, is_word_part);
-            (Token::Word(Word::Ident(word)), rest)
+            (Token::Word(Word::Ident(word, None)), rest)
         }
         _ => (Token::Unknown(cur), chars.as_str()),
     }
@@ -303,7 +303,7 @@ impl<'a> Lexer<'a> {
                 Token::Trivia => start_byte_offset = self.current_byte_offset(),
                 _ => {
                     // Check if `token` is an id with special meaning.
-                    if let Token::Word(Word::Ident(s)) = token {
+                    if let Token::Word(Word::Ident(s, _)) = token {
                         if let Some(known) = self.word_table.get(s) {
                             token = Token::Word(*known);
                         }
@@ -650,19 +650,19 @@ fn double_floats() {
             Token::Number(Ok(Number::F64(0.0625))),
             Token::Number(Ok(Number::F64(10.0))),
             Token::Number(Ok(Number::AbstractInt(10))),
-            Token::Word(Word::Ident("l")),
+            Token::Word(Word::Ident("l", None)),
         ],
     )
 }
 
 #[test]
 fn test_tokens() {
-    sub_test("id123_OK", &[Token::Word(Word::Ident("id123_OK"))]);
+    sub_test("id123_OK", &[Token::Word(Word::Ident("id123_OK", None))]);
     sub_test(
         "92No",
         &[
             Token::Number(Ok(Number::AbstractInt(92))),
-            Token::Word(Word::Ident("No")),
+            Token::Word(Word::Ident("No", None)),
         ],
     );
     sub_test(
@@ -670,7 +670,7 @@ fn test_tokens() {
         &[
             Token::Number(Ok(Number::U32(2))),
             Token::Number(Ok(Number::AbstractInt(3))),
-            Token::Word(Word::Ident("o")),
+            Token::Word(Word::Ident("o", None)),
         ],
     );
     sub_test(
@@ -678,31 +678,31 @@ fn test_tokens() {
         &[
             Token::Number(Ok(Number::F32(2.4))),
             Token::Number(Ok(Number::AbstractInt(44))),
-            Token::Word(Word::Ident("po")),
+            Token::Word(Word::Ident("po", None)),
         ],
     );
     sub_test(
         "Δέλτα réflexion Кызыл 𐰓𐰏𐰇 朝焼け سلام 검정 שָׁלוֹם गुलाबी փիրուզ",
         &[
-            Token::Word(Word::Ident("Δέλτα")),
-            Token::Word(Word::Ident("réflexion")),
-            Token::Word(Word::Ident("Кызыл")),
-            Token::Word(Word::Ident("𐰓𐰏𐰇")),
-            Token::Word(Word::Ident("朝焼け")),
-            Token::Word(Word::Ident("سلام")),
-            Token::Word(Word::Ident("검정")),
-            Token::Word(Word::Ident("שָׁלוֹם")),
-            Token::Word(Word::Ident("गुलाबी")),
-            Token::Word(Word::Ident("փիրուզ")),
+            Token::Word(Word::Ident("Δέλτα", None)),
+            Token::Word(Word::Ident("réflexion", None)),
+            Token::Word(Word::Ident("Кызыл", None)),
+            Token::Word(Word::Ident("𐰓𐰏𐰇", None)),
+            Token::Word(Word::Ident("朝焼け", None)),
+            Token::Word(Word::Ident("سلام", None)),
+            Token::Word(Word::Ident("검정", None)),
+            Token::Word(Word::Ident("שָׁלוֹם", None)),
+            Token::Word(Word::Ident("गुलाबी", None)),
+            Token::Word(Word::Ident("փիրուզ", None)),
         ],
     );
-    sub_test("æNoø", &[Token::Word(Word::Ident("æNoø"))]);
+    sub_test("æNoø", &[Token::Word(Word::Ident("æNoø", None))]);
     sub_test(
         "No¾",
-        &[Token::Word(Word::Ident("No")), Token::Unknown('¾')],
+        &[Token::Word(Word::Ident("No", None)), Token::Unknown('¾')],
     );
-    sub_test("No好", &[Token::Word(Word::Ident("No好"))]);
-    sub_test("_No", &[Token::Word(Word::Ident("_No"))]);
+    sub_test("No好", &[Token::Word(Word::Ident("No好", None))]);
+    sub_test("_No", &[Token::Word(Word::Ident("_No", None))]);
     sub_test(
         "*/*/***/*//=/*****//",
         &[
@@ -722,11 +722,11 @@ fn test_tokens() {
             Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
             Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
             Token::Number(Ok(Number::AbstractFloat(1.125))),
-            Token::Word(Word::Ident("h")),
+            Token::Word(Word::Ident("h", None)),
             Token::Number(Ok(Number::AbstractFloat(1.125))),
-            Token::Word(Word::Ident("H")),
+            Token::Word(Word::Ident("H", None)),
             Token::Number(Ok(Number::AbstractFloat(1.125))),
-            Token::Word(Word::Ident("lf")),
+            Token::Word(Word::Ident("lf", None)),
         ],
     )
 }
@@ -737,19 +737,19 @@ fn test_variable_decl() {
         "@group(0 ) var< uniform> texture:   texture_multisampled_2d <f32 >;",
         &[
             Token::Attribute,
-            Token::Word(Word::Ident("group")),
+            Token::Word(Word::Ident("group", None)),
             Token::Paren('('),
             Token::Number(Ok(Number::AbstractInt(0))),
             Token::Paren(')'),
             Token::Word(Word::Var),
             Token::Paren('<'),
-            Token::Word(Word::Ident("uniform")),
+            Token::Word(Word::Ident("uniform", None)),
             Token::Paren('>'),
-            Token::Word(Word::Ident("texture")),
+            Token::Word(Word::Ident("texture", None)),
             Token::Separator(':'),
-            Token::Word(Word::Ident("texture_multisampled_2d")),
+            Token::Word(Word::Ident("texture_multisampled_2d", None)),
             Token::Paren('<'),
-            Token::Word(Word::Ident("f32")),
+            Token::Word(Word::Ident("f32", None)),
             Token::Paren('>'),
             Token::Separator(';'),
         ],
@@ -759,15 +759,15 @@ fn test_variable_decl() {
         &[
             Token::Word(Word::Var),
             Token::Paren('<'),
-            Token::Word(Word::Ident("storage")),
+            Token::Word(Word::Ident("storage", None)),
             Token::Separator(','),
-            Token::Word(Word::Ident("read_write")),
+            Token::Word(Word::Ident("read_write", None)),
             Token::Paren('>'),
-            Token::Word(Word::Ident("buffer")),
+            Token::Word(Word::Ident("buffer", None)),
             Token::Separator(':'),
-            Token::Word(Word::Ident("array")),
+            Token::Word(Word::Ident("array", None)),
             Token::Paren('<'),
-            Token::Word(Word::Ident("u32")),
+            Token::Word(Word::Ident("u32", None)),
             Token::Paren('>'),
             Token::Separator(';'),
         ],

@@ -387,7 +387,7 @@ pub enum ConstructorType<'a> {
     Type(Handle<crate::Type>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Literal {
     Bool(bool),
     Number(Number),

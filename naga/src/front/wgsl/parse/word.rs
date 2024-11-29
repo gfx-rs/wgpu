@@ -3,9 +3,19 @@ use std::sync::OnceLock;
 
 use crate::FastHashMap;
 
+use super::{ast, number};
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Word<'a> {
-    Ident(&'a str),
+    /// A WGSL identifier, with a possible global binding.
+    Ident(&'a str, Option<GlobalBinding>),
+
+    /// A boolean, `true` or `false.
+    ///
+    /// This is not simply an `Ident` with a `GlobalBinding`, because
+    /// WGSL defines `true` and `false` as keywords with explicit
+    /// productions in the expression grammar, not as identifiers with
+    /// global bindings.
     Bool(bool),
     Underscore,
     Alias,
@@ -31,6 +41,11 @@ pub enum Word<'a> {
     While,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum GlobalBinding {
+    Literal(ast::Literal),
+}
+
 macro_rules! define_keywords {
     { $( $string:literal => $variant:tt ; )* } => {
         #[allow(unused_parens)]
@@ -41,7 +56,7 @@ macro_rules! define_keywords {
                     $(
                         $variant => $string,
                     )*
-                    Ident(s) => s,
+                    Ident(s, _) => s,
                 }
             }
 
@@ -93,8 +108,22 @@ static KNOWN_WORDS: OnceLock<WordTable> = OnceLock::new();
 
 pub fn get_table() -> &'static WordTable {
     KNOWN_WORDS.get_or_init(|| {
+        use crate::common::wgsl;
+
         let mut map = FastHashMap::default();
+
         Word::insert_keywords(&mut map);
+
+        for (value, name) in wgsl::RAYFLAG_NAMES.iter().cloned() {
+            let lit = ast::Literal::Number(number::Number::U32(value.bits()));
+            map.insert(name, Word::Ident(name, Some(GlobalBinding::Literal(lit))));
+        }
+
+        for (value, name) in wgsl::RAYQUERYINTERSECTION_NAMES.iter().cloned() {
+            let lit = ast::Literal::Number(number::Number::U32(value as u32));
+            map.insert(name, Word::Ident(name, Some(GlobalBinding::Literal(lit))));
+        }
+
         map
     })
 }
