@@ -85,6 +85,7 @@
             stage: Compute,
             early_depth_test: None,
             workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("f"),
                 arguments: [],

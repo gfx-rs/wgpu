@@ -300,6 +300,7 @@
             stage: Vertex,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("index_let_array_1d"),
                 arguments: [

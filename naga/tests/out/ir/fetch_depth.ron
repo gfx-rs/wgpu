@@ -246,6 +246,7 @@
             stage: Compute,
             early_depth_test: None,
             workgroup_size: (32, 1, 1),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("cull::fetch_depth_wrap"),
                 arguments: [],

@@ -25,6 +25,8 @@ pub enum PipelineConstantError {
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
     ValidationError(#[from] WithSpan<ValidationError>),
+    #[error("workgroup_size was overridden to a negative value")]
+    NegativeWorkgroupSize,
 }
 
 /// Replace all overrides in `module` with constants.
@@ -190,6 +192,7 @@ pub fn process_overrides<'a>(
     let mut entry_points = mem::take(&mut module.entry_points);
     for ep in entry_points.iter_mut() {
         process_function(&mut module, &override_map, &mut ep.function)?;
+        process_workgroup_size_override(&mut module, &override_map, ep)?;
     }
     module.entry_points = entry_points;
 
@@ -200,6 +203,52 @@ pub fn process_overrides<'a>(
     let module_info = validator.validate_no_overrides(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
+}
+
+fn process_workgroup_size_override(
+    module: &mut Module,
+    override_map: &HandleVec<Override, Handle<Constant>>,
+    ep: &mut crate::EntryPoint
+) -> Result<(), PipelineConstantError> {
+    match ep.workgroup_size_overrides {
+        None => {}
+        Some(overrides) => {
+            overrides.iter().enumerate().try_for_each(
+                |(i, overridden)| -> Result<(), PipelineConstantError> {
+                    match overridden {
+                        None => Ok(()),
+                        Some(h) => {
+                            let c = module.constants[override_map[*h]].init;
+                            let n = &module.global_expressions[c];
+                            match n {
+                                crate::Expression::Literal(literal) => {
+                                    ep.workgroup_size[i] = match literal {
+                                        crate::Literal::U32(m) => (*m).into(),
+                                        crate::Literal::I32(m) => {
+                                            if *m < 0 {
+                                                Err(PipelineConstantError::NegativeWorkgroupSize)?;
+                                                unreachable!();
+                                            } else {
+                                                *m as u32
+                                            }
+                                        }
+                                        _ => {
+                                            unreachable!();
+                                        }
+                                    };
+                                }
+                                _ => {
+                                    unreachable!();
+                                }
+                            }
+                            Ok(())
+                        }
+                    }
+                }
+            )?;
+        }
+    }
+    Ok(())
 }
 
 /// Add a [`Constant`] to `module` for the override `old_h`.
