@@ -208,28 +208,28 @@ pub fn process_overrides<'a>(
 fn process_workgroup_size_override(
     module: &mut Module,
     override_map: &HandleVec<Override, Handle<Constant>>,
-    ep: &mut crate::EntryPoint
+    ep: &mut crate::EntryPoint,
 ) -> Result<(), PipelineConstantError> {
     match ep.workgroup_size_overrides {
         None => {}
         Some(overrides) => {
             overrides.iter().enumerate().try_for_each(
                 |(i, overridden)| -> Result<(), PipelineConstantError> {
-                    match overridden {
+                    match *overridden {
                         None => Ok(()),
                         Some(h) => {
-                            let c = module.constants[override_map[*h]].init;
+                            let c = module.constants[override_map[h]].init;
                             let n = &module.global_expressions[c];
-                            match n {
+                            match *n {
                                 crate::Expression::Literal(literal) => {
                                     ep.workgroup_size[i] = match literal {
-                                        crate::Literal::U32(m) => (*m).into(),
+                                        crate::Literal::U32(m) => m,
                                         crate::Literal::I32(m) => {
-                                            if *m < 0 {
+                                            if m < 0 {
                                                 Err(PipelineConstantError::NegativeWorkgroupSize)?;
                                                 unreachable!();
                                             } else {
-                                                *m as u32
+                                                m as u32
                                             }
                                         }
                                         _ => {
@@ -244,7 +244,7 @@ fn process_workgroup_size_override(
                             Ok(())
                         }
                     }
-                }
+                },
             )?;
         }
     }

@@ -1325,13 +1325,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 if let Err(Error::ConstantEvaluatorError(ref ty, _)) = err {
                                     match **ty {
                                         crate::proc::ConstantEvaluatorError::OverrideExpr => {
-                                            workgroup_size_overrides_out[i] = Some(
-                                                self.workgroup_size_override(
+                                            workgroup_size_overrides_out[i] =
+                                                Some(self.workgroup_size_override(
                                                     size_expr,
                                                     &mut ctx.as_override(),
                                                     i,
-                                                )?
-                                            );
+                                                )?);
                                         }
                                         _ => {
                                             err?;
@@ -1390,9 +1389,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     span,
                 )
             }),
-            _ => {
-                Err(Error::ExpectedConstExprConcreteIntegerScalar(span))
-            }
+            _ => Err(Error::ExpectedConstExprConcreteIntegerScalar(span)),
         }
     }
 
