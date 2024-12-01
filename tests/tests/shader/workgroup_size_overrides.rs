@@ -20,8 +20,8 @@ static WORKGROUP_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::ne
     .parameters(TestParameters::default().limits(wgpu::Limits::default()))
     .run_async(move |ctx| async move {
         workgroup_size_overrides(&ctx, false, 0, &[2, 0, 0], false).await;
-        workgroup_size_overrides(&ctx,  true, 4, &[2, 3, 0], false).await;
-        workgroup_size_overrides(&ctx,  true, 1, &[0, 0, 0],  true).await;
+        workgroup_size_overrides(&ctx, true, 4, &[2, 3, 0], false).await;
+        workgroup_size_overrides(&ctx, true, 1, &[0, 0, 0], true).await;
     });
 
 async fn workgroup_size_overrides(
@@ -45,20 +45,21 @@ async fn workgroup_size_overrides(
         &ctx.device,
         should_fail,
         || {
-            ctx.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: None,
-                layout: None,
-                module: &module,
-                entry_point: Some("main"),
-                compilation_options: if use_override {
-                    pipeline_options
-                } else {
-                    wgpu::PipelineCompilationOptions::default()
-                },
-                cache: None,
-            })
+            ctx.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: None,
+                    layout: None,
+                    module: &module,
+                    entry_point: Some("main"),
+                    compilation_options: if use_override {
+                        pipeline_options
+                    } else {
+                        wgpu::PipelineCompilationOptions::default()
+                    },
+                    cache: None,
+                })
         },
-        None
+        None,
     );
     if should_fail {
         return;
