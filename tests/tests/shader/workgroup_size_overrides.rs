@@ -19,15 +19,14 @@ const SHADER: &str = r#"
 static WORKGROUP_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().limits(wgpu::Limits::default()))
     .run_async(move |ctx| async move {
-        workgroup_size_overrides(&ctx, false, 0, &[2, 0, 0], false).await;
-        workgroup_size_overrides(&ctx, true, 4, &[2, 3, 0], false).await;
-        workgroup_size_overrides(&ctx, true, 1, &[0, 0, 0], true).await;
+        workgroup_size_overrides(&ctx, None, &[2, 0, 0], false).await;
+        workgroup_size_overrides(&ctx, Some(4), &[2, 3, 0], false).await;
+        workgroup_size_overrides(&ctx, Some(1), &[0, 0, 0], true).await;
     });
 
 async fn workgroup_size_overrides(
     ctx: &TestingContext,
-    use_override: bool,
-    n: u32,
+    n: Option<u32>,
     out: &[u32],
     should_fail: bool,
 ) {
@@ -38,7 +37,7 @@ async fn workgroup_size_overrides(
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(SHADER)),
         });
     let pipeline_options = wgpu::PipelineCompilationOptions {
-        constants: &[("n".to_owned(), n.into())].into(),
+        constants: &[("n".to_owned(), n.unwrap_or(0).into())].into(),
         ..Default::default()
     };
     let compute_pipeline = fail_if(
@@ -51,7 +50,7 @@ async fn workgroup_size_overrides(
                     layout: None,
                     module: &module,
                     entry_point: Some("main"),
-                    compilation_options: if use_override {
+                    compilation_options: if n.is_some() {
                         pipeline_options
                     } else {
                         wgpu::PipelineCompilationOptions::default()
