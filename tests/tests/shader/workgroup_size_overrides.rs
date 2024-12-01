@@ -1,7 +1,7 @@
 use std::mem::size_of_val;
 use wgpu::util::DeviceExt;
 use wgpu::{BufferDescriptor, BufferUsages, Maintain, MapMode};
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 const SHADER: &str = r#"
     override n = 3;
@@ -19,13 +19,18 @@ const SHADER: &str = r#"
 static WORKGROUP_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().limits(wgpu::Limits::default()))
     .run_async(move |ctx| async move {
-        workgroup_size_overrides(&ctx, 0, &[2, 0, 0]).await;
-        workgroup_size_overrides(&ctx, 4, &[2, 3, 0]).await;
-        // Expected to fail during pipeline creation:
-        //workgroup_size_overrides(&ctx, 1, &[0, 0, 0]).await;
+        workgroup_size_overrides(&ctx, false, 0, &[2, 0, 0], false).await;
+        workgroup_size_overrides(&ctx,  true, 4, &[2, 3, 0], false).await;
+        workgroup_size_overrides(&ctx,  true, 1, &[0, 0, 0],  true).await;
     });
 
-async fn workgroup_size_overrides(ctx: &TestingContext, n: u32, out: &[u32]) {
+async fn workgroup_size_overrides(
+    ctx: &TestingContext,
+    use_override: bool,
+    n: u32,
+    out: &[u32],
+    should_fail: bool,
+) {
     let module = ctx
         .device
         .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -36,20 +41,28 @@ async fn workgroup_size_overrides(ctx: &TestingContext, n: u32, out: &[u32]) {
         constants: &[("n".to_owned(), n.into())].into(),
         ..Default::default()
     };
-    let compute_pipeline = ctx
-        .device
-        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: None,
-            module: &module,
-            entry_point: Some("main"),
-            compilation_options: if n == 0 {
-                wgpu::PipelineCompilationOptions::default()
-            } else {
-                pipeline_options
-            },
-            cache: None,
-        });
+    let compute_pipeline = fail_if(
+        &ctx.device,
+        should_fail,
+        || {
+            ctx.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: None,
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: if use_override {
+                    pipeline_options
+                } else {
+                    wgpu::PipelineCompilationOptions::default()
+                },
+                cache: None,
+            })
+        },
+        None
+    );
+    if should_fail {
+        return;
+    }
     let init: &[u32] = &[0, 0, 0];
     let init_size: u64 = size_of_val(init).try_into().unwrap();
     let buffer = DeviceExt::create_buffer_init(
