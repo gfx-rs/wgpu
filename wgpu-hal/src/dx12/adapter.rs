@@ -670,7 +670,7 @@ impl crate::Adapter for super::Adapter {
         );
         // UAVs use srv_uav_format
         caps.set(
-            Tfc::STORAGE,
+            Tfc::STORAGE_WRITE,
             data_srv_uav
                 .Support1
                 .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW),

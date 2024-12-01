@@ -1038,7 +1038,7 @@ impl crate::Adapter for super::Adapter {
         let renderable =
             unfilterable | Tfc::COLOR_ATTACHMENT | sample_count | Tfc::MULTISAMPLE_RESOLVE;
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
-        let storage = base | Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
+        let storage = base | Tfc::STORAGE_WRITE | Tfc::STORAGE_READ_WRITE;
 
         let feature_fn = |f, caps| {
             if self.shared.features.contains(f) {

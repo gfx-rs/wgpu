@@ -512,7 +512,7 @@ impl Adapter {
         );
         allowed_usages.set(
             wgt::TextureUsages::STORAGE_BINDING,
-            caps.contains(Tfc::STORAGE),
+            caps.contains(Tfc::STORAGE_WRITE),
         );
         allowed_usages.set(
             wgt::TextureUsages::RENDER_ATTACHMENT,

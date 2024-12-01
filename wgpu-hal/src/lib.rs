@@ -1544,7 +1544,7 @@ bitflags!(
         const SAMPLED_MINMAX = 1 << 2;
 
         /// Format can be used as storage with write-only access.
-        const STORAGE = 1 << 3;
+        const STORAGE_WRITE = 1 << 3;
         /// Format can be used as storage with read and read/write access.
         const STORAGE_READ_WRITE = 1 << 4;
         /// Format can be used as storage with atomics.
