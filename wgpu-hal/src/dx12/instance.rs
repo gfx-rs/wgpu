@@ -89,7 +89,7 @@ impl crate::Instance for super::Instance {
                             )
                         })?;
 
-                container.map(Arc::new)
+                Some(Arc::new(container))
             }
             wgt::Dx12Compiler::StaticDxc => {
                 let container =
@@ -100,7 +100,7 @@ impl crate::Instance for super::Instance {
                         )
                     })?;
 
-                container.map(Arc::new)
+                Some(Arc::new(container))
             }
             wgt::Dx12Compiler::Fxc => None,
         };
