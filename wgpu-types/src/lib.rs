@@ -5284,7 +5284,8 @@ impl VertexFormat {
             | Self::Float32
             | Self::Uint32
             | Self::Sint32
-            | Self::Unorm10_10_10_2 => 4,
+            | Self::Unorm10_10_10_2
+            | Self::Unorm8x4Bgra => 4,
             Self::Uint16x4
             | Self::Sint16x4
             | Self::Unorm16x4
@@ -5295,11 +5296,7 @@ impl VertexFormat {
             | Self::Sint32x2
             | Self::Float64 => 8,
             Self::Float32x3 | Self::Uint32x3 | Self::Sint32x3 => 12,
-            Self::Float32x4
-            | Self::Uint32x4
-            | Self::Sint32x4
-            | Self::Unorm8x4Bgra
-            | Self::Float64x2 => 16,
+            Self::Float32x4 | Self::Uint32x4 | Self::Sint32x4 | Self::Float64x2 => 16,
             Self::Float64x3 => 24,
             Self::Float64x4 => 32,
         }
