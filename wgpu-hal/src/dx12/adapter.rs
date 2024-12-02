@@ -207,10 +207,10 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_2,
                 Direct3D12::D3D_SHADER_MODEL_6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_0,
-                Direct3D12::D3D_SHADER_MODEL_5_1,
             ]
             .iter();
-            match loop {
+
+            let highest_shader_model = loop {
                 if let Some(&sm) = versions.next() {
                     let mut sm = Direct3D12::D3D12_FEATURE_DATA_SHADER_MODEL {
                         HighestShaderModel: sm,
@@ -229,8 +229,10 @@ impl super::Adapter {
                 } else {
                     break Direct3D12::D3D_SHADER_MODEL_5_1;
                 }
-            } {
-                Direct3D12::D3D_SHADER_MODEL_5_1 => naga::back::hlsl::ShaderModel::V5_1,
+            };
+
+            match highest_shader_model {
+                Direct3D12::D3D_SHADER_MODEL_5_1 => return None, // don't expose this adapter if it doesn't support DXIL
                 Direct3D12::D3D_SHADER_MODEL_6_0 => naga::back::hlsl::ShaderModel::V6_0,
                 Direct3D12::D3D_SHADER_MODEL_6_1 => naga::back::hlsl::ShaderModel::V6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_2 => naga::back::hlsl::ShaderModel::V6_2,
