@@ -7432,10 +7432,10 @@ pub enum Dx12Compiler {
     ///
     /// It also requires WDDM 2.1 (Windows 10 version 1607).
     DynamicDxc {
-        /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
-        dxil_path: Option<PathBuf>,
-        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
-        dxc_path: Option<PathBuf>,
+        /// Path to `dxcompiler.dll`.
+        dxc_path: PathBuf,
+        /// Path to `dxil.dll`.
+        dxil_path: PathBuf,
     },
     /// The statically-linked variant of Dxc.
     /// The `static-dxc` feature is required to use this.

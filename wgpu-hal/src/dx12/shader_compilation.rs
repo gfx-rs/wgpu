@@ -98,19 +98,7 @@ struct DxcLib {
 }
 
 impl DxcLib {
-    fn new_dynamic(
-        lib_path: Option<PathBuf>,
-        lib_name: &'static str,
-    ) -> Result<Self, libloading::Error> {
-        let lib_path = if let Some(lib_path) = lib_path {
-            if lib_path.is_file() {
-                lib_path
-            } else {
-                lib_path.join(lib_name)
-            }
-        } else {
-            PathBuf::from(lib_name)
-        };
+    fn new_dynamic(lib_path: PathBuf) -> Result<Self, libloading::Error> {
         unsafe { crate::dx12::DynLib::new(lib_path).map(|lib| Self { lib }) }
     }
 
@@ -167,13 +155,13 @@ pub(super) enum GetDynamicDXCContainerError {
 }
 
 pub(super) fn get_dynamic_dxc_container(
-    dxc_path: Option<PathBuf>,
-    dxil_path: Option<PathBuf>,
+    dxc_path: PathBuf,
+    dxil_path: PathBuf,
 ) -> Result<DxcContainer, GetDynamicDXCContainerError> {
-    let dxc = DxcLib::new_dynamic(dxc_path, "dxcompiler.dll")
+    let dxc = DxcLib::new_dynamic(dxc_path)
         .map_err(|e| GetDynamicDXCContainerError::FailedToLoad("dxcompiler.dll", e))?;
 
-    let dxil = DxcLib::new_dynamic(dxil_path, "dxil.dll")
+    let dxil = DxcLib::new_dynamic(dxil_path)
         .map_err(|e| GetDynamicDXCContainerError::FailedToLoad("dxil.dll", e))?;
 
     let compiler = dxc.create_instance::<Dxc::IDxcCompiler3>()?;

@@ -240,8 +240,8 @@ impl<A: hal::Api> Example<A> {
             name: "example",
             flags: wgt::InstanceFlags::default(),
             dx12_shader_compiler: wgt::Dx12Compiler::DynamicDxc {
-                dxil_path: None,
-                dxc_path: None,
+                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
+                dxil_path: std::path::PathBuf::from("dxil.dll"),
             },
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
