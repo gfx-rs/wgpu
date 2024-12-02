@@ -223,9 +223,9 @@ struct AttributeBlock4{
   @location(1) float32x2: vec2<f32>,
   @location(2) float32x3: vec3<f32>,
   @location(3) float32x4: vec4<f32>,
-  @location(4) float16: f32,
-  @location(5) float16x2: vec2<f32>,
-  @location(6) float16x4: vec4<f32>,
+  @location(4) float16x2: vec2<f32>,
+  @location(5) float16x4: vec4<f32>,
+  @location(6) float16: f32,
 }
 
 @vertex
@@ -253,8 +253,6 @@ fn vertex_block_4(v_in: AttributeBlock4) -> @builtin(position) vec4<f32>
 
   // Accumulate all float16 into one checksum value.
   var all_float16: f32 = 0.0;
-  all_float16 = accumulate_float16(all_float16, v_in.float16);
-
   all_float16 = accumulate_float16(all_float16, v_in.float16x2.x);
   all_float16 = accumulate_float16(all_float16, v_in.float16x2.y);
 
@@ -262,6 +260,8 @@ fn vertex_block_4(v_in: AttributeBlock4) -> @builtin(position) vec4<f32>
   all_float16 = accumulate_float16(all_float16, v_in.float16x4.y);
   all_float16 = accumulate_float16(all_float16, v_in.float16x4.z);
   all_float16 = accumulate_float16(all_float16, v_in.float16x4.w);
+
+  all_float16 = accumulate_float16(all_float16, v_in.float16);
 
   checksums[index_float16] = f32(all_float16);
 

@@ -68,9 +68,9 @@ async fn vertex_formats_all(ctx: TestingContext) {
         1 => Float32x2,
         2 => Float32x3,
         3 => Float32x4,
-        4 => Float16,
-        5 => Float16x2,
-        6 => Float16x4,
+        4 => Float16x2,
+        5 => Float16x4,
+        6 => Float16,
     ];
 
     let attributes_block_6 = &wgpu::vertex_attr_array![
