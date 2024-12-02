@@ -62,22 +62,31 @@ fn create_depth_stencil_desc(state: &wgt::DepthStencilState) -> metal::DepthSten
 
 const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
     match format {
+        wgt::VertexFormat::Uint8 => naga::back::msl::VertexFormat::Uint8,
         wgt::VertexFormat::Uint8x2 => naga::back::msl::VertexFormat::Uint8x2,
         wgt::VertexFormat::Uint8x4 => naga::back::msl::VertexFormat::Uint8x4,
+        wgt::VertexFormat::Sint8 => naga::back::msl::VertexFormat::Sint8,
         wgt::VertexFormat::Sint8x2 => naga::back::msl::VertexFormat::Sint8x2,
         wgt::VertexFormat::Sint8x4 => naga::back::msl::VertexFormat::Sint8x4,
+        wgt::VertexFormat::Unorm8 => naga::back::msl::VertexFormat::Unorm8,
         wgt::VertexFormat::Unorm8x2 => naga::back::msl::VertexFormat::Unorm8x2,
         wgt::VertexFormat::Unorm8x4 => naga::back::msl::VertexFormat::Unorm8x4,
+        wgt::VertexFormat::Snorm8 => naga::back::msl::VertexFormat::Snorm8,
         wgt::VertexFormat::Snorm8x2 => naga::back::msl::VertexFormat::Snorm8x2,
         wgt::VertexFormat::Snorm8x4 => naga::back::msl::VertexFormat::Snorm8x4,
+        wgt::VertexFormat::Uint16 => naga::back::msl::VertexFormat::Uint16,
         wgt::VertexFormat::Uint16x2 => naga::back::msl::VertexFormat::Uint16x2,
         wgt::VertexFormat::Uint16x4 => naga::back::msl::VertexFormat::Uint16x4,
+        wgt::VertexFormat::Sint16 => naga::back::msl::VertexFormat::Sint16,
         wgt::VertexFormat::Sint16x2 => naga::back::msl::VertexFormat::Sint16x2,
         wgt::VertexFormat::Sint16x4 => naga::back::msl::VertexFormat::Sint16x4,
+        wgt::VertexFormat::Unorm16 => naga::back::msl::VertexFormat::Unorm16,
         wgt::VertexFormat::Unorm16x2 => naga::back::msl::VertexFormat::Unorm16x2,
         wgt::VertexFormat::Unorm16x4 => naga::back::msl::VertexFormat::Unorm16x4,
+        wgt::VertexFormat::Snorm16 => naga::back::msl::VertexFormat::Snorm16,
         wgt::VertexFormat::Snorm16x2 => naga::back::msl::VertexFormat::Snorm16x2,
         wgt::VertexFormat::Snorm16x4 => naga::back::msl::VertexFormat::Snorm16x4,
+        wgt::VertexFormat::Float16 => naga::back::msl::VertexFormat::Float16,
         wgt::VertexFormat::Float16x2 => naga::back::msl::VertexFormat::Float16x2,
         wgt::VertexFormat::Float16x4 => naga::back::msl::VertexFormat::Float16x4,
         wgt::VertexFormat::Float32 => naga::back::msl::VertexFormat::Float32,
@@ -93,7 +102,14 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back:
         wgt::VertexFormat::Sint32x3 => naga::back::msl::VertexFormat::Sint32x3,
         wgt::VertexFormat::Sint32x4 => naga::back::msl::VertexFormat::Sint32x4,
         wgt::VertexFormat::Unorm10_10_10_2 => naga::back::msl::VertexFormat::Unorm10_10_10_2,
-        _ => unimplemented!(),
+        wgt::VertexFormat::Unorm8x4Bgra => naga::back::msl::VertexFormat::Unorm8x4Bgra,
+
+        wgt::VertexFormat::Float64
+        | wgt::VertexFormat::Float64x2
+        | wgt::VertexFormat::Float64x3
+        | wgt::VertexFormat::Float64x4 => {
+            unimplemented!()
+        }
     }
 }
 
