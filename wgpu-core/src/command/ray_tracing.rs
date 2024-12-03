@@ -84,9 +84,6 @@ impl Global {
         if let None = *src_blas.built_index.read() {
             return Err(CompactBlasError::UsedUnbuilt(src_blas.error_ident()));
         }
-        cmd_buf_data
-            .check_recording()
-            .map_err(CompactBlasError::from)?;
         let encoder = cmd_buf_data
             .encoder
             .open(device)
@@ -157,8 +154,7 @@ impl Global {
             label: src_blas.label.clone().add(" compacted"),
             tracking_data: TrackingData::new(src_blas.device.tracker_indices.blas_s.clone()),
             compacted_size_buffer: None,
-            // technically compaction counts as a build, so this happens in validate blas actions
-            state: Mutex::new(rank::BLAS_STATE, BlasState::None),
+            state: Mutex::new(rank::BLAS_STATE, BlasState::Compacted),
         };
         blas.size_info.acceleration_structure_size = acc_struct_size;
         log::info!(
@@ -212,25 +208,38 @@ impl Global {
 
             let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
             let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-            let device = &cmd_buf.device;
-            let DevicePoll {
-                closures,
-                queue_empty: _,
-            } = match Self::poll_single_device(device, Maintain::Wait) {
-                Ok(poll) => poll,
+            let mut cmd_buf_data_guard = match cmd_buf_data.record() {
+                Ok(cmd_buf_data) => cmd_buf_data,
                 Err(err) => break 'err err.into(),
             };
-            // preferably, this small gap between encoders landing and the blas state being
+            let cmd_buf_data = &mut *cmd_buf_data_guard;
+
+            let device = &cmd_buf.device;
+            let Some(queue) = device.get_queue() else {
+                break 'err CompactBlasError::DestroyedQueue;
+            };
+            let lock = queue.lock_life();
+            let index = lock.get_blas_latest_submission_index(&src_blas);
+            drop(lock);
+            if let Some(index) = index {
+                let DevicePoll {
+                    closures,
+                    queue_empty: _,
+                } = match Self::poll_single_device(device, Maintain::WaitForSubmissionIndex(index))
+                {
+                    Ok(poll) => poll,
+                    Err(err) => break 'err err.into(),
+                };
+                closures.fire();
+            }
+            // preferably, this small gap between encoders landing and the queue lifetime trackers being
             // relocked could be removed to prevent a queue.submit occurring here. This isn't
             // very likely and will generate an error anyway (but could be frustrating for a user).
-            let mut state_lock = src_blas.state.lock();
-
-            if let BlasState::Building = *state_lock {
+            if queue.lock_life().blas_being_written(src_blas.as_ref()) {
                 break 'err CompactBlasError::BlasBeingBuilt(src_blas.error_ident());
             }
 
-            closures.fire();
+            let mut state_lock = src_blas.state.lock();
             let raw_device = device.raw();
             return match self.internal_command_encoder_compact_blas(
                 &src_blas,
@@ -271,6 +280,7 @@ impl Global {
                         },
                     });
                     *state_lock = BlasState::UsedForCompacting;
+                    cmd_buf_data_guard.mark_successful();
                     (id, Some(handle), None)
                 }
                 Err(err) => {
@@ -1017,7 +1027,6 @@ impl CommandBufferMutable {
                     }
                     built.insert(action.blas.tracker_index());
                     *action.blas.built_index.write() = Some(*id);
-                    *action.blas.state.lock() = BlasState::Building;
                 }
                 crate::ray_tracing::BlasActionKind::Use => {
                     if !built.contains(&action.blas.tracker_index())
@@ -1032,7 +1041,6 @@ impl CommandBufferMutable {
                     *action.blas.built_index.write() = Some(*build_idx);
                     // technically compaction counts as a build
                     built.insert(action.blas.tracker_index());
-                    *action.blas.state.lock() = BlasState::Building;
                     *src.state.lock() = BlasState::None;
                 }
             }
@@ -1105,6 +1113,13 @@ fn iter_blas<'a>(
             .get(entry.blas_id)
             .get()
             .map_err(|_| BuildAccelerationStructureError::InvalidBlasId)?;
+
+        if let BlasState::Compacted = *blas.state.lock() {
+            return Err(BuildAccelerationStructureError::BlasCompacted(
+                blas.error_ident(),
+            ));
+        }
+
         cmd_buf_data.trackers.blas_s.set_single(blas.clone());
         if let Some(queue) = device.get_queue() {
             queue.pending_writes.lock().insert_blas(&blas);

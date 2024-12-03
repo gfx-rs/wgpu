@@ -425,8 +425,6 @@ fn invalid_compact_blas(ctx: TestingContext) {
         None,
     );
 
-    ctx.queue.submit([encoder_compact.finish()]);
-
     //
     // Create a clean `AsBuildContext`
     //
@@ -447,7 +445,6 @@ fn invalid_compact_blas(ctx: TestingContext) {
         None,
     );
 
-    ctx.queue.submit([encoder_compact.finish()]);
     //
     // Create a clean `AsBuildContext`
     //
@@ -484,6 +481,31 @@ fn invalid_compact_blas(ctx: TestingContext) {
         || {
             ctx.queue
                 .submit([encoder_blas.finish(), encoder_compact.finish()]);
+        },
+        None,
+    );
+
+    let mut encoder_compact = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Compact 4"),
+        });
+
+    let blas = encoder_compact.compact_blas(&as_ctx.blas);
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 4"),
+        });
+
+    let mut entry = as_ctx.blas_build_entry();
+    entry.blas = &blas;
+
+    fail(
+        &ctx.device,
+        || {
+            encoder_blas.build_acceleration_structures([&entry], []);
         },
         None,
     );

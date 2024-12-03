@@ -69,6 +69,8 @@ pub enum CompactBlasError {
     BlasBeingBuilt(ResourceErrorIdent),
     #[error("Blas {0:?} is used before it is build")]
     UsedUnbuilt(ResourceErrorIdent),
+    #[error("Queue is destroyed")]
+    DestroyedQueue,
     #[error("Unimplemented Compact Blas error: this error is not yet implemented")]
     Unimplemented,
 }
@@ -171,13 +173,16 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} is being compacted")]
     BlasBeingCompacted(ResourceErrorIdent),
+
+    #[error("Blas {0:?} is compacted")]
+    BlasCompacted(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateBlasActionsError {
     #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
-    #[error("Blas {0:?} is used for compacting while being built")]
+    #[error("Blas {0:?} is compacted or used for compacting while being built")]
     BuiltUsedCompacting(ResourceErrorIdent),
 }
 
@@ -316,6 +321,6 @@ pub struct TraceTlasPackage {
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum BlasState {
     None,
-    Building,
     UsedForCompacting,
+    Compacted,
 }

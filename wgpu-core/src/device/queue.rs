@@ -29,7 +29,6 @@ use crate::{
 use smallvec::SmallVec;
 
 use super::{life::LifetimeTracker, Device};
-use crate::ray_tracing::BlasState;
 use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
 use crate::scratch::ScratchBuffer;
 use std::{

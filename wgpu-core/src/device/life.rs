@@ -124,6 +124,16 @@ impl ActiveSubmission {
         false
     }
 
+    pub fn blas_being_written(&self, blas: &Blas) -> bool {
+        for encoder in &self.encoders {
+            if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn contains_tlas(&self, tlas: &Tlas) -> bool {
         for encoder in &self.encoders {
             // The ownership location of tlas's depends on where the command encoder
@@ -269,6 +279,14 @@ impl LifetimeTracker {
                 None
             }
         })
+    }
+
+    /// Returns the submission index of the most recent submission that uses the
+    /// given blas.
+    pub fn blas_being_written(&self, blas: &Blas) -> bool {
+        self.active
+            .iter()
+            .any(|submission| submission.blas_being_written(blas))
     }
 
     /// Returns the submission index of the most recent submission that uses the
