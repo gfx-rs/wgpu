@@ -122,3 +122,8 @@ pub use raw_window_handle as rwh;
 ///
 #[cfg(any(webgl, webgpu))]
 pub use web_sys;
+
+/// `web-sys` has a `no_std` mode, and instead refers to the `alloc` crate in its generated code.
+/// Since we vendor the WebGPU bindings we need to explicitly add the `alloc` crate ourselves.
+#[cfg(webgpu)]
+extern crate alloc;

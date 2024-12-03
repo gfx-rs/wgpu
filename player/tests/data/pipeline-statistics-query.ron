@@ -1,5 +1,5 @@
 (
-    features: ["MAPPABLE_PRIMARY_BUFFERS", "PIPELINE_STATISTICS_QUERY"],
+    features: "MAPPABLE_PRIMARY_BUFFERS | PIPELINE_STATISTICS_QUERY",
     expectations: [
         (
             name: "Queried number of compute invocations is correct",
@@ -41,7 +41,7 @@
             desc: (
                 label: Some("Compute Invocation QuerySet"),
                 count: 2,
-                ty: PipelineStatistics(0x18), // FRAGMENT_SHADER_INVOCATIONS | COMPUTE_SHADER_INVOCATIONS
+                ty: PipelineStatistics("FRAGMENT_SHADER_INVOCATIONS | COMPUTE_SHADER_INVOCATIONS"),
             ),
         ),
         CreateBuffer(
@@ -49,7 +49,7 @@
             (
                 label: Some("Compute Invocation Result Buffer"),
                 size: 16,
-                usage: 0b1000001001, // COPY_DST | MAP_READ
+                usage: "COPY_DST | MAP_READ | QUERY_RESOLVE",
                 mapped_at_creation: false,
             ),
         ),

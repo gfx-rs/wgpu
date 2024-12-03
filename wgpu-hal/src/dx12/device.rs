@@ -577,7 +577,7 @@ impl crate::Device for super::Device {
                 None
             },
             handle_uav: if desc.usage.intersects(
-                crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
+                crate::TextureUses::STORAGE_READ_ONLY | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
                 match unsafe { view_desc.to_uav() } {
                     Some(raw_desc) => {
@@ -746,11 +746,8 @@ impl crate::Device for super::Device {
             pass: super::PassState::new(),
             temp: super::Temp::default(),
             end_of_pass_timer_query: None,
+            counters: Arc::clone(&self.counters),
         })
-    }
-
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1908,7 +1905,7 @@ impl crate::Device for super::Device {
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {

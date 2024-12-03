@@ -2323,7 +2323,7 @@ impl Parser {
             ready = lexer.skip(Token::Separator(','));
         }
         // read return type
-        let result = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
+        let result = if lexer.skip(Token::Arrow) {
             let binding = self.varying_binding(lexer, &mut ctx)?;
             let ty = self.type_decl(lexer, &mut ctx)?;
             Some(ast::FunctionResult { ty, binding })

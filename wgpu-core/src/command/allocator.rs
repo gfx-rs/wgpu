@@ -1,5 +1,3 @@
-use crate::resource_log;
-
 use crate::lock::{rank, Mutex};
 
 /// A pool of free [`wgpu_hal::CommandEncoder`]s, owned by a `Device`.
@@ -48,18 +46,5 @@ impl CommandAllocator {
     pub(crate) fn release_encoder(&self, encoder: Box<dyn hal::DynCommandEncoder>) {
         let mut free_encoders = self.free_encoders.lock();
         free_encoders.push(encoder);
-    }
-
-    /// Free the pool of command encoders.
-    ///
-    /// This is only called when the `Device` is dropped.
-    pub(crate) fn dispose(&self, device: &dyn hal::DynDevice) {
-        let mut free_encoders = self.free_encoders.lock();
-        resource_log!("CommandAllocator::dispose encoders {}", free_encoders.len());
-        for cmd_encoder in free_encoders.drain(..) {
-            unsafe {
-                device.destroy_command_encoder(cmd_encoder);
-            }
-        }
     }
 }

@@ -16,10 +16,12 @@ use std::{
 };
 
 pub use belt::StagingBelt;
-pub use device::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
+pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
 pub use init::*;
-pub use wgt::{math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs};
+pub use wgt::{
+    math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
+};
 
 /// Treat the given byte slice as a SPIR-V module.
 ///

@@ -585,11 +585,8 @@ impl crate::Device for super::Device {
             raw_cmd_buf: None,
             state: super::CommandState::default(),
             temp: super::Temp::default(),
+            counters: Arc::clone(&self.counters),
         })
-    }
-
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1438,6 +1435,6 @@ impl crate::Device for super::Device {
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 }

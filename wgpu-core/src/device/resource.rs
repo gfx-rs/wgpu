@@ -153,7 +153,6 @@ impl Drop for Device {
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        self.command_allocator.dispose(self.raw.as_ref());
         #[cfg(feature = "indirect-validation")]
         self.indirect_validation
             .take()
@@ -497,7 +496,9 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)?;
         }
 
-        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+        if desc.usage.is_empty()
+            || desc.usage | wgt::BufferUsages::all() != wgt::BufferUsages::all()
+        {
             return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
         }
 
@@ -521,7 +522,16 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
             // We are going to be reading from it, internally;
             // when validating the content of the buffer
-            usage |= hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_READ_WRITE;
+            if !usage.intersects(
+                hal::BufferUses::STORAGE_READ_ONLY | hal::BufferUses::STORAGE_READ_WRITE,
+            ) {
+                if usage.contains(hal::BufferUses::STORAGE_WRITE_ONLY) {
+                    usage |= hal::BufferUses::STORAGE_READ_WRITE;
+                    usage &= !hal::BufferUses::STORAGE_WRITE_ONLY;
+                } else {
+                    usage |= hal::BufferUses::STORAGE_READ_ONLY;
+                }
+            }
         }
 
         if desc.mapped_at_creation {
@@ -731,7 +741,9 @@ impl Device {
 
         self.check_is_valid()?;
 
-        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+        if desc.usage.is_empty()
+            || desc.usage | wgt::TextureUsages::all() != wgt::TextureUsages::all()
+        {
             return Err(CreateTextureError::InvalidUsage(desc.usage));
         }
 
@@ -1254,7 +1266,8 @@ impl Device {
                 }
                 TextureViewDimension::D3 => {
                     hal::TextureUses::RESOURCE
-                        | hal::TextureUses::STORAGE_READ
+                        | hal::TextureUses::STORAGE_READ_ONLY
+                        | hal::TextureUses::STORAGE_WRITE_ONLY
                         | hal::TextureUses::STORAGE_READ_WRITE
                 }
                 _ => hal::TextureUses::all(),
@@ -1803,7 +1816,7 @@ impl Device {
                     })?;
             }
 
-            if entry.visibility.contains_invalid_bits() {
+            if entry.visibility | wgt::ShaderStages::all() != wgt::ShaderStages::all() {
                 return Err(
                     binding_model::CreateBindGroupLayoutError::InvalidVisibility(entry.visibility),
                 );
@@ -1916,7 +1929,7 @@ impl Device {
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsages::STORAGE,
                 if read_only {
-                    hal::BufferUses::STORAGE_READ
+                    hal::BufferUses::STORAGE_READ_ONLY
                 } else {
                     hal::BufferUses::STORAGE_READ_WRITE
                 },
@@ -2489,16 +2502,23 @@ impl Device {
                 }
 
                 let internal_use = match access {
-                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_READ_WRITE,
+                    wgt::StorageTextureAccess::WriteOnly => {
+                        if !view.format_features.flags.intersects(
+                            wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                        ) {
+                            return Err(Error::StorageWriteNotSupported(view.desc.format));
+                        }
+                        hal::TextureUses::STORAGE_WRITE_ONLY
+                    }
                     wgt::StorageTextureAccess::ReadOnly => {
-                        if !view
-                            .format_features
-                            .flags
-                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
-                        {
+                        if !view.format_features.flags.intersects(
+                            wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                        ) {
                             return Err(Error::StorageReadNotSupported(view.desc.format));
                         }
-                        hal::TextureUses::STORAGE_READ
+                        hal::TextureUses::STORAGE_READ_ONLY
                     }
                     wgt::StorageTextureAccess::ReadWrite => {
                         if !view
@@ -2506,7 +2526,7 @@ impl Device {
                             .flags
                             .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
                         {
-                            return Err(Error::StorageReadNotSupported(view.desc.format));
+                            return Err(Error::StorageReadWriteNotSupported(view.desc.format));
                         }
 
                         hal::TextureUses::STORAGE_READ_WRITE
@@ -2968,7 +2988,7 @@ impl Device {
             if let Some(cs) = cs.as_ref() {
                 target_specified = true;
                 let error = 'error: {
-                    if cs.write_mask.contains_invalid_bits() {
+                    if cs.write_mask | wgt::ColorWrites::all() != wgt::ColorWrites::all() {
                         break 'error Some(pipeline::ColorStateError::InvalidWriteMask(
                             cs.write_mask,
                         ));
@@ -3532,9 +3552,7 @@ impl Device {
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
             if let Some(queue) = self.get_queue() {
-                let closures = queue
-                    .lock_life()
-                    .triage_submissions(submission_index, &self.command_allocator);
+                let closures = queue.lock_life().triage_submissions(submission_index);
                 assert!(
                     closures.is_empty(),
                     "wait_for_submit is not expected to work with closures"

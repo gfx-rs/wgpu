@@ -61,29 +61,5 @@ impl Drop for TextureView {
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TextureViewDescriptor<'a> {
-    /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// Format of the texture view. Either must be the same as the texture format or in the list
-    /// of `view_formats` in the texture's descriptor.
-    pub format: Option<TextureFormat>,
-    /// The dimension of the texture view. For 1D textures, this must be `D1`. For 2D textures it must be one of
-    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `D3`
-    pub dimension: Option<TextureViewDimension>,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
-    pub aspect: TextureAspect,
-    /// Base mip level.
-    pub base_mip_level: u32,
-    /// Mip level count.
-    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
-    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub mip_level_count: Option<u32>,
-    /// Base array layer.
-    pub base_array_layer: u32,
-    /// Layer count.
-    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
-    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
-    pub array_layer_count: Option<u32>,
-}
+pub type TextureViewDescriptor<'a> = wgt::TextureViewDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(TextureViewDescriptor<'_>: Send, Sync);

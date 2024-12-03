@@ -842,7 +842,6 @@ pub trait Device: WasmNotSendSync {
         &self,
         desc: &CommandEncoderDescriptor<<Self::A as Api>::Queue>,
     ) -> Result<<Self::A as Api>::CommandEncoder, DeviceError>;
-    unsafe fn destroy_command_encoder(&self, pool: <Self::A as Api>::CommandEncoder);
 
     /// Creates a bind group layout.
     unsafe fn create_bind_group_layout(
@@ -1109,8 +1108,6 @@ pub trait Queue: WasmNotSendSync {
 ///
 /// - A `CommandBuffer` must not outlive the `CommandEncoder` that
 ///   built it.
-///
-/// - A `CommandEncoder` must not outlive its `Device`.
 ///
 /// It is the user's responsibility to meet this requirements. This
 /// allows `CommandEncoder` implementations to keep their state
@@ -1555,9 +1552,11 @@ bitflags!(
         /// Format can be sampled with a min/max reduction sampler.
         const SAMPLED_MINMAX = 1 << 2;
 
+        /// Format can be used as storage with read-only access.
+        const STORAGE_READ_ONLY = 1 << 16;
         /// Format can be used as storage with write-only access.
-        const STORAGE = 1 << 3;
-        /// Format can be used as storage with read and read/write access.
+        const STORAGE_WRITE_ONLY = 1 << 3;
+        /// Format can be used as storage with both read and write access.
         const STORAGE_READ_WRITE = 1 << 4;
         /// Format can be used as storage with atomics.
         const STORAGE_ATOMIC = 1 << 5;
@@ -1687,8 +1686,10 @@ bitflags::bitflags! {
         /// A uniform buffer bound in a bind group.
         const UNIFORM = 1 << 6;
         /// A read-only storage buffer used in a bind group.
-        const STORAGE_READ = 1 << 7;
-        /// A read-write or write-only buffer used in a bind group.
+        const STORAGE_READ_ONLY = 1 << 7;
+        /// A write-only storage buffer used in a bind group.
+        const STORAGE_WRITE_ONLY = 1 << 8;
+        /// A read-write buffer used in a bind group.
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
@@ -1702,7 +1703,7 @@ bitflags::bitflags! {
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
-            Self::STORAGE_READ.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
+            Self::STORAGE_READ_ONLY.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
         /// The combination of states that a buffer must exclusively be in.
         const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits() | Self::ACCELERATION_STRUCTURE_SCRATCH.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
@@ -1733,17 +1734,19 @@ bitflags::bitflags! {
         /// Read-write depth stencil usage
         const DEPTH_STENCIL_WRITE = 1 << 7;
         /// Read-only storage buffer usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
-        const STORAGE_READ = 1 << 8;
-        /// Read-write or write-only storage buffer usage.
+        const STORAGE_READ_ONLY = 1 << 8;
+        /// Write-only storage buffer usage.
+        const STORAGE_WRITE_ONLY = 1 << 9;
+        /// Read-write storage buffer usage.
         const STORAGE_READ_WRITE = 1 << 9;
         /// The combination of states that a texture may be in _at the same time_.
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
         /// The combination of states that a texture must exclusively be in.
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits() | Self::STORAGE_READ_WRITE.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits();
+        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 10;

@@ -14,8 +14,8 @@ use crate::{
         end_occlusion_query, end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        CommandEncoderStatus, DrawError, ExecutionError, MapPassErr, PassErrorScope,
-        PassTimestampWrites, QueryUseError, RenderCommandError, StateChange,
+        DrawError, ExecutionError, MapPassErr, PassErrorScope, PassTimestampWrites, QueryUseError,
+        RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -45,8 +45,7 @@ use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
-use std::sync::Arc;
-use std::{borrow::Cow, fmt, iter, mem::size_of, num::NonZeroU32, ops::Range, str};
+use std::{borrow::Cow, fmt, iter, mem::size_of, num::NonZeroU32, ops::Range, str, sync::Arc};
 
 use super::render_command::ArcRenderCommand;
 use super::{
@@ -1321,7 +1320,9 @@ impl Global {
     /// If creation fails, an invalid pass is returned.
     /// Any operation on an invalid pass will return an error.
     ///
-    /// If successful, puts the encoder into the [`CommandEncoderStatus::Locked`] state.
+    /// If successful, puts the encoder into the [`Locked`] state.
+    ///
+    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
     pub fn command_encoder_create_render_pass(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -1422,11 +1423,7 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        match cmd_buf
-            .try_get()
-            .map_err(|e| e.into())
-            .and_then(|mut cmd_buf_data| cmd_buf_data.lock_encoder())
-        {
+        match cmd_buf.data.lock().lock_encoder() {
             Ok(_) => {}
             Err(e) => return make_err(e, arc_desc),
         };
@@ -1457,7 +1454,8 @@ impl Global {
                 .hub
                 .command_buffers
                 .get(encoder_id.into_command_buffer_id());
-            let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.get_inner().map_pass_err(pass_scope)?;
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
@@ -1532,9 +1530,9 @@ impl Global {
             base.label.as_deref().unwrap_or("")
         );
 
-        let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
-        cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
-        let cmd_buf_data = &mut *cmd_buf_data;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
@@ -1545,7 +1543,6 @@ impl Global {
             device.check_is_valid().map_pass_err(pass_scope)?;
 
             let encoder = &mut cmd_buf_data.encoder;
-            let status = &mut cmd_buf_data.status;
             let tracker = &mut cmd_buf_data.trackers;
             let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
             let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
@@ -1555,8 +1552,6 @@ impl Global {
             // we want to insert a command buffer _before_ what we're about to record,
             // we need to make sure to close the previous one.
             encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
-            // We will reset this to `Recording` if we succeed, acts as a fail-safe.
-            *status = CommandEncoderStatus::Error;
             encoder
                 .open_pass(hal_label, &cmd_buf.device)
                 .map_pass_err(pass_scope)?;
@@ -1867,7 +1862,6 @@ impl Global {
         };
 
         let encoder = &mut cmd_buf_data.encoder;
-        let status = &mut cmd_buf_data.status;
         let tracker = &mut cmd_buf_data.trackers;
 
         {
@@ -1886,10 +1880,10 @@ impl Global {
             CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
         }
 
-        *status = CommandEncoderStatus::Recording;
         encoder
             .close_and_swap(&cmd_buf.device)
             .map_pass_err(pass_scope)?;
+        cmd_buf_data_guard.mark_successful();
 
         Ok(())
     }
