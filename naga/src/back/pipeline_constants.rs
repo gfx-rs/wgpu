@@ -25,7 +25,7 @@ pub enum PipelineConstantError {
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
     ValidationError(#[from] WithSpan<ValidationError>),
-    #[error("workgroup_size was overridden to a negative value")]
+    #[error("workgroup_size overridde isn't strictly positive")]
     NegativeWorkgroupSize,
 }
 
@@ -218,29 +218,17 @@ fn process_workgroup_size_override(
                     match *overridden {
                         None => Ok(()),
                         Some(h) => {
-                            let c = module.constants[override_map[h]].init;
-                            let n = &module.global_expressions[c];
-                            match *n {
-                                crate::Expression::Literal(literal) => {
-                                    ep.workgroup_size[i] = match literal {
-                                        crate::Literal::U32(m) => m,
-                                        crate::Literal::I32(m) => {
-                                            if m < 0 {
-                                                Err(PipelineConstantError::NegativeWorkgroupSize)?;
-                                                unreachable!();
-                                            } else {
-                                                m as u32
-                                            }
-                                        }
-                                        _ => {
-                                            unreachable!();
-                                        }
-                                    };
-                                }
-                                _ => {
-                                    unreachable!();
-                                }
-                            }
+                            ep.workgroup_size[i] = module
+                                .to_ctx()
+                                .eval_expr_to_u32(module.constants[override_map[h]].init)
+                                .map(|n| {
+                                    if n == 0 {
+                                        Err(PipelineConstantError::NegativeWorkgroupSize)
+                                    } else {
+                                        Ok(n)
+                                    }
+                                })
+                                .map_err(|_| PipelineConstantError::NegativeWorkgroupSize)??;
                             Ok(())
                         }
                     }
