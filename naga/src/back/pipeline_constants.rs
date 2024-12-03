@@ -25,7 +25,7 @@ pub enum PipelineConstantError {
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
     ValidationError(#[from] WithSpan<ValidationError>),
-    #[error("workgroup_size overridde isn't strictly positive")]
+    #[error("workgroup_size override isn't strictly positive")]
     NegativeWorkgroupSize,
 }
 
@@ -234,6 +234,7 @@ fn process_workgroup_size_override(
                     }
                 },
             )?;
+            ep.workgroup_size_overrides = None;
         }
     }
     Ok(())

@@ -175,6 +175,11 @@ impl super::Validator {
 
         for entry_point in entry_points.iter() {
             validate_function(None, &entry_point.function)?;
+            if let Some(sizes) = entry_point.workgroup_size_overrides {
+                for size in sizes.iter().filter(|x| x.is_some()) {
+                    Self::validate_override_handle(size.unwrap(), overrides)?;
+                }
+            }
         }
 
         for (function_handle, function) in functions.iter() {

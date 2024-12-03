@@ -5,13 +5,14 @@ use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, Testing
 
 const SHADER: &str = r#"
     override n = 3;
+    const m = 2u;
 
     @group(0) @binding(0)
     var<storage, read_write> output: array<u32>;
 
     @compute @workgroup_size(n - 2)
     fn main(@builtin(local_invocation_index) lii: u32) {
-        output[lii] = lii + 2;
+        output[lii] = lii + m;
     }
 "#;
 
