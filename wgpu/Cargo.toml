@@ -117,6 +117,18 @@ fragile-send-sync-non-atomic-wasm = [
     "wgt/fragile-send-sync-non-atomic-wasm",
 ]
 
+
+#! ### External libraries
+# --------------------------------------------------------------------
+#! The following features facilitate integration with third-party supporting libraries.
+
+## Enables statically linking DXC.
+## Normally, to use the modern DXC shader compiler with WGPU, the final application
+## must be shipped alongside `dxcompiler.dll` and `dxil.dll` (which can be downloaded from Microsoft's GitHub).
+## This feature statically links a version of DXC so that no external binaries are required
+## to compile DX12 shaders.
+static-dxc = ["hal/static-dxc"]
+
 # wgpu-core is always available as an optional dependency, "wgc".
 # Whenever wgpu-core is selected, we want raw window handle support.
 [dependencies.wgc]

@@ -19,8 +19,7 @@ uint collatz_iterations(
     uint n = {};
     uint i = 0u;
     n = n_base;
-#define LOOP_IS_REACHABLE if (volatile bool unpredictable_jump_over_loop = true; unpredictable_jump_over_loop)
-    LOOP_IS_REACHABLE while(true) {
+    while(true) {
         uint _e4 = n;
         if (_e4 > 1u) {
         } else {
@@ -38,6 +37,8 @@ uint collatz_iterations(
             uint _e20 = i;
             i = _e20 + 1u;
         }
+#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
+        LOOP_IS_BOUNDED
     }
     uint _e23 = i;
     return _e23;

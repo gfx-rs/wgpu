@@ -636,3 +636,143 @@ fn parse_missing_workgroup_size() {
         Error::MissingWorkgroupSize(span) if span == Span::new(1, 8)
     ));
 }
+
+mod diagnostic_filter {
+    mod parse_sites_not_yet_supported {
+        use crate::front::wgsl::assert_parse_err;
+
+        #[test]
+        fn user_rules() {
+            let shader = "
+fn myfunc() {
+    if (true) @diagnostic(off, my.lint) {
+        //    ^^^^^^^^^^^^^^^^^^^^^^^^^ not yet supported, should report an error
+    }
+}
+";
+            assert_parse_err(shader, "\
+error: `@diagnostic(…)` attribute(s) not yet implemented
+  ┌─ wgsl:3:15
+  │
+3 │     if (true) @diagnostic(off, my.lint) {
+  │               ^^^^^^^^^^^^^^^^^^^^^^^^^ can't use this on compound statements (yet)
+  │
+  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5320>, so they can prioritize it!
+
+");
+        }
+
+        #[test]
+        fn unknown_rules() {
+            let shader = "
+fn myfunc() {
+	if (true) @diagnostic(off, wat_is_this) {
+		//    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ should emit a warning
+	}
+}
+";
+            assert_parse_err(shader, "\
+error: `@diagnostic(…)` attribute(s) not yet implemented
+  ┌─ wgsl:3:12
+  │
+3 │     if (true) @diagnostic(off, wat_is_this) {
+  │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ can't use this on compound statements (yet)
+  │
+  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5320>, so they can prioritize it!
+
+");
+        }
+    }
+
+    mod directive_conflict {
+        use crate::front::wgsl::assert_parse_err;
+
+        #[test]
+        fn user_rules() {
+            let shader = "
+diagnostic(off, my.lint);
+diagnostic(warning, my.lint);
+";
+            assert_parse_err(shader, "\
+error: found conflicting `diagnostic(…)` rule(s)
+  ┌─ wgsl:2:1
+  │
+2 │ diagnostic(off, my.lint);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^ first rule
+3 │ diagnostic(warning, my.lint);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ second rule
+  │
+  = note: Multiple `diagnostic(…)` rules with the same rule name conflict unless they are directives and the severity is the same.
+  = note: You should delete the rule you don't want.
+
+");
+        }
+
+        #[test]
+        fn unknown_rules() {
+            let shader = "
+diagnostic(off, wat_is_this);
+diagnostic(warning, wat_is_this);
+";
+            assert_parse_err(shader, "\
+error: found conflicting `diagnostic(…)` rule(s)
+  ┌─ wgsl:2:1
+  │
+2 │ diagnostic(off, wat_is_this);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ first rule
+3 │ diagnostic(warning, wat_is_this);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ second rule
+  │
+  = note: Multiple `diagnostic(…)` rules with the same rule name conflict unless they are directives and the severity is the same.
+  = note: You should delete the rule you don't want.
+
+");
+        }
+    }
+
+    mod attribute_conflict {
+        use crate::front::wgsl::assert_parse_err;
+
+        #[test]
+        fn user_rules() {
+            let shader = "
+diagnostic(off, my.lint);
+diagnostic(warning, my.lint);
+";
+            assert_parse_err(shader, "\
+error: found conflicting `diagnostic(…)` rule(s)
+  ┌─ wgsl:2:1
+  │
+2 │ diagnostic(off, my.lint);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^ first rule
+3 │ diagnostic(warning, my.lint);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ second rule
+  │
+  = note: Multiple `diagnostic(…)` rules with the same rule name conflict unless they are directives and the severity is the same.
+  = note: You should delete the rule you don't want.
+
+");
+        }
+
+        #[test]
+        fn unknown_rules() {
+            let shader = "
+diagnostic(off, wat_is_this);
+diagnostic(warning, wat_is_this);
+";
+            assert_parse_err(shader, "\
+error: found conflicting `diagnostic(…)` rule(s)
+  ┌─ wgsl:2:1
+  │
+2 │ diagnostic(off, wat_is_this);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ first rule
+3 │ diagnostic(warning, wat_is_this);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ second rule
+  │
+  = note: Multiple `diagnostic(…)` rules with the same rule name conflict unless they are directives and the severity is the same.
+  = note: You should delete the rule you don't want.
+
+");
+        }
+    }
+}

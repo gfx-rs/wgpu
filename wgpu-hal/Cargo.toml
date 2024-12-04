@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "23.0.0"
+version = "23.0.1"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -91,6 +91,8 @@ dx12 = [
     "windows/Win32_System_Threading",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
+## Enables statically linking DXC.
+static-dxc = ["dep:mach-dxcompiler-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
 # Panic when running into an out-of-memory error (for debugging purposes).
@@ -158,6 +160,7 @@ windows = { workspace = true, optional = true }
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
 gpu-allocator = { workspace = true, optional = true }
+mach-dxcompiler-rs = { workspace = true, optional = true }
 # For core macros. This crate is also reexported as windows::core.
 windows-core = { workspace = true, optional = true }
 

@@ -1,0 +1,13 @@
+error[E0505]: cannot move out of `encoder` because it is borrowed
+  --> compile_tests/fail/cpass_lifetime.rs:16:22
+   |
+12 |     let mut encoder = device.create_command_encoder(&Default::default());
+   |         ----------- binding `encoder` declared here
+13 |     let _compute_pass = encoder.begin_compute_pass(&Default::default());
+   |                         ------- borrow of `encoder` occurs here
+...
+16 |     let cmd_buffer = encoder.finish();
+   |                      ^^^^^^^ move out of `encoder` occurs here
+17 |     queue.submit([cmd_buffer]);
+18 | }
+   | - borrow might be used here, when `_compute_pass` is dropped and runs the destructor for type `wgpu::ComputePass<'_>`

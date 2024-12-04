@@ -1,10 +1,5 @@
-use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
-    thread,
-};
+use std::ops::{Deref, DerefMut};
 
-use crate::context::{DynContext, QueueWriteBuffer};
 use crate::*;
 
 /// Handle to a command queue on a device.
@@ -16,19 +11,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUQueue`](https://gpuweb.github.io/gpuweb/#gpu-queue).
 #[derive(Debug)]
 pub struct Queue {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchQueue,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
 
-impl Drop for Queue {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.queue_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular
@@ -39,7 +27,7 @@ impl Drop for Queue {
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
     #[cfg_attr(not(native), allow(dead_code))]
-    pub(crate) data: Arc<crate::Data>,
+    pub(crate) index: u64,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
@@ -59,7 +47,7 @@ pub struct QueueWriteBufferView<'a> {
     queue: &'a Queue,
     buffer: &'a Buffer,
     offset: BufferAddress,
-    inner: Box<dyn QueueWriteBuffer>,
+    inner: dispatch::DispatchQueueWriteBuffer,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
@@ -79,21 +67,17 @@ impl DerefMut for QueueWriteBufferView<'_> {
     }
 }
 
-impl<'a> AsMut<[u8]> for QueueWriteBufferView<'a> {
+impl AsMut<[u8]> for QueueWriteBufferView<'_> {
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl<'a> Drop for QueueWriteBufferView<'a> {
+impl Drop for QueueWriteBufferView<'_> {
     fn drop(&mut self) {
-        DynContext::queue_write_staging_buffer(
-            &*self.queue.context,
-            self.queue.data.as_ref(),
-            self.buffer.data.as_ref(),
-            self.offset,
-            &*self.inner,
-        );
+        self.queue
+            .inner
+            .write_staging_buffer(&self.buffer.inner, self.offset, &self.inner);
     }
 }
 
@@ -119,13 +103,7 @@ impl Queue {
     /// method avoids an intermediate copy and is often able to transfer data
     /// more efficiently than this one.
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
-        DynContext::queue_write_buffer(
-            &*self.context,
-            self.data.as_ref(),
-            buffer.data.as_ref(),
-            offset,
-            data,
-        )
+        self.inner.write_buffer(&buffer.inner, offset, data);
     }
 
     /// Write to a buffer via a directly mapped staging buffer.
@@ -164,15 +142,9 @@ impl Queue {
         size: BufferSize,
     ) -> Option<QueueWriteBufferView<'a>> {
         profiling::scope!("Queue::write_buffer_with");
-        DynContext::queue_validate_write_buffer(
-            &*self.context,
-            self.data.as_ref(),
-            buffer.data.as_ref(),
-            offset,
-            size,
-        )?;
-        let staging_buffer =
-            DynContext::queue_create_staging_buffer(&*self.context, self.data.as_ref(), size)?;
+        self.inner
+            .validate_write_buffer(&buffer.inner, offset, size)?;
+        let staging_buffer = self.inner.create_staging_buffer(size)?;
         Some(QueueWriteBufferView {
             queue: self,
             buffer,
@@ -207,36 +179,24 @@ impl Queue {
     /// caller may discard it any time after this call completes.
     pub fn write_texture(
         &self,
-        texture: ImageCopyTexture<'_>,
+        texture: TexelCopyTextureInfo<'_>,
         data: &[u8],
-        data_layout: ImageDataLayout,
+        data_layout: TexelCopyBufferLayout,
         size: Extent3d,
     ) {
-        DynContext::queue_write_texture(
-            &*self.context,
-            self.data.as_ref(),
-            texture,
-            data,
-            data_layout,
-            size,
-        )
+        self.inner.write_texture(texture, data, data_layout, size);
     }
 
     /// Schedule a copy of data from `image` into `texture`.
     #[cfg(any(webgpu, webgl))]
     pub fn copy_external_image_to_texture(
         &self,
-        source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged<'_>,
+        source: &wgt::CopyExternalImageSourceInfo,
+        dest: wgt::CopyExternalImageDestInfo<&api::Texture>,
         size: Extent3d,
     ) {
-        DynContext::queue_copy_external_image_to_texture(
-            &*self.context,
-            self.data.as_ref(),
-            source,
-            dest,
-            size,
-        )
+        self.inner
+            .copy_external_image_to_texture(source, dest, size);
     }
 
     /// Submits a series of finished command buffers for execution.
@@ -246,12 +206,11 @@ impl Queue {
     ) -> SubmissionIndex {
         let mut command_buffers = command_buffers
             .into_iter()
-            .map(|mut comb| comb.data.take().unwrap());
+            .map(|mut comb| comb.inner.take().unwrap());
 
-        let data =
-            DynContext::queue_submit(&*self.context, self.data.as_ref(), &mut command_buffers);
+        let index = self.inner.submit(&mut command_buffers);
 
-        SubmissionIndex { data }
+        SubmissionIndex { index }
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
@@ -261,7 +220,7 @@ impl Queue {
     /// Timestamp values are represented in nanosecond values on WebGPU, see `<https://gpuweb.github.io/gpuweb/#timestamp>`
     /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required.
     pub fn get_timestamp_period(&self) -> f32 {
-        DynContext::queue_get_timestamp_period(&*self.context, self.data.as_ref())
+        self.inner.get_timestamp_period()
     }
 
     /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
@@ -276,10 +235,6 @@ impl Queue {
     /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
     /// and used to set flags, send messages, etc.
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
-        DynContext::queue_on_submitted_work_done(
-            &*self.context,
-            self.data.as_ref(),
-            Box::new(callback),
-        )
+        self.inner.on_submitted_work_done(Box::new(callback));
     }
 }

@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 520
+; Bound: 526
 OpCapability Shader
 OpCapability Image1D
 OpCapability Sampled1D
@@ -687,8 +687,14 @@ OpBranch %512
 %515 = OpCompositeExtract  %7  %514 0
 %516 = OpSampledImage  %428  %511 %510
 %517 = OpImageGather  %23  %516 %280 %198
-%518 = OpCompositeConstruct  %23  %515 %515 %515 %515
-%519 = OpFAdd  %23  %518 %517
-OpStore %508 %519
+%518 = OpSampledImage  %428  %511 %510
+%520 = OpConvertSToF  %7  %29
+%519 = OpImageSampleExplicitLod  %23  %518 %280 Lod %520
+%521 = OpCompositeExtract  %7  %519 0
+%522 = OpCompositeConstruct  %23  %515 %515 %515 %515
+%523 = OpFAdd  %23  %522 %517
+%524 = OpCompositeConstruct  %23  %521 %521 %521 %521
+%525 = OpFAdd  %23  %523 %524
+OpStore %508 %525
 OpReturn
 OpFunctionEnd

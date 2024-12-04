@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use crate::{
     hal_api::HalApi,
@@ -85,14 +85,16 @@ impl Global {
     }
 }
 
+impl fmt::Debug for Global {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Global").finish()
+    }
+}
+
 impl Drop for Global {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
         resource_log!("Global::drop");
-
-        for (_, device) in self.hub.devices.read().iter() {
-            device.prepare_to_die();
-        }
     }
 }
 

@@ -193,6 +193,7 @@
                         value: None,
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],

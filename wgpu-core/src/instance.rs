@@ -412,13 +412,13 @@ impl Surface {
         &self,
         adapter: &hal::DynExposedAdapter,
     ) -> Result<hal::SurfaceCapabilities, GetSurfaceSupportError> {
+        let backend = adapter.backend();
         let suf = self
-            .raw(adapter.backend())
-            .ok_or(GetSurfaceSupportError::Unsupported)?;
+            .raw(backend)
+            .ok_or(GetSurfaceSupportError::NotSupportedByBackend(backend))?;
         profiling::scope!("surface_capabilities");
         let caps = unsafe { adapter.adapter.surface_capabilities(suf) }
-            .ok_or(GetSurfaceSupportError::Unsupported)?;
-
+            .ok_or(GetSurfaceSupportError::FailedToRetrieveSurfaceCapabilitiesForAdapter)?;
         Ok(caps)
     }
 
@@ -512,7 +512,9 @@ impl Adapter {
         );
         allowed_usages.set(
             wgt::TextureUsages::STORAGE_BINDING,
-            caps.contains(Tfc::STORAGE),
+            caps.intersects(
+                Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_READ_WRITE,
+            ),
         );
         allowed_usages.set(
             wgt::TextureUsages::RENDER_ATTACHMENT,
@@ -520,6 +522,14 @@ impl Adapter {
         );
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
+        flags.set(
+            wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY,
+            caps.contains(Tfc::STORAGE_READ_ONLY),
+        );
+        flags.set(
+            wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY,
+            caps.contains(Tfc::STORAGE_WRITE_ONLY),
+        );
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
             caps.contains(Tfc::STORAGE_READ_WRITE),
@@ -573,18 +583,14 @@ impl Adapter {
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        let device = Device::new(
-            hal_device.device,
-            hal_device.queue.as_ref(),
-            self,
-            desc,
-            trace_path,
-            instance_flags,
-        )?;
-
+        let device = Device::new(hal_device.device, self, desc, trace_path, instance_flags)?;
         let device = Arc::new(device);
-        let queue = Arc::new(Queue::new(device.clone(), hal_device.queue));
+
+        let queue = Queue::new(device.clone(), hal_device.queue)?;
+        let queue = Arc::new(queue);
+
         device.set_queue(&queue);
+
         Ok((device, queue))
     }
 
@@ -649,21 +655,21 @@ crate::impl_storage_item!(Adapter);
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum GetSurfaceSupportError {
-    #[error("Surface is not supported by the adapter")]
-    Unsupported,
+    #[error("Surface is not supported for the specified backend {0}")]
+    NotSupportedByBackend(Backend),
+    #[error("Failed to retrieve surface capabilities for the specified adapter.")]
+    FailedToRetrieveSurfaceCapabilitiesForAdapter,
 }
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Error when requesting a device from the adaptor
+/// Error when requesting a device from the adapter
 #[non_exhaustive]
 pub enum RequestDeviceError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
-    #[error("Device has no queue supporting graphics")]
-    NoGraphicsQueue,
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }

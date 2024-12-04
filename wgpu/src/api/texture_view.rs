@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a texture view.
@@ -10,13 +8,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUTextureView`](https://gpuweb.github.io/gpuweb/#gputextureview).
 #[derive(Debug)]
 pub struct TextureView {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchTextureView,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
-super::impl_partialeq_eq_hash!(TextureView);
+crate::cmp::impl_eq_ord_hash_proxy!(TextureView => .inner);
 
 impl TextureView {
     /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
@@ -30,27 +27,14 @@ impl TextureView {
         &self,
         hal_texture_view_callback: F,
     ) -> R {
-        if let Some(ctx) = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-        {
+        if let Some(core_view) = self.inner.as_core_opt() {
             unsafe {
-                ctx.texture_view_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(self.data.as_ref()),
-                    hal_texture_view_callback,
-                )
+                core_view
+                    .context
+                    .texture_view_as_hal::<A, F, R>(core_view, hal_texture_view_callback)
             }
         } else {
             hal_texture_view_callback(None)
-        }
-    }
-}
-
-impl Drop for TextureView {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.texture_view_drop(self.data.as_ref());
         }
     }
 }
@@ -61,29 +45,5 @@ impl Drop for TextureView {
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TextureViewDescriptor<'a> {
-    /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// Format of the texture view. Either must be the same as the texture format or in the list
-    /// of `view_formats` in the texture's descriptor.
-    pub format: Option<TextureFormat>,
-    /// The dimension of the texture view. For 1D textures, this must be `D1`. For 2D textures it must be one of
-    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `D3`
-    pub dimension: Option<TextureViewDimension>,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
-    pub aspect: TextureAspect,
-    /// Base mip level.
-    pub base_mip_level: u32,
-    /// Mip level count.
-    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
-    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub mip_level_count: Option<u32>,
-    /// Base array layer.
-    pub base_array_layer: u32,
-    /// Layer count.
-    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
-    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
-    pub array_layer_count: Option<u32>,
-}
+pub type TextureViewDescriptor<'a> = wgt::TextureViewDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(TextureViewDescriptor<'_>: Send, Sync);

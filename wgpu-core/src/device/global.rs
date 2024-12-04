@@ -8,7 +8,7 @@ use crate::{
     },
     command::{self, CommandBuffer},
     conv,
-    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
+    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -219,9 +219,11 @@ impl Global {
         device.check_is_valid()?;
         buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
 
-        let last_submission = device
-            .lock_life()
-            .get_buffer_latest_submission_index(&buffer);
+        let last_submission = device.get_queue().and_then(|queue| {
+            queue
+                .lock_life()
+                .get_buffer_latest_submission_index(&buffer)
+        });
 
         if let Some(last_submission) = last_submission {
             device.wait_for_submit(last_submission)?;
@@ -2078,24 +2080,10 @@ impl Global {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {device_id:?}");
 
-        let device = self.hub.devices.remove(device_id);
-        let device_lost_closure = device.lock_life().device_lost_closure.take();
-        if let Some(closure) = device_lost_closure {
-            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
-        }
-
-        // The things `Device::prepare_to_die` takes care are mostly
-        // unnecessary here. We know our queue is empty, so we don't
-        // need to wait for submissions or triage them. We know we were
-        // just polled, so `life_tracker.free_resources` is empty.
-        debug_assert!(device.lock_life().queue_empty());
-        device.pending_writes.lock().deactivate();
-
-        drop(device);
+        self.hub.devices.remove(device_id);
     }
 
-    // This closure will be called exactly once during "lose the device",
-    // or when it is replaced.
+    /// `device_lost_closure` might never be called.
     pub fn device_set_device_lost_closure(
         &self,
         device_id: DeviceId,
@@ -2103,14 +2091,10 @@ impl Global {
     ) {
         let device = self.hub.devices.get(device_id);
 
-        let mut life_tracker = device.lock_life();
-        if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_tracker);
-            existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-            life_tracker = device.lock_life();
-        }
-        life_tracker.device_lost_closure = Some(device_lost_closure);
+        device
+            .device_lost_closure
+            .lock()
+            .replace(device_lost_closure);
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {
@@ -2160,6 +2144,7 @@ impl Global {
         self.hub.queues.remove(queue_id);
     }
 
+    /// `op.callback` is guaranteed to be called.
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
@@ -2181,7 +2166,7 @@ impl Global {
             Ok(submission_index) => Ok(submission_index),
             Err((mut operation, err)) => {
                 if let Some(callback) = operation.callback.take() {
-                    callback.call(Err(err.clone()));
+                    callback(Err(err.clone()));
                 }
                 log::error!("Buffer::map_async error: {err}");
                 Err(err)

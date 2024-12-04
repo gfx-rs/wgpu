@@ -3497,13 +3497,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     Mf::QuantizeToF16 => match *ctx.resolve_type(arg, &self.module.types) {
-                        crate::TypeInner::Scalar { .. } => {
+                        TypeInner::Scalar { .. } => {
                             write!(self.out, "unpackHalf2x16(packHalf2x16(vec2(")?;
                             self.write_expr(arg, ctx)?;
                             write!(self.out, "))).x")?;
                             return Ok(());
                         }
-                        crate::TypeInner::Vector {
+                        TypeInner::Vector {
                             size: crate::VectorSize::Bi,
                             ..
                         } => {
@@ -3512,7 +3512,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             write!(self.out, "))")?;
                             return Ok(());
                         }
-                        crate::TypeInner::Vector {
+                        TypeInner::Vector {
                             size: crate::VectorSize::Tri,
                             ..
                         } => {
@@ -3523,7 +3523,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             write!(self.out, ".zz)).x)")?;
                             return Ok(());
                         }
-                        crate::TypeInner::Vector {
+                        TypeInner::Vector {
                             size: crate::VectorSize::Quad,
                             ..
                         } => {

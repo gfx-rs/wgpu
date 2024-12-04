@@ -6,7 +6,7 @@
 //! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
-use crate::diagnostic_filter::{DiagnosticFilterNode, FilterableTriggeringRule};
+use crate::diagnostic_filter::{DiagnosticFilterNode, StandardFilterableTriggeringRule};
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
@@ -16,6 +16,8 @@ use std::ops;
 
 pub type NonUniformResult = Option<Handle<crate::Expression>>;
 
+const DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE: bool = true;
+
 bitflags::bitflags! {
     /// Kinds of expressions that require uniform control flow.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -23,8 +25,8 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct UniformityRequirements: u8 {
         const WORK_GROUP_BARRIER = 0x1;
-        const DERIVATIVE = 0x2;
-        const IMPLICIT_LEVEL = 0x4;
+        const DERIVATIVE = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x2 };
+        const IMPLICIT_LEVEL = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x4 };
     }
 }
 
@@ -850,7 +852,7 @@ impl FunctionInfo {
                                 let severity = DiagnosticFilterNode::search(
                                     self.diagnostic_filter_leaf,
                                     diagnostic_filter_arena,
-                                    FilterableTriggeringRule::DerivativeUniformity,
+                                    StandardFilterableTriggeringRule::DerivativeUniformity,
                                 );
                                 severity.report_diag(
                                     FunctionError::NonUniformControlFlow(req, expr, cause)
@@ -1052,7 +1054,7 @@ impl FunctionInfo {
                     value,
                     result: _,
                 } => {
-                    let _ = self.add_ref_impl(pointer, GlobalUse::WRITE);
+                    let _ = self.add_ref_impl(pointer, GlobalUse::READ | GlobalUse::WRITE);
                     let _ = self.add_ref(value);
                     if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
                         let _ = self.add_ref(cmp);
@@ -1148,7 +1150,7 @@ impl ModuleInfo {
             expressions: vec![ExpressionInfo::new(); fun.expressions.len()].into_boxed_slice(),
             sampling: crate::FastHashSet::default(),
             dual_source_blending: false,
-            diagnostic_filter_leaf: module.diagnostic_filter_leaf,
+            diagnostic_filter_leaf: fun.diagnostic_filter_leaf,
         };
         let resolve_context =
             ResolveContext::with_locals(module, &fun.local_variables, &fun.arguments);
@@ -1350,52 +1352,59 @@ fn uniform_control_flow() {
             &expressions,
             &Arena::new(),
         );
-        assert_eq!(
-            block_info,
-            Err(FunctionError::NonUniformControlFlow(
-                UniformityRequirements::DERIVATIVE,
-                derivative_expr,
-                UniformityDisruptor::Expression(non_uniform_global_expr)
-            )
-            .with_span()),
-        );
-        assert_eq!(info[derivative_expr].ref_count, 1);
+        if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE {
+            assert_eq!(info[derivative_expr].ref_count, 2);
+        } else {
+            assert_eq!(
+                block_info,
+                Err(FunctionError::NonUniformControlFlow(
+                    UniformityRequirements::DERIVATIVE,
+                    derivative_expr,
+                    UniformityDisruptor::Expression(non_uniform_global_expr)
+                )
+                .with_span()),
+            );
+            assert_eq!(info[derivative_expr].ref_count, 1);
 
-        // Test that the same thing passes when we disable the `derivative_uniformity`
-        let mut diagnostic_filters = Arena::new();
-        let diagnostic_filter_leaf = diagnostic_filters.append(
-            DiagnosticFilterNode {
-                inner: crate::diagnostic_filter::DiagnosticFilter {
-                    new_severity: crate::diagnostic_filter::Severity::Off,
-                    triggering_rule: FilterableTriggeringRule::DerivativeUniformity,
+            // Test that the same thing passes when we disable the `derivative_uniformity`
+            let mut diagnostic_filters = Arena::new();
+            let diagnostic_filter_leaf = diagnostic_filters.append(
+                DiagnosticFilterNode {
+                    inner: crate::diagnostic_filter::DiagnosticFilter {
+                        new_severity: crate::diagnostic_filter::Severity::Off,
+                        triggering_rule:
+                            crate::diagnostic_filter::FilterableTriggeringRule::Standard(
+                                StandardFilterableTriggeringRule::DerivativeUniformity,
+                            ),
+                    },
+                    parent: None,
                 },
-                parent: None,
-            },
-            crate::Span::default(),
-        );
-        let mut info = FunctionInfo {
-            diagnostic_filter_leaf: Some(diagnostic_filter_leaf),
-            ..info.clone()
-        };
+                crate::Span::default(),
+            );
+            let mut info = FunctionInfo {
+                diagnostic_filter_leaf: Some(diagnostic_filter_leaf),
+                ..info.clone()
+            };
 
-        let block_info = info.process_block(
-            &vec![stmt_emit2, stmt_if_non_uniform].into(),
-            &[],
-            None,
-            &expressions,
-            &diagnostic_filters,
-        );
-        assert_eq!(
-            block_info,
-            Ok(FunctionUniformity {
-                result: Uniformity {
-                    non_uniform_result: None,
-                    requirements: UniformityRequirements::DERIVATIVE,
-                },
-                exit: ExitFlags::empty()
-            }),
-        );
-        assert_eq!(info[derivative_expr].ref_count, 2);
+            let block_info = info.process_block(
+                &vec![stmt_emit2, stmt_if_non_uniform].into(),
+                &[],
+                None,
+                &expressions,
+                &diagnostic_filters,
+            );
+            assert_eq!(
+                block_info,
+                Ok(FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: None,
+                        requirements: UniformityRequirements::DERIVATIVE,
+                    },
+                    exit: ExitFlags::empty()
+                }),
+            );
+            assert_eq!(info[derivative_expr].ref_count, 2);
+        }
     }
     assert_eq!(info[non_uniform_global], GlobalUse::READ);
 

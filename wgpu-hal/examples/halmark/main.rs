@@ -344,7 +344,7 @@ impl<A: hal::Api> Example<A> {
                 usage: hal::TextureUses::COPY_DST..hal::TextureUses::RESOURCE,
             };
             let copy = hal::BufferTextureCopy {
-                buffer_layout: wgt::ImageDataLayout {
+                buffer_layout: wgt::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4),
                     rows_per_image: None,
@@ -559,7 +559,7 @@ impl<A: hal::Api> Example<A> {
 
             for mut ctx in self.contexts {
                 ctx.wait_and_clear(&self.device);
-                self.device.destroy_command_encoder(ctx.encoder);
+                drop(ctx.encoder);
                 self.device.destroy_fence(ctx.fence);
             }
 
@@ -579,7 +579,8 @@ impl<A: hal::Api> Example<A> {
             self.device.destroy_pipeline_layout(self.pipeline_layout);
 
             self.surface.unconfigure(&self.device);
-            self.device.exit(self.queue);
+            drop(self.queue);
+            drop(self.device);
             drop(self.surface);
             drop(self.adapter);
         }

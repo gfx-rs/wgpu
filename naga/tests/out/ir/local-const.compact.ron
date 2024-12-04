@@ -133,6 +133,7 @@
                     end: 5,
                 )),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [],

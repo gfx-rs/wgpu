@@ -269,12 +269,12 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                     !valid,
                     || {
                         ctx.queue.copy_external_image_to_texture(
-                            &wgpu::ImageCopyExternalImage {
+                            &wgpu::CopyExternalImageSourceInfo {
                                 source: source.clone(),
                                 origin: src_origin,
                                 flip_y: src_flip_y,
                             },
-                            wgpu::ImageCopyTextureTagged {
+                            wgt::CopyExternalImageDestInfo {
                                 texture: &texture,
                                 mip_level: 0,
                                 origin: dest_origin,
@@ -299,7 +299,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                     .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
                 encoder.copy_texture_to_buffer(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d {
@@ -309,9 +309,9 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                         },
                         aspect: wgpu::TextureAspect::All,
                     },
-                    wgpu::ImageCopyBuffer {
+                    wgpu::TexelCopyBufferInfo {
                         buffer: &readback_buffer,
-                        layout: wgpu::ImageDataLayout {
+                        layout: wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(256),
                             rows_per_image: None,

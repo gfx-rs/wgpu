@@ -216,7 +216,12 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
                     rest_to_str!(bytes),
                 )
             } else {
-                let kind = consume_map!(bytes, [b'i' => IntKind::I32, b'u' => IntKind::U32]);
+                let kind = consume_map!(bytes, [
+                    b'i' => IntKind::I32,
+                    b'u' => IntKind::U32,
+                    b'l', b'i' => IntKind::I64,
+                    b'l', b'u' => IntKind::U64,
+                ]);
 
                 (parse_hex_int(digits, kind), rest_to_str!(bytes))
             }

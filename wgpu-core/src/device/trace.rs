@@ -121,9 +121,9 @@ pub enum Action<'a> {
         queued: bool,
     },
     WriteTexture {
-        to: crate::command::ImageCopyTexture,
+        to: crate::command::TexelCopyTextureInfo,
         data: FileName,
-        layout: wgt::ImageDataLayout,
+        layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command>),
@@ -153,18 +153,18 @@ pub enum Command {
         size: wgt::BufferAddress,
     },
     CopyBufferToTexture {
-        src: crate::command::ImageCopyBuffer,
-        dst: crate::command::ImageCopyTexture,
+        src: crate::command::TexelCopyBufferInfo,
+        dst: crate::command::TexelCopyTextureInfo,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
-        src: crate::command::ImageCopyTexture,
-        dst: crate::command::ImageCopyBuffer,
+        src: crate::command::TexelCopyTextureInfo,
+        dst: crate::command::TexelCopyBufferInfo,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
-        src: crate::command::ImageCopyTexture,
-        dst: crate::command::ImageCopyTexture,
+        src: crate::command::TexelCopyTextureInfo,
+        dst: crate::command::TexelCopyTextureInfo,
         size: wgt::Extent3d,
     },
     ClearBuffer {

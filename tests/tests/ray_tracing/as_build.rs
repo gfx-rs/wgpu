@@ -1,4 +1,4 @@
-use std::mem;
+use std::{iter, mem};
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -282,4 +282,37 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         },
         None,
     );
+}
+
+#[gpu_test]
+static EMPTY_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+    )
+    .run_sync(empty_build);
+fn empty_build(ctx: TestingContext) {
+    let mut encoder_safe = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    encoder_safe.build_acceleration_structures(iter::empty(), iter::empty());
+
+    let mut encoder_unsafe = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    // # SAFETY:
+    // we don't actually do anything so all the requirements are satisfied
+    unsafe {
+        encoder_unsafe.build_acceleration_structures_unsafe_tlas(iter::empty(), iter::empty());
+    }
+
+    ctx.queue
+        .submit([encoder_safe.finish(), encoder_unsafe.finish()]);
 }

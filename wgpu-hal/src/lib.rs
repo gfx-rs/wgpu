@@ -676,7 +676,7 @@ pub trait Adapter: WasmNotSendSync {
 /// 1)  Free resources with methods like [`Device::destroy_texture`] or
 ///     [`Device::destroy_shader_module`].
 ///
-/// 1)  Shut down the device by calling [`Device::exit`].
+/// 1)  Drop the device.
 ///
 /// [`vkDevice`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VkDevice
 /// [`ID3D12Device`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device
@@ -706,8 +706,6 @@ pub trait Adapter: WasmNotSendSync {
 pub trait Device: WasmNotSendSync {
     type A: Api;
 
-    /// Exit connection to this logical device.
-    unsafe fn exit(self, queue: <Self::A as Api>::Queue);
     /// Creates a new buffer.
     ///
     /// The initial usage is `BufferUses::empty()`.
@@ -844,7 +842,6 @@ pub trait Device: WasmNotSendSync {
         &self,
         desc: &CommandEncoderDescriptor<<Self::A as Api>::Queue>,
     ) -> Result<<Self::A as Api>::CommandEncoder, DeviceError>;
-    unsafe fn destroy_command_encoder(&self, pool: <Self::A as Api>::CommandEncoder);
 
     /// Creates a bind group layout.
     unsafe fn create_bind_group_layout(
@@ -973,6 +970,7 @@ pub trait Device: WasmNotSendSync {
         &self,
         acceleration_structure: <Self::A as Api>::AccelerationStructure,
     );
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8>;
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
 
@@ -1111,8 +1109,6 @@ pub trait Queue: WasmNotSendSync {
 /// - A `CommandBuffer` must not outlive the `CommandEncoder` that
 ///   built it.
 ///
-/// - A `CommandEncoder` must not outlive its `Device`.
-///
 /// It is the user's responsibility to meet this requirements. This
 /// allows `CommandEncoder` implementations to keep their state
 /// tracking to a minimum.
@@ -1207,7 +1203,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
-        src: &wgt::ImageCopyExternalImage,
+        src: &wgt::CopyExternalImageSourceInfo,
         dst: &<Self::A as Api>::Texture,
         dst_premultiplication: bool,
         regions: T,
@@ -1544,9 +1540,11 @@ bitflags!(
         /// Format can be sampled with a min/max reduction sampler.
         const SAMPLED_MINMAX = 1 << 2;
 
+        /// Format can be used as storage with read-only access.
+        const STORAGE_READ_ONLY = 1 << 16;
         /// Format can be used as storage with write-only access.
-        const STORAGE = 1 << 3;
-        /// Format can be used as storage with read and read/write access.
+        const STORAGE_WRITE_ONLY = 1 << 3;
+        /// Format can be used as storage with both read and write access.
         const STORAGE_READ_WRITE = 1 << 4;
         /// Format can be used as storage with atomics.
         const STORAGE_ATOMIC = 1 << 5;
@@ -1607,7 +1605,7 @@ impl FormatAspects {
 
     /// Returns `true` if only one flag is set
     pub fn is_one(&self) -> bool {
-        self.bits().count_ones() == 1
+        self.bits().is_power_of_two()
     }
 
     pub fn map(&self) -> wgt::TextureAspect {
@@ -1676,8 +1674,10 @@ bitflags::bitflags! {
         /// A uniform buffer bound in a bind group.
         const UNIFORM = 1 << 6;
         /// A read-only storage buffer used in a bind group.
-        const STORAGE_READ = 1 << 7;
-        /// A read-write or write-only buffer used in a bind group.
+        const STORAGE_READ_ONLY = 1 << 7;
+        /// A write-only storage buffer used in a bind group.
+        const STORAGE_WRITE_ONLY = 1 << 8;
+        /// A read-write buffer used in a bind group.
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
@@ -1689,7 +1689,7 @@ bitflags::bitflags! {
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
-            Self::STORAGE_READ.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
+            Self::STORAGE_READ_ONLY.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
         /// The combination of states that a buffer must exclusively be in.
         const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits() | Self::ACCELERATION_STRUCTURE_SCRATCH.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
@@ -1720,17 +1720,19 @@ bitflags::bitflags! {
         /// Read-write depth stencil usage
         const DEPTH_STENCIL_WRITE = 1 << 7;
         /// Read-only storage buffer usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
-        const STORAGE_READ = 1 << 8;
-        /// Read-write or write-only storage buffer usage.
+        const STORAGE_READ_ONLY = 1 << 8;
+        /// Write-only storage buffer usage.
+        const STORAGE_WRITE_ONLY = 1 << 9;
+        /// Read-write storage buffer usage.
         const STORAGE_READ_WRITE = 1 << 9;
         /// The combination of states that a texture may be in _at the same time_.
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
         /// The combination of states that a texture must exclusively be in.
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits() | Self::STORAGE_READ_WRITE.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits();
+        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 10;
@@ -1773,6 +1775,12 @@ pub struct Alignments {
     /// [`Uniform`]: wgt::BufferBindingType::Uniform
     /// [size]: BufferBinding::size
     pub uniform_bounds_check_alignment: wgt::BufferSize,
+
+    /// The size of the raw TLAS instance
+    pub raw_tlas_instance_size: usize,
+
+    /// What the scratch buffer for building an acceleration structure must be aligned to
+    pub ray_tracing_scratch_buffer_alignment: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -2291,7 +2299,7 @@ pub struct TextureCopy {
 
 #[derive(Clone, Debug)]
 pub struct BufferTextureCopy {
-    pub buffer_layout: wgt::ImageDataLayout,
+    pub buffer_layout: wgt::TexelCopyBufferLayout,
     pub texture_base: TextureCopyBase,
     pub size: CopyExtent,
 }
@@ -2520,4 +2528,12 @@ bitflags::bitflags! {
 #[derive(Debug, Clone)]
 pub struct AccelerationStructureBarrier {
     pub usage: Range<AccelerationStructureUses>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct TlasInstance {
+    pub transform: [f32; 12],
+    pub custom_index: u32,
+    pub mask: u8,
+    pub blas_address: u64,
 }

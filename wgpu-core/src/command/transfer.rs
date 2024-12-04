@@ -27,9 +27,27 @@ use std::sync::Arc;
 
 use super::{ClearError, CommandBufferMutable};
 
-pub type ImageCopyBuffer = wgt::ImageCopyBuffer<BufferId>;
-pub type ImageCopyTexture = wgt::ImageCopyTexture<TextureId>;
-pub type ImageCopyTextureTagged = wgt::ImageCopyTextureTagged<TextureId>;
+pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<BufferId>;
+pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<TextureId>;
+pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<TextureId>;
+
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyBufferInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyBuffer = wgt::TexelCopyBufferInfo<BufferId>;
+
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyTextureInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyTexture = wgt::TexelCopyTextureInfo<TextureId>;
+
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyTextureSourceInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyTextureTagged = wgt::CopyExternalImageDestInfo<TextureId>;
 
 #[derive(Clone, Copy, Debug)]
 pub enum CopySide {
@@ -91,8 +109,6 @@ pub enum TransferError {
     UnspecifiedRowsPerImage,
     #[error("Number of bytes per row is less than the number of bytes in a complete row")]
     InvalidBytesPerRow,
-    #[error("Image is 1D and the copy height and depth are not both set to 1")]
-    InvalidCopySize,
     #[error("Number of rows per image is invalid")]
     InvalidRowsPerImage,
     #[error("Copy source aspects must refer to all aspects of the source texture format")]
@@ -155,7 +171,7 @@ impl From<DeviceError> for CopyError {
 }
 
 pub(crate) fn extract_texture_selector<T>(
-    copy_texture: &wgt::ImageCopyTexture<T>,
+    copy_texture: &wgt::TexelCopyTextureInfo<T>,
     copy_size: &Extent3d,
     texture: &Texture,
 ) -> Result<(TextureSelector, hal::TextureCopyBase), TransferError> {
@@ -205,7 +221,7 @@ pub(crate) fn extract_texture_selector<T>(
 ///
 /// [vltd]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-linear-texture-data
 pub(crate) fn validate_linear_texture_data(
-    layout: &wgt::ImageDataLayout,
+    layout: &wgt::TexelCopyBufferLayout,
     format: wgt::TextureFormat,
     aspect: wgt::TextureAspect,
     buffer_size: BufferAddress,
@@ -313,7 +329,7 @@ pub(crate) fn validate_linear_texture_data(
 ///
 /// [vtcr]: https://gpuweb.github.io/gpuweb/#validating-texture-copy-range
 pub(crate) fn validate_texture_copy_range<T>(
-    texture_copy_view: &wgt::ImageCopyTexture<T>,
+    texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
     desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     texture_side: CopySide,
     copy_size: &Extent3d,
@@ -406,7 +422,7 @@ fn handle_texture_init(
     init_kind: MemoryInitKind,
     cmd_buf_data: &mut CommandBufferMutable,
     device: &Device,
-    copy_texture: &ImageCopyTexture,
+    copy_texture: &TexelCopyTextureInfo,
     copy_size: &Extent3d,
     texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
@@ -455,7 +471,7 @@ fn handle_texture_init(
 fn handle_src_texture_init(
     cmd_buf_data: &mut CommandBufferMutable,
     device: &Device,
-    source: &ImageCopyTexture,
+    source: &TexelCopyTextureInfo,
     copy_size: &Extent3d,
     texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
@@ -479,7 +495,7 @@ fn handle_src_texture_init(
 fn handle_dst_texture_init(
     cmd_buf_data: &mut CommandBufferMutable,
     device: &Device,
-    destination: &ImageCopyTexture,
+    destination: &TexelCopyTextureInfo,
     copy_size: &Extent3d,
     texture: &Arc<Texture>,
     snatch_guard: &SnatchGuard<'_>,
@@ -533,8 +549,9 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
@@ -636,6 +653,7 @@ impl Global {
 
         if size == 0 {
             log::trace!("Ignoring copy_buffer_to_buffer of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -669,14 +687,16 @@ impl Global {
             cmd_buf_raw.transition_buffers(&barriers);
             cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
         }
+
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
     pub fn command_encoder_copy_buffer_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &ImageCopyBuffer,
-        destination: &ImageCopyTexture,
+        source: &TexelCopyBufferInfo,
+        destination: &TexelCopyTextureInfo,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_buffer_to_texture");
@@ -691,8 +711,9 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
@@ -708,6 +729,7 @@ impl Global {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_buffer_to_texture of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -730,7 +752,7 @@ impl Global {
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
         handle_dst_texture_init(
-            &mut cmd_buf_data,
+            cmd_buf_data,
             device,
             destination,
             copy_size,
@@ -822,14 +844,16 @@ impl Global {
             cmd_buf_raw.transition_buffers(src_barrier.as_slice());
             cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, &regions);
         }
+
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
     pub fn command_encoder_copy_texture_to_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &ImageCopyTexture,
-        destination: &ImageCopyBuffer,
+        source: &TexelCopyTextureInfo,
+        destination: &TexelCopyBufferInfo,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_texture_to_buffer");
@@ -844,14 +868,15 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.commands {
+        if let Some(list) = cmd_buf_data.commands.as_mut() {
             list.push(TraceCommand::CopyTextureToBuffer {
                 src: *source,
                 dst: *destination,
@@ -861,6 +886,7 @@ impl Global {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_buffer of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -879,7 +905,7 @@ impl Global {
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
         handle_src_texture_init(
-            &mut cmd_buf_data,
+            cmd_buf_data,
             device,
             source,
             copy_size,
@@ -989,14 +1015,16 @@ impl Global {
                 &regions,
             );
         }
+
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
     pub fn command_encoder_copy_texture_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &ImageCopyTexture,
-        destination: &ImageCopyTexture,
+        source: &TexelCopyTextureInfo,
+        destination: &TexelCopyTextureInfo,
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_texture_to_texture");
@@ -1011,8 +1039,9 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         device.check_is_valid()?;
@@ -1030,6 +1059,7 @@ impl Global {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_texture of size 0");
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -1076,7 +1106,7 @@ impl Global {
         // have an easier time inserting "immediate-inits" that may be required
         // by prior discards in rare cases.
         handle_src_texture_init(
-            &mut cmd_buf_data,
+            cmd_buf_data,
             device,
             source,
             copy_size,
@@ -1084,7 +1114,7 @@ impl Global {
             &snatch_guard,
         )?;
         handle_dst_texture_init(
-            &mut cmd_buf_data,
+            cmd_buf_data,
             device,
             destination,
             copy_size,
@@ -1149,6 +1179,7 @@ impl Global {
             );
         }
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 }

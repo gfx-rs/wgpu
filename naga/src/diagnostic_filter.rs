@@ -27,22 +27,6 @@ pub enum Severity {
 }
 
 impl Severity {
-    const ERROR: &'static str = "error";
-    const WARNING: &'static str = "warning";
-    const INFO: &'static str = "info";
-    const OFF: &'static str = "off";
-
-    /// Convert from a sentinel word in WGSL into its associated [`Severity`], if possible.
-    pub fn from_ident(s: &str) -> Option<Self> {
-        Some(match s {
-            Self::ERROR => Self::Error,
-            Self::WARNING => Self::Warning,
-            Self::INFO => Self::Info,
-            Self::OFF => Self::Off,
-            _ => return None,
-        })
-    }
-
     /// Checks whether this severity is [`Self::Error`].
     ///
     /// Naga does not yet support diagnostic items at lesser severities than
@@ -70,44 +54,40 @@ impl Severity {
 /// A filterable triggering rule in a [`DiagnosticFilter`].
 ///
 /// <https://www.w3.org/TR/WGSL/#filterable-triggering-rules>
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum FilterableTriggeringRule {
+    Standard(StandardFilterableTriggeringRule),
+    Unknown(Box<str>),
+    User(Box<[Box<str>; 2]>),
+}
+
+/// A filterable triggering rule in a [`DiagnosticFilter`].
+///
+/// <https://www.w3.org/TR/WGSL/#filterable-triggering-rules>
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum StandardFilterableTriggeringRule {
     DerivativeUniformity,
 }
 
-impl FilterableTriggeringRule {
-    const DERIVATIVE_UNIFORMITY: &'static str = "derivative_uniformity";
-
-    /// Convert from a sentinel word in WGSL into its associated [`FilterableTriggeringRule`], if possible.
-    pub fn from_ident(s: &str) -> Option<Self> {
-        Some(match s {
-            Self::DERIVATIVE_UNIFORMITY => Self::DerivativeUniformity,
-            _ => return None,
-        })
-    }
-
-    /// Maps this [`FilterableTriggeringRule`] into the sentinel word associated with it in WGSL.
-    pub const fn to_ident(self) -> &'static str {
-        match self {
-            Self::DerivativeUniformity => Self::DERIVATIVE_UNIFORMITY,
-        }
-    }
-
+impl StandardFilterableTriggeringRule {
     /// The default severity associated with this triggering rule.
     ///
     /// See <https://www.w3.org/TR/WGSL/#filterable-triggering-rules> for a table of default
     /// severities.
     pub(crate) const fn default_severity(self) -> Severity {
         match self {
-            FilterableTriggeringRule::DerivativeUniformity => Severity::Error,
+            Self::DerivativeUniformity => Severity::Error,
         }
     }
 }
 
-/// A filter that modifies how diagnostics are emitted for shaders.
+/// A filtering rule that modifies how diagnostics are emitted for shaders.
 ///
 /// <https://www.w3.org/TR/WGSL/#diagnostic-filter>
 #[derive(Clone, Debug)]
@@ -119,9 +99,35 @@ pub struct DiagnosticFilter {
     pub triggering_rule: FilterableTriggeringRule,
 }
 
-/// A map of diagnostic filters to their severity and first occurrence's span.
+/// Determines whether [`DiagnosticFilterMap::add`] should consider full duplicates a conflict.
 ///
-/// Intended for front ends' first step into storing parsed [`DiagnosticFilter`]s.
+/// In WGSL, directive position does not consider this case a conflict, while attribute position
+/// does.
+#[cfg(feature = "wgsl-in")]
+pub(crate) enum ShouldConflictOnFullDuplicate {
+    /// Use this for attributes in WGSL.
+    Yes,
+    /// Use this for directives in WGSL.
+    No,
+}
+
+/// A map from diagnostic filters to their severity and span.
+///
+/// Front ends can use this to collect the set of filters applied to a
+/// particular language construct, and detect duplicate/conflicting filters.
+///
+/// For example, WGSL has global diagnostic filters that apply to the entire
+/// module, and diagnostic range filter attributes that apply to a specific
+/// function, statement, or other smaller construct. The set of filters applied
+/// to any given construct must not conflict, but they can be overridden by
+/// filters on other constructs nested within it. A front end can use a
+/// `DiagnosticFilterMap` to collect the filters applied to a single construct,
+/// using the [`add`] method's error checking to forbid conflicts.
+///
+/// For each filter it contains, a `DiagnosticFilterMap` records the requested
+/// severity, and the source span of the filter itself.
+///
+/// [`add`]: DiagnosticFilterMap::add
 #[derive(Clone, Debug, Default)]
 #[cfg(feature = "wgsl-in")]
 pub(crate) struct DiagnosticFilterMap(IndexMap<FilterableTriggeringRule, (Severity, Span)>);
@@ -137,6 +143,7 @@ impl DiagnosticFilterMap {
         &mut self,
         diagnostic_filter: DiagnosticFilter,
         span: Span,
+        should_conflict_on_full_duplicate: ShouldConflictOnFullDuplicate,
     ) -> Result<(), ConflictingDiagnosticRuleError> {
         use indexmap::map::Entry;
 
@@ -146,21 +153,36 @@ impl DiagnosticFilterMap {
             triggering_rule,
         } = diagnostic_filter;
 
-        match diagnostic_filters.entry(triggering_rule) {
+        match diagnostic_filters.entry(triggering_rule.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert((new_severity, span));
             }
             Entry::Occupied(entry) => {
                 let &(first_severity, first_span) = entry.get();
-                if first_severity != new_severity {
+                let should_conflict_on_full_duplicate = match should_conflict_on_full_duplicate {
+                    ShouldConflictOnFullDuplicate::Yes => true,
+                    ShouldConflictOnFullDuplicate::No => false,
+                };
+                if first_severity != new_severity || should_conflict_on_full_duplicate {
                     return Err(ConflictingDiagnosticRuleError {
-                        triggering_rule,
                         triggering_rule_spans: [first_span, span],
                     });
                 }
             }
         }
         Ok(())
+    }
+
+    /// Were any rules specified?
+    pub(crate) fn is_empty(&self) -> bool {
+        let &Self(ref map) = self;
+        map.is_empty()
+    }
+
+    /// Returns the spans of all contained rules.
+    pub(crate) fn spans(&self) -> impl Iterator<Item = Span> + '_ {
+        let &Self(ref map) = self;
+        map.iter().map(|(_, &(_, span))| span)
     }
 }
 
@@ -180,7 +202,6 @@ impl IntoIterator for DiagnosticFilterMap {
 #[cfg(feature = "wgsl-in")]
 #[derive(Clone, Debug)]
 pub(crate) struct ConflictingDiagnosticRuleError {
-    pub triggering_rule: FilterableTriggeringRule,
     pub triggering_rule_spans: [Span; 2],
 }
 
@@ -222,24 +243,24 @@ pub struct DiagnosticFilterNode {
 impl DiagnosticFilterNode {
     /// Finds the most specific filter rule applicable to `triggering_rule` from the chain of
     /// diagnostic filter rules in `arena`, starting with `node`, and returns its severity. If none
-    /// is found, return the value of [`FilterableTriggeringRule::default_severity`].
+    /// is found, return the value of [`StandardFilterableTriggeringRule::default_severity`].
     ///
     /// When `triggering_rule` is not applicable to this node, its parent is consulted recursively.
     pub(crate) fn search(
         node: Option<Handle<Self>>,
         arena: &Arena<Self>,
-        triggering_rule: FilterableTriggeringRule,
+        triggering_rule: StandardFilterableTriggeringRule,
     ) -> Severity {
         let mut next = node;
         while let Some(handle) = next {
             let node = &arena[handle];
             let &Self { ref inner, parent } = node;
             let &DiagnosticFilter {
-                triggering_rule: rule,
+                triggering_rule: ref rule,
                 new_severity,
             } = inner;
 
-            if rule == triggering_rule {
+            if rule == &FilterableTriggeringRule::Standard(triggering_rule) {
                 return new_severity;
             }
 

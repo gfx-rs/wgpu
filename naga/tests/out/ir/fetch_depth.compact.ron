@@ -167,6 +167,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -189,6 +190,7 @@
                         result: None,
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],

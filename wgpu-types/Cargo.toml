@@ -35,7 +35,7 @@ serde = ["dep:serde"]
 counters = []
 
 [dependencies]
-bitflags.workspace = true
+bitflags = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

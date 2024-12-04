@@ -136,6 +136,8 @@ pub enum ExpectedToken<'a> {
     Variable,
     /// Access of a function
     Function,
+    /// The `diagnostic` identifier of the `@diagnostic(…)` attribute.
+    DiagnosticAttribute,
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq)]
@@ -296,9 +298,17 @@ pub(crate) enum Error<'a> {
         severity_control_name_span: Span,
     },
     DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError),
+    DiagnosticAttributeNotYetImplementedAtParseSite {
+        site_name_plural: &'static str,
+        spans: Vec<Span>,
+    },
+    DiagnosticAttributeNotSupported {
+        on_what_plural: &'static str,
+        spans: Vec<Span>,
+    },
 }
 
-impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
+impl From<ConflictingDiagnosticRuleError> for Error<'_> {
     fn from(value: ConflictingDiagnosticRuleError) -> Self {
         Self::DiagnosticDuplicateTriggeringRule(value)
     }
@@ -379,6 +389,9 @@ impl<'a> Error<'a> {
                     }
                     ExpectedToken::AfterIdentListComma => {
                         "next argument or end of list (';')".to_string()
+                    }
+                    ExpectedToken::DiagnosticAttribute => {
+                        "the 'diagnostic' attribute identifier".to_string()
                     }
                 };
                 ParseError {
@@ -977,6 +990,7 @@ impl<'a> Error<'a> {
                     )
                     .into(),
                 )],
+                #[allow(irrefutable_let_patterns)]
                 notes: if let EnableExtension::Unimplemented(kind) = kind {
                     vec![format!(
                         concat!(
@@ -1021,28 +1035,72 @@ impl<'a> Error<'a> {
                 .into()],
             },
             Error::DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError {
-                triggering_rule,
                 triggering_rule_spans,
             }) => {
                 let [first_span, second_span] = triggering_rule_spans;
                 ParseError {
-                    message: format!(
-                        "found conflicting `diagnostic(…)` rule(s) for `{}`",
-                        triggering_rule.to_ident()
-                    ),
+                    message: "found conflicting `diagnostic(…)` rule(s)".into(),
                     labels: vec![
                         (first_span, "first rule".into()),
                         (second_span, "second rule".into()),
                     ],
-                    notes: vec![concat!(
-                        "multiple `diagnostic(…)` rules with the same rule name ",
-                        "conflict unless the severity is the same; ",
-                        "delete the rule you don't want, or ",
-                        "ensure that all severities with the same rule name match"
-                    )
-                    .into()],
+                    notes: vec![
+                        concat!(
+                            "Multiple `diagnostic(…)` rules with the same rule name ",
+                            "conflict unless they are directives and the severity is the same.",
+                        )
+                        .into(),
+                        "You should delete the rule you don't want.".into(),
+                    ],
                 }
             }
+            Error::DiagnosticAttributeNotYetImplementedAtParseSite {
+                site_name_plural,
+                ref spans,
+            } => ParseError {
+                message: "`@diagnostic(…)` attribute(s) not yet implemented".into(),
+                labels: {
+                    let mut spans = spans.iter().cloned();
+                    let first = spans
+                        .next()
+                        .map(|span| {
+                            (
+                                span,
+                                format!("can't use this on {site_name_plural} (yet)").into(),
+                            )
+                        })
+                        .expect("internal error: diag. attr. rejection on empty map");
+                    std::iter::once(first)
+                        .chain(spans.map(|span| (span, "".into())))
+                        .collect()
+                },
+                notes: vec![format!(concat!(
+                    "Let Naga maintainers know that you ran into this at ",
+                    "<https://github.com/gfx-rs/wgpu/issues/5320>, ",
+                    "so they can prioritize it!"
+                ))],
+            },
+            Error::DiagnosticAttributeNotSupported {
+                on_what_plural,
+                ref spans,
+            } => ParseError {
+                message: format!(
+                    "`@diagnostic(…)` attribute(s) on {on_what_plural} are not supported",
+                ),
+                labels: spans
+                    .iter()
+                    .cloned()
+                    .map(|span| (span, "".into()))
+                    .collect(),
+                notes: vec![
+                    concat!(
+                        "`@diagnostic(…)` attributes are only permitted on `fn`s, ",
+                        "some statements, and `switch`/`loop` bodies."
+                    )
+                    .into(),
+                    "These attributes are well-formed, you likely just need to move them.".into(),
+                ],
+            },
         }
     }
 }

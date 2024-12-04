@@ -239,9 +239,9 @@ impl<A: hal::Api> Example<A> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgt::InstanceFlags::default(),
-            dx12_shader_compiler: wgt::Dx12Compiler::Dxc {
-                dxil_path: None,
-                dxc_path: None,
+            dx12_shader_compiler: wgt::Dx12Compiler::DynamicDxc {
+                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
+                dxil_path: std::path::PathBuf::from("dxil.dll"),
             },
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
@@ -1046,7 +1046,7 @@ impl<A: hal::Api> Example<A> {
 
             for mut ctx in self.contexts {
                 ctx.wait_and_clear(&self.device);
-                self.device.destroy_command_encoder(ctx.encoder);
+                drop(ctx.encoder);
                 self.device.destroy_fence(ctx.fence);
             }
 
@@ -1068,7 +1068,8 @@ impl<A: hal::Api> Example<A> {
             self.device.destroy_shader_module(self.shader_module);
 
             self.surface.unconfigure(&self.device);
-            self.device.exit(self.queue);
+            drop(self.queue);
+            drop(self.device);
             drop(self.surface);
             drop(self.adapter);
         }

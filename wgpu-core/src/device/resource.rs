@@ -4,12 +4,9 @@ use crate::{
     binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
     device::{
-        bgl, create_validator,
-        life::{LifetimeTracker, WaitIdleError},
-        map_buffer,
-        queue::PendingWrites,
-        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
-        RenderPassContext, CLEANUP_WAIT_MS,
+        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
+        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        CLEANUP_WAIT_MS,
     },
     hal_label,
     init_tracker::{
@@ -17,7 +14,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     instance::Adapter,
-    lock::{rank, Mutex, MutexGuard, RwLock},
+    lock::{rank, Mutex, RwLock},
     pipeline,
     pool::ResourcePool,
     resource::{
@@ -32,7 +29,7 @@ use crate::{
     },
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, PreHashedKey, PreHashedMap,
+    FastHashMap, LabelHelpers,
 };
 
 use arrayvec::ArrayVec;
@@ -53,35 +50,16 @@ use std::{
 };
 
 use super::{
-    queue::Queue, DeviceDescriptor, DeviceError, UserClosures, ENTRYPOINT_FAILURE_ERROR,
-    ZERO_BUFFER_SIZE,
+    queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
+    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
-///
-/// TODO: establish clear order of locking for these:
-/// `life_tracker`, `trackers`, `render_passes`, `pending_writes`, `trace`.
-///
-/// Currently, the rules are:
-/// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
-/// 1. `self.trackers` is locked last (unenforced)
-/// 1. `self.trace` is locked last (unenforced)
-///
-/// Right now avoid locking twice same resource or registry in a call execution
-/// and minimize the locking to the minimum scope possible
-/// Unless otherwise specified, no lock may be acquired while holding another lock.
-/// This means that you must inspect function calls made while a lock is held
-/// to see what locks the callee may try to acquire.
-///
-/// Important:
-/// When locking pending_writes please check that trackers is not locked
-/// trackers should be locked only when needed for the shortest time possible
 pub struct Device {
-    raw: ManuallyDrop<Box<dyn hal::DynDevice>>,
+    raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
     pub(crate) queue: OnceLock<Weak<Queue>>,
-    queue_to_drop: OnceLock<Box<dyn hal::DynQueue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -126,14 +104,14 @@ pub struct Device {
     /// using ref-counted references for internal access.
     pub(crate) valid: AtomicBool,
 
-    /// All live resources allocated with this [`Device`].
-    ///
-    /// Has to be locked temporarily only (locked last)
-    /// and never before pending_writes
+    /// Closure to be called on "lose the device". This is invoked directly by
+    /// device.lose or by the UserCallbacks returned from maintain when the device
+    /// has been destroyed and its queues are empty.
+    pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
+
+    /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<DeviceTracker>,
     pub(crate) tracker_indices: TrackerIndexAllocators,
-    // Life tracker should be locked right after the device and before anything else.
-    life_tracker: Mutex<LifetimeTracker>,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
     pub(crate) alignments: hal::Alignments,
@@ -141,15 +119,14 @@ pub struct Device {
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
-    pub(crate) pending_writes: Mutex<ManuallyDrop<PendingWrites>>,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
-    #[cfg(feature = "trace")]
-    pub(crate) trace: Mutex<Option<trace::Trace>>,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
-
     #[cfg(feature = "indirect-validation")]
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    // needs to be dropped last
+    #[cfg(feature = "trace")]
+    pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -171,26 +148,19 @@ impl std::fmt::Debug for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
-        // SAFETY: We are in the Drop impl and we don't use self.pending_writes anymore after this point.
-        let pending_writes = unsafe { ManuallyDrop::take(&mut self.pending_writes.lock()) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        pending_writes.dispose(raw.as_ref());
-        self.command_allocator.dispose(raw.as_ref());
         #[cfg(feature = "indirect-validation")]
         self.indirect_validation
             .take()
             .unwrap()
-            .dispose(raw.as_ref());
+            .dispose(self.raw.as_ref());
         unsafe {
-            raw.destroy_buffer(zero_buffer);
-            raw.destroy_fence(fence);
-            let queue = self.queue_to_drop.take().unwrap();
-            raw.exit(queue);
+            self.raw.destroy_buffer(zero_buffer);
+            self.raw.destroy_fence(fence);
         }
     }
 }
@@ -222,7 +192,6 @@ impl Device {
 impl Device {
     pub(crate) fn new(
         raw_device: Box<dyn hal::DynDevice>,
-        raw_queue: &dyn hal::DynQueue,
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
@@ -235,10 +204,6 @@ impl Device {
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
-        let pending_encoder = command_allocator
-            .acquire_encoder(raw_device.as_ref(), raw_queue)
-            .map_err(DeviceError::from_hal)?;
-        let mut pending_writes = PendingWrites::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
@@ -250,24 +215,6 @@ impl Device {
             })
         }
         .map_err(DeviceError::from_hal)?;
-        pending_writes.activate();
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                }]);
-            pending_writes
-                .command_encoder
-                .clear_buffer(zero_buffer.as_ref(), 0..ZERO_BUFFER_SIZE);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
-                }]);
-        }
 
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
@@ -292,10 +239,9 @@ impl Device {
         };
 
         Ok(Self {
-            raw: ManuallyDrop::new(raw_device),
+            raw: raw_device,
             adapter: adapter.clone(),
             queue: OnceLock::new(),
-            queue_to_drop: OnceLock::new(),
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
@@ -304,9 +250,9 @@ impl Device {
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
+            device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
             trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
-            life_tracker: Mutex::new(rank::DEVICE_LIFE_TRACKER, LifetimeTracker::new()),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(
@@ -330,10 +276,6 @@ impl Device {
             features: desc.required_features,
             downlevel,
             instance_flags,
-            pending_writes: Mutex::new(
-                rank::DEVICE_PENDING_WRITES,
-                ManuallyDrop::new(pending_writes),
-            ),
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             // By starting at one, we can put the result in a NonZeroU64.
@@ -370,15 +312,6 @@ impl Device {
             }
         }
         DeviceError::from_hal(error)
-    }
-
-    pub(crate) fn release_queue(&self, queue: Box<dyn hal::DynQueue>) {
-        assert!(self.queue_to_drop.set(queue).is_ok());
-    }
-
-    #[track_caller]
-    pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker> {
-        self.life_tracker.lock()
     }
 
     /// Run some destroy operations that were deferred.
@@ -493,13 +426,12 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
         }
 
-        let mut life_tracker = self.lock_life();
-        let submission_closures =
-            life_tracker.triage_submissions(submission_index, &self.command_allocator);
-
-        let mapping_closures = life_tracker.handle_mapping(self.raw(), &snatch_guard);
-
-        let queue_empty = life_tracker.queue_empty();
+        let (submission_closures, mapping_closures, queue_empty) =
+            if let Some(queue) = self.get_queue() {
+                queue.maintain(submission_index, &snatch_guard)
+            } else {
+                (SmallVec::new(), Vec::new(), true)
+            };
 
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
@@ -515,9 +447,9 @@ impl Device {
 
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
-            if life_tracker.device_lost_closure.is_some() {
+            if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
                 device_lost_invocations.push(DeviceLostInvocation {
-                    closure: life_tracker.device_lost_closure.take().unwrap(),
+                    closure: device_lost_closure,
                     reason: DeviceLostReason::Destroyed,
                     message: String::new(),
                 });
@@ -525,7 +457,6 @@ impl Device {
         }
 
         // Don't hold the locks while calling release_gpu_resources.
-        drop(life_tracker);
         drop(fence);
         drop(snatch_guard);
 
@@ -565,7 +496,9 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)?;
         }
 
-        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+        if desc.usage.is_empty()
+            || desc.usage | wgt::BufferUsages::all() != wgt::BufferUsages::all()
+        {
             return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
         }
 
@@ -589,7 +522,16 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
             // We are going to be reading from it, internally;
             // when validating the content of the buffer
-            usage |= hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_READ_WRITE;
+            if !usage.intersects(
+                hal::BufferUses::STORAGE_READ_ONLY | hal::BufferUses::STORAGE_READ_WRITE,
+            ) {
+                if usage.contains(hal::BufferUses::STORAGE_WRITE_ONLY) {
+                    usage |= hal::BufferUses::STORAGE_READ_WRITE;
+                    usage &= !hal::BufferUses::STORAGE_WRITE_ONLY;
+                } else {
+                    usage |= hal::BufferUses::STORAGE_READ_ONLY;
+                }
+            }
         }
 
         if desc.mapped_at_creation {
@@ -666,14 +608,7 @@ impl Device {
                 }
             } else {
                 let snatch_guard: SnatchGuard = self.snatchable_lock.read();
-                map_buffer(
-                    self.raw(),
-                    &buffer,
-                    0,
-                    map_size,
-                    HostMap::Write,
-                    &snatch_guard,
-                )?
+                map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
             };
             *buffer.map_state.lock() = resource::BufferMapState::Active {
                 mapping,
@@ -806,7 +741,9 @@ impl Device {
 
         self.check_is_valid()?;
 
-        if desc.usage.is_empty() || desc.usage.contains_invalid_bits() {
+        if desc.usage.is_empty()
+            || desc.usage | wgt::TextureUsages::all() != wgt::TextureUsages::all()
+        {
             return Err(CreateTextureError::InvalidUsage(desc.usage));
         }
 
@@ -1329,7 +1266,8 @@ impl Device {
                 }
                 TextureViewDimension::D3 => {
                     hal::TextureUses::RESOURCE
-                        | hal::TextureUses::STORAGE_READ
+                        | hal::TextureUses::STORAGE_READ_ONLY
+                        | hal::TextureUses::STORAGE_WRITE_ONLY
                         | hal::TextureUses::STORAGE_READ_WRITE
                 }
                 _ => hal::TextureUses::all(),
@@ -1878,7 +1816,7 @@ impl Device {
                     })?;
             }
 
-            if entry.visibility.contains_invalid_bits() {
+            if entry.visibility | wgt::ShaderStages::all() != wgt::ShaderStages::all() {
                 return Err(
                     binding_model::CreateBindGroupLayoutError::InvalidVisibility(entry.visibility),
                 );
@@ -1991,7 +1929,7 @@ impl Device {
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsages::STORAGE,
                 if read_only {
-                    hal::BufferUses::STORAGE_READ
+                    hal::BufferUses::STORAGE_READ_ONLY
                 } else {
                     hal::BufferUses::STORAGE_READ_WRITE
                 },
@@ -2519,6 +2457,7 @@ impl Device {
                             binding,
                             layout_sample_type: sample_type,
                             view_format: view.desc.format,
+                            view_sample_type: compat_sample_type,
                         })
                     }
                 }
@@ -2563,16 +2502,23 @@ impl Device {
                 }
 
                 let internal_use = match access {
-                    wgt::StorageTextureAccess::WriteOnly => hal::TextureUses::STORAGE_READ_WRITE,
+                    wgt::StorageTextureAccess::WriteOnly => {
+                        if !view.format_features.flags.intersects(
+                            wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                        ) {
+                            return Err(Error::StorageWriteNotSupported(view.desc.format));
+                        }
+                        hal::TextureUses::STORAGE_WRITE_ONLY
+                    }
                     wgt::StorageTextureAccess::ReadOnly => {
-                        if !view
-                            .format_features
-                            .flags
-                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
-                        {
+                        if !view.format_features.flags.intersects(
+                            wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                        ) {
                             return Err(Error::StorageReadNotSupported(view.desc.format));
                         }
-                        hal::TextureUses::STORAGE_READ
+                        hal::TextureUses::STORAGE_READ_ONLY
                     }
                     wgt::StorageTextureAccess::ReadWrite => {
                         if !view
@@ -2580,7 +2526,7 @@ impl Device {
                             .flags
                             .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
                         {
-                            return Err(Error::StorageReadNotSupported(view.desc.format));
+                            return Err(Error::StorageReadWriteNotSupported(view.desc.format));
                         }
 
                         hal::TextureUses::STORAGE_READ_WRITE
@@ -2711,18 +2657,18 @@ impl Device {
             derived_group_layouts.pop();
         }
 
-        let mut unique_bind_group_layouts = PreHashedMap::default();
+        let mut unique_bind_group_layouts = FastHashMap::default();
 
         let bind_group_layouts = derived_group_layouts
             .into_iter()
             .map(|mut bgl_entry_map| {
                 bgl_entry_map.sort();
-                match unique_bind_group_layouts.entry(PreHashedKey::from_key(&bgl_entry_map)) {
+                match unique_bind_group_layouts.entry(bgl_entry_map) {
                     std::collections::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
                     std::collections::hash_map::Entry::Vacant(e) => {
                         match self.create_bind_group_layout(
                             &None,
-                            bgl_entry_map,
+                            e.key().clone(),
                             bgl::Origin::Derived,
                         ) {
                             Ok(bgl) => {
@@ -3042,7 +2988,7 @@ impl Device {
             if let Some(cs) = cs.as_ref() {
                 target_specified = true;
                 let error = 'error: {
-                    if cs.write_mask.contains_invalid_bits() {
+                    if cs.write_mask | wgt::ColorWrites::all() != wgt::ColorWrites::all() {
                         break 'error Some(pipeline::ColorStateError::InvalidWriteMask(
                             cs.write_mask,
                         ));
@@ -3605,13 +3551,13 @@ impl Device {
             unsafe { self.raw().wait(fence.as_ref(), submission_index, !0) }
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
-            let closures = self
-                .lock_life()
-                .triage_submissions(submission_index, &self.command_allocator);
-            assert!(
-                closures.is_empty(),
-                "wait_for_submit is not expected to work with closures"
-            );
+            if let Some(queue) = self.get_queue() {
+                let closures = queue.lock_life().triage_submissions(submission_index);
+                assert!(
+                    closures.is_empty(),
+                    "wait_for_submit is not expected to work with closures"
+                );
+            }
         }
         Ok(())
     }
@@ -3671,14 +3617,8 @@ impl Device {
         self.valid.store(false, Ordering::Release);
 
         // 1) Resolve the GPUDevice device.lost promise.
-        let mut life_lock = self.lock_life();
-        let closure = life_lock.device_lost_closure.take();
-        // It's important to not hold the lock while calling the closure and while calling
-        // release_gpu_resources which may take the lock again.
-        drop(life_lock);
-
-        if let Some(device_lost_closure) = closure {
-            device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
+        if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
+            device_lost_closure(DeviceLostReason::Unknown, message.to_string());
         }
 
         // 2) Complete any outstanding mapAsync() steps.
@@ -3726,34 +3666,6 @@ impl Device {
 
     pub fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         self.raw().generate_allocator_report()
-    }
-}
-
-impl Device {
-    /// Wait for idle and remove resources that we can, before we die.
-    pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.lock().deactivate();
-        let current_index = self
-            .last_successful_submission_index
-            .load(Ordering::Acquire);
-        if let Err(error) = unsafe {
-            let fence = self.fence.read();
-            self.raw()
-                .wait(fence.as_ref(), current_index, CLEANUP_WAIT_MS)
-        } {
-            log::error!("failed to wait for the device: {error}");
-        }
-        let mut life_tracker = self.lock_life();
-        let _ = life_tracker.triage_submissions(current_index, &self.command_allocator);
-        if let Some(device_lost_closure) = life_tracker.device_lost_closure.take() {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_tracker);
-            device_lost_closure.call(DeviceLostReason::Dropped, "Device is dying.".to_string());
-        }
-        #[cfg(feature = "trace")]
-        {
-            *self.trace.lock() = None;
-        }
     }
 }
 

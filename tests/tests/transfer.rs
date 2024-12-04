@@ -40,13 +40,13 @@ static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_s
         || {
             // Validation should catch the silly selected z layer range without panicking.
             encoder.copy_texture_to_texture(
-                wgpu::ImageCopyTexture {
+                wgpu::TexelCopyTextureInfo {
                     texture: &t1,
                     mip_level: 1,
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
-                wgpu::ImageCopyTexture {
+                wgpu::TexelCopyTextureInfo {
                     texture: &t2,
                     mip_level: 1,
                     origin: wgpu::Origin3d {

@@ -99,6 +99,7 @@ impl Drop for super::CommandEncoder {
     fn drop(&mut self) {
         use crate::CommandEncoder;
         unsafe { self.discard_encoding() }
+        self.counters.command_encoders.sub(1);
     }
 }
 
@@ -367,7 +368,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
-        src: &wgt::ImageCopyExternalImage,
+        src: &wgt::CopyExternalImageSourceInfo,
         dst: &super::Texture,
         dst_premultiplication: bool,
         regions: T,

@@ -369,5 +369,6 @@ float4 depth_no_comparison() : SV_Target0
     float2 tc_3 = (0.5).xx;
     float s2d_1 = image_2d_depth.Sample(sampler_reg, tc_3);
     float4 s2d_gather = image_2d_depth.Gather(sampler_reg, tc_3);
-    return ((s2d_1).xxxx + s2d_gather);
+    float s2d_level = image_2d_depth.SampleLevel(sampler_reg, tc_3, 1);
+    return (((s2d_1).xxxx + s2d_gather) + (s2d_level).xxxx);
 }

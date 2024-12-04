@@ -8,6 +8,7 @@ use std::{
 
 use super::conv;
 use crate::auxil::map_naga_stage;
+use crate::TlasInstance;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -320,8 +321,6 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn exit(self, _queue: super::Queue) {}
-
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
         let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
@@ -586,11 +585,8 @@ impl crate::Device for super::Device {
             raw_cmd_buf: None,
             state: super::CommandState::default(),
             temp: super::Temp::default(),
+            counters: Arc::clone(&self.counters),
         })
-    }
-
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1327,9 +1323,15 @@ impl crate::Device for super::Device {
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         self.counters.fences.add(1);
+        let shared_event = if self.shared.private_caps.supports_shared_event {
+            Some(self.shared.device.lock().new_shared_event())
+        } else {
+            None
+        };
         Ok(super::Fence {
             completed_value: Arc::new(atomic::AtomicU64::new(0)),
             pending_command_buffers: Vec::new(),
+            shared_event,
         })
     }
 
@@ -1428,7 +1430,11 @@ impl crate::Device for super::Device {
         unimplemented!()
     }
 
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+        unimplemented!()
+    }
+
     fn get_internal_counters(&self) -> wgt::HalCounters {
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 }

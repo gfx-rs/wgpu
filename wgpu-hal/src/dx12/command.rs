@@ -64,6 +64,7 @@ impl Drop for super::CommandEncoder {
     fn drop(&mut self) {
         use crate::CommandEncoder;
         unsafe { self.discard_encoding() }
+        self.counters.command_encoders.sub(1);
     }
 }
 

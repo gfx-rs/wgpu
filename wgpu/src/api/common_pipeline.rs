@@ -22,7 +22,7 @@ pub struct PipelineCompilationOptions<'a> {
     pub zero_initialize_workgroup_memory: bool,
 }
 
-impl<'a> Default for PipelineCompilationOptions<'a> {
+impl Default for PipelineCompilationOptions<'_> {
     fn default() -> Self {
         // HashMap doesn't have a const constructor, due to the use of RandomState
         // This does introduce some synchronisation costs, but these should be minor,

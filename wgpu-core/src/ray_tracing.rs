@@ -13,8 +13,8 @@ use crate::{
     id::{BlasId, BufferId, TlasId},
     resource::CreateBufferError,
 };
+use std::num::NonZeroU64;
 use std::sync::Arc;
-use std::{num::NonZeroU64, slice};
 
 use crate::resource::{Blas, ResourceErrorIdent, Tlas};
 use thiserror::Error;
@@ -44,8 +44,6 @@ pub enum CreateTlasError {
     CreateBufferError(#[from] CreateBufferError),
     #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
     MissingFeature,
-    #[error("Unimplemented Tlas error: this error is not yet implemented")]
-    Unimplemented,
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -132,9 +130,6 @@ pub enum BuildAccelerationStructureError {
     #[error("BlasId is invalid or destroyed (for instance)")]
     InvalidBlasIdForInstance,
 
-    #[error("Blas {0:?} is invalid or destroyed (for instance)")]
-    InvalidBlasForInstance(ResourceErrorIdent),
-
     #[error("TlasId is invalid or destroyed")]
     InvalidTlasId,
 
@@ -150,18 +145,12 @@ pub enum BuildAccelerationStructureError {
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateBlasActionsError {
-    #[error("BlasId is invalid or destroyed")]
-    InvalidBlas,
-
     #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateTlasActionsError {
-    #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(ResourceErrorIdent),
-
     #[error("Tlas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 
@@ -286,52 +275,4 @@ pub struct TraceTlasPackage {
     pub tlas_id: TlasId,
     pub instances: Vec<Option<TraceTlasInstance>>,
     pub lowest_unmodified: u32,
-}
-
-pub(crate) fn get_raw_tlas_instance_size(backend: wgt::Backend) -> usize {
-    // TODO: this should be provided by the backend
-    match backend {
-        wgt::Backend::Empty => 0,
-        wgt::Backend::Vulkan => 64,
-        _ => unimplemented!(),
-    }
-}
-
-#[derive(Clone)]
-#[repr(C)]
-struct RawTlasInstance {
-    transform: [f32; 12],
-    custom_index_and_mask: u32,
-    shader_binding_table_record_offset_and_flags: u32,
-    acceleration_structure_reference: u64,
-}
-
-pub(crate) fn tlas_instance_into_bytes(
-    instance: &TlasInstance,
-    blas_address: u64,
-    backend: wgt::Backend,
-) -> Vec<u8> {
-    // TODO: get the device to do this
-    match backend {
-        wgt::Backend::Empty => vec![],
-        wgt::Backend::Vulkan => {
-            const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
-            let temp = RawTlasInstance {
-                transform: *instance.transform,
-                custom_index_and_mask: (instance.custom_index & MAX_U24)
-                    | (u32::from(instance.mask) << 24),
-                shader_binding_table_record_offset_and_flags: 0,
-                acceleration_structure_reference: blas_address,
-            };
-            let temp: *const _ = &temp;
-            unsafe {
-                slice::from_raw_parts::<u8>(
-                    temp.cast::<u8>(),
-                    std::mem::size_of::<RawTlasInstance>(),
-                )
-                .to_vec()
-            }
-        }
-        _ => unimplemented!(),
-    }
 }

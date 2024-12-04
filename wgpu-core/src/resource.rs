@@ -188,39 +188,6 @@ macro_rules! impl_trackable {
     };
 }
 
-/// The status code provided to the buffer mapping callback.
-///
-/// This is very similar to `BufferAccessResult`, except that this is FFI-friendly.
-#[repr(C)]
-#[derive(Debug)]
-pub enum BufferMapAsyncStatus {
-    /// The Buffer is successfully mapped, `get_mapped_range` can be called.
-    ///
-    /// All other variants of this enum represent failures to map the buffer.
-    Success,
-    /// The buffer is already mapped.
-    ///
-    /// While this is treated as an error, it does not prevent mapped range from being accessed.
-    AlreadyMapped,
-    /// Mapping was already requested.
-    MapAlreadyPending,
-    /// An unknown error.
-    Error,
-    /// Mapping was aborted (by unmapping or destroying the buffer before mapping
-    /// happened).
-    Aborted,
-    /// The context is Lost.
-    ContextLost,
-    /// The buffer is in an invalid state.
-    Invalid,
-    /// The range isn't fully contained in the buffer.
-    InvalidRange,
-    /// The range isn't properly aligned.
-    InvalidAlignment,
-    /// Incompatible usage flags.
-    InvalidUsageFlags,
-}
-
 #[derive(Debug)]
 pub(crate) enum BufferMapState {
     /// Mapped at creation.
@@ -242,105 +209,23 @@ unsafe impl Send for BufferMapState {}
 #[cfg(send_sync)]
 unsafe impl Sync for BufferMapState {}
 
-#[repr(C)]
-pub struct BufferMapCallbackC {
-    pub callback: unsafe extern "C" fn(status: BufferMapAsyncStatus, user_data: *mut u8),
-    pub user_data: *mut u8,
-}
-
 #[cfg(send_sync)]
-unsafe impl Send for BufferMapCallbackC {}
-
-#[derive(Debug)]
-pub struct BufferMapCallback {
-    // We wrap this so creating the enum in the C variant can be unsafe,
-    // allowing our call function to be safe.
-    inner: BufferMapCallbackInner,
-}
-
-#[cfg(send_sync)]
-type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
+pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
 #[cfg(not(send_sync))]
-type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
+pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
-enum BufferMapCallbackInner {
-    Rust { callback: BufferMapCallbackCallback },
-    C { inner: BufferMapCallbackC },
-}
-
-impl Debug for BufferMapCallbackInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            BufferMapCallbackInner::Rust { callback: _ } => f.debug_struct("Rust").finish(),
-            BufferMapCallbackInner::C { inner: _ } => f.debug_struct("C").finish(),
-        }
-    }
-}
-
-impl BufferMapCallback {
-    pub fn from_rust(callback: BufferMapCallbackCallback) -> Self {
-        Self {
-            inner: BufferMapCallbackInner::Rust { callback },
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The callback pointer must be valid to call with the provided user_data
-    ///   pointer.
-    ///
-    /// - Both pointers must point to valid memory until the callback is
-    ///   invoked, which may happen at an unspecified time.
-    pub unsafe fn from_c(inner: BufferMapCallbackC) -> Self {
-        Self {
-            inner: BufferMapCallbackInner::C { inner },
-        }
-    }
-
-    pub(crate) fn call(self, result: BufferAccessResult) {
-        match self.inner {
-            BufferMapCallbackInner::Rust { callback } => {
-                callback(result);
-            }
-            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            BufferMapCallbackInner::C { inner } => unsafe {
-                let status = match result {
-                    Ok(_) => BufferMapAsyncStatus::Success,
-                    Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
-                    Err(BufferAccessError::InvalidResource(_))
-                    | Err(BufferAccessError::DestroyedResource(_)) => BufferMapAsyncStatus::Invalid,
-                    Err(BufferAccessError::AlreadyMapped) => BufferMapAsyncStatus::AlreadyMapped,
-                    Err(BufferAccessError::MapAlreadyPending) => {
-                        BufferMapAsyncStatus::MapAlreadyPending
-                    }
-                    Err(BufferAccessError::MissingBufferUsage(_)) => {
-                        BufferMapAsyncStatus::InvalidUsageFlags
-                    }
-                    Err(BufferAccessError::UnalignedRange)
-                    | Err(BufferAccessError::UnalignedRangeSize { .. })
-                    | Err(BufferAccessError::UnalignedOffset { .. }) => {
-                        BufferMapAsyncStatus::InvalidAlignment
-                    }
-                    Err(BufferAccessError::OutOfBoundsUnderrun { .. })
-                    | Err(BufferAccessError::OutOfBoundsOverrun { .. })
-                    | Err(BufferAccessError::NegativeRange { .. }) => {
-                        BufferMapAsyncStatus::InvalidRange
-                    }
-                    Err(BufferAccessError::Failed)
-                    | Err(BufferAccessError::NotMapped)
-                    | Err(BufferAccessError::MapAborted) => BufferMapAsyncStatus::Error,
-                };
-
-                (inner.callback)(status, inner.user_data);
-            },
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct BufferMapOperation {
     pub host: HostMap,
     pub callback: Option<BufferMapCallback>,
+}
+
+impl Debug for BufferMapOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BufferMapOperation")
+            .field("host", &self.host)
+            .field("callback", &self.callback.as_ref().map(|_| "?"))
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -506,7 +391,7 @@ impl Buffer {
     pub(crate) fn try_raw<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&dyn hal::DynBuffer, DestroyedResourceError> {
+    ) -> Result<&'a dyn hal::DynBuffer, DestroyedResourceError> {
         self.raw
             .get(guard)
             .map(|raw| raw.as_ref())
@@ -634,9 +519,74 @@ impl Buffer {
             .buffers
             .set_single(self, internal_use);
 
-        let submit_index = device.lock_life().map(self).unwrap_or(0); // '0' means no wait is necessary
+        let submit_index = if let Some(queue) = device.get_queue() {
+            queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
+        } else {
+            // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
+            let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
+            if let Some(callback) = operation.callback.take() {
+                callback(status);
+            }
+            0
+        };
 
         Ok(submit_index)
+    }
+
+    /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
+    #[must_use]
+    pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
+        // This _cannot_ be inlined into the match. If it is, the lock will be held
+        // open through the whole match, resulting in a deadlock when we try to re-lock
+        // the buffer back to active.
+        let mapping = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+        let pending_mapping = match mapping {
+            BufferMapState::Waiting(pending_mapping) => pending_mapping,
+            // Mapping cancelled
+            BufferMapState::Idle => return None,
+            // Mapping queued at least twice by map -> unmap -> map
+            // and was already successfully mapped below
+            BufferMapState::Active { .. } => {
+                *self.map_state.lock() = mapping;
+                return None;
+            }
+            _ => panic!("No pending mapping."),
+        };
+        let status = if pending_mapping.range.start != pending_mapping.range.end {
+            let host = pending_mapping.op.host;
+            let size = pending_mapping.range.end - pending_mapping.range.start;
+            match crate::device::map_buffer(
+                self,
+                pending_mapping.range.start,
+                size,
+                host,
+                snatch_guard,
+            ) {
+                Ok(mapping) => {
+                    *self.map_state.lock() = BufferMapState::Active {
+                        mapping,
+                        range: pending_mapping.range.clone(),
+                        host,
+                    };
+                    Ok(())
+                }
+                Err(e) => {
+                    log::error!("Mapping failed: {e}");
+                    Err(e)
+                }
+            }
+        } else {
+            *self.map_state.lock() = BufferMapState::Active {
+                mapping: hal::BufferMapping {
+                    ptr: NonNull::dangling(),
+                    is_coherent: true,
+                },
+                range: pending_mapping.range,
+                host: pending_mapping.op.host,
+            };
+            Ok(())
+        };
+        Some((pending_mapping.op, status))
     }
 
     // Note: This must not be called while holding a lock.
@@ -649,7 +599,7 @@ impl Buffer {
             buffer_id,
         )? {
             if let Some(callback) = operation.callback.take() {
-                callback.call(status);
+                callback(status);
             }
         }
 
@@ -676,36 +626,37 @@ impl Buffer {
                     });
                 }
 
-                let mut pending_writes = device.pending_writes.lock();
-
                 let staging_buffer = staging_buffer.flush();
 
-                let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size,
-                });
-                let transition_src = hal::BufferBarrier {
-                    buffer: staging_buffer.raw(),
-                    usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
-                };
-                let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
-                    buffer: raw_buf,
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                };
-                let encoder = pending_writes.activate();
-                unsafe {
-                    encoder.transition_buffers(&[transition_src, transition_dst]);
-                    if self.size > 0 {
-                        encoder.copy_buffer_to_buffer(
-                            staging_buffer.raw(),
-                            raw_buf,
-                            region.as_slice(),
-                        );
+                if let Some(queue) = device.get_queue() {
+                    let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
+                        src_offset: 0,
+                        dst_offset: 0,
+                        size,
+                    });
+                    let transition_src = hal::BufferBarrier {
+                        buffer: staging_buffer.raw(),
+                        usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                    };
+                    let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
+                        buffer: raw_buf,
+                        usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                    };
+                    let mut pending_writes = queue.pending_writes.lock();
+                    let encoder = pending_writes.activate();
+                    unsafe {
+                        encoder.transition_buffers(&[transition_src, transition_dst]);
+                        if self.size > 0 {
+                            encoder.copy_buffer_to_buffer(
+                                staging_buffer.raw(),
+                                raw_buf,
+                                region.as_slice(),
+                            );
+                        }
                     }
+                    pending_writes.consume(staging_buffer);
+                    pending_writes.insert_buffer(self);
                 }
-                pending_writes.consume(staging_buffer);
-                pending_writes.insert_buffer(self);
             }
             BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
@@ -778,14 +729,16 @@ impl Buffer {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_buffer(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_buffer(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
         }
 
@@ -1244,14 +1197,16 @@ impl Texture {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_texture(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_texture(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
         }
 
@@ -1413,15 +1368,18 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
-        let cmd_buf_data = cmd_buf.try_get();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data_guard = cmd_buf_data.record();
 
-        if let Ok(mut cmd_buf_data) = cmd_buf_data {
-            let cmd_buf_raw = cmd_buf_data
+        if let Ok(mut cmd_buf_data_guard) = cmd_buf_data_guard {
+            let cmd_buf_raw = cmd_buf_data_guard
                 .encoder
                 .open(&cmd_buf.device)
                 .ok()
                 .and_then(|encoder| encoder.as_any_mut().downcast_mut());
-            hal_command_encoder_callback(cmd_buf_raw)
+            let ret = hal_command_encoder_callback(cmd_buf_raw);
+            cmd_buf_data_guard.mark_successful();
+            ret
         } else {
             hal_command_encoder_callback(None)
         }
@@ -1676,8 +1634,6 @@ pub enum CreateTextureViewError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("Not enough memory left to create texture view")]
-    OutOfMemory,
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
         view: wgt::TextureViewDimension,
@@ -1826,9 +1782,6 @@ pub enum CreateSamplerError {
         filter_mode: wgt::FilterMode,
         anisotropic_clamp: u16,
     },
-    #[error("Cannot create any more samplers")]
-    TooManyObjects,
-    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }
@@ -1960,14 +1913,16 @@ impl Blas {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_blas(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_blas_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_blas(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_blas_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
         }
 
@@ -2012,7 +1967,7 @@ impl Drop for Tlas {
 }
 
 impl AccelerationStructure for Tlas {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&dyn hal::DynAccelerationStructure> {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
         Some(self.raw.get(guard)?.as_ref())
     }
 }
@@ -2047,14 +2002,16 @@ impl Tlas {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_tlas(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_tlas(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
         }
 

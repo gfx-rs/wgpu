@@ -82,7 +82,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         usage.contains(wgt::BufferUsages::UNIFORM),
     );
     u.set(
-        hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_READ_WRITE,
+        hal::BufferUses::STORAGE_READ_WRITE,
         usage.contains(wgt::BufferUsages::STORAGE),
     );
     u.set(
@@ -122,7 +122,7 @@ pub fn map_texture_usage(
         usage.contains(wgt::TextureUsages::TEXTURE_BINDING),
     );
     u.set(
-        hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE,
+        hal::TextureUses::STORAGE_READ_WRITE,
         usage.contains(wgt::TextureUsages::STORAGE_BINDING),
     );
     let is_color = aspect.contains(hal::FormatAspects::COLOR);
@@ -179,7 +179,11 @@ pub fn map_texture_usage_from_hal(uses: hal::TextureUses) -> wgt::TextureUsages 
     );
     u.set(
         wgt::TextureUsages::STORAGE_BINDING,
-        uses.contains(hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE),
+        uses.intersects(
+            hal::TextureUses::STORAGE_READ_ONLY
+                | hal::TextureUses::STORAGE_WRITE_ONLY
+                | hal::TextureUses::STORAGE_READ_WRITE,
+        ),
     );
     u.set(
         wgt::TextureUsages::RENDER_ATTACHMENT,

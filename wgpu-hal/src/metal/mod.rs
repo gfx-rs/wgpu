@@ -290,6 +290,7 @@ struct PrivateCapabilities {
     int64: bool,
     int64_atomics: bool,
     float_atomics: bool,
+    supports_shared_event: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -356,7 +357,7 @@ impl Queue {
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
-    counters: wgt::HalCounters,
+    counters: Arc<wgt::HalCounters>,
 }
 
 pub struct Surface {
@@ -429,6 +430,10 @@ impl crate::Queue for Queue {
                 signal_fence
                     .pending_command_buffers
                     .push((signal_value, raw.to_owned()));
+
+                if let Some(shared_event) = signal_fence.shared_event.as_ref() {
+                    raw.encode_signal_event(shared_event, signal_value);
+                }
                 // only return an extra one if it's extra
                 match command_buffers.last() {
                     Some(_) => None,
@@ -819,6 +824,7 @@ pub struct Fence {
     completed_value: Arc<atomic::AtomicU64>,
     /// The pending fence values have to be ascending.
     pending_command_buffers: Vec<(crate::FenceValue, metal::CommandBuffer)>,
+    shared_event: Option<metal::SharedEvent>,
 }
 
 impl crate::DynFence for Fence {}
@@ -841,6 +847,10 @@ impl Fence {
         let latest = self.get_latest();
         self.pending_command_buffers
             .retain(|&(value, _)| value > latest);
+    }
+
+    pub fn raw_shared_event(&self) -> Option<&metal::SharedEvent> {
+        self.shared_event.as_ref()
     }
 }
 
@@ -901,6 +911,7 @@ pub struct CommandEncoder {
     raw_cmd_buf: Option<metal::CommandBuffer>,
     state: CommandState,
     temp: Temp,
+    counters: Arc<wgt::HalCounters>,
 }
 
 impl fmt::Debug for CommandEncoder {

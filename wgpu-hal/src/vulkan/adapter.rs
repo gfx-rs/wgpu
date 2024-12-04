@@ -1169,6 +1169,13 @@ impl PhysicalDeviceProperties {
                 };
                 wgt::BufferSize::new(alignment).unwrap()
             },
+            raw_tlas_instance_size: 64,
+            ray_tracing_scratch_buffer_alignment: self.acceleration_structure.map_or(
+                0,
+                |acceleration_structure| {
+                    acceleration_structure.min_acceleration_structure_scratch_offset_alignment
+                },
+            ),
         }
     }
 }
@@ -2147,7 +2154,7 @@ impl crate::Adapter for super::Adapter {
         //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
         // );
         flags.set(
-            Tfc::STORAGE | Tfc::STORAGE_READ_WRITE,
+            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY,
             features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
         );
         flags.set(
@@ -2301,7 +2308,8 @@ impl crate::Adapter for super::Adapter {
                 Ok(present_modes) => present_modes,
                 Err(e) => {
                     log::error!("get_physical_device_surface_present_modes: {}", e);
-                    Vec::new()
+                    // Per definition of `SurfaceCapabilities`, there must be at least one present mode.
+                    return None;
                 }
             }
         };
@@ -2316,7 +2324,8 @@ impl crate::Adapter for super::Adapter {
                 Ok(formats) => formats,
                 Err(e) => {
                     log::error!("get_physical_device_surface_formats: {}", e);
-                    Vec::new()
+                    // Per definition of `SurfaceCapabilities`, there must be at least one present format.
+                    return None;
                 }
             }
         };

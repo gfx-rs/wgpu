@@ -228,7 +228,7 @@ impl Access for Store {
     fn out_of_bounds_value(&self, _ctx: &mut BlockContext<'_>) {}
 }
 
-impl<'w> BlockContext<'w> {
+impl BlockContext<'_> {
     /// Extend image coordinates with an array index, if necessary.
     ///
     /// Whereas [`Expression::ImageLoad`] and [`ImageSample`] treat the array
@@ -924,7 +924,43 @@ impl<'w> BlockContext<'w> {
                     depth_id,
                 );
 
-                let lod_id = self.cached[lod_handle];
+                let mut lod_id = self.cached[lod_handle];
+                // SPIR-V expects the LOD to be a float for all image classes.
+                // lod_id, however, will be an integer for depth images,
+                // therefore we must do a conversion.
+                if matches!(
+                    self.ir_module.types[image_type].inner,
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::Depth { .. },
+                        ..
+                    }
+                ) {
+                    let lod_f32_id = self.gen_id();
+                    let f32_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
+                        NumericType::Scalar(crate::Scalar::F32),
+                    )));
+                    let convert_op = match *self.fun_info[lod_handle]
+                        .ty
+                        .inner_with(&self.ir_module.types)
+                    {
+                        crate::TypeInner::Scalar(crate::Scalar {
+                            kind: crate::ScalarKind::Uint,
+                            width: 4,
+                        }) => spirv::Op::ConvertUToF,
+                        crate::TypeInner::Scalar(crate::Scalar {
+                            kind: crate::ScalarKind::Sint,
+                            width: 4,
+                        }) => spirv::Op::ConvertSToF,
+                        _ => unreachable!(),
+                    };
+                    block.body.push(Instruction::unary(
+                        convert_op,
+                        f32_type_id,
+                        lod_f32_id,
+                        lod_id,
+                    ));
+                    lod_id = lod_f32_id;
+                }
                 mask |= spirv::ImageOperands::LOD;
                 inst.add_operand(mask.bits());
                 inst.add_operand(lod_id);
