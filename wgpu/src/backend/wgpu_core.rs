@@ -2549,18 +2549,23 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             );
         }
     }
-    fn compact_blas(
-        &self,
-        encoder_data: &Self::CommandEncoderData,
-        blas_data: &Self::BlasData,
-    ) -> (Option<u64>, Self::BlasData) {
-        let global = &self.0;
+    fn compact_blas(&self, blas: &crate::Blas) -> (Option<u64>, dispatch::DispatchBlas) {
+        let global = &self.context.0;
         let (id, handle, error) =
-            global.command_encoder_compact_blas(encoder_data.id, blas_data.id, None);
+            global.command_encoder_compact_blas(self.id, blas.shared.inner.as_core().id, None);
         if let Some(cause) = error {
-            self.handle_error(&encoder_data.error_sink, cause, None, "Device::create_blas");
+            self.context
+                .handle_error_nolabel(&self.error_sink, cause, "Device::create_blas");
         }
-        (handle, Blas { id })
+        (
+            handle,
+            CoreBlas {
+                context: self.context.clone(),
+                id,
+                // error_sink: Arc::clone(&self.error_sink),
+            }
+            .into(),
+        )
     }
 }
 

@@ -351,6 +351,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
     );
+    fn compact_blas(&self, blas: &crate::Blas) -> (Option<u64>, DispatchBlas);
 }
 pub trait ComputePassInterface: CommonTraits {
     fn set_pipeline(&mut self, pipeline: &DispatchComputePipeline);

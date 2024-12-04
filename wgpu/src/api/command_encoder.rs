@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use crate::{
     api::{
         blas::BlasBuildEntry,
@@ -7,6 +5,8 @@ use crate::{
     },
     *,
 };
+use std::ops::Range;
+use std::sync::Arc;
 
 /// Encodes a series of GPU operations.
 ///
@@ -353,18 +353,10 @@ impl CommandEncoder {
     ///
     /// ***This function is very slow*** and will block until the input blas is built
     pub fn compact_blas(&mut self, blas: &Blas) -> Blas {
-        let (handle, data) = DynContext::command_encoder_compact_blas(
-            &*self.context,
-            self.data.as_ref(),
-            blas.shared.data.as_ref(),
-        );
+        let (handle, blas) = self.inner.compact_blas(blas);
         Blas {
+            shared: Arc::new(BlasShared { inner: blas }),
             handle,
-            #[allow(clippy::arc_with_non_send_sync)]
-            shared: Arc::new(BlasShared {
-                context: Arc::clone(&self.context),
-                data,
-            }),
         }
     }
 }

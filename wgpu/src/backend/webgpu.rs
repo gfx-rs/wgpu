@@ -3064,7 +3064,7 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         &self,
         _encoder_data: &Self::CommandEncoderData,
         _blas_id: &Self::BlasData,
-    ) -> (Option<u64>, Self::BlasData) {
+    ) -> (Option<u64>, dispatch::DispatchBlas) {
         unimplemented!("Raytracing not implemented for web");
     }
 }
