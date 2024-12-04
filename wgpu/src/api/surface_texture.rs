@@ -1,6 +1,5 @@
 use std::{error, fmt, thread};
 
-use crate::context::DynContext;
 use crate::*;
 
 /// Surface texture that can be rendered to.
@@ -17,10 +16,12 @@ pub struct SurfaceTexture {
     /// but should be recreated for maximum performance.
     pub suboptimal: bool,
     pub(crate) presented: bool,
-    pub(crate) detail: Box<dyn AnyWasmNotSendSync>,
+    pub(crate) detail: dispatch::DispatchSurfaceOutputDetail,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
+
+crate::cmp::impl_eq_ord_hash_proxy!(SurfaceTexture => .texture.inner);
 
 impl SurfaceTexture {
     /// Schedule this texture to be presented on the owning surface.
@@ -34,24 +35,14 @@ impl SurfaceTexture {
     /// or synchronize other double buffered state, then these operations should be done before the call to `present`.
     pub fn present(mut self) {
         self.presented = true;
-        DynContext::surface_present(
-            &*self.texture.context,
-            // This call to as_ref is essential because we want the DynContext implementation to see the inner
-            // value of the Box (T::SurfaceOutputDetail), not the Box itself.
-            self.detail.as_ref(),
-        );
+        self.detail.present();
     }
 }
 
 impl Drop for SurfaceTexture {
     fn drop(&mut self) {
         if !self.presented && !thread::panicking() {
-            DynContext::surface_texture_discard(
-                &*self.texture.context,
-                // This call to as_ref is essential because we want the DynContext implementation to see the inner
-                // value of the Box (T::SurfaceOutputDetail), not the Box itself.
-                self.detail.as_ref(),
-            );
+            self.detail.texture_discard();
         }
     }
 }

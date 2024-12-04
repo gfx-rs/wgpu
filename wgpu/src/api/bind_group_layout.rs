@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a binding group layout.
@@ -15,21 +13,12 @@ use crate::*;
 /// https://gpuweb.github.io/gpuweb/#gpubindgrouplayout).
 #[derive(Debug)]
 pub struct BindGroupLayout {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchBindGroupLayout,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);
 
-super::impl_partialeq_eq_hash!(BindGroupLayout);
-
-impl Drop for BindGroupLayout {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.bind_group_layout_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(BindGroupLayout => .inner);
 
 /// Describes a [`BindGroupLayout`].
 ///

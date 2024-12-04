@@ -124,6 +124,7 @@ serde_json = "1.0.133"
 smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
+trybuild = "1"
 tracy-client = "0.17"
 thiserror = "1.0.69"
 wgpu = { version = "23.0.1", path = "./wgpu", default-features = false }
