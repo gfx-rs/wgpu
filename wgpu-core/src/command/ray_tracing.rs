@@ -172,7 +172,7 @@ impl Global {
             encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
                 usage: hal::AccelerationStructureUses::COPY_DST
                     ..hal::AccelerationStructureUses::BUILD_INPUT
-                        | hal::AccelerationStructureUses::BUILD_OUTPUT,
+                        | hal::AccelerationStructureUses::SHADER_INPUT,
             });
         }
         Ok(Arc::new(blas))
@@ -1572,8 +1572,8 @@ fn build_blas<'a>(
     let mut source_usage = hal::AccelerationStructureUses::empty();
     let mut destination_usage = hal::AccelerationStructureUses::empty();
     if blas_present {
-        source_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT;
-        destination_usage |= hal::AccelerationStructureUses::BUILD_INPUT
+        source_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT | hal::AccelerationStructureUses::QUERY_INPUT;
+        destination_usage |= hal::AccelerationStructureUses::BUILD_INPUT | hal::AccelerationStructureUses::COPY_SRC
     }
     if tlas_present {
         source_usage |= hal::AccelerationStructureUses::SHADER_INPUT;
