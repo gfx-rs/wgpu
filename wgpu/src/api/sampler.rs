@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a sampler.
@@ -13,21 +11,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUSampler`](https://gpuweb.github.io/gpuweb/#sampler-interface).
 #[derive(Debug)]
 pub struct Sampler {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchSampler,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
-super::impl_partialeq_eq_hash!(Sampler);
-
-impl Drop for Sampler {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.sampler_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(Sampler => .inner);
 
 /// Describes a [`Sampler`].
 ///

@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a texture view.
@@ -10,13 +8,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUTextureView`](https://gpuweb.github.io/gpuweb/#gputextureview).
 #[derive(Debug)]
 pub struct TextureView {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchTextureView,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
-super::impl_partialeq_eq_hash!(TextureView);
+crate::cmp::impl_eq_ord_hash_proxy!(TextureView => .inner);
 
 impl TextureView {
     /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
@@ -30,27 +27,14 @@ impl TextureView {
         &self,
         hal_texture_view_callback: F,
     ) -> R {
-        if let Some(ctx) = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-        {
+        if let Some(core_view) = self.inner.as_core_opt() {
             unsafe {
-                ctx.texture_view_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(self.data.as_ref()),
-                    hal_texture_view_callback,
-                )
+                core_view
+                    .context
+                    .texture_view_as_hal::<A, F, R>(core_view, hal_texture_view_callback)
             }
         } else {
             hal_texture_view_callback(None)
-        }
-    }
-}
-
-impl Drop for TextureView {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.texture_view_drop(self.data.as_ref());
         }
     }
 }

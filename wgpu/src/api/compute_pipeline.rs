@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a compute pipeline.
@@ -10,13 +8,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUComputePipeline`](https://gpuweb.github.io/gpuweb/#compute-pipeline).
 #[derive(Debug)]
 pub struct ComputePipeline {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchComputePipeline,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
-super::impl_partialeq_eq_hash!(ComputePipeline);
+crate::cmp::impl_eq_ord_hash_proxy!(ComputePipeline => .inner);
 
 impl ComputePipeline {
     /// Get an object representing the bind group layout at a given index.
@@ -27,19 +24,8 @@ impl ComputePipeline {
     ///
     /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
-        let context = Arc::clone(&self.context);
-        let data = self
-            .context
-            .compute_pipeline_get_bind_group_layout(self.data.as_ref(), index);
-        BindGroupLayout { context, data }
-    }
-}
-
-impl Drop for ComputePipeline {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.compute_pipeline_drop(self.data.as_ref());
-        }
+        let bind_group = self.inner.get_bind_group_layout(index);
+        BindGroupLayout { inner: bind_group }
     }
 }
 

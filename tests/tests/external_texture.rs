@@ -274,7 +274,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                                 origin: src_origin,
                                 flip_y: src_flip_y,
                             },
-                            wgpu::CopyExternalImageDestInfo {
+                            wgt::CopyExternalImageDestInfo {
                                 texture: &texture,
                                 mip_level: 0,
                                 origin: dest_origin,

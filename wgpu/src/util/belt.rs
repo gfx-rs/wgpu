@@ -117,7 +117,6 @@ impl StagingBelt {
             } else {
                 let size = self.chunk_size.max(size.get());
                 Chunk {
-                    #[allow(clippy::arc_with_non_send_sync)] // False positive on emscripten
                     buffer: Arc::new(device.create_buffer(&BufferDescriptor {
                         label: Some("(wgpu internal) StagingBelt staging buffer"),
                         size,

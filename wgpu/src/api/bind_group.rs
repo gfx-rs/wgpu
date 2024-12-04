@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a binding group.
@@ -12,21 +10,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUBindGroup`](https://gpuweb.github.io/gpuweb/#gpubindgroup).
 #[derive(Debug)]
 pub struct BindGroup {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchBindGroup,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
-super::impl_partialeq_eq_hash!(BindGroup);
-
-impl Drop for BindGroup {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.bind_group_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(BindGroup => .inner);
 
 /// Resource that can be bound to a pipeline.
 ///

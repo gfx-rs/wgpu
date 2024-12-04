@@ -17,6 +17,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
+#![allow(clippy::arc_with_non_send_sync)]
 
 //
 //
@@ -26,9 +27,9 @@
 
 mod api;
 mod backend;
-mod context;
+mod cmp;
+mod dispatch;
 mod macros;
-mod send_sync;
 pub mod util;
 
 //
@@ -36,16 +37,6 @@ pub mod util;
 // Private re-exports
 //
 //
-
-#[allow(unused_imports)] // WebGPU needs this
-use context::Context;
-use send_sync::*;
-
-type C = dyn context::DynContext;
-#[cfg(send_sync)]
-type Data = dyn std::any::Any + Send + Sync;
-#[cfg(not(send_sync))]
-type Data = dyn std::any::Any;
 
 //
 //
