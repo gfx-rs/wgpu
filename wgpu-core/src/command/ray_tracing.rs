@@ -1572,8 +1572,10 @@ fn build_blas<'a>(
     let mut source_usage = hal::AccelerationStructureUses::empty();
     let mut destination_usage = hal::AccelerationStructureUses::empty();
     if blas_present {
-        source_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT | hal::AccelerationStructureUses::QUERY_INPUT;
-        destination_usage |= hal::AccelerationStructureUses::BUILD_INPUT | hal::AccelerationStructureUses::COPY_SRC
+        source_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT
+            | hal::AccelerationStructureUses::QUERY_INPUT;
+        destination_usage |=
+            hal::AccelerationStructureUses::BUILD_INPUT | hal::AccelerationStructureUses::COPY_SRC
     }
     if tlas_present {
         source_usage |= hal::AccelerationStructureUses::SHADER_INPUT;
