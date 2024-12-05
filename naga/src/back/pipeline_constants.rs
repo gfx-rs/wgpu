@@ -192,7 +192,7 @@ pub fn process_overrides<'a>(
     let mut entry_points = mem::take(&mut module.entry_points);
     for ep in entry_points.iter_mut() {
         process_function(&mut module, &override_map, &mut ep.function)?;
-        process_workgroup_size_override(&mut module, &override_map, ep)?;
+        process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
 
@@ -207,7 +207,7 @@ pub fn process_overrides<'a>(
 
 fn process_workgroup_size_override(
     module: &mut Module,
-    override_map: &HandleVec<Override, Handle<Constant>>,
+    adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
     ep: &mut crate::EntryPoint,
 ) -> Result<(), PipelineConstantError> {
     match ep.workgroup_size_overrides {
@@ -220,7 +220,7 @@ fn process_workgroup_size_override(
                         Some(h) => {
                             ep.workgroup_size[i] = module
                                 .to_ctx()
-                                .eval_expr_to_u32(module.constants[override_map[h]].init)
+                                .eval_expr_to_u32(adjusted_global_expressions[h])
                                 .map(|n| {
                                     if n == 0 {
                                         Err(PipelineConstantError::NegativeWorkgroupSize)

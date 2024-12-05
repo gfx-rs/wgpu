@@ -1329,7 +1329,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                                 Some(self.workgroup_size_override(
                                                     size_expr,
                                                     &mut ctx.as_override(),
-                                                    i,
                                                 )?);
                                         }
                                         _ => {
@@ -1372,23 +1371,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         size_expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-        i: usize,
-    ) -> Result<Handle<crate::Override>, Error<'source>> {
+    ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let span = ctx.ast_expressions.get_span(size_expr);
         let expr = self.expression(size_expr, ctx)?;
-        let ty = ctx.register_type(expr)?;
-        match ctx.module.types[ty].inner.scalar_kind().ok_or(0) {
-            Ok(crate::ScalarKind::Sint) | Ok(crate::ScalarKind::Uint) => Ok({
-                ctx.module.overrides.append(
-                    crate::Override {
-                        name: Some(format!("__workgroup_size_{}", i)),
-                        id: None,
-                        ty,
-                        init: Some(expr),
-                    },
-                    span,
-                )
-            }),
+        match resolve_inner!(ctx, expr).scalar_kind().ok_or(0) {
+            Ok(crate::ScalarKind::Sint) | Ok(crate::ScalarKind::Uint) => Ok(expr),
             _ => Err(Error::ExpectedConstExprConcreteIntegerScalar(span)),
         }
     }

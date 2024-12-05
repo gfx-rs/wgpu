@@ -2187,7 +2187,7 @@ pub struct EntryPoint {
     /// Workgroup size for compute stages
     pub workgroup_size: [u32; 3],
     /// Override expressions for workgroup size
-    pub workgroup_size_overrides: Option<[Option<Handle<Override>>; 3]>,
+    pub workgroup_size_overrides: Option<[Option<Handle<Expression>>; 3]>,
     /// The entrance function.
     pub function: Function,
 }
