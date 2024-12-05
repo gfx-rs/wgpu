@@ -39,61 +39,60 @@ impl Default for SpvOutVersion {
 }
 
 #[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct SpirvOutParameters {
     version: SpvOutVersion,
-    #[serde(default)]
     capabilities: naga::FastHashSet<spirv::Capability>,
-    #[serde(default)]
     debug: bool,
-    #[serde(default)]
     adjust_coordinate_space: bool,
-    #[serde(default)]
     force_point_size: bool,
-    #[serde(default)]
     clamp_frag_depth: bool,
-    #[serde(default)]
     separate_entry_points: bool,
-    #[serde(default)]
     #[cfg(all(feature = "deserialize", spv_out))]
     binding_map: naga::back::spv::BindingMap,
 }
 
 #[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct WgslOutParameters {
-    #[serde(default)]
     explicit_types: bool,
 }
 
 #[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct Parameters {
-    #[serde(default)]
+    // -- GOD MODE --
     god_mode: bool,
-    #[cfg(feature = "deserialize")]
-    #[serde(default)]
-    bounds_check_policies: naga::proc::BoundsCheckPolicies,
-    #[serde(default)]
+
+    // -- SPIR-V options --
     spv: SpirvOutParameters,
+
+    // -- MSL options --
     #[cfg(all(feature = "deserialize", msl_out))]
-    #[serde(default)]
     msl: naga::back::msl::Options,
     #[cfg(all(feature = "deserialize", msl_out))]
     #[serde(default)]
     msl_pipeline: naga::back::msl::PipelineOptions,
+
+    // -- GLSL options --
     #[cfg(all(feature = "deserialize", glsl_out))]
-    #[serde(default)]
     glsl: naga::back::glsl::Options,
-    #[serde(default)]
     glsl_exclude_list: naga::FastHashSet<String>,
-    #[cfg(all(feature = "deserialize", hlsl_out))]
-    #[serde(default)]
-    hlsl: naga::back::hlsl::Options,
-    #[serde(default)]
-    wgsl: WgslOutParameters,
     #[cfg(all(feature = "deserialize", glsl_out))]
-    #[serde(default)]
     glsl_multiview: Option<std::num::NonZeroU32>,
+
+    // -- HLSL options --
+    #[cfg(all(feature = "deserialize", hlsl_out))]
+    hlsl: naga::back::hlsl::Options,
+
+    // -- WGSL options --
+    wgsl: WgslOutParameters,
+
+    // -- General options --
+    #[cfg(feature = "deserialize")]
+    bounds_check_policies: naga::proc::BoundsCheckPolicies,
+
     #[cfg(all(feature = "deserialize", any(hlsl_out, msl_out, spv_out, glsl_out)))]
-    #[serde(default)]
     pipeline_constants: naga::back::PipelineConstants,
 }
 
