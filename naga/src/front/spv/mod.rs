@@ -478,7 +478,8 @@ enum MergeBlockInformation {
 ///   definition, whereas Naga expressions are scoped to the rest of their
 ///   subtree. This means that discovering an expression use later in the
 ///   function retroactively requires us to have spilled that expression into a
-///   local variable back before we left its scope.
+///   local variable back before we left its scope. (The docs for
+///   [`Frontend::get_expr_handle`] explain this in more detail.)
 ///
 /// - We translate SPIR-V OpPhi expressions as Naga local variables in which we
 ///   store the appropriate value before jumping to the OpPhi's block.
@@ -827,20 +828,76 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         Ok(())
     }
 
-    /// Return the Naga `Expression` for a given SPIR-V result `id`.
+    /// Return the Naga [`Expression`] to use in `body_idx` to refer to the SPIR-V result `id`.
     ///
-    /// `lookup` must be the `LookupExpression` for `id`.
+    /// Ideally, we would just have a map from each SPIR-V instruction id to the
+    /// [`Handle`] for the Naga [`Expression`] we generated for it.
+    /// Unfortunately, SPIR-V and Naga IR are different enough that such a
+    /// straightforward relationship isn't possible.
     ///
-    /// SPIR-V result ids can be used by any block dominated by the id's
-    /// definition, but Naga `Expressions` are only in scope for the remainder
-    /// of their `Statement` subtree. This means that the `Expression` generated
-    /// for `id` may no longer be in scope. In such cases, this function takes
-    /// care of spilling the value of `id` to a `LocalVariable` which can then
-    /// be used anywhere. The SPIR-V domination rule ensures that the
-    /// `LocalVariable` has been initialized before it is used.
+    /// In SPIR-V, an instruction's result id can be used by any instruction
+    /// dominated by that instruction. In Naga, an [`Expression`] is only in
+    /// scope for the remainder of its [`Block`]. In pseudocode:
     ///
-    /// The `body_idx` argument should be the index of the `Body` that hopes to
-    /// use `id`'s `Expression`.
+    /// ```ignore
+    ///     loop {
+    ///         a = f();
+    ///         g(a);
+    ///         break;
+    ///     }
+    ///     h(a);
+    /// ```
+    ///
+    /// Suppose the calls to `f`, `g`, and `h` are SPIR-V instructions. In
+    /// SPIR-V, both the `g` and `h` instructions are allowed to refer to `a`,
+    /// because the loop body, including `f`, dominates both of them.
+    ///
+    /// But if `a` is a Naga [`Expression`], its scope ends at the end of the
+    /// block it's evaluated in: the loop body. Thus, while the [`Expression`]
+    /// we generate for `g` can refer to `a`, the one we generate for `h`
+    /// cannot.
+    ///
+    /// Instead, the SPIR-V front end must generate Naga IR like this:
+    ///
+    /// ```ignore
+    ///     var temp; // INTRODUCED
+    ///     loop {
+    ///         a = f();
+    ///         g(a);
+    ///         temp = a; // INTRODUCED
+    ///     }
+    ///     h(temp); // ADJUSTED
+    /// ```
+    ///
+    /// In other words, where `a` is in scope, [`Expression`]s can refer to it
+    /// directly; but once it is out of scope, we need to spill it to a
+    /// temporary and refer to that instead.
+    ///
+    /// Given a SPIR-V expression `id` and the index `body_idx` of the [body]
+    /// that wants to refer to it:
+    ///
+    /// - If the Naga [`Expression`] we generated for `id` is in scope in
+    ///   `body_idx`, then we simply return its `Handle<Expression>`.
+    ///
+    /// - Otherwise, introduce a new [`LocalVariable`], and add an entry to
+    ///   [`BlockContext::phis`] to arrange for `id`'s value to be spilled to
+    ///   it. Then emit a fresh [`Load`] of that temporary variable for use in
+    ///   `body_idx`'s block, and return its `Handle`.
+    ///
+    /// The SPIR-V domination rule ensures that the introduced [`LocalVariable`]
+    /// will always have been initialized before it is used.
+    ///
+    /// `lookup` must be the [`LookupExpression`] for `id`.
+    ///
+    /// `body_idx` argument must be the index of the [`Body`] that hopes to use
+    /// `id`'s [`Expression`].
+    ///
+    /// [`Expression`]: crate::Expression
+    /// [`Handle`]: crate::Handle
+    /// [`Block`]: crate::Block
+    /// [body]: BlockContext::bodies
+    /// [`LocalVariable`]: crate::LocalVariable
+    /// [`Load`]: crate::Expression::Load
     fn get_expr_handle(
         &self,
         id: spirv::Word,
