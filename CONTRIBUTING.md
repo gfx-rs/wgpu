@@ -114,3 +114,7 @@ TODO
 
 TODO: It is strongly recommended that you validate your contributions before
 you make significant efforts…
+
+The "Assigned" field on a PR indicates who has taken responsibility
+for reviewing the PR, not who is responsible for the content of the
+PR.
