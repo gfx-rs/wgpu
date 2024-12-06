@@ -19,6 +19,7 @@ pub mod compilation_messages;
 pub mod data_builtins;
 pub mod numeric_builtins;
 pub mod struct_layout;
+pub mod workgroup_size_overrides;
 pub mod zero_init_workgroup_mem;
 
 #[derive(Clone, Copy, PartialEq)]

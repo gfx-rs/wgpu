@@ -25,6 +25,8 @@ pub enum PipelineConstantError {
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
     ValidationError(#[from] WithSpan<ValidationError>),
+    #[error("workgroup_size override isn't strictly positive")]
+    NegativeWorkgroupSize,
 }
 
 /// Replace all overrides in `module` with constants.
@@ -190,6 +192,7 @@ pub fn process_overrides<'a>(
     let mut entry_points = mem::take(&mut module.entry_points);
     for ep in entry_points.iter_mut() {
         process_function(&mut module, &override_map, &mut ep.function)?;
+        process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
 
@@ -200,6 +203,41 @@ pub fn process_overrides<'a>(
     let module_info = validator.validate_no_overrides(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
+}
+
+fn process_workgroup_size_override(
+    module: &mut Module,
+    adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
+    ep: &mut crate::EntryPoint,
+) -> Result<(), PipelineConstantError> {
+    match ep.workgroup_size_overrides {
+        None => {}
+        Some(overrides) => {
+            overrides.iter().enumerate().try_for_each(
+                |(i, overridden)| -> Result<(), PipelineConstantError> {
+                    match *overridden {
+                        None => Ok(()),
+                        Some(h) => {
+                            ep.workgroup_size[i] = module
+                                .to_ctx()
+                                .eval_expr_to_u32(adjusted_global_expressions[h])
+                                .map(|n| {
+                                    if n == 0 {
+                                        Err(PipelineConstantError::NegativeWorkgroupSize)
+                                    } else {
+                                        Ok(n)
+                                    }
+                                })
+                                .map_err(|_| PipelineConstantError::NegativeWorkgroupSize)??;
+                            Ok(())
+                        }
+                    }
+                },
+            )?;
+            ep.workgroup_size_overrides = None;
+        }
+    }
+    Ok(())
 }
 
 /// Add a [`Constant`] to `module` for the override `old_h`.

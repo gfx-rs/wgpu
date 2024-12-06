@@ -21,7 +21,6 @@ The repository hosts the following libraries:
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - Internal unsafe GPU API abstraction layer.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
 - [![Crates.io](https://img.shields.io/crates/v/naga.svg?label=naga)](https://crates.io/crates/naga) [![docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga/) - Stand-alone shader translation library.
-- [![Crates.io](https://img.shields.io/crates/v/d3d12.svg?label=d3d12)](https://crates.io/crates/d3d12) [![docs.rs](https://docs.rs/d3d12/badge.svg)](https://docs.rs/d3d12/) - Collection of thin abstractions over d3d12.
 - [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
 
 The following binaries:
@@ -120,7 +119,7 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
+- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
 - The rest of the workspace has an MSRV of **1.76** as well right now, but may be higher than above listed crates.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.

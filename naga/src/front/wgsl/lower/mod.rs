@@ -1311,30 +1311,72 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .collect();
 
         if let Some(ref entry) = f.entry_point {
-            let workgroup_size = if let Some(workgroup_size) = entry.workgroup_size {
+            let workgroup_size_info = if let Some(workgroup_size) = entry.workgroup_size {
                 // TODO: replace with try_map once stabilized
                 let mut workgroup_size_out = [1; 3];
+                let mut workgroup_size_overrides_out = [None; 3];
                 for (i, size) in workgroup_size.into_iter().enumerate() {
                     if let Some(size_expr) = size {
-                        workgroup_size_out[i] = self.const_u32(size_expr, &mut ctx.as_const())?.0;
+                        match self.const_u32(size_expr, &mut ctx.as_const()) {
+                            Ok(value) => {
+                                workgroup_size_out[i] = value.0;
+                            }
+                            err => {
+                                if let Err(Error::ConstantEvaluatorError(ref ty, _)) = err {
+                                    match **ty {
+                                        crate::proc::ConstantEvaluatorError::OverrideExpr => {
+                                            workgroup_size_overrides_out[i] =
+                                                Some(self.workgroup_size_override(
+                                                    size_expr,
+                                                    &mut ctx.as_override(),
+                                                )?);
+                                        }
+                                        _ => {
+                                            err?;
+                                        }
+                                    }
+                                } else {
+                                    err?;
+                                }
+                            }
+                        }
                     }
                 }
-                workgroup_size_out
+                if workgroup_size_overrides_out.iter().all(|x| x.is_none()) {
+                    (workgroup_size_out, None)
+                } else {
+                    (workgroup_size_out, Some(workgroup_size_overrides_out))
+                }
             } else {
-                [0; 3]
+                ([0; 3], None)
             };
 
+            let (workgroup_size, workgroup_size_overrides) = workgroup_size_info;
             ctx.module.entry_points.push(crate::EntryPoint {
                 name: f.name.name.to_string(),
                 stage: entry.stage,
                 early_depth_test: entry.early_depth_test,
                 workgroup_size,
+                workgroup_size_overrides,
                 function,
             });
             Ok(LoweredGlobalDecl::EntryPoint)
         } else {
             let handle = ctx.module.functions.append(function, span);
             Ok(LoweredGlobalDecl::Function(handle))
+        }
+    }
+
+    fn workgroup_size_override(
+        &mut self,
+        size_expr: Handle<ast::Expression<'source>>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+        let span = ctx.ast_expressions.get_span(size_expr);
+        let expr = self.expression(size_expr, ctx)?;
+        match resolve_inner!(ctx, expr).scalar_kind().ok_or(0) {
+            Ok(crate::ScalarKind::Sint) | Ok(crate::ScalarKind::Uint) => Ok(expr),
+            _ => Err(Error::ExpectedConstExprConcreteIntegerScalar(span)),
         }
     }
 

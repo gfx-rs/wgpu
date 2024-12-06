@@ -63,6 +63,14 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
+    for e in module.entry_points.iter() {
+        if let Some(sizes) = e.workgroup_size_overrides {
+            for size in sizes.iter().filter_map(|x| *x) {
+                module_tracer.global_expressions_used.insert(size);
+            }
+        }
+    }
+
     // We assume that all functions are used.
     //
     // Observe which types, constant expressions, constants, and
@@ -173,6 +181,18 @@ pub fn compact(module: &mut crate::Module) {
         module_map.types.adjust(&mut override_.ty);
         if let Some(init) = override_.init.as_mut() {
             module_map.global_expressions.adjust(init);
+        }
+    }
+
+    // Adjust workgroup_size_overrides
+    log::trace!("adjusting workgroup_size_overrides");
+    for e in module.entry_points.iter_mut() {
+        if let Some(sizes) = e.workgroup_size_overrides.as_mut() {
+            for size in sizes.iter_mut() {
+                if let Some(expr) = size.as_mut() {
+                    module_map.global_expressions.adjust(expr);
+                }
+            }
         }
     }
 
