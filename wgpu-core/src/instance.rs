@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
-    api_log,
+    api_log, api_log_debug,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
     hal_api::HalApi,
@@ -305,7 +305,7 @@ impl Instance {
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
                 let adapter = Adapter::new(raw);
-                log::debug!("Adapter {:?}", adapter.raw.info);
+                api_log_debug!("Adapter {:?}", adapter.raw.info);
                 adapters.push(adapter);
             }
         }
@@ -404,7 +404,7 @@ impl Instance {
         }
 
         if let Some(adapter) = adapters.into_iter().next() {
-            log::debug!("Request adapter result {:?}", adapter.info);
+            api_log_debug!("Request adapter result {:?}", adapter.info);
             let adapter = Adapter::new(adapter);
             Ok(adapter)
         } else {
