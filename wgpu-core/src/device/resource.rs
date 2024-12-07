@@ -154,10 +154,9 @@ impl Drop for Device {
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         #[cfg(feature = "indirect-validation")]
-        self.indirect_validation
-            .take()
-            .unwrap()
-            .dispose(self.raw.as_ref());
+        if let Some(indirect_validation) = self.indirect_validation.take() {
+            indirect_validation.dispose(self.raw.as_ref());
+        }
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
             self.raw.destroy_fence(fence);
