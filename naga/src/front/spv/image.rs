@@ -28,7 +28,9 @@ impl super::BlockContext<'_> {
         handle: Handle<crate::Expression>,
     ) -> Result<Handle<crate::Type>, Error> {
         match self.expressions[handle] {
-            crate::Expression::GlobalVariable(handle) => Ok(self.global_arena[handle].ty),
+            crate::Expression::GlobalVariable(handle) => {
+                Ok(self.module.global_variables[handle].ty)
+            }
             crate::Expression::FunctionArgument(i) => Ok(self.arguments[i as usize].ty),
             crate::Expression::Access { base, .. } => Ok(self.get_image_expr_ty(base)?),
             ref other => Err(Error::InvalidImageExpression(other.clone())),
@@ -64,7 +66,7 @@ fn extract_image_coordinates(
     coordinate_ty: Handle<crate::Type>,
     ctx: &mut super::BlockContext,
 ) -> (Handle<crate::Expression>, Option<Handle<crate::Expression>>) {
-    let (given_size, kind) = match ctx.type_arena[coordinate_ty].inner {
+    let (given_size, kind) = match ctx.module.types[coordinate_ty].inner {
         crate::TypeInner::Scalar(Scalar { kind, .. }) => (None, kind),
         crate::TypeInner::Vector {
             size,
@@ -75,7 +77,8 @@ fn extract_image_coordinates(
 
     let required_size = image_dim.required_coordinate_size();
     let required_ty = required_size.map(|size| {
-        ctx.type_arena
+        ctx.module
+            .types
             .get(&crate::Type {
                 name: None,
                 inner: crate::TypeInner::Vector {
@@ -287,7 +290,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let coord_handle =
             self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index) = match ctx.type_arena[image_ty].inner {
+        let (coordinate, array_index) = match ctx.module.types[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -378,7 +381,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let coord_handle =
             self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
-        let (coordinate, array_index, is_depth) = match ctx.type_arena[image_ty].inner {
+        let (coordinate, array_index, is_depth) = match ctx.module.types[image_ty].inner {
             crate::TypeInner::Image {
                 dim,
                 arrayed,
@@ -414,7 +417,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let handle = if is_depth {
             let result_ty = self.lookup_type.lookup(result_type_id)?;
             // The return type of `OpImageRead` can be a scalar or vector.
-            match ctx.type_arena[result_ty.handle].inner {
+            match ctx.module.types[result_ty.handle].inner {
                 crate::TypeInner::Vector { size, .. } => {
                     let splat_expr = crate::Expression::Splat {
                         size,
@@ -493,7 +496,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         let image_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
                         let image_ty = ctx.get_image_expr_ty(image_lexp.image)?;
                         matches!(
-                            ctx.type_arena[image_ty].inner,
+                            ctx.module.types[image_ty].inner,
                             crate::TypeInner::Image {
                                 class: crate::ImageClass::Depth { .. },
                                 ..
@@ -565,6 +568,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         .inner
                         .to_expr();
                     let offset_handle = ctx
+                        .module
                         .global_expressions
                         .append(offset_expr, Default::default());
                     offset = Some(offset_handle);
@@ -599,7 +603,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     *flags |= sampling_bit;
                 }
 
-                ctx.global_arena[handle].ty
+                ctx.module.global_variables[handle].ty
             }
 
             crate::Expression::FunctionArgument(i) => {
@@ -613,7 +617,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         *flags |= sampling_bit;
                     }
 
-                    match ctx.type_arena[ctx.global_arena[handle].ty].inner {
+                    match ctx.module.types[ctx.module.global_variables[handle].ty].inner {
                         crate::TypeInner::BindingArray { base, .. } => base,
                         _ => return Err(Error::InvalidGlobalVar(ctx.expressions[base].clone())),
                     }
@@ -645,60 +649,60 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             ref other => return Err(Error::InvalidGlobalVar(other.clone())),
         }
 
-        let ((coordinate, array_index), depth_ref, is_depth) = match ctx.type_arena[image_ty].inner
-        {
-            crate::TypeInner::Image {
-                dim,
-                arrayed,
-                class,
-            } => (
-                extract_image_coordinates(
+        let ((coordinate, array_index), depth_ref, is_depth) =
+            match ctx.module.types[image_ty].inner {
+                crate::TypeInner::Image {
                     dim,
-                    if options.project {
-                        ExtraCoordinate::Projection
-                    } else if arrayed {
-                        ExtraCoordinate::ArrayLayer
-                    } else {
-                        ExtraCoordinate::Garbage
-                    },
-                    coord_handle,
-                    coord_type_handle,
-                    ctx,
-                ),
-                {
-                    match dref_id {
-                        Some(id) => {
-                            let expr_lexp = self.lookup_expression.lookup(id)?;
-                            let mut expr =
-                                self.get_expr_handle(id, expr_lexp, ctx, emitter, block, body_idx);
+                    arrayed,
+                    class,
+                } => (
+                    extract_image_coordinates(
+                        dim,
+                        if options.project {
+                            ExtraCoordinate::Projection
+                        } else if arrayed {
+                            ExtraCoordinate::ArrayLayer
+                        } else {
+                            ExtraCoordinate::Garbage
+                        },
+                        coord_handle,
+                        coord_type_handle,
+                        ctx,
+                    ),
+                    {
+                        match dref_id {
+                            Some(id) => {
+                                let expr_lexp = self.lookup_expression.lookup(id)?;
+                                let mut expr = self
+                                    .get_expr_handle(id, expr_lexp, ctx, emitter, block, body_idx);
 
-                            if options.project {
-                                let required_size = dim.required_coordinate_size();
-                                let right = ctx.expressions.append(
-                                    crate::Expression::AccessIndex {
-                                        base: coord_handle,
-                                        index: required_size.map_or(1, |size| size as u32),
-                                    },
-                                    crate::Span::default(),
-                                );
-                                expr = ctx.expressions.append(
-                                    crate::Expression::Binary {
-                                        op: crate::BinaryOperator::Divide,
-                                        left: expr,
-                                        right,
-                                    },
-                                    crate::Span::default(),
-                                )
-                            };
-                            Some(expr)
+                                if options.project {
+                                    let required_size = dim.required_coordinate_size();
+                                    let right = ctx.expressions.append(
+                                        crate::Expression::AccessIndex {
+                                            base: coord_handle,
+                                            index: required_size.map_or(1, |size| size as u32),
+                                        },
+                                        crate::Span::default(),
+                                    );
+                                    expr = ctx.expressions.append(
+                                        crate::Expression::Binary {
+                                            op: crate::BinaryOperator::Divide,
+                                            left: expr,
+                                            right,
+                                        },
+                                        crate::Span::default(),
+                                    )
+                                };
+                                Some(expr)
+                            }
+                            None => None,
                         }
-                        None => None,
-                    }
-                },
-                class.is_depth(),
-            ),
-            _ => return Err(Error::InvalidImage(image_ty)),
-        };
+                    },
+                    class.is_depth(),
+                ),
+                _ => return Err(Error::InvalidImage(image_ty)),
+            };
 
         let expr = crate::Expression::ImageSample {
             image: si_lexp.image,
@@ -764,7 +768,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         };
 
         let result_type_handle = self.lookup_type.lookup(result_type_id)?.handle;
-        let maybe_scalar_kind = ctx.type_arena[result_type_handle].inner.scalar_kind();
+        let maybe_scalar_kind = ctx.module.types[result_type_handle].inner.scalar_kind();
 
         let expr = if maybe_scalar_kind == Some(crate::ScalarKind::Sint) {
             crate::Expression::As {
@@ -809,7 +813,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         };
 
         let result_type_handle = self.lookup_type.lookup(result_type_id)?.handle;
-        let maybe_scalar_kind = ctx.type_arena[result_type_handle].inner.scalar_kind();
+        let maybe_scalar_kind = ctx.module.types[result_type_handle].inner.scalar_kind();
 
         let expr = if maybe_scalar_kind == Some(crate::ScalarKind::Sint) {
             crate::Expression::As {
