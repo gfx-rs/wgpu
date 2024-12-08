@@ -27,11 +27,11 @@ impl fmt::Debug for DualHandle {
     }
 }
 
-type DescriptorIndex = u64;
+pub(super) type DescriptorIndex = u64;
 
 pub(super) struct GeneralHeap {
     pub raw: Direct3D12::ID3D12DescriptorHeap,
-    ty: Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE,
+    pub(super) ty: Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE,
     handle_size: u64,
     total_handles: u64,
     start: DualHandle,
@@ -81,7 +81,7 @@ impl GeneralHeap {
         }
     }
 
-    fn cpu_descriptor_at(&self, index: u64) -> Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub(super) fn cpu_descriptor_at(&self, index: u64) -> Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE {
         Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE {
             ptr: self.start.cpu.ptr + (self.handle_size * index) as usize,
         }
@@ -91,6 +91,10 @@ impl GeneralHeap {
         Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
             ptr: self.start.gpu.ptr + self.handle_size * index,
         }
+    }
+
+    pub(super) fn gpu_descriptor_index(&self, handle: DualHandle) -> DescriptorIndex {
+        (handle.gpu.ptr - self.start.gpu.ptr) / self.handle_size
     }
 
     pub(super) fn allocate_slice(&self, count: u64) -> Result<DescriptorIndex, crate::DeviceError> {
@@ -248,7 +252,7 @@ pub(super) struct CpuHeap {
     pub inner: Mutex<CpuHeapInner>,
     start: Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE,
     handle_size: u32,
-    total: u32,
+    pub total: u32,
 }
 
 unsafe impl Send for CpuHeap {}
@@ -300,24 +304,58 @@ impl fmt::Debug for CpuHeap {
     }
 }
 
+/// This function allocates `count` descriptors on the GPU's GeneralHeap under `dst` and then calls
+/// `CopyDescriptors` to copy from the CPU heap under `src` into the allocated range in the GPU heap.
+///
+/// [`CopyDescriptors` documentation](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-copydescriptors)
+///
+/// This function copies from a sequence of CPU descriptors to a single GPU descriptor range, and
+/// so it's only used when creating or fully updating a `BindGroup` that's fully bound.
+/// When we have a partially bound `BindGroup`, it's best to write to multiple GPU descriptor ranges.
 pub(super) unsafe fn upload(
     device: &Direct3D12::ID3D12Device,
     src: &CpuHeapInner,
-    dst: &GeneralHeap,
+    dst_ty: Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE,
+    dst_handle: Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE,
+    // All 1's
     dummy_copy_counts: &[u32],
-) -> Result<DualHandle, crate::DeviceError> {
+) {
     let count = src.stage.len() as u32;
-    let index = dst.allocate_slice(count as u64)?;
     unsafe {
+        // In this function, we write to a single destination descriptor range from `count` source
+        // descriptor ranges (which are all the CPU descriptors referenced in the `src.stage` vector).
+        // The `dummy_copy_counts` array is exclusively ones.
         device.CopyDescriptors(
             1,
-            &dst.cpu_descriptor_at(index),
+            &dst_handle,
             Some(&count),
             count,
             src.stage.as_ptr(),
             Some(dummy_copy_counts.as_ptr()),
-            dst.ty,
-        )
-    };
-    Ok(dst.at(index, count as u64))
+            dst_ty,
+        );
+    }
+}
+
+pub(super) unsafe fn multi_update(
+    device: &Direct3D12::ID3D12Device,
+    src: &CpuHeapInner,
+    dst_ty: Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE,
+    dst_handles: &[Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE],
+    dst_descriptor_range_sizes: &[u32],
+    // All 1's
+    dummy_copy_counts: &[u32],
+) {
+    debug_assert_eq!(dst_handles.len(), dst_descriptor_range_sizes.len());
+    unsafe {
+        device.CopyDescriptors(
+            dst_handles.len() as u32,
+            dst_handles.as_ptr(),
+            Some(dst_descriptor_range_sizes.as_ptr()),
+            src.stage.len() as u32,
+            src.stage.as_ptr(),
+            Some(dummy_copy_counts.as_ptr()),
+            dst_ty,
+        );
+    }
 }

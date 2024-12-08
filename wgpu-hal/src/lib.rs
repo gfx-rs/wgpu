@@ -866,6 +866,17 @@ pub trait Device: WasmNotSendSync {
             <Self::A as Api>::AccelerationStructure,
         >,
     ) -> Result<<Self::A as Api>::BindGroup, DeviceError>;
+    unsafe fn update_bind_group(
+        &self,
+        bind_group: &<Self::A as Api>::BindGroup,
+        desc: &UpdateBindGroupDescriptor<
+            <Self::A as Api>::BindGroupLayout,
+            <Self::A as Api>::Buffer,
+            <Self::A as Api>::Sampler,
+            <Self::A as Api>::TextureView,
+            <Self::A as Api>::AccelerationStructure,
+        >,
+    ) -> Result<(), DeviceError>;
     unsafe fn destroy_bind_group(&self, group: <Self::A as Api>::BindGroup);
 
     unsafe fn create_shader_module(
@@ -1531,6 +1542,8 @@ bitflags!(
     pub struct BindGroupLayoutFlags: u32 {
         /// Allows for bind group binding arrays to be shorter than the array in the BGL.
         const PARTIALLY_BOUND = 1 << 0;
+        /// Allows for the bind group to be updated after the bind group has been bound.
+        const UPDATE_AFTER_BIND = 1 << 1;
     }
 );
 
@@ -2042,18 +2055,32 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
 pub struct BindGroupEntry {
     pub binding: u32,
     pub resource_index: u32,
+    pub array_element_offset: Option<u32>,
     pub count: u32,
+}
+
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct BindGroupFlags: u8 {
+        // Allows the bind group to be updated with update_bind_group.
+        const ALLOW_UPDATES = 1 << 0;
+    }
 }
 
 /// BindGroup descriptor.
 ///
 /// Valid usage:
-///. - `entries` has to be sorted by ascending `BindGroupEntry::binding`
-///. - `entries` has to have the same set of `BindGroupEntry::binding` as `layout`
+///. - (Only if `PARTIALLY_BOUND` is **disabled** on the layout): `entries` has to be sorted by
+///    ascending `BindGroupEntry::binding`
+///. - (Only if `PARTIALLY_BOUND` is **disabled** on the layout): `entries` has to have the same
+///    set of `BindGroupEntry::binding` as `layout`
 ///. - each entry has to be compatible with the `layout`
 ///. - each entry's `BindGroupEntry::resource_index` is within range
 ///    of the corresponding resource array, selected by the relevant
 ///    `BindGroupLayoutEntry`.
+///. - each entry's `BindGroupEntry::array_offset` is within the set of values in the
+///    `BindGroupLayoutEntry::count` field. If `array_offset` is not `None`, the layout
+///    must have the `PARTIALLY_BOUND` flag set.
 #[derive(Clone, Debug)]
 pub struct BindGroupDescriptor<
     'a,
@@ -2064,11 +2091,44 @@ pub struct BindGroupDescriptor<
     A: DynAccelerationStructure + ?Sized,
 > {
     pub label: Label<'a>,
+    pub flags: BindGroupFlags,
     pub layout: &'a Bgl,
     pub buffers: &'a [BufferBinding<'a, B>],
     pub samplers: &'a [&'a S],
     pub textures: &'a [TextureBinding<'a, T>],
     pub entries: &'a [BindGroupEntry],
+    pub acceleration_structures: &'a [&'a A],
+}
+
+/// Update BindGroup.
+///
+/// Valid usage:
+///. - (Only if `PARTIALLY_BOUND` is **disabled** on the layout): `entries` has to be sorted by
+///    ascending `BindGroupEntry::binding`
+///. - (Only if `PARTIALLY_BOUND` is **disabled** on the layout): `entries` has to have the same
+///    set of `BindGroupEntry::binding` as `layout`
+///. - each entry has to be compatible with the `layout`
+///. - each entry's `BindGroupEntry::resource_index` is within range
+///    of the corresponding resource array, selected by the relevant
+///    `BindGroupLayoutEntry`.
+///. - each entry's `BindGroupEntry::array_offset` is within the set of values in the
+///    `BindGroupLayoutEntry::count` field. If `array_offset` is not `None`, the layout
+///    must have the `PARTIALLY_BOUND` flag set.
+///  - `layout` must match the layout of the bind group that is being updated
+#[derive(Clone, Debug)]
+pub struct UpdateBindGroupDescriptor<
+    'a,
+    Bgl: DynBindGroupLayout + ?Sized,
+    B: DynBuffer + ?Sized,
+    S: DynSampler + ?Sized,
+    T: DynTextureView + ?Sized,
+    A: DynAccelerationStructure + ?Sized,
+> {
+    pub layout: &'a Bgl,
+    pub entries: &'a [BindGroupEntry],
+    pub buffers: &'a [BufferBinding<'a, B>],
+    pub samplers: &'a [&'a S],
+    pub textures: &'a [TextureBinding<'a, T>],
     pub acceleration_structures: &'a [&'a A],
 }
 

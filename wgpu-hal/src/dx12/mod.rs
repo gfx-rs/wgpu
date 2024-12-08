@@ -892,9 +892,14 @@ impl Fence {
 pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,
-    cpu_heap_views: Option<descriptor::CpuHeap>,
-    cpu_heap_samplers: Option<descriptor::CpuHeap>,
+    // These CPU heaps are stored to be re-used whenever a new `BindGroup` is created using this layout.
+    // In `create_bind_group`, the mutex for the re-usable heaps is acquired, the stage buffer is cleared
+    // and it is used before a call to CopyDescriptors copies it to the GPU, then it is ready to be
+    // used again for another creation.
+    scratch_views_cpu_heap: Option<descriptor::CpuHeap>,
+    scratch_sampler_cpu_heap: Option<descriptor::CpuHeap>,
     copy_counts: Vec<u32>, // all 1's
+    flags: crate::BindGroupLayoutFlags,
 }
 
 impl crate::DynBindGroupLayout for BindGroupLayout {}

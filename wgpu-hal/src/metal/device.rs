@@ -891,6 +891,20 @@ impl crate::Device for super::Device {
         Ok(bg)
     }
 
+    unsafe fn update_bind_group(
+        &self,
+        _bind_group: &<Self::A as Api>::BindGroup,
+        _desc: &UpdateBindGroupDescriptor<
+            <Self::A as Api>::BindGroupLayout,
+            <Self::A as Api>::Buffer,
+            <Self::A as Api>::Sampler,
+            <Self::A as Api>::TextureView,
+            <Self::A as Api>::AccelerationStructure,
+        >,
+    ) -> Result<(), crate::DeviceError> {
+        todo!()
+    }
+
     unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {
         self.counters.bind_groups.sub(1);
     }

@@ -1,3 +1,4 @@
+use parking_lot::{Mutex, MutexGuard};
 use std::{
     ffi,
     mem::{self, size_of, size_of_val},
@@ -6,8 +7,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-use parking_lot::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{
@@ -26,6 +25,16 @@ use crate::{
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
 const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
+
+struct WriteDescriptorsOutput<'a> {
+    view_cpu_heap: Option<MutexGuard<'a, descriptor::CpuHeapInner>>,
+    view_range_sizes: Vec<u32>,
+    view_handles: Vec<Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    sampler_cpu_heap: Option<MutexGuard<'a, descriptor::CpuHeapInner>>,
+    sampler_sizes: Vec<u32>,
+    sampler_handles: Vec<Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    dynamic_buffers: Vec<Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE>,
+}
 
 impl super::Device {
     pub(super) fn new(
@@ -392,6 +401,225 @@ impl super::Device {
             resource,
             size,
             allocation: None,
+        }
+    }
+
+    fn write_descriptors<'a>(
+        &self,
+        dst_views_index: Option<descriptor::DescriptorIndex>,
+        dst_samplers_index: Option<descriptor::DescriptorIndex>,
+        layout: &'a super::BindGroupLayout,
+        buffers: &[crate::BufferBinding<super::Buffer>],
+        samplers: &[&super::Sampler],
+        textures: &[crate::TextureBinding<super::TextureView>],
+        entries: &[crate::BindGroupEntry],
+        _acceleration_structures: &[&super::AccelerationStructure],
+    ) -> WriteDescriptorsOutput<'a> {
+        let partially_bound = layout
+            .flags
+            .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
+        let mut cpu_views = layout
+            .scratch_views_cpu_heap
+            .as_ref()
+            .map(|cpu_heap| cpu_heap.inner.lock());
+        if let Some(ref mut inner) = cpu_views {
+            inner.stage.clear();
+        }
+        let mut cpu_samplers = layout
+            .scratch_sampler_cpu_heap
+            .as_ref()
+            .map(|cpu_heap| cpu_heap.inner.lock());
+        if let Some(ref mut inner) = cpu_samplers {
+            inner.stage.clear();
+        }
+        let mut dynamic_buffers = Vec::new();
+
+        // A multi-update destination range can be done per entry, where the range size is the
+        // `count` and the handle is the `dst.cpu_descriptor_at(index)` offset by the stage length
+        // and array offset.
+        let mut multi_update_dst_range_view_sizes = Vec::new();
+        let mut multi_update_dst_range_view_handles = Vec::new();
+        let mut multi_update_dst_range_sampler_sizes = Vec::new();
+        let mut multi_update_dst_range_sampler_handles = Vec::new();
+        let mut view_gpu_offset = 0u32;
+        let mut sampler_gpu_offset = 0u32;
+
+        let layout_and_entry_iter = entries.iter().map(|entry| {
+            let layout = layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (layout, entry)
+        });
+        for (layout_entry, entry) in layout_and_entry_iter {
+            // We can't skip array elements if the bind group isn't partially bound
+            if !partially_bound {
+                debug_assert_eq!(entry.array_element_offset.unwrap_or(0), 0);
+            }
+
+            match layout_entry.ty {
+                wgt::BindingType::Buffer {
+                    has_dynamic_offset: true,
+                    ..
+                } => {
+                    if partially_bound {
+                        panic!("Dynamic buffers are not supported in partially bound bind groups in DX12");
+                    }
+                    let start = entry.resource_index as usize;
+                    let end = start + entry.count as usize;
+                    for data in &buffers[start..end] {
+                        dynamic_buffers.push(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                            ptr: data.resolve_address(),
+                        });
+                    }
+                }
+                wgt::BindingType::Buffer { ty, .. } => {
+                    let inner = cpu_views.as_mut().unwrap();
+                    let cpu_descriptor_index = inner.stage.len();
+
+                    let start = entry.resource_index as usize;
+                    let end = start + entry.count as usize;
+                    let mut cpu_index =
+                        cpu_descriptor_index as u32 + entry.array_element_offset.unwrap_or(0);
+                    for data in &buffers[start..end] {
+                        let gpu_address = data.resolve_address();
+                        let size = data.resolve_size() as u32;
+                        let handle = layout
+                            .scratch_views_cpu_heap
+                            .as_ref()
+                            .unwrap()
+                            .at(cpu_index);
+                        match ty {
+                            wgt::BufferBindingType::Uniform => {
+                                let size_mask =
+                                    Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
+                                let raw_desc = Direct3D12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                                    BufferLocation: gpu_address,
+                                    SizeInBytes: ((size - 1) | size_mask) + 1,
+                                };
+                                unsafe {
+                                    self.raw.CreateConstantBufferView(Some(&raw_desc), handle)
+                                };
+                            }
+                            wgt::BufferBindingType::Storage { read_only: true } => {
+                                let raw_desc = Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                                    Format: Dxgi::Common::DXGI_FORMAT_R32_TYPELESS,
+                                    Shader4ComponentMapping:
+                                        Direct3D12::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                                    ViewDimension: Direct3D12::D3D12_SRV_DIMENSION_BUFFER,
+                                    Anonymous: Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
+                                        Buffer: Direct3D12::D3D12_BUFFER_SRV {
+                                            FirstElement: data.offset / 4,
+                                            NumElements: size / 4,
+                                            StructureByteStride: 0,
+                                            Flags: Direct3D12::D3D12_BUFFER_SRV_FLAG_RAW,
+                                        },
+                                    },
+                                };
+                                unsafe {
+                                    self.raw.CreateShaderResourceView(
+                                        &data.buffer.resource,
+                                        Some(&raw_desc),
+                                        handle,
+                                    )
+                                };
+                            }
+                            wgt::BufferBindingType::Storage { read_only: false } => {
+                                let raw_desc = Direct3D12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                                    Format: Dxgi::Common::DXGI_FORMAT_R32_TYPELESS,
+                                    ViewDimension: Direct3D12::D3D12_UAV_DIMENSION_BUFFER,
+                                    Anonymous: Direct3D12::D3D12_UNORDERED_ACCESS_VIEW_DESC_0 {
+                                        Buffer: Direct3D12::D3D12_BUFFER_UAV {
+                                            FirstElement: data.offset / 4,
+                                            NumElements: size / 4,
+                                            StructureByteStride: 0,
+                                            CounterOffsetInBytes: 0,
+                                            Flags: Direct3D12::D3D12_BUFFER_UAV_FLAG_RAW,
+                                        },
+                                    },
+                                };
+                                unsafe {
+                                    self.raw.CreateUnorderedAccessView(
+                                        &data.buffer.resource,
+                                        None,
+                                        Some(&raw_desc),
+                                        handle,
+                                    )
+                                };
+                            }
+                        }
+                        inner.stage.push(handle);
+                        cpu_index += 1;
+                    }
+                    multi_update_dst_range_view_sizes.push(entry.count);
+                    multi_update_dst_range_view_handles.push(self.shared.heap_views.cpu_descriptor_at(
+                        dst_views_index.unwrap()
+                            + view_gpu_offset as u64
+                            + entry.array_element_offset.unwrap_or(0) as u64,
+                    ));
+                    view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
+                }
+                wgt::BindingType::Texture { .. } => {
+                    let inner = cpu_views.as_mut().unwrap();
+                    let start = entry.resource_index as usize;
+                    let end = start + entry.count as usize;
+                    for data in &textures[start..end] {
+                        let handle = data.view.handle_srv.unwrap();
+                        inner.stage.push(handle.raw);
+                    }
+                    multi_update_dst_range_view_sizes.push(entry.count);
+                    multi_update_dst_range_view_handles.push(self.shared.heap_views.cpu_descriptor_at(
+                        dst_views_index.unwrap()
+                            + view_gpu_offset as u64
+                            + entry.array_element_offset.unwrap_or(0) as u64,
+                    ));
+                    view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
+                }
+                wgt::BindingType::StorageTexture { .. } => {
+                    let inner = cpu_views.as_mut().unwrap();
+                    let start = entry.resource_index as usize;
+                    let end = start + entry.count as usize;
+                    for data in &textures[start..end] {
+                        let handle = data.view.handle_uav.unwrap();
+                        inner.stage.push(handle.raw);
+                    }
+                    multi_update_dst_range_view_sizes.push(entry.count);
+                    multi_update_dst_range_view_handles.push(self.shared.heap_views.cpu_descriptor_at(
+                        dst_views_index.unwrap()
+                            + view_gpu_offset as u64
+                            + entry.array_element_offset.unwrap_or(0) as u64,
+                    ));
+                    view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
+                }
+                wgt::BindingType::Sampler { .. } => {
+                    let start = entry.resource_index as usize;
+                    let end = start + entry.count as usize;
+                    for data in &samplers[start..end] {
+                        cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
+                    }
+                    multi_update_dst_range_sampler_sizes.push(entry.count);
+                    multi_update_dst_range_sampler_handles.push(
+                        self.shared.heap_views.cpu_descriptor_at(
+                            dst_samplers_index.unwrap()
+                                + sampler_gpu_offset as u64
+                                + entry.array_element_offset.unwrap_or(0) as u64,
+                        ),
+                    );
+                    sampler_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
+                }
+                wgt::BindingType::AccelerationStructure => todo!(),
+            }
+        }
+
+        WriteDescriptorsOutput {
+            view_cpu_heap: cpu_views,
+            view_range_sizes: multi_update_dst_range_view_sizes,
+            view_handles: multi_update_dst_range_view_handles,
+            sampler_cpu_heap: cpu_samplers,
+            sampler_sizes: multi_update_dst_range_sampler_sizes,
+            sampler_handles: multi_update_dst_range_sampler_handles,
+            dynamic_buffers,
         }
     }
 }
@@ -785,7 +1013,7 @@ impl crate::Device for super::Device {
         let num_views = num_buffer_views + num_texture_views;
         Ok(super::BindGroupLayout {
             entries: desc.entries.to_vec(),
-            cpu_heap_views: if num_views != 0 {
+            scratch_views_cpu_heap: if num_views != 0 {
                 let heap = descriptor::CpuHeap::new(
                     &self.raw,
                     Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -795,7 +1023,7 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            cpu_heap_samplers: if num_samplers != 0 {
+            scratch_sampler_cpu_heap: if num_samplers != 0 {
                 let heap = descriptor::CpuHeap::new(
                     &self.raw,
                     Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
@@ -806,6 +1034,7 @@ impl crate::Device for super::Device {
                 None
             },
             copy_counts: vec![1; num_views.max(num_samplers) as usize],
+            flags: desc.flags,
         })
     }
 
@@ -1254,172 +1483,107 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
-        let mut cpu_views = desc
+        let views_count = desc
             .layout
-            .cpu_heap_views
+            .scratch_views_cpu_heap
             .as_ref()
-            .map(|cpu_heap| cpu_heap.inner.lock());
-        if let Some(ref mut inner) = cpu_views {
-            inner.stage.clear();
-        }
-        let mut cpu_samplers = desc
+            .map(|it| it.total);
+        let samplers_count = desc
             .layout
-            .cpu_heap_samplers
+            .scratch_sampler_cpu_heap
             .as_ref()
-            .map(|cpu_heap| cpu_heap.inner.lock());
-        if let Some(ref mut inner) = cpu_samplers {
-            inner.stage.clear();
-        }
-        let mut dynamic_buffers = Vec::new();
+            .map(|it| it.total);
 
-        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
-            let layout = desc
-                .layout
-                .entries
-                .iter()
-                .find(|layout_entry| layout_entry.binding == entry.binding)
-                .expect("internal error: no layout entry found with binding slot");
-            (layout, entry)
-        });
-        for (layout, entry) in layout_and_entry_iter {
-            match layout.ty {
-                wgt::BindingType::Buffer {
-                    has_dynamic_offset: true,
-                    ..
-                } => {
-                    let start = entry.resource_index as usize;
-                    let end = start + entry.count as usize;
-                    for data in &desc.buffers[start..end] {
-                        dynamic_buffers.push(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: data.resolve_address(),
-                        });
-                    }
-                }
-                wgt::BindingType::Buffer { ty, .. } => {
-                    let start = entry.resource_index as usize;
-                    let end = start + entry.count as usize;
-                    for data in &desc.buffers[start..end] {
-                        let gpu_address = data.resolve_address();
-                        let size = data.resolve_size() as u32;
-                        let inner = cpu_views.as_mut().unwrap();
-                        let cpu_index = inner.stage.len() as u32;
-                        let handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
-                        match ty {
-                            wgt::BufferBindingType::Uniform => {
-                                let size_mask =
-                                    Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
-                                let raw_desc = Direct3D12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                    BufferLocation: gpu_address,
-                                    SizeInBytes: ((size - 1) | size_mask) + 1,
-                                };
-                                unsafe {
-                                    self.raw.CreateConstantBufferView(Some(&raw_desc), handle)
-                                };
-                            }
-                            wgt::BufferBindingType::Storage { read_only: true } => {
-                                let raw_desc = Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-                                    Format: Dxgi::Common::DXGI_FORMAT_R32_TYPELESS,
-                                    Shader4ComponentMapping:
-                                        Direct3D12::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-                                    ViewDimension: Direct3D12::D3D12_SRV_DIMENSION_BUFFER,
-                                    Anonymous: Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
-                                        Buffer: Direct3D12::D3D12_BUFFER_SRV {
-                                            FirstElement: data.offset / 4,
-                                            NumElements: size / 4,
-                                            StructureByteStride: 0,
-                                            Flags: Direct3D12::D3D12_BUFFER_SRV_FLAG_RAW,
-                                        },
-                                    },
-                                };
-                                unsafe {
-                                    self.raw.CreateShaderResourceView(
-                                        &data.buffer.resource,
-                                        Some(&raw_desc),
-                                        handle,
-                                    )
-                                };
-                            }
-                            wgt::BufferBindingType::Storage { read_only: false } => {
-                                let raw_desc = Direct3D12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
-                                    Format: Dxgi::Common::DXGI_FORMAT_R32_TYPELESS,
-                                    ViewDimension: Direct3D12::D3D12_UAV_DIMENSION_BUFFER,
-                                    Anonymous: Direct3D12::D3D12_UNORDERED_ACCESS_VIEW_DESC_0 {
-                                        Buffer: Direct3D12::D3D12_BUFFER_UAV {
-                                            FirstElement: data.offset / 4,
-                                            NumElements: size / 4,
-                                            StructureByteStride: 0,
-                                            CounterOffsetInBytes: 0,
-                                            Flags: Direct3D12::D3D12_BUFFER_UAV_FLAG_RAW,
-                                        },
-                                    },
-                                };
-                                unsafe {
-                                    self.raw.CreateUnorderedAccessView(
-                                        &data.buffer.resource,
-                                        None,
-                                        Some(&raw_desc),
-                                        handle,
-                                    )
-                                };
-                            }
-                        }
-                        inner.stage.push(handle);
-                    }
-                }
-                wgt::BindingType::Texture { .. } => {
-                    let start = entry.resource_index as usize;
-                    let end = start + entry.count as usize;
-                    for data in &desc.textures[start..end] {
-                        let handle = data.view.handle_srv.unwrap();
-                        cpu_views.as_mut().unwrap().stage.push(handle.raw);
-                    }
-                }
-                wgt::BindingType::StorageTexture { .. } => {
-                    let start = entry.resource_index as usize;
-                    let end = start + entry.count as usize;
-                    for data in &desc.textures[start..end] {
-                        let handle = data.view.handle_uav.unwrap();
-                        cpu_views.as_mut().unwrap().stage.push(handle.raw);
-                    }
-                }
-                wgt::BindingType::Sampler { .. } => {
-                    let start = entry.resource_index as usize;
-                    let end = start + entry.count as usize;
-                    for data in &desc.samplers[start..end] {
-                        cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
-                    }
-                }
-                wgt::BindingType::AccelerationStructure => todo!(),
-            }
-        }
-
-        let handle_views = match cpu_views {
-            Some(inner) => {
-                let dual = unsafe {
-                    descriptor::upload(
-                        &self.raw,
-                        &inner,
-                        &self.shared.heap_views,
-                        &desc.layout.copy_counts,
-                    )
-                }?;
-                Some(dual)
-            }
+        let views_allocation = match views_count {
+            Some(it) => Some(self.shared.heap_views.allocate_slice(it as u64)?),
             None => None,
         };
-        let handle_samplers = match cpu_samplers {
-            Some(inner) => {
-                let dual = unsafe {
+        let samplers_allocation = match samplers_count {
+            Some(it) => Some(self.shared.heap_samplers.allocate_slice(it as u64)?),
+            None => None,
+        };
+
+        let update_params = self.write_descriptors(
+            views_allocation,
+            samplers_allocation,
+            desc.layout,
+            desc.buffers,
+            desc.samplers,
+            desc.textures,
+            desc.entries,
+            desc.acceleration_structures,
+        );
+        let partially_bound = desc
+            .layout
+            .flags
+            .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
+
+        let handle_views = if let Some(cpu_views) = update_params.view_cpu_heap {
+            if partially_bound {
+                unsafe {
+                    descriptor::multi_update(
+                        &self.raw,
+                        &cpu_views,
+                        self.shared.heap_views.ty,
+                        &update_params.view_handles,
+                        &update_params.view_range_sizes,
+                        &desc.layout.copy_counts,
+                    );
+                }
+            } else {
+                unsafe {
                     descriptor::upload(
                         &self.raw,
-                        &inner,
-                        &self.shared.heap_samplers,
+                        &cpu_views,
+                        self.shared.heap_views.ty,
+                        self.shared
+                            .heap_views
+                            .cpu_descriptor_at(views_allocation.unwrap()),
                         &desc.layout.copy_counts,
-                    )
-                }?;
-                Some(dual)
+                    );
+                }
             }
-            None => None,
+            Some(
+                self.shared
+                    .heap_views
+                    .at(views_allocation.unwrap(), views_count.unwrap() as u64),
+            )
+        } else {
+            None
+        };
+
+        let handle_samplers = if let Some(cpu_samplers) = update_params.sampler_cpu_heap {
+            if partially_bound {
+                unsafe {
+                    descriptor::multi_update(
+                        &self.raw,
+                        &cpu_samplers,
+                        self.shared.heap_samplers.ty,
+                        &update_params.sampler_handles,
+                        &update_params.sampler_sizes,
+                        &desc.layout.copy_counts,
+                    );
+                }
+            } else {
+                unsafe {
+                    descriptor::upload(
+                        &self.raw,
+                        &cpu_samplers,
+                        self.shared.heap_samplers.ty,
+                        self.shared
+                            .heap_samplers
+                            .cpu_descriptor_at(samplers_allocation.unwrap()),
+                        &desc.layout.copy_counts,
+                    );
+                }
+            }
+            Some(
+                self.shared
+                    .heap_samplers
+                    .at(samplers_allocation.unwrap(), samplers_count.unwrap() as u64),
+            )
+        } else {
+            None
         };
 
         self.counters.bind_groups.add(1);
@@ -1427,8 +1591,95 @@ impl crate::Device for super::Device {
         Ok(super::BindGroup {
             handle_views,
             handle_samplers,
-            dynamic_buffers,
+            dynamic_buffers: update_params.dynamic_buffers,
         })
+    }
+
+    unsafe fn update_bind_group(
+        &self,
+        bind_group: &<Self::A as crate::Api>::BindGroup,
+        desc: &crate::UpdateBindGroupDescriptor<
+            <Self::A as crate::Api>::BindGroupLayout,
+            <Self::A as crate::Api>::Buffer,
+            <Self::A as crate::Api>::Sampler,
+            <Self::A as crate::Api>::TextureView,
+            <Self::A as crate::Api>::AccelerationStructure,
+        >,
+    ) -> Result<(), crate::DeviceError> {
+        let views_index = bind_group
+            .handle_views
+            .map(|it| self.shared.heap_views.gpu_descriptor_index(it));
+        let samplers_index = bind_group
+            .handle_samplers
+            .map(|it| self.shared.heap_samplers.gpu_descriptor_index(it));
+        let update_params = self.write_descriptors(
+            views_index,
+            samplers_index,
+            desc.layout,
+            desc.buffers,
+            desc.samplers,
+            desc.textures,
+            desc.entries,
+            desc.acceleration_structures,
+        );
+        let partially_bound = desc
+            .layout
+            .flags
+            .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
+        if let Some(cpu_views) = update_params.view_cpu_heap {
+            if partially_bound {
+                unsafe {
+                    descriptor::multi_update(
+                        &self.raw,
+                        &cpu_views,
+                        self.shared.heap_views.ty,
+                        &update_params.view_handles,
+                        &update_params.view_range_sizes,
+                        &desc.layout.copy_counts,
+                    );
+                }
+            } else {
+                unsafe {
+                    descriptor::upload(
+                        &self.raw,
+                        &cpu_views,
+                        self.shared.heap_views.ty,
+                        self.shared
+                            .heap_views
+                            .cpu_descriptor_at(views_index.unwrap()),
+                        &desc.layout.copy_counts,
+                    );
+                }
+            }
+        }
+
+        if let Some(cpu_samplers) = update_params.sampler_cpu_heap {
+            if partially_bound {
+                unsafe {
+                    descriptor::multi_update(
+                        &self.raw,
+                        &cpu_samplers,
+                        self.shared.heap_samplers.ty,
+                        &update_params.sampler_handles,
+                        &update_params.sampler_sizes,
+                        &desc.layout.copy_counts,
+                    );
+                }
+            } else {
+                unsafe {
+                    descriptor::upload(
+                        &self.raw,
+                        &cpu_samplers,
+                        self.shared.heap_samplers.ty,
+                        self.shared
+                            .heap_samplers
+                            .cpu_descriptor_at(samplers_index.unwrap()),
+                        &desc.layout.copy_counts,
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {

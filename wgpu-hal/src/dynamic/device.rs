@@ -336,6 +336,7 @@ impl<D: Device + DynResource> DynDevice for D {
 
         let desc = BindGroupDescriptor {
             label: desc.label.to_owned(),
+            flags: desc.flags,
             layout: desc.layout.expect_downcast_ref(),
             buffers: &buffers,
             samplers: &samplers,

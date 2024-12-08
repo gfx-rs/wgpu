@@ -1007,6 +1007,175 @@ impl super::Device {
     pub fn shared_instance(&self) -> &super::InstanceShared {
         &self.shared.instance
     }
+
+    fn write_descriptors(
+        &self,
+        set: &gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
+        layout: &super::BindGroupLayout,
+        buffers: &[crate::BufferBinding<super::Buffer>],
+        samplers: &[&super::Sampler],
+        textures: &[crate::TextureBinding<super::TextureView>],
+        entries: &[crate::BindGroupEntry],
+        acceleration_structures: &[&super::AccelerationStructure],
+    ) {
+        /// Helper for splitting off and initializing a given number of elements on a pre-allocated
+        /// stack, based on items returned from an [`ExactSizeIterator`].  Typically created from a
+        /// [`MaybeUninit`] slice (see [`Vec::spare_capacity_mut()`]).
+        /// The updated [`ExtensionStack`] of remaining uninitialized elements is returned, safely
+        /// representing that the initialized and remaining elements are two independent mutable
+        /// borrows.
+        struct ExtendStack<'a, T> {
+            remainder: &'a mut [MaybeUninit<T>],
+        }
+
+        impl<'a, T> ExtendStack<'a, T> {
+            fn from_vec_capacity(vec: &'a mut Vec<T>) -> Self {
+                Self {
+                    remainder: vec.spare_capacity_mut(),
+                }
+            }
+
+            fn extend_one(self, value: T) -> (Self, &'a mut T) {
+                let (to_init, remainder) = self.remainder.split_first_mut().unwrap();
+                let init = to_init.write(value);
+                (Self { remainder }, init)
+            }
+
+            fn extend(
+                self,
+                iter: impl IntoIterator<Item = T> + ExactSizeIterator,
+            ) -> (Self, &'a mut [T]) {
+                let (to_init, remainder) = self.remainder.split_at_mut(iter.len());
+
+                for (value, to_init) in iter.into_iter().zip(to_init.iter_mut()) {
+                    to_init.write(value);
+                }
+
+                // we can't use the safe (yet unstable) MaybeUninit::write_slice() here because of having an iterator to write
+
+                let init = {
+                    // SAFETY: The loop above has initialized exactly as many items as to_init is
+                    // long, so it is safe to cast away the MaybeUninit<T> wrapper into T.
+
+                    // Additional safety docs from unstable slice_assume_init_mut
+                    // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
+                    // mutable reference which is also guaranteed to be valid for writes.
+                    unsafe { std::mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
+                };
+                (Self { remainder }, init)
+            }
+        }
+
+        let mut writes = Vec::with_capacity(entries.len());
+        let mut buffer_infos = Vec::with_capacity(buffers.len());
+        let mut buffer_infos = ExtendStack::from_vec_capacity(&mut buffer_infos);
+        let mut image_infos = Vec::with_capacity(samplers.len() + textures.len());
+        let mut image_infos = ExtendStack::from_vec_capacity(&mut image_infos);
+        // TODO: This length could be reduced to just the number of top-level acceleration
+        // structure bindings, where multiple consecutive TLAS bindings that are set via
+        // one `WriteDescriptorSet` count towards one "info" struct, not the total number of
+        // acceleration structure bindings to write:
+        let mut acceleration_structure_infos = Vec::with_capacity(acceleration_structures.len());
+        let mut acceleration_structure_infos =
+            ExtendStack::from_vec_capacity(&mut acceleration_structure_infos);
+        let mut raw_acceleration_structures = Vec::with_capacity(acceleration_structures.len());
+        let mut raw_acceleration_structures =
+            ExtendStack::from_vec_capacity(&mut raw_acceleration_structures);
+        for entry in entries {
+            let (ty, size) = layout.types[entry.binding as usize];
+            if size == 0 {
+                continue; // empty slot
+            }
+            let offset = entry.array_element_offset.unwrap_or(0);
+            let mut write = vk::WriteDescriptorSet::default()
+                .dst_set(*set.raw())
+                .dst_binding(entry.binding)
+                .descriptor_type(ty)
+                .dst_array_element(offset);
+
+            write = match ty {
+                vk::DescriptorType::SAMPLER => {
+                    let start = entry.resource_index;
+                    let end = start + entry.count;
+                    let local_image_infos;
+                    (image_infos, local_image_infos) =
+                        image_infos.extend(samplers[start as usize..end as usize].iter().map(
+                            |sampler| vk::DescriptorImageInfo::default().sampler(sampler.raw),
+                        ));
+                    write.image_info(local_image_infos)
+                }
+                vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
+                    let start = entry.resource_index;
+                    let end = start + entry.count;
+                    let local_image_infos;
+                    (image_infos, local_image_infos) =
+                        image_infos.extend(textures[start as usize..end as usize].iter().map(
+                            |binding| {
+                                let layout = conv::derive_image_layout(
+                                    binding.usage,
+                                    binding.view.attachment.view_format,
+                                );
+                                vk::DescriptorImageInfo::default()
+                                    .image_view(binding.view.raw)
+                                    .image_layout(layout)
+                            },
+                        ));
+                    write.image_info(local_image_infos)
+                }
+                vk::DescriptorType::UNIFORM_BUFFER
+                | vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC
+                | vk::DescriptorType::STORAGE_BUFFER
+                | vk::DescriptorType::STORAGE_BUFFER_DYNAMIC => {
+                    let start = entry.resource_index;
+                    let end = start + entry.count;
+                    let local_buffer_infos;
+                    (buffer_infos, local_buffer_infos) = buffer_infos.extend(
+                        buffers[start as usize..end as usize].iter().map(|binding| {
+                            vk::DescriptorBufferInfo::default()
+                                .buffer(binding.buffer.raw)
+                                .offset(binding.offset)
+                                .range(binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get))
+                        }),
+                    );
+                    write.buffer_info(local_buffer_infos)
+                }
+                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
+                    let start = entry.resource_index;
+                    let end = start + entry.count;
+
+                    let local_raw_acceleration_structures;
+                    (
+                        raw_acceleration_structures,
+                        local_raw_acceleration_structures,
+                    ) = raw_acceleration_structures.extend(
+                        acceleration_structures[start as usize..end as usize]
+                            .iter()
+                            .map(|acceleration_structure| acceleration_structure.raw),
+                    );
+
+                    let local_acceleration_structure_infos;
+                    (
+                        acceleration_structure_infos,
+                        local_acceleration_structure_infos,
+                    ) = acceleration_structure_infos.extend_one(
+                        vk::WriteDescriptorSetAccelerationStructureKHR::default()
+                            .acceleration_structures(local_raw_acceleration_structures),
+                    );
+
+                    write
+                        .descriptor_count(entry.count)
+                        .push_next(local_acceleration_structure_infos)
+                }
+                _ => unreachable!(),
+            };
+
+            writes.push(write);
+        }
+
+        unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };
+
+        self.counters.bind_groups.add(1);
+    }
 }
 
 impl crate::Device for super::Device {
@@ -1461,6 +1630,9 @@ impl crate::Device for super::Device {
         let partially_bound = desc
             .flags
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
+        let update_after_bind = desc
+            .flags
+            .contains(crate::BindGroupLayoutFlags::UPDATE_AFTER_BIND);
 
         let vk_info = if partially_bound {
             binding_flag_vec = desc
@@ -1471,6 +1643,9 @@ impl crate::Device for super::Device {
 
                     if partially_bound && entry.count.is_some() {
                         flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+                    }
+                    if update_after_bind && entry.count.is_some() {
+                        flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
                     }
 
                     flags
@@ -1611,168 +1786,40 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(*set.raw(), label) };
         }
 
-        /// Helper for splitting off and initializing a given number of elements on a pre-allocated
-        /// stack, based on items returned from an [`ExactSizeIterator`].  Typically created from a
-        /// [`MaybeUninit`] slice (see [`Vec::spare_capacity_mut()`]).
-        /// The updated [`ExtensionStack`] of remaining uninitialized elements is returned, safely
-        /// representing that the initialized and remaining elements are two independent mutable
-        /// borrows.
-        struct ExtendStack<'a, T> {
-            remainder: &'a mut [MaybeUninit<T>],
-        }
-
-        impl<'a, T> ExtendStack<'a, T> {
-            fn from_vec_capacity(vec: &'a mut Vec<T>) -> Self {
-                Self {
-                    remainder: vec.spare_capacity_mut(),
-                }
-            }
-
-            fn extend_one(self, value: T) -> (Self, &'a mut T) {
-                let (to_init, remainder) = self.remainder.split_first_mut().unwrap();
-                let init = to_init.write(value);
-                (Self { remainder }, init)
-            }
-
-            fn extend(
-                self,
-                iter: impl IntoIterator<Item = T> + ExactSizeIterator,
-            ) -> (Self, &'a mut [T]) {
-                let (to_init, remainder) = self.remainder.split_at_mut(iter.len());
-
-                for (value, to_init) in iter.into_iter().zip(to_init.iter_mut()) {
-                    to_init.write(value);
-                }
-
-                // we can't use the safe (yet unstable) MaybeUninit::write_slice() here because of having an iterator to write
-
-                let init = {
-                    // SAFETY: The loop above has initialized exactly as many items as to_init is
-                    // long, so it is safe to cast away the MaybeUninit<T> wrapper into T.
-
-                    // Additional safety docs from unstable slice_assume_init_mut
-                    // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
-                    // mutable reference which is also guaranteed to be valid for writes.
-                    unsafe { mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
-                };
-                (Self { remainder }, init)
-            }
-        }
-
-        let mut writes = Vec::with_capacity(desc.entries.len());
-        let mut buffer_infos = Vec::with_capacity(desc.buffers.len());
-        let mut buffer_infos = ExtendStack::from_vec_capacity(&mut buffer_infos);
-        let mut image_infos = Vec::with_capacity(desc.samplers.len() + desc.textures.len());
-        let mut image_infos = ExtendStack::from_vec_capacity(&mut image_infos);
-        // TODO: This length could be reduced to just the number of top-level acceleration
-        // structure bindings, where multiple consecutive TLAS bindings that are set via
-        // one `WriteDescriptorSet` count towards one "info" struct, not the total number of
-        // acceleration structure bindings to write:
-        let mut acceleration_structure_infos =
-            Vec::with_capacity(desc.acceleration_structures.len());
-        let mut acceleration_structure_infos =
-            ExtendStack::from_vec_capacity(&mut acceleration_structure_infos);
-        let mut raw_acceleration_structures =
-            Vec::with_capacity(desc.acceleration_structures.len());
-        let mut raw_acceleration_structures =
-            ExtendStack::from_vec_capacity(&mut raw_acceleration_structures);
-        for entry in desc.entries {
-            let (ty, size) = desc.layout.types[entry.binding as usize];
-            if size == 0 {
-                continue; // empty slot
-            }
-            let mut write = vk::WriteDescriptorSet::default()
-                .dst_set(*set.raw())
-                .dst_binding(entry.binding)
-                .descriptor_type(ty);
-
-            write = match ty {
-                vk::DescriptorType::SAMPLER => {
-                    let start = entry.resource_index;
-                    let end = start + entry.count;
-                    let local_image_infos;
-                    (image_infos, local_image_infos) =
-                        image_infos.extend(desc.samplers[start as usize..end as usize].iter().map(
-                            |sampler| vk::DescriptorImageInfo::default().sampler(sampler.raw),
-                        ));
-                    write.image_info(local_image_infos)
-                }
-                vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
-                    let start = entry.resource_index;
-                    let end = start + entry.count;
-                    let local_image_infos;
-                    (image_infos, local_image_infos) =
-                        image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
-                            |binding| {
-                                let layout = conv::derive_image_layout(
-                                    binding.usage,
-                                    binding.view.attachment.view_format,
-                                );
-                                vk::DescriptorImageInfo::default()
-                                    .image_view(binding.view.raw)
-                                    .image_layout(layout)
-                            },
-                        ));
-                    write.image_info(local_image_infos)
-                }
-                vk::DescriptorType::UNIFORM_BUFFER
-                | vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC
-                | vk::DescriptorType::STORAGE_BUFFER
-                | vk::DescriptorType::STORAGE_BUFFER_DYNAMIC => {
-                    let start = entry.resource_index;
-                    let end = start + entry.count;
-                    let local_buffer_infos;
-                    (buffer_infos, local_buffer_infos) =
-                        buffer_infos.extend(desc.buffers[start as usize..end as usize].iter().map(
-                            |binding| {
-                                vk::DescriptorBufferInfo::default()
-                                    .buffer(binding.buffer.raw)
-                                    .offset(binding.offset)
-                                    .range(
-                                        binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get),
-                                    )
-                            },
-                        ));
-                    write.buffer_info(local_buffer_infos)
-                }
-                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
-                    let start = entry.resource_index;
-                    let end = start + entry.count;
-
-                    let local_raw_acceleration_structures;
-                    (
-                        raw_acceleration_structures,
-                        local_raw_acceleration_structures,
-                    ) = raw_acceleration_structures.extend(
-                        desc.acceleration_structures[start as usize..end as usize]
-                            .iter()
-                            .map(|acceleration_structure| acceleration_structure.raw),
-                    );
-
-                    let local_acceleration_structure_infos;
-                    (
-                        acceleration_structure_infos,
-                        local_acceleration_structure_infos,
-                    ) = acceleration_structure_infos.extend_one(
-                        vk::WriteDescriptorSetAccelerationStructureKHR::default()
-                            .acceleration_structures(local_raw_acceleration_structures),
-                    );
-
-                    write
-                        .descriptor_count(entry.count)
-                        .push_next(local_acceleration_structure_infos)
-                }
-                _ => unreachable!(),
-            };
-
-            writes.push(write);
-        }
-
-        unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };
-
-        self.counters.bind_groups.add(1);
+        self.write_descriptors(
+            &set,
+            desc.layout,
+            desc.buffers,
+            desc.samplers,
+            desc.textures,
+            desc.entries,
+            desc.acceleration_structures,
+        );
 
         Ok(super::BindGroup { set })
+    }
+
+    unsafe fn update_bind_group(
+        &self,
+        bind_group: &<Self::A as crate::Api>::BindGroup,
+        desc: &crate::UpdateBindGroupDescriptor<
+            <Self::A as crate::Api>::BindGroupLayout,
+            <Self::A as crate::Api>::Buffer,
+            <Self::A as crate::Api>::Sampler,
+            <Self::A as crate::Api>::TextureView,
+            <Self::A as crate::Api>::AccelerationStructure,
+        >,
+    ) -> Result<(), crate::DeviceError> {
+        self.write_descriptors(
+            &bind_group.set,
+            desc.layout,
+            desc.buffers,
+            desc.samplers,
+            desc.textures,
+            desc.entries,
+            desc.acceleration_structures,
+        );
+        Ok(())
     }
 
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {

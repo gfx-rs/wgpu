@@ -227,6 +227,21 @@ impl crate::Device for Context {
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
+
+    unsafe fn update_bind_group(
+        &self,
+        bind_group: &<Self::A as crate::Api>::BindGroup,
+        desc: &crate::UpdateBindGroupDescriptor<
+            <Self::A as crate::Api>::BindGroupLayout,
+            <Self::A as crate::Api>::Buffer,
+            <Self::A as crate::Api>::Sampler,
+            <Self::A as crate::Api>::TextureView,
+            <Self::A as crate::Api>::AccelerationStructure,
+        >,
+    ) -> Result<(), crate::DeviceError> {
+        Ok(())
+    }
+
     unsafe fn destroy_bind_group(&self, group: Resource) {}
 
     unsafe fn create_shader_module(

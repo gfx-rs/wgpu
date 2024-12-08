@@ -2330,6 +2330,7 @@ impl Device {
             hal_entries.push(hal::BindGroupEntry {
                 binding,
                 resource_index: res_index as u32,
+                array_element_offset: None,
                 count: count as u32,
             });
         }
@@ -2344,6 +2345,7 @@ impl Device {
         }
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.to_hal(self.instance_flags),
+            flags: hal::BindGroupFlags::empty(),
             layout: layout.raw(),
             entries: &hal_entries,
             buffers: &hal_buffers,

@@ -1313,6 +1313,20 @@ impl crate::Device for super::Device {
         })
     }
 
+    unsafe fn update_bind_group(
+        &self,
+        _bind_group: &<Self::A as crate::Api>::BindGroup,
+        _desc: &crate::UpdateBindGroupDescriptor<
+            <Self::A as crate::Api>::BindGroupLayout,
+            <Self::A as crate::Api>::Buffer,
+            <Self::A as crate::Api>::Sampler,
+            <Self::A as crate::Api>::TextureView,
+            <Self::A as crate::Api>::AccelerationStructure,
+        >,
+    ) -> Result<(), crate::DeviceError> {
+        todo!()
+    }
+
     unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {
         self.counters.bind_groups.sub(1);
     }

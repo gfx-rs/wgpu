@@ -234,10 +234,12 @@ impl IndirectValidation {
 
         let dst_bind_group_desc = hal::BindGroupDescriptor {
             label: None,
+            flags: hal::BindGroupFlags::empty(),
             layout: dst_bind_group_layout.as_ref(),
             entries: &[hal::BindGroupEntry {
                 binding: 0,
                 resource_index: 0,
+                array_element_offset: None,
                 count: 1,
             }],
             buffers: &[hal::BufferBinding {
@@ -280,10 +282,12 @@ impl IndirectValidation {
         };
         let hal_desc = hal::BindGroupDescriptor {
             label: None,
+            flags: hal::BindGroupFlags::empty(),
             layout: self.src_bind_group_layout.as_ref(),
             entries: &[hal::BindGroupEntry {
                 binding: 0,
                 resource_index: 0,
+                array_element_offset: None,
                 count: 1,
             }],
             buffers: &[hal::BufferBinding {
