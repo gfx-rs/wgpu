@@ -34,7 +34,11 @@ pub fn map_texture_usage_to_resource_flags(
             flags |= Direct3D12::D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
         }
     }
-    if usage.contains(crate::TextureUses::STORAGE_READ_WRITE) {
+    if usage.intersects(
+        crate::TextureUses::STORAGE_READ_ONLY
+            | crate::TextureUses::STORAGE_WRITE_ONLY
+            | crate::TextureUses::STORAGE_READ_WRITE,
+    ) {
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
@@ -168,7 +172,7 @@ pub fn map_texture_usage_to_state(usage: crate::TextureUses) -> Direct3D12::D3D1
     if usage.intersects(Tu::DEPTH_STENCIL_WRITE) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if usage.intersects(Tu::STORAGE_READ_ONLY | Tu::STORAGE_READ_WRITE) {
+    if usage.intersects(Tu::STORAGE_READ_ONLY | Tu::STORAGE_WRITE_ONLY | Tu::STORAGE_READ_WRITE) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
     state

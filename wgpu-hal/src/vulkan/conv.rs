@@ -350,7 +350,9 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUses {
         bits |= crate::TextureUses::DEPTH_STENCIL_READ | crate::TextureUses::DEPTH_STENCIL_WRITE;
     }
     if usage.contains(vk::ImageUsageFlags::STORAGE) {
-        bits |= crate::TextureUses::STORAGE_READ_WRITE;
+        bits |= crate::TextureUses::STORAGE_READ_ONLY
+            | crate::TextureUses::STORAGE_WRITE_ONLY
+            | crate::TextureUses::STORAGE_READ_WRITE;
     }
     bits
 }

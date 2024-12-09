@@ -2374,7 +2374,7 @@ bitflags::bitflags! {
         /// [`StorageTextureAccess::WriteOnly`].
         const STORAGE_WRITE_ONLY = 1 << 6;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
-        /// any [`StorageTextureAccess`].
+        /// [`StorageTextureAccess::ReadWrite`].
         const STORAGE_READ_WRITE = 1 << 9;
         /// If not present, the texture can't be blended into the render target.
         const BLENDABLE = 1 << 7;
@@ -3400,6 +3400,10 @@ impl TextureFormat {
         let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
         let msaa_resolve = msaa | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
 
+        let s_ro_wo = TextureFormatFeatureFlags::STORAGE_READ_ONLY
+            | TextureFormatFeatureFlags::STORAGE_WRITE_ONLY;
+        let s_all = s_ro_wo | TextureFormatFeatureFlags::STORAGE_READ_WRITE;
+
         // Flags
         let basic =
             TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
@@ -3437,31 +3441,31 @@ impl TextureFormat {
             Self::Rg8Snorm =>             (        noaa,      basic),
             Self::Rg8Uint =>              (        msaa, attachment),
             Self::Rg8Sint =>              (        msaa, attachment),
-            Self::R32Uint =>              (        noaa,  all_flags),
-            Self::R32Sint =>              (        noaa,  all_flags),
-            Self::R32Float =>             (        msaa,  all_flags),
+            Self::R32Uint =>              (        noaa | s_all,  all_flags),
+            Self::R32Sint =>              (        noaa | s_all,  all_flags),
+            Self::R32Float =>             (        msaa | s_all,  all_flags),
             Self::Rg16Uint =>             (        msaa, attachment),
             Self::Rg16Sint =>             (        msaa, attachment),
             Self::Rg16Float =>            (msaa_resolve, attachment),
-            Self::Rgba8Unorm =>           (msaa_resolve,  all_flags),
+            Self::Rgba8Unorm =>           (msaa_resolve | s_ro_wo,  all_flags),
             Self::Rgba8UnormSrgb =>       (msaa_resolve, attachment),
-            Self::Rgba8Snorm =>           (        noaa,    storage),
-            Self::Rgba8Uint =>            (        msaa,  all_flags),
-            Self::Rgba8Sint =>            (        msaa,  all_flags),
+            Self::Rgba8Snorm =>           (     s_ro_wo,    storage),
+            Self::Rgba8Uint =>            (        msaa | s_ro_wo,  all_flags),
+            Self::Rgba8Sint =>            (        msaa | s_ro_wo,  all_flags),
             Self::Bgra8Unorm =>           (bgra8unorm_f, bgra8unorm),
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
-            Self::Rg32Uint =>             (        noaa,  all_flags),
-            Self::Rg32Sint =>             (        noaa,  all_flags),
-            Self::Rg32Float =>            (        noaa,  all_flags),
-            Self::Rgba16Uint =>           (        msaa,  all_flags),
-            Self::Rgba16Sint =>           (        msaa,  all_flags),
-            Self::Rgba16Float =>          (msaa_resolve,  all_flags),
-            Self::Rgba32Uint =>           (        noaa,  all_flags),
-            Self::Rgba32Sint =>           (        noaa,  all_flags),
-            Self::Rgba32Float =>          (        noaa,  all_flags),
+            Self::Rg32Uint =>             (        noaa | s_ro_wo,  all_flags),
+            Self::Rg32Sint =>             (        noaa | s_ro_wo,  all_flags),
+            Self::Rg32Float =>            (        noaa | s_ro_wo,  all_flags),
+            Self::Rgba16Uint =>           (        msaa | s_ro_wo,  all_flags),
+            Self::Rgba16Sint =>           (        msaa | s_ro_wo,  all_flags),
+            Self::Rgba16Float =>          (msaa_resolve | s_ro_wo,  all_flags),
+            Self::Rgba32Uint =>           (        noaa | s_ro_wo,  all_flags),
+            Self::Rgba32Sint =>           (        noaa | s_ro_wo,  all_flags),
+            Self::Rgba32Float =>          (        noaa | s_ro_wo,  all_flags),
 
             Self::Stencil8 =>             (        msaa, attachment),
             Self::Depth16Unorm =>         (        msaa, attachment),
@@ -3473,12 +3477,12 @@ impl TextureFormat {
             // We only support sampling nv12 textures until we implement transfer plane data.
             Self::NV12 =>                 (        noaa,    binding),
 
-            Self::R16Unorm =>             (        msaa,    storage),
-            Self::R16Snorm =>             (        msaa,    storage),
-            Self::Rg16Unorm =>            (        msaa,    storage),
-            Self::Rg16Snorm =>            (        msaa,    storage),
-            Self::Rgba16Unorm =>          (        msaa,    storage),
-            Self::Rgba16Snorm =>          (        msaa,    storage),
+            Self::R16Unorm =>             (        msaa | s_ro_wo,    storage),
+            Self::R16Snorm =>             (        msaa | s_ro_wo,    storage),
+            Self::Rg16Unorm =>            (        msaa | s_ro_wo,    storage),
+            Self::Rg16Snorm =>            (        msaa | s_ro_wo,    storage),
+            Self::Rgba16Unorm =>          (        msaa | s_ro_wo,    storage),
+            Self::Rgba16Snorm =>          (        msaa | s_ro_wo,    storage),
 
             Self::Rgb9e5Ufloat =>         (        noaa,      basic),
 

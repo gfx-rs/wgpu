@@ -111,9 +111,7 @@ impl crate::Adapter for super::Adapter {
 
         // Metal defined pixel format capabilities
         let all_caps = Tfc::SAMPLED_LINEAR
-            | Tfc::STORAGE_READ_ONLY
             | Tfc::STORAGE_WRITE_ONLY
-            | Tfc::STORAGE_READ_WRITE
             | Tfc::COLOR_ATTACHMENT
             | Tfc::COLOR_ATTACHMENT_BLEND
             | msaa_count
@@ -311,7 +309,7 @@ impl crate::Adapter for super::Adapter {
             }
         };
 
-        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | extra
+        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra
     }
 
     unsafe fn surface_capabilities(
@@ -360,6 +358,8 @@ impl crate::Adapter for super::Adapter {
             usage: crate::TextureUses::COLOR_TARGET
                 | crate::TextureUses::COPY_SRC
                 | crate::TextureUses::COPY_DST
+                | crate::TextureUses::STORAGE_READ_ONLY
+                | crate::TextureUses::STORAGE_WRITE_ONLY
                 | crate::TextureUses::STORAGE_READ_WRITE,
         })
     }

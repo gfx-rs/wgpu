@@ -650,7 +650,7 @@ impl Device {
         let texture = Texture::new(
             self,
             resource::TextureInner::Native { raw: hal_texture },
-            conv::map_texture_usage(desc.usage, desc.format.into()),
+            conv::map_texture_usage(desc.usage, desc.format.into(), format_features.flags),
             desc,
             format_features,
             resource::TextureClearMode::None,
@@ -2502,19 +2502,21 @@ impl Device {
 
                 let internal_use = match access {
                     wgt::StorageTextureAccess::WriteOnly => {
-                        if !view.format_features.flags.intersects(
-                            wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
-                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-                        ) {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY)
+                        {
                             return Err(Error::StorageWriteNotSupported(view.desc.format));
                         }
                         hal::TextureUses::STORAGE_WRITE_ONLY
                     }
                     wgt::StorageTextureAccess::ReadOnly => {
-                        if !view.format_features.flags.intersects(
-                            wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
-                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-                        ) {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY)
+                        {
                             return Err(Error::StorageReadNotSupported(view.desc.format));
                         }
                         hal::TextureUses::STORAGE_READ_ONLY
