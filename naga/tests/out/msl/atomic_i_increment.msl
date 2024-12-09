@@ -1,0 +1,52 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_2 {
+    uint member;
+};
+struct type_4 {
+    metal::atomic_uint member;
+};
+
+void function(
+    device type_4& global,
+    device type_2 const& global_1
+) {
+    uint phi_23_ = {};
+    uint phi_24_ = {};
+    phi_23_ = 0u;
+    bool loop_init = true;
+    while(true) {
+        if (!loop_init) {
+            phi_23_ = phi_24_;
+            if (!(((phi_23_ >= global_1.member) ? false : true))) {
+                break;
+            }
+        }
+        loop_init = false;
+        uint _e10 = phi_23_;
+        uint _e11 = global_1.member;
+        bool _e12 = _e10 >= _e11;
+        if (_e12) {
+            phi_24_ = uint {};
+        } else {
+            uint _e13 = metal::atomic_fetch_add_explicit(&global.member, 1u, metal::memory_order_relaxed);
+            phi_24_ = _e10 + 1u;
+        }
+        uint _e17 = phi_24_;
+        continue;
+#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
+        LOOP_IS_BOUNDED
+    }
+    return;
+}
+
+kernel void stagetest_atomic_i_increment(
+  device type_4& global [[user(fake0)]]
+, device type_2 const& global_1 [[user(fake0)]]
+) {
+    function(global, global_1);
+}

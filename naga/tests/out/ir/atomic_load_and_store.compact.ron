@@ -1,0 +1,471 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: None,
+                        ty: 0,
+                        binding: None,
+                        offset: 4,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Atomic((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 4,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: None,
+            ty: 0,
+            init: 0,
+        ),
+        (
+            name: None,
+            ty: 0,
+            init: 1,
+        ),
+        (
+            name: None,
+            ty: 1,
+            init: 2,
+        ),
+        (
+            name: None,
+            ty: 0,
+            init: 3,
+        ),
+        (
+            name: None,
+            ty: 2,
+            init: 4,
+        ),
+        (
+            name: None,
+            ty: 1,
+            init: 5,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 5,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 3,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(U32(0)),
+        Literal(U32(2)),
+        Literal(Bool(false)),
+        Literal(U32(1)),
+        ZeroValue(2),
+        Literal(Bool(true)),
+    ],
+    functions: [
+        (
+            name: None,
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("phi_32"),
+                    ty: 2,
+                    init: None,
+                ),
+                (
+                    name: Some("phi_49"),
+                    ty: 2,
+                    init: None,
+                ),
+                (
+                    name: Some("phi_50"),
+                    ty: 2,
+                    init: None,
+                ),
+                (
+                    name: Some("phi_59"),
+                    ty: 1,
+                    init: None,
+                ),
+                (
+                    name: Some("phi_33"),
+                    ty: 2,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                GlobalVariable(0),
+                GlobalVariable(1),
+                Constant(5),
+                Constant(3),
+                Constant(1),
+                Constant(0),
+                Constant(4),
+                Constant(2),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 9,
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        5,
+                        10,
+                    ],
+                ),
+                LocalVariable(0),
+                Load(
+                    pointer: 12,
+                ),
+                AccessIndex(
+                    base: 13,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 13,
+                    index: 1,
+                ),
+                Binary(
+                    op: Less,
+                    left: 14,
+                    right: 15,
+                ),
+                Binary(
+                    op: Add,
+                    left: 14,
+                    right: 3,
+                ),
+                AccessIndex(
+                    base: 13,
+                    index: 1,
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        17,
+                        18,
+                    ],
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        3,
+                        14,
+                    ],
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 1,
+                ),
+                Compose(
+                    ty: 2,
+                    components: [
+                        5,
+                        21,
+                    ],
+                ),
+                LocalVariable(1),
+                Load(
+                    pointer: 23,
+                ),
+                LocalVariable(2),
+                Load(
+                    pointer: 25,
+                ),
+                AccessIndex(
+                    base: 26,
+                    index: 0,
+                ),
+                As(
+                    expr: 27,
+                    kind: Sint,
+                    convert: None,
+                ),
+                Load(
+                    pointer: 8,
+                ),
+                Binary(
+                    op: Add,
+                    left: 29,
+                    right: 4,
+                ),
+                LocalVariable(3),
+                Load(
+                    pointer: 31,
+                ),
+                LocalVariable(4),
+                Load(
+                    pointer: 33,
+                ),
+                Unary(
+                    op: LogicalNot,
+                    expr: 32,
+                ),
+                LocalVariable(0),
+                LocalVariable(1),
+                LocalVariable(2),
+                LocalVariable(3),
+                LocalVariable(4),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 8,
+                    end: 12,
+                )),
+                Store(
+                    pointer: 36,
+                    value: 11,
+                ),
+                Loop(
+                    body: [
+                        Emit((
+                            start: 13,
+                            end: 14,
+                        )),
+                        Emit((
+                            start: 14,
+                            end: 17,
+                        )),
+                        If(
+                            condition: 16,
+                            accept: [
+                                Emit((
+                                    start: 17,
+                                    end: 21,
+                                )),
+                                Store(
+                                    pointer: 37,
+                                    value: 19,
+                                ),
+                                Store(
+                                    pointer: 38,
+                                    value: 20,
+                                ),
+                            ],
+                            reject: [
+                                Emit((
+                                    start: 21,
+                                    end: 23,
+                                )),
+                                Store(
+                                    pointer: 37,
+                                    value: 13,
+                                ),
+                                Store(
+                                    pointer: 38,
+                                    value: 22,
+                                ),
+                            ],
+                        ),
+                        Emit((
+                            start: 24,
+                            end: 25,
+                        )),
+                        Emit((
+                            start: 26,
+                            end: 29,
+                        )),
+                        Switch(
+                            selector: 28,
+                            cases: [
+                                (
+                                    value: I32(0),
+                                    body: [
+                                        Store(
+                                            pointer: 39,
+                                            value: 7,
+                                        ),
+                                        Store(
+                                            pointer: 40,
+                                            value: 6,
+                                        ),
+                                        Break,
+                                    ],
+                                    fall_through: false,
+                                ),
+                                (
+                                    value: I32(1),
+                                    body: [
+                                        Emit((
+                                            start: 29,
+                                            end: 31,
+                                        )),
+                                        Store(
+                                            pointer: 8,
+                                            value: 30,
+                                        ),
+                                        Store(
+                                            pointer: 39,
+                                            value: 2,
+                                        ),
+                                        Store(
+                                            pointer: 40,
+                                            value: 24,
+                                        ),
+                                        Break,
+                                    ],
+                                    fall_through: false,
+                                ),
+                                (
+                                    value: Default,
+                                    body: [
+                                        Store(
+                                            pointer: 39,
+                                            value: 7,
+                                        ),
+                                        Store(
+                                            pointer: 40,
+                                            value: 6,
+                                        ),
+                                        Break,
+                                    ],
+                                    fall_through: false,
+                                ),
+                            ],
+                        ),
+                        Emit((
+                            start: 32,
+                            end: 33,
+                        )),
+                        Emit((
+                            start: 34,
+                            end: 35,
+                        )),
+                        Continue,
+                    ],
+                    continuing: [
+                        Emit((
+                            start: 35,
+                            end: 36,
+                        )),
+                        Store(
+                            pointer: 36,
+                            value: 34,
+                        ),
+                    ],
+                    break_if: Some(35),
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "stage::test_atomic_load_and_store",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (32, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("stage::test_atomic_load_and_store_wrap"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+)

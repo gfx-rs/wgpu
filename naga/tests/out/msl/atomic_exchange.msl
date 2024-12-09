@@ -1,0 +1,89 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_2 {
+    uint member;
+    uint member_1;
+};
+struct type_3 {
+    uint member;
+};
+struct type_5 {
+    metal::atomic_uint member;
+};
+
+void function(
+    device type_5& global,
+    device type_3 const& global_1
+) {
+    type_2 phi_33_ = {};
+    uint phi_36_ = {};
+    type_2 phi_52_ = {};
+    type_2 phi_53_ = {};
+    bool phi_62_ = {};
+    type_2 phi_34_ = {};
+    uint phi_37_ = {};
+    uint _e10 = global_1.member;
+    phi_33_ = type_2 {0u, _e10};
+    phi_36_ = 0u;
+    bool loop_init = true;
+    while(true) {
+        if (!loop_init) {
+            phi_33_ = phi_34_;
+            phi_36_ = phi_37_;
+            if (!(phi_62_)) {
+                break;
+            }
+        }
+        loop_init = false;
+        type_2 _e13 = phi_33_;
+        uint _e15 = phi_36_;
+        if (_e13.member < _e13.member_1) {
+            phi_52_ = type_2 {_e13.member + 1u, _e13.member_1};
+            phi_53_ = type_2 {1u, _e13.member};
+        } else {
+            phi_52_ = _e13;
+            phi_53_ = type_2 {0u, type_2 {}.member_1};
+        }
+        type_2 _e26 = phi_52_;
+        type_2 _e28 = phi_53_;
+        switch(as_type<int>(_e28.member)) {
+            case 0: {
+                phi_62_ = false;
+                phi_34_ = type_2 {};
+                phi_37_ = uint {};
+                break;
+            }
+            case 1: {
+                uint _e31 = metal::atomic_exchange_explicit(&global.member, _e15, metal::memory_order_relaxed);
+                phi_62_ = true;
+                phi_34_ = _e26;
+                phi_37_ = _e15 + _e31;
+                break;
+            }
+            default: {
+                phi_62_ = false;
+                phi_34_ = type_2 {};
+                phi_37_ = uint {};
+                break;
+            }
+        }
+        bool _e34 = phi_62_;
+        type_2 _e36 = phi_34_;
+        uint _e38 = phi_37_;
+        continue;
+#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
+        LOOP_IS_BOUNDED
+    }
+    return;
+}
+
+kernel void stagetest_atomic_exchange(
+  device type_5& global [[user(fake0)]]
+, device type_3 const& global_1 [[user(fake0)]]
+) {
+    function(global, global_1);
+}

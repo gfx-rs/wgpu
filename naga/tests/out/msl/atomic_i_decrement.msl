@@ -1,0 +1,54 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct _mslBufferSizes {
+    uint size1;
+};
+
+typedef uint type_2[1];
+struct type_3 {
+    type_2 member;
+};
+struct type_5 {
+    metal::atomic_uint member;
+};
+
+void function(
+    device type_5& global,
+    device type_3& global_1,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    bool phi_40_ = {};
+    bool loop_init = true;
+    while(true) {
+        if (!loop_init) {
+            if (!(phi_40_)) {
+                break;
+            }
+        }
+        loop_init = false;
+        uint _e8 = metal::atomic_fetch_sub_explicit(&global.member, 1u, metal::memory_order_relaxed);
+        if (_e8 < (1 + (_buffer_sizes.size1 - 0 - 4) / 4)) {
+            global_1.member[_e8] = _e8;
+            phi_40_ = (_e8 == 0u) ? false : true;
+        } else {
+            phi_40_ = false;
+        }
+        bool _e16 = phi_40_;
+        continue;
+#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
+        LOOP_IS_BOUNDED
+    }
+    return;
+}
+
+kernel void stagetest_atomic_i_decrement(
+  device type_5& global [[user(fake0)]]
+, device type_3& global_1 [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+) {
+    function(global, global_1, _buffer_sizes);
+}

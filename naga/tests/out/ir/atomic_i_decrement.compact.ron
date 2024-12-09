@@ -1,0 +1,273 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Dynamic,
+                stride: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Atomic((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 4,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: None,
+            ty: 0,
+            init: 0,
+        ),
+        (
+            name: None,
+            ty: 1,
+            init: 1,
+        ),
+        (
+            name: None,
+            ty: 1,
+            init: 2,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 5,
+            init: None,
+        ),
+        (
+            name: None,
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 3,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(U32(0)),
+        Literal(Bool(false)),
+        Literal(Bool(true)),
+    ],
+    functions: [
+        (
+            name: None,
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("phi_40"),
+                    ty: 1,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                GlobalVariable(0),
+                GlobalVariable(1),
+                Constant(0),
+                Constant(1),
+                Constant(2),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                ArrayLength(6),
+                AtomicResult(
+                    ty: 0,
+                    comparison: false,
+                ),
+                Literal(U32(1)),
+                Binary(
+                    op: Less,
+                    left: 8,
+                    right: 7,
+                ),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                Access(
+                    base: 11,
+                    index: 8,
+                ),
+                Binary(
+                    op: Equal,
+                    left: 8,
+                    right: 2,
+                ),
+                Select(
+                    condition: 13,
+                    accept: 3,
+                    reject: 4,
+                ),
+                LocalVariable(0),
+                Load(
+                    pointer: 15,
+                ),
+                Unary(
+                    op: LogicalNot,
+                    expr: 16,
+                ),
+                LocalVariable(0),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 5,
+                    end: 8,
+                )),
+                Loop(
+                    body: [
+                        Atomic(
+                            pointer: 5,
+                            fun: Subtract,
+                            value: 9,
+                            result: Some(8),
+                        ),
+                        Emit((
+                            start: 10,
+                            end: 11,
+                        )),
+                        If(
+                            condition: 10,
+                            accept: [
+                                Emit((
+                                    start: 11,
+                                    end: 13,
+                                )),
+                                Store(
+                                    pointer: 12,
+                                    value: 8,
+                                ),
+                                Emit((
+                                    start: 13,
+                                    end: 15,
+                                )),
+                                Store(
+                                    pointer: 18,
+                                    value: 14,
+                                ),
+                            ],
+                            reject: [
+                                Store(
+                                    pointer: 18,
+                                    value: 3,
+                                ),
+                            ],
+                        ),
+                        Emit((
+                            start: 16,
+                            end: 17,
+                        )),
+                        Continue,
+                    ],
+                    continuing: [
+                        Emit((
+                            start: 17,
+                            end: 18,
+                        )),
+                    ],
+                    break_if: Some(17),
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "stage::test_atomic_i_decrement",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (32, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("stage::test_atomic_i_decrement_wrap"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+)
