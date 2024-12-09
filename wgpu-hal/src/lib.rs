@@ -1675,8 +1675,6 @@ bitflags::bitflags! {
         const UNIFORM = 1 << 6;
         /// A read-only storage buffer used in a bind group.
         const STORAGE_READ_ONLY = 1 << 7;
-        /// A write-only storage buffer used in a bind group.
-        const STORAGE_WRITE_ONLY = 1 << 8;
         /// A read-write buffer used in a bind group.
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.

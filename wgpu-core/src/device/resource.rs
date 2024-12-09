@@ -521,16 +521,7 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
             // We are going to be reading from it, internally;
             // when validating the content of the buffer
-            if !usage.intersects(
-                hal::BufferUses::STORAGE_READ_ONLY | hal::BufferUses::STORAGE_READ_WRITE,
-            ) {
-                if usage.contains(hal::BufferUses::STORAGE_WRITE_ONLY) {
-                    usage |= hal::BufferUses::STORAGE_READ_WRITE;
-                    usage &= !hal::BufferUses::STORAGE_WRITE_ONLY;
-                } else {
-                    usage |= hal::BufferUses::STORAGE_READ_ONLY;
-                }
-            }
+            usage |= hal::BufferUses::STORAGE_READ_ONLY | hal::BufferUses::STORAGE_READ_WRITE;
         }
 
         if desc.mapped_at_creation {

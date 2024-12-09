@@ -82,7 +82,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         usage.contains(wgt::BufferUsages::UNIFORM),
     );
     u.set(
-        hal::BufferUses::STORAGE_READ_WRITE,
+        hal::BufferUses::STORAGE_READ_ONLY | hal::BufferUses::STORAGE_READ_WRITE,
         usage.contains(wgt::BufferUsages::STORAGE),
     );
     u.set(
