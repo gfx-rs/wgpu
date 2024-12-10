@@ -461,11 +461,6 @@ pub struct CommandBuffer {
     label: String,
 
     /// The mutable state of this command buffer.
-    ///
-    /// This `Option` is populated when the command buffer is first created.
-    /// When this is submitted, dropped, or destroyed, its contents are
-    /// extracted into a [`BakedCommands`] by
-    /// [`CommandBufferMutable::into_baked_commands`].
     pub(crate) data: Mutex<CommandEncoderStatus>,
 }
 

@@ -893,6 +893,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
+            "abstract-types-function-calls",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
             "abstract-types-var",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
@@ -1067,7 +1071,12 @@ fn convert_spv_all() {
         false,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
-    convert_spv("atomic_i_increment", false, Targets::IR);
+    convert_spv("atomic_i_increment", false, Targets::WGSL);
+    convert_spv("atomic_load_and_store", false, Targets::WGSL);
+    convert_spv("atomic_exchange", false, Targets::WGSL);
+    convert_spv("atomic_compare_exchange", false, Targets::WGSL);
+    convert_spv("atomic_i_decrement", false, Targets::WGSL);
+    convert_spv("atomic_i_add_sub", false, Targets::WGSL);
     convert_spv(
         "fetch_depth",
         false,

@@ -2407,6 +2407,7 @@ impl<W: Write> Writer<W> {
                     self.out.write_str(") < ")?;
                     match length {
                         index::IndexableLength::Known(value) => write!(self.out, "{value}")?,
+                        index::IndexableLength::Pending => unreachable!(),
                         index::IndexableLength::Dynamic => {
                             let global =
                                 context.function.originating_global(base).ok_or_else(|| {
@@ -2569,6 +2570,7 @@ impl<W: Write> Writer<W> {
                 index::IndexableLength::Known(limit) => {
                     write!(self.out, "{}u", limit - 1)?;
                 }
+                index::IndexableLength::Pending => unreachable!(),
                 index::IndexableLength::Dynamic => {
                     let global = context.function.originating_global(base).ok_or_else(|| {
                         Error::GenericValidation("Could not find originating global".into())
@@ -3739,6 +3741,9 @@ impl<W: Write> Writer<W> {
                                 size
                             )?;
                             writeln!(self.out, "}};")?;
+                        }
+                        crate::ArraySize::Pending(_) => {
+                            unreachable!()
                         }
                         crate::ArraySize::Dynamic => {
                             writeln!(self.out, "typedef {base_name} {name}[1];")?;
@@ -6008,6 +6013,7 @@ mod workgroup_mem_init {
                         let count = match size.to_indexable_length(module).expect("Bad array size")
                         {
                             proc::IndexableLength::Known(count) => count,
+                            proc::IndexableLength::Pending => unreachable!(),
                             proc::IndexableLength::Dynamic => unreachable!(),
                         };
 

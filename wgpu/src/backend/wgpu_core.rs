@@ -442,6 +442,9 @@ pub struct CoreSurface {
     /// Configured device is needed to know which backend
     /// code to execute when acquiring a new frame.
     configured_device: Mutex<Option<wgc::id::DeviceId>>,
+    /// The error sink with which to report errors.
+    /// `None` if the surface has not been configured.
+    error_sink: Mutex<Option<ErrorSink>>,
 }
 
 #[derive(Debug)]
@@ -827,6 +830,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             context: self.clone(),
             id,
             configured_device: Mutex::default(),
+            error_sink: Mutex::default(),
         }))
     }
 
@@ -3453,9 +3457,11 @@ impl dispatch::SurfaceInterface for CoreSurface {
 
         let error = self.context.0.surface_configure(self.id, device.id, config);
         if let Some(e) = error {
-            self.context.handle_error_fatal(e, "Surface::configure");
+            self.context
+                .handle_error_nolabel(&device.error_sink, e, "Surface::configure");
         } else {
             *self.configured_device.lock() = Some(device.id);
+            *self.error_sink.lock() = Some(device.error_sink.clone());
         }
     }
 
@@ -3466,6 +3472,12 @@ impl dispatch::SurfaceInterface for CoreSurface {
         crate::SurfaceStatus,
         dispatch::DispatchSurfaceOutputDetail,
     ) {
+        let output_detail = CoreSurfaceOutputDetail {
+            context: self.context.clone(),
+            surface_id: self.id,
+        }
+        .into();
+
         match self.context.0.surface_get_current_texture(self.id, None) {
             Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
                 let data = texture_id
@@ -3476,19 +3488,24 @@ impl dispatch::SurfaceInterface for CoreSurface {
                     })
                     .map(Into::into);
 
-                (
-                    data,
-                    status,
-                    CoreSurfaceOutputDetail {
-                        context: self.context.clone(),
-                        surface_id: self.id,
-                    }
-                    .into(),
-                )
+                (data, status, output_detail)
             }
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Surface::get_current_texture_view"),
+            Err(err) => {
+                let error_sink = self.error_sink.lock();
+                match error_sink.as_ref() {
+                    Some(error_sink) => {
+                        self.context.handle_error_nolabel(
+                            error_sink,
+                            err,
+                            "Surface::get_current_texture_view",
+                        );
+                        (None, crate::SurfaceStatus::Unknown, output_detail)
+                    }
+                    None => self
+                        .context
+                        .handle_error_fatal(err, "Surface::get_current_texture_view"),
+                }
+            }
         }
     }
 }

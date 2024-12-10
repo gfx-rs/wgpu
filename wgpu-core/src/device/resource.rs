@@ -154,10 +154,9 @@ impl Drop for Device {
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         #[cfg(feature = "indirect-validation")]
-        self.indirect_validation
-            .take()
-            .unwrap()
-            .dispose(self.raw.as_ref());
+        if let Some(indirect_validation) = self.indirect_validation.take() {
+            indirect_validation.dispose(self.raw.as_ref());
+        }
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
             self.raw.destroy_fence(fence);
@@ -651,7 +650,7 @@ impl Device {
         let texture = Texture::new(
             self,
             resource::TextureInner::Native { raw: hal_texture },
-            conv::map_texture_usage(desc.usage, desc.format.into()),
+            conv::map_texture_usage(desc.usage, desc.format.into(), format_features.flags),
             desc,
             format_features,
             resource::TextureClearMode::None,
@@ -2503,19 +2502,21 @@ impl Device {
 
                 let internal_use = match access {
                     wgt::StorageTextureAccess::WriteOnly => {
-                        if !view.format_features.flags.intersects(
-                            wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
-                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-                        ) {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY)
+                        {
                             return Err(Error::StorageWriteNotSupported(view.desc.format));
                         }
                         hal::TextureUses::STORAGE_WRITE_ONLY
                     }
                     wgt::StorageTextureAccess::ReadOnly => {
-                        if !view.format_features.flags.intersects(
-                            wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
-                                | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
-                        ) {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY)
+                        {
                             return Err(Error::StorageReadNotSupported(view.desc.format));
                         }
                         hal::TextureUses::STORAGE_READ_ONLY

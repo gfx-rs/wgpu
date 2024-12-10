@@ -102,6 +102,7 @@ impl Surface<'_> {
             SurfaceStatus::Timeout => return Err(SurfaceError::Timeout),
             SurfaceStatus::Outdated => return Err(SurfaceError::Outdated),
             SurfaceStatus::Lost => return Err(SurfaceError::Lost),
+            SurfaceStatus::Unknown => return Err(SurfaceError::Other),
         };
 
         let guard = self.config.lock();
