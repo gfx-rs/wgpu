@@ -132,7 +132,7 @@ pub fn map_buffer_usage_to_state(usage: crate::BufferUses) -> Direct3D12::D3D12_
     if usage.intersects(Bu::VERTEX | Bu::UNIFORM) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
-    if usage.intersects(Bu::STORAGE_READ_WRITE | Bu::STORAGE_WRITE_ONLY) {
+    if usage.intersects(Bu::STORAGE_READ_WRITE) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     } else if usage.intersects(Bu::STORAGE_READ_ONLY) {
         state |= Direct3D12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE

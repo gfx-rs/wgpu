@@ -1687,8 +1687,6 @@ bitflags::bitflags! {
         const UNIFORM = 1 << 6;
         /// A read-only storage buffer used in a bind group.
         const STORAGE_READ_ONLY = 1 << 7;
-        /// A write-only storage buffer used in a bind group.
-        const STORAGE_WRITE_ONLY = 1 << 8;
         /// A read-write buffer used in a bind group.
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
@@ -2267,17 +2265,23 @@ pub struct Rect<T> {
     pub h: T,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct StateTransition<T> {
+    pub from: T,
+    pub to: T,
+}
+
 #[derive(Debug, Clone)]
 pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
     pub buffer: &'a B,
-    pub usage: Range<BufferUses>,
+    pub usage: StateTransition<BufferUses>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub texture: &'a T,
     pub range: wgt::ImageSubresourceRange,
-    pub usage: Range<TextureUses>,
+    pub usage: StateTransition<TextureUses>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2553,7 +2557,7 @@ bitflags::bitflags! {
 
 #[derive(Debug, Clone)]
 pub struct AccelerationStructureBarrier {
-    pub usage: Range<AccelerationStructureUses>,
+    pub usage: StateTransition<AccelerationStructureUses>,
 }
 
 #[derive(Debug, Copy, Clone)]

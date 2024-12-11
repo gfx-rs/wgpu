@@ -753,7 +753,10 @@ unsafe fn barrier(
     barriers.push(PendingTransition {
         id: index as _,
         selector: (),
-        usage: current_state..new_state,
+        usage: hal::StateTransition {
+            from: current_state,
+            to: new_state,
+        },
     });
 }
 

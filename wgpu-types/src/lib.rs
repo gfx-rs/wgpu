@@ -3396,7 +3396,7 @@ impl TextureFormat {
     #[must_use]
     pub fn guaranteed_format_features(&self, device_features: Features) -> TextureFormatFeatures {
         // Multisampling
-        let noaa = TextureFormatFeatureFlags::empty();
+        let none = TextureFormatFeatureFlags::empty();
         let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
         let msaa_resolve = msaa | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
 
@@ -3431,19 +3431,19 @@ impl TextureFormat {
             allowed_usages,
         ) = match *self {
             Self::R8Unorm =>              (msaa_resolve, attachment),
-            Self::R8Snorm =>              (        noaa,      basic),
+            Self::R8Snorm =>              (        none,      basic),
             Self::R8Uint =>               (        msaa, attachment),
             Self::R8Sint =>               (        msaa, attachment),
             Self::R16Uint =>              (        msaa, attachment),
             Self::R16Sint =>              (        msaa, attachment),
             Self::R16Float =>             (msaa_resolve, attachment),
             Self::Rg8Unorm =>             (msaa_resolve, attachment),
-            Self::Rg8Snorm =>             (        noaa,      basic),
+            Self::Rg8Snorm =>             (        none,      basic),
             Self::Rg8Uint =>              (        msaa, attachment),
             Self::Rg8Sint =>              (        msaa, attachment),
-            Self::R32Uint =>              (        noaa | s_all,  all_flags),
-            Self::R32Sint =>              (        noaa | s_all,  all_flags),
-            Self::R32Float =>             (        msaa | s_all,  all_flags),
+            Self::R32Uint =>              (       s_all,  all_flags),
+            Self::R32Sint =>              (       s_all,  all_flags),
+            Self::R32Float =>             (msaa | s_all,  all_flags),
             Self::Rg16Uint =>             (        msaa, attachment),
             Self::Rg16Sint =>             (        msaa, attachment),
             Self::Rg16Float =>            (msaa_resolve, attachment),
@@ -3457,15 +3457,15 @@ impl TextureFormat {
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
-            Self::Rg32Uint =>             (        noaa | s_ro_wo,  all_flags),
-            Self::Rg32Sint =>             (        noaa | s_ro_wo,  all_flags),
-            Self::Rg32Float =>            (        noaa | s_ro_wo,  all_flags),
+            Self::Rg32Uint =>             (     s_ro_wo,  all_flags),
+            Self::Rg32Sint =>             (     s_ro_wo,  all_flags),
+            Self::Rg32Float =>            (     s_ro_wo,  all_flags),
             Self::Rgba16Uint =>           (        msaa | s_ro_wo,  all_flags),
             Self::Rgba16Sint =>           (        msaa | s_ro_wo,  all_flags),
             Self::Rgba16Float =>          (msaa_resolve | s_ro_wo,  all_flags),
-            Self::Rgba32Uint =>           (        noaa | s_ro_wo,  all_flags),
-            Self::Rgba32Sint =>           (        noaa | s_ro_wo,  all_flags),
-            Self::Rgba32Float =>          (        noaa | s_ro_wo,  all_flags),
+            Self::Rgba32Uint =>           (     s_ro_wo,  all_flags),
+            Self::Rgba32Sint =>           (     s_ro_wo,  all_flags),
+            Self::Rgba32Float =>          (     s_ro_wo,  all_flags),
 
             Self::Stencil8 =>             (        msaa, attachment),
             Self::Depth16Unorm =>         (        msaa, attachment),
@@ -3475,7 +3475,7 @@ impl TextureFormat {
             Self::Depth32FloatStencil8 => (        msaa, attachment),
 
             // We only support sampling nv12 textures until we implement transfer plane data.
-            Self::NV12 =>                 (        noaa,    binding),
+            Self::NV12 =>                 (        none,    binding),
 
             Self::R16Unorm =>             (        msaa | s_ro_wo,    storage),
             Self::R16Snorm =>             (        msaa | s_ro_wo,    storage),
@@ -3484,35 +3484,35 @@ impl TextureFormat {
             Self::Rgba16Unorm =>          (        msaa | s_ro_wo,    storage),
             Self::Rgba16Snorm =>          (        msaa | s_ro_wo,    storage),
 
-            Self::Rgb9e5Ufloat =>         (        noaa,      basic),
+            Self::Rgb9e5Ufloat =>         (        none,      basic),
 
-            Self::Bc1RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc1RgbaUnormSrgb =>     (        noaa,      basic),
-            Self::Bc2RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc2RgbaUnormSrgb =>     (        noaa,      basic),
-            Self::Bc3RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc3RgbaUnormSrgb =>     (        noaa,      basic),
-            Self::Bc4RUnorm =>            (        noaa,      basic),
-            Self::Bc4RSnorm =>            (        noaa,      basic),
-            Self::Bc5RgUnorm =>           (        noaa,      basic),
-            Self::Bc5RgSnorm =>           (        noaa,      basic),
-            Self::Bc6hRgbUfloat =>        (        noaa,      basic),
-            Self::Bc6hRgbFloat =>         (        noaa,      basic),
-            Self::Bc7RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc7RgbaUnormSrgb =>     (        noaa,      basic),
+            Self::Bc1RgbaUnorm =>         (        none,      basic),
+            Self::Bc1RgbaUnormSrgb =>     (        none,      basic),
+            Self::Bc2RgbaUnorm =>         (        none,      basic),
+            Self::Bc2RgbaUnormSrgb =>     (        none,      basic),
+            Self::Bc3RgbaUnorm =>         (        none,      basic),
+            Self::Bc3RgbaUnormSrgb =>     (        none,      basic),
+            Self::Bc4RUnorm =>            (        none,      basic),
+            Self::Bc4RSnorm =>            (        none,      basic),
+            Self::Bc5RgUnorm =>           (        none,      basic),
+            Self::Bc5RgSnorm =>           (        none,      basic),
+            Self::Bc6hRgbUfloat =>        (        none,      basic),
+            Self::Bc6hRgbFloat =>         (        none,      basic),
+            Self::Bc7RgbaUnorm =>         (        none,      basic),
+            Self::Bc7RgbaUnormSrgb =>     (        none,      basic),
 
-            Self::Etc2Rgb8Unorm =>        (        noaa,      basic),
-            Self::Etc2Rgb8UnormSrgb =>    (        noaa,      basic),
-            Self::Etc2Rgb8A1Unorm =>      (        noaa,      basic),
-            Self::Etc2Rgb8A1UnormSrgb =>  (        noaa,      basic),
-            Self::Etc2Rgba8Unorm =>       (        noaa,      basic),
-            Self::Etc2Rgba8UnormSrgb =>   (        noaa,      basic),
-            Self::EacR11Unorm =>          (        noaa,      basic),
-            Self::EacR11Snorm =>          (        noaa,      basic),
-            Self::EacRg11Unorm =>         (        noaa,      basic),
-            Self::EacRg11Snorm =>         (        noaa,      basic),
+            Self::Etc2Rgb8Unorm =>        (        none,      basic),
+            Self::Etc2Rgb8UnormSrgb =>    (        none,      basic),
+            Self::Etc2Rgb8A1Unorm =>      (        none,      basic),
+            Self::Etc2Rgb8A1UnormSrgb =>  (        none,      basic),
+            Self::Etc2Rgba8Unorm =>       (        none,      basic),
+            Self::Etc2Rgba8UnormSrgb =>   (        none,      basic),
+            Self::EacR11Unorm =>          (        none,      basic),
+            Self::EacR11Snorm =>          (        none,      basic),
+            Self::EacRg11Unorm =>         (        none,      basic),
+            Self::EacRg11Snorm =>         (        none,      basic),
 
-            Self::Astc { .. } =>          (        noaa,      basic),
+            Self::Astc { .. } =>          (        none,      basic),
         };
 
         // Get whether the format is filterable, taking features into account

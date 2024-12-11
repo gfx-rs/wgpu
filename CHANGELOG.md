@@ -147,6 +147,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 #### HAL
 
+- Replace `usage: Range<T>`, for `BufferUses`, `TextureUses`, and `AccelerationStructureBarrier` with a new `StateTransition<T>`. By @atlv24 in [#6703](https://github.com/gfx-rs/wgpu/pull/6703)
 - Change the `DropCallback` API to use `FnOnce` instead of `FnMut`. By @jerzywilczek in [#6482](https://github.com/gfx-rs/wgpu/pull/6482)
 
 ### Bug Fixes

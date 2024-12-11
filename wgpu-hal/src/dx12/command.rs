@@ -340,8 +340,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.temp.barriers.clear();
 
         for barrier in barriers {
-            let s0 = conv::map_buffer_usage_to_state(barrier.usage.start);
-            let s1 = conv::map_buffer_usage_to_state(barrier.usage.end);
+            let s0 = conv::map_buffer_usage_to_state(barrier.usage.from);
+            let s1 = conv::map_buffer_usage_to_state(barrier.usage.to);
             if s0 != s1 {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -360,7 +360,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     },
                 };
                 self.temp.barriers.push(raw);
-            } else if barrier.usage.start == crate::BufferUses::STORAGE_READ_WRITE {
+            } else if barrier.usage.from == crate::BufferUses::STORAGE_READ_WRITE {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -393,8 +393,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.temp.barriers.clear();
 
         for barrier in barriers {
-            let s0 = conv::map_texture_usage_to_state(barrier.usage.start);
-            let s1 = conv::map_texture_usage_to_state(barrier.usage.end);
+            let s0 = conv::map_texture_usage_to_state(barrier.usage.from);
+            let s1 = conv::map_texture_usage_to_state(barrier.usage.to);
             if s0 != s1 {
                 let mut raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -459,7 +459,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         }
                     }
                 }
-            } else if barrier.usage.start == crate::TextureUses::STORAGE_READ_WRITE {
+            } else if barrier.usage.from == crate::TextureUses::STORAGE_READ_WRITE {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
