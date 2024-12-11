@@ -165,14 +165,18 @@ impl Global {
         );
         unsafe {
             encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::AccelerationStructureUses::COPY_SRC
-                    ..hal::AccelerationStructureUses::BUILD_INPUT
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::COPY_SRC,
+                    to: hal::AccelerationStructureUses::BUILD_INPUT
                         | hal::AccelerationStructureUses::BUILD_OUTPUT,
+                },
             });
             encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::AccelerationStructureUses::COPY_DST
-                    ..hal::AccelerationStructureUses::BUILD_INPUT
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::COPY_DST,
+                    to: hal::AccelerationStructureUses::BUILD_INPUT
                         | hal::AccelerationStructureUses::SHADER_INPUT,
+                },
             });
         }
         Ok(Arc::new(blas))
@@ -1562,8 +1566,10 @@ fn build_blas<'a>(
             unsafe {
                 cmd_buf_raw.place_acceleration_structure_barrier(
                     hal::AccelerationStructureBarrier {
-                        usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                            ..hal::AccelerationStructureUses::QUERY_INPUT,
+                        usage: hal::StateTransition {
+                            from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                            to: hal::AccelerationStructureUses::QUERY_INPUT,
+                        },
                     },
                 );
                 cmd_buf_raw.read_acceleration_structure_compact_size(
@@ -1575,8 +1581,11 @@ fn build_blas<'a>(
                 );
                 cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
                     buffer: buf.as_ref(),
-                    usage: hal::BufferUses::ACCELERATION_STRUCTURE_QUERY
-                        ..hal::BufferUses::MAP_READ | hal::BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                    usage: hal::StateTransition {
+                        from: hal::BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                        to: hal::BufferUses::MAP_READ
+                            | hal::BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                    },
                 }]);
             }
         }
