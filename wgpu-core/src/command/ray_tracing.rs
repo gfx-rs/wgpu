@@ -27,7 +27,6 @@ use std::{
     ops::{Deref, Range},
     sync::{atomic::Ordering, Arc},
 };
-use std::time::Instant;
 use crate::id::{BlasId, TlasId};
 
 struct TriangleBufferStore<'a> {
