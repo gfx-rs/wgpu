@@ -27,6 +27,8 @@ use std::{
     ops::{Deref, Range},
     sync::{atomic::Ordering, Arc},
 };
+use std::time::Instant;
+use crate::id::{BlasId, TlasId};
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -61,6 +63,76 @@ struct TlasBufferStore {
 }
 
 impl Global {
+    pub fn command_encoder_mark_acceleration_structures_built(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        blas_iter: impl Iterator<Item = BlasId>,
+        tlas_iter: impl Iterator<Item = TlasId>,
+    ) -> Result<(), BuildAccelerationStructureError> {
+        profiling::scope!("CommandEncoder::mark_acceleration_structures_built");
+
+        let hub = &self.hub;
+
+        let cmd_buf = hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id());
+
+        let device = &cmd_buf.device;
+
+        if !device
+            .features
+            .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+        {
+            return Err(BuildAccelerationStructureError::MissingFeature);
+        }
+
+        let build_command_index = NonZeroU64::new(
+            device
+                .last_acceleration_structure_build_command_index
+                .fetch_add(1, Ordering::Relaxed),
+        ).unwrap();
+
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
+
+        if let Some(size) = blas_iter.size_hint().1 {
+            let _ = cmd_buf_data.blas_actions.try_reserve(size);
+        }
+
+        if let Some(size) = tlas_iter.size_hint().1 {
+            let _ = cmd_buf_data.tlas_actions.try_reserve(size);
+        }
+
+        for blas in blas_iter {
+            let blas = hub
+                .blas_s
+                .get(blas)
+                .get()
+                .map_err(|_| BuildAccelerationStructureError::InvalidBlasId)?;
+            cmd_buf_data.blas_actions.push(BlasAction {
+                blas,
+                kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
+            });
+        }
+
+        for tlas in tlas_iter {
+            let tlas = hub
+                .tlas_s
+                .get(tlas)
+                .get()
+                .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
+            cmd_buf_data.tlas_actions.push(TlasAction {
+                tlas,
+                kind: crate::ray_tracing::TlasActionKind::Build {
+                    build_index: build_command_index,
+                    dependencies: Vec::new(),
+                },
+            });
+        }
+
+        Ok(())
+    }
     // Currently this function is very similar to its safe counterpart, however certain parts of it are very different,
     // making for the two to be implemented differently, the main difference is this function has separate buffers for each
     // of the TLAS instances while the other has one large buffer

@@ -11,7 +11,7 @@
 #![allow(drop_bounds)] // This exists to remind implementors to impl drop.
 #![allow(clippy::too_many_arguments)] // It's fine.
 
-use crate::{WasmNotSend, WasmNotSendSync};
+use crate::{Blas, Tlas, WasmNotSend, WasmNotSendSync};
 
 use std::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
 
@@ -339,6 +339,11 @@ pub trait CommandEncoderInterface: CommonTraits {
         query_count: u32,
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
+    );
+    fn mark_acceleration_structures_built<'a>(
+        &self,
+        blas: &mut dyn Iterator<Item = &'a Blas>,
+        tlas: &mut dyn Iterator<Item = &'a Tlas>,
     );
 
     fn build_acceleration_structures_unsafe_tlas<'a>(

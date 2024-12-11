@@ -30,6 +30,7 @@ use std::{
     ptr::NonNull,
     sync::Arc,
 };
+use crate::id::{BlasId, TlasId};
 
 /// Information about the wgpu-core resource.
 ///
@@ -1382,6 +1383,50 @@ impl Global {
             ret
         } else {
             hal_command_encoder_callback(None)
+        }
+    }
+    /// # Safety
+    ///
+    /// - The raw blas handle must not be manually destroyed
+    pub unsafe fn blas_as_hal<A: HalApi, F: FnOnce(Option<&A::AccelerationStructure>) -> R, R>(
+        &self,
+        id: BlasId,
+        hal_blas_callback: F,
+    ) -> R {
+        profiling::scope!("Blas::as_hal");
+
+        let hub = &self.hub;
+
+        if let Ok(blas) = hub.blas_s.get(id).get() {
+            let snatch_guard = blas.device.snatchable_lock.read();
+            let hal_blas = blas
+                .raw(&snatch_guard)
+                .and_then(|b| b.as_any().downcast_ref());
+            hal_blas_callback(hal_blas)
+        } else {
+            hal_blas_callback(None)
+        }
+    }
+    /// # Safety
+    ///
+    /// - The raw tlas handle must not be manually destroyed
+    pub unsafe fn tlas_as_hal<A: HalApi, F: FnOnce(Option<&A::AccelerationStructure>) -> R, R>(
+        &self,
+        id: TlasId,
+        hal_tlas_callback: F,
+    ) -> R {
+        profiling::scope!("Blas::as_hal");
+
+        let hub = &self.hub;
+
+        if let Ok(tlas) = hub.tlas_s.get(id).get() {
+            let snatch_guard = tlas.device.snatchable_lock.read();
+            let hal_tlas = tlas
+                .raw(&snatch_guard)
+                .and_then(|t| t.as_any().downcast_ref());
+            hal_tlas_callback(hal_tlas)
+        } else {
+            hal_tlas_callback(None)
         }
     }
 }

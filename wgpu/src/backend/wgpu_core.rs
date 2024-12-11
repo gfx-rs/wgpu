@@ -1,10 +1,4 @@
-use crate::{
-    api,
-    dispatch::{self, BufferMappedRangeInterface, InterfaceTypes},
-    BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
-    CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
-    ShaderSource, StoreOp, SurfaceTargetUnsafe, TextureDescriptor,
-};
+use crate::{api, dispatch::{self, BufferMappedRangeInterface, InterfaceTypes}, BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage, CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations, ShaderSource, StoreOp, SurfaceTargetUnsafe, TextureDescriptor, Blas, Tlas};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
@@ -253,6 +247,28 @@ impl ContextWgpuCore {
                 command_encoder.id,
                 hal_command_encoder_callback,
             )
+        }
+    }
+
+    pub unsafe fn blas_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::AccelerationStructure>) -> R, R>(
+        &self,
+        blas: &CoreBlas,
+        hal_blas_callback: F,
+    ) -> R {
+        unsafe {
+            self.0
+                .blas_as_hal::<A, F, R>(blas.id, hal_blas_callback)
+        }
+    }
+
+    pub unsafe fn tlas_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::AccelerationStructure>) -> R, R>(
+        &self,
+        tlas: &CoreTlas,
+        hal_tlas_callback: F,
+    ) -> R {
+        unsafe {
+            self.0
+                .tlas_as_hal::<A, F, R>(tlas.id, hal_tlas_callback)
         }
     }
 
@@ -2433,6 +2449,26 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 &self.error_sink,
                 cause,
                 "CommandEncoder::resolve_query_set",
+            );
+        }
+    }
+
+    fn mark_acceleration_structures_built<'a>(
+        &self,
+        blas: &mut dyn Iterator<Item = &'a Blas>,
+        tlas: &mut dyn Iterator<Item = &'a Tlas>,
+    ) {
+        let blas = blas.map(|b| b.shared.inner.as_core().id);
+        let tlas = tlas.map(|t| t.inner.as_core().id);
+        if let Err(cause) = self
+            .context
+            .0
+            .command_encoder_mark_acceleration_structures_built(self.id, blas, tlas)
+        {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
             );
         }
     }
