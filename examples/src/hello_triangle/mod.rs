@@ -10,7 +10,17 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     size.width = size.width.max(1);
     size.height = size.height.max(1);
 
-    let instance = wgpu::Instance::default();
+    // Configure instance using `WGPU_BACKEND`, `WGPU_DX12_COMPILER` and `WGPU_GLES_MINOR_VERSION` environment variables. (or use default if environment variables not set)
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
+    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
+
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        flags: wgpu::InstanceFlags::from_build_config().with_env(),
+        dx12_shader_compiler,
+        gles_minor_version,
+    });
 
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance
