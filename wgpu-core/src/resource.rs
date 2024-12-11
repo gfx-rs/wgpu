@@ -21,6 +21,7 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use crate::id::{BlasId, TlasId};
 use std::num::NonZeroU64;
 use std::{
     borrow::{Borrow, Cow},
@@ -30,7 +31,6 @@ use std::{
     ptr::NonNull,
     sync::Arc,
 };
-use crate::id::{BlasId, TlasId};
 
 /// Information about the wgpu-core resource.
 ///

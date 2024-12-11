@@ -1,4 +1,10 @@
-use crate::{api, dispatch::{self, BufferMappedRangeInterface, InterfaceTypes}, BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage, CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations, ShaderSource, StoreOp, SurfaceTargetUnsafe, TextureDescriptor, Blas, Tlas};
+use crate::{
+    api,
+    dispatch::{self, BufferMappedRangeInterface, InterfaceTypes},
+    BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
+    CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
+    ShaderSource, StoreOp, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
+};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
@@ -250,26 +256,28 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn blas_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::AccelerationStructure>) -> R, R>(
+    pub unsafe fn blas_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
+        R,
+    >(
         &self,
         blas: &CoreBlas,
         hal_blas_callback: F,
     ) -> R {
-        unsafe {
-            self.0
-                .blas_as_hal::<A, F, R>(blas.id, hal_blas_callback)
-        }
+        unsafe { self.0.blas_as_hal::<A, F, R>(blas.id, hal_blas_callback) }
     }
 
-    pub unsafe fn tlas_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::AccelerationStructure>) -> R, R>(
+    pub unsafe fn tlas_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
+        R,
+    >(
         &self,
         tlas: &CoreTlas,
         hal_tlas_callback: F,
     ) -> R {
-        unsafe {
-            self.0
-                .tlas_as_hal::<A, F, R>(tlas.id, hal_tlas_callback)
-        }
+        unsafe { self.0.tlas_as_hal::<A, F, R>(tlas.id, hal_tlas_callback) }
     }
 
     pub fn generate_report(&self) -> wgc::global::GlobalReport {

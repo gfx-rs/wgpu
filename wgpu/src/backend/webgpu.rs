@@ -17,7 +17,7 @@ use std::{
 };
 use wasm_bindgen::{prelude::*, JsCast};
 
-use crate::{Blas, dispatch, SurfaceTargetUnsafe, Tlas};
+use crate::{dispatch, Blas, SurfaceTargetUnsafe, Tlas};
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
 

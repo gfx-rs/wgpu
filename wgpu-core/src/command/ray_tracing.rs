@@ -20,6 +20,7 @@ use crate::{
 use wgt::{math::align_to, BufferUsages, Features};
 
 use super::CommandBufferMutable;
+use crate::id::{BlasId, TlasId};
 use hal::BufferUses;
 use std::{
     cmp::max,
@@ -27,7 +28,6 @@ use std::{
     ops::{Deref, Range},
     sync::{atomic::Ordering, Arc},
 };
-use crate::id::{BlasId, TlasId};
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -89,7 +89,8 @@ impl Global {
             device
                 .last_acceleration_structure_build_command_index
                 .fetch_add(1, Ordering::Relaxed),
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let mut cmd_buf_data_guard = cmd_buf_data.record()?;
