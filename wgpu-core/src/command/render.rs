@@ -66,6 +66,15 @@ pub enum LoadOp {
     Load = 1,
 }
 
+impl LoadOp {
+    fn hal_ops(&self) -> hal::AttachmentOps {
+        match self {
+            LoadOp::Load => hal::AttachmentOps::LOAD,
+            LoadOp::Clear => hal::AttachmentOps::empty(),
+        }
+    }
+}
+
 /// Operation to perform to the output attachment at the end of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -78,6 +87,15 @@ pub enum StoreOp {
     Discard = 0,
     /// Store the result of the renderpass.
     Store = 1,
+}
+
+impl StoreOp {
+    fn hal_ops(&self) -> hal::AttachmentOps {
+        match self {
+            StoreOp::Store => hal::AttachmentOps::STORE,
+            StoreOp::Discard => hal::AttachmentOps::empty(),
+        }
+    }
 }
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
@@ -104,16 +122,7 @@ pub struct PassChannel<V> {
 
 impl<V> PassChannel<V> {
     fn hal_ops(&self) -> hal::AttachmentOps {
-        let mut ops = hal::AttachmentOps::empty();
-        match self.load_op {
-            LoadOp::Load => ops |= hal::AttachmentOps::LOAD,
-            LoadOp::Clear => (),
-        };
-        match self.store_op {
-            StoreOp::Store => ops |= hal::AttachmentOps::STORE,
-            StoreOp::Discard => (),
-        };
-        ops
+        self.load_op.hal_ops() | self.store_op.hal_ops()
     }
 }
 
@@ -126,8 +135,17 @@ pub struct RenderPassColorAttachment {
     pub view: id::TextureViewId,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<id::TextureViewId>,
-    /// What operations will be performed on this color attachment.
-    pub channel: PassChannel<Color>,
+    /// Operation to perform to the output attachment at the start of a
+    /// renderpass.
+    ///
+    /// This must be clear if it is the first renderpass rendering to a swap
+    /// chain image.
+    pub load_op: LoadOp,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: StoreOp,
+    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
+    /// color.
+    pub clear_value: Color,
 }
 
 /// Describes a color attachment to a render pass.
@@ -137,8 +155,17 @@ struct ArcRenderPassColorAttachment {
     pub view: Arc<TextureView>,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<Arc<TextureView>>,
-    /// What operations will be performed on this color attachment.
-    pub channel: PassChannel<Color>,
+    /// Operation to perform to the output attachment at the start of a
+    /// renderpass.
+    ///
+    /// This must be clear if it is the first renderpass rendering to a swap
+    /// chain image.
+    pub load_op: LoadOp,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: StoreOp,
+    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
+    /// color.
+    pub clear_value: Color,
 }
 
 /// Describes a depth/stencil attachment to a render pass.
@@ -770,13 +797,14 @@ struct RenderPassInfo<'d> {
 }
 
 impl<'d> RenderPassInfo<'d> {
-    fn add_pass_texture_init_actions<V>(
-        channel: &PassChannel<V>,
+    fn add_pass_texture_init_actions(
+        load_op: LoadOp,
+        store_op: StoreOp,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
     ) {
-        if channel.load_op == LoadOp::Load {
+        if load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
                     texture: view.parent.clone(),
@@ -785,14 +813,14 @@ impl<'d> RenderPassInfo<'d> {
                     kind: MemoryInitKind::NeedsInitializedMemory,
                 },
             ));
-        } else if channel.store_op == StoreOp::Store {
+        } else if store_op == StoreOp::Store {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
                 &view.parent,
                 TextureInitRange::from(view.selector.clone()),
             );
         }
-        if channel.store_op == StoreOp::Discard {
+        if store_op == StoreOp::Discard {
             // the discard happens at the *end* of a pass, but recording the
             // discard right away be alright since the texture can't be used
             // during the pass anyways
@@ -923,14 +951,16 @@ impl<'d> RenderPassInfo<'d> {
                     && at.stencil.store_op == at.depth.store_op)
             {
                 Self::add_pass_texture_init_actions(
-                    &at.depth,
+                    at.depth.load_op,
+                    at.depth.store_op,
                     texture_memory_actions,
                     view,
                     &mut pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
                 Self::add_pass_texture_init_actions(
-                    &at.stencil,
+                    at.stencil.load_op,
+                    at.stencil.store_op,
                     texture_memory_actions,
                     view,
                     &mut pending_discard_init_fixups,
@@ -1059,7 +1089,8 @@ impl<'d> RenderPassInfo<'d> {
             }
 
             Self::add_pass_texture_init_actions(
-                &at.channel,
+                at.load_op,
+                at.store_op,
                 texture_memory_actions,
                 color_view,
                 &mut pending_discard_init_fixups,
@@ -1135,8 +1166,8 @@ impl<'d> RenderPassInfo<'d> {
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
-                ops: at.channel.hal_ops(),
-                clear_value: at.channel.clear_value,
+                ops: at.load_op.hal_ops() | at.store_op.hal_ops(),
+                clear_value: at.clear_value,
             }));
         }
 
@@ -1351,7 +1382,9 @@ impl Global {
                 if let Some(RenderPassColorAttachment {
                     view: view_id,
                     resolve_target,
-                    channel,
+                    load_op,
+                    store_op,
+                    clear_value,
                 }) = color_attachment
                 {
                     let view = texture_views.get(*view_id).get()?;
@@ -1371,7 +1404,9 @@ impl Global {
                         .push(Some(ArcRenderPassColorAttachment {
                             view,
                             resolve_target,
-                            channel: channel.clone(),
+                            load_op: *load_op,
+                            store_op: *store_op,
+                            clear_value: *clear_value,
                         }));
                 } else {
                     arc_desc.color_attachments.push(None);

@@ -279,37 +279,14 @@ impl ExampleContext {
             gles_minor_version,
         });
         surface.pre_adapter(&instance, window);
-        let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, surface.get())
-            .await
-            .expect("No suitable GPU adapters found on the system!");
 
-        let adapter_info = adapter.get_info();
-        log::info!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
-
-        let optional_features = E::optional_features();
-        let required_features = E::required_features();
-        let adapter_features = adapter.features();
-        assert!(
-            adapter_features.contains(required_features),
-            "Adapter does not support required features for this example: {:?}",
-            required_features - adapter_features
-        );
-
-        let required_downlevel_capabilities = E::required_downlevel_capabilities();
-        let downlevel_capabilities = adapter.get_downlevel_capabilities();
-        assert!(
-            downlevel_capabilities.shader_model >= required_downlevel_capabilities.shader_model,
-            "Adapter does not support the minimum shader model required to run this example: {:?}",
-            required_downlevel_capabilities.shader_model
-        );
-        assert!(
-            downlevel_capabilities
-                .flags
-                .contains(required_downlevel_capabilities.flags),
-            "Adapter does not support the downlevel capabilities required to run this example: {:?}",
-            required_downlevel_capabilities.flags - downlevel_capabilities.flags
-        );
-
+        let adapter = get_adapter_with_capabilities_or_from_env(
+            &instance,
+            &E::required_features(),
+            &E::required_downlevel_capabilities(),
+            &surface.get(),
+        )
+        .await;
         // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
         let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
@@ -318,7 +295,8 @@ impl ExampleContext {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    required_features: (optional_features & adapter_features) | required_features,
+                    required_features: (E::optional_features() & adapter.features())
+                        | E::required_features(),
                     required_limits: needed_limits,
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
@@ -513,6 +491,8 @@ pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'
 
 #[cfg(test)]
 pub use wgpu_test::image::ComparisonType;
+
+use crate::utils::get_adapter_with_capabilities_or_from_env;
 
 #[cfg(test)]
 #[derive(Clone)]

@@ -2369,15 +2369,15 @@ bitflags::bitflags! {
         const MULTISAMPLE_RESOLVE = 1 << 5;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadOnly`].
-        const STORAGE_READ_ONLY = 1 << 8;
+        const STORAGE_READ_ONLY = 1 << 6;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::WriteOnly`].
-        const STORAGE_WRITE_ONLY = 1 << 6;
+        const STORAGE_WRITE_ONLY = 1 << 7;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
         /// [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1 << 9;
+        const STORAGE_READ_WRITE = 1 << 8;
         /// If not present, the texture can't be blended into the render target.
-        const BLENDABLE = 1 << 7;
+        const BLENDABLE = 1 << 9;
     }
 }
 
