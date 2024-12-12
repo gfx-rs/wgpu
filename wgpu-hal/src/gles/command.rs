@@ -99,6 +99,7 @@ impl Drop for super::CommandEncoder {
     fn drop(&mut self) {
         use crate::CommandEncoder;
         unsafe { self.discard_encoding() }
+        self.counters.command_encoders.sub(1);
     }
 }
 
@@ -288,14 +289,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // GLES only synchronizes storage -> anything explicitly
             if !bar
                 .usage
-                .start
+                .from
                 .contains(crate::BufferUses::STORAGE_READ_WRITE)
             {
                 continue;
             }
             self.cmd_buffer
                 .commands
-                .push(C::BufferBarrier(bar.buffer.raw.unwrap(), bar.usage.end));
+                .push(C::BufferBarrier(bar.buffer.raw.unwrap(), bar.usage.to));
         }
     }
 
@@ -315,14 +316,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // GLES only synchronizes storage -> anything explicitly
             if !bar
                 .usage
-                .start
+                .from
                 .contains(crate::TextureUses::STORAGE_READ_WRITE)
             {
                 continue;
             }
             // unlike buffers, there is no need for a concrete texture
             // object to be bound anywhere for a barrier
-            combined_usage |= bar.usage.end;
+            combined_usage |= bar.usage.to;
         }
 
         if !combined_usage.is_empty() {
@@ -367,7 +368,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     #[cfg(webgl)]
     unsafe fn copy_external_image_to_texture<T>(
         &mut self,
-        src: &wgt::ImageCopyExternalImage,
+        src: &wgt::CopyExternalImageSourceInfo,
         dst: &super::Texture,
         dst_premultiplication: bool,
         regions: T,

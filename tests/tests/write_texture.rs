@@ -26,14 +26,14 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
         let data = vec![1u8; size as usize * 2];
         // Write the first two rows
         ctx.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             &data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(size),
                 rows_per_image: Some(size),
@@ -59,15 +59,15 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &read_buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(size),
                     rows_per_image: Some(size),
@@ -121,14 +121,14 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
         let data = vec![1u8; (size * size) as usize * 2];
         // Write the first two slices
         ctx.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             &data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(size),
                 rows_per_image: Some(size),
@@ -154,15 +154,15 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &read_buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(size),
                     rows_per_image: Some(size),
@@ -213,14 +213,14 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration =
         });
         let data = vec![1u8; size as usize * 2 + 100]; // check that we don't attempt to copy OOB internally by adding 100 bytes here
         ctx.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             &data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(size),
                 rows_per_image: Some(size),

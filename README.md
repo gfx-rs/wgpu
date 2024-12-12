@@ -21,7 +21,6 @@ The repository hosts the following libraries:
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - Internal unsafe GPU API abstraction layer.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
 - [![Crates.io](https://img.shields.io/crates/v/naga.svg?label=naga)](https://crates.io/crates/naga) [![docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga/) - Stand-alone shader translation library.
-- [![Crates.io](https://img.shields.io/crates/v/d3d12.svg?label=d3d12)](https://crates.io/crates/d3d12) [![docs.rs](https://docs.rs/d3d12/badge.svg)](https://docs.rs/d3d12/) - Collection of thin abstractions over d3d12.
 - [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
 
 The following binaries:
@@ -34,6 +33,10 @@ The following binaries:
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
 
 ## Getting Started
+
+### Play with our Examples
+
+Go to [https://wgpu.rs/examples/] to play with our examples in your browser. Requires a browser supporting WebGPU for the WebGPU examples.
 
 ### Rust
 
@@ -120,7 +123,7 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
+- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
 - The rest of the workspace has an MSRV of **1.76** as well right now, but may be higher than above listed crates.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
@@ -140,7 +143,7 @@ All testing and example infrastructure share the same set of environment variabl
 - `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. `1080` will match `NVIDIA GeForce 1080ti`).
 - `WGPU_BACKEND` with a comma-separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, or `gl`).
 - `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high`, `low` or `none`)
-- `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc` or `fxc`, note that `dxc` requires `dxil.dll` and `dxcompiler.dll` to be in the working directory otherwise it will fall back to `fxc`)
+- `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc`, `static-dxc`, or `fxc`). Note that `dxc` requires `dxil.dll` and `dxcompiler.dll` to be in the working directory, and `static-dxc` requires the `static-dxc` crate feature to be enabled. Otherwise, it will fall back to `fxc`.
 - `WGPU_GLES_MINOR_VERSION` with the minor OpenGL ES 3 version number to request (`0`, `1`, `2` or `automatic`).
 - `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` with a boolean whether non-compliant drivers are enumerated (`0` for false, `1` for true).
 

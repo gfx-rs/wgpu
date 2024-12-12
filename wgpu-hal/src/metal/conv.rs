@@ -13,12 +13,12 @@ pub fn map_texture_usage(
     mtl_usage.set(
         metal::MTLTextureUsage::ShaderRead,
         usage.intersects(
-            Tu::RESOURCE | Tu::DEPTH_STENCIL_READ | Tu::STORAGE_READ | Tu::STORAGE_READ_WRITE,
+            Tu::RESOURCE | Tu::DEPTH_STENCIL_READ | Tu::STORAGE_READ_ONLY | Tu::STORAGE_READ_WRITE,
         ),
     );
     mtl_usage.set(
         metal::MTLTextureUsage::ShaderWrite,
-        usage.intersects(Tu::STORAGE_READ_WRITE),
+        usage.intersects(Tu::STORAGE_WRITE_ONLY | Tu::STORAGE_READ_WRITE),
     );
     // needed for combined depth/stencil formats since we might
     // create a stencil-only view from them

@@ -785,10 +785,10 @@ impl Frontend {
             .zip(raw_args)
             .zip(&parameters)
         {
-            let (mut handle, meta) =
-                ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.as_pos())?;
-
             if parameter_info.qualifier.is_lhs() {
+                // Reprocess argument in LHS position
+                let (handle, meta) = ctx.lower_expect_inner(stmt, self, *expr, ExprPos::Lhs)?;
+
                 self.process_lhs_argument(
                     ctx,
                     meta,
@@ -802,6 +802,8 @@ impl Frontend {
 
                 continue;
             }
+
+            let (mut handle, meta) = *call_argument;
 
             let scalar_comps = scalar_components(&ctx.module.types[*parameter].inner);
 
@@ -1364,6 +1366,7 @@ impl Frontend {
             early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
                 .filter(|_| self.meta.early_fragment_tests),
             workgroup_size: self.meta.workgroup_size,
+            workgroup_size_overrides: None,
             function: Function {
                 arguments,
                 expressions,

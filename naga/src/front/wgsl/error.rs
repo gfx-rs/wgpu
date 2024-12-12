@@ -308,7 +308,7 @@ pub(crate) enum Error<'a> {
     },
 }
 
-impl<'a> From<ConflictingDiagnosticRuleError> for Error<'a> {
+impl From<ConflictingDiagnosticRuleError> for Error<'_> {
     fn from(value: ConflictingDiagnosticRuleError) -> Self {
         Self::DiagnosticDuplicateTriggeringRule(value)
     }
@@ -990,6 +990,7 @@ impl<'a> Error<'a> {
                     )
                     .into(),
                 )],
+                #[allow(irrefutable_let_patterns)]
                 notes: if let EnableExtension::Unimplemented(kind) = kind {
                     vec![format!(
                         concat!(
@@ -1034,15 +1035,11 @@ impl<'a> Error<'a> {
                 .into()],
             },
             Error::DiagnosticDuplicateTriggeringRule(ConflictingDiagnosticRuleError {
-                triggering_rule,
                 triggering_rule_spans,
             }) => {
                 let [first_span, second_span] = triggering_rule_spans;
                 ParseError {
-                    message: format!(
-                        "found conflicting `diagnostic(…)` rule(s) for `{}`",
-                        triggering_rule.to_wgsl_ident()
-                    ),
+                    message: "found conflicting `diagnostic(…)` rule(s)".into(),
                     labels: vec![
                         (first_span, "first rule".into()),
                         (second_span, "second rule".into()),
@@ -1050,7 +1047,7 @@ impl<'a> Error<'a> {
                     notes: vec![
                         concat!(
                             "Multiple `diagnostic(…)` rules with the same rule name ",
-                            "conflict unless it is a directive and the severity is the same.",
+                            "conflict unless they are directives and the severity is the same.",
                         )
                         .into(),
                         "You should delete the rule you don't want.".into(),

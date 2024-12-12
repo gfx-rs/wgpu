@@ -168,9 +168,9 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             "copy_buffer_to_texture",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
                 encoder.copy_buffer_to_texture(
-                    wgpu::ImageCopyBuffer {
+                    wgpu::TexelCopyBufferInfo {
                         buffer: &buffer_source,
-                        layout: wgpu::ImageDataLayout {
+                        layout: wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(4),
                             rows_per_image: None,
@@ -185,15 +185,15 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             "copy_texture_to_buffer",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
                 encoder.copy_texture_to_buffer(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &texture_src,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
-                    wgpu::ImageCopyBuffer {
+                    wgpu::TexelCopyBufferInfo {
                         buffer: &buffer_dest,
-                        layout: wgpu::ImageDataLayout {
+                        layout: wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(4),
                             rows_per_image: None,
@@ -207,13 +207,13 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             "copy_texture_to_texture",
             Box::new(|encoder: &mut wgpu::CommandEncoder| {
                 encoder.copy_texture_to_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &texture_src,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture: &texture_dst,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,

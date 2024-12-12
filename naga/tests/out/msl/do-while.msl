@@ -8,9 +8,8 @@ using metal::uint;
 void fb1_(
     thread bool& cond
 ) {
-#define LOOP_IS_REACHABLE if (volatile bool unpredictable_jump_over_loop = true; unpredictable_jump_over_loop)
     bool loop_init = true;
-    LOOP_IS_REACHABLE while(true) {
+    while(true) {
         if (!loop_init) {
             bool _e1 = cond;
             if (!(cond)) {
@@ -19,6 +18,8 @@ void fb1_(
         }
         loop_init = false;
         continue;
+#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
+        LOOP_IS_BOUNDED
     }
     return;
 }

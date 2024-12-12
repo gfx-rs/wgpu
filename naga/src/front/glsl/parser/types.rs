@@ -12,7 +12,7 @@ use crate::{
     AddressSpace, ArraySize, Handle, Span, Type, TypeInner,
 };
 
-impl<'source> ParsingContext<'source> {
+impl ParsingContext<'_> {
     /// Parses an optional array_specifier returning whether or not it's present
     /// and modifying the type handle if it exists
     pub fn parse_array_specifier(

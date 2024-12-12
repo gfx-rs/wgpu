@@ -292,7 +292,7 @@ pub struct Device {
     main_vao: glow::VertexArray,
     #[cfg(all(native, feature = "renderdoc"))]
     render_doc: crate::auxil::renderdoc::RenderDoc,
-    counters: wgt::HalCounters,
+    counters: Arc<wgt::HalCounters>,
 }
 
 impl Drop for Device {
@@ -909,7 +909,7 @@ enum Command {
     },
     #[cfg(webgl)]
     CopyExternalImageToTexture {
-        src: wgt::ImageCopyExternalImage,
+        src: wgt::CopyExternalImageSourceInfo,
         dst: glow::Texture,
         dst_target: BindTarget,
         dst_format: wgt::TextureFormat,
@@ -1081,6 +1081,7 @@ pub struct CommandEncoder {
     cmd_buffer: CommandBuffer,
     state: command::State,
     private_caps: PrivateCapabilities,
+    counters: Arc<wgt::HalCounters>,
 }
 
 impl fmt::Debug for CommandEncoder {

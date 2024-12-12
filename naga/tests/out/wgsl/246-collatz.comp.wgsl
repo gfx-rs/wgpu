@@ -17,25 +17,25 @@ fn collatz_iterations(n: u32) -> u32 {
             break;
         }
         {
-            let _e14 = n_1;
-            let _e15 = f32(_e14);
-            if ((_e15 - (floor((_e15 / 2f)) * 2f)) == 0f) {
+            let _e12 = n_1;
+            let _e14 = f32(_e12);
+            if ((_e14 - (floor((_e14 / 2f)) * 2f)) == 0f) {
                 {
-                    let _e25 = n_1;
-                    n_1 = (_e25 / 2u);
+                    let _e23 = n_1;
+                    n_1 = (_e23 / 2u);
                 }
             } else {
                 {
-                    let _e30 = n_1;
-                    n_1 = ((3u * _e30) + 1u);
+                    let _e28 = n_1;
+                    n_1 = ((3u * _e28) + 1u);
                 }
             }
-            let _e36 = i;
-            i = (_e36 + 1u);
+            let _e34 = i;
+            i = (_e34 + 1u);
         }
     }
-    let _e39 = i;
-    return _e39;
+    let _e37 = i;
+    return _e37;
 }
 
 fn main_1() {
@@ -45,10 +45,9 @@ fn main_1() {
     index = _e3.x;
     let _e6 = index;
     let _e8 = index;
-    let _e11 = index;
-    let _e13 = global.indices[_e11];
-    let _e14 = collatz_iterations(_e13);
-    global.indices[_e6] = _e14;
+    let _e10 = global.indices[_e8];
+    let _e11 = collatz_iterations(_e10);
+    global.indices[_e6] = _e11;
     return;
 }
 

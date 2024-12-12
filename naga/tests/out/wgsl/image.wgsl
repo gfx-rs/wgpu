@@ -235,5 +235,6 @@ fn depth_no_comparison() -> @location(0) vec4<f32> {
     const tc_3 = vec2(0.5f);
     let s2d_1 = textureSample(image_2d_depth, sampler_reg, tc_3);
     let s2d_gather = textureGather(image_2d_depth, sampler_reg, tc_3);
-    return (vec4(s2d_1) + s2d_gather);
+    let s2d_level = textureSampleLevel(image_2d_depth, sampler_reg, tc_3, 1i);
+    return ((vec4(s2d_1) + s2d_gather) + vec4(s2d_level));
 }

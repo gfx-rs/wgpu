@@ -509,6 +509,8 @@ pub enum ConstantEvaluatorError {
     InvalidArrayLengthArg,
     #[error("Constants cannot get the array length of a dynamically sized array")]
     ArrayLengthDynamic,
+    #[error("Cannot call arrayLength on array sized by override-expression")]
+    ArrayLengthOverridden,
     #[error("Constants cannot call functions")]
     Call,
     #[error("Constants don't support workGroupUniformLoad")]
@@ -1313,6 +1315,7 @@ impl<'a> ConstantEvaluator<'a> {
                             let expr = Expression::Literal(Literal::U32(len.get()));
                             self.register_evaluated_expr(expr, span)
                         }
+                        ArraySize::Pending(_) => Err(ConstantEvaluatorError::ArrayLengthOverridden),
                         ArraySize::Dynamic => Err(ConstantEvaluatorError::ArrayLengthDynamic),
                     },
                     _ => Err(ConstantEvaluatorError::InvalidArrayLengthArg),
@@ -1744,6 +1747,7 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::Literal(value) => Expression::Literal(match op {
                 UnaryOperator::Negate => match value {
                     Literal::I32(v) => Literal::I32(v.wrapping_neg()),
+                    Literal::I64(v) => Literal::I64(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
                     Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
@@ -1755,7 +1759,9 @@ impl<'a> ConstantEvaluator<'a> {
                 },
                 UnaryOperator::BitwiseNot => match value {
                     Literal::I32(v) => Literal::I32(!v),
+                    Literal::I64(v) => Literal::I64(!v),
                     Literal::U32(v) => Literal::U32(!v),
+                    Literal::U64(v) => Literal::U64(!v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(!v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },

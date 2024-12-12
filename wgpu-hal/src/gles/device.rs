@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::AtomicFenceValue;
+use crate::{AtomicFenceValue, TlasInstance};
 use arrayvec::ArrayVec;
 use std::sync::atomic::Ordering;
 
@@ -826,7 +826,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -846,7 +846,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -899,7 +899,7 @@ impl crate::Device for super::Device {
                                     0,
                                     format_desc.external,
                                     format_desc.data_type,
-                                    None,
+                                    glow::PixelUnpackData::Slice(None),
                                 );
                             }
                             width = max(1, width / 2);
@@ -918,7 +918,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -1116,11 +1116,8 @@ impl crate::Device for super::Device {
             cmd_buffer: super::CommandBuffer::default(),
             state: Default::default(),
             private_caps: self.shared.private_caps,
+            counters: Arc::clone(&self.counters),
         })
-    }
-
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1633,8 +1630,12 @@ impl crate::Device for super::Device {
     ) {
     }
 
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+        unimplemented!()
+    }
+
     fn get_internal_counters(&self) -> wgt::HalCounters {
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 }
 

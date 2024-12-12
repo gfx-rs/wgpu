@@ -1,5 +1,5 @@
 (
-	backends: 0x3E,
+	backends: "VULKAN | GL | METAL | DX12 | BROWSER_WEBGPU",
 	tests: [
 		"bind-group.ron",
 		"buffer-copy.ron",

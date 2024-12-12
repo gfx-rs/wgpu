@@ -19,12 +19,12 @@ fn main_1() {
     let _e39 = b3_;
     let _e40 = a3_;
     m3_ = mat3x3<f32>(vec3<f32>(_e38.x, _e38.y, _e38.z), vec3<f32>(_e39.x, _e39.y, _e39.z), vec3<f32>(_e40.x, _e40.y, _e40.z));
-    let _e64 = m4_;
-    m4_inverse = _naga_inverse_4x4_f32(_e64);
-    let _e68 = m3_;
-    m3_inverse = _naga_inverse_3x3_f32(_e68);
-    let _e72 = m2_;
-    m2_inverse = _naga_inverse_2x2_f32(_e72);
+    let _e63 = m4_;
+    m4_inverse = _naga_inverse_4x4_f32(_e63);
+    let _e66 = m3_;
+    m3_inverse = _naga_inverse_3x3_f32(_e66);
+    let _e69 = m2_;
+    m2_inverse = _naga_inverse_2x2_f32(_e69);
     return;
 }
 

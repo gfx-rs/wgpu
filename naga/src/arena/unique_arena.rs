@@ -89,7 +89,7 @@ pub struct UniqueArenaDrain<'a, T> {
 }
 
 #[cfg(feature = "compact")]
-impl<'a, T> Iterator for UniqueArenaDrain<'a, T> {
+impl<T> Iterator for UniqueArenaDrain<'_, T> {
     type Item = (Handle<T>, T, Span);
 
     fn next(&mut self) -> Option<Self::Item> {

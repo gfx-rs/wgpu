@@ -54,27 +54,40 @@ impl Severity {
 /// A filterable triggering rule in a [`DiagnosticFilter`].
 ///
 /// <https://www.w3.org/TR/WGSL/#filterable-triggering-rules>
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum FilterableTriggeringRule {
+    Standard(StandardFilterableTriggeringRule),
+    Unknown(Box<str>),
+    User(Box<[Box<str>; 2]>),
+}
+
+/// A filterable triggering rule in a [`DiagnosticFilter`].
+///
+/// <https://www.w3.org/TR/WGSL/#filterable-triggering-rules>
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum StandardFilterableTriggeringRule {
     DerivativeUniformity,
 }
 
-impl FilterableTriggeringRule {
+impl StandardFilterableTriggeringRule {
     /// The default severity associated with this triggering rule.
     ///
     /// See <https://www.w3.org/TR/WGSL/#filterable-triggering-rules> for a table of default
     /// severities.
     pub(crate) const fn default_severity(self) -> Severity {
         match self {
-            FilterableTriggeringRule::DerivativeUniformity => Severity::Error,
+            Self::DerivativeUniformity => Severity::Error,
         }
     }
 }
 
-/// A filter that modifies how diagnostics are emitted for shaders.
+/// A filtering rule that modifies how diagnostics are emitted for shaders.
 ///
 /// <https://www.w3.org/TR/WGSL/#diagnostic-filter>
 #[derive(Clone, Debug)]
@@ -140,7 +153,7 @@ impl DiagnosticFilterMap {
             triggering_rule,
         } = diagnostic_filter;
 
-        match diagnostic_filters.entry(triggering_rule) {
+        match diagnostic_filters.entry(triggering_rule.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert((new_severity, span));
             }
@@ -152,7 +165,6 @@ impl DiagnosticFilterMap {
                 };
                 if first_severity != new_severity || should_conflict_on_full_duplicate {
                     return Err(ConflictingDiagnosticRuleError {
-                        triggering_rule,
                         triggering_rule_spans: [first_span, span],
                     });
                 }
@@ -190,7 +202,6 @@ impl IntoIterator for DiagnosticFilterMap {
 #[cfg(feature = "wgsl-in")]
 #[derive(Clone, Debug)]
 pub(crate) struct ConflictingDiagnosticRuleError {
-    pub triggering_rule: FilterableTriggeringRule,
     pub triggering_rule_spans: [Span; 2],
 }
 
@@ -232,24 +243,24 @@ pub struct DiagnosticFilterNode {
 impl DiagnosticFilterNode {
     /// Finds the most specific filter rule applicable to `triggering_rule` from the chain of
     /// diagnostic filter rules in `arena`, starting with `node`, and returns its severity. If none
-    /// is found, return the value of [`FilterableTriggeringRule::default_severity`].
+    /// is found, return the value of [`StandardFilterableTriggeringRule::default_severity`].
     ///
     /// When `triggering_rule` is not applicable to this node, its parent is consulted recursively.
     pub(crate) fn search(
         node: Option<Handle<Self>>,
         arena: &Arena<Self>,
-        triggering_rule: FilterableTriggeringRule,
+        triggering_rule: StandardFilterableTriggeringRule,
     ) -> Severity {
         let mut next = node;
         while let Some(handle) = next {
             let node = &arena[handle];
             let &Self { ref inner, parent } = node;
             let &DiagnosticFilter {
-                triggering_rule: rule,
+                triggering_rule: ref rule,
                 new_severity,
             } = inner;
 
-            if rule == triggering_rule {
+            if rule == &FilterableTriggeringRule::Standard(triggering_rule) {
                 return new_severity;
             }
 

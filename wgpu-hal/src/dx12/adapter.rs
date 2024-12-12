@@ -207,10 +207,10 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_2,
                 Direct3D12::D3D_SHADER_MODEL_6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_0,
-                Direct3D12::D3D_SHADER_MODEL_5_1,
             ]
             .iter();
-            match loop {
+
+            let highest_shader_model = loop {
                 if let Some(&sm) = versions.next() {
                     let mut sm = Direct3D12::D3D12_FEATURE_DATA_SHADER_MODEL {
                         HighestShaderModel: sm,
@@ -229,8 +229,10 @@ impl super::Adapter {
                 } else {
                     break Direct3D12::D3D_SHADER_MODEL_5_1;
                 }
-            } {
-                Direct3D12::D3D_SHADER_MODEL_5_1 => naga::back::hlsl::ShaderModel::V5_1,
+            };
+
+            match highest_shader_model {
+                Direct3D12::D3D_SHADER_MODEL_5_1 => return None, // don't expose this adapter if it doesn't support DXIL
                 Direct3D12::D3D_SHADER_MODEL_6_0 => naga::back::hlsl::ShaderModel::V6_0,
                 Direct3D12::D3D_SHADER_MODEL_6_1 => naga::back::hlsl::ShaderModel::V6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_2 => naga::back::hlsl::ShaderModel::V6_2,
@@ -293,6 +295,7 @@ impl super::Adapter {
             }
         };
 
+        // these should always be available on d3d12
         let mut features = wgt::Features::empty()
             | wgt::Features::DEPTH_CLIP_CONTROL
             | wgt::Features::DEPTH32FLOAT_STENCIL8
@@ -315,7 +318,8 @@ impl super::Adapter {
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
-            | wgt::Features::TEXTURE_FORMAT_NV12;
+            | wgt::Features::TEXTURE_FORMAT_NV12
+            | wgt::Features::FLOAT32_FILTERABLE;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -402,9 +406,6 @@ impl super::Adapter {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
             atomic_int64_on_typed_resource_supported,
         );
-
-        // float32-filterable should always be available on d3d12
-        features.set(wgt::Features::FLOAT32_FILTERABLE, true);
 
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
@@ -522,6 +523,8 @@ impl super::Adapter {
                     // Direct3D correctly bounds-checks all array accesses:
                     // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
+                    raw_tlas_instance_size: 0,
+                    ray_tracing_scratch_buffer_alignment: 0,
                 },
                 downlevel,
             },
@@ -669,16 +672,20 @@ impl crate::Adapter for super::Adapter {
         );
         // UAVs use srv_uav_format
         caps.set(
-            Tfc::STORAGE,
-            data_srv_uav
-                .Support1
-                .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW),
-        );
-        caps.set(
-            Tfc::STORAGE_READ_WRITE,
+            Tfc::STORAGE_READ_ONLY,
             data_srv_uav
                 .Support2
                 .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD),
+        );
+        caps.set(
+            Tfc::STORAGE_WRITE_ONLY,
+            data_srv_uav
+                .Support2
+                .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE),
+        );
+        caps.set(
+            Tfc::STORAGE_READ_WRITE,
+            caps.contains(Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_WRITE_ONLY),
         );
 
         // We load via UAV/SRV so use srv_uav_format

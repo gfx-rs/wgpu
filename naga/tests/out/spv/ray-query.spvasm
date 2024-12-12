@@ -1,14 +1,16 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 104
+; Bound: 136
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %84 "main" %15 %17
+OpEntryPoint GLCompute %105 "main_candidate" %15 %17
 OpExecutionMode %84 LocalSize 1 1 1
+OpExecutionMode %105 LocalSize 1 1 1
 OpMemberDecorate %10 0 Offset 0
 OpMemberDecorate %10 1 Offset 4
 OpMemberDecorate %10 2 Offset 8
@@ -74,6 +76,8 @@ OpMemberDecorate %18 0 Offset 0
 %91 = OpConstantComposite  %4  %70 %68 %70
 %94 = OpTypePointer StorageBuffer %6
 %99 = OpTypePointer StorageBuffer %4
+%108 = OpConstantComposite  %12  %27 %28 %29 %30 %90 %91
+%109 = OpConstant  %6  3
 %25 = OpFunction  %10  None %26
 %21 = OpFunctionParameter  %4
 %22 = OpFunctionParameter  %4
@@ -160,5 +164,40 @@ OpStore %98 %97
 %102 = OpFunctionCall  %4  %66 %101 %93
 %103 = OpAccessChain  %99  %89 %50
 OpStore %103 %102
+OpReturn
+OpFunctionEnd
+%105 = OpFunction  %2  None %85
+%104 = OpLabel
+%110 = OpVariable  %32  Function
+%106 = OpLoad  %5  %15
+%107 = OpAccessChain  %87  %17 %88
+OpBranch %111
+%111 = OpLabel
+%112 = OpCompositeExtract  %6  %108 0
+%113 = OpCompositeExtract  %6  %108 1
+%114 = OpCompositeExtract  %3  %108 2
+%115 = OpCompositeExtract  %3  %108 3
+%116 = OpCompositeExtract  %4  %108 4
+%117 = OpCompositeExtract  %4  %108 5
+OpRayQueryInitializeKHR %110 %106 %112 %113 %116 %114 %117 %115
+%118 = OpRayQueryGetIntersectionTypeKHR  %6  %110 %88
+%119 = OpIEqual  %8  %118 %88
+%120 = OpSelect  %6  %119 %50 %109
+%121 = OpRayQueryGetIntersectionInstanceCustomIndexKHR  %6  %110 %88
+%122 = OpRayQueryGetIntersectionInstanceIdKHR  %6  %110 %88
+%123 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %6  %110 %88
+%124 = OpRayQueryGetIntersectionGeometryIndexKHR  %6  %110 %88
+%125 = OpRayQueryGetIntersectionPrimitiveIndexKHR  %6  %110 %88
+%126 = OpRayQueryGetIntersectionTKHR  %3  %110 %88
+%127 = OpRayQueryGetIntersectionBarycentricsKHR  %7  %110 %88
+%128 = OpRayQueryGetIntersectionFrontFaceKHR  %8  %110 %88
+%129 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %110 %88
+%130 = OpRayQueryGetIntersectionWorldToObjectKHR  %9  %110 %88
+%131 = OpCompositeConstruct  %10  %120 %126 %121 %122 %123 %124 %125 %127 %128 %129 %130
+%132 = OpCompositeExtract  %6  %131 0
+%133 = OpIEqual  %8  %132 %109
+%134 = OpSelect  %6  %133 %50 %88
+%135 = OpAccessChain  %94  %107 %88
+OpStore %135 %134
 OpReturn
 OpFunctionEnd

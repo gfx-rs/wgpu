@@ -45,14 +45,14 @@
         (
             inner: (
                 new_severity: Off,
-                triggering_rule: DerivativeUniformity,
+                triggering_rule: Standard(DerivativeUniformity),
             ),
             parent: None,
         ),
         (
             inner: (
                 new_severity: Warning,
-                triggering_rule: DerivativeUniformity,
+                triggering_rule: Standard(DerivativeUniformity),
             ),
             parent: Some(0),
         ),

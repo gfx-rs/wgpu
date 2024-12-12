@@ -1,9 +1,6 @@
-use crate::api::blas::{ContextTlasInstance, DynContextTlasInstance, TlasInstance};
-use crate::context::{Context, DynContext};
-use crate::{BindingResource, Buffer, Data, Label, C};
+use crate::{api::blas::TlasInstance, dispatch};
+use crate::{BindingResource, Buffer, Label};
 use std::ops::{Index, IndexMut, Range};
-use std::sync::Arc;
-use std::thread;
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.
@@ -21,24 +18,17 @@ static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 ///
 /// [TLAS instances]: TlasInstance
 pub struct Tlas {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchTlas,
     pub(crate) max_instances: u32,
 }
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
+crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .inner);
+
 impl Tlas {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::tlas_destroy(&*self.context, self.data.as_ref());
-    }
-}
-
-impl Drop for Tlas {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.tlas_drop(self.data.as_ref());
-        }
+        self.inner.destroy();
     }
 }
 
@@ -167,32 +157,4 @@ impl IndexMut<Range<usize>> for TlasPackage {
         }
         idx
     }
-}
-
-pub(crate) struct DynContextTlasBuildEntry<'a> {
-    pub(crate) tlas_data: &'a Data,
-    pub(crate) instance_buffer_data: &'a Data,
-    pub(crate) instance_count: u32,
-}
-
-pub(crate) struct DynContextTlasPackage<'a> {
-    pub(crate) tlas_data: &'a Data,
-    pub(crate) instances: Box<dyn Iterator<Item = Option<DynContextTlasInstance<'a>>> + 'a>,
-    pub(crate) lowest_unmodified: u32,
-}
-
-/// Context version see [TlasBuildEntry].
-#[allow(dead_code)]
-pub struct ContextTlasBuildEntry<'a, T: Context> {
-    pub(crate) tlas_data: &'a T::TlasData,
-    pub(crate) instance_buffer_data: &'a T::BufferData,
-    pub(crate) instance_count: u32,
-}
-
-/// Context version see [TlasPackage].
-#[allow(dead_code)]
-pub struct ContextTlasPackage<'a, T: Context> {
-    pub(crate) tlas_data: &'a T::TlasData,
-    pub(crate) instances: Box<dyn Iterator<Item = Option<ContextTlasInstance<'a, T>>> + 'a>,
-    pub(crate) lowest_unmodified: u32,
 }

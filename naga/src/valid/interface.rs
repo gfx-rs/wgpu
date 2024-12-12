@@ -497,7 +497,10 @@ impl super::Validator {
                 if access == crate::StorageAccess::STORE {
                     return Err(GlobalVariableError::StorageAddressSpaceWriteOnlyNotSupported);
                 }
-                (TypeFlags::DATA | TypeFlags::HOST_SHAREABLE, true)
+                (
+                    TypeFlags::DATA | TypeFlags::HOST_SHAREABLE | TypeFlags::CREATION_RESOLVED,
+                    true,
+                )
             }
             crate::AddressSpace::Uniform => {
                 if let Err((ty_handle, disalignment)) = type_info.uniform_layout {
@@ -513,7 +516,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::COPY
                         | TypeFlags::SIZED
-                        | TypeFlags::HOST_SHAREABLE,
+                        | TypeFlags::HOST_SHAREABLE
+                        | TypeFlags::CREATION_RESOLVED,
                     true,
                 )
             }
@@ -551,7 +555,10 @@ impl super::Validator {
 
                 (TypeFlags::empty(), true)
             }
-            crate::AddressSpace::Private => (TypeFlags::CONSTRUCTIBLE, false),
+            crate::AddressSpace::Private => (
+                TypeFlags::CONSTRUCTIBLE | TypeFlags::CREATION_RESOLVED,
+                false,
+            ),
             crate::AddressSpace::WorkGroup => (TypeFlags::DATA | TypeFlags::SIZED, false),
             crate::AddressSpace::PushConstant => {
                 if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {

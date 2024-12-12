@@ -195,6 +195,7 @@ enum LocationMode {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct Options {
     /// (Major, Minor) target version of the Metal Shading Language.
     pub lang_version: (u8, u8),
@@ -207,7 +208,6 @@ pub struct Options {
     /// Don't panic on missing bindings, instead generate invalid MSL.
     pub fake_missing_bindings: bool,
     /// Bounds checking policies.
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub bounds_check_policies: index::BoundsCheckPolicies,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
@@ -341,6 +341,7 @@ pub struct VertexBufferMapping {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct PipelineOptions {
     /// Allow `BuiltIn::PointSize` and inject it if doesn't exist.
     ///

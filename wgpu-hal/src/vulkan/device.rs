@@ -1,16 +1,17 @@
-use super::conv;
+use super::{conv, RawTlasInstance};
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
 use parking_lot::Mutex;
 
+use crate::TlasInstance;
 use std::{
     borrow::Cow,
     collections::{hash_map::Entry, BTreeMap},
     ffi::{CStr, CString},
-    mem::MaybeUninit,
+    mem::{self, size_of, MaybeUninit},
     num::NonZeroU32,
-    ptr,
+    ptr, slice,
     sync::Arc,
 };
 
@@ -1372,18 +1373,8 @@ impl crate::Device for super::Device {
             discarded: Vec::new(),
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
+            counters: Arc::clone(&self.counters),
         })
-    }
-    unsafe fn destroy_command_encoder(&self, cmd_encoder: super::CommandEncoder) {
-        unsafe {
-            // `vkDestroyCommandPool` also frees any command buffers allocated
-            // from that pool, so there's no need to explicitly call
-            // `vkFreeCommandBuffers` on `cmd_encoder`'s `free` and `discarded`
-            // fields.
-            self.shared.raw.destroy_command_pool(cmd_encoder.raw, None);
-        }
-
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1662,7 +1653,7 @@ impl crate::Device for super::Device {
                     // Additional safety docs from unstable slice_assume_init_mut
                     // SAFETY: similar to safety notes for `slice_get_ref`, but we have a
                     // mutable reference which is also guaranteed to be valid for writes.
-                    unsafe { std::mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
+                    unsafe { mem::transmute::<&mut [MaybeUninit<T>], &mut [T]>(to_init) }
                 };
                 (Self { remainder }, init)
             }
@@ -2555,7 +2546,22 @@ impl crate::Device for super::Device {
             .memory_allocations
             .set(self.shared.memory_allocations_counter.read());
 
-        self.counters.clone()
+        self.counters.as_ref().clone()
+    }
+
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+        let temp = RawTlasInstance {
+            transform: instance.transform,
+            custom_index_and_mask: (instance.custom_index & MAX_U24)
+                | (u32::from(instance.mask) << 24),
+            shader_binding_table_record_offset_and_flags: 0,
+            acceleration_structure_reference: instance.blas_address,
+        };
+        let temp: *const _ = &temp;
+        unsafe {
+            slice::from_raw_parts::<u8>(temp.cast::<u8>(), size_of::<RawTlasInstance>()).to_vec()
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use crate::front::wgsl::error::{
 };
 use crate::{Handle, Span};
 
-impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
+impl<'source> super::ExpressionContext<'source, '_, '_> {
     /// Try to use WGSL's automatic conversions to convert `expr` to `goal_ty`.
     ///
     /// If no conversions are necessary, return `expr` unchanged.

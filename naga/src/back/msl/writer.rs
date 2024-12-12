@@ -132,7 +132,7 @@ struct TypeContext<'a> {
     first_time: bool,
 }
 
-impl<'a> TypeContext<'a> {
+impl TypeContext<'_> {
     fn scalar(&self) -> Option<crate::Scalar> {
         let ty = &self.gctx.types[self.handle];
         ty.inner.scalar()
@@ -148,7 +148,7 @@ impl<'a> TypeContext<'a> {
     }
 }
 
-impl<'a> Display for TypeContext<'a> {
+impl Display for TypeContext<'_> {
     fn fmt(&self, out: &mut Formatter<'_>) -> Result<(), FmtError> {
         let ty = &self.gctx.types[self.handle];
         if ty.needs_alias() && !self.first_time {
@@ -313,7 +313,7 @@ struct TypedGlobalVariable<'a> {
     reference: bool,
 }
 
-impl<'a> TypedGlobalVariable<'a> {
+impl TypedGlobalVariable<'_> {
     fn try_fmt<W: Write>(&self, out: &mut W) -> BackendResult {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
@@ -389,10 +389,10 @@ pub struct Writer<W> {
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
 
-    /// Name of the loop reachability macro.
+    /// Name of the force-bounded-loop macro.
     ///
-    /// See `emit_loop_reachable_macro` for details.
-    loop_reachable_macro_name: String,
+    /// See `emit_force_bounded_loop_macro` for details.
+    force_bounded_loop_macro_name: String,
 }
 
 impl crate::Scalar {
@@ -688,7 +688,7 @@ impl<W: Write> Writer<W> {
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
-            loop_reachable_macro_name: String::default(),
+            force_bounded_loop_macro_name: String::default(),
         }
     }
 
@@ -699,12 +699,13 @@ impl<W: Write> Writer<W> {
         self.out
     }
 
-    /// Define a macro to invoke before loops, to defeat MSL infinite loop
-    /// reasoning.
+    /// Define a macro to invoke at the bottom of each loop body, to
+    /// defeat MSL infinite loop reasoning.
     ///
     /// If we haven't done so already, emit the definition of a preprocessor
-    /// macro to be invoked before each loop in the generated MSL, to ensure
-    /// that the MSL compiler's optimizations do not remove bounds checks.
+    /// macro to be invoked at the end of each loop body in the generated MSL,
+    /// to ensure that the MSL compiler's optimizations do not remove bounds
+    /// checks.
     ///
     /// Only the first call to this function for a given module actually causes
     /// the macro definition to be written. Subsequent loops can simply use the
@@ -770,52 +771,51 @@ impl<W: Write> Writer<W> {
     /// nicely, after having stolen data from elsewhere in the GPU address
     /// space.
     ///
-    /// Ideally, Naga would prevent UB entirely via some means that persuades
-    /// the MSL compiler that no loop Naga generates is infinite. One approach
-    /// would be to add inline assembly to each loop that is annotated as
-    /// potentially branching out of the loop, but which in fact generates no
-    /// instructions. Unfortunately, inline assembly is not handled correctly by
-    /// some Metal device drivers. Further experimentation hasn't produced a
-    /// satisfactory approach.
+    /// To avoid UB, Naga must persuade the MSL compiler that no loop Naga
+    /// generates is infinite. One approach would be to add inline assembly to
+    /// each loop that is annotated as potentially branching out of the loop,
+    /// but which in fact generates no instructions. Unfortunately, inline
+    /// assembly is not handled correctly by some Metal device drivers.
     ///
-    /// Instead, we accept that the MSL compiler may determine that some loops
-    /// are infinite, and focus instead on preventing the range analysis from
-    /// being affected. We transform *every* loop into something like this:
+    /// Instead, we add the following code to the bottom of every loop:
     ///
     /// ```ignore
-    /// if (volatile bool unpredictable = true; unpredictable)
-    ///     while (true) { }
+    /// if (volatile bool unpredictable = false; unpredictable)
+    ///     break;
     /// ```
     ///
-    /// Since the `volatile` qualifier prevents the compiler from assuming that
-    /// the `if` condition is true, it cannot be sure the infinite loop is
-    /// reached, and thus it cannot assume the entire structure is unreachable.
-    /// This prevents the range analysis impact described above.
+    /// Although the `if` condition will always be false in any real execution,
+    /// the `volatile` qualifier prevents the compiler from assuming this. Thus,
+    /// it must assume that the `break` might be reached, and hence that the
+    /// loop is not unbounded. This prevents the range analysis impact described
+    /// above.
     ///
     /// Unfortunately, what makes this a kludge, not a hack, is that this
     /// solution leaves the GPU executing a pointless conditional branch, at
-    /// runtime, before each loop. There's no part of the system that has a
-    /// global enough view to be sure that `unpredictable` is true, and remove
-    /// it from the code.
+    /// runtime, in every iteration of the loop. There's no part of the system
+    /// that has a global enough view to be sure that `unpredictable` is true,
+    /// and remove it from the code. Adding the branch also affects
+    /// optimization: for example, it's impossible to unroll this loop. This
+    /// transformation has been observed to significantly hurt performance.
     ///
     /// To make our output a bit more legible, we pull the condition out into a
     /// preprocessor macro defined at the top of the module.
     ///
-    /// This approach is also used by Chromium WebGPU's Dawn shader compiler, as of
-    /// <https://github.com/google/dawn/commit/ffd485c685040edb1e678165dcbf0e841cfa0298>.
-    fn emit_loop_reachable_macro(&mut self) -> BackendResult {
-        if !self.loop_reachable_macro_name.is_empty() {
+    /// This approach is also used by Chromium WebGPU's Dawn shader compiler:
+    /// <https://dawn.googlesource.com/dawn/+/a37557db581c2b60fb1cd2c01abdb232927dd961/src/tint/lang/msl/writer/printer/printer.cc#222>
+    fn emit_force_bounded_loop_macro(&mut self) -> BackendResult {
+        if !self.force_bounded_loop_macro_name.is_empty() {
             return Ok(());
         }
 
-        self.loop_reachable_macro_name = self.namer.call("LOOP_IS_REACHABLE");
-        let loop_reachable_volatile_name = self.namer.call("unpredictable_jump_over_loop");
+        self.force_bounded_loop_macro_name = self.namer.call("LOOP_IS_BOUNDED");
+        let loop_bounded_volatile_name = self.namer.call("unpredictable_break_from_loop");
         writeln!(
             self.out,
-            "#define {} if (volatile bool {} = true; {})",
-            self.loop_reachable_macro_name,
-            loop_reachable_volatile_name,
-            loop_reachable_volatile_name,
+            "#define {} {{ volatile bool {} = false; if ({}) break; }}",
+            self.force_bounded_loop_macro_name,
+            loop_bounded_volatile_name,
+            loop_bounded_volatile_name,
         )?;
 
         Ok(())
@@ -2263,14 +2263,14 @@ impl<W: Write> Writer<W> {
             crate::Expression::RayQueryVertexPositions { .. } => {
                 unimplemented!()
             }
-            crate::Expression::RayQueryGetIntersection { query, committed } => {
+            crate::Expression::RayQueryGetIntersection {
+                query,
+                committed: _,
+            } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
-                if !committed {
-                    unimplemented!()
-                }
                 let ty = context.module.special_types.ray_intersection.unwrap();
                 let type_name = &self.names[&NameKey::Type(ty)];
                 write!(self.out, "{type_name} {{{RAY_QUERY_FUN_MAP_INTERSECTION}(")?;
@@ -2416,6 +2416,7 @@ impl<W: Write> Writer<W> {
                     self.out.write_str(") < ")?;
                     match length {
                         index::IndexableLength::Known(value) => write!(self.out, "{value}")?,
+                        index::IndexableLength::Pending => unreachable!(),
                         index::IndexableLength::Dynamic => {
                             let global =
                                 context.function.originating_global(base).ok_or_else(|| {
@@ -2578,6 +2579,7 @@ impl<W: Write> Writer<W> {
                 index::IndexableLength::Known(limit) => {
                     write!(self.out, "{}u", limit - 1)?;
                 }
+                index::IndexableLength::Pending => unreachable!(),
                 index::IndexableLength::Dynamic => {
                     let global = context.function.originating_global(base).ok_or_else(|| {
                         Error::GenericValidation("Could not find originating global".into())
@@ -3054,15 +3056,10 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                     break_if,
                 } => {
-                    self.emit_loop_reachable_macro()?;
                     if !continuing.is_empty() || break_if.is_some() {
                         let gate_name = self.namer.call("loop_init");
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                        writeln!(
-                            self.out,
-                            "{level}{} while(true) {{",
-                            self.loop_reachable_macro_name,
-                        )?;
+                        writeln!(self.out, "{level}while(true) {{",)?;
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
@@ -3077,13 +3074,16 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
                     } else {
-                        writeln!(
-                            self.out,
-                            "{level}{} while(true) {{",
-                            self.loop_reachable_macro_name,
-                        )?;
+                        writeln!(self.out, "{level}while(true) {{",)?;
                     }
                     self.put_block(level.next(), body, context)?;
+                    self.emit_force_bounded_loop_macro()?;
+                    writeln!(
+                        self.out,
+                        "{}{}",
+                        level.next(),
+                        self.force_bounded_loop_macro_name
+                    )?;
                     writeln!(self.out, "{level}}}")?;
                 }
                 crate::Statement::Break => {
@@ -3562,7 +3562,7 @@ impl<W: Write> Writer<W> {
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
-        self.loop_reachable_macro_name.clear();
+        self.force_bounded_loop_macro_name.clear();
         self.struct_member_pads.clear();
 
         writeln!(
@@ -3750,6 +3750,9 @@ impl<W: Write> Writer<W> {
                                 size
                             )?;
                             writeln!(self.out, "}};")?;
+                        }
+                        crate::ArraySize::Pending(_) => {
+                            unreachable!()
                         }
                         crate::ArraySize::Dynamic => {
                             writeln!(self.out, "typedef {base_name} {name}[1];")?;
@@ -6019,6 +6022,7 @@ mod workgroup_mem_init {
                         let count = match size.to_indexable_length(module).expect("Bad array size")
                         {
                             proc::IndexableLength::Known(count) => count,
+                            proc::IndexableLength::Pending => unreachable!(),
                             proc::IndexableLength::Dynamic => unreachable!(),
                         };
 

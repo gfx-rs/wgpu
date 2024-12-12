@@ -17,6 +17,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
+#![allow(clippy::arc_with_non_send_sync)]
 
 //
 //
@@ -26,9 +27,9 @@
 
 mod api;
 mod backend;
-mod context;
+mod cmp;
+mod dispatch;
 mod macros;
-mod send_sync;
 pub mod util;
 
 //
@@ -36,16 +37,6 @@ pub mod util;
 // Private re-exports
 //
 //
-
-#[allow(unused_imports)] // WebGPU needs this
-use context::Context;
-use send_sync::*;
-
-type C = dyn context::DynContext;
-#[cfg(send_sync)]
-type Data = dyn std::any::Any + Send + Sync;
-#[cfg(not(send_sync))]
-type Data = dyn std::any::Any;
 
 //
 //
@@ -61,23 +52,28 @@ pub use wgt::{
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CoreCounters, DepthBiasState,
     DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
     Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
-    Gles3MinorVersion, HalCounters, ImageDataLayout, ImageSubresourceRange, IndexFormat,
-    InstanceDescriptor, InstanceFlags, InternalCounters, Limits, MaintainResult, MemoryHints,
-    MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
+    InstanceFlags, InternalCounters, Limits, MaintainResult, MemoryHints, MultisampleState,
+    Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
     PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
     ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
-    QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect,
+    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
+    TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat,
+    VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
+#[allow(deprecated)]
+pub use wgt::{ImageCopyBuffer, ImageCopyTexture, ImageCopyTextureTagged, ImageDataLayout};
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(any(webgpu, webgl))]
-pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
+#[allow(deprecated)]
+pub use wgt::ImageCopyExternalImage;
+#[cfg(any(webgpu, webgl))]
+pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};
 
 //
 //
@@ -117,3 +113,8 @@ pub use raw_window_handle as rwh;
 ///
 #[cfg(any(webgl, webgpu))]
 pub use web_sys;
+
+/// `web-sys` has a `no_std` mode, and instead refers to the `alloc` crate in its generated code.
+/// Since we vendor the WebGPU bindings we need to explicitly add the `alloc` crate ourselves.
+#[cfg(webgpu)]
+extern crate alloc;

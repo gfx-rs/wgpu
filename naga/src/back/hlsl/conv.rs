@@ -68,6 +68,7 @@ impl crate::TypeInner {
                 let count = match size {
                     crate::ArraySize::Constant(size) => size.get(),
                     // A dynamically-sized array has to have at least one element
+                    crate::ArraySize::Pending(_) => unreachable!(),
                     crate::ArraySize::Dynamic => 1,
                 };
                 let last_el_size = gctx.types[base].inner.size_hlsl(gctx);
