@@ -65,6 +65,16 @@ fn run_bench(ctx: &mut Criterion) {
     let mut group = ctx.benchmark_group("Bind Group Creation");
 
     for count in [5, 50, 500, 5_000, 50_000] {
+        if count
+            > state
+                .device_state
+                .device
+                .limits()
+                .max_sampled_textures_per_shader_stage
+        {
+            continue;
+        }
+
         let bind_group_layout =
             state
                 .device_state
