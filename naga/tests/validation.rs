@@ -650,7 +650,7 @@ error: Entry point main at Compute is invalid
   │         ^^^^^^ naga::Expression [3]
   │
   = Expression [3] is invalid
-  = Selecting is not possible
+  = Expected selection condition to be a boolean value, got Scalar(Scalar { kind: Sint, width: 4 })
 
 ",
         ),
@@ -670,7 +670,7 @@ error: Entry point main at Compute is invalid
   │         ^^^^^^ naga::Expression [3]
   │
   = Expression [3] is invalid
-  = Selecting is not possible
+  = Expected selection argument types to match, but reject value of type Scalar(Scalar { kind: Bool, width: 1 }) does not match accept value of value Scalar(Scalar { kind: Sint, width: 4 })
 
 ",
         ),
