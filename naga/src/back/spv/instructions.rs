@@ -748,13 +748,13 @@ impl super::Instruction {
         result_type_id: Word,
         id: Word,
         query: Word,
-        bool_id: Word,
+        intersection: Word,
     ) -> Self {
         let mut instruction = Self::new(Op::RayQueryGetIntersectionTriangleVertexPositionsKHR);
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(query);
-        instruction.add_operand(bool_id);
+        instruction.add_operand(intersection);
         instruction
     }
 

@@ -293,6 +293,7 @@ impl BlockContext<'_> {
         &mut self,
         query: Handle<crate::Expression>,
         block: &mut Block,
+        is_committed: bool,
     ) -> spirv::Word {
         let query_id = self.cached[query];
         let id = self.gen_id();
@@ -301,7 +302,13 @@ impl BlockContext<'_> {
             .special_types
             .ray_vertex_return
             .expect("type should have been populated");
-        let bool_id = self.writer.get_constant_scalar(crate::Literal::Bool(true));
+        let intersection_id =
+            self.writer
+                .get_constant_scalar(crate::Literal::U32(if is_committed {
+                    spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR
+                } else {
+                    spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR
+                } as _));
         block
             .body
             .push(Instruction::ray_query_return_vertex_position(
@@ -312,7 +319,7 @@ impl BlockContext<'_> {
                     .expect("type should have been populated"),
                 id,
                 query_id,
-                bool_id,
+                intersection_id,
             ));
         id
     }
