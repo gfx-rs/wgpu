@@ -1060,6 +1060,14 @@ impl super::Validator {
                         .with_handle(image, context.expressions));
                     };
 
+                    // It had better be a storage image, since we're writing to it.
+                    let crate::ImageClass::Storage { format, .. } = class else {
+                        return Err(FunctionError::InvalidImageStore(
+                            ExpressionError::InvalidImageClass(class),
+                        )
+                        .with_span_handle(image, context.expressions));
+                    };
+
                     // The `coordinate` operand must be a vector of the appropriate size.
                     if !context
                         .resolve_type(coordinate, &self.valid_expression_set)?
@@ -1096,14 +1104,6 @@ impl super::Validator {
                             .with_span_handle(expr, context.expressions));
                         }
                     }
-
-                    // It had better be a storage image, since we're writing to it.
-                    let crate::ImageClass::Storage { format, .. } = class else {
-                        return Err(FunctionError::InvalidImageStore(
-                            ExpressionError::InvalidImageClass(class),
-                        )
-                        .with_span_handle(image, context.expressions));
-                    };
 
                     let value_ty = crate::TypeInner::Vector {
                         size: crate::VectorSize::Quad,
