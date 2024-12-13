@@ -34,6 +34,10 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ## Getting Started
 
+### Play with our Examples
+
+Go to [https://wgpu.rs/examples/] to play with our examples in your browser. Requires a browser supporting WebGPU for the WebGPU examples.
+
 ### Rust
 
 Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin wgpu-examples <example>`. See the [list of examples](examples).

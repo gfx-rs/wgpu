@@ -290,8 +290,8 @@ impl Global {
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
             usage: hal::StateTransition {
-                from: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
-                to: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                from: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                to: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
             },
         };
 
