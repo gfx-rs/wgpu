@@ -1,14 +1,14 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
-/// Running a compute shader with one or more of the workgroup sizes set to 0 implies that no work
+/// Running a compute shader with a total workgroup count of zero implies that no work
 /// should be done, and is a user error. Vulkan and DX12 accept this invalid input with grace, but
-/// Metal does not guard against this and eventually the machine will crash. Since this is a public
-/// API that may be given untrusted values in a browser, this must be protected again.
+/// Metal and some OpenGL drivers do not guard against this and eventually the machine will crash.
+/// Since this is a public  API that may be given untrusted values in a browser, this must be protected again.
 ///
 /// The following test should successfully do nothing on all platforms.
 #[gpu_test]
-static ZERO_WORKGROUP_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
+static ZERO_WORKGROUP_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().limits(wgpu::Limits::default()))
     .run_async(|ctx| async move {
         let module = ctx
