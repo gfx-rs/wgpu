@@ -146,12 +146,12 @@ pub fn gles_minor_version_from_env() -> Option<wgt::Gles3MinorVersion> {
 /// - WGPU_GLES_MINOR_VERSION
 /// If variables are missing, falls back to default or build config values
 pub fn instance_descriptor_from_env() -> wgt::InstanceDescriptor {
-    return wgt::InstanceDescriptor {
+    wgt::InstanceDescriptor {
         backends: backend_bits_from_env().unwrap_or_default(),
         flags: wgt::InstanceFlags::from_build_config().with_env(),
         dx12_shader_compiler: dx12_shader_compiler_from_env().unwrap_or_default(),
         gles_minor_version: gles_minor_version_from_env().unwrap_or_default(),
-    };
+    }
 }
 
 /// Determines whether the [`Backends::BROWSER_WEBGPU`] backend is supported.
