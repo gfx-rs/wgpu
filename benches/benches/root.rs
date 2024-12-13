@@ -1,6 +1,7 @@
 use criterion::criterion_main;
 use pollster::block_on;
 
+mod bind_groups;
 mod computepass;
 mod renderpass;
 mod resource_creation;
@@ -61,6 +62,7 @@ impl DeviceState {
 }
 
 criterion_main!(
+    bind_groups::bind_groups,
     renderpass::renderpass,
     computepass::computepass,
     resource_creation::resource_creation,
