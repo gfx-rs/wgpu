@@ -84,6 +84,25 @@ impl Device {
         ShaderModule { inner: module }
     }
 
+    /// Deprecated: Use [`create_shader_module_trusted`][csmt] instead.
+    ///
+    /// # Safety
+    ///
+    /// See [`create_shader_module_trusted`][csmt].
+    ///
+    /// [csmt]: Self::create_shader_module_trusted
+    #[deprecated(
+        since = "24.0.0",
+        note = "Use `Device::create_shader_module_trusted(desc, wgpu::ShaderRuntimeChecks::unchecked())` instead."
+    )]
+    #[must_use]
+    pub unsafe fn create_shader_module_unchecked(
+        &self,
+        desc: ShaderModuleDescriptor<'_>,
+    ) -> ShaderModule {
+        unsafe { self.create_shader_module_trusted(desc, crate::ShaderRuntimeChecks::unchecked()) }
+    }
+
     /// Creates a shader module with flags to dictate runtime checks.
     ///
     /// When running on WebGPU, this will merely call [`create_shader_module`][csm].
@@ -101,7 +120,7 @@ impl Device {
     /// [csm]: Self::create_shader_module
     /// [src]: crate::ShaderRuntimeChecks
     #[must_use]
-    pub unsafe fn create_shader_module_unchecked(
+    pub unsafe fn create_shader_module_trusted(
         &self,
         desc: ShaderModuleDescriptor<'_>,
         runtime_checks: crate::ShaderRuntimeChecks,

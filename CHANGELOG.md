@@ -53,7 +53,9 @@ By @cwfitzgerald in [#6619](https://github.com/gfx-rs/wgpu/pull/6619).
 A regression intoduced in 23.0.0 caused lifetimes of render and compute passes to be incorrectly enforced. While this is not
 a soundness issue, the intent is to move an error from runtime to compile time. This issue has been fixed and restored to the 22.0.0 behavior.
 
-### `Device::create_shader_module_unchecked` Now Has Configuration Options
+### `Device::create_shader_module_unchecked` Renamed and Now Has Configuration Options
+
+`create_shader_module_unchecked` became `create_shader_module_trusted`.
 
 This allows you to customize which exact checks are omitted so that you can get the correct balance of performance and safety for your use case. Calling the function is still unsafe, but now can be used to skip certain checks only on certain builds.
 
@@ -62,7 +64,7 @@ This also allows users to disable the workarounds in the `msl-out` backend to pr
 ```diff
 let desc: ShaderModuleDescriptor = include_wgsl!(...)
 - let module = unsafe { device.create_shader_module_unchecked(desc) };
-+ let module = unsafe { device.create_shader_module_unchecked(desc, wgpu::ShaderRuntimeChecks::unchecked()) };
++ let module = unsafe { device.create_shader_module_trusted(desc, wgpu::ShaderRuntimeChecks::unchecked()) };
 ```
 
 By @cwfitzgerald and @rudderbucky in [#6662](https://github.com/gfx-rs/wgpu/pull/6662).
