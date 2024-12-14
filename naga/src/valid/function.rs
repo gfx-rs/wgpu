@@ -1012,9 +1012,12 @@ impl super::Validator {
                 } => {
                     //Note: this code uses a lot of `FunctionError::InvalidImageStore`,
                     // and could probably be refactored.
-                    let var = match *context.get_expression(image) {
+                    let global_var;
+                    let image_ty;
+                    match *context.get_expression(image) {
                         crate::Expression::GlobalVariable(var_handle) => {
-                            &context.global_vars[var_handle]
+                            global_var = &context.global_vars[var_handle];
+                            image_ty = global_var.ty;
                         }
                         // The `image` operand is indexing into a binding array,
                         // so punch through the `Access`* expression and look at
@@ -1029,7 +1032,18 @@ impl super::Validator {
                                 )
                                 .with_span_handle(image, context.expressions));
                             };
-                            &context.global_vars[var_handle]
+                            global_var = &context.global_vars[var_handle];
+
+                            // The global variable must be a binding array.
+                            let Ti::BindingArray { base, .. } = context.types[global_var.ty].inner
+                            else {
+                                return Err(FunctionError::InvalidImageStore(
+                                    ExpressionError::ExpectedBindingArrayType(global_var.ty),
+                                )
+                                .with_span_handle(global_var.ty, context.types));
+                            };
+
+                            image_ty = base;
                         }
                         _ => {
                             return Err(FunctionError::InvalidImageStore(
@@ -1039,24 +1053,18 @@ impl super::Validator {
                         }
                     };
 
-                    // Punch through a binding array to get the underlying type.
-                    let global_ty = match context.types[var.ty].inner {
-                        Ti::BindingArray { base, .. } => &context.types[base].inner,
-                        ref inner => inner,
-                    };
-
                     // The `image` operand must be an `Image`.
                     let Ti::Image {
                         class,
                         arrayed,
                         dim,
-                    } = *global_ty
+                    } = context.types[image_ty].inner
                     else {
                         return Err(FunctionError::InvalidImageStore(
-                            ExpressionError::ExpectedImageType(var.ty),
+                            ExpressionError::ExpectedImageType(global_var.ty),
                         )
                         .with_span()
-                        .with_handle(var.ty, context.types)
+                        .with_handle(global_var.ty, context.types)
                         .with_handle(image, context.expressions));
                     };
 
