@@ -344,6 +344,7 @@ impl super::Adapter {
             shader_model >= naga::back::hlsl::ShaderModel::V5_1,
         );
 
+        // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
         features.set(
             wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
             options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
