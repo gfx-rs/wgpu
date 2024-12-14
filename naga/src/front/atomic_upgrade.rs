@@ -46,6 +46,8 @@ pub enum Error {
     GlobalInitUnsupported,
     #[error("expected to find a global variable")]
     GlobalVariableMissing,
+    #[error("atomic compare exchange requires a scalar base type")]
+    CompareExchangeNonScalarBaseType,
 }
 
 #[derive(Clone, Default)]

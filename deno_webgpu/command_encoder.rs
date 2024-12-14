@@ -133,12 +133,9 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                 Some(wgpu_core::command::RenderPassColorAttachment {
                     view: texture_view_resource.1,
                     resolve_target,
-                    channel: wgpu_core::command::PassChannel {
-                        load_op: at.load_op,
-                        store_op: at.store_op,
-                        clear_value: at.clear_value.unwrap_or_default(),
-                        read_only: false,
-                    },
+                    load_op: at.load_op,
+                    store_op: at.store_op,
+                    clear_value: at.clear_value.unwrap_or_default(),
                 })
             } else {
                 None

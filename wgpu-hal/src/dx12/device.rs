@@ -577,7 +577,9 @@ impl crate::Device for super::Device {
                 None
             },
             handle_uav: if desc.usage.intersects(
-                crate::TextureUses::STORAGE_READ_ONLY | crate::TextureUses::STORAGE_READ_WRITE,
+                crate::TextureUses::STORAGE_READ_ONLY
+                    | crate::TextureUses::STORAGE_WRITE_ONLY
+                    | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
                 match unsafe { view_desc.to_uav() } {
                     Some(raw_desc) => {

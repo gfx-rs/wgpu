@@ -85,6 +85,28 @@ fn parse_type_cast() {
 }
 
 #[test]
+fn parse_type_coercion() {
+    parse_str(
+        "
+        fn foo(bar: f32) {}
+        fn main() {
+            foo(0);
+        }
+    ",
+    )
+    .unwrap();
+    assert!(parse_str(
+        "
+        fn foo(bar: i32) {}
+        fn main() {
+            foo(0.0);
+        }
+    ",
+    )
+    .is_err());
+}
+
+#[test]
 fn parse_struct() {
     parse_str(
         "
@@ -461,7 +483,7 @@ fn binary_expression_mixed_scalar_and_vector_operands() {
 #[test]
 fn parse_pointers() {
     parse_str(
-        "fn foo(a: ptr<private, f32>) -> f32 { return *a; }
+        "fn foo(a: ptr<function, f32>) -> f32 { return *a; }
     fn bar() {
         var x: f32 = 1.0;
         let px = &x;

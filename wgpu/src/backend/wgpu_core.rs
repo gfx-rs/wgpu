@@ -404,28 +404,26 @@ fn map_store_op(op: StoreOp) -> wgc::command::StoreOp {
     }
 }
 
+fn map_load_op<V: Default>(op: LoadOp<V>) -> (wgc::command::LoadOp, V) {
+    match op {
+        LoadOp::Clear(v) => (wgc::command::LoadOp::Clear, v),
+        LoadOp::Load => (wgc::command::LoadOp::Load, V::default()),
+    }
+}
+
 fn map_pass_channel<V: Copy + Default>(
     ops: Option<&Operations<V>>,
 ) -> wgc::command::PassChannel<V> {
     match ops {
-        Some(&Operations {
-            load: LoadOp::Clear(clear_value),
-            store,
-        }) => wgc::command::PassChannel {
-            load_op: wgc::command::LoadOp::Clear,
-            store_op: map_store_op(store),
-            clear_value,
-            read_only: false,
-        },
-        Some(&Operations {
-            load: LoadOp::Load,
-            store,
-        }) => wgc::command::PassChannel {
-            load_op: wgc::command::LoadOp::Load,
-            store_op: map_store_op(store),
-            clear_value: V::default(),
-            read_only: false,
-        },
+        Some(&Operations { load, store }) => {
+            let (load_op, clear_value) = map_load_op(load);
+            wgc::command::PassChannel {
+                load_op,
+                store_op: map_store_op(store),
+                clear_value,
+                read_only: false,
+            }
+        }
         None => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Load,
             store_op: wgc::command::StoreOp::Store,
@@ -442,6 +440,9 @@ pub struct CoreSurface {
     /// Configured device is needed to know which backend
     /// code to execute when acquiring a new frame.
     configured_device: Mutex<Option<wgc::id::DeviceId>>,
+    /// The error sink with which to report errors.
+    /// `None` if the surface has not been configured.
+    error_sink: Mutex<Option<ErrorSink>>,
 }
 
 #[derive(Debug)]
@@ -827,6 +828,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             context: self.clone(),
             id,
             configured_device: Mutex::default(),
+            error_sink: Mutex::default(),
         }))
     }
 
@@ -2245,12 +2247,16 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             .color_attachments
             .iter()
             .map(|ca| {
-                ca.as_ref()
-                    .map(|at| wgc::command::RenderPassColorAttachment {
+                ca.as_ref().map(|at| {
+                    let (load_op, clear_value) = map_load_op(at.ops.load);
+                    wgc::command::RenderPassColorAttachment {
                         view: at.view.inner.as_core().id,
                         resolve_target: at.resolve_target.map(|view| view.inner.as_core().id),
-                        channel: map_pass_channel(Some(&at.ops)),
-                    })
+                        load_op,
+                        store_op: map_store_op(at.ops.store),
+                        clear_value,
+                    }
+                })
             })
             .collect::<Vec<_>>();
 
@@ -3435,9 +3441,11 @@ impl dispatch::SurfaceInterface for CoreSurface {
 
         let error = self.context.0.surface_configure(self.id, device.id, config);
         if let Some(e) = error {
-            self.context.handle_error_fatal(e, "Surface::configure");
+            self.context
+                .handle_error_nolabel(&device.error_sink, e, "Surface::configure");
         } else {
             *self.configured_device.lock() = Some(device.id);
+            *self.error_sink.lock() = Some(device.error_sink.clone());
         }
     }
 
@@ -3448,6 +3456,12 @@ impl dispatch::SurfaceInterface for CoreSurface {
         crate::SurfaceStatus,
         dispatch::DispatchSurfaceOutputDetail,
     ) {
+        let output_detail = CoreSurfaceOutputDetail {
+            context: self.context.clone(),
+            surface_id: self.id,
+        }
+        .into();
+
         match self.context.0.surface_get_current_texture(self.id, None) {
             Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
                 let data = texture_id
@@ -3458,19 +3472,24 @@ impl dispatch::SurfaceInterface for CoreSurface {
                     })
                     .map(Into::into);
 
-                (
-                    data,
-                    status,
-                    CoreSurfaceOutputDetail {
-                        context: self.context.clone(),
-                        surface_id: self.id,
-                    }
-                    .into(),
-                )
+                (data, status, output_detail)
             }
-            Err(err) => self
-                .context
-                .handle_error_fatal(err, "Surface::get_current_texture_view"),
+            Err(err) => {
+                let error_sink = self.error_sink.lock();
+                match error_sink.as_ref() {
+                    Some(error_sink) => {
+                        self.context.handle_error_nolabel(
+                            error_sink,
+                            err,
+                            "Surface::get_current_texture_view",
+                        );
+                        (None, crate::SurfaceStatus::Unknown, output_detail)
+                    }
+                    None => self
+                        .context
+                        .handle_error_fatal(err, "Surface::get_current_texture_view"),
+                }
+            }
         }
     }
 }

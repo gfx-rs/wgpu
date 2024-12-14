@@ -331,17 +331,26 @@ impl<A: hal::Api> Example<A> {
         {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: &staging_buffer,
-                usage: hal::BufferUses::empty()..hal::BufferUses::COPY_SRC,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::empty(),
+                    to: hal::BufferUses::COPY_SRC,
+                },
             };
             let texture_barrier1 = hal::TextureBarrier {
                 texture: &texture,
                 range: wgt::ImageSubresourceRange::default(),
-                usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COPY_DST,
+                usage: hal::StateTransition {
+                    from: hal::TextureUses::UNINITIALIZED,
+                    to: hal::TextureUses::COPY_DST,
+                },
             };
             let texture_barrier2 = hal::TextureBarrier {
                 texture: &texture,
                 range: wgt::ImageSubresourceRange::default(),
-                usage: hal::TextureUses::COPY_DST..hal::TextureUses::RESOURCE,
+                usage: hal::StateTransition {
+                    from: hal::TextureUses::COPY_DST,
+                    to: hal::TextureUses::RESOURCE,
+                },
             };
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgt::TexelCopyBufferLayout {
@@ -665,7 +674,10 @@ impl<A: hal::Api> Example<A> {
         let target_barrier0 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COLOR_TARGET,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::UNINITIALIZED,
+                to: hal::TextureUses::COLOR_TARGET,
+            },
         };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
@@ -732,7 +744,10 @@ impl<A: hal::Api> Example<A> {
         let target_barrier1 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::PRESENT,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::COLOR_TARGET,
+                to: hal::TextureUses::PRESENT,
+            },
         };
         unsafe {
             ctx.encoder.end_render_pass();

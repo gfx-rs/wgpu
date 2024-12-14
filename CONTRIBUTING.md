@@ -16,11 +16,11 @@ The WGPU project has multiple official platforms for community engagement:
   is dedicated to informal chat about contributions the project. It is
   particularly useful for:
 
-  - …saying hello, and introducing yourself.
-  - …validating contributions (i.e., determining if they'll be accepted,
+  - Saying hello, and introducing yourself.
+  - Validating contributions (i.e., determining if they'll be accepted,
     ensuring your approach is correct, making sure you aren't wasting effort,
     etc.).
-  - …setting expectations for contributions.
+  - Setting expectations for contributions.
 
   Notification in Matrix can sometimes be unreliable. Feel free to explicitly
   tag people from whom you would like attention, esp. to follow-up after a day
@@ -41,12 +41,23 @@ The WGPU project has multiple official platforms for community engagement:
 
 - [GitHub pull requests]: Modifications to the contents of this repository are
   done through pull requests.
+- `wgpu` Maintainership Meetings: Every week, the maintainership of the wgpu
+  project meets to discuss the project's direction and review ongoing work.
+  These meetings are open to the public, and you are welcome to attend. They
+  happen on Google Meet and happen on Wednesday at 16:00 UTC and last approximately
+  an hour. Remember to obey the [`CODE_OF_CONDUCT.md`] in the meeting.
+  - [Meeting Notes]
+  - [Meeting Link]
 - [GitHub discussions]: TODO: Experimentally used by some enthusiastic members
   of our community. Not supported officially.
+  
 
 [GitHub discussions]: https://github.com/gfx-rs/wgpu/discussions
 [GitHub issues]: https://github.com/gfx-rs/wgpu/issues
 [GitHub pull requests]: https://github.com/gfx-rs/wgpu/pulls
+[Meeting Notes]: https://docs.google.com/document/d/1Z3qjy3m7eAYaTsh2n-iKxLV4Hjc6wZxgukzdQOgVH1c/edit?usp=sharing
+[Meeting Link]: https://meet.google.com/ubo-ztcw-gwf
+[`CODE_OF_CONDUCT.md`]: ./CODE_OF_CONDUCT.md
 
 ## Contributing to WGPU
 

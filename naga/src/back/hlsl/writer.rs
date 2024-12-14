@@ -988,6 +988,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::ArraySize::Constant(size) => {
                 write!(self.out, "{size}")?;
             }
+            crate::ArraySize::Pending(_) => unreachable!(),
             crate::ArraySize::Dynamic => unreachable!(),
         }
 
@@ -2634,6 +2635,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             index::IndexableLength::Known(limit) => {
                                 write!(self.out, "{}u", limit - 1)?;
                             }
+                            index::IndexableLength::Pending => unreachable!(),
                             index::IndexableLength::Dynamic => unreachable!(),
                         }
                         write!(self.out, ")")?;

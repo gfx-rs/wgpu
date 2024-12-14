@@ -672,16 +672,20 @@ impl crate::Adapter for super::Adapter {
         );
         // UAVs use srv_uav_format
         caps.set(
-            Tfc::STORAGE_WRITE_ONLY,
-            data_srv_uav
-                .Support1
-                .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW),
-        );
-        caps.set(
-            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_WRITE_ONLY,
+            Tfc::STORAGE_READ_ONLY,
             data_srv_uav
                 .Support2
                 .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD),
+        );
+        caps.set(
+            Tfc::STORAGE_WRITE_ONLY,
+            data_srv_uav
+                .Support2
+                .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE),
+        );
+        caps.set(
+            Tfc::STORAGE_READ_WRITE,
+            caps.contains(Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_WRITE_ONLY),
         );
 
         // We load via UAV/SRV so use srv_uav_format

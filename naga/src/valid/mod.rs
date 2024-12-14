@@ -332,6 +332,8 @@ pub enum ValidationError {
         handle: Handle<crate::Expression>,
         source: ConstExpressionError,
     },
+    #[error("Array size expression {handle:?} is not strictly positive")]
+    ArraySizeError { handle: Handle<crate::Expression> },
     #[error("Constant {handle:?} '{name}' is invalid")]
     Constant {
         handle: Handle<crate::Constant>,
@@ -612,6 +614,20 @@ impl Validator {
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
+            if !self.allow_overrides {
+                if let crate::TypeInner::Array {
+                    size: crate::ArraySize::Pending(_),
+                    ..
+                } = ty.inner
+                {
+                    return Err((ValidationError::Type {
+                        handle,
+                        name: ty.name.clone().unwrap_or_default(),
+                        source: TypeError::UnresolvedOverride(handle),
+                    })
+                    .with_span_handle(handle, &module.types));
+                }
+            }
             mod_info.type_flags.push(ty_info.flags);
             self.types[handle.index()] = ty_info;
         }

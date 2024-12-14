@@ -636,11 +636,17 @@ impl Buffer {
                     });
                     let transition_src = hal::BufferBarrier {
                         buffer: staging_buffer.raw(),
-                        usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                        usage: hal::StateTransition {
+                            from: hal::BufferUses::MAP_WRITE,
+                            to: hal::BufferUses::COPY_SRC,
+                        },
                     };
                     let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: raw_buf,
-                        usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                        usage: hal::StateTransition {
+                            from: hal::BufferUses::empty(),
+                            to: hal::BufferUses::COPY_DST,
+                        },
                     };
                     let mut pending_writes = queue.pending_writes.lock();
                     let encoder = pending_writes.activate();

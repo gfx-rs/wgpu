@@ -1225,9 +1225,7 @@ impl super::Queue {
                     flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::BufferUses::STORAGE_READ_ONLY
-                        | crate::BufferUses::STORAGE_WRITE_ONLY
-                        | crate::BufferUses::STORAGE_READ_WRITE,
+                    crate::BufferUses::STORAGE_READ_ONLY | crate::BufferUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_STORAGE_BARRIER_BIT;
                 }

@@ -289,8 +289,10 @@ impl Global {
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
-            usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH
-                ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            usage: hal::StateTransition {
+                from: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                to: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            },
         };
 
         let mut tlas_descriptors = Vec::new();
@@ -343,8 +345,10 @@ impl Global {
 
                 cmd_buf_raw.place_acceleration_structure_barrier(
                     hal::AccelerationStructureBarrier {
-                        usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                            ..hal::AccelerationStructureUses::SHADER_INPUT,
+                        usage: hal::StateTransition {
+                            from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                            to: hal::AccelerationStructureUses::SHADER_INPUT,
+                        },
                     },
                 );
             }
@@ -629,8 +633,10 @@ impl Global {
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
-            usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH
-                ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            usage: hal::StateTransition {
+                from: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                to: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            },
         };
 
         let mut tlas_descriptors = Vec::with_capacity(tlas_storage.len());
@@ -703,7 +709,10 @@ impl Global {
                 if let Some(ref staging_buffer) = staging_buffer {
                     cmd_buf_raw.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: staging_buffer.raw(),
-                        usage: BufferUses::MAP_WRITE..BufferUses::COPY_SRC,
+                        usage: hal::StateTransition {
+                            from: BufferUses::MAP_WRITE,
+                            to: BufferUses::COPY_SRC,
+                        },
                     }]);
                 }
             }
@@ -720,12 +729,18 @@ impl Global {
                 };
                 instance_buffer_barriers.push(hal::BufferBarrier::<dyn hal::DynBuffer> {
                     buffer: tlas.instance_buffer.as_ref(),
-                    usage: BufferUses::COPY_DST..BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    usage: hal::StateTransition {
+                        from: BufferUses::COPY_DST,
+                        to: BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    },
                 });
                 unsafe {
                     cmd_buf_raw.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: tlas.instance_buffer.as_ref(),
-                        usage: BufferUses::MAP_READ..BufferUses::COPY_DST,
+                        usage: hal::StateTransition {
+                            from: BufferUses::MAP_READ,
+                            to: BufferUses::COPY_DST,
+                        },
                     }]);
                     let temp = hal::BufferCopy {
                         src_offset: range.start as u64,
@@ -749,8 +764,10 @@ impl Global {
 
                 cmd_buf_raw.place_acceleration_structure_barrier(
                     hal::AccelerationStructureBarrier {
-                        usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                            ..hal::AccelerationStructureUses::SHADER_INPUT,
+                        usage: hal::StateTransition {
+                            from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                            to: hal::AccelerationStructureUses::SHADER_INPUT,
+                        },
                     },
                 );
             }
@@ -1275,8 +1292,10 @@ fn build_blas<'a>(
     if blas_present {
         unsafe {
             cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::AccelerationStructureUses::BUILD_INPUT
-                    ..hal::AccelerationStructureUses::BUILD_OUTPUT,
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::BUILD_INPUT,
+                    to: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                },
             });
 
             cmd_buf_raw.build_acceleration_structures(blas_descriptors);
@@ -1301,7 +1320,10 @@ fn build_blas<'a>(
     }
     unsafe {
         cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-            usage: source_usage..destination_usage,
+            usage: hal::StateTransition {
+                from: source_usage,
+                to: destination_usage,
+            },
         });
     }
 }

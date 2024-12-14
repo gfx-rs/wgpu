@@ -271,6 +271,9 @@ impl BlockContext<'_> {
             Ok(crate::proc::IndexableLength::Known(known_length)) => {
                 Ok(MaybeKnown::Known(known_length))
             }
+            Ok(crate::proc::IndexableLength::Pending) => {
+                unreachable!()
+            }
             Ok(crate::proc::IndexableLength::Dynamic) => {
                 let length_id = self.write_runtime_array_length(sequence, block)?;
                 Ok(MaybeKnown::Computed(length_id))
