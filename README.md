@@ -251,3 +251,6 @@ wgpu uses the coordinate systems of D3D and Metal:
 | Render                                              | Texture                                               |
 | --------------------------------------------------- | ----------------------------------------------------- |
 | ![render_coordinates](./etc/render_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png) |
+
+## Ray Tracing Extensions
+See [the ray tracing documentation](./etc/ray_tracing.md).
