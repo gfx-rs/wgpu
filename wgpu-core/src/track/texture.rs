@@ -429,10 +429,9 @@ impl TextureTracker {
     }
 
     /// Returns a list of all textures tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<Texture>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture>> + '_ {
         self.metadata.owned_resources()
     }
-
     /// Drain all currently pending transitions.
     pub fn drain_transitions<'a>(
         &'a mut self,
@@ -672,7 +671,7 @@ impl DeviceTextureTracker {
     }
 
     /// Returns a list of all textures tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Weak<Texture>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Weak<Texture>> + '_ {
         self.metadata.owned_resources()
     }
 

@@ -311,7 +311,7 @@ impl BufferTracker {
     }
 
     /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<Buffer>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer>> + '_ {
         self.metadata.owned_resources()
     }
 
@@ -559,7 +559,7 @@ impl DeviceBufferTracker {
     }
 
     /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Weak<Buffer>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Weak<Buffer>> + '_ {
         self.metadata.owned_resources()
     }
 
