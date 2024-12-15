@@ -1,18 +1,20 @@
-use wgpu::{BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, include_wgsl};
-use wgpu_macros::gpu_test;
-use wgpu_test::{GpuTestConfiguration, TestingContext, TestParameters};
-use wgt::BufferUsages;
 use crate::ray_tracing::AsBuildContext;
+use wgpu::{
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+};
+use wgpu_macros::gpu_test;
+use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
+use wgt::BufferUsages;
 
 const STRUCT_SIZE: wgt::BufferAddress = 176;
 
 #[gpu_test]
 static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE | wgpu::Features::EXPERIMENTAL_RAY_QUERY),
-    )
+    .parameters(TestParameters::default().test_features_limits().features(
+        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+            | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
+    ))
     .run_sync(access_all_struct_members);
 
 fn access_all_struct_members(ctx: TestingContext) {
@@ -48,10 +50,8 @@ fn access_all_struct_members(ctx: TestingContext) {
 
     encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
 
-    ctx.queue.submit([
-        encoder_blas.finish(),
-        encoder_tlas.finish(),
-    ]);
+    ctx.queue
+        .submit([encoder_blas.finish(), encoder_tlas.finish()]);
 
     //
     // Create shader to use tlas with
@@ -76,13 +76,13 @@ fn access_all_struct_members(ctx: TestingContext) {
         layout: &compute_pipeline.get_bind_group_layout(0),
         entries: &[
             BindGroupEntry {
-            binding: 0,
-            resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
-        },
+                binding: 0,
+                resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+            },
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::Buffer(buf.as_entire_buffer_binding()),
-            }
+            },
         ],
     });
 

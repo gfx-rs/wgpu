@@ -1,8 +1,8 @@
 use std::iter;
 
+use crate::ray_tracing::AsBuildContext;
 use wgpu::*;
 use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
-use crate::ray_tracing::AsBuildContext;
 
 #[gpu_test]
 static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()

@@ -1,8 +1,15 @@
 use std::mem;
-use wgpu::{Blas, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, CreateBlasDescriptor, CreateTlasDescriptor, TlasInstance, TlasPackage, util::DeviceExt};
 use wgpu::util::BufferInitDescriptor;
+use wgpu::{
+    util::DeviceExt, Blas, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
+    BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, CreateBlasDescriptor,
+    CreateTlasDescriptor, TlasInstance, TlasPackage,
+};
 use wgpu_test::TestingContext;
-use wgt::{AccelerationStructureFlags, AccelerationStructureGeometryFlags, AccelerationStructureUpdateMode, BufferAddress, BufferUsages, VertexFormat};
+use wgt::{
+    AccelerationStructureFlags, AccelerationStructureGeometryFlags,
+    AccelerationStructureUpdateMode, BufferAddress, BufferUsages, VertexFormat,
+};
 
 mod as_build;
 mod as_create;
