@@ -57,6 +57,17 @@ intersection.
 
 *The API to commit a candidate intersection is not yet implemented but would be possible to be user implemented.
 
+Undefined behavior*:
+- Calling `rayQueryGetCommittedIntersection` or `rayQueryGetCandidateIntersection` when `rayQueryProceed` has not been
+called on this ray query since it was initialized (or if the ray query has not been previously initialized).
+- Calling `rayQueryGetCommittedIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
+  `Candidate`. 
+- Calling `rayQueryGetCandidateIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
+  `Committed`.
+- Calling `rayQueryProceed` when `rayQueryInitialize` has not previously been called on this ray query
+
+*this is only known undefined behaviour.
+
 Structure definitions:
 ````wgsl
 struct RayDesc {
