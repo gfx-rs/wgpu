@@ -69,7 +69,7 @@ called on this ray query since it was initialized (or if the ray query has not b
   `Committed`.
 - Calling `rayQueryProceed` when `rayQueryInitialize` has not previously been called on this ray query
 
-*this is only known undefined behaviour.
+*this is only known undefined behaviour, and will be worked around in the future.
 
 Structure definitions:
 ````wgsl
