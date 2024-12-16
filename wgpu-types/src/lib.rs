@@ -559,7 +559,6 @@ bitflags::bitflags! {
         /// - `buffer myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// Supported platforms:
-        /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.

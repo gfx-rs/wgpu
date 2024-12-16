@@ -268,16 +268,7 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
-        let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
-        let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
-
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends,
-            flags: wgpu::InstanceFlags::from_build_config().with_env(),
-            dx12_shader_compiler,
-            gles_minor_version,
-        });
+        let instance = wgpu::Instance::new(wgpu::util::instance_descriptor_from_env());
         surface.pre_adapter(&instance, window);
 
         let adapter = get_adapter_with_capabilities_or_from_env(
