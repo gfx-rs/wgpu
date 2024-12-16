@@ -377,12 +377,6 @@ const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v3,
 ];
 
-const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
-];
-
 const MUTABLE_COMPARISON_SAMPLER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
@@ -610,7 +604,7 @@ impl super::PrivateCapabilities {
             },
             msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT),
+            argument_buffers: device.argument_buffers_support(),
             shared_textures: !os_is_mac,
             mutable_comparison_samplers: Self::supports_any(
                 device,
@@ -905,18 +899,12 @@ impl super::PrivateCapabilities {
         features.set(
             F::TEXTURE_BINDING_ARRAY
                 | F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            self.msl_version >= MTLLanguageVersion::V2_0 && self.supports_arrays_of_textures,
+                | F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | F::PARTIALLY_BOUND_BINDING_ARRAY,
+            self.msl_version >= MTLLanguageVersion::V3_0
+                && self.supports_arrays_of_textures
+                && self.argument_buffers as u64 >= metal::MTLArgumentBuffersTier::Tier2 as u64,
         );
-        //// XXX: this is technically not true, as read-only storage images can be used in arrays
-        //// on precisely the same conditions that sampled textures can. But texel fetch from a
-        //// sampled texture is a thing; should we bother introducing another feature flag?
-        if self.msl_version >= MTLLanguageVersion::V2_2
-            && self.supports_arrays_of_textures
-            && self.supports_arrays_of_textures_write
-        {
-            features.insert(F::STORAGE_RESOURCE_BINDING_ARRAY);
-        }
         features.set(
             F::SHADER_INT64,
             self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
