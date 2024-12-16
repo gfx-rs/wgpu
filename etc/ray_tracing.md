@@ -42,12 +42,20 @@ Function definitions:
 - Returns false if all triangles that were hit by the ray were in `Blas`es that were marked as opaque.
 - The hit is considered `Candidate` if this function returns true, and the hit is considered `Committed` if
   this function returns false.
+- A `Candidate` intersection interrupts the ray traversal.
+- A `Candidate` intersection may happen anywhere along the ray, it should not be relied on to give the closest hit. A 
+`Candidate` intersection is to allow the user themselves to decide if that intersection is valid*. If one wants to get
+the closest hit a `Committed` intersection should be used.
+- Calling this function multiple times will cause the ray traversal to continue if it was interrupted by a `Candidate`
+intersection.
 
 `rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection`
 - Returns intersection details about a hit considered `Committed`.
 
 `rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersection`
 - Returns intersection details about a hit considered `Candidate`.
+
+*The API to commit a candidate intersection is not yet implemented but would be possible to be user implemented.
 
 Structure definitions:
 ````wgsl
