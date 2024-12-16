@@ -192,6 +192,10 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> metal::MTLVertexFormat {
     use wgt::VertexFormat as Vf;
 
     match format {
+        Vf::Unorm8 => UCharNormalized,
+        Vf::Snorm8 => CharNormalized,
+        Vf::Uint8 => UChar,
+        Vf::Sint8 => Char,
         Vf::Unorm8x2 => UChar2Normalized,
         Vf::Snorm8x2 => Char2Normalized,
         Vf::Uint8x2 => UChar2,
@@ -200,6 +204,11 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> metal::MTLVertexFormat {
         Vf::Snorm8x4 => Char4Normalized,
         Vf::Uint8x4 => UChar4,
         Vf::Sint8x4 => Char4,
+        Vf::Unorm16 => UShortNormalized,
+        Vf::Snorm16 => ShortNormalized,
+        Vf::Uint16 => UShort,
+        Vf::Sint16 => Short,
+        Vf::Float16 => Half,
         Vf::Unorm16x2 => UShort2Normalized,
         Vf::Snorm16x2 => Short2Normalized,
         Vf::Uint16x2 => UShort2,
@@ -223,6 +232,7 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> metal::MTLVertexFormat {
         Vf::Sint32x4 => Int4,
         Vf::Float32x4 => Float4,
         Vf::Unorm10_10_10_2 => UInt1010102Normalized,
+        Vf::Unorm8x4Bgra => UChar4Normalized_BGRA,
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
 }

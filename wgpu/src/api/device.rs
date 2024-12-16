@@ -62,7 +62,7 @@ impl Device {
         self.inner.limits()
     }
 
-    /// Creates a shader module from either SPIR-V or WGSL source code.
+    /// Creates a shader module.
     ///
     /// <div class="warning">
     // NOTE: Keep this in sync with `naga::front::wgsl::parse_str`!
@@ -80,28 +80,52 @@ impl Device {
     pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
         let module = self
             .inner
-            .create_shader_module(desc, wgt::ShaderBoundChecks::new());
+            .create_shader_module(desc, wgt::ShaderRuntimeChecks::checked());
         ShaderModule { inner: module }
     }
 
-    /// Creates a shader module from either SPIR-V or WGSL source code without runtime checks.
+    /// Deprecated: Use [`create_shader_module_trusted`][csmt] instead.
     ///
     /// # Safety
-    /// In contrast with [`create_shader_module`](Self::create_shader_module) this function
-    /// creates a shader module without runtime checks which allows shaders to perform
-    /// operations which can lead to undefined behavior like indexing out of bounds, thus it's
-    /// the caller responsibility to pass a shader which doesn't perform any of this
-    /// operations.
     ///
-    /// This has no effect on web.
+    /// See [`create_shader_module_trusted`][csmt].
+    ///
+    /// [csmt]: Self::create_shader_module_trusted
+    #[deprecated(
+        since = "24.0.0",
+        note = "Use `Device::create_shader_module_trusted(desc, wgpu::ShaderRuntimeChecks::unchecked())` instead."
+    )]
     #[must_use]
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor<'_>,
     ) -> ShaderModule {
-        let module = self
-            .inner
-            .create_shader_module(desc, unsafe { wgt::ShaderBoundChecks::unchecked() });
+        unsafe { self.create_shader_module_trusted(desc, crate::ShaderRuntimeChecks::unchecked()) }
+    }
+
+    /// Creates a shader module with flags to dictate runtime checks.
+    ///
+    /// When running on WebGPU, this will merely call [`create_shader_module`][csm].
+    ///
+    /// # Safety
+    ///
+    /// In contrast with [`create_shader_module`][csm] this function
+    /// creates a shader module with user-customizable runtime checks which allows shaders to
+    /// perform operations which can lead to undefined behavior like indexing out of bounds,
+    /// thus it's the caller responsibility to pass a shader which doesn't perform any of this
+    /// operations.
+    ///
+    /// See the documentation for [`ShaderRuntimeChecks`][src] for more information about specific checks.
+    ///
+    /// [csm]: Self::create_shader_module
+    /// [src]: crate::ShaderRuntimeChecks
+    #[must_use]
+    pub unsafe fn create_shader_module_trusted(
+        &self,
+        desc: ShaderModuleDescriptor<'_>,
+        runtime_checks: crate::ShaderRuntimeChecks,
+    ) -> ShaderModule {
+        let module = self.inner.create_shader_module(desc, runtime_checks);
         ShaderModule { inner: module }
     }
 

@@ -235,6 +235,10 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> Dxgi::Common::DXGI_FORMAT
     use Dxgi::Common::*;
 
     match format {
+        Vf::Unorm8 => DXGI_FORMAT_R8_UNORM,
+        Vf::Snorm8 => DXGI_FORMAT_R8_SNORM,
+        Vf::Uint8 => DXGI_FORMAT_R8_UINT,
+        Vf::Sint8 => DXGI_FORMAT_R8_SINT,
         Vf::Unorm8x2 => DXGI_FORMAT_R8G8_UNORM,
         Vf::Snorm8x2 => DXGI_FORMAT_R8G8_SNORM,
         Vf::Uint8x2 => DXGI_FORMAT_R8G8_UINT,
@@ -243,6 +247,11 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> Dxgi::Common::DXGI_FORMAT
         Vf::Snorm8x4 => DXGI_FORMAT_R8G8B8A8_SNORM,
         Vf::Uint8x4 => DXGI_FORMAT_R8G8B8A8_UINT,
         Vf::Sint8x4 => DXGI_FORMAT_R8G8B8A8_SINT,
+        Vf::Unorm16 => DXGI_FORMAT_R16_UNORM,
+        Vf::Snorm16 => DXGI_FORMAT_R16_SNORM,
+        Vf::Uint16 => DXGI_FORMAT_R16_UINT,
+        Vf::Sint16 => DXGI_FORMAT_R16_SINT,
+        Vf::Float16 => DXGI_FORMAT_R16_FLOAT,
         Vf::Unorm16x2 => DXGI_FORMAT_R16G16_UNORM,
         Vf::Snorm16x2 => DXGI_FORMAT_R16G16_SNORM,
         Vf::Uint16x2 => DXGI_FORMAT_R16G16_UINT,
@@ -266,6 +275,7 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> Dxgi::Common::DXGI_FORMAT
         Vf::Sint32x4 => DXGI_FORMAT_R32G32B32A32_SINT,
         Vf::Float32x4 => DXGI_FORMAT_R32G32B32A32_FLOAT,
         Vf::Unorm10_10_10_2 => DXGI_FORMAT_R10G10B10A2_UNORM,
+        Vf::Unorm8x4Bgra => DXGI_FORMAT_B8G8R8A8_UNORM,
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
 }

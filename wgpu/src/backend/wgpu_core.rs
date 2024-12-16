@@ -418,15 +418,15 @@ fn map_pass_channel<V: Copy + Default>(
         Some(&Operations { load, store }) => {
             let (load_op, clear_value) = map_load_op(load);
             wgc::command::PassChannel {
-                load_op,
-                store_op: map_store_op(store),
+                load_op: Some(load_op),
+                store_op: Some(map_store_op(store)),
                 clear_value,
                 read_only: false,
             }
         }
         None => wgc::command::PassChannel {
-            load_op: wgc::command::LoadOp::Load,
-            store_op: wgc::command::StoreOp::Store,
+            load_op: None,
+            store_op: None,
             clear_value: V::default(),
             read_only: true,
         },
@@ -969,11 +969,11 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_shader_module(
         &self,
         desc: crate::ShaderModuleDescriptor<'_>,
-        shader_bound_checks: wgt::ShaderBoundChecks,
+        shader_bound_checks: wgt::ShaderRuntimeChecks,
     ) -> dispatch::DispatchShaderModule {
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
-            shader_bound_checks,
+            runtime_checks: shader_bound_checks,
         };
         let source = match desc.source {
             #[cfg(feature = "spirv")]
@@ -1034,7 +1034,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             label: desc.label.map(Borrowed),
             // Doesn't matter the value since spirv shaders aren't mutated to include
             // runtime checks
-            shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
+            runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
         };
         let (id, error) = unsafe {
             self.context.0.device_create_shader_module_spirv(

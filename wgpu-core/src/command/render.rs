@@ -102,15 +102,15 @@ impl StoreOp {
 #[repr(C)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PassChannel<V> {
+pub struct PassChannel<V, L = Option<LoadOp>, S = Option<StoreOp>> {
     /// Operation to perform to the output attachment at the start of a
     /// renderpass.
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: LoadOp,
+    pub load_op: L,
     /// Operation to perform to the output attachment at the end of a renderpass.
-    pub store_op: StoreOp,
+    pub store_op: S,
     /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
     /// color.
     pub clear_value: V,
@@ -120,9 +120,49 @@ pub struct PassChannel<V> {
     pub read_only: bool,
 }
 
-impl<V> PassChannel<V> {
+impl<V> PassChannel<V, LoadOp, StoreOp> {
     fn hal_ops(&self) -> hal::AttachmentOps {
         self.load_op.hal_ops() | self.store_op.hal_ops()
+    }
+}
+
+impl<V: Default> Default for PassChannel<V, LoadOp, StoreOp> {
+    fn default() -> Self {
+        PassChannel {
+            load_op: LoadOp::Load,
+            store_op: StoreOp::Store,
+            clear_value: V::default(),
+            read_only: false,
+        }
+    }
+}
+
+impl<V: Copy> PassChannel<V, Option<LoadOp>, Option<StoreOp>> {
+    fn resolve(&self) -> Result<PassChannel<V, LoadOp, StoreOp>, AttachmentError> {
+        let load_op = if self.read_only {
+            if self.load_op.is_some() {
+                return Err(AttachmentError::ReadOnlyWithLoad);
+            } else {
+                LoadOp::Load
+            }
+        } else {
+            self.load_op.ok_or(AttachmentError::NoLoad)?
+        };
+        let store_op = if self.read_only {
+            if self.store_op.is_some() {
+                return Err(AttachmentError::ReadOnlyWithStore);
+            } else {
+                StoreOp::Store
+            }
+        } else {
+            self.store_op.ok_or(AttachmentError::NoStore)?
+        };
+        Ok(PassChannel {
+            load_op,
+            store_op,
+            clear_value: self.clear_value,
+            read_only: self.read_only,
+        })
     }
 }
 
@@ -176,9 +216,9 @@ pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
     /// What operations will be performed on the depth part of the attachment.
-    pub depth: PassChannel<f32>,
+    pub depth: PassChannel<f32, Option<LoadOp>, Option<StoreOp>>,
     /// What operations will be performed on the stencil part of the attachment.
-    pub stencil: PassChannel<u32>,
+    pub stencil: PassChannel<u32, Option<LoadOp>, Option<StoreOp>>,
 }
 /// Describes a depth/stencil attachment to a render pass.
 #[derive(Debug)]
@@ -186,9 +226,9 @@ pub struct ArcRenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: Arc<TextureView>,
     /// What operations will be performed on the depth part of the attachment.
-    pub depth: PassChannel<f32>,
+    pub depth: PassChannel<f32, LoadOp, StoreOp>,
     /// What operations will be performed on the stencil part of the attachment.
-    pub stencil: PassChannel<u32>,
+    pub stencil: PassChannel<u32, LoadOp, StoreOp>,
 }
 
 impl ArcRenderPassDepthStencilAttachment {
@@ -596,6 +636,21 @@ pub enum ColorAttachmentError {
     TooManyBytesPerSample { total: u32, limit: u32 },
 }
 
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum AttachmentError {
+    #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-or-stencil format")]
+    InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
+    #[error("Read-only attachment with load")]
+    ReadOnlyWithLoad,
+    #[error("Read-only attachment with store")]
+    ReadOnlyWithStore,
+    #[error("Attachment without load")]
+    NoLoad,
+    #[error("Attachment without store")]
+    NoStore,
+}
+
 /// Error encountered when performing a render pass.
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassErrorInner {
@@ -607,8 +662,6 @@ pub enum RenderPassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
-    #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
-    InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
     UnsupportedResolveTargetFormat {
         location: AttachmentErrorLocation,
@@ -935,16 +988,10 @@ impl<'d> RenderPassInfo<'d> {
 
         if let Some(at) = depth_stencil_attachment.as_ref() {
             let view = &at.view;
-            view.same_device(device)?;
             check_multiview(view)?;
             add_view(view, AttachmentErrorLocation::Depth)?;
 
             let ds_aspects = view.desc.aspects();
-            if ds_aspects.contains(hal::FormatAspects::COLOR) {
-                return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
-                    view.desc.format,
-                ));
-            }
 
             if !ds_aspects.contains(hal::FormatAspects::STENCIL)
                 || (at.stencil.load_op == at.depth.load_op
@@ -1414,14 +1461,30 @@ impl Global {
             }
 
             arc_desc.depth_stencil_attachment =
+            // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
                     let view = texture_views.get(depth_stencil_attachment.view).get()?;
                     view.same_device(device)?;
 
+                    let format = view.desc.format;
+                    if !format.is_depth_stencil_format() {
+                        return Err(CommandEncoderError::InvalidAttachment(AttachmentError::InvalidDepthStencilAttachmentFormat(
+                            view.desc.format,
+                        )));
+                    }
+
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
-                        depth: depth_stencil_attachment.depth.clone(),
-                        stencil: depth_stencil_attachment.stencil.clone(),
+                        depth: if format.has_depth_aspect() {
+                            depth_stencil_attachment.depth.resolve()?
+                        } else {
+                            Default::default()
+                        },
+                        stencil: if format.has_stencil_aspect() {
+                            depth_stencil_attachment.stencil.resolve()?
+                        } else {
+                            Default::default()
+                        },
                     })
                 } else {
                     None

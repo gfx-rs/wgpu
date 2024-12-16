@@ -59,6 +59,22 @@ a soundness issue, the intent is to move an error from runtime to compile time. 
 
 [D3D12 Feature Table]: https://d3d12infodb.boolka.dev/FeatureTable.html
 
+### `Device::create_shader_module_unchecked` Renamed and Now Has Configuration Options
+
+`create_shader_module_unchecked` became `create_shader_module_trusted`.
+
+This allows you to customize which exact checks are omitted so that you can get the correct balance of performance and safety for your use case. Calling the function is still unsafe, but now can be used to skip certain checks only on certain builds.
+
+This also allows users to disable the workarounds in the `msl-out` backend to prevent the compiler from optimizing infinite loops. This can have a big impact on performance, but is not recommended for untrusted shaders.
+
+```diff
+let desc: ShaderModuleDescriptor = include_wgsl!(...)
+- let module = unsafe { device.create_shader_module_unchecked(desc) };
++ let module = unsafe { device.create_shader_module_trusted(desc, wgpu::ShaderRuntimeChecks::unchecked()) };
+```
+
+By @cwfitzgerald and @rudderbucky in [#6662](https://github.com/gfx-rs/wgpu/pull/6662).
+
 ### The `diagnostic(…);` directive is now supported in WGSL
 
 Naga now parses `diagnostic(…);` directives according to the WGSL spec. This allows users to control certain lints, similar to Rust's `allow`, `warn`, and `deny` attributes. For example, in standard WGSL (but, notably, not Naga yet—see <https://github.com/gfx-rs/wgpu/issues/4369>) this snippet would emit a uniformity error:
@@ -120,6 +136,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Implement `quantizeToF16()` for WGSL frontend, and WGSL, SPIR-V, HLSL, MSL, and GLSL backends. By @jamienicol in [#6519](https://github.com/gfx-rs/wgpu/pull/6519).
 - Add support for GLSL `usampler*` and `isampler*`. By @DavidPeicho in [#6513](https://github.com/gfx-rs/wgpu/pull/6513).
 - Expose Ray Query flags as constants in WGSL. Implement candidate intersections. By @kvark in [#5429](https://github.com/gfx-rs/wgpu/pull/5429)
+- Add new vertex formats (`{U,S}{int,norm}{8,16}`, `Float16` and `Unorm8x4Bgra`). By @nolanderc in [#6632](https://github.com/gfx-rs/wgpu/pull/6632)
 - Allow for override-expressions in `workgroup_size`. By @KentSlaney in [#6635](https://github.com/gfx-rs/wgpu/pull/6635).
 - Add support for OpAtomicCompareExchange in SPIR-V frontend. By @schell in [#6590](https://github.com/gfx-rs/wgpu/pull/6590).
 - Implement type inference for abstract arguments to user-defined functions. By @jamienicol in [#6577](https://github.com/gfx-rs/wgpu/pull/6577).
