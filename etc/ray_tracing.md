@@ -104,8 +104,10 @@ struct RayIntersection {
   then this is the triangle index)
 - `barycentrics`: two of the barycentric coordinates, the third can be calculated (only useful if this is a triangle).
 - `front_face`: whether the hit face is the front (only useful if this is a triangle).
-- `object_to_world`: matrix for converting from object-space to world-space
-- `world_to_object`: matrix for converting from world-space to object-space
+- `object_to_world`: matrix for converting from object-space to world-space*
+- `world_to_object`: matrix for converting from world-space to object-space*
+
+*These matrices need to be transposed currently otherwise they will not work properly.
 
 Constant definitions:
 
