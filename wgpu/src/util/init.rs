@@ -138,12 +138,14 @@ pub fn gles_minor_version_from_env() -> Option<wgt::Gles3MinorVersion> {
     )
 }
 
-/// Get an instance descriptor from the following environment variables
+/// Get an instance descriptor from the following environment variables:
+///
 /// - WGPU_BACKEND
 /// - WGPU_DEBUG
 /// - WGPU_VALIDATION
 /// - WGPU_DX12_COMPILER
 /// - WGPU_GLES_MINOR_VERSION
+///
 /// If variables are missing, falls back to default or build config values
 pub fn instance_descriptor_from_env() -> wgt::InstanceDescriptor {
     wgt::InstanceDescriptor {
