@@ -7,6 +7,9 @@
 to breaking changes, suggestions for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040).
 Large changes may mean that this documentation may be out of date.
 
+***This is not*** an introduction to raytracing, and assumes basic prior knowledge, to look at the fundamentals look at 
+an [introduction](https://developer.nvidia.com/blog/introduction-nvidia-rtx-directx-ray-tracing/).
+
 
 ### `wgpu`'s raytracing API:
 The documentation and specific details of the functions and structures provided
