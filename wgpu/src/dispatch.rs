@@ -134,7 +134,7 @@ pub trait DeviceInterface: CommonTraits {
     fn create_shader_module(
         &self,
         desc: crate::ShaderModuleDescriptor<'_>,
-        shader_bound_checks: wgt::ShaderBoundChecks,
+        shader_bound_checks: wgt::ShaderRuntimeChecks,
     ) -> DispatchShaderModule;
     unsafe fn create_shader_module_spirv(
         &self,
