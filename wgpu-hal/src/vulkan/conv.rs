@@ -375,22 +375,31 @@ pub fn map_index_format(index_format: wgt::IndexFormat) -> vk::IndexType {
 pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
     use wgt::VertexFormat as Vf;
     match vertex_format {
+        Vf::Uint8 => vk::Format::R8_UINT,
         Vf::Uint8x2 => vk::Format::R8G8_UINT,
         Vf::Uint8x4 => vk::Format::R8G8B8A8_UINT,
+        Vf::Sint8 => vk::Format::R8_SINT,
         Vf::Sint8x2 => vk::Format::R8G8_SINT,
         Vf::Sint8x4 => vk::Format::R8G8B8A8_SINT,
+        Vf::Unorm8 => vk::Format::R8_UNORM,
         Vf::Unorm8x2 => vk::Format::R8G8_UNORM,
         Vf::Unorm8x4 => vk::Format::R8G8B8A8_UNORM,
+        Vf::Snorm8 => vk::Format::R8_SNORM,
         Vf::Snorm8x2 => vk::Format::R8G8_SNORM,
         Vf::Snorm8x4 => vk::Format::R8G8B8A8_SNORM,
+        Vf::Uint16 => vk::Format::R16_UINT,
         Vf::Uint16x2 => vk::Format::R16G16_UINT,
         Vf::Uint16x4 => vk::Format::R16G16B16A16_UINT,
+        Vf::Sint16 => vk::Format::R16_SINT,
         Vf::Sint16x2 => vk::Format::R16G16_SINT,
         Vf::Sint16x4 => vk::Format::R16G16B16A16_SINT,
+        Vf::Unorm16 => vk::Format::R16_UNORM,
         Vf::Unorm16x2 => vk::Format::R16G16_UNORM,
         Vf::Unorm16x4 => vk::Format::R16G16B16A16_UNORM,
+        Vf::Snorm16 => vk::Format::R16_SNORM,
         Vf::Snorm16x2 => vk::Format::R16G16_SNORM,
         Vf::Snorm16x4 => vk::Format::R16G16B16A16_SNORM,
+        Vf::Float16 => vk::Format::R16_SFLOAT,
         Vf::Float16x2 => vk::Format::R16G16_SFLOAT,
         Vf::Float16x4 => vk::Format::R16G16B16A16_SFLOAT,
         Vf::Float32 => vk::Format::R32_SFLOAT,
@@ -410,6 +419,7 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
         Vf::Float64x3 => vk::Format::R64G64B64_SFLOAT,
         Vf::Float64x4 => vk::Format::R64G64B64A64_SFLOAT,
         Vf::Unorm10_10_10_2 => vk::Format::A2B10G10R10_UNORM_PACK32,
+        Vf::Unorm8x4Bgra => vk::Format::B8G8R8A8_UNORM,
     }
 }
 

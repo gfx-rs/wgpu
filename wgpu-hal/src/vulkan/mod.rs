@@ -974,7 +974,7 @@ pub enum ShaderModule {
     Raw(vk::ShaderModule),
     Intermediate {
         naga_shader: crate::NagaShader,
-        runtime_checks: bool,
+        runtime_checks: wgt::ShaderRuntimeChecks,
     },
 }
 

@@ -14,6 +14,8 @@ enum TestCase {
     SintsBig,
     Floats,
     Unorm1010102,
+    SingleSmallNormsAndInts,
+    Unorm8x4Bgra,
 }
 
 struct Test<'a> {
@@ -68,6 +70,22 @@ async fn vertex_formats_all(ctx: TestingContext) {
         3 => Float32x4,
         4 => Float16x2,
         5 => Float16x4,
+        6 => Float16,
+    ];
+
+    let attributes_block_6 = &wgpu::vertex_attr_array![
+        0 => Uint16,
+        1 => Sint16,
+        2 => Unorm16,
+        3 => Snorm16,
+        4 => Uint8,
+        5 => Sint8,
+        6 => Unorm8,
+        7 => Snorm8,
+    ];
+
+    let attributes_block_7 = &wgpu::vertex_attr_array![
+        0 => Unorm8x4Bgra,
     ];
 
     let tests = vec![
@@ -145,11 +163,37 @@ async fn vertex_formats_all(ctx: TestingContext) {
                 66u8, // Float32x3 (-2.0, -102.0, 100.0)
                 0u8, 0u8, 92u8, 66u8, 0u8, 0u8, 72u8, 194u8, 0u8, 0u8, 32u8, 65u8, 0u8, 0u8, 128u8,
                 63u8, // Float32x4 (55.0, -50.0, 10.0, 1.0)
+                0u8, 68u8, // Float16 (4.0)
                 0u8, 60u8, 72u8, 53u8, // Float16x2 (1.0, 0.33)
                 72u8, 57u8, 0u8, 192u8, 0u8, 188u8, 0u8,
                 184u8, // Float16x4 (0.66, -2.0, -1.0, -0.5)
             ],
-            checksums: &[0.0, 0.0, 0.0, 0.0, -1.5, 16.0],
+            checksums: &[0.0, 0.0, 0.0, 0.0, 2.5, 16.0],
+        },
+        Test {
+            case: TestCase::SingleSmallNormsAndInts,
+            entry_point: "vertex_block_6",
+            attributes: attributes_block_6,
+            input: &[
+                1u8, 2u8, // Uint16 (513)
+                1u8, 2u8, // Sint16 (513)
+                0u8, 64u8, // Unorm16 (0.25)
+                0u8, 64u8,  // Snorm16 (0.5)
+                32u8,  // Uint8 (32)
+                255u8, // Sint8 (-1)
+                128u8, // Unorm8 (0.5)
+                128u8, // Snorm8 (-1)
+            ],
+            checksums: &[513.0 + 32.0, 513.0 - 1.0, 0.25 + 0.5, 0.5 - 1.0, 0.0, 0.0],
+        },
+        Test {
+            case: TestCase::Unorm8x4Bgra,
+            entry_point: "vertex_block_7",
+            attributes: attributes_block_7,
+            input: &[
+                128u8, 85u8, 170u8, 64u8, // Unorm8x4Bgra (0.67, 0.33, 0.5, 0.25)
+            ],
+            checksums: &[0.0, 0.0, 1.75, 0.0, 0.0, 0.0],
         },
     ];
 

@@ -1177,6 +1177,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
+        // Empty dispatches are invalid in OpenGL, but valid in WebGPU.
+        if count.iter().any(|&c| c == 0) {
+            return;
+        }
         self.cmd_buffer.commands.push(C::Dispatch(count));
     }
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {

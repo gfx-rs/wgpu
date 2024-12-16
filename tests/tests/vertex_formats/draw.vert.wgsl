@@ -225,6 +225,7 @@ struct AttributeBlock4{
   @location(3) float32x4: vec4<f32>,
   @location(4) float16x2: vec2<f32>,
   @location(5) float16x4: vec4<f32>,
+  @location(6) float16: f32,
 }
 
 @vertex
@@ -260,6 +261,8 @@ fn vertex_block_4(v_in: AttributeBlock4) -> @builtin(position) vec4<f32>
   all_float16 = accumulate_float16(all_float16, v_in.float16x4.z);
   all_float16 = accumulate_float16(all_float16, v_in.float16x4.w);
 
+  all_float16 = accumulate_float16(all_float16, v_in.float16);
+
   checksums[index_float16] = f32(all_float16);
 
   return vec4(0.0);
@@ -280,6 +283,70 @@ fn vertex_block_5(v_in: AttributeBlock5) -> @builtin(position) vec4<f32>
   all_unorm = accumulate_unorm(all_unorm, v_in.unorm10_10_10_2.y);
   all_unorm = accumulate_unorm(all_unorm, v_in.unorm10_10_10_2.z);
   all_unorm = accumulate_unorm(all_unorm, v_in.unorm10_10_10_2.w);
+
+  checksums[index_unorm] = f32(all_unorm);
+
+  return vec4(0.0);
+}
+
+struct AttributeBlock6 {
+  @location(0) uint16: u32,
+  @location(1) sint16: i32,
+  @location(2) unorm16: f32,
+  @location(3) snorm16: f32,
+  @location(4) uint8: u32,
+  @location(5) sint8: i32,
+  @location(6) unorm8: f32,
+  @location(7) snorm8: f32,
+}
+
+@vertex
+fn vertex_block_6(v_in: AttributeBlock6) -> @builtin(position) vec4<f32>
+{
+  init_checksums();
+
+  // Accumulate all unorm into one checksum value.
+  var all_unorm: f32 = 0.0;
+  all_unorm = accumulate_unorm(all_unorm, v_in.unorm16);
+  all_unorm = accumulate_unorm(all_unorm, v_in.unorm8);
+  checksums[index_unorm] = f32(all_unorm);
+
+  // Accumulate all snorm into one checksum value.
+  var all_snorm: f32 = 0.0;
+  all_snorm = accumulate_snorm(all_snorm, v_in.snorm16);
+  all_snorm = accumulate_snorm(all_snorm, v_in.snorm8);
+  checksums[index_snorm] = f32(all_snorm);
+
+  // Accumulate all uint into one checksum value.
+  var all_uint: u32 = 0;
+  all_uint = accumulate_uint(all_uint, v_in.uint16);
+  all_uint = accumulate_uint(all_uint, v_in.uint8);
+  checksums[index_uint] = f32(all_uint);
+
+  // Accumulate all sint into one checksum value.
+  var all_sint: i32 = 0;
+  all_sint = accumulate_sint(all_sint, v_in.sint16);
+  all_sint = accumulate_sint(all_sint, v_in.sint8);
+  checksums[index_sint] = f32(all_sint);
+
+  return vec4(0.0);
+}
+
+struct AttributeBlock7 {
+  @location(0) unorm8x4_bgra: vec4<f32>,
+}
+
+@vertex
+fn vertex_block_7(v_in: AttributeBlock7) -> @builtin(position) vec4<f32>
+{
+  init_checksums();
+
+  // Accumulate all unorm into one checksum value.
+  var all_unorm: f32 = 0.0;
+  all_unorm = accumulate_unorm(all_unorm, v_in.unorm8x4_bgra.r);
+  all_unorm = accumulate_unorm(all_unorm, v_in.unorm8x4_bgra.g);
+  all_unorm = accumulate_unorm(all_unorm, v_in.unorm8x4_bgra.b);
+  all_unorm = accumulate_unorm(all_unorm, v_in.unorm8x4_bgra.a);
 
   checksums[index_unorm] = f32(all_unorm);
 
