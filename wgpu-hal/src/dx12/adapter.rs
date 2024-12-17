@@ -244,7 +244,6 @@ impl super::Adapter {
                 _ => unreachable!(),
             }
         };
-        println!("{shader_model:?}");
         let private_caps = super::PrivateCapabilities {
             instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
