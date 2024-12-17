@@ -397,14 +397,18 @@ impl super::Adapter {
             )
         }
         .is_ok();
-        if has_features5 {
-            features.set(
-                wgt::Features::EXPERIMENTAL_RAY_QUERY
-                    | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
-                features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
-                    && shader_model >= naga::back::hlsl::ShaderModel::V6_5,
-            );
-        }
+
+        // Since all features for raytracing pipeline (geometry index) and ray queries both come
+        // from here, there is no point in adding an extra call here given that there will be no
+        // feature using EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE if all these are not met.
+        // Once ray tracing pipelines are supported they also will go here
+        features.set(
+            wgt::Features::EXPERIMENTAL_RAY_QUERY
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_5
+                && has_features5,
+        );
 
         let atomic_int64_on_typed_resource_supported = {
             let mut features9 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS9::default();

@@ -1424,6 +1424,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
     ) {
+        // TODO: This is not very optimal, we should be using [enhanced barriers](https://microsoft.github.io/DirectX-Specs/d3d/D3D12EnhancedBarriers.html) if possible
         let list = self
             .list
             .as_ref()

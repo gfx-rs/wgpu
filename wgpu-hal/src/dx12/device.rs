@@ -2035,8 +2035,8 @@ impl crate::Device for super::Device {
                 Quality: 0,
             },
             Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            Flags: Direct3D12::D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE
-                | Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+            // TODO: when moving to enhanced barriers use Direct3D12::D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE
+            Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
         };
 
         let (resource, allocation) =
