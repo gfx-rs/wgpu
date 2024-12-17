@@ -265,7 +265,6 @@ impl<A: hal::Api> Example<A> {
             }
             let exposed = adapters.swap_remove(0);
             dbg!(exposed.features);
-            assert!(exposed.features.contains(Features::RAY_QUERY));
             (exposed.adapter, exposed.features)
         };
         let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
