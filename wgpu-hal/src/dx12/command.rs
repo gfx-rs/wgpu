@@ -1223,13 +1223,25 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
-        self.update_root_elements();
+        if self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .is_some()
+        {
+            self.update_root_elements();
+        } else {
+            self.prepare_dispatch([0; 3]);
+        }
+
         let cmd_signature = &self
             .pass
             .layout
             .special_constants
             .as_ref()
-            .map(|sc| &sc.cmd_signatures)
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
             .unwrap_or_else(|| &self.shared.cmd_signatures)
             .dispatch;
         unsafe {

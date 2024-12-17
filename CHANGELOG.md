@@ -129,6 +129,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 #### Naga
 
+- Support atomic operations on fields of global structs in the SPIR-V frontend. By @schell in [#6693](https://github.com/gfx-rs/wgpu/pull/6693).
 - Clean up tests for atomic operations support in SPIR-V frontend. By @schell in [#6692](https://github.com/gfx-rs/wgpu/pull/6692)
 - Fix an issue where `naga` CLI would incorrectly skip the first positional argument when `--stdin-file-path` was specified. By @ErichDonGubler in [#6480](https://github.com/gfx-rs/wgpu/pull/6480).
 - Fix textureNumLevels in the GLSL backend. By @magcius in [#6483](https://github.com/gfx-rs/wgpu/pull/6483).

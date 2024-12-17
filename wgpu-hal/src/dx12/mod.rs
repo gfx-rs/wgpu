@@ -946,7 +946,7 @@ unsafe impl Sync for PipelineLayoutShared {}
 #[derive(Debug, Clone)]
 struct PipelineLayoutSpecialConstants {
     root_index: RootIndex,
-    cmd_signatures: CommandSignatures,
+    indirect_cmd_signatures: Option<CommandSignatures>,
 }
 
 unsafe impl Send for PipelineLayoutSpecialConstants {}

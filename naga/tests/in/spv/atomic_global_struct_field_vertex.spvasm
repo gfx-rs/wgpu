@@ -1,0 +1,53 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 44
+; Schema: 0
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint Vertex %1 "global_field_vertex" %2 %gl_Position
+               OpMemberDecorate %_struct_9 0 Offset 0
+               OpMemberDecorate %_struct_9 1 Offset 8
+               OpMemberDecorate %_struct_9 2 Offset 16
+               OpDecorate %_struct_10 Block
+               OpMemberDecorate %_struct_10 0 Offset 0
+               OpDecorate %2 Binding 0
+               OpDecorate %2 DescriptorSet 0
+               OpDecorate %gl_Position BuiltIn Position
+       %uint = OpTypeInt 32 0
+      %float = OpTypeFloat 32
+    %v2float = OpTypeVector %float 2
+  %_struct_9 = OpTypeStruct %uint %v2float %uint
+ %_struct_10 = OpTypeStruct %_struct_9
+%_ptr_StorageBuffer__struct_10 = OpTypePointer StorageBuffer %_struct_10
+    %v4float = OpTypeVector %float 4
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+       %void = OpTypeVoid
+         %18 = OpTypeFunction %void
+          %2 = OpVariable %_ptr_StorageBuffer__struct_10 StorageBuffer
+     %uint_0 = OpConstant %uint 0
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+     %uint_2 = OpConstant %uint 2
+     %uint_5 = OpConstant %uint 5
+%_ptr_StorageBuffer_v2float = OpTypePointer StorageBuffer %v2float
+     %uint_1 = OpConstant %uint 1
+    %float_0 = OpConstant %float 0
+%gl_Position = OpVariable %_ptr_Output_v4float Output
+          %1 = OpFunction %void None %18
+         %28 = OpLabel
+         %30 = OpInBoundsAccessChain %_ptr_StorageBuffer_uint %2 %uint_0 %uint_2
+         %31 = OpInBoundsAccessChain %_ptr_StorageBuffer_uint %2 %uint_0 %uint_0
+         %32 = OpLoad %uint %31
+         %33 = OpAtomicIAdd %uint %30 %uint_5 %uint_0 %32
+         %34 = OpConvertUToF %float %33
+         %35 = OpInBoundsAccessChain %_ptr_StorageBuffer_v2float %2 %uint_0 %uint_1
+         %36 = OpLoad %v2float %35
+         %37 = OpCompositeExtract %float %36 0
+         %38 = OpCompositeExtract %float %36 1
+         %39 = OpFMul %float %34 %37
+         %40 = OpFMul %float %34 %38
+         %43 = OpCompositeConstruct %v4float %39 %40 %float_0 %34
+               OpStore %gl_Position %43
+               OpReturn
+               OpFunctionEnd

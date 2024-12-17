@@ -108,6 +108,9 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
 [[example]]
 name = "halmark"
 
