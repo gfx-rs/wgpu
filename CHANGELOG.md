@@ -40,83 +40,354 @@ Bottom level categories:
 
 ## Unreleased
 
+## Major changes
+
+### Refactored Dispatch Between `wgpu-core` and `webgpu`
+
+The crate `wgpu` has two different "backends", one which targets webgpu in the browser, one which targets `wgpu_core` on native platforms and webgl. This was previously very difficult to traverse and add new features to. The entire system was refactored to make it simpler. Additionally the new system has zero overhead if there is only one "backend" in use. You can see the new system in action by using go-to-definition on any wgpu functions in your IDE.
+
+By @cwfitzgerald in [#6619](https://github.com/gfx-rs/wgpu/pull/6619).
+
+### Render and Compute Passes Now Properly Enforce Their Lifetime
+
+A regression introduced in 23.0.0 caused lifetimes of render and compute passes to be incorrectly enforced. While this is not
+a soundness issue, the intent is to move an error from runtime to compile time. This issue has been fixed and restored to the 22.0.0 behavior.
+
+### The `diagnostic(…);` directive is now supported in WGSL
+
+Naga now parses `diagnostic(…);` directives according to the WGSL spec. This allows users to control certain lints, similar to Rust's `allow`, `warn`, and `deny` attributes. For example, in standard WGSL (but, notably, not Naga yet—see <https://github.com/gfx-rs/wgpu/issues/4369>) this snippet would emit a uniformity error:
+
+```wgsl
+@group(0) @binding(0) var s : sampler;
+@group(0) @binding(2) var tex : texture_2d<f32>;
+@group(1) @binding(0) var<storage, read> ro_buffer : array<f32, 4>;
+
+@fragment
+fn main(@builtin(position) p : vec4f) -> @location(0) vec4f {
+  if ro_buffer[0] == 0 {
+    // Emits a derivative uniformity error during validation.
+    return textureSample(tex, s, vec2(0.,0.));
+  }
+
+  return vec4f(0.);
+}
+```
+
+…but we can now silence it with the `off` severity level, like so:
+
+```wgsl
+// Disable the diagnosic with this…
+diagnostic(off, derivative_uniformity);
+
+@group(0) @binding(0) var s : sampler;
+@group(0) @binding(2) var tex : texture_2d<f32>;
+@group(1) @binding(0) var<storage, read> ro_buffer : array<f32, 4>;
+
+@fragment
+fn main(@builtin(position) p : vec4f) -> @location(0) vec4f {
+  if ro_buffer[0] == 0 {
+    // Look ma, no error!
+    return textureSample(tex, s, vec2(0.,0.));
+  }
+
+  return vec4f(0.);
+}
+```
+
+There are some limitations to keep in mind with this new functionality:
+
+- We support `@diagnostic(…)` rules as `fn` attributes, but prioritization for rules in statement positions (i.e., `if (…) @diagnostic(…) { … }` is unclear. If you are blocked by not being able to parse `diagnostic(…)` rules in statement positions, please let us know in <https://github.com/gfx-rs/wgpu/issues/5320>, so we can determine how to prioritize it!
+- Standard WGSL specifies `error`, `warning`, `info`, and `off` severity levels. These are all technically usable now! A caveat, though: warning- and info-level are only emitted to `stderr` via the `log` façade, rather than being reported through a `Result::Err` in Naga or the `CompilationInfo` interface in `wgpu{,-core}`. This will require breaking changes in Naga to fix, and is being tracked by <https://github.com/gfx-rs/wgpu/issues/6458>.
+- Not all lints can be controlled with `diagnostic(…)` rules. In fact, only the `derivative_uniformity` triggering rule exists in the WGSL standard. That said, Naga contributors are excited to see how this level of control unlocks a new ecosystem of configurable diagnostics.
+- Finally, `diagnostic(…)` rules are not yet emitted in WGSL output. This means that `wgsl-in` → `wgsl-out` is currently a lossy process. We felt that it was important to unblock users who needed `diagnostic(…)` rules (i.e., <https://github.com/gfx-rs/wgpu/issues/3135>) before we took significant effort to fix this (tracked in <https://github.com/gfx-rs/wgpu/issues/6496>).
+
+By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148](https://github.com/gfx-rs/wgpu/pull/6148), [#6533](https://github.com/gfx-rs/wgpu/pull/6533), [#6353](https://github.com/gfx-rs/wgpu/pull/6353), [#6537](https://github.com/gfx-rs/wgpu/pull/6537).
+
+### New Features
+
+#### Naga
+
+- Clean up tests for atomic operations support in SPIR-V frontend. By @schell in [#6692](https://github.com/gfx-rs/wgpu/pull/6692)
+- Fix an issue where `naga` CLI would incorrectly skip the first positional argument when `--stdin-file-path` was specified. By @ErichDonGubler in [#6480](https://github.com/gfx-rs/wgpu/pull/6480).
+- Fix textureNumLevels in the GLSL backend. By @magcius in [#6483](https://github.com/gfx-rs/wgpu/pull/6483).
+- Support 64-bit hex literals and unary operations in constants [#6616](https://github.com/gfx-rs/wgpu/pull/6616).
+- Implement `quantizeToF16()` for WGSL frontend, and WGSL, SPIR-V, HLSL, MSL, and GLSL backends. By @jamienicol in [#6519](https://github.com/gfx-rs/wgpu/pull/6519).
+- Add support for GLSL `usampler*` and `isampler*`. By @DavidPeicho in [#6513](https://github.com/gfx-rs/wgpu/pull/6513).
+- Expose Ray Query flags as constants in WGSL. Implement candidate intersections. By @kvark in [#5429](https://github.com/gfx-rs/wgpu/pull/5429)
+- Allow for override-expressions in `workgroup_size`. By @KentSlaney in [#6635](https://github.com/gfx-rs/wgpu/pull/6635).
+- Add support for OpAtomicCompareExchange in SPIR-V frontend. By @schell in [#6590](https://github.com/gfx-rs/wgpu/pull/6590).
+- Implement type inference for abstract arguments to user-defined functions. By @jamienicol in [#6577](https://github.com/gfx-rs/wgpu/pull/6577).
+- Allow for override-expressions in array sizes. By @KentSlaney in [#6654](https://github.com/gfx-rs/wgpu/pull/6654).
+
+#### General
+
+- Return submission index in `map_async` and `on_submitted_work_done` to track down completion of async callbacks. By @eliemichel in [#6360](https://github.com/gfx-rs/wgpu/pull/6360).
+- Move raytracing alignments into HAL instead of in core. By @Vecvec in [#6563](https://github.com/gfx-rs/wgpu/pull/6563).
+- Allow for statically linking DXC rather than including separate `.dll` files. By @DouglasDwyer in [#6574](https://github.com/gfx-rs/wgpu/pull/6574).
+
+### Changes
+
+#### Naga
+
+- Show types of LHS and RHS in binary operation type mismatch errors. By @ErichDonGubler in [#6450](https://github.com/gfx-rs/wgpu/pull/6450).
+- The GLSL parser now uses less expressions for function calls. By @magcius in [#6604](https://github.com/gfx-rs/wgpu/pull/6604).
+
+#### General
+
+- Align Storage Access enums to the webgpu spec. By @atlv24 in [#6642](https://github.com/gfx-rs/wgpu/pull/6642)
+- Make `Surface::as_hal` take an immutable reference to the surface. By @jerzywilczek in [#9999](https://github.com/gfx-rs/wgpu/pull/9999)
+- Add actual sample type to `CreateBindGroupError::InvalidTextureSampleType` error message. By @ErichDonGubler in [#6530](https://github.com/gfx-rs/wgpu/pull/6530).
+- Improve binding error to give a clearer message when there is a mismatch between resource binding as it is in the shader and as it is in the binding layout. By @eliemichel in [#6553](https://github.com/gfx-rs/wgpu/pull/6553).
+- `Surface::configure` and `Surface::get_current_texture` are no longer fatal. By @alokedesai in [#6253](https://github.com/gfx-rs/wgpu/pull/6253)
+
+#### D3D12
+
+- Avoid using FXC as fallback when the DXC container was passed at instance creation. Paths to `dxcompiler.dll` & `dxil.dll` are also now required. By @teoxoy in [#6643](https://github.com/gfx-rs/wgpu/pull/6643).
+
+#### HAL
+
+- Replace `usage: Range<T>`, for `BufferUses`, `TextureUses`, and `AccelerationStructureBarrier` with a new `StateTransition<T>`. By @atlv24 in [#6703](https://github.com/gfx-rs/wgpu/pull/6703)
+- Change the `DropCallback` API to use `FnOnce` instead of `FnMut`. By @jerzywilczek in [#6482](https://github.com/gfx-rs/wgpu/pull/6482)
+
+### Bug Fixes
+
+#### General
+
+- Handle query set creation failure as an internal error that loses the `Device`, rather than panicking. By @ErichDonGubler in [#6505](https://github.com/gfx-rs/wgpu/pull/6505).
+- Ensure that `Features::TIMESTAMP_QUERY` is set when using timestamp writes in render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497).
+- Check for device mismatches when beginning render and compute passes. By @ErichDonGubler in [#6497](https://github.com/gfx-rs/wgpu/pull/6497).
+- Lower `QUERY_SET_MAX_QUERIES` (and enforced limits) from 8192 to 4096 to match WebGPU spec. By @ErichDonGubler in [#6525](https://github.com/gfx-rs/wgpu/pull/6525).
+- Allow non-filterable float on texture bindings never used with samplers when using a derived bind group layout. By @ErichDonGubler in [#6531](https://github.com/gfx-rs/wgpu/pull/6531/).
+- Replace potentially unsound usage of `PreHashedMap` with `FastHashMap`. By @jamienicol in [#6541](https://github.com/gfx-rs/wgpu/pull/6541).
+- Add missing validation for timestamp writes in compute and render passes. By @ErichDonGubler in [#6578](https://github.com/gfx-rs/wgpu/pull/6578), [#6583](https://github.com/gfx-rs/wgpu/pull/6583).
+  - Check the status of the `TIMESTAMP_QUERY` feature before other validation.
+  - Check that indices are in-bounds for the query set.
+  - Check that begin and end indices are not equal.
+  - Check that at least one index is specified.
+- Reject destroyed buffers in query set resolution. By @ErichDonGubler in [#6579](https://github.com/gfx-rs/wgpu/pull/6579).
+- Fix panic when dropping `Device` on some environments. By @Dinnerbone in [#6681](https://github.com/gfx-rs/wgpu/pull/6681).
+- Reduced the overhead of command buffer validation. By @nical in [#6721](https://github.com/gfx-rs/wgpu/pull/6721).
+
+#### Naga
+
+- Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
+- Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
+
+### Testing
+
+- Tests the early returns in the acceleration structure build calls with empty calls. By @Vecvec in [#6651](https://github.com/gfx-rs/wgpu/pull/6651).
+
+## 23.0.1 (2024-11-25)
+
+This release includes patches for `wgpu`, `wgpu-core` and `wgpu-hal`. All other crates remain at [23.0.0](https://github.com/gfx-rs/wgpu/releases/tag/v23.0.0).
+Below changes were cherry-picked from 24.0.0 development line.
+
+### Bug fixes
+
+#### General
+
+- Fix Texture view leaks regression. By @xiaopengli89 in [#6576](https://github.com/gfx-rs/wgpu/pull/6576)
+
+#### Metal
+
+- Fix surface creation crashing on iOS. By @mockersf in [#6535](https://github.com/gfx-rs/wgpu/pull/6535)
+
+#### Vulkan
+
+- Fix surface capabilities being advertised when its query failed. By @wumpf in [#6510](https://github.com/gfx-rs/wgpu/pull/6510)
+
+## 23.0.0 (2024-10-25)
+
+### Themes of this release
+
+This release's theme is one that is likely to repeat for a few releases: convergence with the WebGPU specification! WGPU's design and base functionality are actually determined by two specifications: one for WebGPU, and one for the WebGPU Shading Language.
+
+This may not sound exciting, but let us convince you otherwise! All major web browsers have committed to offering WebGPU in their environment. Even JS runtimes like [Node][nodejs-webgpu-interest] and [Deno][deno_webgpu-crate-manifest] have communities that are very interested in providing WebGPU! WebGPU is slowly [eating the world][eat-the-world-meaning], as it were. 😀 It's really important, then, that WebGPU implementations behave in ways that one would expect across all platforms. For example, if Firefox's WebGPU implementation were to break when running scripts and shaders that worked just fine in Chrome, that would mean sad users for both application authors _and_ browser authors.
+
+[nodejs-webgpu-interest]: https://github.com/orgs/nodejs/discussions/41994
+[deno_webgpu-crate-manifest]: https://github.com/gfx-rs/wgpu/tree/64a61ee5c69569bbb3db03563997e88a229eba17/deno_webgpu#deno_webgpu
+[eat-the-world-meaning]: https://www.quora.com/What-did-Marc-Andreessen-mean-when-he-said-that-software-is-eating-the-world
+
+WGPU also benefits from standard, portable behavior in the same way as web browsers. Because of this behavior, it's generally fairly easy to port over usage of WebGPU in JavaScript to WGPU. It is also what lets WGPU go full circle: WGPU can be an implementation of WebGPU on native targets, but _also_ it can use _other implementations of WebGPU_ as a backend in JavaScript when compiled to WASM. Therefore, the same dynamic applies: if WGPU's own behavior were significantly different, then WGPU and end users would be _sad, sad humans_ as soon as they discover places where their nice apps are breaking, right?
+
+The answer is: yes, we _do_ have sad, sad humans that really want their WGPU code to work _everywhere_. As Firefox and others use WGPU to implement WebGPU, the above example of Firefox diverging from standard is, unfortunately, today's reality. It _mostly_ behaves the same as a standards-compliant WebGPU, but it still doesn't in many important ways. Of particular note is Naga, its implementation of the WebGPU Shader Language. Shaders are pretty much a black-and-white point of failure in GPU programming; if they don't compile, then you can't use the rest of the API! And yet, it's extremely easy to run into a case like that from <https://github.com/gfx-rs/wgpu/issues/4400>:
+
+```wgsl
+fn gimme_a_float() -> f32 {
+  return 42; // fails in Naga, but standard WGSL happily converts to `f32`
+}
+```
+
+We intend to continue making visible strides in converging with specifications for WebGPU and WGSL, as this release has. This is, unfortunately, one of the major reasons that WGPU has no plans to work hard at keeping a SemVer-stable interface for the foreseeable future; we have an entire platform of GPU programming functionality we have to catch up with, and SemVer stability is unfortunately in tension with that. So, for now, you're going to keep seeing major releases and breaking changes. Where possible, we'll try to make that painless, but compromises to do so don't always make sense with our limited resources.
+
+This is also the last planned major version release of 2024; the next milestone is set for January 1st, 2025, according to our regular 12-week cadence (offset from the originally planned date of 2024-10-09 for _this_ release 😅). We'll see you next year!
+
+### Contributor spotlight: @sagudev
+
+This release, we'd like to spotlight the work of @sagudev, who has made significant contributions to the WGPU ecosystem this release. Among other things, they contributed a particularly notable feature where runtime-known indices are finally allowed for use with `const` array values. For example, this WGSL shader previously wasn't allowed:
+
+```wgsl
+const arr: array<u32, 4> = array(1, 2, 3, 4);
+
+fn what_number_should_i_use(idx: u32) -> u32 {
+  return arr[idx];
+}
+```
+
+…but now it works! This is significant because this sort of shader rejection was one of the most impactful issues we are aware of for converging with the WGSL specification. There are more still to go—some of which we expect to even more drastically change how folks author shaders—but we suspect that many more will come in the next few releases, including with @sagudev's help.
+
+We're excited for more of @sagudev's contributions via the Servo community. Oh, did we forget to mention that these contributions were motivated by their work on Servo? That's right, a _third_ well-known JavaScript runtime is now using WGPU to implement its WebGPU implementation. We're excited to support Servo to becoming another fully fledged browsing environment this way.
+
 ### Major Changes
 
+In addition to the above spotlight, we have the following particularly interesting items to call out for this release:
+
 #### `wgpu-core` is no longer generic over `wgpu-hal` backends
-Dynamic dispatch between different backends has been moved from the user facing `wgpu` crate,
-to a new dynamic dispatch mechanism inside the backend abstraction layer `wgpu-hal`.
 
-Whenever targeting more than a single backend (default on Windows & Linux) this leads to faster compile times and smaller binaries!
-This also solves a long standing issue with `cargo doc` failing to run for `wgpu-core`.
+Dynamic dispatch between different backends has been moved from the user facing `wgpu` crate, to a new dynamic dispatch mechanism inside the backend abstraction layer `wgpu-hal`.
 
-Benchmarking indicated that compute pass recording is slower as a consequence,
-whereas on render passes speed improvements have been observed.
-However, this effort simplifies many of the internals of the wgpu family of crates
-which we're hoping to build performance improvements upon in the future.
+Whenever targeting more than a single backend (default on Windows & Linux) this leads to faster compile times and smaller binaries! This also solves a long standing issue with `cargo doc` failing to run for `wgpu-core`.
+
+Benchmarking indicated that compute pass recording is slower as a consequence, whereas on render passes speed improvements have been observed. However, this effort simplifies many of the internals of the wgpu family of crates which we're hoping to build performance improvements upon in the future.
 
 By @wumpf in [#6069](https://github.com/gfx-rs/wgpu/pull/6069), [#6099](https://github.com/gfx-rs/wgpu/pull/6099), [#6100](https://github.com/gfx-rs/wgpu/pull/6100).
 
 #### `wgpu`'s resources no longer have `.global_id()` getters
 
-`wgpu-core`'s internals no longer use nor need IDs and we are moving towards removing IDs
-completely. This is a step in that direction.
+`wgpu-core`'s internals no longer use nor need IDs and we are moving towards removing IDs completely. This is a step in that direction.
 
-Current users of `.global_id()` are encouraged to make use of the `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord`
-traits that have now been implemented for `wgpu` resources.
+Current users of `.global_id()` are encouraged to make use of the `PartialEq`, `Eq`, `Hash`, `PartialOrd` and `Ord` traits that have now been implemented for `wgpu` resources.
 
-By @teoxoy [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
+By @teoxoy in [#6134](https://github.com/gfx-rs/wgpu/pull/6134).
 
 #### `set_bind_group` now takes an `Option` for the bind group argument.
 
-https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup
-is nullable. This change is the start of implementing this part of the spec. Callers that
-specify a `Some()` value should have unchanged behavior. Handling of `None` values still
-needs to be implemented by backends.
+https://gpuweb.github.io/gpuweb/#programmable-passes-bind-groups specifies that bindGroup is nullable. This change is the start of implementing this part of the spec. Callers that specify a `Some()` value should have unchanged behavior. Handling of `None` values still needs to be implemented by backends.
 
-By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
+For convenience, the `set_bind_group` on compute/render passes & encoders takes `impl Into<Option<&BindGroup>>`, so most code should still work the same.
+
+By @bradwerth in [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
+
+#### `entry_point`s are now `Option`al
+
+One of the changes in the WebGPU spec. (from [about this time last year][optional-entrypoint-in-spec] 😅) was to allow optional entry points in `GPUProgrammableStage`. In `wgpu`, this corresponds to a subset of fields in `FragmentState`, `VertexState`, and `ComputeState` as the `entry_point` member:
+
+```wgsl
+let render_pipeline = device.createRenderPipeline(wgpu::RenderPipelineDescriptor {
+    module,
+    entry_point: Some("cs_main"), // This is now `Option`al.
+    // …
+});
+
+let compute_pipeline = device.createComputePipeline(wgpu::ComputePipelineDescriptor {
+    module,
+    entry_point: None, // This is now `Option`al.
+    // …
+});
+```
+
+When set to `None`, it's assumed that the shader only has a single entry point associated with the pipeline stage (i.e., `@compute`, `@fragment`, or `@vertex`). If there is not one and only one candidate entry point, then a validation error is returned. To continue the example, we might have written the above API usage with the following shader module:
+
+```wgsl
+// We can't use `entry_point: None` for compute pipelines with this module,
+// because there are two `@compute` entry points.
+
+@compute
+fn cs_main() { /* … */ }
+
+@compute
+fn other_cs_main() { /* … */ }
+
+// The following entry points _can_ be inferred from `entry_point: None` in a
+// render pipeline, because they're the only `@vertex` and `@fragment` entry
+// points:
+
+@vertex
+fn vs_main() { /* … */ }
+
+@fragment
+fn fs_main() { /* … */ }
+```
+
+[optional-entrypoint-in-spec]: https://github.com/gpuweb/gpuweb/issues/4342
+
+#### WGPU's DX12 backend is now based on the `windows` crate ecosystem, instead of the `d3d12` crate
+
+WGPU has retired the `d3d12` crate (based on `winapi`), and now uses the `windows` crate for interfacing with Windows. For many, this may not be a change that affects day-to-day work. However, for users who need to vet their dependencies, or who may vendor in dependencies, this may be a nontrivial migration.
+
+By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
 
 ### New Features
+
+#### Wgpu
+
+- Added initial acceleration structure and ray query support into wgpu. By @expenses @daniel-keitel @Vecvec @JMS55 @atlv24 in [#6291](https://github.com/gfx-rs/wgpu/pull/6291)
 
 #### Naga
 
 - Support constant evaluation for `firstLeadingBit` and `firstTrailingBit` numeric built-ins in WGSL. Front-ends that translate to these built-ins also benefit from constant evaluation. By @ErichDonGubler in [#5101](https://github.com/gfx-rs/wgpu/pull/5101).
 - Add `first` and `either` sampling types for `@interpolate(flat, …)` in WGSL. By @ErichDonGubler in [#6181](https://github.com/gfx-rs/wgpu/pull/6181).
 - Support for more atomic ops in the SPIR-V frontend. By @schell in [#5824](https://github.com/gfx-rs/wgpu/pull/5824).
+- Support local `const` declarations in WGSL. By @sagudev in [#6156](https://github.com/gfx-rs/wgpu/pull/6156).
+- Implemented `const_assert` in WGSL. By @sagudev in [#6198](https://github.com/gfx-rs/wgpu/pull/6198).
+- Support polyfilling `inverse` in WGSL. By @chyyran in [#6385](https://github.com/gfx-rs/wgpu/pull/6385).
+- Add base support for parsing `requires`, `enable`, and `diagnostic` directives. No extensions or diagnostic filters are yet supported, but diagnostics have improved dramatically. By @ErichDonGubler in [#6352](https://github.com/gfx-rs/wgpu/pull/6352), [#6424](https://github.com/gfx-rs/wgpu/pull/6424), [#6437](https://github.com/gfx-rs/wgpu/pull/6437).
+- Include error chain information as a message and notes in shader compilation messages. By @ErichDonGubler in [#6436](https://github.com/gfx-rs/wgpu/pull/6436).
+- Unify Naga CLI error output with the format of shader compilation messages. By @ErichDonGubler in [#6436](https://github.com/gfx-rs/wgpu/pull/6436).
 
 #### General
 
-- Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170)
+- Add `VideoFrame` to `ExternalImageSource` enum. By @jprochazk in [#6170](https://github.com/gfx-rs/wgpu/pull/6170).
+- Add `wgpu::util::new_instance_with_webgpu_detection` & `wgpu::util::is_browser_webgpu_supported` to make it easier to support WebGPU & WebGL in the same binary. By @wumpf in [#6371](https://github.com/gfx-rs/wgpu/pull/6371).
 
 #### Vulkan
 
-- Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely with the `VULKAN_GOOGLE_DISPLAY_TIMING` feature. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149)
+- Allow using [VK_GOOGLE_display_timing](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html) unsafely with the `VULKAN_GOOGLE_DISPLAY_TIMING` feature. By @DJMcNab in [#6149](https://github.com/gfx-rs/wgpu/pull/6149).
+
+#### Metal
+
+- Implement `atomicCompareExchangeWeak`. By @AsherJingkongChen in [#6265](https://github.com/gfx-rs/wgpu/pull/6265).
+- Unless an explicit `CAMetalLayer` is provided, surfaces now render to a sublayer. This improves resizing behavior, fixing glitches during on window resize. By @madsmtm in [#6107](https://github.com/gfx-rs/wgpu/pull/6107).
 
 ### Bug Fixes
 
-- Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123)
+- Fix incorrect hlsl image output type conversion. By @atlv24 in [#6123](https://github.com/gfx-rs/wgpu/pull/6123).
 
 #### Naga
 
+- SPIR-V frontend splats depth texture sample and load results. Fixes [issue #4551](https://github.com/gfx-rs/wgpu/issues/4551). By @schell in [#6384](https://github.com/gfx-rs/wgpu/pull/6384).
 - Accept only `vec3` (not `vecN`) for the `cross` built-in. By @ErichDonGubler in [#6171](https://github.com/gfx-rs/wgpu/pull/6171).
-- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256)
+- Configure `SourceLanguage` when enabling debug info in SPV-out. By @kvark in [#6256](https://github.com/gfx-rs/wgpu/pull/6256).
+- Do not consider per-polygon and flat inputs subgroup uniform. By @magcius in [#6276](https://github.com/gfx-rs/wgpu/pull/6276).
+- Validate all swizzle components are either color (rgba) or dimension (xyzw) in WGSL. By @sagudev in [#6187](https://github.com/gfx-rs/wgpu/pull/6187).
+- Fix detection of shl overflows to detect arithmetic overflows. By @sagudev in [#6186](https://github.com/gfx-rs/wgpu/pull/6186).
+- Fix type parameters to vec/mat type constructors to also support aliases. By @sagudev in [#6189](https://github.com/gfx-rs/wgpu/pull/6189).
+- Accept global `var`s without explicit type. By @sagudev in [#6199](https://github.com/gfx-rs/wgpu/pull/6199).
+- Fix handling of phony statements, so they are actually emitted. By @sagudev in [#6328](https://github.com/gfx-rs/wgpu/pull/6328).
+- Added `gl_DrawID` to glsl and `DrawIndex` to spv. By @ChosenName in [#6325](https://github.com/gfx-rs/wgpu/pull/6325).
+- Matrices can now be indexed by value (#4337), and indexing arrays by value no longer causes excessive spilling (#6358). By @jimblandy in [#6390](https://github.com/gfx-rs/wgpu/pull/6390).
+- Add support for `textureQueryLevels` to the GLSL parser. By @magcius in [#6325](https://github.com/gfx-rs/wgpu/pull/6415).
+- Fix unescaped identifiers in the Metal backend shader I/O structures causing shader miscompilation. By @ErichDonGubler in [#6438](https://github.com/gfx-rs/wgpu/pull/6438).
 
 #### General
 
-- If GL context creation fails retry with GLES. By @Rapdorian in [#5996](https://github.com/gfx-rs/wgpu/pull/5996)
-- Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988)
-- As a workaround for [issue #4905](https://github.com/gfx-rs/wgpu/issues/4905), `wgpu-core` is undocumented unless `--cfg wgpu_core_doc` feature is enabled. By @kpreid in [#5987](https://github.com/gfx-rs/wgpu/pull/5987)
-- Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003)
-- Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007)
-- Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
-- Deduplicate bind group layouts that are created from pipelines with "auto" layouts. By @teoxoy [#6049](https://github.com/gfx-rs/wgpu/pull/6049)
-- Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
-- Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
-- Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201)
+- If GL context creation fails retry with GLES. By @Rapdorian in [#5996](https://github.com/gfx-rs/wgpu/pull/5996).
+- Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003).
+- Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007).
+- Deduplicate bind group layouts that are created from pipelines with "auto" layouts. By @teoxoy [#6049](https://github.com/gfx-rs/wgpu/pull/6049).
+- Document `wgpu_hal` bounds-checking promises, and adapt `wgpu_core`'s lazy initialization logic to the slightly weaker-than-expected guarantees. By @jimblandy in [#6201](https://github.com/gfx-rs/wgpu/pull/6201).
 - Raise validation error instead of panicking in `{Render,Compute}Pipeline::get_bind_group_layout` on native / WebGL. By @bgr360 in [#6280](https://github.com/gfx-rs/wgpu/pull/6280).
+- **BREAKING**: Remove the last exposed C symbols in project, located in `wgpu_core::render::bundle::bundle_ffi`, to allow multiple versions of WGPU to compile together. By @ErichDonGubler in [#6272](https://github.com/gfx-rs/wgpu/pull/6272).
+- Call `flush_mapped_ranges` when unmapping write-mapped buffers. By @teoxoy in [#6089](https://github.com/gfx-rs/wgpu/pull/6089).
+- When mapping buffers for reading, mark buffers as initialized only when they have `MAP_WRITE` usage. By @teoxoy in [#6178](https://github.com/gfx-rs/wgpu/pull/6178).
+- Add a separate pipeline constants error. By @teoxoy in [#6094](https://github.com/gfx-rs/wgpu/pull/6094).
+- Ensure safety of indirect dispatch by injecting a compute shader that validates the content of the indirect buffer. By @teoxoy in [#5714](https://github.com/gfx-rs/wgpu/pull/5714).
 
 #### GLES / OpenGL
 
-- Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114)
+- Fix GL debug message callbacks not being properly cleaned up (causing UB). By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
+- Fix calling `slice::from_raw_parts` with unaligned pointers in push constant handling. By @Imberflur in [#6341](https://github.com/gfx-rs/wgpu/pull/6341).
+- Optimise fence checking when `Queue::submit` is called many times per frame. By @dinnerbone in [#6427](https://github.com/gfx-rs/wgpu/pull/6427).
 
 #### WebGPU
 
@@ -124,38 +395,73 @@ By @bradwerth [#6216](https://github.com/gfx-rs/wgpu/pull/6216).
 
 #### Vulkan
 
-- Vulkan debug labels assumed no interior nul byte. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257)
-- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` in the raytraced triangle example to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282)
+- Avoid undefined behaviour with adversarial debug label. By @DJMcNab in [#6257](https://github.com/gfx-rs/wgpu/pull/6257).
+- Add `.index_type(vk::IndexType::NONE_KHR)` when creating `AccelerationStructureGeometryTrianglesDataKHR` in the raytraced triangle example to prevent a validation error. By @Vecvec in [#6282](https://github.com/gfx-rs/wgpu/pull/6282).
 
 ### Changes
 
 - `wgpu_hal::gles::Adapter::new_external` now requires the context to be current when dropping the adapter and related objects. By @Imberflur in [#6114](https://github.com/gfx-rs/wgpu/pull/6114).
-- Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065)
-- `Rg11b10Float` is renamed to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108)
+- Reduce the amount of debug and trace logs emitted by wgpu-core and wgpu-hal. By @nical in [#6065](https://github.com/gfx-rs/wgpu/issues/6065).
+- Rename `Rg11b10Float` to `Rg11b10Ufloat`. By @sagudev in [#6108](https://github.com/gfx-rs/wgpu/pull/6108).
+- Invalidate the device when we encounter driver-induced device loss or on unexpected errors. By @teoxoy in [#6229](https://github.com/gfx-rs/wgpu/pull/6229).
+- Make Vulkan error handling more robust. By @teoxoy in [#6119](https://github.com/gfx-rs/wgpu/pull/6119).
+- Add bounds checking to Buffer slice method. By @beholdnec in [#6432](https://github.com/gfx-rs/wgpu/pull/6432).
+- Replace `impl From<StorageFormat> for ScalarKind` with `impl From<StorageFormat> for Scalar` so that byte width is included. By @atlv24 in [#6451](https://github.com/gfx-rs/wgpu/pull/6451).
+
+#### Internal
+
+- Tracker simplifications. By @teoxoy in [#6073](https://github.com/gfx-rs/wgpu/pull/6073) & [#6088](https://github.com/gfx-rs/wgpu/pull/6088).
+- D3D12 cleanup. By @teoxoy in [#6200](https://github.com/gfx-rs/wgpu/pull/6200).
+- Use `ManuallyDrop` in remaining places. By @teoxoy in [#6092](https://github.com/gfx-rs/wgpu/pull/6092).
+- Move out invalidity from the `Registry`. By @teoxoy in [#6243](https://github.com/gfx-rs/wgpu/pull/6243).
+- Remove `backend` from ID. By @teoxoy in [#6263](https://github.com/gfx-rs/wgpu/pull/6263).
 
 #### HAL
 
-- Change the inconsistent `DropGuard` based API on Vulkan and GLES to a consistent, callback-based one. By @jerzywilczek in [#6164](https://github.com/gfx-rs/wgpu/pull/6164)
+- Change the inconsistent `DropGuard` based API on Vulkan and GLES to a consistent, callback-based one. By @jerzywilczek in [#6164](https://github.com/gfx-rs/wgpu/pull/6164).
 
 ### Documentation
 
-- Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271)
+- Removed some OpenGL and Vulkan references from `wgpu-types` documentation. Fixed Storage texel types in examples. By @Nelarius in [#6271](https://github.com/gfx-rs/wgpu/pull/6271).
+- Used `wgpu::include_wgsl!(…)` more in examples and tests. By @ErichDonGubler in [#6326](https://github.com/gfx-rs/wgpu/pull/6326).
 
 ### Dependency Updates
 
 #### GLES
 
-- Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006)
-- Update `glutin` to `0.31` with `glutin-winit` crate. By @MarijnS95 in [#6150](https://github.com/gfx-rs/wgpu/pull/6150) and [#6176](https://github.com/gfx-rs/wgpu/pull/6176)
-- Implement `Adapter::new_external()` for WGL (just like EGL) to import an external OpenGL ES context. By @MarijnS95 in [#6152](https://github.com/gfx-rs/wgpu/pull/6152)
+- Replace `winapi` code in WGL wrapper to use the `windows` crate. By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
+- Update `glutin` to `0.31` with `glutin-winit` crate. By @MarijnS95 in [#6150](https://github.com/gfx-rs/wgpu/pull/6150) and [#6176](https://github.com/gfx-rs/wgpu/pull/6176).
+- Implement `Adapter::new_external()` for WGL (just like EGL) to import an external OpenGL ES context. By @MarijnS95 in [#6152](https://github.com/gfx-rs/wgpu/pull/6152).
 
 #### DX12
 
-- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956) and [#6173](https://github.com/gfx-rs/wgpu/pull/6173)
+- Replace `winapi` code to use the `windows` crate. By @MarijnS95 in [#5956](https://github.com/gfx-rs/wgpu/pull/5956) and [#6173](https://github.com/gfx-rs/wgpu/pull/6173).
+- Get `num_workgroups` builtin working for indirect dispatches. By @teoxoy in [#5730](https://github.com/gfx-rs/wgpu/pull/5730).
 
 #### HAL
 
-- Update `parking_lot` to `0.12`. By @mahkoh in [#6287](https://github.com/gfx-rs/wgpu/pull/6287)
+- Update `parking_lot` to `0.12`. By @mahkoh in [#6287](https://github.com/gfx-rs/wgpu/pull/6287).
+
+## v22.1.0 (2024-07-17)
+
+This release includes `wgpu`, `wgpu-core` and `naga`. All other crates remain at 22.0.0.
+
+### Added
+
+#### Naga
+
+- Added back implementations of PartialEq for more IR types. By @teoxoy in [#6045](https://github.com/gfx-rs/wgpu/pull/6045)
+
+### Bug Fixes
+
+#### General
+
+- Fix profiling with `tracy`. By @waywardmonkeys in [#5988](https://github.com/gfx-rs/wgpu/pull/5988)
+- Fix function for checking bind compatibility to error instead of panic. By @sagudev [#6012](https://github.com/gfx-rs/wgpu/pull/6012)
+- Fix crash when dropping the surface after the device. By @wumpf in [#6052](https://github.com/gfx-rs/wgpu/pull/6052)
+- Fix length of copy in `queue_write_texture`. By @teoxoy in [#6009](https://github.com/gfx-rs/wgpu/pull/6009)
+- Fix error message that is thrown in create_render_pass to no longer say `compute_pass`. By @matthew-wong1 [#6041](https://github.com/gfx-rs/wgpu/pull/6041)
+- As a workaround for [issue #4905](https://github.com/gfx-rs/wgpu/issues/4905), `wgpu-core` is undocumented unless `--cfg wgpu_core_doc` feature is enabled. By @kpreid in [#5987](https://github.com/gfx-rs/wgpu/pull/5987)
 
 ## 22.0.0 (2024-07-17)
 
@@ -911,7 +1217,7 @@ By @cwfitzgerald in [#5053](https://github.com/gfx-rs/wgpu/pull/5053)
 
 #### Naga
 
-- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing thir operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
+- Naga's WGSL front end now allows operators to produce values with abstract types, rather than concretizing their operands. By @jimblandy in [#4850](https://github.com/gfx-rs/wgpu/pull/4850) and [#4870](https://github.com/gfx-rs/wgpu/pull/4870).
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
 - Naga constant evaluation can now process binary operators whose operands are both vectors. By @jimblandy in [#4861](https://github.com/gfx-rs/wgpu/pull/4861).
 - Add `--bulk-validate` option to Naga CLI. By @jimblandy in [#4871](https://github.com/gfx-rs/wgpu/pull/4871).

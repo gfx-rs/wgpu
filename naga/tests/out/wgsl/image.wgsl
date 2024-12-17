@@ -95,8 +95,9 @@ fn queries() -> @builtin(position) vec4<f32> {
 @vertex 
 fn levels_queries() -> @builtin(position) vec4<f32> {
     let num_levels_2d = textureNumLevels(image_2d);
-    let num_levels_2d_array = textureNumLevels(image_2d_array);
     let num_layers_2d = textureNumLayers(image_2d_array);
+    let num_levels_2d_array = textureNumLevels(image_2d_array);
+    let num_layers_2d_array = textureNumLayers(image_2d_array);
     let num_levels_cube = textureNumLevels(image_cube);
     let num_levels_cube_array = textureNumLevels(image_cube_array);
     let num_layers_cube = textureNumLayers(image_cube_array);
@@ -234,5 +235,6 @@ fn depth_no_comparison() -> @location(0) vec4<f32> {
     const tc_3 = vec2(0.5f);
     let s2d_1 = textureSample(image_2d_depth, sampler_reg, tc_3);
     let s2d_gather = textureGather(image_2d_depth, sampler_reg, tc_3);
-    return (vec4(s2d_1) + s2d_gather);
+    let s2d_level = textureSampleLevel(image_2d_depth, sampler_reg, tc_3, 1i);
+    return ((vec4(s2d_1) + s2d_gather) + vec4(s2d_level));
 }

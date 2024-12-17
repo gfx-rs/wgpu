@@ -292,6 +292,26 @@ pub fn inject_builtin(
                 f,
             )
         }
+        "textureQueryLevels" => {
+            let f = |kind, dim, arrayed, multi, shadow| {
+                let class = match shadow {
+                    true => ImageClass::Depth { multi },
+                    false => ImageClass::Sampled { kind, multi },
+                };
+
+                let image = TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                };
+
+                declaration
+                    .overloads
+                    .push(module.add_builtin(vec![image], MacroCall::TextureQueryLevels))
+            };
+
+            texture_args_generator(TextureArgsOptions::SHADOW | variations.into(), f)
+        }
         "texelFetch" | "texelFetchOffset" => {
             let offset = "texelFetchOffset" == name;
             let f = |kind, dim, arrayed, multi, _shadow| {
@@ -442,37 +462,54 @@ fn inject_standard_builtins(
     module: &mut Module,
     name: &str,
 ) {
-    match name {
-        "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
-        | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
-            declaration.overloads.push(module.add_builtin(
-                vec![
-                    TypeInner::Image {
-                        dim: match name {
-                            "sampler1D" | "sampler1DArray" => Dim::D1,
-                            "sampler2D" | "sampler2DArray" | "sampler2DMS" | "sampler2DMSArray" => {
-                                Dim::D2
-                            }
-                            "sampler3D" => Dim::D3,
-                            _ => Dim::Cube,
+    // Some samplers (sampler1D, etc...) can be float, int, or uint
+    let anykind_sampler = if name.starts_with("sampler") {
+        Some((name, Sk::Float))
+    } else if name.starts_with("usampler") {
+        Some((&name[1..], Sk::Uint))
+    } else if name.starts_with("isampler") {
+        Some((&name[1..], Sk::Sint))
+    } else {
+        None
+    };
+    if let Some((sampler, kind)) = anykind_sampler {
+        match sampler {
+            "sampler1D" | "sampler1DArray" | "sampler2D" | "sampler2DArray" | "sampler2DMS"
+            | "sampler2DMSArray" | "sampler3D" | "samplerCube" | "samplerCubeArray" => {
+                declaration.overloads.push(module.add_builtin(
+                    vec![
+                        TypeInner::Image {
+                            dim: match sampler {
+                                "sampler1D" | "sampler1DArray" => Dim::D1,
+                                "sampler2D" | "sampler2DArray" | "sampler2DMS"
+                                | "sampler2DMSArray" => Dim::D2,
+                                "sampler3D" => Dim::D3,
+                                _ => Dim::Cube,
+                            },
+                            arrayed: matches!(
+                                sampler,
+                                "sampler1DArray"
+                                    | "sampler2DArray"
+                                    | "sampler2DMSArray"
+                                    | "samplerCubeArray"
+                            ),
+                            class: ImageClass::Sampled {
+                                kind,
+                                multi: matches!(sampler, "sampler2DMS" | "sampler2DMSArray"),
+                            },
                         },
-                        arrayed: matches!(
-                            name,
-                            "sampler1DArray"
-                                | "sampler2DArray"
-                                | "sampler2DMSArray"
-                                | "samplerCubeArray"
-                        ),
-                        class: ImageClass::Sampled {
-                            kind: Sk::Float,
-                            multi: matches!(name, "sampler2DMS" | "sampler2DMSArray"),
-                        },
-                    },
-                    TypeInner::Sampler { comparison: false },
-                ],
-                MacroCall::Sampler,
-            ))
+                        TypeInner::Sampler { comparison: false },
+                    ],
+                    MacroCall::Sampler,
+                ));
+                return;
+            }
+            _ => (),
         }
+    }
+
+    match name {
+        // Shadow sampler can only be of kind `Sk::Float`
         "sampler1DShadow"
         | "sampler1DArrayShadow"
         | "sampler2DShadow"
@@ -1515,6 +1552,7 @@ pub enum MacroCall {
     TextureSize {
         arrayed: bool,
     },
+    TextureQueryLevels,
     ImageLoad {
         multi: bool,
     },
@@ -1737,6 +1775,24 @@ impl MacroCall {
 
                     expr = ctx.add_expression(Expression::Compose { components, ty }, meta)?
                 }
+
+                ctx.add_expression(
+                    Expression::As {
+                        expr,
+                        kind: Sk::Sint,
+                        convert: Some(4),
+                    },
+                    Span::default(),
+                )?
+            }
+            MacroCall::TextureQueryLevels => {
+                let expr = ctx.add_expression(
+                    Expression::ImageQuery {
+                        image: args[0],
+                        query: ImageQuery::NumLevels,
+                    },
+                    Span::default(),
+                )?;
 
                 ctx.add_expression(
                     Expression::As {

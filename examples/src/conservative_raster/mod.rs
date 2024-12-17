@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 const RENDER_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 struct Example {
@@ -83,12 +81,8 @@ impl crate::framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-        let shader_triangle_and_lines = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "triangle_and_lines.wgsl"
-            ))),
-        });
+        let shader_triangle_and_lines =
+            device.create_shader_module(wgpu::include_wgsl!("triangle_and_lines.wgsl"));
 
         let pipeline_triangle_conservative =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -203,10 +197,7 @@ impl crate::framework::Example for Example {
                 bind_group_layouts: &[&bind_group_layout],
                 push_constant_ranges: &[],
             });
-            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
-            });
+            let shader = device.create_shader_module(wgpu::include_wgsl!("upscale.wgsl"));
             (
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("Upscale"),
@@ -305,7 +296,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.pipeline_upscale);
-            rpass.set_bind_group(0, Some(&self.bind_group_upscale), &[]);
+            rpass.set_bind_group(0, &self.bind_group_upscale, &[]);
             rpass.draw(0..3, 0..1);
 
             if let Some(pipeline_lines) = &self.pipeline_lines {

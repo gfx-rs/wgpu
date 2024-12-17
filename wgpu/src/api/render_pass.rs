@@ -1,21 +1,6 @@
-use std::{marker::PhantomData, ops::Range, sync::Arc, thread};
+use std::ops::Range;
 
-use crate::context::DynContext;
 use crate::*;
-
-#[derive(Debug)]
-pub(crate) struct RenderPassInner {
-    pub(crate) data: Box<Data>,
-    pub(crate) context: Arc<C>,
-}
-
-impl Drop for RenderPassInner {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.render_pass_end(self.data.as_mut());
-        }
-    }
-}
 
 /// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
 ///
@@ -37,15 +22,20 @@ impl Drop for RenderPassInner {
 /// https://gpuweb.github.io/gpuweb/#render-pass-encoder).
 #[derive(Debug)]
 pub struct RenderPass<'encoder> {
-    /// The inner data of the render pass, separated out so it's easy to replace the lifetime with 'static if desired.
-    pub(crate) inner: RenderPassInner,
+    pub(crate) inner: dispatch::DispatchRenderPass,
 
     /// This lifetime is used to protect the [`CommandEncoder`] from being used
-    /// while the pass is alive.
-    pub(crate) encoder_guard: PhantomData<&'encoder ()>,
+    /// while the pass is alive. This needs to be PhantomDrop to prevent the lifetime
+    /// from being shortened.
+    pub(crate) _encoder_guard: PhantomDrop<&'encoder ()>,
 }
 
-impl<'encoder> RenderPass<'encoder> {
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(RenderPass<'_>: Send, Sync);
+
+crate::cmp::impl_eq_ord_hash_proxy!(RenderPass<'_> => .inner);
+
+impl RenderPass<'_> {
     /// Drops the lifetime relationship to the parent command encoder, making usage of
     /// the encoder while this pass is recorded a run-time error instead.
     ///
@@ -61,7 +51,7 @@ impl<'encoder> RenderPass<'encoder> {
     pub fn forget_lifetime(self) -> RenderPass<'static> {
         RenderPass {
             inner: self.inner,
-            encoder_guard: PhantomData,
+            _encoder_guard: crate::api::PhantomDrop::default(),
         }
     }
 
@@ -74,31 +64,21 @@ impl<'encoder> RenderPass<'encoder> {
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
     ///
     /// Subsequent draw calls’ shader executions will be able to access data in these bind groups.
-    pub fn set_bind_group(
-        &mut self,
-        index: u32,
-        bind_group: Option<&BindGroup>,
-        offsets: &[DynamicOffset],
-    ) {
-        let bg = bind_group.map(|x| x.data.as_ref());
-        DynContext::render_pass_set_bind_group(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            index,
-            bg,
-            offsets,
-        )
+    pub fn set_bind_group<'a, BG>(&mut self, index: u32, bind_group: BG, offsets: &[DynamicOffset])
+    where
+        Option<&'a BindGroup>: From<BG>,
+    {
+        let bg: Option<&'a BindGroup> = bind_group.into();
+        let bg = bg.map(|bg| &bg.inner);
+
+        self.inner.set_bind_group(index, bg, offsets);
     }
 
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
     pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
-        DynContext::render_pass_set_pipeline(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            pipeline.data.as_ref(),
-        )
+        self.inner.set_pipeline(&pipeline.inner);
     }
 
     /// Sets the blend color as used by some of the blending modes.
@@ -107,11 +87,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// If this method has not been called, the blend constant defaults to [`Color::TRANSPARENT`]
     /// (all components zero).
     pub fn set_blend_constant(&mut self, color: Color) {
-        DynContext::render_pass_set_blend_constant(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            color,
-        )
+        self.inner.set_blend_constant(color);
     }
 
     /// Sets the active index buffer.
@@ -119,14 +95,12 @@ impl<'encoder> RenderPass<'encoder> {
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
     pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
-        DynContext::render_pass_set_index_buffer(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            buffer_slice.buffer.data.as_ref(),
+        self.inner.set_index_buffer(
+            &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
             buffer_slice.size,
-        )
+        );
     }
 
     /// Assign a vertex buffer to a slot.
@@ -140,14 +114,12 @@ impl<'encoder> RenderPass<'encoder> {
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
     pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
-        DynContext::render_pass_set_vertex_buffer(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
+        self.inner.set_vertex_buffer(
             slot,
-            buffer_slice.buffer.data.as_ref(),
+            &buffer_slice.buffer.inner,
             buffer_slice.offset,
             buffer_slice.size,
-        )
+        );
     }
 
     /// Sets the scissor rectangle used during the rasterization stage.
@@ -160,14 +132,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// The function of the scissor rectangle resembles [`set_viewport()`](Self::set_viewport),
     /// but it does not affect the coordinate system, only which fragments are discarded.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        DynContext::render_pass_set_scissor_rect(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            x,
-            y,
-            width,
-            height,
-        );
+        self.inner.set_scissor_rect(x, y, width, height);
     }
 
     /// Sets the viewport used during the rasterization stage to linearly map
@@ -177,16 +142,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// If this method has not been called, the viewport defaults to the entire bounds of the render
     /// targets.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
-        DynContext::render_pass_set_viewport(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            x,
-            y,
-            w,
-            h,
-            min_depth,
-            max_depth,
-        );
+        self.inner.set_viewport(x, y, w, h, min_depth, max_depth);
     }
 
     /// Sets the stencil reference.
@@ -194,34 +150,22 @@ impl<'encoder> RenderPass<'encoder> {
     /// Subsequent stencil tests will test against this value.
     /// If this method has not been called, the stencil reference value defaults to `0`.
     pub fn set_stencil_reference(&mut self, reference: u32) {
-        DynContext::render_pass_set_stencil_reference(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            reference,
-        );
+        self.inner.set_stencil_reference(reference);
     }
 
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
-        DynContext::render_pass_insert_debug_marker(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            label,
-        );
+        self.inner.insert_debug_marker(label);
     }
 
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
-        DynContext::render_pass_push_debug_group(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            label,
-        );
+        self.inner.push_debug_group(label);
     }
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        DynContext::render_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut());
+        self.inner.pop_debug_group();
     }
 
     /// Draws primitives from the active vertex buffer(s).
@@ -246,12 +190,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        DynContext::render_pass_draw(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            vertices,
-            instances,
-        )
+        self.inner.draw(vertices, instances);
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
@@ -279,13 +218,7 @@ impl<'encoder> RenderPass<'encoder> {
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        DynContext::render_pass_draw_indexed(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indices,
-            base_vertex,
-            instances,
-        );
+        self.inner.draw_indexed(indices, base_vertex, instances);
     }
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
@@ -302,12 +235,8 @@ impl<'encoder> RenderPass<'encoder> {
     ///
     /// See details on the individual flags for more information.
     pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
-        DynContext::render_pass_draw_indirect(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indirect_buffer.data.as_ref(),
-            indirect_offset,
-        );
+        self.inner
+            .draw_indirect(&indirect_buffer.inner, indirect_offset);
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -329,12 +258,8 @@ impl<'encoder> RenderPass<'encoder> {
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
-        DynContext::render_pass_draw_indexed_indirect(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indirect_buffer.data.as_ref(),
-            indirect_offset,
-        );
+        self.inner
+            .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset);
     }
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
@@ -346,18 +271,14 @@ impl<'encoder> RenderPass<'encoder> {
         &mut self,
         render_bundles: I,
     ) {
-        let mut render_bundles = render_bundles.into_iter().map(|rb| rb.data.as_ref());
+        let mut render_bundles = render_bundles.into_iter().map(|rb| &rb.inner);
 
-        DynContext::render_pass_execute_bundles(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            &mut render_bundles,
-        )
+        self.inner.execute_bundles(&mut render_bundles);
     }
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// `count` draw calls are issued.
     ///
@@ -374,13 +295,8 @@ impl<'encoder> RenderPass<'encoder> {
         indirect_offset: BufferAddress,
         count: u32,
     ) {
-        DynContext::render_pass_multi_draw_indirect(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indirect_buffer.data.as_ref(),
-            indirect_offset,
-            count,
-        );
+        self.inner
+            .multi_draw_indirect(&indirect_buffer.inner, indirect_offset, count);
     }
 
     /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
@@ -400,18 +316,13 @@ impl<'encoder> RenderPass<'encoder> {
         indirect_offset: BufferAddress,
         count: u32,
     ) {
-        DynContext::render_pass_multi_draw_indexed_indirect(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indirect_buffer.data.as_ref(),
-            indirect_offset,
-            count,
-        );
+        self.inner
+            .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count);
     }
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
@@ -442,12 +353,10 @@ impl<'encoder> RenderPass<'encoder> {
         count_offset: BufferAddress,
         max_count: u32,
     ) {
-        DynContext::render_pass_multi_draw_indirect_count(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indirect_buffer.data.as_ref(),
+        self.inner.multi_draw_indirect_count(
+            &indirect_buffer.inner,
             indirect_offset,
-            count_buffer.data.as_ref(),
+            &count_buffer.inner,
             count_offset,
             max_count,
         );
@@ -486,12 +395,10 @@ impl<'encoder> RenderPass<'encoder> {
         count_offset: BufferAddress,
         max_count: u32,
     ) {
-        DynContext::render_pass_multi_draw_indexed_indirect_count(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indirect_buffer.data.as_ref(),
+        self.inner.multi_draw_indexed_indirect_count(
+            &indirect_buffer.inner,
             indirect_offset,
-            count_buffer.data.as_ref(),
+            &count_buffer.inner,
             count_offset,
             max_count,
         );
@@ -499,7 +406,7 @@ impl<'encoder> RenderPass<'encoder> {
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Set push constant data for subsequent draw calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -541,18 +448,12 @@ impl<'encoder> RenderPass<'encoder> {
     ///
     /// [`PushConstant`]: https://docs.rs/naga/latest/naga/enum.StorageClass.html#variant.PushConstant
     pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
-        DynContext::render_pass_set_push_constants(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            stages,
-            offset,
-            data,
-        );
+        self.inner.set_push_constants(stages, offset, data);
     }
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Issue a timestamp command at this point in the queue. The
     /// timestamp will be written to the specified query set, at the specified index.
     ///
@@ -561,53 +462,37 @@ impl<'encoder> RenderPass<'encoder> {
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
-        DynContext::render_pass_write_timestamp(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            query_set.data.as_ref(),
-            query_index,
-        )
+        self.inner.write_timestamp(&query_set.inner, query_index);
     }
 }
 
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Start a occlusion query on this render pass. It can be ended with
     /// `end_occlusion_query`. Occlusion queries may not be nested.
     pub fn begin_occlusion_query(&mut self, query_index: u32) {
-        DynContext::render_pass_begin_occlusion_query(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            query_index,
-        );
+        self.inner.begin_occlusion_query(query_index);
     }
 
     /// End the occlusion query on this render pass. It can be started with
     /// `begin_occlusion_query`. Occlusion queries may not be nested.
     pub fn end_occlusion_query(&mut self) {
-        DynContext::render_pass_end_occlusion_query(&*self.inner.context, self.inner.data.as_mut());
+        self.inner.end_occlusion_query();
     }
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'encoder> RenderPass<'encoder> {
+impl RenderPass<'_> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
-        DynContext::render_pass_begin_pipeline_statistics_query(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            query_set.data.as_ref(),
-            query_index,
-        );
+        self.inner
+            .begin_pipeline_statistics_query(&query_set.inner, query_index);
     }
 
     /// End the pipeline statistics query on this render pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
-        DynContext::render_pass_end_pipeline_statistics_query(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-        );
+        self.inner.end_pipeline_statistics_query();
     }
 }
 

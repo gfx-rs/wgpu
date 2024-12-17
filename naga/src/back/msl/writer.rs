@@ -33,6 +33,7 @@ const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
+pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
@@ -131,7 +132,7 @@ struct TypeContext<'a> {
     first_time: bool,
 }
 
-impl<'a> TypeContext<'a> {
+impl TypeContext<'_> {
     fn scalar(&self) -> Option<crate::Scalar> {
         let ty = &self.gctx.types[self.handle];
         ty.inner.scalar()
@@ -147,7 +148,7 @@ impl<'a> TypeContext<'a> {
     }
 }
 
-impl<'a> Display for TypeContext<'a> {
+impl Display for TypeContext<'_> {
     fn fmt(&self, out: &mut Formatter<'_>) -> Result<(), FmtError> {
         let ty = &self.gctx.types[self.handle];
         if ty.needs_alias() && !self.first_time {
@@ -214,14 +215,15 @@ impl<'a> Display for TypeContext<'a> {
                     crate::ImageDimension::D3 => "3d",
                     crate::ImageDimension::Cube => "cube",
                 };
-                let (texture_str, msaa_str, kind, access) = match class {
+                let (texture_str, msaa_str, scalar, access) = match class {
                     crate::ImageClass::Sampled { kind, multi } => {
                         let (msaa_str, access) = if multi {
                             ("_ms", "read")
                         } else {
                             ("", "sample")
                         };
-                        ("texture", msaa_str, kind, access)
+                        let scalar = crate::Scalar { kind, width: 4 };
+                        ("texture", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Depth { multi } => {
                         let (msaa_str, access) = if multi {
@@ -229,7 +231,11 @@ impl<'a> Display for TypeContext<'a> {
                         } else {
                             ("", "sample")
                         };
-                        ("depth", msaa_str, crate::ScalarKind::Float, access)
+                        let scalar = crate::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width: 4,
+                        };
+                        ("depth", msaa_str, scalar, access)
                     }
                     crate::ImageClass::Storage { format, .. } => {
                         let access = if self
@@ -253,7 +259,7 @@ impl<'a> Display for TypeContext<'a> {
                         ("texture", "", format.into(), access)
                     }
                 };
-                let base_name = crate::Scalar { kind, width: 4 }.to_msl_name();
+                let base_name = scalar.to_msl_name();
                 let array_str = if arrayed { "_array" } else { "" };
                 write!(
                     out,
@@ -301,7 +307,7 @@ struct TypedGlobalVariable<'a> {
     reference: bool,
 }
 
-impl<'a> TypedGlobalVariable<'a> {
+impl TypedGlobalVariable<'_> {
     fn try_fmt<W: Write>(&self, out: &mut W) -> BackendResult {
         let var = &self.module.global_variables[self.handle];
         let name = &self.names[&NameKey::GlobalVariable(self.handle)];
@@ -377,10 +383,10 @@ pub struct Writer<W> {
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
 
-    /// Name of the loop reachability macro.
+    /// Name of the force-bounded-loop macro.
     ///
-    /// See `emit_loop_reachable_macro` for details.
-    loop_reachable_macro_name: String,
+    /// See `emit_force_bounded_loop_macro` for details.
+    force_bounded_loop_macro_name: String,
 }
 
 impl crate::Scalar {
@@ -629,7 +635,13 @@ impl<'a> ExpressionContext<'a> {
         base: Handle<crate::Expression>,
         index: index::GuardedIndex,
     ) -> Option<index::IndexableLength> {
-        index::access_needs_check(base, index, self.module, self.function, self.info)
+        index::access_needs_check(
+            base,
+            index,
+            self.module,
+            &self.function.expressions,
+            self.info,
+        )
     }
 
     fn get_packed_vec_kind(&self, expr_handle: Handle<crate::Expression>) -> Option<crate::Scalar> {
@@ -670,7 +682,7 @@ impl<W: Write> Writer<W> {
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
-            loop_reachable_macro_name: String::default(),
+            force_bounded_loop_macro_name: String::default(),
         }
     }
 
@@ -681,12 +693,13 @@ impl<W: Write> Writer<W> {
         self.out
     }
 
-    /// Define a macro to invoke before loops, to defeat MSL infinite loop
-    /// reasoning.
+    /// Define a macro to invoke at the bottom of each loop body, to
+    /// defeat MSL infinite loop reasoning.
     ///
     /// If we haven't done so already, emit the definition of a preprocessor
-    /// macro to be invoked before each loop in the generated MSL, to ensure
-    /// that the MSL compiler's optimizations do not remove bounds checks.
+    /// macro to be invoked at the end of each loop body in the generated MSL,
+    /// to ensure that the MSL compiler's optimizations do not remove bounds
+    /// checks.
     ///
     /// Only the first call to this function for a given module actually causes
     /// the macro definition to be written. Subsequent loops can simply use the
@@ -752,52 +765,51 @@ impl<W: Write> Writer<W> {
     /// nicely, after having stolen data from elsewhere in the GPU address
     /// space.
     ///
-    /// Ideally, Naga would prevent UB entirely via some means that persuades
-    /// the MSL compiler that no loop Naga generates is infinite. One approach
-    /// would be to add inline assembly to each loop that is annotated as
-    /// potentially branching out of the loop, but which in fact generates no
-    /// instructions. Unfortunately, inline assembly is not handled correctly by
-    /// some Metal device drivers. Further experimentation hasn't produced a
-    /// satisfactory approach.
+    /// To avoid UB, Naga must persuade the MSL compiler that no loop Naga
+    /// generates is infinite. One approach would be to add inline assembly to
+    /// each loop that is annotated as potentially branching out of the loop,
+    /// but which in fact generates no instructions. Unfortunately, inline
+    /// assembly is not handled correctly by some Metal device drivers.
     ///
-    /// Instead, we accept that the MSL compiler may determine that some loops
-    /// are infinite, and focus instead on preventing the range analysis from
-    /// being affected. We transform *every* loop into something like this:
+    /// Instead, we add the following code to the bottom of every loop:
     ///
     /// ```ignore
-    /// if (volatile bool unpredictable = true; unpredictable)
-    ///     while (true) { }
+    /// if (volatile bool unpredictable = false; unpredictable)
+    ///     break;
     /// ```
     ///
-    /// Since the `volatile` qualifier prevents the compiler from assuming that
-    /// the `if` condition is true, it cannot be sure the infinite loop is
-    /// reached, and thus it cannot assume the entire structure is unreachable.
-    /// This prevents the range analysis impact described above.
+    /// Although the `if` condition will always be false in any real execution,
+    /// the `volatile` qualifier prevents the compiler from assuming this. Thus,
+    /// it must assume that the `break` might be reached, and hence that the
+    /// loop is not unbounded. This prevents the range analysis impact described
+    /// above.
     ///
     /// Unfortunately, what makes this a kludge, not a hack, is that this
     /// solution leaves the GPU executing a pointless conditional branch, at
-    /// runtime, before each loop. There's no part of the system that has a
-    /// global enough view to be sure that `unpredictable` is true, and remove
-    /// it from the code.
+    /// runtime, in every iteration of the loop. There's no part of the system
+    /// that has a global enough view to be sure that `unpredictable` is true,
+    /// and remove it from the code. Adding the branch also affects
+    /// optimization: for example, it's impossible to unroll this loop. This
+    /// transformation has been observed to significantly hurt performance.
     ///
     /// To make our output a bit more legible, we pull the condition out into a
     /// preprocessor macro defined at the top of the module.
     ///
-    /// This approach is also used by Chromium WebGPU's Dawn shader compiler, as of
-    /// <https://github.com/google/dawn/commit/ffd485c685040edb1e678165dcbf0e841cfa0298>.
-    fn emit_loop_reachable_macro(&mut self) -> BackendResult {
-        if !self.loop_reachable_macro_name.is_empty() {
+    /// This approach is also used by Chromium WebGPU's Dawn shader compiler:
+    /// <https://dawn.googlesource.com/dawn/+/a37557db581c2b60fb1cd2c01abdb232927dd961/src/tint/lang/msl/writer/printer/printer.cc#222>
+    fn emit_force_bounded_loop_macro(&mut self) -> BackendResult {
+        if !self.force_bounded_loop_macro_name.is_empty() {
             return Ok(());
         }
 
-        self.loop_reachable_macro_name = self.namer.call("LOOP_IS_REACHABLE");
-        let loop_reachable_volatile_name = self.namer.call("unpredictable_jump_over_loop");
+        self.force_bounded_loop_macro_name = self.namer.call("LOOP_IS_BOUNDED");
+        let loop_bounded_volatile_name = self.namer.call("unpredictable_break_from_loop");
         writeln!(
             self.out,
-            "#define {} if (volatile bool {} = true; {})",
-            self.loop_reachable_macro_name,
-            loop_reachable_volatile_name,
-            loop_reachable_volatile_name,
+            "#define {} {{ volatile bool {} = false; if ({}) break; }}",
+            self.force_bounded_loop_macro_name,
+            loop_bounded_volatile_name,
+            loop_bounded_volatile_name,
         )?;
 
         Ok(())
@@ -1276,42 +1288,6 @@ impl<W: Write> Writer<W> {
             size = size,
             stride = stride,
         )?;
-        Ok(())
-    }
-
-    fn put_atomic_operation(
-        &mut self,
-        pointer: Handle<crate::Expression>,
-        key: &str,
-        value: Handle<crate::Expression>,
-        context: &ExpressionContext,
-    ) -> BackendResult {
-        // If the pointer we're passing to the atomic operation needs to be conditional
-        // for `ReadZeroSkipWrite`, the condition needs to *surround* the atomic op, and
-        // the pointer operand should be unchecked.
-        let policy = context.choose_bounds_check_policy(pointer);
-        let checked = policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
-            && self.put_bounds_checks(pointer, context, back::Level(0), "")?;
-
-        // If requested and successfully put bounds checks, continue the ternary expression.
-        if checked {
-            write!(self.out, " ? ")?;
-        }
-
-        write!(
-            self.out,
-            "{NAMESPACE}::atomic_{key}_explicit({ATOMIC_REFERENCE}"
-        )?;
-        self.put_access_chain(pointer, policy, context)?;
-        write!(self.out, ", ")?;
-        self.put_expression(value, context, true)?;
-        write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
-
-        // Finish the ternary expression.
-        if checked {
-            write!(self.out, " : DefaultConstructible()")?;
-        }
-
         Ok(())
     }
 
@@ -1960,6 +1936,7 @@ impl<W: Write> Writer<W> {
                     Mf::Inverse => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
+                    Mf::QuantizeToF16 => "",
                     // bits
                     Mf::CountTrailingZeros => "ctz",
                     Mf::CountLeadingZeros => "clz",
@@ -2168,6 +2145,22 @@ impl<W: Write> Writer<W> {
                         self.put_expression(arg, context, true)?;
                         write!(self.out, " >> 24) << 24 >> 24")?;
                     }
+                    Mf::QuantizeToF16 => {
+                        match *context.resolve_type(arg) {
+                            crate::TypeInner::Scalar { .. } => write!(self.out, "float(half(")?,
+                            crate::TypeInner::Vector { size, .. } => write!(
+                                self.out,
+                                "{NAMESPACE}::float{size}({NAMESPACE}::half{size}(",
+                                size = back::vector_size_str(size),
+                            )?,
+                            _ => unreachable!(
+                                "Correct TypeInner for QuantizeToF16 should be already validated"
+                            ),
+                        };
+
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, "))")?;
+                    }
                     _ => {
                         write!(self.out, "{NAMESPACE}::{fun_name}")?;
                         self.put_call_parameters(
@@ -2261,14 +2254,14 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
             }
-            crate::Expression::RayQueryGetIntersection { query, committed } => {
+            crate::Expression::RayQueryGetIntersection {
+                query,
+                committed: _,
+            } => {
                 if context.lang_version < (2, 4) {
                     return Err(Error::UnsupportedRayTracing);
                 }
 
-                if !committed {
-                    unimplemented!()
-                }
                 let ty = context.module.special_types.ray_intersection.unwrap();
                 let type_name = &self.names[&NameKey::Type(ty)];
                 write!(self.out, "{type_name} {{{RAY_QUERY_FUN_MAP_INTERSECTION}(")?;
@@ -2414,6 +2407,7 @@ impl<W: Write> Writer<W> {
                     self.out.write_str(") < ")?;
                     match length {
                         index::IndexableLength::Known(value) => write!(self.out, "{value}")?,
+                        index::IndexableLength::Pending => unreachable!(),
                         index::IndexableLength::Dynamic => {
                             let global =
                                 context.function.originating_global(base).ok_or_else(|| {
@@ -2576,6 +2570,7 @@ impl<W: Write> Writer<W> {
                 index::IndexableLength::Known(limit) => {
                     write!(self.out, "{}u", limit - 1)?;
                 }
+                index::IndexableLength::Pending => unreachable!(),
                 index::IndexableLength::Dynamic => {
                     let global = context.function.originating_global(base).ok_or_else(|| {
                         Error::GenericValidation("Could not find originating global".into())
@@ -3052,15 +3047,10 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                     break_if,
                 } => {
-                    self.emit_loop_reachable_macro()?;
                     if !continuing.is_empty() || break_if.is_some() {
                         let gate_name = self.namer.call("loop_init");
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                        writeln!(
-                            self.out,
-                            "{level}{} while(true) {{",
-                            self.loop_reachable_macro_name,
-                        )?;
+                        writeln!(self.out, "{level}while(true) {{",)?;
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
@@ -3075,13 +3065,16 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
                     } else {
-                        writeln!(
-                            self.out,
-                            "{level}{} while(true) {{",
-                            self.loop_reachable_macro_name,
-                        )?;
+                        writeln!(self.out, "{level}while(true) {{",)?;
                     }
                     self.put_block(level.next(), body, context)?;
+                    self.emit_force_bounded_loop_macro()?;
+                    writeln!(
+                        self.out,
+                        "{}{}",
+                        level.next(),
+                        self.force_bounded_loop_macro_name
+                    )?;
                     writeln!(self.out, "{level}}}")?;
                 }
                 crate::Statement::Break => {
@@ -3182,24 +3175,65 @@ impl<W: Write> Writer<W> {
                     value,
                     result,
                 } => {
+                    let context = &context.expression;
+
                     // This backend supports `SHADER_INT64_ATOMIC_MIN_MAX` but not
                     // `SHADER_INT64_ATOMIC_ALL_OPS`, so we can assume that if `result` is
                     // `Some`, we are not operating on a 64-bit value, and that if we are
                     // operating on a 64-bit value, `result` is `None`.
                     write!(self.out, "{level}")?;
-                    let fun_str = if let Some(result) = result {
+                    let fun_key = if let Some(result) = result {
                         let res_name = Baked(result).to_string();
-                        self.start_baking_expression(result, &context.expression, &res_name)?;
+                        self.start_baking_expression(result, context, &res_name)?;
                         self.named_expressions.insert(result, res_name);
-                        fun.to_msl()?
-                    } else if context.expression.resolve_type(value).scalar_width() == Some(8) {
+                        fun.to_msl()
+                    } else if context.resolve_type(value).scalar_width() == Some(8) {
                         fun.to_msl_64_bit()?
                     } else {
-                        fun.to_msl()?
+                        fun.to_msl()
                     };
 
-                    self.put_atomic_operation(pointer, fun_str, value, &context.expression)?;
-                    // done
+                    // If the pointer we're passing to the atomic operation needs to be conditional
+                    // for `ReadZeroSkipWrite`, the condition needs to *surround* the atomic op, and
+                    // the pointer operand should be unchecked.
+                    let policy = context.choose_bounds_check_policy(pointer);
+                    let checked = policy == index::BoundsCheckPolicy::ReadZeroSkipWrite
+                        && self.put_bounds_checks(pointer, context, back::Level(0), "")?;
+
+                    // If requested and successfully put bounds checks, continue the ternary expression.
+                    if checked {
+                        write!(self.out, " ? ")?;
+                    }
+
+                    // Put the atomic function invocation.
+                    match *fun {
+                        crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
+                            write!(self.out, "{ATOMIC_COMP_EXCH_FUNCTION}({ATOMIC_REFERENCE}")?;
+                            self.put_access_chain(pointer, policy, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(cmp, context, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(value, context, true)?;
+                            write!(self.out, ")")?;
+                        }
+                        _ => {
+                            write!(
+                                self.out,
+                                "{NAMESPACE}::atomic_{fun_key}_explicit({ATOMIC_REFERENCE}"
+                            )?;
+                            self.put_access_chain(pointer, policy, context)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(value, context, true)?;
+                            write!(self.out, ", {NAMESPACE}::memory_order_relaxed)")?;
+                        }
+                    }
+
+                    // Finish the ternary expression.
+                    if checked {
+                        write!(self.out, " : DefaultConstructible()")?;
+                    }
+
+                    // Done
                     writeln!(self.out, ";")?;
                 }
                 crate::Statement::WorkGroupUniformLoad { pointer, result } => {
@@ -3317,7 +3351,10 @@ impl<W: Write> Writer<W> {
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
-                    write!(self.out, "uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    write!(
+                        self.out,
+                        "{NAMESPACE}::uint4((uint64_t){NAMESPACE}::simd_ballot("
+                    )?;
                     if let Some(predicate) = predicate {
                         self.put_expression(predicate, &context.expression, true)?;
                     } else {
@@ -3516,7 +3553,7 @@ impl<W: Write> Writer<W> {
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
-        self.loop_reachable_macro_name.clear();
+        self.force_bounded_loop_macro_name.clear();
         self.struct_member_pads.clear();
 
         writeln!(
@@ -3705,6 +3742,9 @@ impl<W: Write> Writer<W> {
                             )?;
                             writeln!(self.out, "}};")?;
                         }
+                        crate::ArraySize::Pending(_) => {
+                            unreachable!()
+                        }
                         crate::ArraySize::Dynamic => {
                             writeln!(self.out, "typedef {base_name} {name}[1];")?;
                         }
@@ -3820,15 +3860,40 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out)?;
                     writeln!(
                         self.out,
-                        "{} {defined_func_name}({arg_type_name} arg) {{
+                        "{struct_name} {defined_func_name}({arg_type_name} arg) {{
     {other_type_name} other;
     {arg_type_name} fract = {NAMESPACE}::{called_func_name}(arg, other);
-    return {}{{ fract, other }};
-}}",
-                        struct_name, struct_name
+    return {struct_name}{{ fract, other }};
+}}"
                     )?;
                 }
-                &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
+                &crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
+                    let arg_type_name = scalar.to_msl_name();
+                    let called_func_name = "atomic_compare_exchange_weak_explicit";
+                    let defined_func_name = ATOMIC_COMP_EXCH_FUNCTION;
+                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
+
+                    writeln!(self.out)?;
+
+                    for address_space_name in ["device", "threadgroup"] {
+                        writeln!(
+                            self.out,
+                            "\
+template <typename A>
+{struct_name} {defined_func_name}(
+    {address_space_name} A *atomic_ptr,
+    {arg_type_name} cmp,
+    {arg_type_name} v
+) {{
+    bool swapped = {NAMESPACE}::{called_func_name}(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return {struct_name}{{cmp, swapped}};
+}}"
+                        )?;
+                    }
+                }
             }
         }
 
@@ -4456,7 +4521,7 @@ impl<W: Write> Writer<W> {
                 let name = self.namer.call("unpackUint32x4");
                 writeln!(
                     self.out,
-                    "uint4 {name}(uint b0, \
+                    "{NAMESPACE}::uint4 {name}(uint b0, \
                                   uint b1, \
                                   uint b2, \
                                   uint b3, \
@@ -4475,7 +4540,7 @@ impl<W: Write> Writer<W> {
                 )?;
                 writeln!(
                     self.out,
-                    "{}return uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                    "{}return {NAMESPACE}::uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), \
                                     (b7 << 24 | b6 << 16 | b5 << 8 | b4), \
                                     (b11 << 24 | b10 << 16 | b9 << 8 | b8), \
                                     (b15 << 24 | b14 << 16 | b13 << 8 | b12));",
@@ -5029,7 +5094,7 @@ impl<W: Write> Writer<W> {
             // a struct type named `<fun>Input` to hold them. If we are doing
             // vertex pulling, we instead update our attribute mapping to
             // note the types, names, and zero values of the attributes.
-            let stage_in_name = format!("{fun_name}Input");
+            let stage_in_name = self.namer.call(&format!("{fun_name}Input"));
             let varyings_member_name = self.namer.call("varyings");
             let mut has_varyings = false;
             if !flattened_arguments.is_empty() {
@@ -5081,7 +5146,7 @@ impl<W: Write> Writer<W> {
 
             // Define a struct type named for the return value, if any, named
             // `<fun>Output`.
-            let stage_out_name = format!("{fun_name}Output");
+            let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
                 Some(ref result) => {
@@ -5948,6 +6013,7 @@ mod workgroup_mem_init {
                         let count = match size.to_indexable_length(module).expect("Bad array size")
                         {
                             proc::IndexableLength::Known(count) => count,
+                            proc::IndexableLength::Pending => unreachable!(),
                             proc::IndexableLength::Dynamic => unreachable!(),
                         };
 
@@ -6066,8 +6132,8 @@ fn test_stack_size() {
 }
 
 impl crate::AtomicFunction {
-    fn to_msl(self) -> Result<&'static str, Error> {
-        Ok(match self {
+    const fn to_msl(self) -> &'static str {
+        match self {
             Self::Add => "fetch_add",
             Self::Subtract => "fetch_sub",
             Self::And => "fetch_and",
@@ -6076,10 +6142,8 @@ impl crate::AtomicFunction {
             Self::Min => "fetch_min",
             Self::Max => "fetch_max",
             Self::Exchange { compare: None } => "exchange",
-            Self::Exchange { compare: Some(_) } => Err(Error::FeatureNotImplemented(
-                "atomic CompareExchange".to_string(),
-            ))?,
-        })
+            Self::Exchange { compare: Some(_) } => ATOMIC_COMP_EXCH_FUNCTION,
+        }
     }
 
     fn to_msl_64_bit(self) -> Result<&'static str, Error> {

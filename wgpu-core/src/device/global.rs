@@ -8,7 +8,7 @@ use crate::{
     },
     command::{self, CommandBuffer},
     conv,
-    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure, DeviceLostReason},
+    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -219,9 +219,11 @@ impl Global {
         device.check_is_valid()?;
         buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
 
-        let last_submission = device
-            .lock_life()
-            .get_buffer_latest_submission_index(&buffer);
+        let last_submission = device.get_queue().and_then(|queue| {
+            queue
+                .lock_life()
+                .get_buffer_latest_submission_index(&buffer)
+        });
 
         if let Some(last_submission) = last_submission {
             device.wait_for_submit(last_submission)?;
@@ -406,12 +408,12 @@ impl Global {
             trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
         }
 
-        let buffer = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
+        let (buffer, err) = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
 
         let id = fid.assign(buffer);
         api_log!("Device::create_buffer -> {id:?}");
 
-        (id, None)
+        (id, err)
     }
 
     pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
@@ -732,6 +734,7 @@ impl Global {
                 buffer_storage: &Storage<Fallible<resource::Buffer>>,
                 sampler_storage: &Storage<Fallible<resource::Sampler>>,
                 texture_view_storage: &Storage<Fallible<resource::TextureView>>,
+                tlas_storage: &Storage<Fallible<resource::Tlas>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
@@ -753,6 +756,12 @@ impl Global {
                 };
                 let resolve_view = |id: &id::TextureViewId| {
                     texture_view_storage
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
+                };
+                let resolve_tlas = |id: &id::TlasId| {
+                    tlas_storage
                         .get(*id)
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
@@ -788,6 +797,9 @@ impl Global {
                             .collect::<Result<Vec<_>, _>>()?;
                         ResolvedBindingResource::TextureViewArray(Cow::Owned(views))
                     }
+                    BindingResource::AccelerationStructure(ref tlas) => {
+                        ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
+                    }
                 };
                 Ok(ResolvedBindGroupEntry {
                     binding: e.binding,
@@ -799,9 +811,18 @@ impl Global {
                 let buffer_guard = hub.buffers.read();
                 let texture_view_guard = hub.texture_views.read();
                 let sampler_guard = hub.samplers.read();
+                let tlas_guard = hub.tlas_s.read();
                 desc.entries
                     .iter()
-                    .map(|e| resolve_entry(e, &buffer_guard, &sampler_guard, &texture_view_guard))
+                    .map(|e| {
+                        resolve_entry(
+                            e,
+                            &buffer_guard,
+                            &sampler_guard,
+                            &texture_view_guard,
+                            &tlas_guard,
+                        )
+                    })
                     .collect::<Result<Vec<_>, _>>()
             };
             let entries = match entries {
@@ -1838,7 +1859,13 @@ impl Global {
                         height: config.height,
                         depth_or_array_layers: 1,
                     },
-                    usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                    usage: conv::map_texture_usage(
+                        config.usage,
+                        hal::FormatAspects::COLOR,
+                        wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                    ),
                     view_formats: hal_view_formats,
                 };
 
@@ -2059,24 +2086,10 @@ impl Global {
         profiling::scope!("Device::drop");
         api_log!("Device::drop {device_id:?}");
 
-        let device = self.hub.devices.remove(device_id);
-        let device_lost_closure = device.lock_life().device_lost_closure.take();
-        if let Some(closure) = device_lost_closure {
-            closure.call(DeviceLostReason::Dropped, String::from("Device dropped."));
-        }
-
-        // The things `Device::prepare_to_die` takes care are mostly
-        // unnecessary here. We know our queue is empty, so we don't
-        // need to wait for submissions or triage them. We know we were
-        // just polled, so `life_tracker.free_resources` is empty.
-        debug_assert!(device.lock_life().queue_empty());
-        device.pending_writes.lock().deactivate();
-
-        drop(device);
+        self.hub.devices.remove(device_id);
     }
 
-    // This closure will be called exactly once during "lose the device",
-    // or when it is replaced.
+    /// `device_lost_closure` might never be called.
     pub fn device_set_device_lost_closure(
         &self,
         device_id: DeviceId,
@@ -2084,14 +2097,10 @@ impl Global {
     ) {
         let device = self.hub.devices.get(device_id);
 
-        let mut life_tracker = device.lock_life();
-        if let Some(existing_closure) = life_tracker.device_lost_closure.take() {
-            // It's important to not hold the lock while calling the closure.
-            drop(life_tracker);
-            existing_closure.call(DeviceLostReason::ReplacedCallback, "".to_string());
-            life_tracker = device.lock_life();
-        }
-        life_tracker.device_lost_closure = Some(device_lost_closure);
+        device
+            .device_lost_closure
+            .lock()
+            .replace(device_lost_closure);
     }
 
     pub fn device_destroy(&self, device_id: DeviceId) {
@@ -2141,39 +2150,34 @@ impl Global {
         self.hub.queues.remove(queue_id);
     }
 
+    /// `op.callback` is guaranteed to be called.
     pub fn buffer_map_async(
         &self,
         buffer_id: id::BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
         op: BufferMapOperation,
-    ) -> BufferAccessResult {
+    ) -> Result<crate::SubmissionIndex, BufferAccessError> {
         profiling::scope!("Buffer::map_async");
         api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 
         let hub = &self.hub;
 
-        let op_and_err = 'error: {
-            let buffer = match hub.buffers.get(buffer_id).get() {
-                Ok(buffer) => buffer,
-                Err(e) => break 'error Some((op, e.into())),
-            };
-
-            buffer.map_async(offset, size, op).err()
+        let map_result = match hub.buffers.get(buffer_id).get() {
+            Ok(buffer) => buffer.map_async(offset, size, op),
+            Err(e) => Err((op, e.into())),
         };
 
-        // User callbacks must not be called while holding `buffer.map_async`'s locks, so we
-        // defer the error callback if it needs to be called immediately (typically when running
-        // into errors).
-        if let Some((mut operation, err)) = op_and_err {
-            if let Some(callback) = operation.callback.take() {
-                callback.call(Err(err.clone()));
+        match map_result {
+            Ok(submission_index) => Ok(submission_index),
+            Err((mut operation, err)) => {
+                if let Some(callback) = operation.callback.take() {
+                    callback(Err(err.clone()));
+                }
+                log::error!("Buffer::map_async error: {err}");
+                Err(err)
             }
-            log::error!("Buffer::map_async error: {err}");
-            return Err(err);
         }
-
-        Ok(())
     }
 
     pub fn buffer_get_mapped_range(

@@ -19,8 +19,6 @@ pub enum ExpressionError {
     NegativeIndex(Handle<crate::Expression>),
     #[error("Accessing index {1} is out of {0:?} bounds")]
     IndexOutOfBounds(Handle<crate::Expression>, u32),
-    #[error("The expression {0:?} may only be indexed by a constant")]
-    IndexMustBeConstant(Handle<crate::Expression>),
     #[error("Function argument {0:?} doesn't exist")]
     FunctionArgumentDoesntExist(u32),
     #[error("Loading of {0:?} can't be done")]
@@ -41,12 +39,21 @@ pub enum ExpressionError {
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
     InvalidUnaryOperandType(crate::UnaryOperator, Handle<crate::Expression>),
-    #[error("Operation {0:?} can't work with {1:?} and {2:?}")]
-    InvalidBinaryOperandTypes(
-        crate::BinaryOperator,
-        Handle<crate::Expression>,
-        Handle<crate::Expression>,
-    ),
+    #[error(
+        "Operation {:?} can't work with {:?} (of type {:?}) and {:?} (of type {:?})",
+        op,
+        lhs_expr,
+        lhs_type,
+        rhs_expr,
+        rhs_type
+    )]
+    InvalidBinaryOperandTypes {
+        op: crate::BinaryOperator,
+        lhs_expr: Handle<crate::Expression>,
+        lhs_type: crate::TypeInner,
+        rhs_expr: Handle<crate::Expression>,
+        rhs_type: crate::TypeInner,
+    },
     #[error("Selecting is not possible")]
     InvalidSelectTypes,
     #[error("Relational argument {0:?} is not a boolean vector")]
@@ -99,10 +106,12 @@ pub enum ExpressionError {
     InvalidGatherComponent(crate::SwizzleComponent),
     #[error("Gather can't be done for image dimension {0:?}")]
     InvalidGatherDimension(crate::ImageDimension),
-    #[error("Sample level (exact) type {0:?} is not a scalar float")]
+    #[error("Sample level (exact) type {0:?} has an invalid type")]
     InvalidSampleLevelExactType(Handle<crate::Expression>),
     #[error("Sample level (bias) type {0:?} is not a scalar float")]
     InvalidSampleLevelBiasType(Handle<crate::Expression>),
+    #[error("Bias can't be done for image dimension {0:?}")]
+    InvalidSampleLevelBiasDimension(crate::ImageDimension),
     #[error("Sample level (gradient) of {1:?} doesn't match the image dimension {0:?}")]
     InvalidSampleLevelGradientType(crate::ImageDimension, Handle<crate::Expression>),
     #[error("Unable to cast")]
@@ -159,7 +168,7 @@ struct ExpressionTypeResolver<'a> {
     info: &'a FunctionInfo,
 }
 
-impl<'a> std::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'a> {
+impl std::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
     type Output = crate::TypeInner;
 
     #[allow(clippy::panic)]
@@ -238,11 +247,11 @@ impl super::Validator {
         let stages = match *expression {
             E::Access { base, index } => {
                 let base_type = &resolver[base];
-                // See the documentation for `Expression::Access`.
-                let dynamic_indexing_restricted = match *base_type {
-                    Ti::Vector { .. } => false,
-                    Ti::Matrix { .. } | Ti::Array { .. } => true,
-                    Ti::Pointer { .. }
+                match *base_type {
+                    Ti::Matrix { .. }
+                    | Ti::Vector { .. }
+                    | Ti::Array { .. }
+                    | Ti::Pointer { .. }
                     | Ti::ValuePointer { size: Some(_), .. }
                     | Ti::BindingArray { .. } => false,
                     ref other => {
@@ -260,9 +269,6 @@ impl super::Validator {
                         log::error!("Indexing by {:?}", other);
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
-                }
-                if dynamic_indexing_restricted && function.expressions[index].is_dynamic_index() {
-                    return Err(ExpressionError::IndexMustBeConstant(base));
                 }
 
                 // If we know both the length and the index, we can do the
@@ -526,11 +532,24 @@ impl super::Validator {
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
                     crate::SampleLevel::Zero => ShaderStages::all(),
                     crate::SampleLevel::Exact(expr) => {
-                        match resolver[expr] {
-                            Ti::Scalar(Sc {
-                                kind: Sk::Float, ..
-                            }) => {}
-                            _ => return Err(ExpressionError::InvalidSampleLevelExactType(expr)),
+                        match class {
+                            crate::ImageClass::Depth { .. } => match resolver[expr] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    ..
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidSampleLevelExactType(expr))
+                                }
+                            },
+                            _ => match resolver[expr] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Float, ..
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidSampleLevelExactType(expr))
+                                }
+                            },
                         }
                         ShaderStages::all()
                     }
@@ -540,6 +559,19 @@ impl super::Validator {
                                 kind: Sk::Float, ..
                             }) => {}
                             _ => return Err(ExpressionError::InvalidSampleLevelBiasType(expr)),
+                        }
+                        match class {
+                            crate::ImageClass::Sampled {
+                                kind: Sk::Float,
+                                multi: false,
+                            } => {
+                                if dim == crate::ImageDimension::D1 {
+                                    return Err(ExpressionError::InvalidSampleLevelBiasDimension(
+                                        dim,
+                                    ));
+                                }
+                            }
+                            _ => return Err(ExpressionError::InvalidImageClass(class)),
                         }
                         ShaderStages::FRAGMENT
                     }
@@ -852,7 +884,13 @@ impl super::Validator {
                         function.expressions[right],
                         right_inner
                     );
-                    return Err(ExpressionError::InvalidBinaryOperandTypes(op, left, right));
+                    return Err(ExpressionError::InvalidBinaryOperandTypes {
+                        op,
+                        lhs_expr: left,
+                        lhs_type: left_inner.clone(),
+                        rhs_expr: right,
+                        rhs_type: right_inner.clone(),
+                    });
                 }
                 ShaderStages::all()
             }
@@ -1365,6 +1403,26 @@ impl super::Validator {
                         }
                         match *arg_ty {
                             Ti::Matrix { .. } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
+                    Mf::QuantizeToF16 => {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Scalar(Sc {
+                                kind: Sk::Float,
+                                width: 4,
+                            })
+                            | Ti::Vector {
+                                scalar:
+                                    Sc {
+                                        kind: Sk::Float,
+                                        width: 4,
+                                    },
+                                ..
+                            } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }
                     }

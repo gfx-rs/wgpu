@@ -795,6 +795,7 @@
                     value: Some(70),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("fs_main"),
@@ -1226,6 +1227,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -1234,6 +1236,7 @@
             stage: Fragment,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("fs_main_wrap"),
                 arguments: [
@@ -1301,7 +1304,10 @@
                         value: Some(5),
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
 )

@@ -91,8 +91,9 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -138,6 +139,8 @@ impl Global {
 
         if offset == end_offset {
             log::trace!("Ignoring fill_buffer of size 0");
+
+            cmd_buf_data_guard.mark_successful();
             return Ok(());
         }
 
@@ -157,6 +160,8 @@ impl Global {
             cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
             cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
         }
+
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
@@ -174,8 +179,9 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -243,7 +249,10 @@ impl Global {
             &device.alignments,
             device.zero_buffer.as_ref(),
             &snatch_guard,
-        )
+        )?;
+
+        cmd_buf_data_guard.mark_successful();
+        Ok(())
     }
 }
 
@@ -386,7 +395,7 @@ fn clear_texture_via_buffer_copies(
                     let num_rows = num_rows_left.min(max_rows_per_copy);
 
                     zero_buffer_copy_regions.push(hal::BufferTextureCopy {
-                        buffer_layout: wgt::ImageDataLayout {
+                        buffer_layout: wgt::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(bytes_per_row),
                             rows_per_image: None,

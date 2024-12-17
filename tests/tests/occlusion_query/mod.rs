@@ -1,4 +1,4 @@
-use std::{borrow::Cow, mem::size_of};
+use std::mem::size_of;
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
@@ -25,10 +25,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         // Setup pipeline using a simple shader with hardcoded vertices
         let shader = ctx
             .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Shader module"),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-            });
+            .create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let pipeline = ctx
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {

@@ -44,7 +44,7 @@ pub fn op_webgpu_queue_submit(
         })
         .collect::<Result<Vec<_>, AnyError>>()?;
 
-    let maybe_err = instance.queue_submit(queue, &ids).err();
+    let maybe_err = instance.queue_submit(queue, &ids).err().map(|(_idx, e)| e);
 
     for rid in command_buffers {
         let resource = state.resource_table.take::<WebGpuCommandBuffer>(rid)?;
@@ -56,15 +56,15 @@ pub fn op_webgpu_queue_submit(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GpuImageDataLayout {
+pub struct GpuTexelCopyBufferLayout {
     offset: u64,
     bytes_per_row: Option<u32>,
     rows_per_image: Option<u32>,
 }
 
-impl From<GpuImageDataLayout> for wgpu_types::ImageDataLayout {
-    fn from(layout: GpuImageDataLayout) -> Self {
-        wgpu_types::ImageDataLayout {
+impl From<GpuTexelCopyBufferLayout> for wgpu_types::TexelCopyBufferLayout {
+    fn from(layout: GpuTexelCopyBufferLayout) -> Self {
+        wgpu_types::TexelCopyBufferLayout {
             offset: layout.offset,
             bytes_per_row: layout.bytes_per_row,
             rows_per_image: layout.rows_per_image,
@@ -107,8 +107,8 @@ pub fn op_webgpu_write_buffer(
 pub fn op_webgpu_write_texture(
     state: &mut OpState,
     #[smi] queue_rid: ResourceId,
-    #[serde] destination: super::command_encoder::GpuImageCopyTexture,
-    #[serde] data_layout: GpuImageDataLayout,
+    #[serde] destination: super::command_encoder::GpuTexelCopyTextureInfo,
+    #[serde] data_layout: GpuTexelCopyBufferLayout,
     #[serde] size: wgpu_types::Extent3d,
     #[buffer] buf: &[u8],
 ) -> Result<WebGpuResult, AnyError> {
@@ -119,7 +119,7 @@ pub fn op_webgpu_write_texture(
     let queue_resource = state.resource_table.get::<WebGpuQueue>(queue_rid)?;
     let queue = queue_resource.1;
 
-    let destination = wgpu_core::command::ImageCopyTexture {
+    let destination = wgpu_core::command::TexelCopyTextureInfo {
         texture: texture_resource.id,
         mip_level: destination.mip_level,
         origin: destination.origin,

@@ -5,7 +5,7 @@ use crate::{
     GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange, PipelineCacheDescriptor,
     PipelineCacheError, PipelineError, PipelineLayoutDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor,
-    TextureViewDescriptor,
+    TextureViewDescriptor, TlasInstance,
 };
 
 use super::{
@@ -16,8 +16,6 @@ use super::{
 };
 
 pub trait DynDevice: DynResource {
-    unsafe fn exit(self: Box<Self>, queue: Box<dyn DynQueue>);
-
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
@@ -60,7 +58,6 @@ pub trait DynDevice: DynResource {
         &self,
         desc: &CommandEncoderDescriptor<dyn DynQueue>,
     ) -> Result<Box<dyn DynCommandEncoder>, DeviceError>;
-    unsafe fn destroy_command_encoder(&self, pool: Box<dyn DynCommandEncoder>);
 
     unsafe fn create_bind_group_layout(
         &self,
@@ -160,16 +157,13 @@ pub trait DynDevice: DynResource {
         &self,
         acceleration_structure: Box<dyn DynAccelerationStructure>,
     );
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8>;
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
 }
 
 impl<D: Device + DynResource> DynDevice for D {
-    unsafe fn exit(self: Box<Self>, queue: Box<dyn DynQueue>) {
-        unsafe { D::exit(*self, queue.unbox()) }
-    }
-
     unsafe fn create_buffer(
         &self,
         desc: &BufferDescriptor,
@@ -271,10 +265,6 @@ impl<D: Device + DynResource> DynDevice for D {
         };
         unsafe { D::create_command_encoder(self, &desc) }
             .map(|b| -> Box<dyn DynCommandEncoder> { Box::new(b) })
-    }
-
-    unsafe fn destroy_command_encoder(&self, encoder: Box<dyn DynCommandEncoder>) {
-        unsafe { D::destroy_command_encoder(self, encoder.unbox()) };
     }
 
     unsafe fn create_bind_group_layout(
@@ -524,6 +514,10 @@ impl<D: Device + DynResource> DynDevice for D {
         acceleration_structure: Box<dyn DynAccelerationStructure>,
     ) {
         unsafe { D::destroy_acceleration_structure(self, acceleration_structure.unbox()) }
+    }
+
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        D::tlas_instance_to_bytes(self, instance)
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

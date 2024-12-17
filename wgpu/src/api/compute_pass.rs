@@ -1,6 +1,3 @@
-use std::{marker::PhantomData, sync::Arc, thread};
-
-use crate::context::DynContext;
 use crate::*;
 
 /// In-progress recording of a compute pass.
@@ -11,15 +8,20 @@ use crate::*;
 /// https://gpuweb.github.io/gpuweb/#compute-pass-encoder).
 #[derive(Debug)]
 pub struct ComputePass<'encoder> {
-    /// The inner data of the compute pass, separated out so it's easy to replace the lifetime with 'static if desired.
-    pub(crate) inner: ComputePassInner,
+    pub(crate) inner: dispatch::DispatchComputePass,
 
     /// This lifetime is used to protect the [`CommandEncoder`] from being used
-    /// while the pass is alive.
-    pub(crate) encoder_guard: PhantomData<&'encoder ()>,
+    /// while the pass is alive. This needs to be PhantomDrop to prevent the lifetime
+    /// from being shortened.
+    pub(crate) _encoder_guard: crate::api::PhantomDrop<&'encoder ()>,
 }
 
-impl<'encoder> ComputePass<'encoder> {
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(ComputePass<'_>: Send, Sync);
+
+crate::cmp::impl_eq_ord_hash_proxy!(ComputePass<'_> => .inner);
+
+impl ComputePass<'_> {
     /// Drops the lifetime relationship to the parent command encoder, making usage of
     /// the encoder while this pass is recorded a run-time error instead.
     ///
@@ -35,7 +37,7 @@ impl<'encoder> ComputePass<'encoder> {
     pub fn forget_lifetime(self) -> ComputePass<'static> {
         ComputePass {
             inner: self.inner,
-            encoder_guard: PhantomData,
+            _encoder_guard: crate::api::PhantomDrop::default(),
         }
     }
 
@@ -45,65 +47,40 @@ impl<'encoder> ComputePass<'encoder> {
     /// If the bind group have dynamic offsets, provide them in the binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
-    pub fn set_bind_group(
-        &mut self,
-        index: u32,
-        bind_group: Option<&BindGroup>,
-        offsets: &[DynamicOffset],
-    ) {
-        let bg = bind_group.map(|x| x.data.as_ref());
-        DynContext::compute_pass_set_bind_group(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            index,
-            bg,
-            offsets,
-        );
+    pub fn set_bind_group<'a, BG>(&mut self, index: u32, bind_group: BG, offsets: &[DynamicOffset])
+    where
+        Option<&'a BindGroup>: From<BG>,
+    {
+        let bg: Option<&BindGroup> = bind_group.into();
+        let bg = bg.map(|bg| &bg.inner);
+        self.inner.set_bind_group(index, bg, offsets);
     }
 
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
-        DynContext::compute_pass_set_pipeline(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            pipeline.data.as_ref(),
-        );
+        self.inner.set_pipeline(&pipeline.inner);
     }
 
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
-        DynContext::compute_pass_insert_debug_marker(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            label,
-        );
+        self.inner.insert_debug_marker(label);
     }
 
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
-        DynContext::compute_pass_push_debug_group(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            label,
-        );
+        self.inner.push_debug_group(label);
     }
 
     /// Stops command recording and creates debug group.
     pub fn pop_debug_group(&mut self) {
-        DynContext::compute_pass_pop_debug_group(&*self.inner.context, self.inner.data.as_mut());
+        self.inner.pop_debug_group();
     }
 
     /// Dispatches compute work operations.
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch_workgroups(&mut self, x: u32, y: u32, z: u32) {
-        DynContext::compute_pass_dispatch_workgroups(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            x,
-            y,
-            z,
-        );
+        self.inner.dispatch_workgroups(x, y, z);
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
@@ -114,17 +91,13 @@ impl<'encoder> ComputePass<'encoder> {
         indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
-        DynContext::compute_pass_dispatch_workgroups_indirect(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            indirect_buffer.data.as_ref(),
-            indirect_offset,
-        );
+        self.inner
+            .dispatch_workgroups_indirect(&indirect_buffer.inner, indirect_offset);
     }
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
-impl<'encoder> ComputePass<'encoder> {
+impl ComputePass<'_> {
     /// Set push constant data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within push constant
@@ -134,17 +107,12 @@ impl<'encoder> ComputePass<'encoder> {
     /// For example, if `offset` is `4` and `data` is eight bytes long, this
     /// call will write `data` to bytes `4..12` of push constant storage.
     pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
-        DynContext::compute_pass_set_push_constants(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            offset,
-            data,
-        );
+        self.inner.set_push_constants(offset, data);
     }
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`] must be enabled on the device in order to call these functions.
-impl<'encoder> ComputePass<'encoder> {
+impl ComputePass<'_> {
     /// Issue a timestamp command at this point in the queue. The timestamp will be written to the specified query set, at the specified index.
     ///
     /// Must be multiplied by [`Queue::get_timestamp_period`] to get
@@ -152,49 +120,23 @@ impl<'encoder> ComputePass<'encoder> {
     /// but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
     pub fn write_timestamp(&mut self, query_set: &QuerySet, query_index: u32) {
-        DynContext::compute_pass_write_timestamp(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            query_set.data.as_ref(),
-            query_index,
-        )
+        self.inner.write_timestamp(&query_set.inner, query_index);
     }
 }
 
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl<'encoder> ComputePass<'encoder> {
+impl ComputePass<'_> {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
-        DynContext::compute_pass_begin_pipeline_statistics_query(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-            query_set.data.as_ref(),
-            query_index,
-        );
+        self.inner
+            .begin_pipeline_statistics_query(&query_set.inner, query_index);
     }
 
     /// End the pipeline statistics query on this compute pass. It can be started with
     /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
-        DynContext::compute_pass_end_pipeline_statistics_query(
-            &*self.inner.context,
-            self.inner.data.as_mut(),
-        );
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ComputePassInner {
-    pub(crate) data: Box<Data>,
-    pub(crate) context: Arc<C>,
-}
-
-impl Drop for ComputePassInner {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.compute_pass_end(self.data.as_mut());
-        }
+        self.inner.end_pipeline_statistics_query();
     }
 }
 

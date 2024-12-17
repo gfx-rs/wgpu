@@ -83,6 +83,12 @@ impl<T> HandleSet<T> {
     }
 }
 
+impl<T> Default for HandleSet<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub trait ArenaType<T> {
     fn len(&self) -> usize;
 }

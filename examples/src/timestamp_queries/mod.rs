@@ -227,7 +227,7 @@ async fn run() {
 
     let queries = submit_render_and_compute_pass_with_queries(&device, &queue);
     let raw_results = queries.wait_for_results(&device);
-    println!("Raw timestamp buffer contents: {:?}", raw_results);
+    println!("Raw timestamp buffer contents: {raw_results:?}");
     QueryResults::from_raw_results(raw_results, timestamps_inside_passes).print(&queue);
 }
 
@@ -239,10 +239,7 @@ fn submit_render_and_compute_pass_with_queries(
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
     let mut queries = Queries::new(device, QueryResults::NUM_QUERIES);
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     if device
         .features()
@@ -324,7 +321,7 @@ fn compute_pass(
     });
     *next_unused_query += 2;
     cpass.set_pipeline(&compute_pipeline);
-    cpass.set_bind_group(0, Some(&bind_group), &[]);
+    cpass.set_bind_group(0, &bind_group, &[]);
     cpass.dispatch_workgroups(1, 1, 1);
     if device
         .features()

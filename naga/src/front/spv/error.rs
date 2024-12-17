@@ -47,7 +47,13 @@ pub enum Error {
     UnsupportedBinaryOperator(spirv::Word),
     #[error("Naga supports OpTypeRuntimeArray in the StorageBuffer storage class only")]
     UnsupportedRuntimeArrayStorageClass,
-    #[error("unsupported matrix stride {stride} for a {columns}x{rows} matrix with scalar width={width}")]
+    #[error(
+        "unsupported matrix stride {} for a {}x{} matrix with scalar width={}",
+        stride,
+        columns,
+        rows,
+        width
+    )]
     UnsupportedMatrixStride {
         stride: u32,
         columns: u8,

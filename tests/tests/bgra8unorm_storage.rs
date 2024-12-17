@@ -110,21 +110,21 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
                 timestamp_writes: None,
             });
 
-            pass.set_bind_group(0, Some(&bg), &[]);
+            pass.set_bind_group(0, &bg, &[]);
             pass.set_pipeline(&pipeline);
             pass.dispatch_workgroups(256, 256, 1);
         }
 
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &readback_buffer,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(256 * 4),
                     rows_per_image: Some(256),

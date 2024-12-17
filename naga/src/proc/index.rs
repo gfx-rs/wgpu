@@ -64,10 +64,10 @@ pub enum BoundsCheckPolicy {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct BoundsCheckPolicies {
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range?
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub index: BoundsCheckPolicy,
 
     /// How should the generated code handle array, vector, or matrix indices
@@ -103,7 +103,6 @@ pub struct BoundsCheckPolicies {
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Storage`]: crate::AddressSpace::Storage
     /// [`Uniform`]: crate::AddressSpace::Uniform
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: BoundsCheckPolicy,
 
     /// How should the generated code handle image texel loads that are out
@@ -119,11 +118,9 @@ pub struct BoundsCheckPolicies {
     /// [`ImageLoad`]: crate::Expression::ImageLoad
     /// [`ImageStore`]: crate::Statement::ImageStore
     /// [`ReadZeroSkipWrite`]: BoundsCheckPolicy::ReadZeroSkipWrite
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub image_load: BoundsCheckPolicy,
 
     /// How should the generated code handle binding array indexes that are out of bounds.
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub binding_array: BoundsCheckPolicy,
 }
 
@@ -250,7 +247,7 @@ pub fn find_checked_indexes(
                             base,
                             GuardedIndex::Expression(index),
                             module,
-                            function,
+                            &function.expressions,
                             info,
                         )
                         .is_some()
@@ -311,7 +308,7 @@ pub fn access_needs_check(
     base: Handle<crate::Expression>,
     mut index: GuardedIndex,
     module: &crate::Module,
-    function: &crate::Function,
+    expressions: &crate::Arena<crate::Expression>,
     info: &valid::FunctionInfo,
 ) -> Option<IndexableLength> {
     let base_inner = info[base].ty.inner_with(&module.types);
@@ -319,7 +316,7 @@ pub fn access_needs_check(
     // length constants, but `access_needs_check` is only used by back ends, so
     // validation should have caught those problems.
     let length = base_inner.indexable_length(module).unwrap();
-    index.try_resolve_to_constant(function, module);
+    index.try_resolve_to_constant(expressions, module);
     if let (&GuardedIndex::Known(index), &IndexableLength::Known(length)) = (&index, &length) {
         if index < length {
             // Index is statically known to be in bounds, no check needed.
@@ -334,14 +331,24 @@ impl GuardedIndex {
     /// Make a `GuardedIndex::Known` from a `GuardedIndex::Expression` if possible.
     ///
     /// Return values that are already `Known` unchanged.
-    fn try_resolve_to_constant(&mut self, function: &crate::Function, module: &crate::Module) {
+    pub(crate) fn try_resolve_to_constant(
+        &mut self,
+        expressions: &crate::Arena<crate::Expression>,
+        module: &crate::Module,
+    ) {
         if let GuardedIndex::Expression(expr) = *self {
-            if let Ok(value) = module
-                .to_ctx()
-                .eval_expr_to_u32_from(expr, &function.expressions)
-            {
-                *self = GuardedIndex::Known(value);
-            }
+            *self = GuardedIndex::from_expression(expr, expressions, module);
+        }
+    }
+
+    pub(crate) fn from_expression(
+        expr: Handle<crate::Expression>,
+        expressions: &crate::Arena<crate::Expression>,
+        module: &crate::Module,
+    ) -> Self {
+        match module.to_ctx().eval_expr_to_u32_from(expr, expressions) {
+            Ok(value) => Self::Known(value),
+            Err(_) => Self::Expression(expr),
         }
     }
 }
@@ -409,6 +416,8 @@ pub enum IndexableLength {
     /// Values of this type always have the given number of elements.
     Known(u32),
 
+    Pending,
+
     /// The number of elements is determined at runtime.
     Dynamic,
 }
@@ -420,6 +429,7 @@ impl crate::ArraySize {
     ) -> Result<IndexableLength, IndexableLengthError> {
         Ok(match self {
             Self::Constant(length) => IndexableLength::Known(length.get()),
+            Self::Pending(_) => IndexableLength::Pending,
             Self::Dynamic => IndexableLength::Dynamic,
         })
     }

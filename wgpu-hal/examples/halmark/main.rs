@@ -331,20 +331,29 @@ impl<A: hal::Api> Example<A> {
         {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: &staging_buffer,
-                usage: hal::BufferUses::empty()..hal::BufferUses::COPY_SRC,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::empty(),
+                    to: hal::BufferUses::COPY_SRC,
+                },
             };
             let texture_barrier1 = hal::TextureBarrier {
                 texture: &texture,
                 range: wgt::ImageSubresourceRange::default(),
-                usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COPY_DST,
+                usage: hal::StateTransition {
+                    from: hal::TextureUses::UNINITIALIZED,
+                    to: hal::TextureUses::COPY_DST,
+                },
             };
             let texture_barrier2 = hal::TextureBarrier {
                 texture: &texture,
                 range: wgt::ImageSubresourceRange::default(),
-                usage: hal::TextureUses::COPY_DST..hal::TextureUses::RESOURCE,
+                usage: hal::StateTransition {
+                    from: hal::TextureUses::COPY_DST,
+                    to: hal::TextureUses::RESOURCE,
+                },
             };
             let copy = hal::BufferTextureCopy {
-                buffer_layout: wgt::ImageDataLayout {
+                buffer_layout: wgt::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4),
                     rows_per_image: None,
@@ -559,7 +568,7 @@ impl<A: hal::Api> Example<A> {
 
             for mut ctx in self.contexts {
                 ctx.wait_and_clear(&self.device);
-                self.device.destroy_command_encoder(ctx.encoder);
+                drop(ctx.encoder);
                 self.device.destroy_fence(ctx.fence);
             }
 
@@ -579,7 +588,8 @@ impl<A: hal::Api> Example<A> {
             self.device.destroy_pipeline_layout(self.pipeline_layout);
 
             self.surface.unconfigure(&self.device);
-            self.device.exit(self.queue);
+            drop(self.queue);
+            drop(self.device);
             drop(self.surface);
             drop(self.adapter);
         }
@@ -664,7 +674,10 @@ impl<A: hal::Api> Example<A> {
         let target_barrier0 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COLOR_TARGET,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::UNINITIALIZED,
+                to: hal::TextureUses::COLOR_TARGET,
+            },
         };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
@@ -731,7 +744,10 @@ impl<A: hal::Api> Example<A> {
         let target_barrier1 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::COLOR_TARGET..hal::TextureUses::PRESENT,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::COLOR_TARGET,
+                to: hal::TextureUses::PRESENT,
+            },
         };
         unsafe {
             ctx.encoder.end_render_pass();

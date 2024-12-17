@@ -622,7 +622,7 @@ impl Frontend {
                     // check that the format scalar kind matches
                     let good_format = overload_format == call_format
                         || (overload.internal
-                            && ScalarKind::from(overload_format) == ScalarKind::from(call_format));
+                            && Scalar::from(overload_format) == Scalar::from(call_format));
                     if !(good_size && good_format) {
                         continue 'outer;
                     }
@@ -634,7 +634,8 @@ impl Frontend {
                         self.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 format!(
-                                    "'{name}': image needs {overload_access:?} access but only {call_access:?} was provided"
+                                    "'{}': image needs {:?} access but only {:?} was provided",
+                                    name, overload_access, call_access
                                 )
                                 .into(),
                             ),
@@ -784,10 +785,10 @@ impl Frontend {
             .zip(raw_args)
             .zip(&parameters)
         {
-            let (mut handle, meta) =
-                ctx.lower_expect_inner(stmt, self, *expr, parameter_info.qualifier.as_pos())?;
-
             if parameter_info.qualifier.is_lhs() {
+                // Reprocess argument in LHS position
+                let (handle, meta) = ctx.lower_expect_inner(stmt, self, *expr, ExprPos::Lhs)?;
+
                 self.process_lhs_argument(
                     ctx,
                     meta,
@@ -801,6 +802,8 @@ impl Frontend {
 
                 continue;
             }
+
+            let (mut handle, meta) = *call_argument;
 
             let scalar_comps = scalar_components(&ctx.module.types[*parameter].inner);
 
@@ -1065,6 +1068,7 @@ impl Frontend {
             expressions,
             named_expressions: crate::NamedExpressions::default(),
             body,
+            diagnostic_filter_leaf: None,
         };
 
         'outer: for decl in declaration.overloads.iter_mut() {
@@ -1362,6 +1366,7 @@ impl Frontend {
             early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
                 .filter(|_| self.meta.early_fragment_tests),
             workgroup_size: self.meta.workgroup_size,
+            workgroup_size_overrides: None,
             function: Function {
                 arguments,
                 expressions,

@@ -317,6 +317,42 @@
                 space: Function,
             ),
         ),
+        (
+            name: Some("AssignToMember"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("x"),
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 29,
+                space: Function,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Constant(4),
+                stride: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 31,
+                space: Function,
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -887,6 +923,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("test_matrix_within_array_within_struct_accesses"),
@@ -1491,6 +1528,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("read_from_private"),
@@ -1524,6 +1562,7 @@
                     value: Some(1),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("test_arr_as_arg"),
@@ -1566,6 +1605,7 @@
                     value: Some(2),
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("assign_through_ptr_fn"),
@@ -1594,6 +1634,7 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
         ),
         (
             name: Some("assign_array_through_ptr_fn"),
@@ -1654,6 +1695,157 @@
                     value: None,
                 ),
             ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("fetch_arg_ptr_member"),
+            arguments: [
+                (
+                    name: Some("p"),
+                    ty: 30,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 1,
+                ),
+            ],
+            named_expressions: {
+                0: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 3,
+                )),
+                Return(
+                    value: Some(2),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("assign_to_arg_ptr_member"),
+            arguments: [
+                (
+                    name: Some("p"),
+                    ty: 30,
+                    binding: None,
+                ),
+            ],
+            result: None,
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                Literal(U32(10)),
+            ],
+            named_expressions: {
+                0: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Store(
+                    pointer: 1,
+                    value: 2,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("fetch_arg_ptr_array_element"),
+            arguments: [
+                (
+                    name: Some("p"),
+                    ty: 32,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                AccessIndex(
+                    base: 0,
+                    index: 1,
+                ),
+                Load(
+                    pointer: 1,
+                ),
+            ],
+            named_expressions: {
+                0: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 3,
+                )),
+                Return(
+                    value: Some(2),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("assign_to_arg_ptr_array_element"),
+            arguments: [
+                (
+                    name: Some("p"),
+                    ty: 32,
+                    binding: None,
+                ),
+            ],
+            result: None,
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                AccessIndex(
+                    base: 0,
+                    index: 1,
+                ),
+                Literal(U32(10)),
+            ],
+            named_expressions: {
+                0: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Store(
+                    pointer: 1,
+                    value: 2,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -1662,6 +1854,7 @@
             stage: Vertex,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("foo_vert"),
                 arguments: [
@@ -1956,6 +2149,7 @@
                         value: Some(52),
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
         (
@@ -1963,6 +2157,7 @@
             stage: Fragment,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("foo_frag"),
                 arguments: [],
@@ -2147,6 +2342,7 @@
                         value: Some(31),
                     ),
                 ],
+                diagnostic_filter_leaf: None,
             ),
         ),
         (
@@ -2154,6 +2350,7 @@
             stage: Compute,
             early_depth_test: None,
             workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("assign_through_ptr"),
                 arguments: [],
@@ -2228,7 +2425,75 @@
                         value: None,
                     ),
                 ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+        (
+            name: "assign_to_ptr_components",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("assign_to_ptr_components"),
+                arguments: [],
+                result: None,
+                local_variables: [
+                    (
+                        name: Some("s1"),
+                        ty: 29,
+                        init: None,
+                    ),
+                    (
+                        name: Some("a1"),
+                        ty: 31,
+                        init: None,
+                    ),
+                ],
+                expressions: [
+                    LocalVariable(0),
+                    CallResult(6),
+                    LocalVariable(1),
+                    CallResult(8),
+                ],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 7,
+                        arguments: [
+                            0,
+                        ],
+                        result: None,
+                    ),
+                    Call(
+                        function: 6,
+                        arguments: [
+                            0,
+                        ],
+                        result: Some(1),
+                    ),
+                    Call(
+                        function: 9,
+                        arguments: [
+                            2,
+                        ],
+                        result: None,
+                    ),
+                    Call(
+                        function: 8,
+                        arguments: [
+                            2,
+                        ],
+                        result: Some(3),
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
             ),
         ),
     ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
 )

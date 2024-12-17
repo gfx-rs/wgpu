@@ -23,47 +23,6 @@ pub mod math;
 
 pub use counters::*;
 
-// Use this macro instead of the one provided by the bitflags_serde_shim crate
-// because the latter produces an error when deserializing bits that are not
-// specified in the bitflags, while we want deserialization to succeed and
-// and unspecified bits to lead to errors handled in wgpu-core.
-// Note that plainly deriving Serialize and Deserialized would have a similar
-// behavior to this macro (unspecified bit do not produce an error).
-macro_rules! impl_bitflags {
-    ($name:ident) => {
-        #[cfg(feature = "serde")]
-        impl serde::Serialize for $name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer,
-            {
-                self.bits().serialize(serializer)
-            }
-        }
-
-        #[cfg(feature = "serde")]
-        impl<'de> serde::Deserialize<'de> for $name {
-            fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
-                Ok($name::from_bits_retain(value))
-            }
-        }
-
-        impl $name {
-            /// Returns true if the bitflags contains bits that are not part of
-            /// the bitflags definition.
-            #[must_use]
-            pub fn contains_invalid_bits(&self) -> bool {
-                let all = Self::all().bits();
-                (self.bits() | all) != all
-            }
-        }
-    };
-}
-
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
@@ -77,7 +36,7 @@ pub type DynamicOffset = u32;
 ///
 /// This doesn't apply to [`Queue::write_texture`][Qwt].
 ///
-/// [`bytes_per_row`]: ImageDataLayout::bytes_per_row
+/// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// An offset into the query resolve buffer has to be aligned to this.
@@ -91,7 +50,7 @@ pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 /// Alignment all push constants need
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
 /// Maximum queries in a query set
-pub const QUERY_SET_MAX_QUERIES: u32 = 8192;
+pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
 /// Size of a single piece of query data.
 pub const QUERY_SIZE: u32 = 8;
 
@@ -156,6 +115,8 @@ pub enum PowerPreference {
 bitflags::bitflags! {
     /// Represents the backends that wgpu will use.
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Backends: u32 {
         /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
@@ -198,8 +159,6 @@ impl Default for Backends {
     }
 }
 
-impl_bitflags!(Backends);
-
 impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
         Self::from_bits(1 << backend as u32).unwrap()
@@ -221,6 +180,7 @@ pub struct RequestAdapterOptions<S> {
     pub force_fallback_adapter: bool,
     /// Surface that is required to be presentable with the requested adapter. This does not
     /// create the surface, only guarantees that the adapter can present to said surface.
+    /// For WebGL, this is strictly required, as an adapter can not be created without a surface.
     pub compatible_surface: Option<S>,
 }
 
@@ -249,8 +209,9 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUFeatureName`](
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(transparent)]
-    #[derive(Default)]
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Features: u64 {
         //
         // ---- Start numbering at 1 << 0 ----
@@ -598,7 +559,6 @@ bitflags::bitflags! {
         /// - `buffer myBuffer { ... } buffer_array[10]` (GLSL)
         ///
         /// Supported platforms:
-        /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.
@@ -828,23 +788,32 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_NV12 = 1 << 47;
-        /// Allows for the creation of ray-tracing acceleration structures.
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
+        /// Allows for the creation of ray-tracing acceleration structures. Currently,
+        /// ray-tracing acceleration structures are only useful when used with [Features::EXPERIMENTAL_RAY_QUERY]
         ///
         /// Supported platforms:
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 48;
+        const EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 48;
 
         // Shader:
 
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in it and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
         /// Allows for the creation of ray-tracing queries within shaders.
         ///
         /// Supported platforms:
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const RAY_QUERY = 1 << 49;
+        const EXPERIMENTAL_RAY_QUERY = 1 << 49;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -972,8 +941,6 @@ bitflags::bitflags! {
     }
 }
 
-impl_bitflags!(Features);
-
 impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
     #[must_use]
@@ -985,6 +952,16 @@ impl Features {
     #[must_use]
     pub const fn all_native_mask() -> Self {
         Self::from_bits_truncate(!Self::all_webgpu_mask().bits())
+    }
+
+    /// Vertex formats allowed for creating and building BLASes
+    #[must_use]
+    pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
+        let mut formats = Vec::new();
+        if self.contains(Self::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+            formats.push(VertexFormat::Float32x3);
+        }
+        formats
     }
 }
 
@@ -1583,6 +1560,8 @@ bitflags::bitflags! {
     ///
     /// You can check whether a set of flags is compliant through the
     /// [`DownlevelCapabilities::is_webgpu_compliant()`] function.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
@@ -1673,11 +1652,11 @@ bitflags::bitflags! {
 
         /// With this feature not present, there are the following restrictions on `Queue::copy_external_image_to_texture`:
         /// - The source must not be [`web_sys::OffscreenCanvas`]
-        /// - [`ImageCopyExternalImage::origin`] must be zero.
-        /// - [`ImageCopyTextureTagged::color_space`] must be srgb.
+        /// - [`CopyExternalImageSourceInfo::origin`] must be zero.
+        /// - [`CopyExternalImageDestInfo::color_space`] must be srgb.
         /// - If the source is an [`web_sys::ImageBitmap`]:
-        ///   - [`ImageCopyExternalImage::flip_y`] must be false.
-        ///   - [`ImageCopyTextureTagged::premultiplied_alpha`] must be false.
+        ///   - [`CopyExternalImageSourceInfo::flip_y`] must be false.
+        ///   - [`CopyExternalImageDestInfo::premultiplied_alpha`] must be false.
         ///
         /// WebGL doesn't support this. WebGPU does.
         const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 20;
@@ -1733,8 +1712,6 @@ bitflags::bitflags! {
         const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW = 1 << 23;
     }
 }
-
-impl_bitflags!(DownlevelFlags);
 
 impl DownlevelFlags {
     /// All flags that indicate if the backend is WebGPU compliant
@@ -1899,6 +1876,8 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUShaderStageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpushaderstageflags).
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ShaderStages: u32 {
         /// Binding is not visible from any shader stage.
@@ -1914,7 +1893,31 @@ bitflags::bitflags! {
     }
 }
 
-impl_bitflags!(ShaderStages);
+/// Order in which TextureData is laid out in memory.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+pub enum TextureDataOrder {
+    /// The texture is laid out densely in memory as:
+    ///
+    /// ```text
+    /// Layer0Mip0 Layer0Mip1 Layer0Mip2
+    /// Layer1Mip0 Layer1Mip1 Layer1Mip2
+    /// Layer2Mip0 Layer2Mip1 Layer2Mip2
+    /// ````
+    ///
+    /// This is the layout used by dds files.
+    #[default]
+    LayerMajor,
+    /// The texture is laid out densely in memory as:
+    ///
+    /// ```text
+    /// Layer0Mip0 Layer1Mip0 Layer2Mip0
+    /// Layer0Mip1 Layer1Mip1 Layer2Mip1
+    /// Layer0Mip2 Layer1Mip2 Layer2Mip2
+    /// ```
+    ///
+    /// This is the layout used by ktx and ktx2 files.
+    MipMajor,
+}
 
 /// Dimensions of a particular texture view.
 ///
@@ -2345,6 +2348,8 @@ impl Default for MultisampleState {
 bitflags::bitflags! {
     /// Feature flags for a texture format.
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureFormatFeatureFlags: u32 {
         /// If not present, the texture can't be sampled with a filtering sampler.
@@ -2362,10 +2367,16 @@ bitflags::bitflags! {
         /// to a render pass for an automatic driver-implemented resolve.
         const MULTISAMPLE_RESOLVE = 1 << 5;
         /// When used as a STORAGE texture, then a texture with this format can be bound with
-        /// [`StorageTextureAccess::ReadOnly`] or [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1 << 6;
+        /// [`StorageTextureAccess::ReadOnly`].
+        const STORAGE_READ_ONLY = 1 << 6;
+        /// When used as a STORAGE texture, then a texture with this format can be bound with
+        /// [`StorageTextureAccess::WriteOnly`].
+        const STORAGE_WRITE_ONLY = 1 << 7;
+        /// When used as a STORAGE texture, then a texture with this format can be bound with
+        /// [`StorageTextureAccess::ReadWrite`].
+        const STORAGE_READ_WRITE = 1 << 8;
         /// If not present, the texture can't be blended into the render target.
-        const BLENDABLE = 1 << 7;
+        const BLENDABLE = 1 << 9;
     }
 }
 
@@ -2397,8 +2408,6 @@ impl TextureFormatFeatureFlags {
             .collect()
     }
 }
-
-impl_bitflags!(TextureFormatFeatureFlags);
 
 /// Features supported by a given texture format
 ///
@@ -2803,7 +2812,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
 
         struct TextureFormatVisitor;
 
-        impl<'de> de::Visitor<'de> for TextureFormatVisitor {
+        impl de::Visitor<'_> for TextureFormatVisitor {
             type Value = TextureFormat;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -3386,9 +3395,13 @@ impl TextureFormat {
     #[must_use]
     pub fn guaranteed_format_features(&self, device_features: Features) -> TextureFormatFeatures {
         // Multisampling
-        let noaa = TextureFormatFeatureFlags::empty();
+        let none = TextureFormatFeatureFlags::empty();
         let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
         let msaa_resolve = msaa | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
+
+        let s_ro_wo = TextureFormatFeatureFlags::STORAGE_READ_ONLY
+            | TextureFormatFeatureFlags::STORAGE_WRITE_ONLY;
+        let s_all = s_ro_wo | TextureFormatFeatureFlags::STORAGE_READ_WRITE;
 
         // Flags
         let basic =
@@ -3402,10 +3415,13 @@ impl TextureFormat {
         } else {
             basic
         };
-        let bgra8unorm = if device_features.contains(Features::BGRA8UNORM_STORAGE) {
-            attachment | TextureUsages::STORAGE_BINDING
+        let (bgra8unorm_f, bgra8unorm) = if device_features.contains(Features::BGRA8UNORM_STORAGE) {
+            (
+                msaa_resolve | TextureFormatFeatureFlags::STORAGE_WRITE_ONLY,
+                attachment | TextureUsages::STORAGE_BINDING,
+            )
         } else {
-            attachment
+            (msaa_resolve, attachment)
         };
 
         #[rustfmt::skip] // lets make a nice table
@@ -3414,41 +3430,41 @@ impl TextureFormat {
             allowed_usages,
         ) = match *self {
             Self::R8Unorm =>              (msaa_resolve, attachment),
-            Self::R8Snorm =>              (        noaa,      basic),
+            Self::R8Snorm =>              (        none,      basic),
             Self::R8Uint =>               (        msaa, attachment),
             Self::R8Sint =>               (        msaa, attachment),
             Self::R16Uint =>              (        msaa, attachment),
             Self::R16Sint =>              (        msaa, attachment),
             Self::R16Float =>             (msaa_resolve, attachment),
             Self::Rg8Unorm =>             (msaa_resolve, attachment),
-            Self::Rg8Snorm =>             (        noaa,      basic),
+            Self::Rg8Snorm =>             (        none,      basic),
             Self::Rg8Uint =>              (        msaa, attachment),
             Self::Rg8Sint =>              (        msaa, attachment),
-            Self::R32Uint =>              (        noaa,  all_flags),
-            Self::R32Sint =>              (        noaa,  all_flags),
-            Self::R32Float =>             (        msaa,  all_flags),
+            Self::R32Uint =>              (       s_all,  all_flags),
+            Self::R32Sint =>              (       s_all,  all_flags),
+            Self::R32Float =>             (msaa | s_all,  all_flags),
             Self::Rg16Uint =>             (        msaa, attachment),
             Self::Rg16Sint =>             (        msaa, attachment),
             Self::Rg16Float =>            (msaa_resolve, attachment),
-            Self::Rgba8Unorm =>           (msaa_resolve,  all_flags),
+            Self::Rgba8Unorm =>           (msaa_resolve | s_ro_wo,  all_flags),
             Self::Rgba8UnormSrgb =>       (msaa_resolve, attachment),
-            Self::Rgba8Snorm =>           (        noaa,    storage),
-            Self::Rgba8Uint =>            (        msaa,  all_flags),
-            Self::Rgba8Sint =>            (        msaa,  all_flags),
-            Self::Bgra8Unorm =>           (msaa_resolve, bgra8unorm),
+            Self::Rgba8Snorm =>           (     s_ro_wo,    storage),
+            Self::Rgba8Uint =>            (        msaa | s_ro_wo,  all_flags),
+            Self::Rgba8Sint =>            (        msaa | s_ro_wo,  all_flags),
+            Self::Bgra8Unorm =>           (bgra8unorm_f, bgra8unorm),
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
-            Self::Rg32Uint =>             (        noaa,  all_flags),
-            Self::Rg32Sint =>             (        noaa,  all_flags),
-            Self::Rg32Float =>            (        noaa,  all_flags),
-            Self::Rgba16Uint =>           (        msaa,  all_flags),
-            Self::Rgba16Sint =>           (        msaa,  all_flags),
-            Self::Rgba16Float =>          (msaa_resolve,  all_flags),
-            Self::Rgba32Uint =>           (        noaa,  all_flags),
-            Self::Rgba32Sint =>           (        noaa,  all_flags),
-            Self::Rgba32Float =>          (        noaa,  all_flags),
+            Self::Rg32Uint =>             (     s_ro_wo,  all_flags),
+            Self::Rg32Sint =>             (     s_ro_wo,  all_flags),
+            Self::Rg32Float =>            (     s_ro_wo,  all_flags),
+            Self::Rgba16Uint =>           (        msaa | s_ro_wo,  all_flags),
+            Self::Rgba16Sint =>           (        msaa | s_ro_wo,  all_flags),
+            Self::Rgba16Float =>          (msaa_resolve | s_ro_wo,  all_flags),
+            Self::Rgba32Uint =>           (     s_ro_wo,  all_flags),
+            Self::Rgba32Sint =>           (     s_ro_wo,  all_flags),
+            Self::Rgba32Float =>          (     s_ro_wo,  all_flags),
 
             Self::Stencil8 =>             (        msaa, attachment),
             Self::Depth16Unorm =>         (        msaa, attachment),
@@ -3458,44 +3474,44 @@ impl TextureFormat {
             Self::Depth32FloatStencil8 => (        msaa, attachment),
 
             // We only support sampling nv12 textures until we implement transfer plane data.
-            Self::NV12 =>                 (        noaa,    binding),
+            Self::NV12 =>                 (        none,    binding),
 
-            Self::R16Unorm =>             (        msaa,    storage),
-            Self::R16Snorm =>             (        msaa,    storage),
-            Self::Rg16Unorm =>            (        msaa,    storage),
-            Self::Rg16Snorm =>            (        msaa,    storage),
-            Self::Rgba16Unorm =>          (        msaa,    storage),
-            Self::Rgba16Snorm =>          (        msaa,    storage),
+            Self::R16Unorm =>             (        msaa | s_ro_wo,    storage),
+            Self::R16Snorm =>             (        msaa | s_ro_wo,    storage),
+            Self::Rg16Unorm =>            (        msaa | s_ro_wo,    storage),
+            Self::Rg16Snorm =>            (        msaa | s_ro_wo,    storage),
+            Self::Rgba16Unorm =>          (        msaa | s_ro_wo,    storage),
+            Self::Rgba16Snorm =>          (        msaa | s_ro_wo,    storage),
 
-            Self::Rgb9e5Ufloat =>         (        noaa,      basic),
+            Self::Rgb9e5Ufloat =>         (        none,      basic),
 
-            Self::Bc1RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc1RgbaUnormSrgb =>     (        noaa,      basic),
-            Self::Bc2RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc2RgbaUnormSrgb =>     (        noaa,      basic),
-            Self::Bc3RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc3RgbaUnormSrgb =>     (        noaa,      basic),
-            Self::Bc4RUnorm =>            (        noaa,      basic),
-            Self::Bc4RSnorm =>            (        noaa,      basic),
-            Self::Bc5RgUnorm =>           (        noaa,      basic),
-            Self::Bc5RgSnorm =>           (        noaa,      basic),
-            Self::Bc6hRgbUfloat =>        (        noaa,      basic),
-            Self::Bc6hRgbFloat =>         (        noaa,      basic),
-            Self::Bc7RgbaUnorm =>         (        noaa,      basic),
-            Self::Bc7RgbaUnormSrgb =>     (        noaa,      basic),
+            Self::Bc1RgbaUnorm =>         (        none,      basic),
+            Self::Bc1RgbaUnormSrgb =>     (        none,      basic),
+            Self::Bc2RgbaUnorm =>         (        none,      basic),
+            Self::Bc2RgbaUnormSrgb =>     (        none,      basic),
+            Self::Bc3RgbaUnorm =>         (        none,      basic),
+            Self::Bc3RgbaUnormSrgb =>     (        none,      basic),
+            Self::Bc4RUnorm =>            (        none,      basic),
+            Self::Bc4RSnorm =>            (        none,      basic),
+            Self::Bc5RgUnorm =>           (        none,      basic),
+            Self::Bc5RgSnorm =>           (        none,      basic),
+            Self::Bc6hRgbUfloat =>        (        none,      basic),
+            Self::Bc6hRgbFloat =>         (        none,      basic),
+            Self::Bc7RgbaUnorm =>         (        none,      basic),
+            Self::Bc7RgbaUnormSrgb =>     (        none,      basic),
 
-            Self::Etc2Rgb8Unorm =>        (        noaa,      basic),
-            Self::Etc2Rgb8UnormSrgb =>    (        noaa,      basic),
-            Self::Etc2Rgb8A1Unorm =>      (        noaa,      basic),
-            Self::Etc2Rgb8A1UnormSrgb =>  (        noaa,      basic),
-            Self::Etc2Rgba8Unorm =>       (        noaa,      basic),
-            Self::Etc2Rgba8UnormSrgb =>   (        noaa,      basic),
-            Self::EacR11Unorm =>          (        noaa,      basic),
-            Self::EacR11Snorm =>          (        noaa,      basic),
-            Self::EacRg11Unorm =>         (        noaa,      basic),
-            Self::EacRg11Snorm =>         (        noaa,      basic),
+            Self::Etc2Rgb8Unorm =>        (        none,      basic),
+            Self::Etc2Rgb8UnormSrgb =>    (        none,      basic),
+            Self::Etc2Rgb8A1Unorm =>      (        none,      basic),
+            Self::Etc2Rgb8A1UnormSrgb =>  (        none,      basic),
+            Self::Etc2Rgba8Unorm =>       (        none,      basic),
+            Self::Etc2Rgba8UnormSrgb =>   (        none,      basic),
+            Self::EacR11Unorm =>          (        none,      basic),
+            Self::EacR11Snorm =>          (        none,      basic),
+            Self::EacRg11Unorm =>         (        none,      basic),
+            Self::EacRg11Snorm =>         (        none,      basic),
 
-            Self::Astc { .. } =>          (        noaa,      basic),
+            Self::Astc { .. } =>          (        none,      basic),
         };
 
         // Get whether the format is filterable, taking features into account
@@ -4652,6 +4668,8 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUColorWriteFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ColorWrites: u32 {
         /// Enable red channel writes
@@ -4668,8 +4686,6 @@ bitflags::bitflags! {
         const ALL = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits() | Self::ALPHA.bits();
     }
 }
-
-impl_bitflags!(ColorWrites);
 
 impl Default for ColorWrites {
     fn default() -> Self {
@@ -5264,6 +5280,8 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUsages: u32 {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
@@ -5296,10 +5314,12 @@ bitflags::bitflags! {
         const INDIRECT = 1 << 8;
         /// Allow a buffer to be the destination buffer for a [`CommandEncoder::resolve_query_set`] operation.
         const QUERY_RESOLVE = 1 << 9;
+        /// Allows a buffer to be used as input for a bottom level acceleration structure build
+        const BLAS_INPUT = 1 << 10;
+        /// Allows a buffer to be used as input for a top level acceleration structure build
+        const TLAS_INPUT = 1 << 11;
     }
 }
-
-impl_bitflags!(BufferUsages);
 
 /// Describes a [`Buffer`](../wgpu/struct.Buffer.html).
 ///
@@ -5483,6 +5503,8 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUTextureUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gputextureusageflags).
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureUsages: u32 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
@@ -5499,8 +5521,6 @@ bitflags::bitflags! {
         const RENDER_ATTACHMENT = 1 << 4;
     }
 }
-
-impl_bitflags!(TextureUsages);
 
 /// Defines the capabilities of a given surface and adapter.
 #[derive(Debug)]
@@ -5541,7 +5561,7 @@ impl Default for SurfaceCapabilities {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SurfaceConfiguration<V> {
-    /// The usage of the swap chain. The only supported usage is `RENDER_ATTACHMENT`.
+    /// The usage of the swap chain. The only usage guaranteed to be supported is `RENDER_ATTACHMENT`.
     pub usage: TextureUsages,
     /// The texture format of the swap chain. The only formats that are guaranteed are
     /// `Bgra8Unorm` and `Bgra8UnormSrgb`
@@ -5626,6 +5646,8 @@ pub enum SurfaceStatus {
     Outdated,
     /// The surface under the swap chain is lost.
     Lost,
+    /// The surface status is not known since `get_current_texture` previously failed.
+    Unknown,
 }
 
 /// Nanosecond timestamp used by the presentation engine.
@@ -5878,8 +5900,8 @@ impl Extent3d {
     pub fn physical_size(&self, format: TextureFormat) -> Self {
         let (block_width, block_height) = format.block_dimensions();
 
-        let width = ((self.width + block_width - 1) / block_width) * block_width;
-        let height = ((self.height + block_height - 1) / block_height) * block_height;
+        let width = self.width.div_ceil(block_width) * block_width;
+        let height = self.height.div_ceil(block_height) * block_height;
 
         Self {
             width,
@@ -6029,6 +6051,38 @@ fn test_max_mips() {
     );
 }
 
+/// Describes a `TextureView`.
+///
+/// For use with `Texture::create_view`.
+///
+/// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TextureViewDescriptor<L> {
+    /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Format of the texture view. Either must be the same as the texture format or in the list
+    /// of `view_formats` in the texture's descriptor.
+    pub format: Option<TextureFormat>,
+    /// The dimension of the texture view. For 1D textures, this must be `D1`. For 2D textures it must be one of
+    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `D3`
+    pub dimension: Option<TextureViewDimension>,
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
+    pub aspect: TextureAspect,
+    /// Base mip level.
+    pub base_mip_level: u32,
+    /// Mip level count.
+    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
+    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
+    pub mip_level_count: Option<u32>,
+    /// Base array layer.
+    pub base_array_layer: u32,
+    /// Layer count.
+    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
+    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
+    pub array_layer_count: Option<u32>,
+}
+
 /// Describes a [`Texture`](../wgpu/struct.Texture.html).
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
@@ -6161,6 +6215,60 @@ impl<L, V> TextureDescriptor<L, V> {
         match self.dimension {
             TextureDimension::D1 | TextureDimension::D3 => 1,
             TextureDimension::D2 => self.size.depth_or_array_layers,
+        }
+    }
+}
+
+/// Describes a `Sampler`.
+///
+/// For use with `Device::create_sampler`.
+///
+/// Corresponds to [WebGPU `GPUSamplerDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerdescriptor).
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SamplerDescriptor<L> {
+    /// Debug label of the sampler. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// How to deal with out of bounds accesses in the u (i.e. x) direction
+    pub address_mode_u: AddressMode,
+    /// How to deal with out of bounds accesses in the v (i.e. y) direction
+    pub address_mode_v: AddressMode,
+    /// How to deal with out of bounds accesses in the w (i.e. z) direction
+    pub address_mode_w: AddressMode,
+    /// How to filter the texture when it needs to be magnified (made larger)
+    pub mag_filter: FilterMode,
+    /// How to filter the texture when it needs to be minified (made smaller)
+    pub min_filter: FilterMode,
+    /// How to filter between mip map levels
+    pub mipmap_filter: FilterMode,
+    /// Minimum level of detail (i.e. mip level) to use
+    pub lod_min_clamp: f32,
+    /// Maximum level of detail (i.e. mip level) to use
+    pub lod_max_clamp: f32,
+    /// If this is enabled, this is a comparison sampler using the given comparison function.
+    pub compare: Option<CompareFunction>,
+    /// Must be at least 1. If this is not 1, all filter modes must be linear.
+    pub anisotropy_clamp: u16,
+    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
+    pub border_color: Option<SamplerBorderColor>,
+}
+
+impl<L: Default> Default for SamplerDescriptor<L> {
+    fn default() -> Self {
+        Self {
+            label: Default::default(),
+            address_mode_u: Default::default(),
+            address_mode_v: Default::default(),
+            address_mode_w: Default::default(),
+            mag_filter: Default::default(),
+            min_filter: Default::default(),
+            mipmap_filter: Default::default(),
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 32.0,
+            compare: None,
+            anisotropy_clamp: 1,
+            border_color: None,
         }
     }
 }
@@ -6342,12 +6450,12 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 /// | 256x256    | BC3    | 16              | 4 * 4 * 1        | 16 * (256 / 4) = 1024 = Some(1024)     | None                         |
 /// | 64x64x8    | BC3    | 16              | 4 * 4 * 1        | 16 * (64 / 4) = 256 = Some(256)        | 64 / 4 = 16 = Some(16)       |
 ///
-/// Corresponds to [WebGPU `GPUImageDataLayout`](
+/// Corresponds to [WebGPU `GPUTexelCopyBufferLayout`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagedatalayout).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageDataLayout {
+pub struct TexelCopyBufferLayout {
     /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
     /// For non-compressed textures, this is 1.
     pub offset: BufferAddress,
@@ -6380,6 +6488,13 @@ pub struct ImageDataLayout {
     /// Required if there are multiple images (i.e. the depth is more than one).
     pub rows_per_image: Option<u32>,
 }
+
+/// Old name for a [`TexelCopyBufferLayout`].
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyBufferLayout`, and will be removed in 25.0.0."
+)]
+pub type ImageDataLayout = TexelCopyBufferLayout;
 
 /// Specific type of a buffer binding.
 ///
@@ -6786,26 +6901,33 @@ pub struct BindGroupLayoutEntry {
 
 /// View of a buffer which can be used to copy to/from a texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyBuffer`](
+/// Corresponds to [WebGPU `GPUTexelCopyBufferInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageCopyBuffer<B> {
+pub struct TexelCopyBufferInfo<B> {
     /// The buffer to be copied to/from.
     pub buffer: B,
     /// The layout of the texture data in this buffer.
-    pub layout: ImageDataLayout,
+    pub layout: TexelCopyBufferLayout,
 }
+
+/// Old name for a [`TexelCopyBufferInfo`].
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyBufferInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyBuffer<B> = TexelCopyBufferInfo<B>;
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyTexture`](
+/// Corresponds to [WebGPU `GPUTexelCopyTextureInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageCopyTexture<T> {
+pub struct TexelCopyTextureInfo<T> {
     /// The texture to be copied to/from.
     pub texture: T,
     /// The target mip level of the texture.
@@ -6820,15 +6942,15 @@ pub struct ImageCopyTexture<T> {
     pub aspect: TextureAspect,
 }
 
-impl<T> ImageCopyTexture<T> {
+impl<T> TexelCopyTextureInfo<T> {
     /// Adds color space and premultiplied alpha information to make this
     /// descriptor tagged.
     pub fn to_tagged(
         self,
         color_space: PredefinedColorSpace,
         premultiplied_alpha: bool,
-    ) -> ImageCopyTextureTagged<T> {
-        ImageCopyTextureTagged {
+    ) -> CopyExternalImageDestInfo<T> {
+        CopyExternalImageDestInfo {
             texture: self.texture,
             mip_level: self.mip_level,
             origin: self.origin,
@@ -6839,13 +6961,20 @@ impl<T> ImageCopyTexture<T> {
     }
 }
 
+/// Old name for a [`TexelCopyTextureInfo`].
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `TexelCopyTextureInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyTexture<T> = TexelCopyTextureInfo<T>;
+
 /// View of an external texture that can be used to copy to a texture.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyExternalImage`](
+/// Corresponds to [WebGPU `GPUCopyExternalImageSourceInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Debug)]
-pub struct ImageCopyExternalImage {
+pub struct CopyExternalImageSourceInfo {
     /// The texture to be copied from. The copy source data is captured at the moment
     /// the copy is issued.
     pub source: ExternalImageSource,
@@ -6862,9 +6991,17 @@ pub struct ImageCopyExternalImage {
     pub flip_y: bool,
 }
 
+/// Old name for a [`CopyExternalImageSourceInfo`].
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `CopyExternalImageSourceInfo`, and will be removed in 25.0.0."
+)]
+#[cfg(target_arch = "wasm32")]
+pub type ImageCopyExternalImage = CopyExternalImageSourceInfo;
+
 /// Source of an external texture copy.
 ///
-/// Corresponds to the [implicit union type on WebGPU `GPUImageCopyExternalImage.source`](
+/// Corresponds to the [implicit union type on WebGPU `GPUCopyExternalImageSourceInfo.source`](
 /// https://gpuweb.github.io/gpuweb/#dom-gpuimagecopyexternalimage-source).
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Debug)]
@@ -6967,11 +7104,11 @@ pub enum PredefinedColorSpace {
 /// View of a texture which can be used to copy to a texture, including
 /// color space and alpha premultiplication information.
 ///
-/// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
+/// Corresponds to [WebGPU `GPUCopyExternalImageDestInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImageCopyTextureTagged<T> {
+pub struct CopyExternalImageDestInfo<T> {
     /// The texture to be copied to/from.
     pub texture: T,
     /// The target mip level of the texture.
@@ -6986,10 +7123,10 @@ pub struct ImageCopyTextureTagged<T> {
     pub premultiplied_alpha: bool,
 }
 
-impl<T: Copy> ImageCopyTextureTagged<T> {
+impl<T> CopyExternalImageDestInfo<T> {
     /// Removes the colorspace information from the type.
-    pub fn to_untagged(self) -> ImageCopyTexture<T> {
-        ImageCopyTexture {
+    pub fn to_untagged(self) -> TexelCopyTextureInfo<T> {
+        TexelCopyTextureInfo {
             texture: self.texture,
             mip_level: self.mip_level,
             origin: self.origin,
@@ -6997,6 +7134,13 @@ impl<T: Copy> ImageCopyTextureTagged<T> {
         }
     }
 }
+
+/// Old name for a [`CopyExternalImageDestInfo`].
+#[deprecated(
+    since = "24.0.0",
+    note = "This has been renamed to `CopyExternalImageDestInfo`, and will be removed in 25.0.0."
+)]
+pub type ImageCopyTextureTagged<T> = CopyExternalImageDestInfo<T>;
 
 /// Subresource range within an image
 #[repr(C)]
@@ -7193,6 +7337,8 @@ bitflags::bitflags! {
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineStatisticsTypes : u8 {
         /// Amount of times the vertex shader is ran. Accounts for
@@ -7214,8 +7360,6 @@ bitflags::bitflags! {
         const COMPUTE_SHADER_INVOCATIONS = 1 << 4;
     }
 }
-
-impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]
@@ -7372,12 +7516,15 @@ pub enum Dx12Compiler {
     /// Minimum supported version: [v1.5.2010](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.5.2010)
     ///
     /// It also requires WDDM 2.1 (Windows 10 version 1607).
-    Dxc {
-        /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
-        dxil_path: Option<PathBuf>,
-        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
-        dxc_path: Option<PathBuf>,
+    DynamicDxc {
+        /// Path to `dxcompiler.dll`.
+        dxc_path: PathBuf,
+        /// Path to `dxil.dll`.
+        dxil_path: PathBuf,
     },
+    /// The statically-linked variant of Dxc.
+    /// The `static-dxc` feature is required to use this.
+    StaticDxc,
 }
 
 /// Selects which OpenGL ES 3 minor version to request.
@@ -7423,35 +7570,150 @@ impl Default for InstanceDescriptor {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for all size defining attributes of a single triangle geometry inside a bottom level acceleration structure.
+pub struct BlasTriangleGeometrySizeDescriptor {
+    /// Format of a vertex position, must be [VertexFormat::Float32x3]
+    /// with just [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]
+    /// but later features may add more formats.
+    pub vertex_format: VertexFormat,
+    /// Number of vertices.
+    pub vertex_count: u32,
+    /// Format of an index. Only needed if an index buffer is used.
+    /// If `index_format` is provided `index_count` is required.
+    pub index_format: Option<IndexFormat>,
+    /// Number of indices. Only needed if an index buffer is used.
+    /// If `index_count` is provided `index_format` is required.
+    pub index_count: Option<u32>,
+    /// Flags for the geometry.
+    pub flags: AccelerationStructureGeometryFlags,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for all size defining attributes of all geometries inside a bottom level acceleration structure.
+pub enum BlasGeometrySizeDescriptors {
+    /// Triangle geometry version.
+    Triangles {
+        /// Descriptor for each triangle geometry.
+        descriptors: Vec<BlasTriangleGeometrySizeDescriptor>,
+    },
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Update mode for acceleration structure builds.
+pub enum AccelerationStructureUpdateMode {
+    /// Always perform a full build.
+    Build,
+    /// If possible, perform an incremental update.
+    ///
+    /// Not advised for major topology changes.
+    /// (Useful for e.g. skinning)
+    PreferUpdate,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for creating a bottom level acceleration structure.
+pub struct CreateBlasDescriptor<L> {
+    /// Label for the bottom level acceleration structure.
+    pub label: L,
+    /// Flags for the bottom level acceleration structure.
+    pub flags: AccelerationStructureFlags,
+    /// Update mode for the bottom level acceleration structure.
+    pub update_mode: AccelerationStructureUpdateMode,
+}
+
+impl<L> CreateBlasDescriptor<L> {
+    /// Takes a closure and maps the label of the blas descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K> {
+        CreateBlasDescriptor {
+            label: fun(&self.label),
+            flags: self.flags,
+            update_mode: self.update_mode,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Descriptor for creating a top level acceleration structure.
+pub struct CreateTlasDescriptor<L> {
+    /// Label for the top level acceleration structure.
+    pub label: L,
+    /// Number of instances that can be stored in the acceleration structure.
+    pub max_instances: u32,
+    /// Flags for the bottom level acceleration structure.
+    pub flags: AccelerationStructureFlags,
+    /// Update mode for the bottom level acceleration structure.
+    pub update_mode: AccelerationStructureUpdateMode,
+}
+
+impl<L> CreateTlasDescriptor<L> {
+    /// Takes a closure and maps the label of the blas descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K> {
+        CreateTlasDescriptor {
+            label: fun(&self.label),
+            flags: self.flags,
+            update_mode: self.update_mode,
+            max_instances: self.max_instances,
+        }
+    }
+}
+
 bitflags::bitflags!(
     /// Flags for acceleration structures
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureFlags: u8 {
-        /// Allow for incremental updates (no change in size)
+        /// Allow for incremental updates (no change in size), currently this is unimplemented
+        /// and will build as normal (this is fine, update vs build should be unnoticeable)
         const ALLOW_UPDATE = 1 << 0;
-        /// Allow the acceleration structure to be compacted in a copy operation
+        /// Allow the acceleration structure to be compacted in a copy operation, the function
+        /// to compact is not currently implemented.
         const ALLOW_COMPACTION = 1 << 1;
-        /// Optimize for fast ray tracing performance
+        /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
+        /// to change (e.g. in a game: non-interactive scene geometry)
         const PREFER_FAST_TRACE = 1 << 2;
-        /// Optimize for fast build time
+        /// Optimize for fast build time, recommended if geometry is likely to change frequently
+        /// (e.g. in a game: player model).
         const PREFER_FAST_BUILD = 1 << 3;
-        /// Optimize for low memory footprint (scratch and output)
+        /// Optimize for low memory footprint (both while building and in the output BLAS).
         const LOW_MEMORY = 1 << 4;
     }
 );
-impl_bitflags!(AccelerationStructureFlags);
 
 bitflags::bitflags!(
     /// Flags for acceleration structure geometries
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureGeometryFlags: u8 {
-        /// Is OPAQUE
+        /// Is OPAQUE (is there no alpha test) recommended as currently in naga there is no
+        /// candidate intersections yet so currently BLASes without this flag will not have hits.
+        /// Not enabling this makes the BLAS unable to be interacted with in WGSL.
         const OPAQUE = 1 << 0;
-        /// NO_DUPLICATE_ANY_HIT_INVOCATION
+        /// NO_DUPLICATE_ANY_HIT_INVOCATION, not useful unless using hal with wgpu, ray-tracing
+        /// pipelines are not supported in wgpu so any-hit shaders do not exist. For when any-hit
+        /// shaders are implemented (or experienced users who combine this with an underlying library:
+        /// for any primitive (triangle or AABB) multiple any-hit shaders sometimes may be invoked
+        /// (especially in AABBs like a sphere), if this flag in present only one hit on a primitive may
+        /// invoke an any-hit shader.
         const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
     }
 );
-impl_bitflags!(AccelerationStructureGeometryFlags);
+
+/// Alignment requirement for transform buffers used in acceleration structure builds
+pub const TRANSFORM_BUFFER_ALIGNMENT: BufferAddress = 16;
+
+/// Alignment requirement for instance buffers used in acceleration structure builds (`build_acceleration_structures_unsafe_tlas`)
+pub const INSTANCE_BUFFER_ALIGNMENT: BufferAddress = 16;
 
 pub use send_sync::*;
 
@@ -7537,18 +7799,4 @@ pub enum DeviceLostReason {
     Unknown = 0,
     /// After Device::destroy
     Destroyed = 1,
-    /// After Device::drop
-    ///
-    /// WebGPU does not invoke the device lost callback when the device is
-    /// dropped to prevent garbage collection from being observable. In wgpu,
-    /// we invoke the callback on drop to help with managing memory owned by
-    /// the callback.
-    Dropped = 2,
-    /// After replacing the device_lost_callback
-    ///
-    /// WebGPU does not have a concept of a device lost callback, but wgpu
-    /// does. wgpu guarantees that any supplied callback will be invoked
-    /// exactly once before it is dropped, which helps with managing the
-    /// memory owned by the callback.
-    ReplacedCallback = 3,
 }

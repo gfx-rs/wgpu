@@ -1359,26 +1359,6 @@ fn missing_bindings2() {
 #[test]
 fn invalid_access() {
     check_validation! {
-        "
-        fn array_by_value(a: array<i32, 5>, i: i32) -> i32 {
-            return a[i];
-        }
-        ",
-        "
-        fn matrix_by_value(m: mat4x4<f32>, i: i32) -> vec4<f32> {
-            return m[i];
-        }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::Expression {
-                source: naga::valid::ExpressionError::IndexMustBeConstant(_),
-                ..
-            },
-            ..
-        })
-    }
-
-    check_validation! {
         r#"
             fn main() -> f32 {
                 let a = array<f32, 3>(0., 1., 2.);
@@ -1416,6 +1396,15 @@ fn valid_access() {
             var v: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
             let pv = &v;
             let a = (*pv)[3];
+        }
+        ":
+        Ok(_)
+    }
+
+    check_validation! {
+        "
+        fn matrix_by_value(m: mat4x4<f32>, i: i32) -> vec4<f32> {
+            return m[i];
         }
         ":
         Ok(_)

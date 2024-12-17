@@ -148,7 +148,7 @@ async fn reinterpret(
         occlusion_query_set: None,
     });
     rpass.set_pipeline(&pipeline);
-    rpass.set_bind_group(0, Some(&bind_group), &[]);
+    rpass.set_bind_group(0, &bind_group, &[]);
     rpass.draw(0..3, 0..1);
     drop(rpass);
     ctx.queue.submit(Some(encoder.finish()));
@@ -164,15 +164,15 @@ async fn reinterpret(
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
+        wgpu::TexelCopyTextureInfo {
             texture: &target_tex,
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
         },
-        wgpu::ImageCopyBuffer {
+        wgpu::TexelCopyBufferInfo {
             buffer: &read_buffer,
-            layout: wgpu::ImageDataLayout {
+            layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
                 rows_per_image: None,

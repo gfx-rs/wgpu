@@ -1,9 +1,16 @@
 * @gfx-rs/wgpu
 
-/cts_runner/    @gfx-rs/deno @gfx-rs/wgpu
-/deno_webgpu/   @gfx-rs/deno @gfx-rs/wgpu
+/cts_runner/    @crowlkats @gfx-rs/wgpu
+/deno_webgpu/   @crowlkats @gfx-rs/wgpu
 /naga/          @gfx-rs/naga
 /naga-cli/      @gfx-rs/naga
+
+# Both wgpu and naga teams are owners of naga infrastructure so
+# either team can review changes to deps and docs.
+naga/Cargo.toml      @gfx-rs/wgpu @gfx-rs/naga
+naga/README.md       @gfx-rs/wgpu @gfx-rs/naga
+naga/CHANGELOG.md    @gfx-rs/wgpu @gfx-rs/naga
+naga-cli/Cargo.toml  @gfx-rs/wgpu @gfx-rs/naga
 
 # We leave the codeowners empty for the changelog, so naga changes 
 # don't trigger wgpu reviews and vise versa.

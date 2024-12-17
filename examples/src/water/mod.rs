@@ -3,7 +3,7 @@ mod point_gen;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, f32::consts, iter, mem::size_of};
+use std::{f32::consts, iter, mem::size_of};
 use wgpu::util::DeviceExt;
 
 ///
@@ -493,14 +493,8 @@ impl crate::framework::Example for Example {
         });
 
         // Upload/compile them to GPU code.
-        let terrain_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("terrain"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
-        });
-        let water_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("water"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
-        });
+        let terrain_module = device.create_shader_module(wgpu::include_wgsl!("terrain.wgsl"));
+        let water_module = device.create_shader_module(wgpu::include_wgsl!("water.wgsl"));
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
@@ -630,7 +624,7 @@ impl crate::framework::Example for Example {
                     multiview: None,
                 });
             encoder.set_pipeline(&terrain_pipeline);
-            encoder.set_bind_group(0, Some(&terrain_flipped_bind_group), &[]);
+            encoder.set_bind_group(0, &terrain_flipped_bind_group, &[]);
             encoder.set_vertex_buffer(0, terrain_vertex_buf.slice(..));
             encoder.draw(0..terrain_vertices.len() as u32, 0..1);
             encoder.finish(&wgpu::RenderBundleDescriptor::default())
@@ -784,7 +778,7 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
-            rpass.set_bind_group(0, Some(&self.terrain_normal_bind_group), &[]);
+            rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
             rpass.set_vertex_buffer(0, self.terrain_vertex_buf.slice(..));
             rpass.draw(0..self.terrain_vertex_count as u32, 0..1);
         }
@@ -811,7 +805,7 @@ impl crate::framework::Example for Example {
             });
 
             rpass.set_pipeline(&self.water_pipeline);
-            rpass.set_bind_group(0, Some(&self.water_bind_group), &[]);
+            rpass.set_bind_group(0, &self.water_bind_group, &[]);
             rpass.set_vertex_buffer(0, self.water_vertex_buf.slice(..));
             rpass.draw(0..self.water_vertex_count as u32, 0..1);
         }

@@ -1,9 +1,9 @@
 (
     type_flags: [
-        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
-        ("DATA | COPY | HOST_SHAREABLE"),
-        ("DATA | COPY | HOST_SHAREABLE"),
-        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | COPY | HOST_SHAREABLE | CREATION_RESOLVED"),
+        ("DATA | COPY | HOST_SHAREABLE | CREATION_RESOLVED"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
     ],
     functions: [
         (
@@ -274,6 +274,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
     ],
     entry_points: [
@@ -428,6 +429,7 @@
             ],
             sampling: [],
             dual_source_blending: false,
+            diagnostic_filter_leaf: None,
         ),
     ],
     const_expression_types: [],

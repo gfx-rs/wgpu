@@ -18,7 +18,8 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_label, id,
-    resource::{self, Trackable},
+    instance::Surface,
+    resource,
 };
 
 use thiserror::Error;
@@ -30,7 +31,7 @@ const FRAME_TIMEOUT_MS: u32 = 1000;
 pub(crate) struct Presentation {
     pub(crate) device: Arc<Device>,
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
-    pub(crate) acquired_texture: Option<id::TextureId>,
+    pub(crate) acquired_texture: Option<Arc<resource::Texture>>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -44,8 +45,8 @@ pub enum SurfaceError {
     Device(#[from] DeviceError),
     #[error("Surface image is already acquired")]
     AlreadyAcquired,
-    #[error("Acquired frame is still referenced")]
-    StillReferenced,
+    #[error("Texture has been destroyed")]
+    TextureDestroyed,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -91,8 +92,6 @@ pub enum ConfigureSurfaceError {
         requested: hal::TextureUses,
         available: hal::TextureUses,
     },
-    #[error("Gpu got stuck :(")]
-    StuckGpu,
 }
 
 impl From<WaitIdleError> for ConfigureSurfaceError {
@@ -100,9 +99,14 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
         match e {
             WaitIdleError::Device(d) => ConfigureSurfaceError::Device(d),
             WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
-            WaitIdleError::StuckGpu => ConfigureSurfaceError::StuckGpu,
         }
     }
+}
+
+#[derive(Debug)]
+pub struct ResolvedSurfaceOutput {
+    pub status: Status,
+    pub texture: Option<Arc<resource::Texture>>,
 }
 
 #[repr(C)]
@@ -112,39 +116,21 @@ pub struct SurfaceOutput {
     pub texture_id: Option<id::TextureId>,
 }
 
-impl Global {
-    pub fn surface_get_current_texture(
-        &self,
-        surface_id: id::SurfaceId,
-        texture_id_in: Option<id::TextureId>,
-    ) -> Result<SurfaceOutput, SurfaceError> {
-        profiling::scope!("SwapChain::get_next_texture");
+impl Surface {
+    pub fn get_current_texture(&self) -> Result<ResolvedSurfaceOutput, SurfaceError> {
+        profiling::scope!("Surface::get_current_texture");
 
-        let hub = &self.hub;
-
-        let surface = self.surfaces.get(surface_id);
-
-        let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
+        let (device, config) = if let Some(ref present) = *self.presentation.lock() {
             present.device.check_is_valid()?;
             (present.device.clone(), present.config.clone())
         } else {
             return Err(SurfaceError::NotConfigured);
         };
 
-        let fid = hub.textures.prepare(texture_id_in);
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(Action::GetSurfaceTexture {
-                id: fid.id(),
-                parent_id: surface_id,
-            });
-        }
-
         let fence = device.fence.read();
 
-        let suf = surface.raw(device.backend()).unwrap();
-        let (texture_id, status) = match unsafe {
+        let suf = self.raw(device.backend()).unwrap();
+        let (texture, status) = match unsafe {
             suf.acquire_texture(
                 Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
                 fence.as_ref(),
@@ -167,12 +153,16 @@ impl Global {
                     usage: config.usage,
                     view_formats: config.view_formats,
                 };
-                let hal_usage = conv::map_texture_usage(config.usage, config.format.into());
                 let format_features = wgt::TextureFormatFeatures {
                     allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
                     flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
                         | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
                 };
+                let hal_usage = conv::map_texture_usage(
+                    config.usage,
+                    config.format.into(),
+                    format_features.flags,
+                );
                 let clear_view_desc = hal::TextureViewDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) clear surface texture view"),
@@ -190,14 +180,11 @@ impl Global {
                 }
                 .map_err(|e| device.handle_hal_error(e))?;
 
-                let mut presentation = surface.presentation.lock();
+                let mut presentation = self.presentation.lock();
                 let present = presentation.as_mut().unwrap();
                 let texture = resource::Texture::new(
                     &device,
-                    resource::TextureInner::Surface {
-                        raw: ast.texture,
-                        parent_id: surface_id,
-                    },
+                    resource::TextureInner::Surface { raw: ast.texture },
                     hal_usage,
                     &texture_desc,
                     format_features,
@@ -215,19 +202,17 @@ impl Global {
                     .textures
                     .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
 
-                let id = fid.assign(resource::Fallible::Valid(texture));
-
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
                 }
-                present.acquired_texture = Some(id);
+                present.acquired_texture = Some(texture.clone());
 
                 let status = if ast.suboptimal {
                     Status::Suboptimal
                 } else {
                     Status::Good
                 };
-                (Some(id), status)
+                (Some(texture), status)
             }
             Ok(None) => (None, Status::Timeout),
             Err(err) => (
@@ -246,17 +231,13 @@ impl Global {
             ),
         };
 
-        Ok(SurfaceOutput { status, texture_id })
+        Ok(ResolvedSurfaceOutput { status, texture })
     }
 
-    pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
-        profiling::scope!("SwapChain::present");
+    pub fn present(&self) -> Result<Status, SurfaceError> {
+        profiling::scope!("Surface::present");
 
-        let hub = &self.hub;
-
-        let surface = self.surfaces.get(surface_id);
-
-        let mut presentation = surface.presentation.lock();
+        let mut presentation = self.presentation.lock();
         let present = match presentation.as_mut() {
             Some(present) => present,
             None => return Err(SurfaceError::NotConfigured),
@@ -264,45 +245,22 @@ impl Global {
 
         let device = &present.device;
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(Action::Present(surface_id));
-        }
-
         device.check_is_valid()?;
         let queue = device.get_queue().unwrap();
 
-        let result = {
-            let texture_id = present
-                .acquired_texture
-                .take()
-                .ok_or(SurfaceError::AlreadyAcquired)?;
+        let texture = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::AlreadyAcquired)?;
 
-            // The texture ID got added to the device tracker by `submit()`,
-            // and now we are moving it away.
-            let texture = hub.textures.remove(texture_id).get();
-            if let Ok(texture) = texture {
-                device
-                    .trackers
-                    .lock()
-                    .textures
-                    .remove(texture.tracker_index());
-                let suf = surface.raw(device.backend()).unwrap();
-                let exclusive_snatch_guard = device.snatchable_lock.write();
-                match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
-                    resource::TextureInner::Surface { raw, parent_id } => {
-                        if surface_id != parent_id {
-                            log::error!("Presented frame is from a different surface");
-                            Err(hal::SurfaceError::Lost)
-                        } else {
-                            unsafe { queue.raw().present(suf, raw) }
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            } else {
-                Err(hal::SurfaceError::Outdated) //TODO?
+        let result = match texture.inner.snatch(&mut device.snatchable_lock.write()) {
+            None => return Err(SurfaceError::TextureDestroyed),
+            Some(resource::TextureInner::Surface { raw }) => {
+                let raw_surface = self.raw(device.backend()).unwrap();
+                let raw_queue = queue.raw();
+                unsafe { raw_queue.present(raw_surface, raw) }
             }
+            _ => unreachable!(),
         };
 
         match result {
@@ -321,13 +279,10 @@ impl Global {
         }
     }
 
-    pub fn surface_texture_discard(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
-        profiling::scope!("SwapChain::discard");
+    pub fn discard(&self) -> Result<(), SurfaceError> {
+        profiling::scope!("Surface::discard");
 
-        let hub = &self.hub;
-
-        let surface = self.surfaces.get(surface_id);
-        let mut presentation = surface.presentation.lock();
+        let mut presentation = self.presentation.lock();
         let present = match presentation.as_mut() {
             Some(present) => present,
             None => return Err(SurfaceError::NotConfigured),
@@ -335,44 +290,79 @@ impl Global {
 
         let device = &present.device;
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(Action::DiscardSurfaceTexture(surface_id));
-        }
-
         device.check_is_valid()?;
 
-        {
-            let texture_id = present
-                .acquired_texture
-                .take()
-                .ok_or(SurfaceError::AlreadyAcquired)?;
+        let texture = present
+            .acquired_texture
+            .take()
+            .ok_or(SurfaceError::AlreadyAcquired)?;
 
-            // The texture ID got added to the device tracker by `submit()`,
-            // and now we are moving it away.
-            let texture = hub.textures.remove(texture_id).get();
-
-            if let Ok(texture) = texture {
-                device
-                    .trackers
-                    .lock()
-                    .textures
-                    .remove(texture.tracker_index());
-                let suf = surface.raw(device.backend());
-                let exclusive_snatch_guard = device.snatchable_lock.write();
-                match texture.inner.snatch(exclusive_snatch_guard).unwrap() {
-                    resource::TextureInner::Surface { raw, parent_id } => {
-                        if surface_id == parent_id {
-                            unsafe { suf.unwrap().discard_texture(raw) };
-                        } else {
-                            log::warn!("Surface texture is outdated");
-                        }
-                    }
-                    _ => unreachable!(),
-                }
+        match texture.inner.snatch(&mut device.snatchable_lock.write()) {
+            None => return Err(SurfaceError::TextureDestroyed),
+            Some(resource::TextureInner::Surface { raw }) => {
+                let raw_surface = self.raw(device.backend()).unwrap();
+                unsafe { raw_surface.discard_texture(raw) };
             }
+            _ => unreachable!(),
         }
 
         Ok(())
+    }
+}
+
+impl Global {
+    pub fn surface_get_current_texture(
+        &self,
+        surface_id: id::SurfaceId,
+        texture_id_in: Option<id::TextureId>,
+    ) -> Result<SurfaceOutput, SurfaceError> {
+        let surface = self.surfaces.get(surface_id);
+
+        let fid = self.hub.textures.prepare(texture_id_in);
+
+        #[cfg(feature = "trace")]
+        if let Some(present) = surface.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::GetSurfaceTexture {
+                    id: fid.id(),
+                    parent_id: surface_id,
+                });
+            }
+        }
+
+        let output = surface.get_current_texture()?;
+
+        let status = output.status;
+        let texture_id = output
+            .texture
+            .map(|texture| fid.assign(resource::Fallible::Valid(texture)));
+
+        Ok(SurfaceOutput { status, texture_id })
+    }
+
+    pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {
+        let surface = self.surfaces.get(surface_id);
+
+        #[cfg(feature = "trace")]
+        if let Some(present) = surface.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::Present(surface_id));
+            }
+        }
+
+        surface.present()
+    }
+
+    pub fn surface_texture_discard(&self, surface_id: id::SurfaceId) -> Result<(), SurfaceError> {
+        let surface = self.surfaces.get(surface_id);
+
+        #[cfg(feature = "trace")]
+        if let Some(present) = surface.presentation.lock().as_ref() {
+            if let Some(ref mut trace) = *present.device.trace.lock() {
+                trace.add(Action::DiscardSurfaceTexture(surface_id));
+            }
+        }
+
+        surface.discard()
     }
 }

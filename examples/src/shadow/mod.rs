@@ -1,4 +1,4 @@
-use std::{borrow::Cow, f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
+use std::{f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{align_to, DeviceExt};
@@ -447,10 +447,7 @@ impl crate::framework::Example for Example {
             attributes: &vertex_attr,
         };
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let shadow_pass = {
             let uniform_size = size_of::<GlobalUniforms>() as wgpu::BufferAddress;
@@ -779,10 +776,10 @@ impl crate::framework::Example for Example {
                     occlusion_query_set: None,
                 });
                 pass.set_pipeline(&self.shadow_pass.pipeline);
-                pass.set_bind_group(0, Some(&self.shadow_pass.bind_group), &[]);
+                pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
 
                 for entity in &self.entities {
-                    pass.set_bind_group(1, Some(&self.entity_bind_group), &[entity.uniform_offset]);
+                    pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
                     pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format);
                     pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                     pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
@@ -823,10 +820,10 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
             pass.set_pipeline(&self.forward_pass.pipeline);
-            pass.set_bind_group(0, Some(&self.forward_pass.bind_group), &[]);
+            pass.set_bind_group(0, &self.forward_pass.bind_group, &[]);
 
             for entity in &self.entities {
-                pass.set_bind_group(1, Some(&self.entity_bind_group), &[entity.uniform_offset]);
+                pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
                 pass.set_index_buffer(entity.index_buf.slice(..), entity.index_format);
                 pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);

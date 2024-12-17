@@ -14,7 +14,10 @@ use thiserror::Error;
 pub enum PipelineConstantError {
     #[error("Missing value for pipeline-overridable constant with identifier string: '{0}'")]
     MissingValue(String),
-    #[error("Source f64 value needs to be finite (NaNs and Inifinites are not allowed) for number destinations")]
+    #[error(
+        "Source f64 value needs to be finite ({}) for number destinations",
+        "NaNs and Inifinites are not allowed"
+    )]
     SrcNeedsToBeFinite,
     #[error("Source f64 value doesn't fit in destination")]
     DstRangeTooSmall,
@@ -22,6 +25,8 @@ pub enum PipelineConstantError {
     ConstantEvaluatorError(#[from] ConstantEvaluatorError),
     #[error(transparent)]
     ValidationError(#[from] WithSpan<ValidationError>),
+    #[error("workgroup_size override isn't strictly positive")]
+    NegativeWorkgroupSize,
 }
 
 /// Replace all overrides in `module` with constants.
@@ -187,8 +192,11 @@ pub fn process_overrides<'a>(
     let mut entry_points = mem::take(&mut module.entry_points);
     for ep in entry_points.iter_mut() {
         process_function(&mut module, &override_map, &mut ep.function)?;
+        process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
+
+    process_pending(&mut module, &override_map, &adjusted_global_expressions)?;
 
     // Now that we've rewritten all the expressions, we need to
     // recompute their types and other metadata. For the time being,
@@ -197,6 +205,99 @@ pub fn process_overrides<'a>(
     let module_info = validator.validate_no_overrides(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
+}
+
+fn process_pending(
+    module: &mut Module,
+    override_map: &HandleVec<Override, Handle<Constant>>,
+    adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
+) -> Result<(), PipelineConstantError> {
+    for (handle, ty) in module.types.clone().iter() {
+        if let TypeInner::Array {
+            base,
+            size: crate::ArraySize::Pending(size),
+            stride,
+        } = ty.inner
+        {
+            let expr = match size {
+                crate::PendingArraySize::Expression(size_expr) => {
+                    adjusted_global_expressions[size_expr]
+                }
+                crate::PendingArraySize::Override(size_override) => {
+                    module.constants[override_map[size_override]].init
+                }
+            };
+            let value = module
+                .to_ctx()
+                .eval_expr_to_u32(expr)
+                .map(|n| {
+                    if n == 0 {
+                        Err(PipelineConstantError::ValidationError(
+                            WithSpan::new(ValidationError::ArraySizeError { handle: expr })
+                                .with_span(
+                                    module.global_expressions.get_span(expr),
+                                    "evaluated to zero",
+                                ),
+                        ))
+                    } else {
+                        Ok(std::num::NonZeroU32::new(n).unwrap())
+                    }
+                })
+                .map_err(|_| {
+                    PipelineConstantError::ValidationError(
+                        WithSpan::new(ValidationError::ArraySizeError { handle: expr })
+                            .with_span(module.global_expressions.get_span(expr), "negative"),
+                    )
+                })??;
+            module.types.replace(
+                handle,
+                crate::Type {
+                    name: None,
+                    inner: TypeInner::Array {
+                        base,
+                        size: crate::ArraySize::Constant(value),
+                        stride,
+                    },
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn process_workgroup_size_override(
+    module: &mut Module,
+    adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
+    ep: &mut crate::EntryPoint,
+) -> Result<(), PipelineConstantError> {
+    match ep.workgroup_size_overrides {
+        None => {}
+        Some(overrides) => {
+            overrides.iter().enumerate().try_for_each(
+                |(i, overridden)| -> Result<(), PipelineConstantError> {
+                    match *overridden {
+                        None => Ok(()),
+                        Some(h) => {
+                            ep.workgroup_size[i] = module
+                                .to_ctx()
+                                .eval_expr_to_u32(adjusted_global_expressions[h])
+                                .map(|n| {
+                                    if n == 0 {
+                                        Err(PipelineConstantError::NegativeWorkgroupSize)
+                                    } else {
+                                        Ok(n)
+                                    }
+                                })
+                                .map_err(|_| PipelineConstantError::NegativeWorkgroupSize)??;
+                            Ok(())
+                        }
+                    }
+                },
+            )?;
+            ep.workgroup_size_overrides = None;
+        }
+    }
+    Ok(())
 }
 
 /// Add a [`Constant`] to `module` for the override `old_h`.

@@ -12,7 +12,6 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
-use std::os::raw::c_char;
 use thiserror::Error;
 use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
@@ -22,6 +21,7 @@ pub(crate) mod bgl;
 pub mod global;
 mod life;
 pub mod queue;
+pub mod ray_tracing;
 pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
@@ -36,7 +36,7 @@ pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 // See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
 const CLEANUP_WAIT_MS: u32 = 60000;
 
-const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
+pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 
@@ -175,61 +175,22 @@ impl UserClosures {
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
         for (mut operation, status) in self.mappings {
             if let Some(callback) = operation.callback.take() {
-                callback.call(status);
+                callback(status);
             }
         }
         for closure in self.submissions {
-            closure.call();
+            closure();
         }
         for invocation in self.device_lost_invocations {
-            invocation
-                .closure
-                .call(invocation.reason, invocation.message);
+            (invocation.closure)(invocation.reason, invocation.message);
         }
     }
 }
 
 #[cfg(send_sync)]
-pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + Send + 'static>;
+pub type DeviceLostClosure = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
 #[cfg(not(send_sync))]
-pub type DeviceLostCallback = Box<dyn Fn(DeviceLostReason, String) + 'static>;
-
-pub struct DeviceLostClosureRust {
-    pub callback: DeviceLostCallback,
-    consumed: bool,
-}
-
-impl Drop for DeviceLostClosureRust {
-    fn drop(&mut self) {
-        if !self.consumed {
-            panic!("DeviceLostClosureRust must be consumed before it is dropped.");
-        }
-    }
-}
-
-#[repr(C)]
-pub struct DeviceLostClosureC {
-    pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
-    pub user_data: *mut u8,
-    consumed: bool,
-}
-
-#[cfg(send_sync)]
-unsafe impl Send for DeviceLostClosureC {}
-
-impl Drop for DeviceLostClosureC {
-    fn drop(&mut self) {
-        if !self.consumed {
-            panic!("DeviceLostClosureC must be consumed before it is dropped.");
-        }
-    }
-}
-
-pub struct DeviceLostClosure {
-    // We wrap this so creating the enum in the C variant can be unsafe,
-    // allowing our call function to be safe.
-    inner: DeviceLostClosureInner,
-}
+pub type DeviceLostClosure = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
 
 pub struct DeviceLostInvocation {
     closure: DeviceLostClosure,
@@ -237,84 +198,25 @@ pub struct DeviceLostInvocation {
     message: String,
 }
 
-enum DeviceLostClosureInner {
-    Rust { inner: DeviceLostClosureRust },
-    C { inner: DeviceLostClosureC },
-}
-
-impl DeviceLostClosure {
-    pub fn from_rust(callback: DeviceLostCallback) -> Self {
-        let inner = DeviceLostClosureRust {
-            callback,
-            consumed: false,
-        };
-        Self {
-            inner: DeviceLostClosureInner::Rust { inner },
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The callback pointer must be valid to call with the provided `user_data`
-    ///   pointer.
-    ///
-    /// - Both pointers must point to `'static` data, as the callback may happen at
-    ///   an unspecified time.
-    pub unsafe fn from_c(mut closure: DeviceLostClosureC) -> Self {
-        // Build an inner with the values from closure, ensuring that
-        // inner.consumed is false.
-        let inner = DeviceLostClosureC {
-            callback: closure.callback,
-            user_data: closure.user_data,
-            consumed: false,
-        };
-
-        // Mark the original closure as consumed, so we can safely drop it.
-        closure.consumed = true;
-
-        Self {
-            inner: DeviceLostClosureInner::C { inner },
-        }
-    }
-
-    pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
-        match self.inner {
-            DeviceLostClosureInner::Rust { mut inner } => {
-                inner.consumed = true;
-
-                (inner.callback)(reason, message)
-            }
-            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            DeviceLostClosureInner::C { mut inner } => unsafe {
-                inner.consumed = true;
-
-                // Ensure message is structured as a null-terminated C string. It only
-                // needs to live as long as the callback invocation.
-                let message = std::ffi::CString::new(message).unwrap();
-                (inner.callback)(inner.user_data, reason as u8, message.as_ptr())
-            },
-        }
-    }
-}
-
-fn map_buffer(
-    raw: &dyn hal::DynDevice,
+pub(crate) fn map_buffer(
     buffer: &Buffer,
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
     snatch_guard: &SnatchGuard,
 ) -> Result<hal::BufferMapping, BufferAccessError> {
+    let raw_device = buffer.device.raw();
     let raw_buffer = buffer.try_raw(snatch_guard)?;
     let mapping = unsafe {
-        raw.map_buffer(raw_buffer, offset..offset + size)
+        raw_device
+            .map_buffer(raw_buffer, offset..offset + size)
             .map_err(|e| buffer.device.handle_hal_error(e))?
     };
 
     if !mapping.is_coherent && kind == HostMap::Read {
         #[allow(clippy::single_range_in_vec_init)]
         unsafe {
-            raw.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
+            raw_device.invalidate_mapped_ranges(raw_buffer, &[offset..offset + size]);
         }
     }
 
@@ -369,7 +271,7 @@ fn map_buffer(
                 && kind == HostMap::Read
                 && buffer.usage.contains(wgt::BufferUsages::MAP_WRITE)
             {
-                unsafe { raw.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
+                unsafe { raw_device.flush_mapped_ranges(raw_buffer, &[uninitialized]) };
             }
         }
     }
@@ -543,6 +445,10 @@ pub fn create_validator(
     caps.set(
         Caps::SUBGROUP_BARRIER,
         features.intersects(wgt::Features::SUBGROUP_BARRIER),
+    );
+    caps.set(
+        Caps::RAY_QUERY,
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY),
     );
     caps.set(
         Caps::SUBGROUP_VERTEX_STAGE,

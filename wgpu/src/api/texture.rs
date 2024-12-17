@@ -1,6 +1,3 @@
-use std::{sync::Arc, thread};
-
-use crate::context::DynContext;
 use crate::*;
 
 /// Handle to a texture on the GPU.
@@ -10,15 +7,13 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUTexture`](https://gpuweb.github.io/gpuweb/#texture-interface).
 #[derive(Debug)]
 pub struct Texture {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
-    pub(crate) owned: bool,
+    pub(crate) inner: dispatch::DispatchTexture,
     pub(crate) descriptor: TextureDescriptor<'static>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
-super::impl_partialeq_eq_hash!(Texture);
+crate::cmp::impl_eq_ord_hash_proxy!(Texture => .inner);
 
 impl Texture {
     /// Returns the inner hal Texture using a callback. The hal texture will be `None` if the
@@ -32,16 +27,10 @@ impl Texture {
         &self,
         hal_texture_callback: F,
     ) -> R {
-        if let Some(ctx) = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-        {
+        if let Some(tex) = self.inner.as_core_opt() {
             unsafe {
-                ctx.texture_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(self.data.as_ref()),
-                    hal_texture_callback,
-                )
+                tex.context
+                    .texture_as_hal::<A, F, R>(tex, hal_texture_callback)
             }
         } else {
             hal_texture_callback(None)
@@ -50,21 +39,19 @@ impl Texture {
 
     /// Creates a view of this texture.
     pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
-        let data = DynContext::texture_create_view(&*self.context, self.data.as_ref(), desc);
-        TextureView {
-            context: Arc::clone(&self.context),
-            data,
-        }
+        let view = self.inner.create_view(desc);
+
+        TextureView { inner: view }
     }
 
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::texture_destroy(&*self.context, self.data.as_ref());
+        self.inner.destroy();
     }
 
-    /// Make an `ImageCopyTexture` representing the whole texture.
-    pub fn as_image_copy(&self) -> ImageCopyTexture<'_> {
-        ImageCopyTexture {
+    /// Make an `TexelCopyTextureInfo` representing the whole texture.
+    pub fn as_image_copy(&self) -> TexelCopyTextureInfo<'_> {
+        TexelCopyTextureInfo {
             texture: self,
             mip_level: 0,
             origin: Origin3d::ZERO,
@@ -133,14 +120,6 @@ impl Texture {
     /// This is always equal to the `usage` that was specified when creating the texture.
     pub fn usage(&self) -> TextureUsages {
         self.descriptor.usage
-    }
-}
-
-impl Drop for Texture {
-    fn drop(&mut self) {
-        if self.owned && !thread::panicking() {
-            self.context.texture_drop(self.data.as_ref());
-        }
     }
 }
 

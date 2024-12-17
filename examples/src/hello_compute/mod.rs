@@ -1,4 +1,4 @@
-use std::{borrow::Cow, mem::size_of_val, str::FromStr};
+use std::{mem::size_of_val, str::FromStr};
 use wgpu::util::DeviceExt;
 
 // Indicates a u32 overflow in an intermediate Collatz value
@@ -66,10 +66,7 @@ async fn execute_gpu_inner(
     numbers: &[u32],
 ) -> Option<Vec<u32>> {
     // Loads the shader from WGSL
-    let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     // Gets the size in bytes of the buffer.
     let size = size_of_val(numbers) as wgpu::BufferAddress;
@@ -135,7 +132,7 @@ async fn execute_gpu_inner(
             timestamp_writes: None,
         });
         cpass.set_pipeline(&compute_pipeline);
-        cpass.set_bind_group(0, Some(&bind_group), &[]);
+        cpass.set_bind_group(0, &bind_group, &[]);
         cpass.insert_debug_marker("compute collatz iterations");
         cpass.dispatch_workgroups(numbers.len() as u32, 1, 1); // Number of cells to run, the (x,y,z) size of item being processed
     }

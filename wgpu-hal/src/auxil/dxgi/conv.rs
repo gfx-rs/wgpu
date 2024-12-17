@@ -206,7 +206,8 @@ pub fn map_texture_format_for_resource(
     } else if format.is_depth_stencil_format()
         && usage.intersects(
             crate::TextureUses::RESOURCE
-                | crate::TextureUses::STORAGE_READ
+                | crate::TextureUses::STORAGE_READ_ONLY
+                | crate::TextureUses::STORAGE_WRITE_ONLY
                 | crate::TextureUses::STORAGE_READ_WRITE,
         )
     {

@@ -418,7 +418,13 @@ impl Surface {
             swapchain.next_present_time = Some(present_timing);
         } else {
             // Ideally we'd use something like `device.required_features` here, but that's in `wgpu-core`, which we are a dependency of
-            panic!("Tried to set display timing properties without the corresponding feature ({features:?}) enabled.");
+            panic!(
+                concat!(
+                    "Tried to set display timing properties ",
+                    "without the corresponding feature ({:?}) enabled."
+                ),
+                features
+            );
         }
     }
 }
@@ -526,6 +532,8 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
+    #[cfg(windows)]
+    external_memory_win32: bool,
 }
 
 bitflags::bitflags!(
@@ -638,6 +646,20 @@ struct DeviceShared {
     memory_allocations_counter: InternalCounter,
 }
 
+impl Drop for DeviceShared {
+    fn drop(&mut self) {
+        for &raw in self.render_passes.lock().values() {
+            unsafe { self.raw.destroy_render_pass(raw, None) };
+        }
+        for &raw in self.framebuffers.lock().values() {
+            unsafe { self.raw.destroy_framebuffer(raw, None) };
+        }
+        if self.drop_guard.is_none() {
+            unsafe { self.raw.destroy_device(None) };
+        }
+    }
+}
+
 pub struct Device {
     shared: Arc<DeviceShared>,
     mem_allocator: Mutex<gpu_alloc::GpuAllocator<vk::DeviceMemory>>,
@@ -647,7 +669,14 @@ pub struct Device {
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
-    counters: wgt::HalCounters,
+    counters: Arc<wgt::HalCounters>,
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe { self.mem_allocator.lock().cleanup(&*self.shared) };
+        unsafe { self.desc_allocator.lock().cleanup(&*self.shared) };
+    }
 }
 
 /// Semaphores for forcing queue submissions to run in order.
@@ -733,6 +762,12 @@ pub struct Queue {
     relay_semaphores: Mutex<RelaySemaphores>,
 }
 
+impl Drop for Queue {
+    fn drop(&mut self) {
+        unsafe { self.relay_semaphores.lock().destroy(&self.device.raw) };
+    }
+}
+
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
@@ -754,6 +789,7 @@ impl crate::DynAccelerationStructure for AccelerationStructure {}
 pub struct Texture {
     raw: vk::Image,
     drop_guard: Option<crate::DropGuard>,
+    external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     usage: crate::TextureUses,
     format: wgt::TextureFormat,
@@ -882,6 +918,30 @@ pub struct CommandEncoder {
     /// If set, the end of the next render/compute pass will write a timestamp at
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
+
+    counters: Arc<wgt::HalCounters>,
+}
+
+impl Drop for CommandEncoder {
+    fn drop(&mut self) {
+        // SAFETY:
+        //
+        // VUID-vkDestroyCommandPool-commandPool-00041: wgpu_hal requires that a
+        // `CommandBuffer` must live until its execution is complete, and that a
+        // `CommandBuffer` must not outlive the `CommandEncoder` that built it.
+        // Thus, we know that none of our `CommandBuffers` are in the "pending"
+        // state.
+        //
+        // The other VUIDs are pretty obvious.
+        unsafe {
+            // `vkDestroyCommandPool` also frees any command buffers allocated
+            // from that pool, so there's no need to explicitly call
+            // `vkFreeCommandBuffers` on `cmd_encoder`'s `free` and `discarded`
+            // fields.
+            self.device.raw.destroy_command_pool(self.raw, None);
+        }
+        self.counters.command_encoders.sub(1);
+    }
 }
 
 impl CommandEncoder {
@@ -1386,4 +1446,13 @@ fn get_lost_err() -> crate::DeviceError {
 
     #[allow(unreachable_code)]
     crate::DeviceError::Lost
+}
+
+#[derive(Clone)]
+#[repr(C)]
+struct RawTlasInstance {
+    transform: [f32; 12],
+    custom_index_and_mask: u32,
+    shader_binding_table_record_offset_and_flags: u32,
+    acceleration_structure_reference: u64,
 }

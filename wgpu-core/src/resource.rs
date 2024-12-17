@@ -14,19 +14,21 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, Snatchable},
     track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
-    Label, LabelHelpers,
+    weak_vec::WeakVec,
+    Label, LabelHelpers, SubmissionIndex,
 };
 
 use smallvec::SmallVec;
 use thiserror::Error;
 
+use std::num::NonZeroU64;
 use std::{
     borrow::{Borrow, Cow},
     fmt::Debug,
     mem::{self, ManuallyDrop},
     ops::Range,
     ptr::NonNull,
-    sync::{Arc, Weak},
+    sync::Arc,
 };
 
 /// Information about the wgpu-core resource.
@@ -86,7 +88,7 @@ impl std::fmt::Display for ResourceErrorIdent {
     }
 }
 
-pub(crate) trait ParentDevice: Labeled {
+pub trait ParentDevice: Labeled {
     fn device(&self) -> &Arc<Device>;
 
     fn is_equal(self: &Arc<Self>, other: &Arc<Self>) -> bool {
@@ -131,7 +133,7 @@ macro_rules! impl_parent_device {
     };
 }
 
-pub(crate) trait ResourceType {
+pub trait ResourceType {
     const TYPE: &'static str;
 }
 
@@ -144,7 +146,7 @@ macro_rules! impl_resource_type {
     };
 }
 
-pub(crate) trait Labeled: ResourceType {
+pub trait Labeled: ResourceType {
     /// Returns a string identifying this resource for logging and errors.
     ///
     /// It may be a user-provided string or it may be a placeholder from wgpu.
@@ -186,39 +188,6 @@ macro_rules! impl_trackable {
     };
 }
 
-/// The status code provided to the buffer mapping callback.
-///
-/// This is very similar to `BufferAccessResult`, except that this is FFI-friendly.
-#[repr(C)]
-#[derive(Debug)]
-pub enum BufferMapAsyncStatus {
-    /// The Buffer is successfully mapped, `get_mapped_range` can be called.
-    ///
-    /// All other variants of this enum represent failures to map the buffer.
-    Success,
-    /// The buffer is already mapped.
-    ///
-    /// While this is treated as an error, it does not prevent mapped range from being accessed.
-    AlreadyMapped,
-    /// Mapping was already requested.
-    MapAlreadyPending,
-    /// An unknown error.
-    Error,
-    /// Mapping was aborted (by unmapping or destroying the buffer before mapping
-    /// happened).
-    Aborted,
-    /// The context is Lost.
-    ContextLost,
-    /// The buffer is in an invalid state.
-    Invalid,
-    /// The range isn't fully contained in the buffer.
-    InvalidRange,
-    /// The range isn't properly aligned.
-    InvalidAlignment,
-    /// Incompatible usage flags.
-    InvalidUsageFlags,
-}
-
 #[derive(Debug)]
 pub(crate) enum BufferMapState {
     /// Mapped at creation.
@@ -240,105 +209,23 @@ unsafe impl Send for BufferMapState {}
 #[cfg(send_sync)]
 unsafe impl Sync for BufferMapState {}
 
-#[repr(C)]
-pub struct BufferMapCallbackC {
-    pub callback: unsafe extern "C" fn(status: BufferMapAsyncStatus, user_data: *mut u8),
-    pub user_data: *mut u8,
-}
-
 #[cfg(send_sync)]
-unsafe impl Send for BufferMapCallbackC {}
-
-#[derive(Debug)]
-pub struct BufferMapCallback {
-    // We wrap this so creating the enum in the C variant can be unsafe,
-    // allowing our call function to be safe.
-    inner: BufferMapCallbackInner,
-}
-
-#[cfg(send_sync)]
-type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
+pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
 #[cfg(not(send_sync))]
-type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
+pub type BufferMapCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
-enum BufferMapCallbackInner {
-    Rust { callback: BufferMapCallbackCallback },
-    C { inner: BufferMapCallbackC },
-}
-
-impl Debug for BufferMapCallbackInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            BufferMapCallbackInner::Rust { callback: _ } => f.debug_struct("Rust").finish(),
-            BufferMapCallbackInner::C { inner: _ } => f.debug_struct("C").finish(),
-        }
-    }
-}
-
-impl BufferMapCallback {
-    pub fn from_rust(callback: BufferMapCallbackCallback) -> Self {
-        Self {
-            inner: BufferMapCallbackInner::Rust { callback },
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The callback pointer must be valid to call with the provided user_data
-    ///   pointer.
-    ///
-    /// - Both pointers must point to valid memory until the callback is
-    ///   invoked, which may happen at an unspecified time.
-    pub unsafe fn from_c(inner: BufferMapCallbackC) -> Self {
-        Self {
-            inner: BufferMapCallbackInner::C { inner },
-        }
-    }
-
-    pub(crate) fn call(self, result: BufferAccessResult) {
-        match self.inner {
-            BufferMapCallbackInner::Rust { callback } => {
-                callback(result);
-            }
-            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            BufferMapCallbackInner::C { inner } => unsafe {
-                let status = match result {
-                    Ok(()) => BufferMapAsyncStatus::Success,
-                    Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
-                    Err(BufferAccessError::InvalidResource(_))
-                    | Err(BufferAccessError::DestroyedResource(_)) => BufferMapAsyncStatus::Invalid,
-                    Err(BufferAccessError::AlreadyMapped) => BufferMapAsyncStatus::AlreadyMapped,
-                    Err(BufferAccessError::MapAlreadyPending) => {
-                        BufferMapAsyncStatus::MapAlreadyPending
-                    }
-                    Err(BufferAccessError::MissingBufferUsage(_)) => {
-                        BufferMapAsyncStatus::InvalidUsageFlags
-                    }
-                    Err(BufferAccessError::UnalignedRange)
-                    | Err(BufferAccessError::UnalignedRangeSize { .. })
-                    | Err(BufferAccessError::UnalignedOffset { .. }) => {
-                        BufferMapAsyncStatus::InvalidAlignment
-                    }
-                    Err(BufferAccessError::OutOfBoundsUnderrun { .. })
-                    | Err(BufferAccessError::OutOfBoundsOverrun { .. })
-                    | Err(BufferAccessError::NegativeRange { .. }) => {
-                        BufferMapAsyncStatus::InvalidRange
-                    }
-                    Err(BufferAccessError::Failed)
-                    | Err(BufferAccessError::NotMapped)
-                    | Err(BufferAccessError::MapAborted) => BufferMapAsyncStatus::Error,
-                };
-
-                (inner.callback)(status, inner.user_data);
-            },
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct BufferMapOperation {
     pub host: HostMap,
     pub callback: Option<BufferMapCallback>,
+}
+
+impl Debug for BufferMapOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BufferMapOperation")
+            .field("host", &self.host)
+            .field("callback", &self.callback.as_ref().map(|_| "?"))
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -417,7 +304,7 @@ pub struct DestroyedResourceError(pub ResourceErrorIdent);
 #[error("{0} is invalid")]
 pub struct InvalidResourceError(pub ResourceErrorIdent);
 
-pub(crate) enum Fallible<T: ParentDevice> {
+pub enum Fallible<T: ParentDevice> {
     Valid(Arc<T>),
     Invalid(Arc<String>),
 }
@@ -474,11 +361,19 @@ pub struct Buffer {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
-    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup>>>,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    #[cfg(feature = "indirect-validation")]
+    pub(crate) raw_indirect_validation_bind_group: Snatchable<Box<dyn hal::DynBindGroup>>,
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
+        #[cfg(feature = "indirect-validation")]
+        if let Some(raw) = self.raw_indirect_validation_bind_group.take() {
+            unsafe {
+                self.device.raw().destroy_bind_group(raw);
+            }
+        }
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
@@ -496,7 +391,7 @@ impl Buffer {
     pub(crate) fn try_raw<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&dyn hal::DynBuffer, DestroyedResourceError> {
+    ) -> Result<&'a dyn hal::DynBuffer, DestroyedResourceError> {
         self.raw
             .get(guard)
             .map(|raw| raw.as_ref())
@@ -537,7 +432,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<(), (BufferMapOperation, BufferAccessError)> {
+    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
         let range_size = if let Some(size) = size {
             size
         } else if offset > self.size {
@@ -624,9 +519,74 @@ impl Buffer {
             .buffers
             .set_single(self, internal_use);
 
-        device.lock_life().map(self);
+        let submit_index = if let Some(queue) = device.get_queue() {
+            queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
+        } else {
+            // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
+            let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
+            if let Some(callback) = operation.callback.take() {
+                callback(status);
+            }
+            0
+        };
 
-        Ok(())
+        Ok(submit_index)
+    }
+
+    /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
+    #[must_use]
+    pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
+        // This _cannot_ be inlined into the match. If it is, the lock will be held
+        // open through the whole match, resulting in a deadlock when we try to re-lock
+        // the buffer back to active.
+        let mapping = mem::replace(&mut *self.map_state.lock(), BufferMapState::Idle);
+        let pending_mapping = match mapping {
+            BufferMapState::Waiting(pending_mapping) => pending_mapping,
+            // Mapping cancelled
+            BufferMapState::Idle => return None,
+            // Mapping queued at least twice by map -> unmap -> map
+            // and was already successfully mapped below
+            BufferMapState::Active { .. } => {
+                *self.map_state.lock() = mapping;
+                return None;
+            }
+            _ => panic!("No pending mapping."),
+        };
+        let status = if pending_mapping.range.start != pending_mapping.range.end {
+            let host = pending_mapping.op.host;
+            let size = pending_mapping.range.end - pending_mapping.range.start;
+            match crate::device::map_buffer(
+                self,
+                pending_mapping.range.start,
+                size,
+                host,
+                snatch_guard,
+            ) {
+                Ok(mapping) => {
+                    *self.map_state.lock() = BufferMapState::Active {
+                        mapping,
+                        range: pending_mapping.range.clone(),
+                        host,
+                    };
+                    Ok(())
+                }
+                Err(e) => {
+                    log::error!("Mapping failed: {e}");
+                    Err(e)
+                }
+            }
+        } else {
+            *self.map_state.lock() = BufferMapState::Active {
+                mapping: hal::BufferMapping {
+                    ptr: NonNull::dangling(),
+                    is_coherent: true,
+                },
+                range: pending_mapping.range,
+                host: pending_mapping.op.host,
+            };
+            Ok(())
+        };
+        Some((pending_mapping.op, status))
     }
 
     // Note: This must not be called while holding a lock.
@@ -639,7 +599,7 @@ impl Buffer {
             buffer_id,
         )? {
             if let Some(callback) = operation.callback.take() {
-                callback.call(status);
+                callback(status);
             }
         }
 
@@ -666,36 +626,43 @@ impl Buffer {
                     });
                 }
 
-                let mut pending_writes = device.pending_writes.lock();
-
                 let staging_buffer = staging_buffer.flush();
 
-                let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size,
-                });
-                let transition_src = hal::BufferBarrier {
-                    buffer: staging_buffer.raw(),
-                    usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
-                };
-                let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
-                    buffer: raw_buf,
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
-                };
-                let encoder = pending_writes.activate();
-                unsafe {
-                    encoder.transition_buffers(&[transition_src, transition_dst]);
-                    if self.size > 0 {
-                        encoder.copy_buffer_to_buffer(
-                            staging_buffer.raw(),
-                            raw_buf,
-                            region.as_slice(),
-                        );
+                if let Some(queue) = device.get_queue() {
+                    let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
+                        src_offset: 0,
+                        dst_offset: 0,
+                        size,
+                    });
+                    let transition_src = hal::BufferBarrier {
+                        buffer: staging_buffer.raw(),
+                        usage: hal::StateTransition {
+                            from: hal::BufferUses::MAP_WRITE,
+                            to: hal::BufferUses::COPY_SRC,
+                        },
+                    };
+                    let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
+                        buffer: raw_buf,
+                        usage: hal::StateTransition {
+                            from: hal::BufferUses::empty(),
+                            to: hal::BufferUses::COPY_DST,
+                        },
+                    };
+                    let mut pending_writes = queue.pending_writes.lock();
+                    let encoder = pending_writes.activate();
+                    unsafe {
+                        encoder.transition_buffers(&[transition_src, transition_dst]);
+                        if self.size > 0 {
+                            encoder.copy_buffer_to_buffer(
+                                staging_buffer.raw(),
+                                raw_buf,
+                                region.as_slice(),
+                            );
+                        }
                     }
+                    pending_writes.consume(staging_buffer);
+                    pending_writes.insert_buffer(self);
                 }
-                pending_writes.consume(staging_buffer);
-                pending_writes.insert_buffer(self);
             }
             BufferMapState::Idle => {
                 return Err(BufferAccessError::NotMapped);
@@ -737,13 +704,21 @@ impl Buffer {
         let device = &self.device;
 
         let temp = {
-            let snatch_guard = device.snatchable_lock.write();
-            let raw = match self.raw.snatch(snatch_guard) {
+            let mut snatch_guard = device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
                     return Err(DestroyError::AlreadyDestroyed);
                 }
             };
+
+            #[cfg(feature = "indirect-validation")]
+            let raw_indirect_validation_bind_group = self
+                .raw_indirect_validation_bind_group
+                .snatch(&mut snatch_guard);
+
+            drop(snatch_guard);
 
             let bind_groups = {
                 let mut guard = self.bind_groups.lock();
@@ -755,17 +730,21 @@ impl Buffer {
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
                 bind_groups,
+                #[cfg(feature = "indirect-validation")]
+                raw_indirect_validation_bind_group,
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_buffer(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_buffer(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
         }
 
@@ -790,6 +769,8 @@ pub enum CreateBufferError {
     MaxBufferSize { requested: u64, maximum: u64 },
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("Failed to create bind group for indirect buffer validation: {0}")]
+    IndirectValidationBindGroup(DeviceError),
 }
 
 crate::impl_resource_type!(Buffer);
@@ -804,7 +785,9 @@ pub struct DestroyedBuffer {
     raw: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     device: Arc<Device>,
     label: String,
-    bind_groups: Vec<Weak<BindGroup>>,
+    bind_groups: WeakVec<BindGroup>,
+    #[cfg(feature = "indirect-validation")]
+    raw_indirect_validation_bind_group: Option<Box<dyn hal::DynBindGroup>>,
 }
 
 impl DestroyedBuffer {
@@ -816,10 +799,17 @@ impl DestroyedBuffer {
 impl Drop for DestroyedBuffer {
     fn drop(&mut self) {
         let mut deferred = self.device.deferred_destroy.lock();
-        for bind_group in self.bind_groups.drain(..) {
-            deferred.push(DeferredDestroy::BindGroup(bind_group));
-        }
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
         drop(deferred);
+
+        #[cfg(feature = "indirect-validation")]
+        if let Some(raw) = self.raw_indirect_validation_bind_group.take() {
+            unsafe {
+                self.device.raw().destroy_bind_group(raw);
+            }
+        }
 
         resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
@@ -990,7 +980,6 @@ pub(crate) enum TextureInner {
     },
     Surface {
         raw: Box<dyn hal::DynSurfaceTexture>,
-        parent_id: SurfaceId,
     },
 }
 
@@ -1032,8 +1021,8 @@ pub struct Texture {
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
     pub(crate) clear_mode: TextureClearMode,
-    pub(crate) views: Mutex<Vec<Weak<TextureView>>>,
-    pub(crate) bind_groups: Mutex<Vec<Weak<BindGroup>>>,
+    pub(crate) views: Mutex<WeakVec<TextureView>>,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
 
 impl Texture {
@@ -1067,8 +1056,8 @@ impl Texture {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
             clear_mode,
-            views: Mutex::new(rank::TEXTURE_VIEWS, Vec::new()),
-            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, Vec::new()),
+            views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
+            bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
     }
     /// Checks that the given texture usage contains the required texture usage,
@@ -1185,8 +1174,7 @@ impl Texture {
         let device = &self.device;
 
         let temp = {
-            let snatch_guard = device.snatchable_lock.write();
-            let raw = match self.inner.snatch(snatch_guard) {
+            let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
                     return Ok(());
@@ -1215,14 +1203,16 @@ impl Texture {
             })
         };
 
-        let mut pending_writes = device.pending_writes.lock();
-        if pending_writes.contains_texture(self) {
-            pending_writes.consume_temp(temp);
-        } else {
-            let mut life_lock = device.lock_life();
-            let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-            if let Some(last_submit_index) = last_submit_index {
-                life_lock.schedule_resource_destruction(temp, last_submit_index);
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_texture(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
             }
         }
 
@@ -1384,15 +1374,18 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
-        let cmd_buf_data = cmd_buf.try_get();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data_guard = cmd_buf_data.record();
 
-        if let Ok(mut cmd_buf_data) = cmd_buf_data {
-            let cmd_buf_raw = cmd_buf_data
+        if let Ok(mut cmd_buf_data_guard) = cmd_buf_data_guard {
+            let cmd_buf_raw = cmd_buf_data_guard
                 .encoder
                 .open(&cmd_buf.device)
                 .ok()
                 .and_then(|encoder| encoder.as_any_mut().downcast_mut());
-            hal_command_encoder_callback(cmd_buf_raw)
+            let ret = hal_command_encoder_callback(cmd_buf_raw);
+            cmd_buf_data_guard.mark_successful();
+            ret
         } else {
             hal_command_encoder_callback(None)
         }
@@ -1403,8 +1396,8 @@ impl Global {
 #[derive(Debug)]
 pub struct DestroyedTexture {
     raw: ManuallyDrop<Box<dyn hal::DynTexture>>,
-    views: Vec<Weak<TextureView>>,
-    bind_groups: Vec<Weak<BindGroup>>,
+    views: WeakVec<TextureView>,
+    bind_groups: WeakVec<BindGroup>,
     device: Arc<Device>,
     label: String,
 }
@@ -1420,12 +1413,10 @@ impl Drop for DestroyedTexture {
         let device = &self.device;
 
         let mut deferred = device.deferred_destroy.lock();
-        for view in self.views.drain(..) {
-            deferred.push(DeferredDestroy::TextureView(view));
-        }
-        for bind_group in self.bind_groups.drain(..) {
-            deferred.push(DeferredDestroy::BindGroup(bind_group));
-        }
+        deferred.push(DeferredDestroy::TextureViews(mem::take(&mut self.views)));
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
         drop(deferred);
 
         resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
@@ -1649,8 +1640,6 @@ pub enum CreateTextureViewError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
-    #[error("Not enough memory left to create texture view")]
-    OutOfMemory,
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
         view: wgt::TextureViewDimension,
@@ -1799,9 +1788,6 @@ pub enum CreateSamplerError {
         filter_mode: wgt::FilterMode,
         anisotropic_clamp: u16,
     },
-    #[error("Cannot create any more samplers")]
-    TooManyObjects,
-    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }
@@ -1867,4 +1853,206 @@ pub enum DestroyError {
     AlreadyDestroyed,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+
+pub(crate) trait AccelerationStructure: Trackable {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure>;
+}
+
+#[derive(Debug)]
+pub struct Blas {
+    pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) handle: u64,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+}
+
+impl Drop for Blas {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
+        // SAFETY: We are in the Drop impl, and we don't use self.raw anymore after this point.
+        if let Some(raw) = self.raw.take() {
+            unsafe {
+                self.device.raw().destroy_acceleration_structure(raw);
+            }
+        }
+    }
+}
+
+impl AccelerationStructure for Blas {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
+        Some(self.raw.get(guard)?.as_ref())
+    }
+}
+
+impl Blas {
+    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+        let device = &self.device;
+
+        let temp = {
+            let mut snatch_guard = device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    return Err(DestroyError::AlreadyDestroyed);
+                }
+            };
+
+            drop(snatch_guard);
+
+            queue::TempResource::DestroyedAccelerationStructure(DestroyedAccelerationStructure {
+                raw: ManuallyDrop::new(raw),
+                device: Arc::clone(&self.device),
+                label: self.label().to_owned(),
+                bind_groups: WeakVec::new(),
+            })
+        };
+
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_blas(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_blas_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+crate::impl_resource_type!(Blas);
+crate::impl_labeled!(Blas);
+crate::impl_parent_device!(Blas);
+crate::impl_storage_item!(Blas);
+crate::impl_trackable!(Blas);
+
+#[derive(Debug)]
+pub struct Tlas {
+    pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) max_instance_count: u32,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) dependencies: RwLock<Vec<Arc<Blas>>>,
+    pub(crate) instance_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+}
+
+impl Drop for Tlas {
+    fn drop(&mut self) {
+        unsafe {
+            resource_log!("Destroy raw {}", self.error_ident());
+            if let Some(structure) = self.raw.take() {
+                self.device.raw().destroy_acceleration_structure(structure);
+            }
+            let buffer = ManuallyDrop::take(&mut self.instance_buffer);
+            self.device.raw().destroy_buffer(buffer);
+        }
+    }
+}
+
+impl AccelerationStructure for Tlas {
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
+        Some(self.raw.get(guard)?.as_ref())
+    }
+}
+
+crate::impl_resource_type!(Tlas);
+crate::impl_labeled!(Tlas);
+crate::impl_parent_device!(Tlas);
+crate::impl_storage_item!(Tlas);
+crate::impl_trackable!(Tlas);
+
+impl Tlas {
+    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+        let device = &self.device;
+
+        let temp = {
+            let mut snatch_guard = device.snatchable_lock.write();
+
+            let raw = match self.raw.snatch(&mut snatch_guard) {
+                Some(raw) => raw,
+                None => {
+                    return Err(DestroyError::AlreadyDestroyed);
+                }
+            };
+
+            drop(snatch_guard);
+
+            queue::TempResource::DestroyedAccelerationStructure(DestroyedAccelerationStructure {
+                raw: ManuallyDrop::new(raw),
+                device: Arc::clone(&self.device),
+                label: self.label().to_owned(),
+                bind_groups: mem::take(&mut self.bind_groups.lock()),
+            })
+        };
+
+        if let Some(queue) = device.get_queue() {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_tlas(self) {
+                pending_writes.consume_temp(temp);
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct DestroyedAccelerationStructure {
+    raw: ManuallyDrop<Box<dyn hal::DynAccelerationStructure>>,
+    device: Arc<Device>,
+    label: String,
+    // only filled if the acceleration structure is a TLAS
+    bind_groups: WeakVec<BindGroup>,
+}
+
+impl DestroyedAccelerationStructure {
+    pub fn label(&self) -> &dyn Debug {
+        &self.label
+    }
+}
+
+impl Drop for DestroyedAccelerationStructure {
+    fn drop(&mut self) {
+        let mut deferred = self.device.deferred_destroy.lock();
+        deferred.push(DeferredDestroy::BindGroups(mem::take(
+            &mut self.bind_groups,
+        )));
+        drop(deferred);
+
+        resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
+        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
+        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
+        unsafe {
+            hal::DynDevice::destroy_acceleration_structure(self.device.raw(), raw);
+        }
+    }
 }

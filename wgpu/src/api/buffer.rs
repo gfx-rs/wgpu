@@ -1,13 +1,10 @@
 use std::{
     error, fmt,
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
-    sync::Arc,
-    thread,
 };
 
 use parking_lot::Mutex;
 
-use crate::context::DynContext;
 use crate::*;
 
 /// Handle to a GPU-accessible buffer.
@@ -172,8 +169,7 @@ use crate::*;
 /// [`MAP_WRITE`]: BufferUsages::MAP_WRITE
 #[derive(Debug)]
 pub struct Buffer {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchBuffer,
     pub(crate) map_context: Mutex<MapContext>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) usage: BufferUsages,
@@ -182,7 +178,7 @@ pub struct Buffer {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
-super::impl_partialeq_eq_hash!(Buffer);
+crate::cmp::impl_eq_ord_hash_proxy!(Buffer => .inner);
 
 impl Buffer {
     /// Return the binding view of the entire buffer.
@@ -210,16 +206,11 @@ impl Buffer {
         &self,
         hal_buffer_callback: F,
     ) -> R {
-        if let Some(ctx) = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-        {
+        if let Some(buffer) = self.inner.as_core_opt() {
             unsafe {
-                ctx.buffer_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(self.data.as_ref()),
-                    hal_buffer_callback,
-                )
+                buffer
+                    .context
+                    .buffer_as_hal::<A, F, R>(buffer, hal_buffer_callback)
             }
         } else {
             hal_buffer_callback(None)
@@ -242,6 +233,7 @@ impl Buffer {
     /// end of the buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds);
+        check_buffer_bounds(self.size, offset, size);
         BufferSlice {
             buffer: self,
             offset,
@@ -252,12 +244,12 @@ impl Buffer {
     /// Flushes any pending write operations and unmaps the buffer from host memory.
     pub fn unmap(&self) {
         self.map_context.lock().reset();
-        DynContext::buffer_unmap(&*self.context, self.data.as_ref());
+        self.inner.unmap();
     }
 
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::buffer_destroy(&*self.context, self.data.as_ref());
+        self.inner.destroy();
     }
 
     /// Returns the length of the buffer allocation in bytes.
@@ -346,13 +338,9 @@ impl<'a> BufferSlice<'a> {
         };
         mc.initial_range = self.offset..end;
 
-        DynContext::buffer_map_async(
-            &*self.buffer.context,
-            self.buffer.data.as_ref(),
-            mode,
-            self.offset..end,
-            Box::new(callback),
-        )
+        self.buffer
+            .inner
+            .map_async(mode, self.offset..end, Box::new(callback));
     }
 
     /// Gain read-only access to the bytes of a [mapped] [`Buffer`].
@@ -371,12 +359,11 @@ impl<'a> BufferSlice<'a> {
     /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range(&self) -> BufferView<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let data = DynContext::buffer_get_mapped_range(
-            &*self.buffer.context,
-            self.buffer.data.as_ref(),
-            self.offset..end,
-        );
-        BufferView { slice: *self, data }
+        let range = self.buffer.inner.get_mapped_range(self.offset..end);
+        BufferView {
+            slice: *self,
+            inner: range,
+        }
     }
 
     /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
@@ -389,15 +376,11 @@ impl<'a> BufferSlice<'a> {
     /// This is only available on WebGPU, on any other backends this will return `None`.
     #[cfg(webgpu)]
     pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
+        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+
         self.buffer
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWebGpu>()
-            .map(|ctx| {
-                let buffer_data = crate::context::downcast_ref(self.buffer.data.as_ref());
-                let end = self.buffer.map_context.lock().add(self.offset, self.size);
-                ctx.buffer_get_mapped_range_as_array_buffer(buffer_data, self.offset..end)
-            })
+            .inner
+            .get_mapped_range_as_array_buffer(self.offset..end)
     }
 
     /// Gain write access to the bytes of a [mapped] [`Buffer`].
@@ -416,14 +399,10 @@ impl<'a> BufferSlice<'a> {
     /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let data = DynContext::buffer_get_mapped_range(
-            &*self.buffer.context,
-            self.buffer.data.as_ref(),
-            self.offset..end,
-        );
+        let range = self.buffer.inner.get_mapped_range(self.offset..end);
         BufferViewMut {
             slice: *self,
-            data,
+            inner: range,
             readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
     }
@@ -576,7 +555,7 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 #[derive(Debug)]
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
-    data: Box<dyn crate::context::BufferMappedRange>,
+    inner: dispatch::DispatchBufferMappedRange,
 }
 
 impl std::ops::Deref for BufferView<'_> {
@@ -584,14 +563,14 @@ impl std::ops::Deref for BufferView<'_> {
 
     #[inline]
     fn deref(&self) -> &[u8] {
-        self.data.slice()
+        self.inner.slice()
     }
 }
 
 impl AsRef<[u8]> for BufferView<'_> {
     #[inline]
     fn as_ref(&self) -> &[u8] {
-        self.data.slice()
+        self.inner.slice()
     }
 }
 
@@ -616,14 +595,14 @@ impl AsRef<[u8]> for BufferView<'_> {
 #[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
-    data: Box<dyn crate::context::BufferMappedRange>,
+    inner: dispatch::DispatchBufferMappedRange,
     readable: bool,
 }
 
 impl AsMut<[u8]> for BufferViewMut<'_> {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
-        self.data.slice_mut()
+        self.inner.slice_mut()
     }
 }
 
@@ -635,13 +614,13 @@ impl Deref for BufferViewMut<'_> {
             log::warn!("Reading from a BufferViewMut is slow and not recommended.");
         }
 
-        self.data.slice()
+        self.inner.slice()
     }
 }
 
 impl DerefMut for BufferViewMut<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data.slice_mut()
+        self.inner.slice_mut()
     }
 }
 
@@ -665,10 +644,27 @@ impl Drop for BufferViewMut<'_> {
     }
 }
 
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.buffer_drop(self.data.as_ref());
+fn check_buffer_bounds(
+    buffer_size: BufferAddress,
+    offset: BufferAddress,
+    size: Option<BufferSize>,
+) {
+    // A slice of length 0 is invalid, so the offset must not be equal to or greater than the buffer size.
+    if offset >= buffer_size {
+        panic!(
+            "slice offset {} is out of range for buffer of size {}",
+            offset, buffer_size
+        );
+    }
+
+    if let Some(size) = size {
+        // Detect integer overflow.
+        let end = offset.checked_add(size.get());
+        if end.map_or(true, |end| end > buffer_size) {
+            panic!(
+                "slice offset {} size {} is out of range for buffer of size {}",
+                offset, size, buffer_size
+            );
         }
     }
 }
@@ -690,9 +686,10 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 
     (offset, size)
 }
+
 #[cfg(test)]
 mod tests {
-    use super::{range_to_offset_size, BufferSize};
+    use super::{check_buffer_bounds, range_to_offset_size, BufferSize};
 
     #[test]
     fn range_to_offset_size_works() {
@@ -714,5 +711,32 @@ mod tests {
     #[should_panic]
     fn range_to_offset_size_panics_for_unbounded_empty_range() {
         range_to_offset_size(..0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_buffer_bounds_panics_for_offset_at_size() {
+        check_buffer_bounds(100, 100, None);
+    }
+
+    #[test]
+    fn check_buffer_bounds_works_for_end_in_range() {
+        check_buffer_bounds(200, 100, BufferSize::new(50));
+        check_buffer_bounds(200, 100, BufferSize::new(100));
+        check_buffer_bounds(u64::MAX, u64::MAX - 100, BufferSize::new(100));
+        check_buffer_bounds(u64::MAX, 0, BufferSize::new(u64::MAX));
+        check_buffer_bounds(u64::MAX, 1, BufferSize::new(u64::MAX - 1));
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_buffer_bounds_panics_for_end_over_size() {
+        check_buffer_bounds(200, 100, BufferSize::new(101));
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_buffer_bounds_panics_for_end_wraparound() {
+        check_buffer_bounds(u64::MAX, 1, BufferSize::new(u64::MAX));
     }
 }

@@ -137,8 +137,8 @@ macro_rules! gen_component_wise_extractor {
                             for idx in 0..(size as u8).into() {
                                 let group = component_groups
                                     .iter()
-                                    .map(|cs| cs[idx])
-                                    .collect::<ArrayVec<_, N>>()
+                                    .map(|cs| cs.get(idx).cloned().ok_or(err.clone()))
+                                    .collect::<Result<ArrayVec<_, N>, _>>()?
                                     .into_inner()
                                     .unwrap();
                                 new_components.push($ident(
@@ -509,6 +509,8 @@ pub enum ConstantEvaluatorError {
     InvalidArrayLengthArg,
     #[error("Constants cannot get the array length of a dynamically sized array")]
     ArrayLengthDynamic,
+    #[error("Cannot call arrayLength on array sized by override-expression")]
+    ArrayLengthOverridden,
     #[error("Constants cannot call functions")]
     Call,
     #[error("Constants don't support workGroupUniformLoad")]
@@ -1175,8 +1177,8 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
             crate::MathFunction::Round => {
-                // TODO: Use `f{32,64}.round_ties_even()` when available on stable. This polyfill
-                // is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
+                // TODO: this hit stable on 1.77, but MSRV hasn't caught up yet
+                // This polyfill is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
                 // which has licensing compatible with ours. See also
                 // <https://github.com/rust-lang/rust/issues/96710>.
                 //
@@ -1311,6 +1313,7 @@ impl<'a> ConstantEvaluator<'a> {
                             let expr = Expression::Literal(Literal::U32(len.get()));
                             self.register_evaluated_expr(expr, span)
                         }
+                        ArraySize::Pending(_) => Err(ConstantEvaluatorError::ArrayLengthOverridden),
                         ArraySize::Dynamic => Err(ConstantEvaluatorError::ArrayLengthDynamic),
                     },
                     _ => Err(ConstantEvaluatorError::InvalidArrayLengthArg),
@@ -1742,6 +1745,7 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::Literal(value) => Expression::Literal(match op {
                 UnaryOperator::Negate => match value {
                     Literal::I32(v) => Literal::I32(v.wrapping_neg()),
+                    Literal::I64(v) => Literal::I64(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
                     Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
@@ -1753,7 +1757,9 @@ impl<'a> ConstantEvaluator<'a> {
                 },
                 UnaryOperator::BitwiseNot => match value {
                     Literal::I32(v) => Literal::I32(!v),
+                    Literal::I64(v) => Literal::I64(!v),
                     Literal::U32(v) => Literal::U32(!v),
+                    Literal::U64(v) => Literal::U64(!v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(!v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },

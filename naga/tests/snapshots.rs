@@ -39,61 +39,60 @@ impl Default for SpvOutVersion {
 }
 
 #[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct SpirvOutParameters {
     version: SpvOutVersion,
-    #[serde(default)]
     capabilities: naga::FastHashSet<spirv::Capability>,
-    #[serde(default)]
     debug: bool,
-    #[serde(default)]
     adjust_coordinate_space: bool,
-    #[serde(default)]
     force_point_size: bool,
-    #[serde(default)]
     clamp_frag_depth: bool,
-    #[serde(default)]
     separate_entry_points: bool,
-    #[serde(default)]
     #[cfg(all(feature = "deserialize", spv_out))]
     binding_map: naga::back::spv::BindingMap,
 }
 
 #[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct WgslOutParameters {
-    #[serde(default)]
     explicit_types: bool,
 }
 
 #[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct Parameters {
-    #[serde(default)]
+    // -- GOD MODE --
     god_mode: bool,
-    #[cfg(feature = "deserialize")]
-    #[serde(default)]
-    bounds_check_policies: naga::proc::BoundsCheckPolicies,
-    #[serde(default)]
+
+    // -- SPIR-V options --
     spv: SpirvOutParameters,
+
+    // -- MSL options --
     #[cfg(all(feature = "deserialize", msl_out))]
-    #[serde(default)]
     msl: naga::back::msl::Options,
     #[cfg(all(feature = "deserialize", msl_out))]
     #[serde(default)]
     msl_pipeline: naga::back::msl::PipelineOptions,
+
+    // -- GLSL options --
     #[cfg(all(feature = "deserialize", glsl_out))]
-    #[serde(default)]
     glsl: naga::back::glsl::Options,
-    #[serde(default)]
     glsl_exclude_list: naga::FastHashSet<String>,
-    #[cfg(all(feature = "deserialize", hlsl_out))]
-    #[serde(default)]
-    hlsl: naga::back::hlsl::Options,
-    #[serde(default)]
-    wgsl: WgslOutParameters,
     #[cfg(all(feature = "deserialize", glsl_out))]
-    #[serde(default)]
     glsl_multiview: Option<std::num::NonZeroU32>,
+
+    // -- HLSL options --
+    #[cfg(all(feature = "deserialize", hlsl_out))]
+    hlsl: naga::back::hlsl::Options,
+
+    // -- WGSL options --
+    wgsl: WgslOutParameters,
+
+    // -- General options --
+    #[cfg(feature = "deserialize")]
+    bounds_check_policies: naga::proc::BoundsCheckPolicies,
+
     #[cfg(all(feature = "deserialize", any(hlsl_out, msl_out, spv_out, glsl_out)))]
-    #[serde(default)]
     pipeline_constants: naga::back::PipelineConstants,
 }
 
@@ -773,7 +772,10 @@ fn convert_wgsl() {
             "atomicOps",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
+        (
+            "atomicCompareExchange",
+            Targets::SPIRV | Targets::METAL | Targets::WGSL,
+        ),
         (
             "padding",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
@@ -891,6 +893,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
+            "abstract-types-function-calls",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
+        (
             "abstract-types-var",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
@@ -917,7 +923,7 @@ fn convert_wgsl() {
         ),
         (
             "overrides-atomicCompareExchangeWeak",
-            Targets::IR | Targets::SPIRV,
+            Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
         (
             "overrides-ray-query",
@@ -928,6 +934,17 @@ fn convert_wgsl() {
             "cross",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        (
+            "phony_assignment",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        ("6220-break-from-loop", Targets::SPIRV),
+        ("index-by-value", Targets::SPIRV | Targets::IR),
+        (
+            "6438-conflicting-idents",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        ("diagnostic-filter", Targets::IR),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -1054,11 +1071,16 @@ fn convert_spv_all() {
         false,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+    convert_spv("atomic_i_increment", false, Targets::WGSL);
+    convert_spv("atomic_load_and_store", false, Targets::WGSL);
+    convert_spv("atomic_exchange", false, Targets::WGSL);
+    convert_spv("atomic_compare_exchange", false, Targets::WGSL);
+    convert_spv("atomic_i_decrement", false, Targets::WGSL);
+    convert_spv("atomic_i_add_sub", false, Targets::WGSL);
     convert_spv(
-        "atomic_i_increment",
+        "fetch_depth",
         false,
-        // TODO(@schell): remove Targets::NO_VALIDATION when OpAtomicIIncrement lands
-        Targets::IR | Targets::NO_VALIDATION,
+        Targets::IR | Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
     );
 }
 

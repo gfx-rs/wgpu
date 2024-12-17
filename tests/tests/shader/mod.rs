@@ -15,10 +15,12 @@ use wgpu::{
 
 use wgpu_test::TestingContext;
 
+pub mod array_size_overrides;
 pub mod compilation_messages;
 pub mod data_builtins;
 pub mod numeric_builtins;
 pub mod struct_layout;
+pub mod workgroup_size_overrides;
 pub mod zero_init_workgroup_mem;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -349,7 +351,7 @@ async fn shader_input_output_test(
             timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, Some(&bg), &[]);
+        cpass.set_bind_group(0, &bg, &[]);
 
         if let InputStorageType::PushConstant = storage_type {
             cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values))

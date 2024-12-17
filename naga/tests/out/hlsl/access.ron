@@ -16,5 +16,9 @@
             entry_point:"assign_through_ptr",
             target_profile:"cs_5_1",
         ),
+        (
+            entry_point:"assign_to_ptr_components",
+            target_profile:"cs_5_1",
+        ),
     ],
 )

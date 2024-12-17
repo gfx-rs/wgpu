@@ -471,10 +471,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             test.case, test.id_source, test.draw_call_kind, test.encoder_kind
         );
         if data != expected {
-            eprintln!(
-                "Failed: Got: {:?} Expected: {:?} - {case_name}",
-                data, expected,
-            );
+            eprintln!("Failed: Got: {data:?} Expected: {expected:?} - {case_name}",);
             failed = true;
         } else {
             eprintln!("Passed: {case_name}");

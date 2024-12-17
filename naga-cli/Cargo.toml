@@ -1,9 +1,9 @@
 [package]
 name = "naga-cli"
-version = "22.0.0"
+version = "23.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
-description = "Shader translation command line tool"
+description = "CLI for the naga shader translator and validator. Part of the wgpu project"
 repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga-cli"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
@@ -23,9 +23,10 @@ codespan-reporting.workspace = true
 env_logger.workspace = true
 argh.workspace = true
 anyhow.workspace = true
+log.workspace = true
 
 [dependencies.naga]
-version = "22.0.0"
+version = "23.0.0"
 path = "../naga"
 features = [
     "compact",

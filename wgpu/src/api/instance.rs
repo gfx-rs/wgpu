@@ -1,8 +1,8 @@
 use parking_lot::Mutex;
 
-use crate::*;
+use crate::{dispatch::InstanceInterface, *};
 
-use std::{future::Future, sync::Arc};
+use std::future::Future;
 
 /// Context for all other wgpu objects. Instance of wgpu.
 ///
@@ -14,10 +14,12 @@ use std::{future::Future, sync::Arc};
 /// Corresponds to [WebGPU `GPU`](https://gpuweb.github.io/gpuweb/#gpu-interface).
 #[derive(Debug)]
 pub struct Instance {
-    context: Arc<C>,
+    inner: dispatch::DispatchInstance,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Instance: Send, Sync);
+
+crate::cmp::impl_eq_ord_hash_proxy!(Instance => .inner);
 
 impl Default for Instance {
     /// Creates a new instance of wgpu with default options.
@@ -93,10 +95,15 @@ impl Instance {
     ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
     ///
     ///   [`Backends::BROWSER_WEBGPU`] takes a special role:
-    ///   If it is set and WebGPU support is detected, this instance will *only* be able to create
-    ///   WebGPU adapters. If you instead want to force use of WebGL, either
-    ///   disable the `webgpu` compile-time feature or don't add the [`Backends::BROWSER_WEBGPU`]
-    ///   flag to the the `instance_desc`'s `backends` field.
+    ///   If it is set and a [`navigator.gpu`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu)
+    ///   object is present, this instance will *only* be able to create WebGPU adapters.
+    ///
+    ///   ⚠️ On some browsers this check is insufficient to determine whether WebGPU is supported,
+    ///   as the browser may define the `navigator.gpu` object, but be unable to create any WebGPU adapters.
+    ///   For targeting _both_ WebGPU & WebGL is recommended to use [`crate::util::new_instance_with_webgpu_detection`].
+    ///
+    ///   If you instead want to force use of WebGL, either disable the `webgpu` compile-time feature
+    ///   or don't add the [`Backends::BROWSER_WEBGPU`] flag to the the `instance_desc`'s `backends` field.
     ///   If it is set and WebGPU support is *not* detected, the instance will use wgpu-core
     ///   to create adapters. Meaning that if the `webgl` feature is enabled, it is able to create
     ///   a WebGL adapter.
@@ -124,7 +131,7 @@ impl Instance {
 
             if is_only_available_backend || (requested_webgpu && support_webgpu) {
                 return Self {
-                    context: Arc::from(crate::backend::ContextWebGpu::init(_instance_desc)),
+                    inner: crate::backend::ContextWebGpu::new(_instance_desc).into(),
                 };
             }
         }
@@ -132,7 +139,7 @@ impl Instance {
         #[cfg(wgpu_core)]
         {
             return Self {
-                context: Arc::from(crate::backend::ContextWgpuCore::init(_instance_desc)),
+                inner: crate::backend::ContextWgpuCore::new(_instance_desc).into(),
             };
         }
 
@@ -153,9 +160,9 @@ impl Instance {
     #[cfg(wgpu_core)]
     pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
-            context: Arc::new(unsafe {
-                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance)
-            }),
+            inner: unsafe {
+                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance).into()
+            },
         }
     }
 
@@ -171,10 +178,8 @@ impl Instance {
     /// [`Instance`]: hal::Api::Instance
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
-        self.context
-            .as_any()
-            // If we don't have a wgpu-core instance, we don't have a hal instance either.
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
+        self.inner
+            .as_core_opt()
             .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
     }
 
@@ -190,9 +195,9 @@ impl Instance {
     #[cfg(wgpu_core)]
     pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
         Self {
-            context: Arc::new(unsafe {
-                crate::backend::ContextWgpuCore::from_core_instance(core_instance)
-            }),
+            inner: unsafe {
+                crate::backend::ContextWgpuCore::from_core_instance(core_instance).into()
+            },
         }
     }
 
@@ -203,20 +208,21 @@ impl Instance {
     /// - `backends` - Backends from which to enumerate adapters.
     #[cfg(native)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
-        let context = Arc::clone(&self.context);
-        self.context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-            .map(|ctx| {
-                ctx.enumerate_adapters(backends)
-                    .into_iter()
-                    .map(move |adapter| crate::Adapter {
-                        context: Arc::clone(&context),
-                        data: Box::new(adapter),
-                    })
-                    .collect()
+        let Some(core_instance) = self.inner.as_core_opt() else {
+            return Vec::new();
+        };
+
+        core_instance
+            .enumerate_adapters(backends)
+            .into_iter()
+            .map(|adapter| {
+                let core = backend::wgpu_core::CoreAdapter {
+                    context: core_instance.clone(),
+                    id: adapter,
+                };
+                crate::Adapter { inner: core.into() }
             })
-            .unwrap()
+            .collect()
     }
 
     /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].
@@ -230,9 +236,8 @@ impl Instance {
         &self,
         options: &RequestAdapterOptions<'_, '_>,
     ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
-        let context = Arc::clone(&self.context);
-        let adapter = self.context.instance_request_adapter(options);
-        async move { adapter.await.map(|data| Adapter { context, data }) }
+        let future = self.inner.request_adapter(options);
+        async move { future.await.map(|inner| Adapter { inner }) }
     }
 
     /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
@@ -245,18 +250,14 @@ impl Instance {
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
-        let context = Arc::clone(&self.context);
-        let adapter = unsafe {
-            context
-                .as_any()
-                .downcast_ref::<crate::backend::ContextWgpuCore>()
-                .unwrap()
-                .create_adapter_from_hal(hal_adapter)
+        let core_instance = self.inner.as_core();
+        let adapter = unsafe { core_instance.create_adapter_from_hal(hal_adapter) };
+        let core = backend::wgpu_core::CoreAdapter {
+            context: core_instance.clone(),
+            id: adapter,
         };
-        Adapter {
-            context,
-            data: Box::new(adapter),
-        }
+
+        Adapter { inner: core.into() }
     }
 
     /// Creates a new surface targeting a given window/canvas/surface/etc..
@@ -347,12 +348,11 @@ impl Instance {
         &self,
         target: SurfaceTargetUnsafe,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
-        let data = unsafe { self.context.instance_create_surface(target) }?;
+        let surface = unsafe { self.inner.create_surface(target)? };
 
         Ok(Surface {
-            context: Arc::clone(&self.context),
             _handle_source: None,
-            surface_data: data,
+            inner: surface,
             config: Mutex::new(None),
         })
     }
@@ -374,7 +374,7 @@ impl Instance {
     ///
     /// [`Queue`s]: Queue
     pub fn poll_all(&self, force_wait: bool) -> bool {
-        self.context.instance_poll_all_devices(force_wait)
+        self.inner.poll_all_devices(force_wait)
     }
 
     /// Generates memory report.
@@ -383,9 +383,6 @@ impl Instance {
     /// which happens only when WebGPU is pre-selected by the instance creation.
     #[cfg(wgpu_core)]
     pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
-        self.context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-            .map(|ctx| ctx.generate_report())
+        self.inner.as_core_opt().map(|ctx| ctx.generate_report())
     }
 }

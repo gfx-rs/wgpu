@@ -10,12 +10,12 @@ license = "MIT OR Apache-2.0"
 cargo-fuzz = true
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
-arbitrary = { version = "1.3.2", features = ["derive"] }
+arbitrary = { version = "1.4.1", features = ["derive"] }
 libfuzzer-sys = "0.4"
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies.naga]
 path = ".."
-version = "22.0.0"
+version = "23.0.0"
 features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in"]
 
 [[bin]]

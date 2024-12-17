@@ -107,10 +107,12 @@ pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
             .map(str::to_lowercase)
             .as_deref()
         {
-            Ok("dxc") => wgt::Dx12Compiler::Dxc {
-                dxil_path: None,
-                dxc_path: None,
+            Ok("dxc") => wgt::Dx12Compiler::DynamicDxc {
+                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
+                dxil_path: std::path::PathBuf::from("dxil.dll"),
             },
+            #[cfg(feature = "static-dxc")]
+            Ok("static-dxc") => wgt::Dx12Compiler::StaticDxc,
             Ok("fxc") => wgt::Dx12Compiler::Fxc,
             _ => return None,
         },
@@ -134,4 +136,78 @@ pub fn gles_minor_version_from_env() -> Option<wgt::Gles3MinorVersion> {
             _ => return None,
         },
     )
+}
+
+/// Get an instance descriptor from the following environment variables
+/// - WGPU_BACKEND
+/// - WGPU_DEBUG
+/// - WGPU_VALIDATION
+/// - WGPU_DX12_COMPILER
+/// - WGPU_GLES_MINOR_VERSION
+/// If variables are missing, falls back to default or build config values
+pub fn instance_descriptor_from_env() -> wgt::InstanceDescriptor {
+    wgt::InstanceDescriptor {
+        backends: backend_bits_from_env().unwrap_or_default(),
+        flags: wgt::InstanceFlags::from_build_config().with_env(),
+        dx12_shader_compiler: dx12_shader_compiler_from_env().unwrap_or_default(),
+        gles_minor_version: gles_minor_version_from_env().unwrap_or_default(),
+    }
+}
+
+/// Determines whether the [`Backends::BROWSER_WEBGPU`] backend is supported.
+///
+/// The result can only be true if this is called from the main thread or a dedicated worker.
+/// For convenience, this is also supported on non-wasm targets, always returning false there.
+pub async fn is_browser_webgpu_supported() -> bool {
+    #[cfg(webgpu)]
+    {
+        // In theory it should be enough to check for the presence of the `gpu` property...
+        let gpu = crate::backend::get_browser_gpu_property();
+        let Ok(Some(gpu)) = gpu else {
+            return false;
+        };
+
+        // ...but in practice, we also have to try to create an adapter, since as of writing
+        // Chrome on Linux has the `gpu` property but doesn't support WebGPU.
+        let adapter_promise = gpu.request_adapter();
+        wasm_bindgen_futures::JsFuture::from(adapter_promise)
+            .await
+            .map_or(false, |adapter| {
+                !adapter.is_undefined() && !adapter.is_null()
+            })
+    }
+    #[cfg(not(webgpu))]
+    {
+        false
+    }
+}
+
+/// Create an new instance of wgpu, but disabling [`Backends::BROWSER_WEBGPU`] if no WebGPU support was detected.
+///
+/// If the instance descriptor enables [`Backends::BROWSER_WEBGPU`],
+/// this checks via [`is_browser_webgpu_supported`] for WebGPU support before forwarding
+/// the descriptor with or without [`Backends::BROWSER_WEBGPU`] respecitively to [`Instance::new`].
+///
+/// You should prefer this method over [`Instance::new`] if you want to target WebGPU and automatically
+/// fall back to WebGL if WebGPU is not available.
+/// This is because WebGPU support has to be decided upon instance creation and [`Instance::new`]
+/// (being a `sync` function) can't establish WebGPU support (details see [`is_browser_webgpu_supported`]).
+///
+/// # Panics
+///
+/// If no backend feature for the active target platform is enabled,
+/// this method will panic, see [`Instance::enabled_backend_features()`].
+#[allow(unused_mut)]
+pub async fn new_instance_with_webgpu_detection(
+    mut instance_desc: wgt::InstanceDescriptor,
+) -> crate::Instance {
+    if instance_desc
+        .backends
+        .contains(wgt::Backends::BROWSER_WEBGPU)
+        && !is_browser_webgpu_supported().await
+    {
+        instance_desc.backends.remove(wgt::Backends::BROWSER_WEBGPU);
+    }
+
+    crate::Instance::new(instance_desc)
 }

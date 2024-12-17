@@ -67,6 +67,8 @@ mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
+#[cfg(feature = "indirect-validation")]
+mod indirect_validation;
 mod init_tracker;
 pub mod instance;
 mod lock;
@@ -74,15 +76,18 @@ pub mod pipeline;
 mod pipeline_cache;
 mod pool;
 pub mod present;
+pub mod ray_tracing;
 pub mod registry;
 pub mod resource;
 mod snatch;
 pub mod storage;
 mod track;
+mod weak_vec;
 // This is public for users who pre-compile shaders while still wanting to
 // preserve all run-time checks that `wgpu-core` does.
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
 // made private again.
+mod scratch;
 pub mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
@@ -128,16 +133,26 @@ pub fn hal_label(opt: Option<&str>, flags: wgt::InstanceFlags) -> Option<&str> {
     opt
 }
 
-const DOWNLEVEL_WARNING_MESSAGE: &str = "The underlying API or device in use does not \
-support enough features to be a fully compliant implementation of WebGPU. A subset of the features can still be used. \
-If you are running this program on native and not in a browser and wish to limit the features you use to the supported subset, \
-call Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
-platform supports.";
-const DOWNLEVEL_ERROR_MESSAGE: &str = "This is not an invalid use of WebGPU: the underlying API or device does not \
-support enough features to be a fully compliant implementation. A subset of the features can still be used. \
-If you are running this program on native and not in a browser and wish to work around this issue, call \
-Adapter::downlevel_properties or Device::downlevel_properties to get a listing of the features the current \
-platform supports.";
+const DOWNLEVEL_WARNING_MESSAGE: &str = concat!(
+    "The underlying API or device in use does not ",
+    "support enough features to be a fully compliant implementation of WebGPU. ",
+    "A subset of the features can still be used. ",
+    "If you are running this program on native and not in a browser and wish to limit ",
+    "the features you use to the supported subset, ",
+    "call Adapter::downlevel_properties or Device::downlevel_properties to get ",
+    "a listing of the features the current ",
+    "platform supports."
+);
+
+const DOWNLEVEL_ERROR_MESSAGE: &str = concat!(
+    "This is not an invalid use of WebGPU: the underlying API or device does not ",
+    "support enough features to be a fully compliant implementation. ",
+    "A subset of the features can still be used. ",
+    "If you are running this program on native and not in a browser ",
+    "and wish to work around this issue, call ",
+    "Adapter::downlevel_properties or Device::downlevel_properties ",
+    "to get a listing of the features the current platform supports."
+);
 
 #[cfg(feature = "api_log_info")]
 macro_rules! api_log {
@@ -147,7 +162,18 @@ macro_rules! api_log {
 macro_rules! api_log {
     ($($arg:tt)+) => (log::trace!($($arg)+))
 }
+
+#[cfg(feature = "api_log_info")]
+macro_rules! api_log_debug {
+    ($($arg:tt)+) => (log::info!($($arg)+))
+}
+#[cfg(not(feature = "api_log_info"))]
+macro_rules! api_log_debug {
+    ($($arg:tt)+) => (log::debug!($($arg)+))
+}
+
 pub(crate) use api_log;
+pub(crate) use api_log_debug;
 
 #[cfg(feature = "resource_log_info")]
 macro_rules! resource_log {

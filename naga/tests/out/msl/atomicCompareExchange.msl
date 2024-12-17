@@ -1,0 +1,165 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_2 {
+    metal::atomic_int inner[128];
+};
+struct type_4 {
+    metal::atomic_uint inner[128];
+};
+struct _atomic_compare_exchange_resultSint4_ {
+    int old_value;
+    bool exchanged;
+};
+struct _atomic_compare_exchange_resultUint4_ {
+    uint old_value;
+    bool exchanged;
+};
+
+template <typename A>
+_atomic_compare_exchange_resultSint4_ naga_atomic_compare_exchange_weak_explicit(
+    device A *atomic_ptr,
+    int cmp,
+    int v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultSint4_{cmp, swapped};
+}
+template <typename A>
+_atomic_compare_exchange_resultSint4_ naga_atomic_compare_exchange_weak_explicit(
+    threadgroup A *atomic_ptr,
+    int cmp,
+    int v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultSint4_{cmp, swapped};
+}
+
+template <typename A>
+_atomic_compare_exchange_resultUint4_ naga_atomic_compare_exchange_weak_explicit(
+    device A *atomic_ptr,
+    uint cmp,
+    uint v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultUint4_{cmp, swapped};
+}
+template <typename A>
+_atomic_compare_exchange_resultUint4_ naga_atomic_compare_exchange_weak_explicit(
+    threadgroup A *atomic_ptr,
+    uint cmp,
+    uint v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultUint4_{cmp, swapped};
+}
+constant uint SIZE = 128u;
+
+kernel void test_atomic_compare_exchange_i32_(
+  device type_2& arr_i32_ [[user(fake0)]]
+) {
+    uint i = 0u;
+    int old = {};
+    bool exchanged = {};
+    bool loop_init = true;
+    while(true) {
+        if (!loop_init) {
+            uint _e27 = i;
+            i = _e27 + 1u;
+        }
+        loop_init = false;
+        uint _e2 = i;
+        if (_e2 < SIZE) {
+        } else {
+            break;
+        }
+        {
+            uint _e6 = i;
+            int _e8 = metal::atomic_load_explicit(&arr_i32_.inner[_e6], metal::memory_order_relaxed);
+            old = _e8;
+            exchanged = false;
+            while(true) {
+                bool _e12 = exchanged;
+                if (!(_e12)) {
+                } else {
+                    break;
+                }
+                {
+                    int _e14 = old;
+                    int new_ = as_type<int>(as_type<float>(_e14) + 1.0);
+                    uint _e20 = i;
+                    int _e22 = old;
+                    _atomic_compare_exchange_resultSint4_ _e23 = naga_atomic_compare_exchange_weak_explicit(&arr_i32_.inner[_e20], _e22, new_);
+                    old = _e23.old_value;
+                    exchanged = _e23.exchanged;
+                }
+#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
+                LOOP_IS_BOUNDED
+            }
+        }
+        LOOP_IS_BOUNDED
+    }
+    return;
+}
+
+
+kernel void test_atomic_compare_exchange_u32_(
+  device type_4& arr_u32_ [[user(fake0)]]
+) {
+    uint i_1 = 0u;
+    uint old_1 = {};
+    bool exchanged_1 = {};
+    bool loop_init_1 = true;
+    while(true) {
+        if (!loop_init_1) {
+            uint _e27 = i_1;
+            i_1 = _e27 + 1u;
+        }
+        loop_init_1 = false;
+        uint _e2 = i_1;
+        if (_e2 < SIZE) {
+        } else {
+            break;
+        }
+        {
+            uint _e6 = i_1;
+            uint _e8 = metal::atomic_load_explicit(&arr_u32_.inner[_e6], metal::memory_order_relaxed);
+            old_1 = _e8;
+            exchanged_1 = false;
+            while(true) {
+                bool _e12 = exchanged_1;
+                if (!(_e12)) {
+                } else {
+                    break;
+                }
+                {
+                    uint _e14 = old_1;
+                    uint new_1 = as_type<uint>(as_type<float>(_e14) + 1.0);
+                    uint _e20 = i_1;
+                    uint _e22 = old_1;
+                    _atomic_compare_exchange_resultUint4_ _e23 = naga_atomic_compare_exchange_weak_explicit(&arr_u32_.inner[_e20], _e22, new_1);
+                    old_1 = _e23.old_value;
+                    exchanged_1 = _e23.exchanged;
+                }
+                LOOP_IS_BOUNDED
+            }
+        }
+        LOOP_IS_BOUNDED
+    }
+    return;
+}

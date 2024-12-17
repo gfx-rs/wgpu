@@ -68,6 +68,10 @@ struct MatCx2InArray {
     __mat4x2 am[2];
 };
 
+struct AssignToMember {
+    uint x;
+};
+
 GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     GlobalConst ret = (GlobalConst)0;
     ret.a = arg0;
@@ -192,7 +196,7 @@ void test_matrix_within_array_within_struct_accesses()
     __set_col_of_mat4x2(t_1.am[0], _e77, (90.0).xx);
     t_1.am[0]._0.y = 10.0;
     int _e89 = idx_1;
-    t_1.am[0]._0[_e89] = 20.0;
+    t_1.am[0]._0[min(uint(_e89), 1u)] = 20.0;
     int _e94 = idx_1;
     __set_el_of_mat4x2(t_1.am[0], _e94, 1, 30.0);
     int _e100 = idx_1;
@@ -227,6 +231,30 @@ ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
 void assign_array_through_ptr_fn(inout float4 foo_2[2])
 {
     foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
+    return;
+}
+
+uint fetch_arg_ptr_member(inout AssignToMember p_1)
+{
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(inout AssignToMember p_2)
+{
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(inout uint p_3[4])
+{
+    uint _e2 = p_3[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(inout uint p_4[4])
+{
+    p_4[1] = 10u;
     return;
 }
 
@@ -270,8 +298,8 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     int2 c = asint(qux.Load2(0));
     const float _e33 = read_from_private(foo);
     c2_ = Constructarray5_int_(a_1, int(b), 3, 4, 5);
-    c2_[(vi + 1u)] = 42;
-    int value = c2_[vi];
+    c2_[min(uint((vi + 1u)), 4u)] = 42;
+    int value = c2_[min(uint(vi), 4u)];
     const float _e47 = test_arr_as_arg(ZeroValuearray5_array10_float__());
     return float4(mul(float4((value).xxxx), _matrix), 2.0);
 }
@@ -308,5 +336,18 @@ void assign_through_ptr()
 
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
+    return;
+}
+
+[numthreads(1, 1, 1)]
+void assign_to_ptr_components()
+{
+    AssignToMember s1_ = (AssignToMember)0;
+    uint a1_[4] = (uint[4])0;
+
+    assign_to_arg_ptr_member(s1_);
+    const uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    const uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }

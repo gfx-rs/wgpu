@@ -1,9 +1,9 @@
 [package]
 name = "naga"
-version = "22.0.0"
+version = "23.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
-description = "Shader translation infrastructure"
+description = "Shader translator and validator. Part of the wgpu project"
 repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
@@ -63,7 +63,7 @@ hlsl-out-if-target-windows = []
 compact = []
 
 [dependencies]
-arbitrary = { version = "1.3", features = ["derive"], optional = true }
+arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
@@ -77,11 +77,11 @@ indexmap.workspace = true
 log = "0.4"
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.210", features = ["derive"], optional = true }
+serde = { version = "1.0.215", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
-unicode-xid = { version = "0.2.5", optional = true }
+unicode-xid = { version = "0.2.6", optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
@@ -101,3 +101,4 @@ ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { workspace = true, features = ["derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }
+strum.workspace = true

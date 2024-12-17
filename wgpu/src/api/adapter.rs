@@ -1,9 +1,11 @@
-use std::{future::Future, sync::Arc, thread};
+use std::future::Future;
 
-use crate::context::{DeviceRequest, DynContext};
 use crate::*;
 
 /// Handle to a physical graphics and/or compute device.
+///
+/// Adapters can be created using [`Instance::request_adapter`]
+/// or other [`Instance`] methods.
 ///
 /// Adapters can be used to open a connection to the corresponding [`Device`]
 /// on the host system by using [`Adapter::request_device`].
@@ -13,19 +15,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUAdapter`](https://gpuweb.github.io/gpuweb/#gpu-adapter).
 #[derive(Debug)]
 pub struct Adapter {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchAdapter,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
-impl Drop for Adapter {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.adapter_drop(self.data.as_ref())
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(Adapter => .inner);
 
 pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 /// Additional information required when requesting an adapter.
@@ -68,31 +63,11 @@ impl Adapter {
         desc: &DeviceDescriptor<'_>,
         trace_path: Option<&std::path::Path>,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
-        let context = Arc::clone(&self.context);
-        let device = DynContext::adapter_request_device(
-            &*self.context,
-            self.data.as_ref(),
-            desc,
-            trace_path,
-        );
+        let device = self.inner.request_device(desc, trace_path);
         async move {
-            device.await.map(
-                |DeviceRequest {
-                     device_data,
-                     queue_data,
-                 }| {
-                    (
-                        Device {
-                            context: Arc::clone(&context),
-                            data: device_data,
-                        },
-                        Queue {
-                            context,
-                            data: queue_data,
-                        },
-                    )
-                },
-            )
+            device
+                .await
+                .map(|(device, queue)| (Device { inner: device }, Queue { inner: queue }))
         }
     }
 
@@ -109,33 +84,21 @@ impl Adapter {
         desc: &DeviceDescriptor<'_>,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
-        let context = Arc::clone(&self.context);
-        unsafe {
-            self.context
-                .as_any()
-                .downcast_ref::<crate::backend::ContextWgpuCore>()
-                // Part of the safety requirements is that the device was generated from the same adapter.
-                // Therefore, unwrap is fine here since only WgpuCoreContext based adapters have the ability to create hal devices.
-                .unwrap()
-                .create_device_from_hal(
-                    crate::context::downcast_ref(self.data.as_ref()),
-                    hal_device,
-                    desc,
-                    trace_path,
-                )
-        }
-        .map(|(device, queue)| {
-            (
-                Device {
-                    context: Arc::clone(&context),
-                    data: Box::new(device),
-                },
-                Queue {
-                    context,
-                    data: Box::new(queue),
-                },
-            )
-        })
+        let core_adapter = self.inner.as_core();
+        let (device, queue) = unsafe {
+            core_adapter
+                .context
+                .create_device_from_hal(core_adapter, hal_device, desc, trace_path)
+        }?;
+
+        Ok((
+            Device {
+                inner: device.into(),
+            },
+            Queue {
+                inner: queue.into(),
+            },
+        ))
     }
 
     /// Apply a callback to this `Adapter`'s underlying backend adapter.
@@ -162,16 +125,11 @@ impl Adapter {
         &self,
         hal_adapter_callback: F,
     ) -> R {
-        if let Some(ctx) = self
-            .context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-        {
+        if let Some(adapter) = self.inner.as_core_opt() {
             unsafe {
-                ctx.adapter_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(self.data.as_ref()),
-                    hal_adapter_callback,
-                )
+                adapter
+                    .context
+                    .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
             }
         } else {
             hal_adapter_callback(None)
@@ -180,31 +138,27 @@ impl Adapter {
 
     /// Returns whether this adapter may present to the passed surface.
     pub fn is_surface_supported(&self, surface: &Surface<'_>) -> bool {
-        DynContext::adapter_is_surface_supported(
-            &*self.context,
-            self.data.as_ref(),
-            surface.surface_data.as_ref(),
-        )
+        self.inner.is_surface_supported(&surface.inner)
     }
 
     /// The features which can be used to create devices on this adapter.
     pub fn features(&self) -> Features {
-        DynContext::adapter_features(&*self.context, self.data.as_ref())
+        self.inner.features()
     }
 
     /// The best limits which can be used to create devices on this adapter.
     pub fn limits(&self) -> Limits {
-        DynContext::adapter_limits(&*self.context, self.data.as_ref())
+        self.inner.limits()
     }
 
     /// Get info about the adapter itself.
     pub fn get_info(&self) -> AdapterInfo {
-        DynContext::adapter_get_info(&*self.context, self.data.as_ref())
+        self.inner.get_info()
     }
 
     /// Get info about the adapter itself.
     pub fn get_downlevel_capabilities(&self) -> DownlevelCapabilities {
-        DynContext::adapter_downlevel_capabilities(&*self.context, self.data.as_ref())
+        self.inner.downlevel_capabilities()
     }
 
     /// Returns the features supported for a given texture format by this adapter.
@@ -212,7 +166,7 @@ impl Adapter {
     /// Note that the WebGPU spec further restricts the available usages/features.
     /// To disable these restrictions on a device, request the [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] feature.
     pub fn get_texture_format_features(&self, format: TextureFormat) -> TextureFormatFeatures {
-        DynContext::adapter_get_texture_format_features(&*self.context, self.data.as_ref(), format)
+        self.inner.get_texture_format_features(format)
     }
 
     /// Generates a timestamp using the clock used by the presentation engine.
@@ -237,6 +191,6 @@ impl Adapter {
     //
     /// [Instant]: std::time::Instant
     pub fn get_presentation_timestamp(&self) -> PresentationTimestamp {
-        DynContext::adapter_get_presentation_timestamp(&*self.context, self.data.as_ref())
+        self.inner.get_presentation_timestamp()
     }
 }

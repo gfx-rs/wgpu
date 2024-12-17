@@ -1,0 +1,31 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_2 {
+    float member;
+};
+struct type_4 {
+    metal::uint2 member;
+};
+
+void function(
+    device type_2& global,
+    device type_4 const& global_1,
+    metal::depth2d<float, metal::access::sample> global_2
+) {
+    metal::uint2 _e6 = global_1.member;
+    float _e7 = global_2.read(metal::uint2(_e6), 0);
+    global.member = metal::float4(_e7).x;
+    return;
+}
+
+kernel void cullfetch_depth(
+  device type_2& global [[user(fake0)]]
+, device type_4 const& global_1 [[user(fake0)]]
+, metal::depth2d<float, metal::access::sample> global_2 [[user(fake0)]]
+) {
+    function(global, global_1, global_2);
+}

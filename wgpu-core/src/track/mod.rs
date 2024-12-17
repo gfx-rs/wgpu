@@ -98,6 +98,7 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 mod buffer;
 mod metadata;
 mod range;
+mod ray_tracing;
 mod stateless;
 mod texture;
 
@@ -112,6 +113,7 @@ use crate::{
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
+use crate::track::ray_tracing::AccelerationStructureTracker;
 pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };
@@ -224,6 +226,8 @@ pub(crate) struct TrackerIndexAllocators {
     pub render_pipelines: Arc<SharedTrackerIndexAllocator>,
     pub bundles: Arc<SharedTrackerIndexAllocator>,
     pub query_sets: Arc<SharedTrackerIndexAllocator>,
+    pub blas_s: Arc<SharedTrackerIndexAllocator>,
+    pub tlas_s: Arc<SharedTrackerIndexAllocator>,
 }
 
 impl TrackerIndexAllocators {
@@ -238,6 +242,8 @@ impl TrackerIndexAllocators {
             render_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
             bundles: Arc::new(SharedTrackerIndexAllocator::new()),
             query_sets: Arc::new(SharedTrackerIndexAllocator::new()),
+            blas_s: Arc::new(SharedTrackerIndexAllocator::new()),
+            tlas_s: Arc::new(SharedTrackerIndexAllocator::new()),
         }
     }
 }
@@ -249,7 +255,7 @@ impl TrackerIndexAllocators {
 pub(crate) struct PendingTransition<S: ResourceUses> {
     pub id: u32,
     pub selector: S::Selector,
-    pub usage: ops::Range<S>,
+    pub usage: hal::StateTransition<S>,
 }
 
 pub(crate) type PendingTransitionList = Vec<PendingTransition<hal::TextureUses>>;
@@ -276,8 +282,8 @@ impl PendingTransition<hal::TextureUses> {
         texture: &dyn hal::DynTexture,
     ) -> hal::TextureBarrier<'_, dyn hal::DynTexture> {
         // These showing up in a barrier is always a bug
-        strict_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
-        strict_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
+        strict_assert_ne!(self.usage.from, hal::TextureUses::UNKNOWN);
+        strict_assert_ne!(self.usage.to, hal::TextureUses::UNKNOWN);
 
         let mip_count = self.selector.mips.end - self.selector.mips.start;
         strict_assert_ne!(mip_count, 0);
@@ -420,6 +426,7 @@ pub(crate) struct BindGroupStates {
     pub buffers: BufferBindGroupState,
     pub views: TextureViewBindGroupState,
     pub samplers: StatelessTracker<resource::Sampler>,
+    pub acceleration_structures: StatelessTracker<resource::Tlas>,
 }
 
 impl BindGroupStates {
@@ -428,6 +435,7 @@ impl BindGroupStates {
             buffers: BufferBindGroupState::new(),
             views: TextureViewBindGroupState::new(),
             samplers: StatelessTracker::new(),
+            acceleration_structures: StatelessTracker::new(),
         }
     }
 
@@ -440,7 +448,7 @@ impl BindGroupStates {
         // Views are stateless, however, `TextureViewBindGroupState`
         // is special as it will be merged with other texture trackers.
         self.views.optimize();
-        // Samplers are stateless and don't need to be optimized
+        // Samplers and Tlas's are stateless and don't need to be optimized
         // since the tracker is never merged with any other tracker.
     }
 }
@@ -594,6 +602,8 @@ impl DeviceTracker {
 pub(crate) struct Tracker {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
+    pub blas_s: AccelerationStructureTracker<resource::Blas>,
+    pub tlas_s: AccelerationStructureTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
@@ -607,6 +617,8 @@ impl Tracker {
         Self {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
+            blas_s: AccelerationStructureTracker::new(),
+            tlas_s: AccelerationStructureTracker::new(),
             views: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),
             compute_pipelines: StatelessTracker::new(),

@@ -46,6 +46,8 @@ pub enum Error {
     GlobalInitUnsupported,
     #[error("expected to find a global variable")]
     GlobalVariableMissing,
+    #[error("atomic compare exchange requires a scalar base type")]
+    CompareExchangeNonScalarBaseType,
 }
 
 #[derive(Clone, Default)]
@@ -90,7 +92,7 @@ struct UpgradeState<'a> {
     module: &'a mut Module,
 }
 
-impl<'a> UpgradeState<'a> {
+impl UpgradeState<'_> {
     fn inc_padding(&self) -> Padding {
         self.padding.inc_padding()
     }

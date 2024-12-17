@@ -12,7 +12,7 @@ use crate::{
     ArraySize, BinaryOperator, Handle, Literal, Type, TypeInner, UnaryOperator,
 };
 
-impl<'source> ParsingContext<'source> {
+impl ParsingContext<'_> {
     pub fn parse_primary(
         &mut self,
         frontend: &mut Frontend,
@@ -38,7 +38,13 @@ impl<'source> ParsingContext<'source> {
             TokenValue::FloatConstant(float) => {
                 if float.width != 32 {
                     frontend.errors.push(Error {
-                        kind: ErrorKind::SemanticError("Unsupported floating-point value (expected single-precision floating-point number)".into()),
+                        kind: ErrorKind::SemanticError(
+                            concat!(
+                                "Unsupported floating-point value ",
+                                "(expected single-precision floating-point number)"
+                            )
+                            .into(),
+                        ),
                         meta: token.meta,
                     });
                 }

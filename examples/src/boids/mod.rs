@@ -2,7 +2,7 @@
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, mem::size_of};
+use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
 // number of boid particles to simulate
@@ -43,14 +43,8 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("compute.wgsl"))),
-        });
-        let draw_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-        });
+        let compute_shader = device.create_shader_module(wgpu::include_wgsl!("compute.wgsl"));
+        let draw_shader = device.create_shader_module(wgpu::include_wgsl!("draw.wgsl"));
 
         // buffer for simulation parameters uniform
 
@@ -298,7 +292,7 @@ impl crate::framework::Example for Example {
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&self.compute_pipeline);
-            cpass.set_bind_group(0, Some(&self.particle_bind_groups[self.frame_num % 2]), &[]);
+            cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch_workgroups(self.work_group_count, 1, 1);
         }
         command_encoder.pop_debug_group();

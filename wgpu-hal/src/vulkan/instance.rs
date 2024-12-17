@@ -344,11 +344,11 @@ impl super::Instance {
                     callback_data: debug_utils_create_info.callback_data,
                 })
             } else {
-                log::info!("Debug utils not enabled: extension not listed");
+                log::debug!("Debug utils not enabled: extension not listed");
                 None
             }
         } else {
-            log::info!(
+            log::debug!(
                 "Debug utils not enabled: \
                         debug_utils_user_data not passed to Instance::from_raw"
             );
@@ -745,7 +745,12 @@ impl crate::Instance for super::Instance {
                     Ok(sdk_ver) => sdk_ver,
                     Err(err) => {
                         log::error!(
-                            "Couldn't parse Android's ro.build.version.sdk system property ({val}): {err}"
+                            concat!(
+                                "Couldn't parse Android's ",
+                                "ro.build.version.sdk system property ({}): {}",
+                            ),
+                            val,
+                            err,
                         );
                         0
                     }
@@ -931,7 +936,10 @@ impl crate::Instance for super::Instance {
                         if version < (21, 2) {
                             // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
                             log::warn!(
-                                "Disabling presentation on '{}' (id {:?}) due to NV Optimus and Intel Mesa < v21.2",
+                                concat!(
+                                    "Disabling presentation on '{}' (id {:?}) ",
+                                    "due to NV Optimus and Intel Mesa < v21.2"
+                                ),
                                 exposed.info.name,
                                 exposed.adapter.raw
                             );
@@ -1087,6 +1095,7 @@ impl crate::Surface for super::Surface {
                 raw: swapchain.images[index as usize],
                 drop_guard: None,
                 block: None,
+                external_memory: None,
                 usage: swapchain.config.usage,
                 format: swapchain.config.format,
                 raw_flags,

@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use crate::{AtomicFenceValue, TlasInstance};
 use arrayvec::ArrayVec;
 use std::sync::atomic::Ordering;
 
@@ -500,14 +501,6 @@ impl super::Device {
 impl crate::Device for super::Device {
     type A = super::Api;
 
-    unsafe fn exit(self, queue: super::Queue) {
-        let gl = &self.shared.context.lock();
-        unsafe { gl.delete_vertex_array(self.main_vao) };
-        unsafe { gl.delete_framebuffer(queue.draw_fbo) };
-        unsafe { gl.delete_framebuffer(queue.copy_fbo) };
-        unsafe { gl.delete_buffer(queue.zero_buffer) };
-    }
-
     unsafe fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
@@ -833,7 +826,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -853,7 +846,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -906,7 +899,7 @@ impl crate::Device for super::Device {
                                     0,
                                     format_desc.external,
                                     format_desc.data_type,
-                                    None,
+                                    glow::PixelUnpackData::Slice(None),
                                 );
                             }
                             width = max(1, width / 2);
@@ -925,7 +918,7 @@ impl crate::Device for super::Device {
                                 0,
                                 format_desc.external,
                                 format_desc.data_type,
-                                None,
+                                glow::PixelUnpackData::Slice(None),
                             );
                             width = max(1, width / 2);
                             height = max(1, height / 2);
@@ -1123,11 +1116,8 @@ impl crate::Device for super::Device {
             cmd_buffer: super::CommandBuffer::default(),
             state: Default::default(),
             private_caps: self.shared.private_caps,
+            counters: Arc::clone(&self.counters),
         })
-    }
-
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1534,7 +1524,7 @@ impl crate::Device for super::Device {
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         self.counters.fences.add(1);
         Ok(super::Fence {
-            last_completed: 0,
+            last_completed: AtomicFenceValue::new(0),
             pending: Vec::new(),
         })
     }
@@ -1560,8 +1550,12 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if fence.last_completed < wait_value {
+        if fence.last_completed.load(Ordering::Relaxed) < wait_value {
             let gl = &self.shared.context.lock();
+            // MAX_CLIENT_WAIT_TIMEOUT_WEBGL is:
+            // - 1s in Gecko https://searchfox.org/mozilla-central/rev/754074e05178e017ef6c3d8e30428ffa8f1b794d/dom/canvas/WebGLTypes.h#1386
+            // - 0 in WebKit https://github.com/WebKit/WebKit/blob/4ef90d4672ca50267c0971b85db403d9684508ea/Source/WebCore/html/canvas/WebGL2RenderingContext.cpp#L110
+            // - 0 in Chromium https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/modules/webgl/webgl2_rendering_context_base.cc;l=112;drc=a3cb0ac4c71ec04abfeaed199e5d63230eca2551
             let timeout_ns = if cfg!(any(webgl, Emscripten)) {
                 0
             } else {
@@ -1572,19 +1566,25 @@ impl crate::Device for super::Device {
                 .iter()
                 .find(|&&(value, _)| value >= wait_value)
             {
-                return match unsafe {
+                let signalled = match unsafe {
                     gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
                 } {
                     // for some reason firefox returns WAIT_FAILED, to investigate
                     #[cfg(any(webgl, Emscripten))]
                     glow::WAIT_FAILED => {
                         log::warn!("wait failed!");
-                        Ok(false)
+                        false
                     }
-                    glow::TIMEOUT_EXPIRED => Ok(false),
-                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
-                    _ => Err(crate::DeviceError::Lost),
+                    glow::TIMEOUT_EXPIRED => false,
+                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => true,
+                    _ => return Err(crate::DeviceError::Lost),
                 };
+                if signalled {
+                    fence
+                        .last_completed
+                        .fetch_max(wait_value, Ordering::Relaxed);
+                }
+                return Ok(signalled);
             }
         }
         Ok(true)
@@ -1630,8 +1630,12 @@ impl crate::Device for super::Device {
     ) {
     }
 
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+        unimplemented!()
+    }
+
     fn get_internal_counters(&self) -> wgt::HalCounters {
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 }
 

@@ -41,10 +41,7 @@ async fn run() {
         .await
         .unwrap();
 
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     let storage_buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
@@ -127,7 +124,7 @@ async fn run() {
             timestamp_writes: None,
         });
         compute_pass.set_pipeline(&pipeline);
-        compute_pass.set_bind_group(0, Some(&bind_group), &[]);
+        compute_pass.set_bind_group(0, &bind_group, &[]);
         /* Note that since each workgroup will cover both arrays, we only need to
         cover the length of one array. */
         compute_pass.dispatch_workgroups(local_a.len() as u32, 1, 1);

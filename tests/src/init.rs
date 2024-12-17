@@ -1,6 +1,8 @@
 use wgpu::{Adapter, Device, Instance, Queue};
 use wgt::{Backends, Features, Limits};
 
+use crate::report::AdapterReport;
+
 /// Initialize the logger for the test runner.
 pub fn init_logger() {
     // We don't actually care if it fails
@@ -11,7 +13,7 @@ pub fn init_logger() {
 }
 
 /// Initialize a wgpu instance with the options from the environment.
-pub fn initialize_instance(force_fxc: bool) -> Instance {
+pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instance {
     // We ignore `WGPU_BACKEND` for now, merely using test filtering to only run a single backend's tests.
     //
     // We can potentially work support back into the test runner in the future, but as the adapters are matched up
@@ -23,9 +25,9 @@ pub fn initialize_instance(force_fxc: bool) -> Instance {
     // To "disable" webgpu regardless, we do this by removing the webgpu backend whenever we see
     // the webgl feature.
     let backends = if cfg!(feature = "webgl") {
-        Backends::all() - Backends::BROWSER_WEBGPU
+        backends - wgpu::Backends::BROWSER_WEBGPU
     } else {
-        Backends::all()
+        backends
     };
     // Some tests need to be able to force demote to FXC, to specifically test workarounds for FXC
     // behavior.
@@ -43,12 +45,16 @@ pub fn initialize_instance(force_fxc: bool) -> Instance {
     })
 }
 
-/// Initialize a wgpu adapter, taking the `n`th adapter from the instance.
+/// Initialize a wgpu adapter, using the given adapter report to match the adapter.
 pub async fn initialize_adapter(
-    adapter_index: usize,
+    adapter_report: Option<&AdapterReport>,
     force_fxc: bool,
 ) -> (Instance, Adapter, Option<SurfaceGuard>) {
-    let instance = initialize_instance(force_fxc);
+    let backends = adapter_report
+        .map(|report| Backends::from(report.info.backend))
+        .unwrap_or_default();
+
+    let instance = initialize_instance(backends, force_fxc);
     #[allow(unused_variables)]
     let surface: Option<wgpu::Surface>;
     let surface_guard: Option<SurfaceGuard>;
@@ -82,13 +88,24 @@ pub async fn initialize_adapter(
 
     cfg_if::cfg_if! {
         if #[cfg(not(target_arch = "wasm32"))] {
-            let adapter_iter = instance.enumerate_adapters(wgpu::Backends::all());
-            let adapter_count = adapter_iter.len();
+            let adapter_iter = instance.enumerate_adapters(backends);
             let adapter = adapter_iter.into_iter()
-                .nth(adapter_index)
-                .unwrap_or_else(|| panic!("Tried to get index {adapter_index} adapter, but adapter list was only {adapter_count} long. Is .gpuconfig out of date?"));
+                // If we have a report, we only want to match the adapter with the same info.
+                //
+                // If we don't have a report, we just take the first adapter.
+                .find(|adapter| if let Some(adapter_report) = adapter_report {
+                    adapter.get_info() == adapter_report.info
+                } else {
+                    true
+                });
+            let Some(adapter) = adapter else {
+                panic!(
+                    "Could not find adapter with info {:#?} in {:#?}",
+                    adapter_report.map(|r| &r.info),
+                    instance.enumerate_adapters(backends).into_iter().map(|a| a.get_info()).collect::<Vec<_>>(),
+                );
+            };
         } else {
-            assert_eq!(adapter_index, 0);
             let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
                 compatible_surface: surface.as_ref(),
                 ..Default::default()

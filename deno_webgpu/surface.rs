@@ -87,7 +87,6 @@ pub fn op_webgpu_surface_get_current_texture(
             let rid = state.resource_table.add(crate::texture::WebGpuTexture {
                 instance: instance.clone(),
                 id,
-                owned: false,
             });
             Ok(WebGpuResult::rid(rid))
         }

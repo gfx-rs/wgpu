@@ -1,4 +1,4 @@
-use std::{borrow::Cow, mem::size_of, num::NonZeroU64};
+use std::{mem::size_of, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
@@ -56,10 +56,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             }],
         });
 
-        let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
@@ -93,7 +90,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&compute_pipeline);
-            cpass.set_bind_group(0, Some(&bind_group), &[]);
+            cpass.set_bind_group(0, &bind_group, &[]);
             cpass.dispatch_workgroups(1, 1, 1);
         }
         ctx.queue.submit(Some(encoder.finish()));
@@ -123,10 +120,10 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                         .enumerate()
                         .filter(|(_, (r, e))| *r != e)
                     {
-                        write!(&mut msg, "thread {} failed tests:", thread).unwrap();
+                        write!(&mut msg, "thread {thread} failed tests:").unwrap();
                         let difference = result ^ expected;
                         for i in (0..u32::BITS).filter(|i| (difference & (1 << i)) != 0) {
-                            write!(&mut msg, " {},", i).unwrap();
+                            write!(&mut msg, " {i},").unwrap();
                         }
                         writeln!(&mut msg).unwrap();
                     }

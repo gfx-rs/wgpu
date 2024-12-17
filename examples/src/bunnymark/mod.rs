@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use nanorand::{Rng, WyRand};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, mem::size_of};
 use wgpu::util::DeviceExt;
 use winit::{
     event::{ElementState, KeyEvent},
@@ -128,11 +128,11 @@ impl Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, Some(&self.global_group), &[]);
+            rpass.set_bind_group(0, &self.global_group, &[]);
             for i in 0..self.bunnies.len() {
                 let offset =
                     (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
-                rpass.set_bind_group(1, Some(&self.local_group), &[offset]);
+                rpass.set_bind_group(1, &self.local_group, &[offset]);
                 rpass.draw(0..4, 0..1);
             }
         }
@@ -164,7 +164,7 @@ impl crate::framework::Example for Example {
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
-                            min_binding_size: wgpu::BufferSize::new(mem::size_of::<Globals>() as _),
+                            min_binding_size: wgpu::BufferSize::new(size_of::<Globals>() as _),
                         },
                         count: None,
                     },
@@ -195,7 +195,7 @@ impl crate::framework::Example for Example {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
+                        min_binding_size: wgpu::BufferSize::new(size_of::<Bunny>() as _),
                     },
                     count: None,
                 }],
@@ -262,7 +262,7 @@ impl crate::framework::Example for Example {
             queue.write_texture(
                 texture.as_image_copy(),
                 &buf,
-                wgpu::ImageDataLayout {
+                wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(info.width * 4),
                     rows_per_image: None,
@@ -337,7 +337,7 @@ impl crate::framework::Example for Example {
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &local_buffer,
                     offset: 0,
-                    size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
+                    size: wgpu::BufferSize::new(size_of::<Bunny>() as _),
                 }),
             }],
             label: None,

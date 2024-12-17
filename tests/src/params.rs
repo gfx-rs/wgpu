@@ -151,7 +151,7 @@ impl TestInfo {
             let names: ArrayVec<_, 4> = reasons.iter_names().map(|(name, _)| name).collect();
             let names_text = names.join(" | ");
 
-            format!("Skipped Failure: {}", names_text)
+            format!("Skipped Failure: {names_text}")
         } else if !unsupported_reasons.is_empty() {
             skip = true;
             format!("Unsupported: {}", unsupported_reasons.join(" | "))

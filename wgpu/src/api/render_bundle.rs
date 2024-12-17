@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Pre-prepared reusable bundle of GPU operations.
@@ -13,21 +11,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPURenderBundle`](https://gpuweb.github.io/gpuweb/#render-bundle).
 #[derive(Debug)]
 pub struct RenderBundle {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchRenderBundle,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
 
-super::impl_partialeq_eq_hash!(RenderBundle);
-
-impl Drop for RenderBundle {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.render_bundle_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(RenderBundle => .inner);
 
 /// Describes a [`RenderBundle`].
 ///

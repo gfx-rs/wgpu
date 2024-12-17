@@ -30,15 +30,6 @@ impl<T> Mutex<T> {
     }
 }
 
-impl<'a, T> MutexGuard<'a, T> {
-    pub fn try_map<U: ?Sized, F>(s: Self, f: F) -> Result<parking_lot::MappedMutexGuard<'a, U>, ()>
-    where
-        F: FnOnce(&mut T) -> Option<&mut U>,
-    {
-        parking_lot::MutexGuard::try_map(s.0, f).map_err(|_| ())
-    }
-}
-
 impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
     type Target = T;
 

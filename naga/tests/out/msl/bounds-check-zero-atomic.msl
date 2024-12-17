@@ -75,3 +75,19 @@ uint exchange_atomic_dynamic_sized_array(
     uint _e5 = uint(i_3) < 1 + (_buffer_sizes.size0 - 44 - 4) / 4 ? metal::atomic_exchange_explicit(&globals.c[i_3], 1u, metal::memory_order_relaxed) : DefaultConstructible();
     return _e5;
 }
+
+uint fetch_add_atomic_dynamic_sized_array_static_index(
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    uint _e4 = uint(1000) < 1 + (_buffer_sizes.size0 - 44 - 4) / 4 ? metal::atomic_fetch_add_explicit(&globals.c[1000], 1u, metal::memory_order_relaxed) : DefaultConstructible();
+    return _e4;
+}
+
+uint exchange_atomic_dynamic_sized_array_static_index(
+    device Globals& globals,
+    constant _mslBufferSizes& _buffer_sizes
+) {
+    uint _e4 = uint(1000) < 1 + (_buffer_sizes.size0 - 44 - 4) / 4 ? metal::atomic_exchange_explicit(&globals.c[1000], 1u, metal::memory_order_relaxed) : DefaultConstructible();
+    return _e4;
+}

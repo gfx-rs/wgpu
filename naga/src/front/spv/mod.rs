@@ -478,7 +478,8 @@ enum MergeBlockInformation {
 ///   definition, whereas Naga expressions are scoped to the rest of their
 ///   subtree. This means that discovering an expression use later in the
 ///   function retroactively requires us to have spilled that expression into a
-///   local variable back before we left its scope.
+///   local variable back before we left its scope. (The docs for
+///   [`Frontend::get_expr_handle`] explain this in more detail.)
 ///
 /// - We translate SPIR-V OpPhi expressions as Naga local variables in which we
 ///   store the appropriate value before jumping to the OpPhi's block.
@@ -541,27 +542,22 @@ struct BlockContext<'function> {
     /// The first element is always the function's top-level block.
     bodies: Vec<Body>,
 
+    /// The module we're building.
+    module: &'function mut crate::Module,
+
     /// Id of the function currently being processed
     function_id: spirv::Word,
     /// Expression arena of the function currently being processed
     expressions: &'function mut Arena<crate::Expression>,
     /// Local variables arena of the function currently being processed
     local_arena: &'function mut Arena<crate::LocalVariable>,
-    /// Constants arena of the module being processed
-    const_arena: &'function mut Arena<crate::Constant>,
-    overrides: &'function mut Arena<crate::Override>,
-    global_expressions: &'function mut Arena<crate::Expression>,
-    /// Type arena of the module being processed
-    type_arena: &'function UniqueArena<crate::Type>,
-    /// Global arena of the module being processed
-    global_arena: &'function Arena<crate::GlobalVariable>,
     /// Arguments of the function currently being processed
     arguments: &'function [crate::FunctionArgument],
     /// Metadata about the usage of function parameters as sampling objects
     parameter_sampling: &'function mut [image::SamplingFlags],
 }
 
-impl<'a> BlockContext<'a> {
+impl BlockContext<'_> {
     /// Descend into the expression with the given handle, locating a contained
     /// global variable.
     ///
@@ -827,20 +823,76 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         Ok(())
     }
 
-    /// Return the Naga `Expression` for a given SPIR-V result `id`.
+    /// Return the Naga [`Expression`] to use in `body_idx` to refer to the SPIR-V result `id`.
     ///
-    /// `lookup` must be the `LookupExpression` for `id`.
+    /// Ideally, we would just have a map from each SPIR-V instruction id to the
+    /// [`Handle`] for the Naga [`Expression`] we generated for it.
+    /// Unfortunately, SPIR-V and Naga IR are different enough that such a
+    /// straightforward relationship isn't possible.
     ///
-    /// SPIR-V result ids can be used by any block dominated by the id's
-    /// definition, but Naga `Expressions` are only in scope for the remainder
-    /// of their `Statement` subtree. This means that the `Expression` generated
-    /// for `id` may no longer be in scope. In such cases, this function takes
-    /// care of spilling the value of `id` to a `LocalVariable` which can then
-    /// be used anywhere. The SPIR-V domination rule ensures that the
-    /// `LocalVariable` has been initialized before it is used.
+    /// In SPIR-V, an instruction's result id can be used by any instruction
+    /// dominated by that instruction. In Naga, an [`Expression`] is only in
+    /// scope for the remainder of its [`Block`]. In pseudocode:
     ///
-    /// The `body_idx` argument should be the index of the `Body` that hopes to
-    /// use `id`'s `Expression`.
+    /// ```ignore
+    ///     loop {
+    ///         a = f();
+    ///         g(a);
+    ///         break;
+    ///     }
+    ///     h(a);
+    /// ```
+    ///
+    /// Suppose the calls to `f`, `g`, and `h` are SPIR-V instructions. In
+    /// SPIR-V, both the `g` and `h` instructions are allowed to refer to `a`,
+    /// because the loop body, including `f`, dominates both of them.
+    ///
+    /// But if `a` is a Naga [`Expression`], its scope ends at the end of the
+    /// block it's evaluated in: the loop body. Thus, while the [`Expression`]
+    /// we generate for `g` can refer to `a`, the one we generate for `h`
+    /// cannot.
+    ///
+    /// Instead, the SPIR-V front end must generate Naga IR like this:
+    ///
+    /// ```ignore
+    ///     var temp; // INTRODUCED
+    ///     loop {
+    ///         a = f();
+    ///         g(a);
+    ///         temp = a; // INTRODUCED
+    ///     }
+    ///     h(temp); // ADJUSTED
+    /// ```
+    ///
+    /// In other words, where `a` is in scope, [`Expression`]s can refer to it
+    /// directly; but once it is out of scope, we need to spill it to a
+    /// temporary and refer to that instead.
+    ///
+    /// Given a SPIR-V expression `id` and the index `body_idx` of the [body]
+    /// that wants to refer to it:
+    ///
+    /// - If the Naga [`Expression`] we generated for `id` is in scope in
+    ///   `body_idx`, then we simply return its `Handle<Expression>`.
+    ///
+    /// - Otherwise, introduce a new [`LocalVariable`], and add an entry to
+    ///   [`BlockContext::phis`] to arrange for `id`'s value to be spilled to
+    ///   it. Then emit a fresh [`Load`] of that temporary variable for use in
+    ///   `body_idx`'s block, and return its `Handle`.
+    ///
+    /// The SPIR-V domination rule ensures that the introduced [`LocalVariable`]
+    /// will always have been initialized before it is used.
+    ///
+    /// `lookup` must be the [`LookupExpression`] for `id`.
+    ///
+    /// `body_idx` argument must be the index of the [`Body`] that hopes to use
+    /// `id`'s [`Expression`].
+    ///
+    /// [`Expression`]: crate::Expression
+    /// [`Handle`]: crate::Handle
+    /// [`Block`]: crate::Block
+    /// [body]: BlockContext::bodies
+    /// [`LocalVariable`]: crate::LocalVariable
+    /// [`Load`]: crate::Expression::Load
     fn get_expr_handle(
         &self,
         id: spirv::Word,
@@ -987,7 +1039,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let left = self.get_expr_handle(p1_id, p1_lexp, ctx, emitter, block, body_idx);
 
         let result_lookup_ty = self.lookup_type.lookup(result_type_id)?;
-        let kind = ctx.type_arena[result_lookup_ty.handle]
+        let kind = ctx.module.types[result_lookup_ty.handle]
             .inner
             .scalar_kind()
             .unwrap();
@@ -1053,7 +1105,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             SignAnchor::Operand => p1_lexp.type_id,
         };
         let expected_lookup_ty = self.lookup_type.lookup(expected_type_id)?;
-        let kind = ctx.type_arena[expected_lookup_ty.handle]
+        let kind = ctx.module.types[expected_lookup_ty.handle]
             .inner
             .scalar_kind()
             .unwrap();
@@ -1121,14 +1173,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let p1_lexp = self.lookup_expression.lookup(p1_id)?;
         let left = self.get_expr_handle(p1_id, p1_lexp, ctx, emitter, block, body_idx);
         let p1_lookup_ty = self.lookup_type.lookup(p1_lexp.type_id)?;
-        let p1_kind = ctx.type_arena[p1_lookup_ty.handle]
+        let p1_kind = ctx.module.types[p1_lookup_ty.handle]
             .inner
             .scalar_kind()
             .unwrap();
         let p2_lexp = self.lookup_expression.lookup(p2_id)?;
         let right = self.get_expr_handle(p2_id, p2_lexp, ctx, emitter, block, body_idx);
         let p2_lookup_ty = self.lookup_type.lookup(p2_lexp.type_id)?;
-        let p2_kind = ctx.type_arena[p2_lookup_ty.handle]
+        let p2_kind = ctx.module.types[p2_lookup_ty.handle]
             .inner
             .scalar_kind()
             .unwrap();
@@ -1277,6 +1329,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             crate::TypeInner::Array { size, .. } => {
                 let size = match size {
                     crate::ArraySize::Constant(size) => size.get(),
+                    crate::ArraySize::Pending(_) => {
+                        unreachable!();
+                    }
                     // A runtime sized array is not a composite type
                     crate::ArraySize::Dynamic => {
                         return Err(Error::InvalidAccessType(root_type_id))
@@ -1570,7 +1625,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let var_handle = ctx.local_arena.append(
                         crate::LocalVariable {
                             name,
-                            ty: match ctx.type_arena[lookup_ty.handle].inner {
+                            ty: match ctx.module.types[lookup_ty.handle].inner {
                                 crate::TypeInner::Pointer { base, .. } => base,
                                 _ => lookup_ty.handle,
                             },
@@ -1665,7 +1720,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         // This can happen only through `BindingArray`, since
                         // that's the only case where one can obtain a pointer
                         // to an image / sampler, and so let's match on that:
-                        let dereference = match ctx.type_arena[lty.handle].inner {
+                        let dereference = match ctx.module.types[lty.handle].inner {
                             crate::TypeInner::BindingArray { .. } => false,
                             _ => true,
                         };
@@ -1692,7 +1747,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         let index_maybe = match *index_expr_data {
                             crate::Expression::Constant(const_handle) => Some(
                                 ctx.gctx()
-                                    .eval_expr_to_u32(ctx.const_arena[const_handle].init)
+                                    .eval_expr_to_u32(ctx.module.constants[const_handle].init)
                                     .map_err(|_| {
                                         Error::InvalidAccess(crate::Expression::Constant(
                                             const_handle,
@@ -1704,7 +1759,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                         log::trace!("\t\t\tlooking up type {:?}", acex.type_id);
                         let type_lookup = self.lookup_type.lookup(acex.type_id)?;
-                        let ty = &ctx.type_arena[type_lookup.handle];
+                        let ty = &ctx.module.types[type_lookup.handle];
                         acex = match ty.inner {
                             // can only index a struct with a constant
                             crate::TypeInner::Struct { ref members, .. } => {
@@ -1736,7 +1791,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                         debug_assert!(acex.load_override.is_none());
                                         let sub_type_lookup =
                                             self.lookup_type.lookup(lookup_member.type_id)?;
-                                        Some(match ctx.type_arena[sub_type_lookup.handle].inner {
+                                        Some(match ctx.module.types[sub_type_lookup.handle].inner {
                                             // load it transposed, to match column major expectations
                                             crate::TypeInner::Matrix { .. } => {
                                                 let loaded = ctx.expressions.append(
@@ -1885,7 +1940,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let index_handle = get_expr_handle!(index_id, index_lexp);
                     let index_type = self.lookup_type.lookup(index_lexp.type_id)?.handle;
 
-                    let num_components = match ctx.type_arena[root_type_lookup.handle].inner {
+                    let num_components = match ctx.module.types[root_type_lookup.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
@@ -1964,7 +2019,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let index_handle = get_expr_handle!(index_id, index_lexp);
                     let index_type = self.lookup_type.lookup(index_lexp.type_id)?.handle;
 
-                    let num_components = match ctx.type_arena[root_type_lookup.handle].inner {
+                    let num_components = match ctx.module.types[root_type_lookup.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
@@ -2035,7 +2090,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         let index = self.next()?;
                         log::trace!("\t\t\tlooking up type {:?}", lexp.type_id);
                         let type_lookup = self.lookup_type.lookup(lexp.type_id)?;
-                        let type_id = match ctx.type_arena[type_lookup.handle].inner {
+                        let type_id = match ctx.module.types[type_lookup.handle].inner {
                             crate::TypeInner::Struct { .. } => {
                                 self.lookup_member
                                     .get(&(type_lookup.handle, index))
@@ -2095,7 +2150,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         result_type_id,
                         object_handle,
                         &selections,
-                        ctx.type_arena,
+                        &ctx.module.types,
                         ctx.expressions,
                         span,
                     )?;
@@ -2124,7 +2179,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     }
                     let ty = self.lookup_type.lookup(result_type_id)?.handle;
                     let first = components[0];
-                    let expr = match ctx.type_arena[ty].inner {
+                    let expr = match ctx.module.types[ty].inner {
                         // this is an optimization to detect the splat
                         crate::TypeInner::Vector { size, .. }
                             if components.len() == size as usize
@@ -2157,7 +2212,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let base_lexp = self.lookup_expression.lookup(pointer_id)?;
                     let base_handle = get_expr_handle!(pointer_id, base_lexp);
                     let type_lookup = self.lookup_type.lookup(base_lexp.type_id)?;
-                    let handle = match ctx.type_arena[type_lookup.handle].inner {
+                    let handle = match ctx.module.types[type_lookup.handle].inner {
                         crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } => {
                             base_handle
                         }
@@ -2303,7 +2358,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
 
                     let result_ty = self.lookup_type.lookup(result_type_id)?;
-                    let inner = &ctx.type_arena[result_ty.handle].inner;
+                    let inner = &ctx.module.types[result_ty.handle].inner;
                     let kind = inner.scalar_kind().unwrap();
                     let size = inner.size(ctx.gctx()) as u8;
 
@@ -2531,11 +2586,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let count_handle = get_expr_handle!(count_id, count_lexp);
                     let count_lookup_ty = self.lookup_type.lookup(count_lexp.type_id)?;
 
-                    let offset_kind = ctx.type_arena[offset_lookup_ty.handle]
+                    let offset_kind = ctx.module.types[offset_lookup_ty.handle]
                         .inner
                         .scalar_kind()
                         .unwrap();
-                    let count_kind = ctx.type_arena[count_lookup_ty.handle]
+                    let count_kind = ctx.module.types[count_lookup_ty.handle]
                         .inner
                         .scalar_kind()
                         .unwrap();
@@ -2599,11 +2654,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let count_handle = get_expr_handle!(count_id, count_lexp);
                     let count_lookup_ty = self.lookup_type.lookup(count_lexp.type_id)?;
 
-                    let offset_kind = ctx.type_arena[offset_lookup_ty.handle]
+                    let offset_kind = ctx.module.types[offset_lookup_ty.handle]
                         .inner
                         .scalar_kind()
                         .unwrap();
-                    let count_kind = ctx.type_arena[count_lookup_ty.handle]
+                    let count_kind = ctx.module.types[count_lookup_ty.handle]
                         .inner
                         .scalar_kind()
                         .unwrap();
@@ -2893,14 +2948,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let v1_lexp = self.lookup_expression.lookup(v1_id)?;
                     let v1_lty = self.lookup_type.lookup(v1_lexp.type_id)?;
                     let v1_handle = get_expr_handle!(v1_id, v1_lexp);
-                    let n1 = match ctx.type_arena[v1_lty.handle].inner {
+                    let n1 = match ctx.module.types[v1_lty.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidInnerType(v1_lexp.type_id)),
                     };
                     let v2_lexp = self.lookup_expression.lookup(v2_id)?;
                     let v2_lty = self.lookup_type.lookup(v2_lexp.type_id)?;
                     let v2_handle = get_expr_handle!(v2_id, v2_lexp);
-                    let n2 = match ctx.type_arena[v2_lty.handle].inner {
+                    let n2 = match ctx.module.types[v2_lty.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidInnerType(v2_lexp.type_id)),
                     };
@@ -2988,7 +3043,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let value_lexp = self.lookup_expression.lookup(value_id)?;
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
-                    let scalar = match ctx.type_arena[ty_lookup.handle].inner {
+                    let scalar = match ctx.module.types[ty_lookup.handle].inner {
                         crate::TypeInner::Scalar(scalar)
                         | crate::TypeInner::Vector { scalar, .. }
                         | crate::TypeInner::Matrix { scalar, .. } => scalar,
@@ -3514,7 +3569,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let selector_lexp = &self.lookup_expression[&selector];
                     let selector_lty = self.lookup_type.lookup(selector_lexp.type_id)?;
                     let selector_handle = get_expr_handle!(selector, selector_lexp);
-                    let selector = match ctx.type_arena[selector_lty.handle].inner {
+                    let selector = match ctx.module.types[selector_lty.handle].inner {
                         crate::TypeInner::Scalar(crate::Scalar {
                             kind: crate::ScalarKind::Uint,
                             width: _,
@@ -4214,6 +4269,102 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         },
                         value: one_lexp_handle,
                         result: Some(r_lexp_handle),
+                    };
+                    block.push(stmt, span);
+
+                    // Store any associated global variables so we can upgrade their types later
+                    self.upgrade_atomics
+                        .insert(ctx.get_contained_global_variable(p_exp_h)?);
+                }
+                Op::AtomicCompareExchange => {
+                    inst.expect(9)?;
+
+                    let start = self.data_offset;
+                    let span = self.span_from_with_op(start);
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let pointer_id = self.next()?;
+                    let _memory_scope_id = self.next()?;
+                    let _equal_memory_semantics_id = self.next()?;
+                    let _unequal_memory_semantics_id = self.next()?;
+                    let value_id = self.next()?;
+                    let comparator_id = self.next()?;
+
+                    let (p_exp_h, p_base_ty_h) = self.get_exp_and_base_ty_handles(
+                        pointer_id,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        body_idx,
+                    )?;
+
+                    log::trace!("\t\t\tlooking up value expr {:?}", value_id);
+                    let v_lexp_handle =
+                        get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
+
+                    log::trace!("\t\t\tlooking up comparator expr {:?}", value_id);
+                    let c_lexp_handle = get_expr_handle!(
+                        comparator_id,
+                        self.lookup_expression.lookup(comparator_id)?
+                    );
+
+                    // We know from the SPIR-V spec that the result type must be an integer
+                    // scalar, and we'll need the type itself to get a handle to the atomic
+                    // result struct.
+                    let crate::TypeInner::Scalar(scalar) = ctx.module.types[p_base_ty_h].inner
+                    else {
+                        return Err(
+                            crate::front::atomic_upgrade::Error::CompareExchangeNonScalarBaseType
+                                .into(),
+                        );
+                    };
+
+                    // Get a handle to the atomic result struct type.
+                    let atomic_result_struct_ty_h = ctx.module.generate_predeclared_type(
+                        crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar),
+                    );
+
+                    block.extend(emitter.finish(ctx.expressions));
+
+                    // Create an expression for our atomic result
+                    let atomic_lexp_handle = {
+                        let expr = crate::Expression::AtomicResult {
+                            ty: atomic_result_struct_ty_h,
+                            comparison: true,
+                        };
+                        ctx.expressions.append(expr, span)
+                    };
+
+                    // Create an dot accessor to extract the value from the
+                    // result struct __atomic_compare_exchange_result<T> and use that
+                    // as the expression for the result_id
+                    {
+                        let expr = crate::Expression::AccessIndex {
+                            base: atomic_lexp_handle,
+                            index: 0,
+                        };
+                        let handle = ctx.expressions.append(expr, span);
+                        // Use this dot accessor as the result id's expression
+                        let _ = self.lookup_expression.insert(
+                            result_id,
+                            LookupExpression {
+                                handle,
+                                type_id: result_type_id,
+                                block_id,
+                            },
+                        );
+                    }
+
+                    emitter.start(ctx.expressions);
+
+                    // Create a statement for the op itself
+                    let stmt = crate::Statement::Atomic {
+                        pointer: p_exp_h,
+                        fun: crate::AtomicFunction::Exchange {
+                            compare: Some(c_lexp_handle),
+                        },
+                        value: v_lexp_handle,
+                        result: Some(atomic_lexp_handle),
                     };
                     block.push(stmt, span);
 
@@ -5842,7 +5993,7 @@ fn make_index_literal(
 ) -> Result<Handle<crate::Expression>, Error> {
     block.extend(emitter.finish(ctx.expressions));
 
-    let literal = match ctx.type_arena[index_type].inner.scalar_kind() {
+    let literal = match ctx.module.types[index_type].inner.scalar_kind() {
         Some(crate::ScalarKind::Uint) => crate::Literal::U32(index),
         Some(crate::ScalarKind::Sint) => crate::Literal::I32(index as i32),
         _ => return Err(Error::InvalidIndexType(index_type_id)),
@@ -5907,88 +6058,5 @@ mod test {
             0x01, 0x00, 0x00, 0x00,
         ];
         let _ = super::parse_u8_slice(&bin, &Default::default()).unwrap();
-    }
-}
-
-#[cfg(all(test, feature = "wgsl-in", wgsl_out))]
-mod test_atomic {
-    fn atomic_test(bytes: &[u8]) {
-        let _ = env_logger::builder().is_test(true).try_init();
-        let m = crate::front::spv::parse_u8_slice(bytes, &Default::default()).unwrap();
-
-        let mut wgsl = String::new();
-        let mut should_panic = false;
-
-        for vflags in [
-            crate::valid::ValidationFlags::all(),
-            crate::valid::ValidationFlags::empty(),
-        ] {
-            let mut validator = crate::valid::Validator::new(vflags, Default::default());
-            match validator.validate(&m) {
-                Err(e) => {
-                    log::error!("SPIR-V validation {}", e.emit_to_string(""));
-                    should_panic = true;
-                }
-                Ok(i) => {
-                    wgsl = crate::back::wgsl::write_string(
-                        &m,
-                        &i,
-                        crate::back::wgsl::WriterFlags::empty(),
-                    )
-                    .unwrap();
-                    log::info!("wgsl-out:\n{wgsl}");
-                    break;
-                }
-            };
-        }
-
-        if should_panic {
-            panic!("validation error");
-        }
-
-        let m = match crate::front::wgsl::parse_str(&wgsl) {
-            Ok(m) => m,
-            Err(e) => {
-                log::error!("round trip WGSL validation {}", e.emit_to_string(&wgsl));
-                panic!("invalid module");
-            }
-        };
-        let mut validator =
-            crate::valid::Validator::new(crate::valid::ValidationFlags::all(), Default::default());
-        if let Err(e) = validator.validate(&m) {
-            log::error!("{}", e.emit_to_string(&wgsl));
-            panic!("invalid generated wgsl");
-        }
-    }
-
-    #[test]
-    fn atomic_i_inc() {
-        atomic_test(include_bytes!(
-            "../../../tests/in/spv/atomic_i_increment.spv"
-        ));
-    }
-
-    #[test]
-    fn atomic_load_and_store() {
-        atomic_test(include_bytes!(
-            "../../../tests/in/spv/atomic_load_and_store.spv"
-        ));
-    }
-
-    #[test]
-    fn atomic_exchange() {
-        atomic_test(include_bytes!("../../../tests/in/spv/atomic_exchange.spv"));
-    }
-
-    #[test]
-    fn atomic_i_decrement() {
-        atomic_test(include_bytes!(
-            "../../../tests/in/spv/atomic_i_decrement.spv"
-        ));
-    }
-
-    #[test]
-    fn atomic_i_add_and_sub() {
-        atomic_test(include_bytes!("../../../tests/in/spv/atomic_i_add_sub.spv"));
     }
 }

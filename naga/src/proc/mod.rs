@@ -20,10 +20,10 @@ pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
 
-impl From<super::StorageFormat> for super::ScalarKind {
+impl From<super::StorageFormat> for super::Scalar {
     fn from(format: super::StorageFormat) -> Self {
         use super::{ScalarKind as Sk, StorageFormat as Sf};
-        match format {
+        let kind = match format {
             Sf::R8Unorm => Sk::Float,
             Sf::R8Snorm => Sk::Float,
             Sf::R8Uint => Sk::Uint,
@@ -64,7 +64,8 @@ impl From<super::StorageFormat> for super::ScalarKind {
             Sf::Rg16Snorm => Sk::Float,
             Sf::Rgba16Unorm => Sk::Float,
             Sf::Rgba16Snorm => Sk::Float,
-        }
+        };
+        super::Scalar { kind, width: 4 }
     }
 }
 
@@ -296,6 +297,9 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(count) => count.get(),
+                    // any struct member or array element needing a size at pipeline-creation time
+                    // must have a creation-fixed footprint
+                    super::ArraySize::Pending(_) => 0,
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
                 };
@@ -477,6 +481,7 @@ impl super::MathFunction {
             Self::Inverse => 1,
             Self::Transpose => 1,
             Self::Determinant => 1,
+            Self::QuantizeToF16 => 1,
             // bits
             Self::CountTrailingZeros => 1,
             Self::CountLeadingZeros => 1,
@@ -521,12 +526,12 @@ impl crate::Expression {
         }
     }
 
-    /// Return true if this expression is a dynamic array index, for [`Access`].
+    /// Return true if this expression is a dynamic array/vector/matrix index,
+    /// for [`Access`].
     ///
     /// This method returns true if this expression is a dynamically computed
-    /// index, and as such can only be used to index matrices and arrays when
-    /// they appear behind a pointer. See the documentation for [`Access`] for
-    /// details.
+    /// index, and as such can only be used to index matrices when they appear
+    /// behind a pointer. See the documentation for [`Access`] for details.
     ///
     /// Note, this does not check the _type_ of the given expression. It's up to
     /// the caller to establish that the `Access` expression is well-typed
@@ -621,6 +626,10 @@ impl super::ImageClass {
             crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => !multi,
             crate::ImageClass::Storage { .. } => false,
         }
+    }
+
+    pub const fn is_depth(self) -> bool {
+        matches!(self, crate::ImageClass::Depth { .. })
     }
 }
 

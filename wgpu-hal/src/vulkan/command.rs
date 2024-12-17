@@ -140,9 +140,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         vk_barriers.clear();
 
         for bar in barriers {
-            let (src_stage, src_access) = conv::map_buffer_usage_to_barrier(bar.usage.start);
+            let (src_stage, src_access) = conv::map_buffer_usage_to_barrier(bar.usage.from);
             src_stages |= src_stage;
-            let (dst_stage, dst_access) = conv::map_buffer_usage_to_barrier(bar.usage.end);
+            let (dst_stage, dst_access) = conv::map_buffer_usage_to_barrier(bar.usage.to);
             dst_stages |= dst_stage;
 
             vk_barriers.push(
@@ -184,11 +184,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 bar.texture.format,
                 &self.device.private_caps,
             );
-            let (src_stage, src_access) = conv::map_texture_usage_to_barrier(bar.usage.start);
-            let src_layout = conv::derive_image_layout(bar.usage.start, bar.texture.format);
+            let (src_stage, src_access) = conv::map_texture_usage_to_barrier(bar.usage.from);
+            let src_layout = conv::derive_image_layout(bar.usage.from, bar.texture.format);
             src_stages |= src_stage;
-            let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(bar.usage.end);
-            let dst_layout = conv::derive_image_layout(bar.usage.end, bar.texture.format);
+            let (dst_stage, dst_access) = conv::map_texture_usage_to_barrier(bar.usage.to);
+            let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
             dst_stages |= dst_stage;
 
             vk_barriers.push(
@@ -647,10 +647,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         &mut self,
         barrier: crate::AccelerationStructureBarrier,
     ) {
-        let (src_stage, src_access) =
-            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.start);
-        let (dst_stage, dst_access) =
-            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.end);
+        let (src_stage, src_access) = conv::map_acceleration_structure_usage_to_barrier(
+            barrier.usage.from,
+            self.device.features,
+        );
+        let (dst_stage, dst_access) = conv::map_acceleration_structure_usage_to_barrier(
+            barrier.usage.to,
+            self.device.features,
+        );
 
         unsafe {
             self.device.raw.cmd_pipeline_barrier(

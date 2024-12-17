@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem::size_of};
+use std::{f32::consts, mem::size_of};
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -81,10 +81,7 @@ impl Example {
         query_sets: &Option<QuerySets>,
         mip_count: u32,
     ) {
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("blit.wgsl"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blit"),
@@ -180,7 +177,7 @@ impl Example {
                 );
             }
             rpass.set_pipeline(&pipeline);
-            rpass.set_bind_group(0, Some(&bind_group), &[]);
+            rpass.set_bind_group(0, &bind_group, &[]);
             rpass.draw(0..3, 0..1);
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base + 1);
@@ -249,9 +246,9 @@ impl crate::framework::Example for Example {
             usage: wgpu::BufferUsages::COPY_SRC,
         });
         init_encoder.copy_buffer_to_texture(
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &temp_buf,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4 * size),
                     rows_per_image: None,
@@ -281,10 +278,7 @@ impl crate::framework::Example for Example {
         });
 
         // Create the render pipeline
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("draw.wgsl"));
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("draw"),
@@ -497,7 +491,7 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.draw_pipeline);
-            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
             rpass.draw(0..4, 0..1);
         }
 

@@ -93,7 +93,7 @@ impl Components<'_> {
     }
 }
 
-impl<'source, 'temp> Lowerer<'source, 'temp> {
+impl<'source> Lowerer<'source, '_> {
     /// Generate Naga IR for a type constructor expression.
     ///
     /// The `constructor` value represents the head of the constructor

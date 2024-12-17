@@ -9,13 +9,17 @@ on:
 
 env:
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  VULKAN_SDK_VERSION: "1.3.268"
+  #
+  # We don't include the 4th version number, as it's not used in any URL.
+  #
+  # Held back from 1.3.290 by https://github.com/gfx-rs/wgpu/issues/6307
+  VULKAN_SDK_VERSION: "1.3.283"
 
   # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
   #
   # Must also be changed in ci.yaml
-  DXC_RELEASE: "v1.7.2308"
-  DXC_FILENAME: "dxc_2023_08_14.zip"
+  DXC_RELEASE: "v1.8.2407"
+  DXC_FILENAME: "dxc_2024_07_31_clang_cl.zip"
 
 jobs:
   naga-validate-windows:

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use crate::{
     hal_api::HalApi,
@@ -24,9 +24,10 @@ impl GlobalReport {
 }
 
 pub struct Global {
-    pub instance: Instance,
     pub(crate) surfaces: Registry<Arc<Surface>>,
     pub(crate) hub: Hub,
+    // the instance must be dropped last
+    pub instance: Instance,
 }
 
 impl Global {
@@ -61,13 +62,7 @@ impl Global {
     ///
     /// - The raw instance handle returned must not be manually destroyed.
     pub unsafe fn instance_as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
-        self.instance.raw(A::VARIANT).map(|instance| {
-            instance
-                .as_any()
-                .downcast_ref()
-                // This should be impossible. It would mean that backend instance and enum type are mismatching.
-                .expect("Stored instance is not of the correct type")
-        })
+        unsafe { self.instance.as_hal::<A>() }
     }
 
     /// # Safety
@@ -90,16 +85,16 @@ impl Global {
     }
 }
 
+impl fmt::Debug for Global {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Global").finish()
+    }
+}
+
 impl Drop for Global {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
         resource_log!("Global::drop");
-        let mut surfaces_locked = self.surfaces.write();
-
-        // destroy hub before the instance gets dropped
-        self.hub.clear(&surfaces_locked);
-
-        surfaces_locked.map.clear();
     }
 }
 

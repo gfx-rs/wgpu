@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem::size_of};
+use std::{f32::consts, mem::size_of};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
 const IMAGE_SIZE: u32 = 256;
@@ -168,10 +168,7 @@ impl crate::framework::Example for Example {
         });
 
         // Create the render pipeline
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
         let camera = Camera {
             screen_size: (config.width, config.height),
@@ -451,7 +448,7 @@ impl crate::framework::Example for Example {
                 occlusion_query_set: None,
             });
 
-            rpass.set_bind_group(0, Some(&self.bind_group), &[]);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
             rpass.set_pipeline(&self.entity_pipeline);
 
             for entity in self.entities.iter() {

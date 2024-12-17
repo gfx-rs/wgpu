@@ -1,0 +1,52 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 56
+; Schema: 0
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %1 "cull::fetch_depth" %2 %3 %4
+               OpExecutionMode %1 LocalSize 32 1 1
+               OpDecorate %_struct_10 Block
+               OpMemberDecorate %_struct_10 0 Offset 0
+               OpDecorate %_struct_11 Block
+               OpMemberDecorate %_struct_11 0 Offset 0
+               OpDecorate %2 Binding 0
+               OpDecorate %2 DescriptorSet 0
+               OpDecorate %3 NonWritable
+               OpDecorate %3 Binding 1
+               OpDecorate %3 DescriptorSet 0
+               OpDecorate %4 Binding 2
+               OpDecorate %4 DescriptorSet 0
+       %uint = OpTypeInt 32 0
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+       %void = OpTypeVoid
+         %16 = OpTypeFunction %void
+     %uint_0 = OpConstant %uint 0
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+ %_struct_10 = OpTypeStruct %float
+%_ptr_StorageBuffer__struct_10 = OpTypePointer StorageBuffer %_struct_10
+     %v2uint = OpTypeVector %uint 2
+ %_struct_11 = OpTypeStruct %v2uint
+%_ptr_StorageBuffer__struct_11 = OpTypePointer StorageBuffer %_struct_11
+         %24 = OpTypeImage %float 2D 1 0 0 1 Unknown
+%_ptr_UniformConstant_24 = OpTypePointer UniformConstant %24
+%_ptr_StorageBuffer_float = OpTypePointer StorageBuffer %float
+          %2 = OpVariable %_ptr_StorageBuffer__struct_10 StorageBuffer
+%_ptr_StorageBuffer_v2uint = OpTypePointer StorageBuffer %v2uint
+          %3 = OpVariable %_ptr_StorageBuffer__struct_11 StorageBuffer
+          %4 = OpVariable %_ptr_UniformConstant_24 UniformConstant
+          %1 = OpFunction %void None %16
+         %32 = OpLabel
+         %33 = OpInBoundsAccessChain %_ptr_StorageBuffer_float %2 %uint_0
+         %34 = OpInBoundsAccessChain %_ptr_StorageBuffer_v2uint %3 %uint_0
+         %35 = OpLoad %v2uint %34
+         %54 = OpLoad %24 %4
+         %55 = OpImageFetch %v4float %54 %35 Lod %int_0
+         %38 = OpCompositeExtract %float %55 0
+               OpStore %33 %38
+               OpReturn
+               OpFunctionEnd

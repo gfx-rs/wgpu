@@ -139,6 +139,7 @@ pub(super) fn map_builtin(word: spirv::Word, invariant: bool) -> Result<crate::B
         Some(Bi::InstanceIndex) => crate::BuiltIn::InstanceIndex,
         Some(Bi::PointSize) => crate::BuiltIn::PointSize,
         Some(Bi::VertexIndex) => crate::BuiltIn::VertexIndex,
+        Some(Bi::DrawIndex) => crate::BuiltIn::DrawID,
         // fragment
         Some(Bi::FragDepth) => crate::BuiltIn::FragDepth,
         Some(Bi::PointCoord) => crate::BuiltIn::PointCoord,
