@@ -123,7 +123,7 @@ impl IndirectValidation {
         });
         let hal_desc = hal::ShaderModuleDescriptor {
             label: None,
-            runtime_checks: false,
+            runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
         };
         let module =
             unsafe { device.create_shader_module(&hal_desc, hal_shader) }.map_err(|error| {

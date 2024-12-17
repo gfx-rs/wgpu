@@ -182,6 +182,10 @@ pub(super) fn describe_vertex_format(vertex_format: wgt::VertexFormat) -> super:
     use wgt::VertexFormat as Vf;
 
     let (element_count, element_format, attrib_kind) = match vertex_format {
+        Vf::Unorm8 => (1, glow::UNSIGNED_BYTE, Vak::Float),
+        Vf::Snorm8 => (1, glow::BYTE, Vak::Float),
+        Vf::Uint8 => (1, glow::UNSIGNED_BYTE, Vak::Integer),
+        Vf::Sint8 => (1, glow::BYTE, Vak::Integer),
         Vf::Unorm8x2 => (2, glow::UNSIGNED_BYTE, Vak::Float),
         Vf::Snorm8x2 => (2, glow::BYTE, Vak::Float),
         Vf::Uint8x2 => (2, glow::UNSIGNED_BYTE, Vak::Integer),
@@ -190,6 +194,11 @@ pub(super) fn describe_vertex_format(vertex_format: wgt::VertexFormat) -> super:
         Vf::Snorm8x4 => (4, glow::BYTE, Vak::Float),
         Vf::Uint8x4 => (4, glow::UNSIGNED_BYTE, Vak::Integer),
         Vf::Sint8x4 => (4, glow::BYTE, Vak::Integer),
+        Vf::Unorm16 => (1, glow::UNSIGNED_SHORT, Vak::Float),
+        Vf::Snorm16 => (1, glow::SHORT, Vak::Float),
+        Vf::Uint16 => (1, glow::UNSIGNED_SHORT, Vak::Integer),
+        Vf::Sint16 => (1, glow::SHORT, Vak::Integer),
+        Vf::Float16 => (1, glow::HALF_FLOAT, Vak::Float),
         Vf::Unorm16x2 => (2, glow::UNSIGNED_SHORT, Vak::Float),
         Vf::Snorm16x2 => (2, glow::SHORT, Vak::Float),
         Vf::Uint16x2 => (2, glow::UNSIGNED_SHORT, Vak::Integer),
@@ -213,6 +222,7 @@ pub(super) fn describe_vertex_format(vertex_format: wgt::VertexFormat) -> super:
         Vf::Sint32x4 => (4, glow::INT, Vak::Integer),
         Vf::Float32x4 => (4, glow::FLOAT, Vak::Float),
         Vf::Unorm10_10_10_2 => (4, glow::UNSIGNED_INT_10_10_10_2, Vak::Float),
+        Vf::Unorm8x4Bgra => (glow::BGRA as i32, glow::UNSIGNED_BYTE, Vak::Float),
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     };
 

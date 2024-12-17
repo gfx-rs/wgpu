@@ -676,6 +676,8 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     InvalidColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
+    InvalidAttachment(#[from] AttachmentError),
+    #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),

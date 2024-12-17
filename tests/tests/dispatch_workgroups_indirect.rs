@@ -88,7 +88,7 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
         ctx.queue.submit(Some(encoder.finish()));
 
         let error = pollster::block_on(ctx.device.pop_error_scope());
-        assert!(error.map_or(false, |error| {
+        assert!(error.is_some_and(|error| {
             format!("{error}").contains("The current set ComputePipeline with '' label expects a BindGroup to be set at index 0")
         }));
     });
@@ -130,7 +130,7 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
         ctx.queue.submit(Some(encoder.finish()));
 
         let error = pollster::block_on(ctx.device.pop_error_scope());
-        assert!(error.map_or(false, |error| {
+        assert!(error.is_some_and(|error| {
             format!("{error}").contains(
                 "Indirect buffer uses bytes 0..12 which overruns indirect buffer of size 0",
             )

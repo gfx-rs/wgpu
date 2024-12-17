@@ -75,6 +75,15 @@ We have the Matrix space [![Matrix Space](https://img.shields.io/static/v1?label
 
 We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge base.
 
+## Extension Specifications
+
+While the core of wgpu is based on the WebGPU standard, we also support extensions that allow for features that the standard does not have yet.
+For high-level documentation on how to use these extensions, see the individual specifications:
+
+🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
+
+- 🧪EXPERIMENTAL🧪 [Ray Tracing](./etc/specs/ray_tracing.md).
+
 ## Supported Platforms
 
 | API    | Windows            | Linux/Android      | macOS/iOS          | Web (wasm)         |
