@@ -1513,10 +1513,15 @@ bitflags!(
     /// Pipeline layout creation flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
-        /// Include support for `first_vertex` / `first_instance` drawing.
+        /// D3D12: Add support for `first_vertex` and `first_instance` builtins
+        /// via push constants for direct execution.
         const FIRST_VERTEX_INSTANCE = 1 << 0;
-        /// Include support for num work groups builtin.
+        /// D3D12: Add support for `num_workgroups` builtins via push constants
+        /// for direct execution.
         const NUM_WORK_GROUPS = 1 << 1;
+        /// D3D12: Add support for the builtins that the other flags enable for
+        /// indirect execution.
+        const INDIRECT_BUILTIN_UPDATE = 1 << 2;
     }
 );
 
