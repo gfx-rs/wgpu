@@ -2,7 +2,7 @@ use std::{
     ffi,
     mem::{self, size_of, size_of_val},
     num::NonZeroU32,
-    ptr,
+    ptr, slice,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -21,8 +21,7 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{self, dxgi::result::HResult},
     dx12::{borrow_optional_interface_temporarily, shader_compilation, Event},
-    AccelerationStructureEntries,
-    TlasInstance,
+    AccelerationStructureEntries, TlasInstance,
 };
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
@@ -2106,7 +2105,21 @@ impl crate::Device for super::Device {
         })
     }
 
-    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
-        todo!()
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
+        let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
+            Transform: instance.transform,
+            _bitfield1: (instance.custom_index & MAX_U24) | (u32::from(instance.mask) << 24),
+            _bitfield2: 0,
+            AccelerationStructure: instance.blas_address,
+        };
+        let temp: *const _ = &temp;
+        unsafe {
+            slice::from_raw_parts::<u8>(
+                temp.cast::<u8>(),
+                size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
+            )
+            .to_vec()
+        }
     }
 }

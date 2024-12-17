@@ -1466,7 +1466,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             global.device_create_tlas(self.id, &desc.map_label(|l| l.map(Borrowed)), None);
         if let Some(cause) = error {
             self.context
-                .handle_error(&self.error_sink, cause, desc.label, "Device::create_blas");
+                .handle_error(&self.error_sink, cause, desc.label, "Device::create_tlas");
         }
         CoreTlas {
             context: self.context.clone(),
