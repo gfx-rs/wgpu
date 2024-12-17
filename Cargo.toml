@@ -42,6 +42,7 @@ default-members = [
 
 [workspace.lints.clippy]
 manual_c_str_literals = "allow"
+ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"

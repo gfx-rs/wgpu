@@ -34,7 +34,7 @@ env:
   # We sometimes need nightly to use special things in CI.
   #
   # In order to prevent CI regressions, we pin the nightly version.
-  NIGHTLY_VERSION: "nightly-2023-12-17"
+  NIGHTLY_VERSION: "nightly-2024-10-10"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.83"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
