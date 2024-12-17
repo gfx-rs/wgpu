@@ -192,7 +192,7 @@ impl super::CommandEncoder {
             if dirty_textures & (1 << texture_index) != 0
                 || slot
                     .sampler_index
-                    .map_or(false, |si| dirty_samplers & (1 << si) != 0)
+                    .is_some_and(|si| dirty_samplers & (1 << si) != 0)
             {
                 let sampler = slot
                     .sampler_index
@@ -1177,6 +1177,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
+        // Empty dispatches are invalid in OpenGL, but valid in WebGPU.
+        if count.iter().any(|&c| c == 0) {
+            return;
+        }
         self.cmd_buffer.commands.push(C::Dispatch(count));
     }
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {

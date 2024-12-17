@@ -34,6 +34,9 @@ serde = ["dep:serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"], optional = true }
