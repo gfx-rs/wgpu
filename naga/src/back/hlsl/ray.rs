@@ -111,7 +111,11 @@ impl<'a, W: Write> super::Writer<'a, W> {
             RayQueryIntersection::Triangle as u32
         )?;
         writeln!(self.out, "    }} else {{")?;
-        writeln!(self.out, "        ret.kind = {};", RayQueryIntersection::Aabb as u32)?;
+        writeln!(
+            self.out,
+            "        ret.kind = {};",
+            RayQueryIntersection::Aabb as u32
+        )?;
         writeln!(self.out, "    }}")?;
         writeln!(self.out, "    ret.t = rq.CommittedRayT();")?;
         writeln!(
