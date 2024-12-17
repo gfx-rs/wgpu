@@ -4,7 +4,6 @@ use crate::{
     dx12::borrow_interface_temporarily,
     AccelerationStructureEntries,
 };
-use std::mem::ManuallyDrop;
 use std::{mem, ops::Range};
 use windows::Win32::Graphics::Dxgi;
 use windows::Win32::{Foundation, Graphics::Direct3D12};
@@ -779,8 +778,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         // )
                         // TODO: Replace with the above in the next breaking windows-rs release,
                         // when https://github.com/microsoft/win32metadata/pull/1971 is in.
-                        (windows_core::Interface::vtable(list).ClearDepthStencilView)(
-                            windows_core::Interface::as_raw(list),
+                        (Interface::vtable(list).ClearDepthStencilView)(
+                            Interface::as_raw(list),
                             ds_view,
                             flags,
                             ds.clear_value.0,
@@ -1448,7 +1447,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                 Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                 Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
-                    UAV: ManuallyDrop::new(Direct3D12::D3D12_RESOURCE_UAV_BARRIER {
+                    UAV: mem::ManuallyDrop::new(Direct3D12::D3D12_RESOURCE_UAV_BARRIER {
                         pResource: Default::default(),
                     }),
                 },

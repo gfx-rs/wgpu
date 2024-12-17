@@ -2,7 +2,7 @@ use crate::back::hlsl::BackendResult;
 use crate::{RayQueryIntersection, TypeInner};
 use std::fmt::Write;
 
-impl<'a, W: Write> super::Writer<'a, W> {
+impl<W: Write> super::Writer<'_, W> {
     // constructs hlsl RayDesc from wgsl RayDesc
     pub(super) fn write_ray_desc_from_ray_desc_constructor_function(
         &mut self,
