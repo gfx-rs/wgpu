@@ -3631,7 +3631,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, query, func_ctx)?;
                     write!(self.out, ")")?;
                 } else {
-                    return Err(Error::Unimplemented("candidate intersection".to_string()));
+                    write!(self.out, "GetCandidateIntersection(")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ")")?;
                 }
             }
             // Nothing to do here, since call expression already cached

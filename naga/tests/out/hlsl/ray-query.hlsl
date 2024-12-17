@@ -81,11 +81,11 @@ RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq) {
 
 RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructure acs)
 {
-    RayQuery<RAY_FLAG_NONE> rq;
+    RayQuery<RAY_FLAG_NONE> rq_1;
 
-    rq.TraceRayInline(acs, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir)));
+    rq_1.TraceRayInline(acs, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir)));
     while(true) {
-        const bool _e9 = rq.Proceed();
+        const bool _e9 = rq_1.Proceed();
         if (_e9) {
         } else {
             break;
@@ -93,7 +93,7 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         {
         }
     }
-    const RayIntersection rayintersection = GetCommittedIntersection(rq);
+    const RayIntersection rayintersection = GetCommittedIntersection(rq_1);
     return rayintersection;
 }
 
@@ -114,5 +114,41 @@ void main()
     output.Store(0, asuint(uint((_e7.kind == 0u))));
     const float3 _e18 = get_torus_normal((dir_1 * _e7.t), _e7);
     output.Store3(16, asuint(_e18));
+    return;
+}
+
+RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
+    RayIntersection ret = (RayIntersection)0;
+    CANDIDATE_TYPE kind = rq.CandidateType();
+    if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+        ret.kind = RAY_QUERY_INTERSECTION_TRIANGLE;
+    } else {
+        ret.kind = RAY_QUERY_INTERSECTION_AABB;
+    }
+    ret.t = rq.CommittedRayT();
+    ret.instance_custom_index = rq.CommittedInstanceIndex();
+    ret.instance_id = rq.CommittedInstanceID();
+    ret.sbt_record_offset = rq.CommittedInstanceContributionToHitGroupIndex();
+    ret.geometry_index = rq.CommittedGeometryIndex();
+    ret.primitive_index = rq.CommittedPrimitiveIndex();
+    if( rq.CommittedStatus() == COMMITTED_TRIANGLE_HIT ) {
+        ret.barycentrics = rq.CommittedTriangleBarycentrics();
+        ret.front_face = rq.CommittedTriangleFrontFace();
+    }
+    ret.object_to_world = rq.CommittedObjectToWorld4x3();
+    ret.world_to_object = rq.CommittedWorldToObject4x3();
+    return ret;
+}
+
+[numthreads(1, 1, 1)]
+void main_candidate()
+{
+    RayQuery<RAY_FLAG_NONE> rq;
+
+    float3 pos_2 = (0.0).xxx;
+    float3 dir_2 = float3(0.0, 1.0, 0.0);
+    rq.TraceRayInline(acc_struct, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2)));
+    RayIntersection intersection_1 = GetCandidateIntersection(rq);
+    output.Store(0, asuint(uint((intersection_1.kind == 3u))));
     return;
 }

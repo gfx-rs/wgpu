@@ -29,7 +29,7 @@ int dim_1d = NagaDimensions1D(image_1d);
 use super::{
     super::FunctionCtx,
     writer::{EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION},
-    BackendResult, Error,
+    BackendResult,
 };
 use crate::{arena::Handle, proc::NameKey};
 use std::fmt::Write;
@@ -871,7 +871,7 @@ impl<W: Write> super::Writer<'_, W> {
                     if committed {
                         self.write_committed_intersection_function(module)?;
                     } else {
-                        return Err(Error::Unimplemented("candidate intersection".to_string()));
+                        self.write_candidate_intersection_function(module)?;
                     }
                 }
                 _ => {}
