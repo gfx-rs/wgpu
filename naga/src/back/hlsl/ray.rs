@@ -1,5 +1,5 @@
 use crate::back::hlsl::BackendResult;
-use crate::TypeInner;
+use crate::{RayQueryIntersection, TypeInner};
 use std::fmt::Write;
 
 impl<'a, W: Write> super::Writer<'a, W> {
@@ -107,10 +107,11 @@ impl<'a, W: Write> super::Writer<'a, W> {
         )?;
         writeln!(
             self.out,
-            "        ret.kind = RAY_QUERY_INTERSECTION_TRIANGLE;"
+            "        ret.kind = {};",
+            RayQueryIntersection::Triangle as u32
         )?;
         writeln!(self.out, "    }} else {{")?;
-        writeln!(self.out, "        ret.kind = RAY_QUERY_INTERSECTION_AABB;")?;
+        writeln!(self.out, "        ret.kind = {};", RayQueryIntersection::Aabb as u32)?;
         writeln!(self.out, "    }}")?;
         writeln!(self.out, "    ret.t = rq.CommittedRayT();")?;
         writeln!(

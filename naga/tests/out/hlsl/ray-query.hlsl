@@ -121,9 +121,9 @@ RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
     RayIntersection ret = (RayIntersection)0;
     CANDIDATE_TYPE kind = rq.CandidateType();
     if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
-        ret.kind = RAY_QUERY_INTERSECTION_TRIANGLE;
+        ret.kind = 1;
     } else {
-        ret.kind = RAY_QUERY_INTERSECTION_AABB;
+        ret.kind = 3;
     }
     ret.t = rq.CommittedRayT();
     ret.instance_custom_index = rq.CommittedInstanceIndex();
