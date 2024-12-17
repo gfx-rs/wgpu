@@ -13,7 +13,6 @@ use std::{
     ptr,
     time::Instant,
 };
-use wgt::Features;
 use winit::window::WindowButtons;
 
 const DESIRED_MAX_LATENCY: u32 = 2;
