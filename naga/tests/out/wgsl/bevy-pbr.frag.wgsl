@@ -123,15 +123,13 @@ fn getDistanceAttenuation(distanceSquare: f32, inverseRangeSquared: f32) -> f32 
     factor = (_e44 * _e45);
     let _e49 = factor;
     let _e50 = factor;
-    let _e56 = factor;
-    let _e57 = factor;
-    smoothFactor = clamp((1f - (_e56 * _e57)), 0f, 1f);
-    let _e64 = smoothFactor;
-    let _e65 = smoothFactor;
-    attenuation = (_e64 * _e65);
-    let _e68 = attenuation;
-    let _e73 = distanceSquare_1;
-    return ((_e68 * 1f) / max(_e73, 0.001f));
+    smoothFactor = clamp((1f - (_e49 * _e50)), 0f, 1f);
+    let _e57 = smoothFactor;
+    let _e58 = smoothFactor;
+    attenuation = (_e57 * _e58);
+    let _e61 = attenuation;
+    let _e64 = distanceSquare_1;
+    return ((_e61 * 1f) / max(_e64, 0.001f));
 }
 
 fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
@@ -183,29 +181,19 @@ fn V_SmithGGXCorrelated(roughness_2: f32, NoV: f32, NoL: f32) -> f32 {
     let _e53 = NoV_1;
     let _e56 = NoV_1;
     let _e58 = a2_;
-    let _e60 = NoV_1;
-    let _e61 = a2_;
-    let _e62 = NoV_1;
-    let _e65 = NoV_1;
-    let _e67 = a2_;
-    lambdaV = (_e50 * sqrt((((_e60 - (_e61 * _e62)) * _e65) + _e67)));
-    let _e72 = NoV_1;
-    let _e73 = NoL_1;
-    let _e74 = a2_;
-    let _e75 = NoL_1;
-    let _e78 = NoL_1;
-    let _e80 = a2_;
-    let _e82 = NoL_1;
-    let _e83 = a2_;
-    let _e84 = NoL_1;
-    let _e87 = NoL_1;
-    let _e89 = a2_;
-    lambdaL = (_e72 * sqrt((((_e82 - (_e83 * _e84)) * _e87) + _e89)));
-    let _e95 = lambdaV;
-    let _e96 = lambdaL;
-    v = (0.5f / (_e95 + _e96));
-    let _e100 = v;
-    return _e100;
+    lambdaV = (_e50 * sqrt((((_e51 - (_e52 * _e53)) * _e56) + _e58)));
+    let _e63 = NoV_1;
+    let _e64 = NoL_1;
+    let _e65 = a2_;
+    let _e66 = NoL_1;
+    let _e69 = NoL_1;
+    let _e71 = a2_;
+    lambdaL = (_e63 * sqrt((((_e64 - (_e65 * _e66)) * _e69) + _e71)));
+    let _e77 = lambdaV;
+    let _e78 = lambdaL;
+    v = (0.5f / (_e77 + _e78));
+    let _e82 = v;
+    return _e82;
 }
 
 fn F_Schlick(f0_: vec3<f32>, f90_: f32, VoH: f32) -> vec3<f32> {
@@ -216,9 +204,8 @@ fn F_Schlick(f0_: vec3<f32>, f90_: f32, VoH: f32) -> vec3<f32> {
     VoH_1 = VoH;
     let _e45 = f90_1;
     let _e49 = VoH_1;
-    let _e52 = VoH_1;
-    let _e54 = pow5_((1f - _e52));
-    return (f0_ + ((vec3(_e45) - f0_) * _e54));
+    let _e51 = pow5_((1f - _e49));
+    return (f0_ + ((vec3(_e45) - f0_) * _e51));
 }
 
 fn F_Schlick_1(f0_1: f32, f90_2: f32, VoH_2: f32) -> f32 {
@@ -233,9 +220,8 @@ fn F_Schlick_1(f0_1: f32, f90_2: f32, VoH_2: f32) -> f32 {
     let _e47 = f90_3;
     let _e48 = f0_2;
     let _e51 = VoH_3;
-    let _e54 = VoH_3;
-    let _e56 = pow5_((1f - _e54));
-    return (_e46 + ((_e47 - _e48) * _e56));
+    let _e53 = pow5_((1f - _e51));
+    return (_e46 + ((_e47 - _e48) * _e53));
 }
 
 fn fresnel(f0_3: vec3<f32>, LoH: f32) -> vec3<f32> {
@@ -245,14 +231,13 @@ fn fresnel(f0_3: vec3<f32>, LoH: f32) -> vec3<f32> {
 
     f0_4 = f0_3;
     LoH_1 = LoH;
-    let _e49 = f0_4;
-    let _e62 = f0_4;
-    f90_4 = clamp(dot(_e62, vec3(16.5f)), 0f, 1f);
-    let _e75 = f0_4;
-    let _e76 = f90_4;
-    let _e77 = LoH_1;
-    let _e78 = F_Schlick(_e75, _e76, _e77);
-    return _e78;
+    let _e44 = f0_4;
+    f90_4 = clamp(dot(_e44, vec3(16.5f)), 0f, 1f);
+    let _e54 = f0_4;
+    let _e55 = f90_4;
+    let _e56 = LoH_1;
+    let _e57 = F_Schlick(_e54, _e55, _e56);
+    return _e57;
 }
 
 fn specular(f0_5: vec3<f32>, roughness_4: f32, h_1: vec3<f32>, NoV_2: f32, NoL_2: f32, NoH_2: f32, LoH_2: f32, specularIntensity: f32) -> vec3<f32> {
@@ -274,24 +259,24 @@ fn specular(f0_5: vec3<f32>, roughness_4: f32, h_1: vec3<f32>, NoV_2: f32, NoL_2
     NoH_3 = NoH_2;
     LoH_3 = LoH_2;
     specularIntensity_1 = specularIntensity;
-    let _e57 = roughness_5;
-    let _e58 = NoH_3;
-    let _e59 = D_GGX(_e57, _e58, h_1);
-    D = _e59;
-    let _e64 = roughness_5;
-    let _e65 = NoV_3;
-    let _e66 = NoL_3;
-    let _e67 = V_SmithGGXCorrelated(_e64, _e65, _e66);
-    V = _e67;
-    let _e71 = f0_6;
-    let _e72 = LoH_3;
-    let _e73 = fresnel(_e71, _e72);
-    F = _e73;
-    let _e75 = specularIntensity_1;
-    let _e76 = D;
-    let _e78 = V;
-    let _e80 = F;
-    return (((_e75 * _e76) * _e78) * _e80);
+    let _e55 = roughness_5;
+    let _e56 = NoH_3;
+    let _e57 = D_GGX(_e55, _e56, h_1);
+    D = _e57;
+    let _e59 = roughness_5;
+    let _e60 = NoV_3;
+    let _e61 = NoL_3;
+    let _e62 = V_SmithGGXCorrelated(_e59, _e60, _e61);
+    V = _e62;
+    let _e64 = f0_6;
+    let _e65 = LoH_3;
+    let _e66 = fresnel(_e64, _e65);
+    F = _e66;
+    let _e68 = specularIntensity_1;
+    let _e69 = D;
+    let _e71 = V;
+    let _e73 = F;
+    return (((_e68 * _e69) * _e71) * _e73);
 }
 
 fn Fd_Burley(roughness_6: f32, NoV_4: f32, NoL_4: f32, LoH_4: f32) -> f32 {
@@ -311,17 +296,17 @@ fn Fd_Burley(roughness_6: f32, NoV_4: f32, NoL_4: f32, LoH_4: f32) -> f32 {
     let _e52 = LoH_5;
     let _e54 = LoH_5;
     f90_5 = (0.5f + (((2f * _e50) * _e52) * _e54));
-    let _e62 = f90_5;
-    let _e63 = NoL_5;
-    let _e64 = F_Schlick_1(1f, _e62, _e63);
-    lightScatter = _e64;
-    let _e70 = f90_5;
-    let _e71 = NoV_5;
-    let _e72 = F_Schlick_1(1f, _e70, _e71);
-    viewScatter = _e72;
-    let _e74 = lightScatter;
-    let _e75 = viewScatter;
-    return ((_e74 * _e75) * 0.31830987f);
+    let _e59 = f90_5;
+    let _e60 = NoL_5;
+    let _e61 = F_Schlick_1(1f, _e59, _e60);
+    lightScatter = _e61;
+    let _e64 = f90_5;
+    let _e65 = NoV_5;
+    let _e66 = F_Schlick_1(1f, _e64, _e65);
+    viewScatter = _e66;
+    let _e68 = lightScatter;
+    let _e69 = viewScatter;
+    return ((_e68 * _e69) * 0.31830987f);
 }
 
 fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3<f32> {
@@ -344,21 +329,16 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     let _e69 = r;
     let _e71 = r;
     let _e76 = NoV_7;
-    let _e80 = NoV_7;
+    let _e80 = r;
     let _e83 = r;
-    let _e85 = r;
-    let _e90 = NoV_7;
-    let _e94 = NoV_7;
-    let _e98 = r;
-    let _e101 = r;
-    a004_ = ((min((_e83.x * _e85.x), exp2((-9.28f * _e94))) * _e98.x) + _e101.y);
-    let _e109 = a004_;
-    let _e112 = r;
-    AB = ((vec2<f32>(-1.04f, 1.04f) * vec2(_e109)) + _e112.zw);
-    let _e116 = f0_8;
-    let _e117 = AB;
-    let _e121 = AB;
-    return ((_e116 * vec3(_e117.x)) + vec3(_e121.y));
+    a004_ = ((min((_e69.x * _e71.x), exp2((-9.28f * _e76))) * _e80.x) + _e83.y);
+    let _e91 = a004_;
+    let _e94 = r;
+    AB = ((vec2<f32>(-1.04f, 1.04f) * vec2(_e91)) + _e94.zw);
+    let _e98 = f0_8;
+    let _e99 = AB;
+    let _e103 = AB;
+    return ((_e98 * vec3(_e99.x)) + vec3(_e103.y));
 }
 
 fn perceptualRoughnessToRoughness(perceptualRoughness: f32) -> f32 {
@@ -366,11 +346,11 @@ fn perceptualRoughnessToRoughness(perceptualRoughness: f32) -> f32 {
     var clampedPerceptualRoughness: f32;
 
     perceptualRoughness_1 = perceptualRoughness;
-    let _e45 = perceptualRoughness_1;
-    clampedPerceptualRoughness = clamp(_e45, 0.089f, 1f);
-    let _e50 = clampedPerceptualRoughness;
-    let _e51 = clampedPerceptualRoughness;
-    return (_e50 * _e51);
+    let _e42 = perceptualRoughness_1;
+    clampedPerceptualRoughness = clamp(_e42, 0.089f, 1f);
+    let _e47 = clampedPerceptualRoughness;
+    let _e48 = clampedPerceptualRoughness;
+    return (_e47 * _e48);
 }
 
 fn reinhard(color: vec3<f32>) -> vec3<f32> {
@@ -403,8 +383,8 @@ fn luminance(v_1: vec3<f32>) -> f32 {
     var v_2: vec3<f32>;
 
     v_2 = v_1;
-    let _e47 = v_2;
-    return dot(_e47, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
+    let _e42 = v_2;
+    return dot(_e42, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
 }
 
 fn change_luminance(c_in: vec3<f32>, l_out: f32) -> vec3<f32> {
@@ -414,13 +394,13 @@ fn change_luminance(c_in: vec3<f32>, l_out: f32) -> vec3<f32> {
 
     c_in_1 = c_in;
     l_out_1 = l_out;
-    let _e45 = c_in_1;
-    let _e46 = luminance(_e45);
-    l_in = _e46;
-    let _e48 = c_in_1;
-    let _e49 = l_out_1;
-    let _e50 = l_in;
-    return (_e48 * (_e49 / _e50));
+    let _e44 = c_in_1;
+    let _e45 = luminance(_e44);
+    l_in = _e45;
+    let _e47 = c_in_1;
+    let _e48 = l_out_1;
+    let _e49 = l_in;
+    return (_e47 * (_e48 / _e49));
 }
 
 fn reinhard_luminance(color_4: vec3<f32>) -> vec3<f32> {
@@ -429,16 +409,16 @@ fn reinhard_luminance(color_4: vec3<f32>) -> vec3<f32> {
     var l_new: f32;
 
     color_5 = color_4;
-    let _e43 = color_5;
-    let _e44 = luminance(_e43);
-    l_old = _e44;
-    let _e46 = l_old;
-    let _e48 = l_old;
-    l_new = (_e46 / (1f + _e48));
-    let _e54 = color_5;
-    let _e55 = l_new;
-    let _e56 = change_luminance(_e54, _e55);
-    return _e56;
+    let _e42 = color_5;
+    let _e43 = luminance(_e42);
+    l_old = _e43;
+    let _e45 = l_old;
+    let _e47 = l_old;
+    l_new = (_e45 / (1f + _e47));
+    let _e51 = color_5;
+    let _e52 = l_new;
+    let _e53 = change_luminance(_e51, _e52);
+    return _e53;
 }
 
 fn reinhard_extended_luminance(color_6: vec3<f32>, max_white_l: f32) -> vec3<f32> {
@@ -450,21 +430,21 @@ fn reinhard_extended_luminance(color_6: vec3<f32>, max_white_l: f32) -> vec3<f32
 
     color_7 = color_6;
     max_white_l_1 = max_white_l;
-    let _e45 = color_7;
-    let _e46 = luminance(_e45);
-    l_old_1 = _e46;
-    let _e48 = l_old_1;
-    let _e50 = l_old_1;
+    let _e44 = color_7;
+    let _e45 = luminance(_e44);
+    l_old_1 = _e45;
+    let _e47 = l_old_1;
+    let _e49 = l_old_1;
+    let _e50 = max_white_l_1;
     let _e51 = max_white_l_1;
-    let _e52 = max_white_l_1;
-    numerator_1 = (_e48 * (1f + (_e50 / (_e51 * _e52))));
-    let _e58 = numerator_1;
-    let _e60 = l_old_1;
-    l_new_1 = (_e58 / (1f + _e60));
-    let _e66 = color_7;
-    let _e67 = l_new_1;
-    let _e68 = change_luminance(_e66, _e67);
-    return _e68;
+    numerator_1 = (_e47 * (1f + (_e49 / (_e50 * _e51))));
+    let _e57 = numerator_1;
+    let _e59 = l_old_1;
+    l_new_1 = (_e57 / (1f + _e59));
+    let _e63 = color_7;
+    let _e64 = l_new_1;
+    let _e65 = change_luminance(_e63, _e64);
+    return _e65;
 }
 
 fn point_light(light: PointLight, roughness_8: f32, NdotV: f32, N: vec3<f32>, V_1: vec3<f32>, R: vec3<f32>, F0_: vec3<f32>, diffuseColor: vec3<f32>) -> vec3<f32> {
@@ -505,120 +485,91 @@ fn point_light(light: PointLight, roughness_8: f32, NdotV: f32, N: vec3<f32>, V_
     let _e56 = light_1;
     let _e59 = v_WorldPosition_1;
     light_to_frag = (_e56.pos.xyz - _e59.xyz);
-    let _e65 = light_to_frag;
-    let _e66 = light_to_frag;
-    distance_square = dot(_e65, _e66);
-    let _e70 = light_1;
-    let _e73 = distance_square;
-    let _e74 = light_1;
-    let _e77 = getDistanceAttenuation(_e73, _e74.lightParams.x);
-    rangeAttenuation = _e77;
-    let _e79 = roughness_9;
-    a_1 = _e79;
-    let _e81 = light_1;
-    radius = _e81.lightParams.y;
+    let _e63 = light_to_frag;
+    let _e64 = light_to_frag;
+    distance_square = dot(_e63, _e64);
+    let _e67 = distance_square;
+    let _e68 = light_1;
+    let _e71 = getDistanceAttenuation(_e67, _e68.lightParams.x);
+    rangeAttenuation = _e71;
+    let _e73 = roughness_9;
+    a_1 = _e73;
+    let _e75 = light_1;
+    radius = _e75.lightParams.y;
+    let _e79 = light_to_frag;
+    let _e80 = R_1;
+    let _e82 = R_1;
+    let _e84 = light_to_frag;
+    centerToRay = ((dot(_e79, _e80) * _e82) - _e84);
     let _e87 = light_to_frag;
-    let _e88 = R_1;
-    let _e90 = R_1;
-    let _e92 = light_to_frag;
-    centerToRay = ((dot(_e87, _e88) * _e90) - _e92);
-    let _e95 = light_to_frag;
-    let _e96 = centerToRay;
-    let _e97 = radius;
-    let _e100 = centerToRay;
-    let _e101 = centerToRay;
-    let _e105 = centerToRay;
-    let _e106 = centerToRay;
-    let _e112 = radius;
-    let _e115 = centerToRay;
-    let _e116 = centerToRay;
-    let _e120 = centerToRay;
-    let _e121 = centerToRay;
-    closestPoint = (_e95 + (_e96 * clamp((_e112 * inverseSqrt(dot(_e120, _e121))), 0f, 1f)));
-    let _e133 = closestPoint;
-    let _e134 = closestPoint;
-    let _e138 = closestPoint;
-    let _e139 = closestPoint;
-    LspecLengthInverse = inverseSqrt(dot(_e138, _e139));
-    let _e143 = a_1;
-    let _e144 = a_1;
-    let _e145 = radius;
-    let _e148 = LspecLengthInverse;
-    let _e153 = a_1;
-    let _e154 = radius;
-    let _e157 = LspecLengthInverse;
-    normalizationFactor = (_e143 / clamp((_e153 + ((_e154 * 0.5f) * _e157)), 0f, 1f));
-    let _e165 = normalizationFactor;
-    let _e166 = normalizationFactor;
-    specularIntensity_2 = (_e165 * _e166);
-    let _e169 = closestPoint;
-    let _e170 = LspecLengthInverse;
-    L = (_e169 * _e170);
-    let _e173 = L;
-    let _e174 = V_2;
-    let _e176 = L;
-    let _e177 = V_2;
-    H = normalize((_e176 + _e177));
-    let _e183 = N_1;
-    let _e184 = L;
-    let _e190 = N_1;
-    let _e191 = L;
-    NoL_6 = clamp(dot(_e190, _e191), 0f, 1f);
-    let _e199 = N_1;
-    let _e200 = H;
-    let _e206 = N_1;
-    let _e207 = H;
-    NoH_4 = clamp(dot(_e206, _e207), 0f, 1f);
-    let _e215 = L;
-    let _e216 = H;
-    let _e222 = L;
-    let _e223 = H;
-    LoH_6 = clamp(dot(_e222, _e223), 0f, 1f);
-    let _e237 = F0_1;
-    let _e238 = roughness_9;
-    let _e239 = H;
-    let _e240 = NdotV_1;
-    let _e241 = NoL_6;
-    let _e242 = NoH_4;
-    let _e243 = LoH_6;
-    let _e244 = specularIntensity_2;
-    let _e245 = specular(_e237, _e238, _e239, _e240, _e241, _e242, _e243, _e244);
-    specular_1 = _e245;
-    let _e248 = light_to_frag;
-    L = normalize(_e248);
-    let _e250 = L;
-    let _e251 = V_2;
-    let _e253 = L;
-    let _e254 = V_2;
-    H = normalize((_e253 + _e254));
-    let _e259 = N_1;
-    let _e260 = L;
-    let _e266 = N_1;
-    let _e267 = L;
-    NoL_6 = clamp(dot(_e266, _e267), 0f, 1f);
-    let _e274 = N_1;
-    let _e275 = H;
-    let _e281 = N_1;
-    let _e282 = H;
-    NoH_4 = clamp(dot(_e281, _e282), 0f, 1f);
-    let _e289 = L;
-    let _e290 = H;
-    let _e296 = L;
-    let _e297 = H;
-    LoH_6 = clamp(dot(_e296, _e297), 0f, 1f);
-    let _e302 = diffuseColor_1;
-    let _e307 = roughness_9;
-    let _e308 = NdotV_1;
-    let _e309 = NoL_6;
-    let _e310 = LoH_6;
-    let _e311 = Fd_Burley(_e307, _e308, _e309, _e310);
-    diffuse = (_e302 * _e311);
-    let _e314 = diffuse;
-    let _e315 = specular_1;
-    let _e317 = light_1;
-    let _e321 = rangeAttenuation;
-    let _e322 = NoL_6;
-    return (((_e314 + _e315) * _e317.color.xyz) * (_e321 * _e322));
+    let _e88 = centerToRay;
+    let _e89 = radius;
+    let _e90 = centerToRay;
+    let _e91 = centerToRay;
+    closestPoint = (_e87 + (_e88 * clamp((_e89 * inverseSqrt(dot(_e90, _e91))), 0f, 1f)));
+    let _e101 = closestPoint;
+    let _e102 = closestPoint;
+    LspecLengthInverse = inverseSqrt(dot(_e101, _e102));
+    let _e106 = a_1;
+    let _e107 = a_1;
+    let _e108 = radius;
+    let _e111 = LspecLengthInverse;
+    normalizationFactor = (_e106 / clamp((_e107 + ((_e108 * 0.5f) * _e111)), 0f, 1f));
+    let _e119 = normalizationFactor;
+    let _e120 = normalizationFactor;
+    specularIntensity_2 = (_e119 * _e120);
+    let _e123 = closestPoint;
+    let _e124 = LspecLengthInverse;
+    L = (_e123 * _e124);
+    let _e127 = L;
+    let _e128 = V_2;
+    H = normalize((_e127 + _e128));
+    let _e132 = N_1;
+    let _e133 = L;
+    NoL_6 = clamp(dot(_e132, _e133), 0f, 1f);
+    let _e139 = N_1;
+    let _e140 = H;
+    NoH_4 = clamp(dot(_e139, _e140), 0f, 1f);
+    let _e146 = L;
+    let _e147 = H;
+    LoH_6 = clamp(dot(_e146, _e147), 0f, 1f);
+    let _e153 = F0_1;
+    let _e154 = roughness_9;
+    let _e155 = H;
+    let _e156 = NdotV_1;
+    let _e157 = NoL_6;
+    let _e158 = NoH_4;
+    let _e159 = LoH_6;
+    let _e160 = specularIntensity_2;
+    let _e161 = specular(_e153, _e154, _e155, _e156, _e157, _e158, _e159, _e160);
+    specular_1 = _e161;
+    let _e163 = light_to_frag;
+    L = normalize(_e163);
+    let _e165 = L;
+    let _e166 = V_2;
+    H = normalize((_e165 + _e166));
+    let _e169 = N_1;
+    let _e170 = L;
+    NoL_6 = clamp(dot(_e169, _e170), 0f, 1f);
+    let _e175 = N_1;
+    let _e176 = H;
+    NoH_4 = clamp(dot(_e175, _e176), 0f, 1f);
+    let _e181 = L;
+    let _e182 = H;
+    LoH_6 = clamp(dot(_e181, _e182), 0f, 1f);
+    let _e187 = diffuseColor_1;
+    let _e188 = roughness_9;
+    let _e189 = NdotV_1;
+    let _e190 = NoL_6;
+    let _e191 = LoH_6;
+    let _e192 = Fd_Burley(_e188, _e189, _e190, _e191);
+    diffuse = (_e187 * _e192);
+    let _e195 = diffuse;
+    let _e196 = specular_1;
+    let _e198 = light_1;
+    let _e202 = rangeAttenuation;
+    let _e203 = NoL_6;
+    return (((_e195 + _e196) * _e198.color.xyz) * (_e202 * _e203));
 }
 
 fn dir_light(light_2: DirectionalLight, roughness_10: f32, NdotV_2: f32, normal: vec3<f32>, view: vec3<f32>, R_2: vec3<f32>, F0_2: vec3<f32>, diffuseColor_2: vec3<f32>) -> vec3<f32> {
@@ -651,46 +602,38 @@ fn dir_light(light_2: DirectionalLight, roughness_10: f32, NdotV_2: f32, normal:
     incident_light = _e56.direction.xyz;
     let _e60 = incident_light;
     let _e61 = view_1;
-    let _e63 = incident_light;
-    let _e64 = view_1;
-    half_vector = normalize((_e63 + _e64));
-    let _e70 = normal_1;
-    let _e71 = incident_light;
-    let _e77 = normal_1;
-    let _e78 = incident_light;
-    NoL_7 = clamp(dot(_e77, _e78), 0f, 1f);
-    let _e86 = normal_1;
-    let _e87 = half_vector;
-    let _e93 = normal_1;
-    let _e94 = half_vector;
-    NoH_5 = clamp(dot(_e93, _e94), 0f, 1f);
-    let _e102 = incident_light;
-    let _e103 = half_vector;
-    let _e109 = incident_light;
-    let _e110 = half_vector;
-    LoH_7 = clamp(dot(_e109, _e110), 0f, 1f);
-    let _e116 = diffuseColor_3;
-    let _e121 = roughness_11;
-    let _e122 = NdotV_3;
-    let _e123 = NoL_7;
-    let _e124 = LoH_7;
-    let _e125 = Fd_Burley(_e121, _e122, _e123, _e124);
-    diffuse_1 = (_e116 * _e125);
-    let _e138 = F0_3;
-    let _e139 = roughness_11;
-    let _e140 = half_vector;
-    let _e141 = NdotV_3;
-    let _e142 = NoL_7;
-    let _e143 = NoH_5;
-    let _e144 = LoH_7;
-    let _e145 = specularIntensity_3;
-    let _e146 = specular(_e138, _e139, _e140, _e141, _e142, _e143, _e144, _e145);
-    specular_2 = _e146;
-    let _e148 = specular_2;
-    let _e149 = diffuse_1;
-    let _e151 = light_3;
-    let _e155 = NoL_7;
-    return (((_e148 + _e149) * _e151.color.xyz) * _e155);
+    half_vector = normalize((_e60 + _e61));
+    let _e65 = normal_1;
+    let _e66 = incident_light;
+    NoL_7 = clamp(dot(_e65, _e66), 0f, 1f);
+    let _e72 = normal_1;
+    let _e73 = half_vector;
+    NoH_5 = clamp(dot(_e72, _e73), 0f, 1f);
+    let _e79 = incident_light;
+    let _e80 = half_vector;
+    LoH_7 = clamp(dot(_e79, _e80), 0f, 1f);
+    let _e86 = diffuseColor_3;
+    let _e87 = roughness_11;
+    let _e88 = NdotV_3;
+    let _e89 = NoL_7;
+    let _e90 = LoH_7;
+    let _e91 = Fd_Burley(_e87, _e88, _e89, _e90);
+    diffuse_1 = (_e86 * _e91);
+    let _e96 = F0_3;
+    let _e97 = roughness_11;
+    let _e98 = half_vector;
+    let _e99 = NdotV_3;
+    let _e100 = NoL_7;
+    let _e101 = NoH_5;
+    let _e102 = LoH_7;
+    let _e103 = specularIntensity_3;
+    let _e104 = specular(_e96, _e97, _e98, _e99, _e100, _e101, _e102, _e103);
+    specular_2 = _e104;
+    let _e106 = specular_2;
+    let _e107 = diffuse_1;
+    let _e109 = light_3;
+    let _e113 = NoL_7;
+    return (((_e106 + _e107) * _e109.color.xyz) * _e113);
 }
 
 fn main_1() {
@@ -722,201 +665,190 @@ fn main_1() {
     let _e40 = global_3.base_color;
     output_color = _e40;
     let _e42 = output_color;
-    let _e44 = v_Uv_1;
-    let _e45 = textureSample(StandardMaterial_base_color_texture, StandardMaterial_base_color_texture_sampler, _e44);
-    output_color = (_e42 * _e45);
-    let _e48 = v_Uv_1;
-    let _e49 = textureSample(StandardMaterial_metallic_roughness_texture, StandardMaterial_metallic_roughness_texture_sampler, _e48);
-    metallic_roughness = _e49;
-    let _e51 = global_5.metallic;
-    let _e52 = metallic_roughness;
-    metallic = (_e51 * _e52.z);
-    let _e56 = global_4.perceptual_roughness;
-    let _e57 = metallic_roughness;
-    perceptual_roughness_2 = (_e56 * _e57.y);
-    let _e62 = perceptual_roughness_2;
-    let _e63 = perceptualRoughnessToRoughness(_e62);
-    roughness_12 = _e63;
-    let _e66 = v_WorldNormal_1;
-    N_2 = normalize(_e66);
-    let _e69 = v_WorldTangent_1;
-    let _e71 = v_WorldTangent_1;
-    T = normalize(_e71.xyz);
-    let _e77 = N_2;
-    let _e78 = T;
-    let _e80 = v_WorldTangent_1;
-    B = (cross(_e77, _e78) * _e80.w);
-    let _e85 = gl_FrontFacing_1;
-    if _e85 {
-        let _e86 = N_2;
-        local = _e86;
+    let _e43 = v_Uv_1;
+    let _e44 = textureSample(StandardMaterial_base_color_texture, StandardMaterial_base_color_texture_sampler, _e43);
+    output_color = (_e42 * _e44);
+    let _e46 = v_Uv_1;
+    let _e47 = textureSample(StandardMaterial_metallic_roughness_texture, StandardMaterial_metallic_roughness_texture_sampler, _e46);
+    metallic_roughness = _e47;
+    let _e49 = global_5.metallic;
+    let _e50 = metallic_roughness;
+    metallic = (_e49 * _e50.z);
+    let _e54 = global_4.perceptual_roughness;
+    let _e55 = metallic_roughness;
+    perceptual_roughness_2 = (_e54 * _e55.y);
+    let _e59 = perceptual_roughness_2;
+    let _e60 = perceptualRoughnessToRoughness(_e59);
+    roughness_12 = _e60;
+    let _e62 = v_WorldNormal_1;
+    N_2 = normalize(_e62);
+    let _e65 = v_WorldTangent_1;
+    T = normalize(_e65.xyz);
+    let _e69 = N_2;
+    let _e70 = T;
+    let _e72 = v_WorldTangent_1;
+    B = (cross(_e69, _e70) * _e72.w);
+    let _e77 = gl_FrontFacing_1;
+    if _e77 {
+        let _e78 = N_2;
+        local = _e78;
     } else {
-        let _e87 = N_2;
-        local = -(_e87);
+        let _e79 = N_2;
+        local = -(_e79);
     }
-    let _e90 = local;
-    N_2 = _e90;
-    let _e91 = gl_FrontFacing_1;
-    if _e91 {
-        let _e92 = T;
-        local_1 = _e92;
+    let _e82 = local;
+    N_2 = _e82;
+    let _e83 = gl_FrontFacing_1;
+    if _e83 {
+        let _e84 = T;
+        local_1 = _e84;
     } else {
-        let _e93 = T;
-        local_1 = -(_e93);
+        let _e85 = T;
+        local_1 = -(_e85);
     }
-    let _e96 = local_1;
-    T = _e96;
-    let _e97 = gl_FrontFacing_1;
-    if _e97 {
-        let _e98 = B;
-        local_2 = _e98;
+    let _e88 = local_1;
+    T = _e88;
+    let _e89 = gl_FrontFacing_1;
+    if _e89 {
+        let _e90 = B;
+        local_2 = _e90;
     } else {
-        let _e99 = B;
-        local_2 = -(_e99);
+        let _e91 = B;
+        local_2 = -(_e91);
     }
-    let _e102 = local_2;
-    B = _e102;
-    let _e103 = T;
-    let _e104 = B;
-    let _e105 = N_2;
-    TBN = mat3x3<f32>(vec3<f32>(_e103.x, _e103.y, _e103.z), vec3<f32>(_e104.x, _e104.y, _e104.z), vec3<f32>(_e105.x, _e105.y, _e105.z));
-    let _e120 = TBN;
-    let _e122 = v_Uv_1;
-    let _e123 = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e122);
-    let _e131 = v_Uv_1;
-    let _e132 = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e131);
-    N_2 = (_e120 * normalize(((_e132.xyz * 2f) - vec3(1f))));
-    let _e142 = v_Uv_1;
-    let _e143 = textureSample(StandardMaterial_occlusion_texture, StandardMaterial_occlusion_texture_sampler, _e142);
-    occlusion = _e143.x;
-    let _e146 = global_7.emissive;
-    emissive = _e146;
-    let _e148 = emissive;
-    let _e150 = emissive;
-    let _e153 = v_Uv_1;
-    let _e154 = textureSample(StandardMaterial_emissive_texture, StandardMaterial_emissive_texture_sampler, _e153);
-    let _e156 = (_e150.xyz * _e154.xyz);
-    emissive.x = _e156.x;
-    emissive.y = _e156.y;
-    emissive.z = _e156.z;
-    let _e163 = global_1.CameraPos;
-    let _e165 = v_WorldPosition_1;
-    let _e168 = global_1.CameraPos;
-    let _e170 = v_WorldPosition_1;
-    V_3 = normalize((_e168.xyz - _e170.xyz));
-    let _e177 = N_2;
-    let _e178 = V_3;
+    let _e94 = local_2;
+    B = _e94;
+    let _e95 = T;
+    let _e96 = B;
+    let _e97 = N_2;
+    TBN = mat3x3<f32>(vec3<f32>(_e95.x, _e95.y, _e95.z), vec3<f32>(_e96.x, _e96.y, _e96.z), vec3<f32>(_e97.x, _e97.y, _e97.z));
+    let _e112 = TBN;
+    let _e113 = v_Uv_1;
+    let _e114 = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e113);
+    N_2 = (_e112 * normalize(((_e114.xyz * 2f) - vec3(1f))));
+    let _e123 = v_Uv_1;
+    let _e124 = textureSample(StandardMaterial_occlusion_texture, StandardMaterial_occlusion_texture_sampler, _e123);
+    occlusion = _e124.x;
+    let _e127 = global_7.emissive;
+    emissive = _e127;
+    let _e129 = emissive;
+    let _e131 = emissive;
+    let _e133 = v_Uv_1;
+    let _e134 = textureSample(StandardMaterial_emissive_texture, StandardMaterial_emissive_texture_sampler, _e133);
+    let _e136 = (_e131.xyz * _e134.xyz);
+    emissive.x = _e136.x;
+    emissive.y = _e136.y;
+    emissive.z = _e136.z;
+    let _e143 = global_1.CameraPos;
+    let _e145 = v_WorldPosition_1;
+    V_3 = normalize((_e143.xyz - _e145.xyz));
+    let _e150 = N_2;
+    let _e151 = V_3;
+    NdotV_4 = max(dot(_e150, _e151), 0.001f);
+    let _e157 = global_6.reflectance;
+    let _e159 = global_6.reflectance;
+    let _e162 = metallic;
+    let _e166 = output_color;
+    let _e168 = metallic;
+    F0_4 = (vec3((((0.16f * _e157) * _e159) * (1f - _e162))) + (_e166.xyz * vec3(_e168)));
+    let _e173 = output_color;
+    let _e176 = metallic;
+    diffuseColor_4 = (_e173.xyz * vec3((1f - _e176)));
+    let _e181 = V_3;
     let _e183 = N_2;
-    let _e184 = V_3;
-    NdotV_4 = max(dot(_e183, _e184), 0.001f);
-    let _e190 = global_6.reflectance;
-    let _e192 = global_6.reflectance;
-    let _e195 = metallic;
-    let _e199 = output_color;
-    let _e201 = metallic;
-    F0_4 = (vec3((((0.16f * _e190) * _e192) * (1f - _e195))) + (_e199.xyz * vec3(_e201)));
-    let _e206 = output_color;
-    let _e209 = metallic;
-    diffuseColor_4 = (_e206.xyz * vec3((1f - _e209)));
-    let _e214 = V_3;
-    let _e217 = V_3;
-    let _e219 = N_2;
-    R_4 = reflect(-(_e217), _e219);
+    R_4 = reflect(-(_e181), _e183);
     loop {
-        let _e227 = i;
-        let _e228 = global_2.NumLights;
-        let _e232 = i;
-        if !(((_e227 < i32(_e228.x)) && (_e232 < MAX_POINT_LIGHTS))) {
+        let _e191 = i;
+        let _e192 = global_2.NumLights;
+        let _e196 = i;
+        if !(((_e191 < i32(_e192.x)) && (_e196 < MAX_POINT_LIGHTS))) {
             break;
         }
         {
-            let _e239 = light_accum;
-            let _e240 = i;
-            let _e250 = i;
-            let _e252 = global_2.PointLights[_e250];
-            let _e253 = roughness_12;
-            let _e254 = NdotV_4;
-            let _e255 = N_2;
-            let _e256 = V_3;
-            let _e257 = R_4;
-            let _e258 = F0_4;
-            let _e259 = diffuseColor_4;
-            let _e260 = point_light(_e252, _e253, _e254, _e255, _e256, _e257, _e258, _e259);
-            light_accum = (_e239 + _e260);
+            let _e203 = light_accum;
+            let _e204 = i;
+            let _e206 = global_2.PointLights[_e204];
+            let _e207 = roughness_12;
+            let _e208 = NdotV_4;
+            let _e209 = N_2;
+            let _e210 = V_3;
+            let _e211 = R_4;
+            let _e212 = F0_4;
+            let _e213 = diffuseColor_4;
+            let _e214 = point_light(_e206, _e207, _e208, _e209, _e210, _e211, _e212, _e213);
+            light_accum = (_e203 + _e214);
         }
         continuing {
-            let _e236 = i;
-            i = (_e236 + 1i);
+            let _e200 = i;
+            i = (_e200 + 1i);
         }
     }
     loop {
-        let _e264 = i_1;
-        let _e265 = global_2.NumLights;
-        let _e269 = i_1;
-        if !(((_e264 < i32(_e265.y)) && (_e269 < MAX_DIRECTIONAL_LIGHTS))) {
+        let _e218 = i_1;
+        let _e219 = global_2.NumLights;
+        let _e223 = i_1;
+        if !(((_e218 < i32(_e219.y)) && (_e223 < MAX_DIRECTIONAL_LIGHTS))) {
             break;
         }
         {
-            let _e276 = light_accum;
-            let _e277 = i_1;
-            let _e287 = i_1;
-            let _e289 = global_2.DirectionalLights[_e287];
-            let _e290 = roughness_12;
-            let _e291 = NdotV_4;
-            let _e292 = N_2;
-            let _e293 = V_3;
-            let _e294 = R_4;
-            let _e295 = F0_4;
-            let _e296 = diffuseColor_4;
-            let _e297 = dir_light(_e289, _e290, _e291, _e292, _e293, _e294, _e295, _e296);
-            light_accum = (_e276 + _e297);
+            let _e230 = light_accum;
+            let _e231 = i_1;
+            let _e233 = global_2.DirectionalLights[_e231];
+            let _e234 = roughness_12;
+            let _e235 = NdotV_4;
+            let _e236 = N_2;
+            let _e237 = V_3;
+            let _e238 = R_4;
+            let _e239 = F0_4;
+            let _e240 = diffuseColor_4;
+            let _e241 = dir_light(_e233, _e234, _e235, _e236, _e237, _e238, _e239, _e240);
+            light_accum = (_e230 + _e241);
         }
         continuing {
-            let _e273 = i_1;
-            i_1 = (_e273 + 1i);
+            let _e227 = i_1;
+            i_1 = (_e227 + 1i);
         }
     }
-    let _e302 = diffuseColor_4;
-    let _e304 = NdotV_4;
-    let _e305 = EnvBRDFApprox(_e302, 1f, _e304);
-    diffuse_ambient = _e305;
-    let _e310 = F0_4;
-    let _e311 = perceptual_roughness_2;
-    let _e312 = NdotV_4;
-    let _e313 = EnvBRDFApprox(_e310, _e311, _e312);
-    specular_ambient = _e313;
-    let _e315 = output_color;
-    let _e317 = light_accum;
-    output_color.x = _e317.x;
-    output_color.y = _e317.y;
-    output_color.z = _e317.z;
-    let _e324 = output_color;
-    let _e326 = output_color;
-    let _e328 = diffuse_ambient;
-    let _e329 = specular_ambient;
-    let _e331 = global_2.AmbientColor;
-    let _e334 = occlusion;
-    let _e336 = (_e326.xyz + (((_e328 + _e329) * _e331.xyz) * _e334));
-    output_color.x = _e336.x;
-    output_color.y = _e336.y;
-    output_color.z = _e336.z;
-    let _e343 = output_color;
-    let _e345 = output_color;
-    let _e347 = emissive;
-    let _e349 = output_color;
-    let _e352 = (_e345.xyz + (_e347.xyz * _e349.w));
-    output_color.x = _e352.x;
-    output_color.y = _e352.y;
-    output_color.z = _e352.z;
-    let _e359 = output_color;
-    let _e361 = output_color;
-    let _e363 = output_color;
-    let _e365 = reinhard_luminance(_e363.xyz);
-    output_color.x = _e365.x;
-    output_color.y = _e365.y;
-    output_color.z = _e365.z;
-    let _e372 = output_color;
-    o_Target = _e372;
+    let _e243 = diffuseColor_4;
+    let _e245 = NdotV_4;
+    let _e246 = EnvBRDFApprox(_e243, 1f, _e245);
+    diffuse_ambient = _e246;
+    let _e248 = F0_4;
+    let _e249 = perceptual_roughness_2;
+    let _e250 = NdotV_4;
+    let _e251 = EnvBRDFApprox(_e248, _e249, _e250);
+    specular_ambient = _e251;
+    let _e253 = output_color;
+    let _e255 = light_accum;
+    output_color.x = _e255.x;
+    output_color.y = _e255.y;
+    output_color.z = _e255.z;
+    let _e262 = output_color;
+    let _e264 = output_color;
+    let _e266 = diffuse_ambient;
+    let _e267 = specular_ambient;
+    let _e269 = global_2.AmbientColor;
+    let _e272 = occlusion;
+    let _e274 = (_e264.xyz + (((_e266 + _e267) * _e269.xyz) * _e272));
+    output_color.x = _e274.x;
+    output_color.y = _e274.y;
+    output_color.z = _e274.z;
+    let _e281 = output_color;
+    let _e283 = output_color;
+    let _e285 = emissive;
+    let _e287 = output_color;
+    let _e290 = (_e283.xyz + (_e285.xyz * _e287.w));
+    output_color.x = _e290.x;
+    output_color.y = _e290.y;
+    output_color.z = _e290.z;
+    let _e297 = output_color;
+    let _e299 = output_color;
+    let _e301 = reinhard_luminance(_e299.xyz);
+    output_color.x = _e301.x;
+    output_color.y = _e301.y;
+    output_color.z = _e301.z;
+    let _e308 = output_color;
+    o_Target = _e308;
     return;
 }
 

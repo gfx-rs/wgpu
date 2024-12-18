@@ -84,12 +84,12 @@ platform graphics APIs:
 
 - Metal on macOS, using the [`metal`] crate's bindings.
 
-- Direct3D 12 on Windows, using the [`d3d12`] crate's bindings.
+- Direct3D 12 on Windows, using the [`windows`] crate's bindings.
 
 [`ash`]: https://crates.io/crates/ash
 [MoltenVK]: https://github.com/KhronosGroup/MoltenVK
 [`metal`]: https://crates.io/crates/metal
-[`d3d12`]: https://crates.io/crates/d3d12
+[`windows`]: https://crates.io/crates/windows
 
 ## Secondary backends
 

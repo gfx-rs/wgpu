@@ -265,5 +265,6 @@ fragment depth_no_comparisonOutput depth_no_comparison(
     metal::float2 tc_3 = metal::float2(0.5);
     float s2d_1 = image_2d_depth.sample(sampler_reg, tc_3);
     metal::float4 s2d_gather = image_2d_depth.gather(sampler_reg, tc_3);
-    return depth_no_comparisonOutput { metal::float4(s2d_1) + s2d_gather };
+    float s2d_level = image_2d_depth.sample(sampler_reg, tc_3, metal::level(1));
+    return depth_no_comparisonOutput { (metal::float4(s2d_1) + s2d_gather) + metal::float4(s2d_level) };
 }

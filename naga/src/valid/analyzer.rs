@@ -6,7 +6,7 @@
 //! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
-use crate::diagnostic_filter::{DiagnosticFilterNode, FilterableTriggeringRule};
+use crate::diagnostic_filter::{DiagnosticFilterNode, StandardFilterableTriggeringRule};
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
@@ -859,7 +859,7 @@ impl FunctionInfo {
                                 let severity = DiagnosticFilterNode::search(
                                     self.diagnostic_filter_leaf,
                                     diagnostic_filter_arena,
-                                    FilterableTriggeringRule::DerivativeUniformity,
+                                    StandardFilterableTriggeringRule::DerivativeUniformity,
                                 );
                                 severity.report_diag(
                                     FunctionError::NonUniformControlFlow(req, expr, cause)
@@ -1061,7 +1061,7 @@ impl FunctionInfo {
                     value,
                     result: _,
                 } => {
-                    let _ = self.add_ref_impl(pointer, GlobalUse::WRITE);
+                    let _ = self.add_ref_impl(pointer, GlobalUse::READ | GlobalUse::WRITE);
                     let _ = self.add_ref(value);
                     if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
                         let _ = self.add_ref(cmp);
@@ -1379,7 +1379,10 @@ fn uniform_control_flow() {
                 DiagnosticFilterNode {
                     inner: crate::diagnostic_filter::DiagnosticFilter {
                         new_severity: crate::diagnostic_filter::Severity::Off,
-                        triggering_rule: FilterableTriggeringRule::DerivativeUniformity,
+                        triggering_rule:
+                            crate::diagnostic_filter::FilterableTriggeringRule::Standard(
+                                StandardFilterableTriggeringRule::DerivativeUniformity,
+                            ),
                     },
                     parent: None,
                 },

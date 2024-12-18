@@ -1,11 +1,11 @@
 (
-    features: [],
+    features: "",
     expectations: [], //not crash!
     actions: [
         CreateBuffer(Id(0, 1), (
             label: None,
             size: 16,
-            usage: 64,
+            usage: "UNIFORM",
             mapped_at_creation: false,
         )),
         CreateBindGroupLayout(Id(0, 1), (
@@ -13,7 +13,7 @@
             entries: [
                 (
                     binding: 0,
-                    visibility: 0x3,
+                    visibility: "VERTEX | FRAGMENT",
                     ty: Buffer(
                         ty: Uniform,
                     ),

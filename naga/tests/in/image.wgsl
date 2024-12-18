@@ -185,7 +185,9 @@ fn gather() -> @location(0) vec4<f32> {
 @fragment
 fn depth_no_comparison() -> @location(0) vec4<f32> {
     let tc = vec2<f32>(0.5);
+    let level = 1;
     let s2d = textureSample(image_2d_depth, sampler_reg, tc);
     let s2d_gather = textureGather(image_2d_depth, sampler_reg, tc);
-    return s2d + s2d_gather;
+    let s2d_level = textureSampleLevel(image_2d_depth, sampler_reg, tc, level);
+    return s2d + s2d_gather + s2d_level;
 }

@@ -6,28 +6,20 @@ use std::sync::Weak;
 /// dropping older elements that no longer have strong references to them.
 #[derive(Debug)]
 pub(crate) struct WeakVec<T> {
-    inner: Vec<Option<Weak<T>>>,
-    empty_slots: Vec<usize>,
-    scan_slots_on_next_push: bool,
+    inner: Vec<Weak<T>>,
 }
 
 impl<T> Default for WeakVec<T> {
     fn default() -> Self {
         Self {
             inner: Default::default(),
-            empty_slots: Default::default(),
-            scan_slots_on_next_push: false,
         }
     }
 }
 
 impl<T> WeakVec<T> {
     pub(crate) fn new() -> Self {
-        Self {
-            inner: Vec::new(),
-            empty_slots: Vec::default(),
-            scan_slots_on_next_push: false,
-        }
+        Self { inner: Vec::new() }
     }
 
     /// Pushes a new element to this collection.
@@ -35,28 +27,25 @@ impl<T> WeakVec<T> {
     /// If the inner Vec needs to be reallocated, we will first drop older elements that
     /// no longer have strong references to them.
     pub(crate) fn push(&mut self, value: Weak<T>) {
-        if self.scan_slots_on_next_push {
-            for (i, value) in self.inner.iter_mut().enumerate() {
-                if let Some(w) = value {
-                    if w.strong_count() == 0 {
-                        *value = None;
-                        self.empty_slots.push(i);
-                    }
+        if self.inner.len() == self.inner.capacity() {
+            // Iterating backwards has the advantage that we don't do more work than we have to.
+            for i in (0..self.inner.len()).rev() {
+                if self.inner[i].strong_count() == 0 {
+                    self.inner.swap_remove(i);
                 }
             }
+
+            // Make sure our capacity is twice the number of live elements.
+            // Leaving some spare capacity ensures that we won't re-scan immediately.
+            self.inner.reserve_exact(self.inner.len());
         }
-        if let Some(i) = self.empty_slots.pop() {
-            self.inner[i] = Some(value);
-            self.scan_slots_on_next_push = false;
-        } else {
-            self.inner.push(Some(value));
-            self.scan_slots_on_next_push = self.inner.len() == self.inner.capacity();
-        }
+
+        self.inner.push(value);
     }
 }
 
 pub(crate) struct WeakVecIter<T> {
-    inner: std::iter::Flatten<std::vec::IntoIter<Option<Weak<T>>>>,
+    inner: std::vec::IntoIter<Weak<T>>,
 }
 
 impl<T> Iterator for WeakVecIter<T> {
@@ -71,7 +60,7 @@ impl<T> IntoIterator for WeakVec<T> {
     type IntoIter = WeakVecIter<T>;
     fn into_iter(self) -> Self::IntoIter {
         WeakVecIter {
-            inner: self.inner.into_iter().flatten(),
+            inner: self.inner.into_iter(),
         }
     }
 }

@@ -111,7 +111,7 @@ impl crate::Adapter for super::Adapter {
 
         // Metal defined pixel format capabilities
         let all_caps = Tfc::SAMPLED_LINEAR
-            | Tfc::STORAGE
+            | Tfc::STORAGE_WRITE_ONLY
             | Tfc::COLOR_ATTACHMENT
             | Tfc::COLOR_ATTACHMENT_BLEND
             | msaa_count
@@ -134,7 +134,7 @@ impl crate::Adapter for super::Adapter {
             | Tf::Rgba8Sint
             | Tf::Rgba16Uint
             | Tf::Rgba16Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
+                read_write_tier2_if | Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::R16Unorm
             | Tf::R16Snorm
@@ -143,59 +143,72 @@ impl crate::Adapter for super::Adapter {
             | Tf::Rgba16Unorm
             | Tf::Rgba16Snorm => {
                 Tfc::SAMPLED_LINEAR
-                    | Tfc::STORAGE
+                    | Tfc::STORAGE_WRITE_ONLY
                     | Tfc::COLOR_ATTACHMENT
                     | Tfc::COLOR_ATTACHMENT_BLEND
                     | msaa_count
                     | msaa_resolve_desktop_if
             }
             Tf::Rg8Unorm | Tf::Rg16Float | Tf::Bgra8Unorm => all_caps,
-            Tf::Rg8Uint | Tf::Rg8Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count,
+            Tf::Rg8Uint | Tf::Rg8Sint => {
+                Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
+            }
             Tf::R32Uint | Tf::R32Sint => {
-                read_write_tier1_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
+                read_write_tier1_if | Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::R32Float => {
                 let flags = if pc.format_r32float_all {
                     all_caps
                 } else {
-                    Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND | msaa_count
+                    Tfc::STORAGE_WRITE_ONLY
+                        | Tfc::COLOR_ATTACHMENT
+                        | Tfc::COLOR_ATTACHMENT_BLEND
+                        | msaa_count
                 };
                 read_write_tier1_if | flags
             }
-            Tf::Rg16Uint | Tf::Rg16Sint => Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count,
+            Tf::Rg16Uint | Tf::Rg16Sint => {
+                Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
+            }
             Tf::Rgba8UnormSrgb | Tf::Bgra8UnormSrgb => {
                 let mut flags = all_caps;
-                flags.set(Tfc::STORAGE, pc.format_rgba8_srgb_all);
+                flags.set(Tfc::STORAGE_WRITE_ONLY, pc.format_rgba8_srgb_all);
                 flags
             }
             Tf::Rgb10a2Uint => {
                 let mut flags = Tfc::COLOR_ATTACHMENT | msaa_count;
-                flags.set(Tfc::STORAGE, pc.format_rgb10a2_uint_write);
+                flags.set(Tfc::STORAGE_WRITE_ONLY, pc.format_rgb10a2_uint_write);
                 flags
             }
             Tf::Rgb10a2Unorm => {
                 let mut flags = all_caps;
-                flags.set(Tfc::STORAGE, pc.format_rgb10a2_unorm_all);
+                flags.set(Tfc::STORAGE_WRITE_ONLY, pc.format_rgb10a2_unorm_all);
                 flags
             }
             Tf::Rg11b10Ufloat => {
                 let mut flags = all_caps;
-                flags.set(Tfc::STORAGE, pc.format_rg11b10_all);
+                flags.set(Tfc::STORAGE_WRITE_ONLY, pc.format_rg11b10_all);
                 flags
             }
-            Tf::Rg32Uint | Tf::Rg32Sint => Tfc::COLOR_ATTACHMENT | Tfc::STORAGE | msaa_count,
+            Tf::Rg32Uint | Tf::Rg32Sint => {
+                Tfc::COLOR_ATTACHMENT | Tfc::STORAGE_WRITE_ONLY | msaa_count
+            }
             Tf::Rg32Float => {
                 if pc.format_rg32float_all {
                     all_caps
                 } else {
-                    Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | Tfc::COLOR_ATTACHMENT_BLEND | msaa_count
+                    Tfc::STORAGE_WRITE_ONLY
+                        | Tfc::COLOR_ATTACHMENT
+                        | Tfc::COLOR_ATTACHMENT_BLEND
+                        | msaa_count
                 }
             }
             Tf::Rgba32Uint | Tf::Rgba32Sint => {
-                read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT | msaa_count
+                read_write_tier2_if | Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::Rgba32Float => {
-                let mut flags = read_write_tier2_if | Tfc::STORAGE | Tfc::COLOR_ATTACHMENT;
+                let mut flags =
+                    read_write_tier2_if | Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT;
                 if pc.format_rgba32float_all {
                     flags |= all_caps
                 } else if pc.msaa_apple7 {
@@ -296,7 +309,7 @@ impl crate::Adapter for super::Adapter {
             }
         };
 
-        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | extra
+        Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra
     }
 
     unsafe fn surface_capabilities(
@@ -344,7 +357,10 @@ impl crate::Adapter for super::Adapter {
             current_extent,
             usage: crate::TextureUses::COLOR_TARGET
                 | crate::TextureUses::COPY_SRC
-                | crate::TextureUses::COPY_DST,
+                | crate::TextureUses::COPY_DST
+                | crate::TextureUses::STORAGE_READ_ONLY
+                | crate::TextureUses::STORAGE_WRITE_ONLY
+                | crate::TextureUses::STORAGE_READ_WRITE,
         })
     }
 
@@ -828,6 +844,7 @@ impl super::PrivateCapabilities {
                 && ((device.supports_family(MTLGPUFamily::Apple8)
                     && device.supports_family(MTLGPUFamily::Mac2))
                     || device.supports_family(MTLGPUFamily::Apple9)),
+            supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
         }
     }
 
@@ -1001,6 +1018,8 @@ impl super::PrivateCapabilities {
                 // Metal Shading Language it generates, so from `wgpu_hal`'s
                 // users' point of view, references are tightly checked.
                 uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
+                raw_tlas_instance_size: 0,
+                ray_tracing_scratch_buffer_alignment: 0,
             },
             downlevel,
         }

@@ -128,7 +128,7 @@ impl From<crate::ImageQuery> for ImageQuery {
     }
 }
 
-impl<'a, W: Write> super::Writer<'a, W> {
+impl<W: Write> super::Writer<'_, W> {
     pub(super) fn write_image_type(
         &mut self,
         dim: crate::ImageDimension,

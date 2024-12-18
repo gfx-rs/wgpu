@@ -851,6 +851,8 @@ impl super::Adapter {
                     // being, provide 1 as the value here, to cause as little
                     // trouble as possible.
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
+                    raw_tlas_instance_size: 0,
+                    ray_tracing_scratch_buffer_alignment: 0,
                 },
             },
         })
@@ -1036,7 +1038,8 @@ impl crate::Adapter for super::Adapter {
         let renderable =
             unfilterable | Tfc::COLOR_ATTACHMENT | sample_count | Tfc::MULTISAMPLE_RESOLVE;
         let filterable_renderable = filterable | renderable | Tfc::COLOR_ATTACHMENT_BLEND;
-        let storage = base | Tfc::STORAGE | Tfc::STORAGE_READ_WRITE;
+        let storage =
+            base | Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_WRITE_ONLY;
 
         let feature_fn = |f, caps| {
             if self.shared.features.contains(f) {

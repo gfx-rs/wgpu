@@ -1855,6 +1855,7 @@
             stage: Vertex,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("foo_vert"),
                 arguments: [
@@ -2157,6 +2158,7 @@
             stage: Fragment,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("foo_frag"),
                 arguments: [],
@@ -2349,6 +2351,7 @@
             stage: Compute,
             early_depth_test: None,
             workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("assign_through_ptr"),
                 arguments: [],
@@ -2431,6 +2434,7 @@
             stage: Compute,
             early_depth_test: None,
             workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
             function: (
                 name: Some("assign_to_ptr_components"),
                 arguments: [],

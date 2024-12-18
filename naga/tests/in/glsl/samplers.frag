@@ -45,17 +45,18 @@ void testTex1D(in float coord) {
     int levels = textureQueryLevels(sampler1D(tex1D, samp));
     vec4 c;
     c = texture(sampler1D(tex1D, samp), coord);
-    c = texture(sampler1D(tex1D, samp), coord, 2.0);
+    /* 1 dimensional textures are not supported in the WGSL specification with `textureSampleBias()` */
+    // c = texture(sampler1D(tex1D, samp), coord, 2.0);
     c = textureGrad(sampler1D(tex1D, samp), coord, 4.0, 4.0);
     c = textureGradOffset(sampler1D(tex1D, samp), coord, 4.0, 4.0, 5);
     c = textureLod(sampler1D(tex1D, samp), coord, 3.0);
     c = textureLodOffset(sampler1D(tex1D, samp), coord, 3.0, 5);
     c = textureOffset(sampler1D(tex1D, samp), coord, 5);
-    c = textureOffset(sampler1D(tex1D, samp), coord, 5, 2.0);
+    // c = textureOffset(sampler1D(tex1D, samp), coord, 5, 2.0);
     c = textureProj(sampler1D(tex1D, samp), vec2(coord, 6.0));
     c = textureProj(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0));
-    c = textureProj(sampler1D(tex1D, samp), vec2(coord, 6.0), 2.0);
-    c = textureProj(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 2.0);
+    // c = textureProj(sampler1D(tex1D, samp), vec2(coord, 6.0), 2.0);
+    // c = textureProj(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 2.0);
     c = textureProjGrad(sampler1D(tex1D, samp), vec2(coord, 6.0), 4.0, 4.0);
     c = textureProjGrad(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 4.0, 4.0);
     c = textureProjGradOffset(sampler1D(tex1D, samp), vec2(coord, 6.0), 4.0, 4.0, 5);
@@ -66,8 +67,8 @@ void testTex1D(in float coord) {
     c = textureProjLodOffset(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 3.0, 5);
     c = textureProjOffset(sampler1D(tex1D, samp), vec2(coord, 6.0), 5);
     c = textureProjOffset(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 5);
-    c = textureProjOffset(sampler1D(tex1D, samp), vec2(coord, 6.0), 5, 2.0);
-    c = textureProjOffset(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 5, 2.0);
+    // c = textureProjOffset(sampler1D(tex1D, samp), vec2(coord, 6.0), 5, 2.0);
+    // c = textureProjOffset(sampler1D(tex1D, samp), vec4(coord, 0.0, 0.0, 6.0), 5, 2.0);
     c = texelFetch(sampler1D(tex1D, samp), int(coord), 3);
     c = texelFetchOffset(sampler1D(tex1D, samp), int(coord), 3, 5);
 }
@@ -101,13 +102,13 @@ void testTex1DArray(in vec2 coord) {
     int levels = textureQueryLevels(sampler1DArray(tex1DArray, samp));
     vec4 c;
     c = texture(sampler1DArray(tex1DArray, samp), coord);
-    c = texture(sampler1DArray(tex1DArray, samp), coord, 2.0);
+    // c = texture(sampler1DArray(tex1DArray, samp), coord, 2.0);
     c = textureGrad(sampler1DArray(tex1DArray, samp), coord, 4.0, 4.0);
     c = textureGradOffset(sampler1DArray(tex1DArray, samp), coord, 4.0, 4.0, 5);
     c = textureLod(sampler1DArray(tex1DArray, samp), coord, 3.0);
     c = textureLodOffset(sampler1DArray(tex1DArray, samp), coord, 3.0, 5);
     c = textureOffset(sampler1DArray(tex1DArray, samp), coord, 5);
-    c = textureOffset(sampler1DArray(tex1DArray, samp), coord, 5, 2.0);
+    // c = textureOffset(sampler1DArray(tex1DArray, samp), coord, 5, 2.0);
     c = texelFetch(sampler1DArray(tex1DArray, samp), ivec2(coord), 3);
     c = texelFetchOffset(sampler1DArray(tex1DArray, samp), ivec2(coord), 3, 5);
 }

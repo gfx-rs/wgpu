@@ -16,6 +16,11 @@ name = "wgpu-test"
 path = "tests/root.rs"
 harness = false
 
+[[test]]
+name = "wgpu-compile-test"
+path = "compile_tests/root.rs"
+harness = true
+
 [features]
 webgl = ["wgpu/webgl"]
 
@@ -27,7 +32,9 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
+glam.workspace = true
 itertools.workspace = true
+image.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
 parking_lot.workspace = true
@@ -37,10 +44,10 @@ profiling.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 strum = { workspace = true, features = ["derive"] }
+trybuild.workspace = true
+wgpu = { workspace = true, features = ["wgsl", "static-dxc"] }
 wgpu-macros.workspace = true
-wgpu = { workspace = true, features = ["wgsl"] }
 wgt = { workspace = true, features = ["serde"] }
-glam.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true

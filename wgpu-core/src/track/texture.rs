@@ -429,10 +429,9 @@ impl TextureTracker {
     }
 
     /// Returns a list of all textures tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<Texture>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture>> + '_ {
         self.metadata.owned_resources()
     }
-
     /// Drain all currently pending transitions.
     pub fn drain_transitions<'a>(
         &'a mut self,
@@ -672,7 +671,7 @@ impl DeviceTextureTracker {
     }
 
     /// Returns a list of all textures tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Weak<Texture>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Weak<Texture>> + '_ {
         self.metadata.owned_resources()
     }
 
@@ -1304,7 +1303,10 @@ unsafe fn barrier(
             barriers.push(PendingTransition {
                 id: index as _,
                 selector: texture_selector.clone(),
-                usage: current_simple..new_simple,
+                usage: hal::StateTransition {
+                    from: current_simple,
+                    to: new_simple,
+                },
             });
         }
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Many(new_many)) => {
@@ -1320,7 +1322,10 @@ unsafe fn barrier(
                 barriers.push(PendingTransition {
                     id: index as _,
                     selector,
-                    usage: current_simple..new_state,
+                    usage: hal::StateTransition {
+                        from: current_simple,
+                        to: new_state,
+                    },
                 });
             }
         }
@@ -1343,7 +1348,10 @@ unsafe fn barrier(
                             mips: mip_id..mip_id + 1,
                             layers: layers.clone(),
                         },
-                        usage: current_layer_state..new_simple,
+                        usage: hal::StateTransition {
+                            from: current_layer_state,
+                            to: new_simple,
+                        },
                     });
                 }
             }
@@ -1372,7 +1380,10 @@ unsafe fn barrier(
                                 mips: mip_id..mip_id + 1,
                                 layers,
                             },
-                            usage: *current_layer_state..new_state,
+                            usage: hal::StateTransition {
+                                from: *current_layer_state,
+                                to: new_state,
+                            },
                         });
                     }
                 }

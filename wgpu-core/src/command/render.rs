@@ -14,8 +14,8 @@ use crate::{
         end_occlusion_query, end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        CommandEncoderStatus, DrawError, ExecutionError, MapPassErr, PassErrorScope,
-        PassTimestampWrites, QueryUseError, RenderCommandError, StateChange,
+        DrawError, ExecutionError, MapPassErr, PassErrorScope, PassTimestampWrites, QueryUseError,
+        RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -45,8 +45,7 @@ use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
-use std::sync::Arc;
-use std::{borrow::Cow, fmt, iter, mem::size_of, num::NonZeroU32, ops::Range, str};
+use std::{borrow::Cow, fmt, iter, mem::size_of, num::NonZeroU32, ops::Range, str, sync::Arc};
 
 use super::render_command::ArcRenderCommand;
 use super::{
@@ -67,6 +66,15 @@ pub enum LoadOp {
     Load = 1,
 }
 
+impl LoadOp {
+    fn hal_ops(&self) -> hal::AttachmentOps {
+        match self {
+            LoadOp::Load => hal::AttachmentOps::LOAD,
+            LoadOp::Clear => hal::AttachmentOps::empty(),
+        }
+    }
+}
+
 /// Operation to perform to the output attachment at the end of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -81,19 +89,28 @@ pub enum StoreOp {
     Store = 1,
 }
 
+impl StoreOp {
+    fn hal_ops(&self) -> hal::AttachmentOps {
+        match self {
+            StoreOp::Store => hal::AttachmentOps::STORE,
+            StoreOp::Discard => hal::AttachmentOps::empty(),
+        }
+    }
+}
+
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 #[repr(C)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PassChannel<V> {
+pub struct PassChannel<V, L = Option<LoadOp>, S = Option<StoreOp>> {
     /// Operation to perform to the output attachment at the start of a
     /// renderpass.
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: LoadOp,
+    pub load_op: L,
     /// Operation to perform to the output attachment at the end of a renderpass.
-    pub store_op: StoreOp,
+    pub store_op: S,
     /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
     /// color.
     pub clear_value: V,
@@ -103,18 +120,49 @@ pub struct PassChannel<V> {
     pub read_only: bool,
 }
 
-impl<V> PassChannel<V> {
+impl<V> PassChannel<V, LoadOp, StoreOp> {
     fn hal_ops(&self) -> hal::AttachmentOps {
-        let mut ops = hal::AttachmentOps::empty();
-        match self.load_op {
-            LoadOp::Load => ops |= hal::AttachmentOps::LOAD,
-            LoadOp::Clear => (),
+        self.load_op.hal_ops() | self.store_op.hal_ops()
+    }
+}
+
+impl<V: Default> Default for PassChannel<V, LoadOp, StoreOp> {
+    fn default() -> Self {
+        PassChannel {
+            load_op: LoadOp::Load,
+            store_op: StoreOp::Store,
+            clear_value: V::default(),
+            read_only: false,
+        }
+    }
+}
+
+impl<V: Copy + Default> PassChannel<Option<V>, Option<LoadOp>, Option<StoreOp>> {
+    fn resolve(&self) -> Result<PassChannel<V, LoadOp, StoreOp>, AttachmentError> {
+        let load_op = if self.read_only {
+            if self.load_op.is_some() {
+                return Err(AttachmentError::ReadOnlyWithLoad);
+            } else {
+                LoadOp::Load
+            }
+        } else {
+            self.load_op.ok_or(AttachmentError::NoLoad)?
         };
-        match self.store_op {
-            StoreOp::Store => ops |= hal::AttachmentOps::STORE,
-            StoreOp::Discard => (),
+        let store_op = if self.read_only {
+            if self.store_op.is_some() {
+                return Err(AttachmentError::ReadOnlyWithStore);
+            } else {
+                StoreOp::Store
+            }
+        } else {
+            self.store_op.ok_or(AttachmentError::NoStore)?
         };
-        ops
+        Ok(PassChannel {
+            load_op,
+            store_op,
+            clear_value: self.clear_value.unwrap_or_default(),
+            read_only: self.read_only,
+        })
     }
 }
 
@@ -127,8 +175,17 @@ pub struct RenderPassColorAttachment {
     pub view: id::TextureViewId,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<id::TextureViewId>,
-    /// What operations will be performed on this color attachment.
-    pub channel: PassChannel<Color>,
+    /// Operation to perform to the output attachment at the start of a
+    /// renderpass.
+    ///
+    /// This must be clear if it is the first renderpass rendering to a swap
+    /// chain image.
+    pub load_op: LoadOp,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: StoreOp,
+    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
+    /// color.
+    pub clear_value: Color,
 }
 
 /// Describes a color attachment to a render pass.
@@ -138,8 +195,17 @@ struct ArcRenderPassColorAttachment {
     pub view: Arc<TextureView>,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<Arc<TextureView>>,
-    /// What operations will be performed on this color attachment.
-    pub channel: PassChannel<Color>,
+    /// Operation to perform to the output attachment at the start of a
+    /// renderpass.
+    ///
+    /// This must be clear if it is the first renderpass rendering to a swap
+    /// chain image.
+    pub load_op: LoadOp,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: StoreOp,
+    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
+    /// color.
+    pub clear_value: Color,
 }
 
 /// Describes a depth/stencil attachment to a render pass.
@@ -150,19 +216,20 @@ pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
     /// What operations will be performed on the depth part of the attachment.
-    pub depth: PassChannel<f32>,
+    pub depth: PassChannel<Option<f32>, Option<LoadOp>, Option<StoreOp>>,
     /// What operations will be performed on the stencil part of the attachment.
-    pub stencil: PassChannel<u32>,
+    pub stencil: PassChannel<Option<u32>, Option<LoadOp>, Option<StoreOp>>,
 }
+
 /// Describes a depth/stencil attachment to a render pass.
 #[derive(Debug)]
 pub struct ArcRenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: Arc<TextureView>,
     /// What operations will be performed on the depth part of the attachment.
-    pub depth: PassChannel<f32>,
+    pub depth: PassChannel<f32, LoadOp, StoreOp>,
     /// What operations will be performed on the stencil part of the attachment.
-    pub stencil: PassChannel<u32>,
+    pub stencil: PassChannel<u32, LoadOp, StoreOp>,
 }
 
 impl ArcRenderPassDepthStencilAttachment {
@@ -570,6 +637,25 @@ pub enum ColorAttachmentError {
     TooManyBytesPerSample { total: u32, limit: u32 },
 }
 
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum AttachmentError {
+    #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-or-stencil format")]
+    InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
+    #[error("Read-only attachment with load")]
+    ReadOnlyWithLoad,
+    #[error("Read-only attachment with store")]
+    ReadOnlyWithStore,
+    #[error("Attachment without load")]
+    NoLoad,
+    #[error("Attachment without store")]
+    NoStore,
+    #[error("LoadOp is `Clear` but no clear value was provided")]
+    NoClearValue,
+    #[error("Clear value ({0}) must be between 0.0 and 1.0, inclusive")]
+    ClearValueOutOfRange(f32),
+}
+
 /// Error encountered when performing a render pass.
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassErrorInner {
@@ -581,8 +667,6 @@ pub enum RenderPassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
-    #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
-    InvalidDepthStencilAttachmentFormat(wgt::TextureFormat),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
     UnsupportedResolveTargetFormat {
         location: AttachmentErrorLocation,
@@ -771,13 +855,14 @@ struct RenderPassInfo<'d> {
 }
 
 impl<'d> RenderPassInfo<'d> {
-    fn add_pass_texture_init_actions<V>(
-        channel: &PassChannel<V>,
+    fn add_pass_texture_init_actions(
+        load_op: LoadOp,
+        store_op: StoreOp,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
     ) {
-        if channel.load_op == LoadOp::Load {
+        if load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
                     texture: view.parent.clone(),
@@ -786,14 +871,14 @@ impl<'d> RenderPassInfo<'d> {
                     kind: MemoryInitKind::NeedsInitializedMemory,
                 },
             ));
-        } else if channel.store_op == StoreOp::Store {
+        } else if store_op == StoreOp::Store {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
                 &view.parent,
                 TextureInitRange::from(view.selector.clone()),
             );
         }
-        if channel.store_op == StoreOp::Discard {
+        if store_op == StoreOp::Discard {
             // the discard happens at the *end* of a pass, but recording the
             // discard right away be alright since the texture can't be used
             // during the pass anyways
@@ -908,30 +993,26 @@ impl<'d> RenderPassInfo<'d> {
 
         if let Some(at) = depth_stencil_attachment.as_ref() {
             let view = &at.view;
-            view.same_device(device)?;
             check_multiview(view)?;
             add_view(view, AttachmentErrorLocation::Depth)?;
 
             let ds_aspects = view.desc.aspects();
-            if ds_aspects.contains(hal::FormatAspects::COLOR) {
-                return Err(RenderPassErrorInner::InvalidDepthStencilAttachmentFormat(
-                    view.desc.format,
-                ));
-            }
 
             if !ds_aspects.contains(hal::FormatAspects::STENCIL)
                 || (at.stencil.load_op == at.depth.load_op
                     && at.stencil.store_op == at.depth.store_op)
             {
                 Self::add_pass_texture_init_actions(
-                    &at.depth,
+                    at.depth.load_op,
+                    at.depth.store_op,
                     texture_memory_actions,
                     view,
                     &mut pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
                 Self::add_pass_texture_init_actions(
-                    &at.stencil,
+                    at.stencil.load_op,
+                    at.stencil.store_op,
                     texture_memory_actions,
                     view,
                     &mut pending_discard_init_fixups,
@@ -1060,7 +1141,8 @@ impl<'d> RenderPassInfo<'d> {
             }
 
             Self::add_pass_texture_init_actions(
-                &at.channel,
+                at.load_op,
+                at.store_op,
                 texture_memory_actions,
                 color_view,
                 &mut pending_discard_init_fixups,
@@ -1136,8 +1218,8 @@ impl<'d> RenderPassInfo<'d> {
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
-                ops: at.channel.hal_ops(),
-                clear_value: at.channel.clear_value,
+                ops: at.load_op.hal_ops() | at.store_op.hal_ops(),
+                clear_value: at.clear_value,
             }));
         }
 
@@ -1321,7 +1403,9 @@ impl Global {
     /// If creation fails, an invalid pass is returned.
     /// Any operation on an invalid pass will return an error.
     ///
-    /// If successful, puts the encoder into the [`CommandEncoderStatus::Locked`] state.
+    /// If successful, puts the encoder into the [`Locked`] state.
+    ///
+    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
     pub fn command_encoder_create_render_pass(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -1350,7 +1434,9 @@ impl Global {
                 if let Some(RenderPassColorAttachment {
                     view: view_id,
                     resolve_target,
-                    channel,
+                    load_op,
+                    store_op,
+                    clear_value,
                 }) = color_attachment
                 {
                     let view = texture_views.get(*view_id).get()?;
@@ -1370,7 +1456,9 @@ impl Global {
                         .push(Some(ArcRenderPassColorAttachment {
                             view,
                             resolve_target,
-                            channel: channel.clone(),
+                            load_op: *load_op,
+                            store_op: *store_op,
+                            clear_value: *clear_value,
                         }));
                 } else {
                     arc_desc.color_attachments.push(None);
@@ -1378,33 +1466,50 @@ impl Global {
             }
 
             arc_desc.depth_stencil_attachment =
+            // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
                 if let Some(depth_stencil_attachment) = desc.depth_stencil_attachment {
                     let view = texture_views.get(depth_stencil_attachment.view).get()?;
                     view.same_device(device)?;
 
+                    let format = view.desc.format;
+                    if !format.is_depth_stencil_format() {
+                        return Err(CommandEncoderError::InvalidAttachment(AttachmentError::InvalidDepthStencilAttachmentFormat(
+                            view.desc.format,
+                        )));
+                    }
+
+                    // If this.depthLoadOp is "clear", this.depthClearValue must be provided and must be between 0.0 and 1.0, inclusive.
+                    if depth_stencil_attachment.depth.load_op == Some(LoadOp::Clear) {
+                        if let Some(clear_value) = depth_stencil_attachment.depth.clear_value {
+                            if !(0.0..=1.0).contains(&clear_value) {
+                                return Err(CommandEncoderError::InvalidAttachment(AttachmentError::ClearValueOutOfRange(clear_value)));
+                            }
+                        } else {
+                            return Err(CommandEncoderError::InvalidAttachment(AttachmentError::NoClearValue));
+                        }
+                    }
+
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
-                        depth: depth_stencil_attachment.depth.clone(),
-                        stencil: depth_stencil_attachment.stencil.clone(),
+                        depth: if format.has_depth_aspect() {
+                            depth_stencil_attachment.depth.resolve()?
+                        } else {
+                            Default::default()
+                        },
+                        stencil: if format.has_stencil_aspect() {
+                            depth_stencil_attachment.stencil.resolve()?
+                        } else {
+                            Default::default()
+                        },
                     })
                 } else {
                     None
                 };
 
-            arc_desc.timestamp_writes = if let Some(tw) = desc.timestamp_writes {
-                let query_set = query_sets.get(tw.query_set).get()?;
-                query_set.same_device(device)?;
-
-                device.require_features(wgt::Features::TIMESTAMP_QUERY)?;
-
-                Some(ArcPassTimestampWrites {
-                    query_set,
-                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                    end_of_pass_write_index: tw.end_of_pass_write_index,
-                })
-            } else {
-                None
-            };
+            arc_desc.timestamp_writes = desc
+                .timestamp_writes
+                .map(|tw| Global::validate_pass_timestamp_writes(device, &query_sets, tw))
+                .transpose()?;
 
             arc_desc.occlusion_query_set =
                 if let Some(occlusion_query_set) = desc.occlusion_query_set {
@@ -1432,11 +1537,7 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        match cmd_buf
-            .try_get()
-            .map_err(|e| e.into())
-            .and_then(|mut cmd_buf_data| cmd_buf_data.lock_encoder())
-        {
+        match cmd_buf.data.lock().lock_encoder() {
             Ok(_) => {}
             Err(e) => return make_err(e, arc_desc),
         };
@@ -1467,7 +1568,8 @@ impl Global {
                 .hub
                 .command_buffers
                 .get(encoder_id.into_command_buffer_id());
-            let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.get_inner().map_pass_err(pass_scope)?;
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
@@ -1542,9 +1644,9 @@ impl Global {
             base.label.as_deref().unwrap_or("")
         );
 
-        let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
-        cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
-        let cmd_buf_data = &mut *cmd_buf_data;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
@@ -1555,7 +1657,6 @@ impl Global {
             device.check_is_valid().map_pass_err(pass_scope)?;
 
             let encoder = &mut cmd_buf_data.encoder;
-            let status = &mut cmd_buf_data.status;
             let tracker = &mut cmd_buf_data.trackers;
             let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
             let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
@@ -1565,8 +1666,6 @@ impl Global {
             // we want to insert a command buffer _before_ what we're about to record,
             // we need to make sure to close the previous one.
             encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
-            // We will reset this to `Recording` if we succeed, acts as a fail-safe.
-            *status = CommandEncoderStatus::Error;
             encoder
                 .open_pass(hal_label, &cmd_buf.device)
                 .map_pass_err(pass_scope)?;
@@ -1877,7 +1976,6 @@ impl Global {
         };
 
         let encoder = &mut cmd_buf_data.encoder;
-        let status = &mut cmd_buf_data.status;
         let tracker = &mut cmd_buf_data.trackers;
 
         {
@@ -1896,10 +1994,10 @@ impl Global {
             CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
         }
 
-        *status = CommandEncoderStatus::Recording;
         encoder
             .close_and_swap(&cmd_buf.device)
             .map_pass_err(pass_scope)?;
+        cmd_buf_data_guard.mark_successful();
 
         Ok(())
     }

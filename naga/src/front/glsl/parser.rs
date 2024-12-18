@@ -410,7 +410,7 @@ pub struct DeclarationContext<'ctx, 'qualifiers, 'a> {
     ctx: &'ctx mut Context<'a>,
 }
 
-impl<'ctx, 'qualifiers, 'a> DeclarationContext<'ctx, 'qualifiers, 'a> {
+impl DeclarationContext<'_, '_, '_> {
     fn add_var(
         &mut self,
         frontend: &mut Frontend,

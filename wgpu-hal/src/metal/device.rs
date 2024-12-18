@@ -8,6 +8,7 @@ use std::{
 
 use super::conv;
 use crate::auxil::map_naga_stage;
+use crate::TlasInstance;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -61,22 +62,31 @@ fn create_depth_stencil_desc(state: &wgt::DepthStencilState) -> metal::DepthSten
 
 const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
     match format {
+        wgt::VertexFormat::Uint8 => naga::back::msl::VertexFormat::Uint8,
         wgt::VertexFormat::Uint8x2 => naga::back::msl::VertexFormat::Uint8x2,
         wgt::VertexFormat::Uint8x4 => naga::back::msl::VertexFormat::Uint8x4,
+        wgt::VertexFormat::Sint8 => naga::back::msl::VertexFormat::Sint8,
         wgt::VertexFormat::Sint8x2 => naga::back::msl::VertexFormat::Sint8x2,
         wgt::VertexFormat::Sint8x4 => naga::back::msl::VertexFormat::Sint8x4,
+        wgt::VertexFormat::Unorm8 => naga::back::msl::VertexFormat::Unorm8,
         wgt::VertexFormat::Unorm8x2 => naga::back::msl::VertexFormat::Unorm8x2,
         wgt::VertexFormat::Unorm8x4 => naga::back::msl::VertexFormat::Unorm8x4,
+        wgt::VertexFormat::Snorm8 => naga::back::msl::VertexFormat::Snorm8,
         wgt::VertexFormat::Snorm8x2 => naga::back::msl::VertexFormat::Snorm8x2,
         wgt::VertexFormat::Snorm8x4 => naga::back::msl::VertexFormat::Snorm8x4,
+        wgt::VertexFormat::Uint16 => naga::back::msl::VertexFormat::Uint16,
         wgt::VertexFormat::Uint16x2 => naga::back::msl::VertexFormat::Uint16x2,
         wgt::VertexFormat::Uint16x4 => naga::back::msl::VertexFormat::Uint16x4,
+        wgt::VertexFormat::Sint16 => naga::back::msl::VertexFormat::Sint16,
         wgt::VertexFormat::Sint16x2 => naga::back::msl::VertexFormat::Sint16x2,
         wgt::VertexFormat::Sint16x4 => naga::back::msl::VertexFormat::Sint16x4,
+        wgt::VertexFormat::Unorm16 => naga::back::msl::VertexFormat::Unorm16,
         wgt::VertexFormat::Unorm16x2 => naga::back::msl::VertexFormat::Unorm16x2,
         wgt::VertexFormat::Unorm16x4 => naga::back::msl::VertexFormat::Unorm16x4,
+        wgt::VertexFormat::Snorm16 => naga::back::msl::VertexFormat::Snorm16,
         wgt::VertexFormat::Snorm16x2 => naga::back::msl::VertexFormat::Snorm16x2,
         wgt::VertexFormat::Snorm16x4 => naga::back::msl::VertexFormat::Snorm16x4,
+        wgt::VertexFormat::Float16 => naga::back::msl::VertexFormat::Float16,
         wgt::VertexFormat::Float16x2 => naga::back::msl::VertexFormat::Float16x2,
         wgt::VertexFormat::Float16x4 => naga::back::msl::VertexFormat::Float16x4,
         wgt::VertexFormat::Float32 => naga::back::msl::VertexFormat::Float32,
@@ -92,7 +102,14 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back:
         wgt::VertexFormat::Sint32x3 => naga::back::msl::VertexFormat::Sint32x3,
         wgt::VertexFormat::Sint32x4 => naga::back::msl::VertexFormat::Sint32x4,
         wgt::VertexFormat::Unorm10_10_10_2 => naga::back::msl::VertexFormat::Unorm10_10_10_2,
-        _ => unimplemented!(),
+        wgt::VertexFormat::Unorm8x4Bgra => naga::back::msl::VertexFormat::Unorm8x4Bgra,
+
+        wgt::VertexFormat::Float64
+        | wgt::VertexFormat::Float64x2
+        | wgt::VertexFormat::Float64x3
+        | wgt::VertexFormat::Float64x4 => {
+            unimplemented!()
+        }
     }
 }
 
@@ -116,7 +133,7 @@ impl super::Device {
 
         let ep_resources = &layout.per_stage_map[naga_stage];
 
-        let bounds_check_policy = if stage.module.runtime_checks {
+        let bounds_check_policy = if stage.module.bounds_checks.bounds_checks {
             naga::proc::BoundsCheckPolicy::Restrict
         } else {
             naga::proc::BoundsCheckPolicy::Unchecked
@@ -150,6 +167,7 @@ impl super::Device {
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
             zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+            force_loop_bounding: stage.module.bounds_checks.force_loop_bounding,
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
@@ -584,11 +602,8 @@ impl crate::Device for super::Device {
             raw_cmd_buf: None,
             state: super::CommandState::default(),
             temp: super::Temp::default(),
+            counters: Arc::clone(&self.counters),
         })
-    }
-
-    unsafe fn destroy_command_encoder(&self, _encoder: super::CommandEncoder) {
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -890,7 +905,7 @@ impl crate::Device for super::Device {
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 naga,
-                runtime_checks: desc.runtime_checks,
+                bounds_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
@@ -1325,9 +1340,15 @@ impl crate::Device for super::Device {
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         self.counters.fences.add(1);
+        let shared_event = if self.shared.private_caps.supports_shared_event {
+            Some(self.shared.device.lock().new_shared_event())
+        } else {
+            None
+        };
         Ok(super::Fence {
             completed_value: Arc::new(atomic::AtomicU64::new(0)),
             pending_command_buffers: Vec::new(),
+            shared_event,
         })
     }
 
@@ -1426,7 +1447,11 @@ impl crate::Device for super::Device {
         unimplemented!()
     }
 
+    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
+        unimplemented!()
+    }
+
     fn get_internal_counters(&self) -> wgt::HalCounters {
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 }

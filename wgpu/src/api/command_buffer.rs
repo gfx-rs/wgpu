@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a command buffer on the GPU.
@@ -11,18 +9,9 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUCommandBuffer`](https://gpuweb.github.io/gpuweb/#command-buffer).
 #[derive(Debug)]
 pub struct CommandBuffer {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Option<Box<Data>>,
+    pub(crate) inner: Option<dispatch::DispatchCommandBuffer>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 
-impl Drop for CommandBuffer {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            if let Some(data) = self.data.take() {
-                self.context.command_buffer_drop(data.as_ref());
-            }
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(CommandBuffer => .inner);

@@ -64,10 +64,10 @@ pub enum BoundsCheckPolicy {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct BoundsCheckPolicies {
     /// How should the generated code handle array, vector, or matrix indices
     /// that are out of range?
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub index: BoundsCheckPolicy,
 
     /// How should the generated code handle array, vector, or matrix indices
@@ -103,7 +103,6 @@ pub struct BoundsCheckPolicies {
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Storage`]: crate::AddressSpace::Storage
     /// [`Uniform`]: crate::AddressSpace::Uniform
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: BoundsCheckPolicy,
 
     /// How should the generated code handle image texel loads that are out
@@ -119,11 +118,9 @@ pub struct BoundsCheckPolicies {
     /// [`ImageLoad`]: crate::Expression::ImageLoad
     /// [`ImageStore`]: crate::Statement::ImageStore
     /// [`ReadZeroSkipWrite`]: BoundsCheckPolicy::ReadZeroSkipWrite
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub image_load: BoundsCheckPolicy,
 
     /// How should the generated code handle binding array indexes that are out of bounds.
-    #[cfg_attr(feature = "deserialize", serde(default))]
     pub binding_array: BoundsCheckPolicy,
 }
 
@@ -419,6 +416,8 @@ pub enum IndexableLength {
     /// Values of this type always have the given number of elements.
     Known(u32),
 
+    Pending,
+
     /// The number of elements is determined at runtime.
     Dynamic,
 }
@@ -430,6 +429,7 @@ impl crate::ArraySize {
     ) -> Result<IndexableLength, IndexableLengthError> {
         Ok(match self {
             Self::Constant(length) => IndexableLength::Known(length.get()),
+            Self::Pending(_) => IndexableLength::Pending,
             Self::Dynamic => IndexableLength::Dynamic,
         })
     }

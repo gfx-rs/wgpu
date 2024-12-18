@@ -1,5 +1,5 @@
 (
-    features: [],
+    features: "",
     expectations: [
         (
             name: "Copy to Buffer",
@@ -20,7 +20,7 @@
             sample_count: 1,
             dimension: r#2d,
             format: "rgba8unorm",
-            usage: 1, // COPY_SRC
+            usage: "COPY_SRC",
             view_formats: [],
         )),
         CreateBuffer(
@@ -28,7 +28,7 @@
             (
                 label: Some("Copy to Buffer Buffer"),
                 size: 16384,
-                usage: 9,
+                usage: "MAP_READ | COPY_DST",
                 mapped_at_creation: false,
             ),
         ),
