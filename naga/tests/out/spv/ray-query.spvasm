@@ -74,12 +74,12 @@ OpMemberDecorate %18 0 Offset 0
 %58 = OpConstantNull  %10
 %62 = OpConstant  %6  1
 %64 = OpConstant  %6  0
-%78 = OpConstant  %6  2
-%80 = OpConstant  %6  3
-%83 = OpConstant  %6  5
-%85 = OpConstant  %6  6
-%87 = OpConstant  %6  9
-%89 = OpConstant  %6  10
+%76 = OpConstant  %6  2
+%78 = OpConstant  %6  3
+%81 = OpConstant  %6  5
+%83 = OpConstant  %6  6
+%85 = OpConstant  %6  9
+%87 = OpConstant  %6  10
 %96 = OpConstant  %6  7
 %98 = OpConstant  %6  8
 %106 = OpTypeFunction %4 %4 %10
@@ -109,37 +109,37 @@ OpBranchConditional %66 %67 %68
 %71 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %6  %59 %62
 %72 = OpRayQueryGetIntersectionGeometryIndexKHR  %6  %59 %62
 %73 = OpRayQueryGetIntersectionPrimitiveIndexKHR  %6  %59 %62
-%74 = OpRayQueryGetIntersectionTKHR  %3  %59 %62
-%75 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %59 %62
-%76 = OpRayQueryGetIntersectionWorldToObjectKHR  %9  %59 %62
-%77 = OpAccessChain  %55  %61 %62
-OpStore %77 %74
+%74 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %59 %62
+%75 = OpRayQueryGetIntersectionWorldToObjectKHR  %9  %59 %62
+%77 = OpAccessChain  %51  %61 %76
+OpStore %77 %69
 %79 = OpAccessChain  %51  %61 %78
-OpStore %79 %69
-%81 = OpAccessChain  %51  %61 %80
-OpStore %81 %70
-%82 = OpAccessChain  %51  %61 %27
-OpStore %82 %71
+OpStore %79 %70
+%80 = OpAccessChain  %51  %61 %27
+OpStore %80 %71
+%82 = OpAccessChain  %51  %61 %81
+OpStore %82 %72
 %84 = OpAccessChain  %51  %61 %83
-OpStore %84 %72
-%86 = OpAccessChain  %51  %61 %85
-OpStore %86 %73
+OpStore %84 %73
+%86 = OpAccessChain  %52  %61 %85
+OpStore %86 %74
 %88 = OpAccessChain  %52  %61 %87
 OpStore %88 %75
-%90 = OpAccessChain  %52  %61 %89
-OpStore %90 %76
-%91 = OpIEqual  %8  %63 %62
-OpSelectionMerge %93 None
-OpBranchConditional %66 %92 %93
-%92 = OpLabel
+%89 = OpIEqual  %8  %63 %62
+%92 = OpRayQueryGetIntersectionTKHR  %3  %59 %62
+%93 = OpAccessChain  %55  %61 %62
+OpStore %93 %92
+OpSelectionMerge %91 None
+OpBranchConditional %66 %90 %91
+%90 = OpLabel
 %94 = OpRayQueryGetIntersectionBarycentricsKHR  %7  %59 %62
 %95 = OpRayQueryGetIntersectionFrontFaceKHR  %8  %59 %62
 %97 = OpAccessChain  %53  %61 %96
 OpStore %97 %94
 %99 = OpAccessChain  %54  %61 %98
 OpStore %99 %95
-OpBranch %93
-%93 = OpLabel
+OpBranch %91
+%91 = OpLabel
 OpBranch %68
 %68 = OpLabel
 %100 = OpLoad  %10  %61
@@ -238,7 +238,7 @@ OpBranch %148
 OpRayQueryInitializeKHR %147 %144 %149 %150 %153 %151 %154 %152
 %155 = OpFunctionCall  %10  %57 %147
 %156 = OpCompositeExtract  %6  %155 0
-%157 = OpIEqual  %8  %156 %80
+%157 = OpIEqual  %8  %156 %78
 %158 = OpSelect  %6  %157 %62 %64
 %159 = OpAccessChain  %132  %145 %64
 OpStore %159 %158
