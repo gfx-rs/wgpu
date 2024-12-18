@@ -2612,10 +2612,17 @@ impl Device {
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
+        let additional_flags = if cfg!(feature = "indirect-validation") {
+            hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
+        } else {
+            hal::PipelineLayoutFlags::empty()
+        };
+
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             flags: hal::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE
-                | hal::PipelineLayoutFlags::NUM_WORK_GROUPS,
+                | hal::PipelineLayoutFlags::NUM_WORK_GROUPS
+                | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.as_ref(),
         };
@@ -2640,7 +2647,7 @@ impl Device {
 
     pub(crate) fn derive_pipeline_layout(
         self: &Arc<Self>,
-        mut derived_group_layouts: ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>,
+        mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()

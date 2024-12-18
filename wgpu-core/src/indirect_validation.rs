@@ -180,7 +180,7 @@ impl IndirectValidation {
 
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
             label: None,
-            flags: hal::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE,
+            flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[
                 dst_bind_group_layout.as_ref(),
                 src_bind_group_layout.as_ref(),

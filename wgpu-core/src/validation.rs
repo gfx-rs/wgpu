@@ -819,7 +819,7 @@ pub enum BindingLayoutSource<'a> {
     /// The binding layout is derived from the pipeline layout.
     ///
     /// This will be filled in by the shader binding validation, as it iterates the shader's interfaces.
-    Derived(ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>),
+    Derived(Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>),
     /// The binding layout is provided by the user in BGLs.
     ///
     /// This will be validated against the shader's interfaces.
@@ -832,7 +832,7 @@ impl<'a> BindingLayoutSource<'a> {
         for _ in 0..limits.max_bind_groups {
             array.push(Default::default());
         }
-        BindingLayoutSource::Derived(array)
+        BindingLayoutSource::Derived(Box::new(array))
     }
 }
 

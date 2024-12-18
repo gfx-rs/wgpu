@@ -159,7 +159,7 @@ fn collect_validation_jobs(jobs: &mut Vec<Job>, cmd: ValidateSubcommand) -> anyh
                     // that to Windows as well.
                     ValidateSubcommand::Hlsl(
                         ValidateHlslCommand::Dxc | ValidateHlslCommand::Fxc,
-                    ) => cfg!(os = "windows"),
+                    ) => cfg!(target_os = "windows"),
                     ValidateSubcommand::All => continue,
                 };
                 if should_validate {
