@@ -636,11 +636,17 @@ impl Buffer {
                     });
                     let transition_src = hal::BufferBarrier {
                         buffer: staging_buffer.raw(),
-                        usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                        usage: hal::StateTransition {
+                            from: hal::BufferUses::MAP_WRITE,
+                            to: hal::BufferUses::COPY_SRC,
+                        },
                     };
                     let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: raw_buf,
-                        usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                        usage: hal::StateTransition {
+                            from: hal::BufferUses::empty(),
+                            to: hal::BufferUses::COPY_DST,
+                        },
                     };
                     let mut pending_writes = queue.pending_writes.lock();
                     let encoder = pending_writes.activate();
@@ -1368,15 +1374,18 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
-        let cmd_buf_data = cmd_buf.try_get();
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data_guard = cmd_buf_data.record();
 
-        if let Ok(mut cmd_buf_data) = cmd_buf_data {
-            let cmd_buf_raw = cmd_buf_data
+        if let Ok(mut cmd_buf_data_guard) = cmd_buf_data_guard {
+            let cmd_buf_raw = cmd_buf_data_guard
                 .encoder
                 .open(&cmd_buf.device)
                 .ok()
                 .and_then(|encoder| encoder.as_any_mut().downcast_mut());
-            hal_command_encoder_callback(cmd_buf_raw)
+            let ret = hal_command_encoder_callback(cmd_buf_raw);
+            cmd_buf_data_guard.mark_successful();
+            ret
         } else {
             hal_command_encoder_callback(None)
         }

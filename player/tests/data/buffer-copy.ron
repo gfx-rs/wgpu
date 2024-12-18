@@ -1,5 +1,5 @@
 (
-    features: ["MAPPABLE_PRIMARY_BUFFERS"],
+    features: "MAPPABLE_PRIMARY_BUFFERS",
     expectations: [
         (
             name: "basic",
@@ -14,7 +14,7 @@
             (
                 label: Some("dummy"),
                 size: 16,
-                usage: 41,
+                usage: "MAP_READ | COPY_DST | VERTEX",
                 mapped_at_creation: false,
             ),
         ),

@@ -3,7 +3,7 @@ name = "wgpu-core"
 version = "23.0.1"
 authors = ["gfx-rs developers"]
 edition = "2021"
-description = "WebGPU core logic on wgpu-hal"
+description = "Core implementation logic of wgpu, the cross-platform, safe, pure-rust graphics API"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
@@ -29,6 +29,9 @@ targets = [
 # Cargo machete can't check build.rs dependencies. See https://github.com/bnjbvr/cargo-machete/issues/100
 ignored = ["cfg_aliases"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
+
 [lib]
 
 [features]
@@ -38,6 +41,7 @@ ignored = ["cfg_aliases"]
 counters = ["wgt/counters"]
 
 ## Log all API entry points at info instead of trace level.
+## Also, promotes certain debug log calls to info.
 api_log_info = []
 
 ## Log resource lifecycle management at info instead of trace level.

@@ -1,0 +1,103 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_7 {
+    float inner[2];
+};
+struct type_8 {
+    int inner[2];
+};
+struct type_9 {
+    uint inner[2];
+};
+
+void func_f(
+    float a
+) {
+    return;
+}
+
+void func_i(
+    int a_1
+) {
+    return;
+}
+
+void func_u(
+    uint a_2
+) {
+    return;
+}
+
+void func_vf(
+    metal::float2 a_3
+) {
+    return;
+}
+
+void func_vi(
+    metal::int2 a_4
+) {
+    return;
+}
+
+void func_vu(
+    metal::uint2 a_5
+) {
+    return;
+}
+
+void func_mf(
+    metal::float2x2 a_6
+) {
+    return;
+}
+
+void func_af(
+    type_7 a_7
+) {
+    return;
+}
+
+void func_ai(
+    type_8 a_8
+) {
+    return;
+}
+
+void func_au(
+    type_9 a_9
+) {
+    return;
+}
+
+void func_f_i(
+    float a_10,
+    int b
+) {
+    return;
+}
+
+void main_(
+) {
+    func_f(0.0);
+    func_f(0.0);
+    func_i(0);
+    func_u(0u);
+    func_vf(metal::float2(0.0));
+    func_vf(metal::float2(0.0));
+    func_vi(metal::int2(0));
+    func_vu(metal::uint2(0u));
+    func_mf(metal::float2x2(metal::float2(0.0), metal::float2(0.0)));
+    func_mf(metal::float2x2(metal::float2(0.0), metal::float2(0.0)));
+    func_af(type_7 {0.0, 0.0});
+    func_af(type_7 {0.0, 0.0});
+    func_ai(type_8 {0, 0});
+    func_au(type_9 {0u, 0u});
+    func_f_i(0.0, 0);
+    func_f_i(0.0, 0);
+    return;
+}

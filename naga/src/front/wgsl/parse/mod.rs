@@ -134,7 +134,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
 /// This is used for error checking. `Parser` maintains a stack of
 /// these and (occasionally) checks that it is being pushed and popped
 /// as expected.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum Rule {
     Attribute,
     VariableDecl,
@@ -147,6 +147,8 @@ enum Rule {
     UnaryExpr,
     GeneralExpr,
     Directive,
+    GenericExpr,
+    EnclosedExpr,
 }
 
 struct ParsedAttribute<T> {
@@ -282,6 +284,16 @@ impl Parser {
     fn peek_rule_span(&mut self, lexer: &Lexer<'_>) -> Span {
         let &(_, initial) = self.rules.last().unwrap();
         lexer.span_from(initial)
+    }
+
+    fn race_rules(&self, rule0: Rule, rule1: Rule) -> Option<Rule> {
+        Some(
+            self.rules
+                .iter()
+                .rev()
+                .find(|&x| x.0 == rule0 || x.0 == rule1)?
+                .0,
+        )
     }
 
     fn switch_value<'a>(
@@ -547,7 +559,7 @@ impl Parser {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
                 let size = if lexer.skip(Token::Separator(',')) {
-                    let expr = self.unary_expression(lexer, ctx)?;
+                    let expr = self.const_generic_expression(lexer, ctx)?;
                     ast::ArraySize::Constant(expr)
                 } else {
                     ast::ArraySize::Dynamic
@@ -566,6 +578,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Vec<Handle<ast::Expression<'a>>>, Error<'a>> {
+        self.push_rule_span(Rule::EnclosedExpr, lexer);
         lexer.open_arguments()?;
         let mut arguments = Vec::new();
         loop {
@@ -580,7 +593,19 @@ impl Parser {
             arguments.push(arg);
         }
 
+        self.pop_rule_span(lexer);
         Ok(arguments)
+    }
+
+    fn enclosed_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+        self.push_rule_span(Rule::EnclosedExpr, lexer);
+        let expr = self.general_expression(lexer, ctx)?;
+        self.pop_rule_span(lexer);
+        Ok(expr)
     }
 
     /// Expects [`Rule::PrimaryExpr`] or [`Rule::SingularExpr`] on top; does not pop it.
@@ -667,7 +692,7 @@ impl Parser {
         let expr = match lexer.peek() {
             (Token::Paren('('), _) => {
                 let _ = lexer.next();
-                let expr = self.general_expression(lexer, ctx)?;
+                let expr = self.enclosed_expression(lexer, ctx)?;
                 lexer.expect(Token::Paren(')'))?;
                 self.pop_rule_span(lexer);
                 return Ok(expr);
@@ -803,7 +828,7 @@ impl Parser {
                 }
                 Token::Paren('[') => {
                     let _ = lexer.next();
-                    let index = self.general_expression(lexer, ctx)?;
+                    let index = self.enclosed_expression(lexer, ctx)?;
                     lexer.expect(Token::Paren(']'))?;
 
                     ast::Expression::Index { base: expr, index }
@@ -815,6 +840,17 @@ impl Parser {
             expr = ctx.expressions.append(expression, span);
         }
 
+        Ok(expr)
+    }
+
+    fn const_generic_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+        self.push_rule_span(Rule::GenericExpr, lexer);
+        let expr = self.general_expression(lexer, ctx)?;
+        self.pop_rule_span(lexer);
         Ok(expr)
     }
 
@@ -908,27 +944,47 @@ impl Parser {
             },
             // relational_expression
             |lexer, context| {
+                let enclosing = self.race_rules(Rule::GenericExpr, Rule::EnclosedExpr);
                 context.parse_binary_op(
                     lexer,
-                    |token| match token {
-                        Token::Paren('<') => Some(crate::BinaryOperator::Less),
-                        Token::Paren('>') => Some(crate::BinaryOperator::Greater),
-                        Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
-                        Token::LogicalOperation('>') => Some(crate::BinaryOperator::GreaterEqual),
-                        _ => None,
+                    match enclosing {
+                        Some(Rule::GenericExpr) => |token| match token {
+                            Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
+                            Token::LogicalOperation('>') => {
+                                Some(crate::BinaryOperator::GreaterEqual)
+                            }
+                            _ => None,
+                        },
+                        _ => |token| match token {
+                            Token::Paren('<') => Some(crate::BinaryOperator::Less),
+                            Token::Paren('>') => Some(crate::BinaryOperator::Greater),
+                            Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
+                            Token::LogicalOperation('>') => {
+                                Some(crate::BinaryOperator::GreaterEqual)
+                            }
+                            _ => None,
+                        },
                     },
                     // shift_expression
                     |lexer, context| {
                         context.parse_binary_op(
                             lexer,
-                            |token| match token {
-                                Token::ShiftOperation('<') => {
-                                    Some(crate::BinaryOperator::ShiftLeft)
-                                }
-                                Token::ShiftOperation('>') => {
-                                    Some(crate::BinaryOperator::ShiftRight)
-                                }
-                                _ => None,
+                            match enclosing {
+                                Some(Rule::GenericExpr) => |token| match token {
+                                    Token::ShiftOperation('<') => {
+                                        Some(crate::BinaryOperator::ShiftLeft)
+                                    }
+                                    _ => None,
+                                },
+                                _ => |token| match token {
+                                    Token::ShiftOperation('<') => {
+                                        Some(crate::BinaryOperator::ShiftLeft)
+                                    }
+                                    Token::ShiftOperation('>') => {
+                                        Some(crate::BinaryOperator::ShiftRight)
+                                    }
+                                    _ => None,
+                                },
                             },
                             // additive_expression
                             |lexer, context| {
@@ -1364,7 +1420,7 @@ impl Parser {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
                 let size = if lexer.skip(Token::Separator(',')) {
-                    let size = self.unary_expression(lexer, ctx)?;
+                    let size = self.const_generic_expression(lexer, ctx)?;
                     ast::ArraySize::Constant(size)
                 } else {
                     ast::ArraySize::Dynamic
@@ -2323,7 +2379,7 @@ impl Parser {
             ready = lexer.skip(Token::Separator(','));
         }
         // read return type
-        let result = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
+        let result = if lexer.skip(Token::Arrow) {
             let binding = self.varying_binding(lexer, &mut ctx)?;
             let ty = self.type_decl(lexer, &mut ctx)?;
             Some(ast::FunctionResult { ty, binding })

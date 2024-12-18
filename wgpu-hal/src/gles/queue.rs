@@ -1225,7 +1225,7 @@ impl super::Queue {
                     flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_READ_WRITE,
+                    crate::BufferUses::STORAGE_READ_ONLY | crate::BufferUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_STORAGE_BARRIER_BIT;
                 }
@@ -1237,7 +1237,9 @@ impl super::Queue {
                     flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
+                    crate::TextureUses::STORAGE_READ_ONLY
+                        | crate::TextureUses::STORAGE_WRITE_ONLY
+                        | crate::TextureUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
                 }

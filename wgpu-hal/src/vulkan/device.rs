@@ -897,14 +897,14 @@ impl super::Device {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
                 };
-                let needs_temp_options = !runtime_checks
+                let needs_temp_options = !runtime_checks.bounds_checks
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
-                    if !runtime_checks {
+                    if !runtime_checks.bounds_checks {
                         temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                             index: naga::proc::BoundsCheckPolicy::Unchecked,
                             buffer: naga::proc::BoundsCheckPolicy::Unchecked,
@@ -1373,18 +1373,8 @@ impl crate::Device for super::Device {
             discarded: Vec::new(),
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
+            counters: Arc::clone(&self.counters),
         })
-    }
-    unsafe fn destroy_command_encoder(&self, cmd_encoder: super::CommandEncoder) {
-        unsafe {
-            // `vkDestroyCommandPool` also frees any command buffers allocated
-            // from that pool, so there's no need to explicitly call
-            // `vkFreeCommandBuffers` on `cmd_encoder`'s `free` and `discarded`
-            // fields.
-            self.shared.raw.destroy_command_pool(cmd_encoder.raw, None);
-        }
-
-        self.counters.command_encoders.sub(1);
     }
 
     unsafe fn create_bind_group_layout(
@@ -1823,7 +1813,7 @@ impl crate::Device for super::Device {
                             file_name: d.file_name.as_ref().as_ref(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         });
-                if !desc.runtime_checks {
+                if !desc.runtime_checks.bounds_checks {
                     naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                         index: naga::proc::BoundsCheckPolicy::Unchecked,
                         buffer: naga::proc::BoundsCheckPolicy::Unchecked,
@@ -2556,7 +2546,7 @@ impl crate::Device for super::Device {
             .memory_allocations
             .set(self.shared.memory_allocations_counter.read());
 
-        self.counters.clone()
+        self.counters.as_ref().clone()
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {

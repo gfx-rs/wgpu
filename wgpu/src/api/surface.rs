@@ -1,9 +1,8 @@
-use std::{error, fmt, sync::Arc, thread};
+use std::{error, fmt};
 
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
-use crate::context::DynContext;
 use crate::*;
 
 /// Describes a [`Surface`].
@@ -24,8 +23,6 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
 /// serves a similar role.
 pub struct Surface<'window> {
-    pub(crate) context: Arc<C>,
-
     /// Optionally, keep the source of the handle used for the surface alive.
     ///
     /// This is useful for platforms where the surface is created from a window and the surface
@@ -33,7 +30,7 @@ pub struct Surface<'window> {
     pub(crate) _handle_source: Option<Box<dyn WindowHandle + 'window>>,
 
     /// Additional surface data returned by [`DynContext::instance_create_surface`].
-    pub(crate) surface_data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchSurface,
 
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
     // It is required to set the attributes of the `SurfaceTexture` in the
@@ -49,11 +46,7 @@ impl Surface<'_> {
     ///
     /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
     pub fn get_capabilities(&self, adapter: &Adapter) -> SurfaceCapabilities {
-        DynContext::surface_get_capabilities(
-            &*self.context,
-            self.surface_data.as_ref(),
-            adapter.data.as_ref(),
-        )
+        self.inner.get_capabilities(&adapter.inner)
     }
 
     /// Return a default `SurfaceConfiguration` from width and height to use for the [`Surface`] with this adapter.
@@ -86,12 +79,7 @@ impl Surface<'_> {
     /// - Texture format requested is unsupported on the surface.
     /// - `config.width` or `config.height` is zero.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
-        DynContext::surface_configure(
-            &*self.context,
-            self.surface_data.as_ref(),
-            device.data.as_ref(),
-            config,
-        );
+        self.inner.configure(&device.inner, config);
 
         let mut conf = self.config.lock();
         *conf = Some(config.clone());
@@ -106,8 +94,7 @@ impl Surface<'_> {
     /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
     pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
-        let (texture_data, status, detail) =
-            DynContext::surface_get_current_texture(&*self.context, self.surface_data.as_ref());
+        let (texture, status, detail) = self.inner.get_current_texture();
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,
@@ -115,6 +102,7 @@ impl Surface<'_> {
             SurfaceStatus::Timeout => return Err(SurfaceError::Timeout),
             SurfaceStatus::Outdated => return Err(SurfaceError::Outdated),
             SurfaceStatus::Lost => return Err(SurfaceError::Lost),
+            SurfaceStatus::Unknown => return Err(SurfaceError::Other),
         };
 
         let guard = self.config.lock();
@@ -137,11 +125,10 @@ impl Surface<'_> {
             view_formats: &[],
         };
 
-        texture_data
-            .map(|data| SurfaceTexture {
+        texture
+            .map(|texture| SurfaceTexture {
                 texture: Texture {
-                    context: Arc::clone(&self.context),
-                    data,
+                    inner: texture,
                     descriptor,
                 },
                 suboptimal,
@@ -161,16 +148,18 @@ impl Surface<'_> {
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
         &self,
         hal_surface_callback: F,
-    ) -> Option<R> {
-        self.context
-            .as_any()
-            .downcast_ref::<crate::backend::ContextWgpuCore>()
-            .map(|ctx| unsafe {
-                ctx.surface_as_hal::<A, F, R>(
-                    crate::context::downcast_ref(self.surface_data.as_ref()),
-                    hal_surface_callback,
-                )
-            })
+    ) -> R {
+        let core_surface = self.inner.as_core_opt();
+
+        if let Some(core_surface) = core_surface {
+            unsafe {
+                core_surface
+                    .context
+                    .surface_as_hal::<A, F, R>(core_surface, hal_surface_callback)
+            }
+        } else {
+            hal_surface_callback(None)
+        }
     }
 }
 
@@ -179,7 +168,6 @@ impl Surface<'_> {
 impl fmt::Debug for Surface<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Surface")
-            .field("context", &self.context)
             .field(
                 "_handle_source",
                 &if self._handle_source.is_some() {
@@ -188,7 +176,7 @@ impl fmt::Debug for Surface<'_> {
                     "None"
                 },
             )
-            .field("data", &self.surface_data)
+            .field("inner", &self.inner)
             .field("config", &self.config)
             .finish()
     }
@@ -197,13 +185,7 @@ impl fmt::Debug for Surface<'_> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Surface<'_>: Send, Sync);
 
-impl Drop for Surface<'_> {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.surface_drop(self.surface_data.as_ref())
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(Surface<'_> => .inner);
 
 /// Super trait for window handles as used in [`SurfaceTarget`].
 pub trait WindowHandle: HasWindowHandle + HasDisplayHandle + WasmNotSendSync {}

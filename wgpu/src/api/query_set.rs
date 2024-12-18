@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a query set.
@@ -9,22 +7,13 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUQuerySet`](https://gpuweb.github.io/gpuweb/#queryset).
 #[derive(Debug)]
 pub struct QuerySet {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchQuerySet,
 }
 #[cfg(send_sync)]
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
-super::impl_partialeq_eq_hash!(QuerySet);
-
-impl Drop for QuerySet {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.query_set_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(QuerySet => .inner);
 
 /// Describes a [`QuerySet`].
 ///

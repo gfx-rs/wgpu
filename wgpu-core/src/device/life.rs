@@ -320,7 +320,6 @@ impl LifetimeTracker {
     pub fn triage_submissions(
         &mut self,
         last_done: SubmissionIndex,
-        command_allocator: &crate::command::CommandAllocator,
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         profiling::scope!("triage_submissions");
 
@@ -336,8 +335,10 @@ impl LifetimeTracker {
         for a in self.active.drain(..done_count) {
             self.ready_to_map.extend(a.mapped);
             for encoder in a.encoders {
-                let raw = unsafe { encoder.land() };
-                command_allocator.release_encoder(raw);
+                // This involves actually decrementing the ref count of all command buffer
+                // resources, so can be _very_ expensive.
+                profiling::scope!("drop command buffer trackers");
+                drop(encoder);
             }
             drop(a.temp_resources);
             work_done_closures.extend(a.work_done_closures);

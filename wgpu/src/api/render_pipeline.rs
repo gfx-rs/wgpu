@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, sync::Arc, thread};
+use std::num::NonZeroU32;
 
 use crate::*;
 
@@ -10,21 +10,12 @@ use crate::*;
 /// Corresponds to [WebGPU `GPURenderPipeline`](https://gpuweb.github.io/gpuweb/#render-pipeline).
 #[derive(Debug)]
 pub struct RenderPipeline {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchRenderPipeline,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
-super::impl_partialeq_eq_hash!(RenderPipeline);
-
-impl Drop for RenderPipeline {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.render_pipeline_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(RenderPipeline => .inner);
 
 impl RenderPipeline {
     /// Get an object representing the bind group layout at a given index.
@@ -34,11 +25,8 @@ impl RenderPipeline {
     ///
     /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
-        let context = Arc::clone(&self.context);
-        let data = self
-            .context
-            .render_pipeline_get_bind_group_layout(self.data.as_ref(), index);
-        BindGroupLayout { context, data }
+        let inner = self.inner.get_bind_group_layout(index);
+        BindGroupLayout { inner }
     }
 }
 

@@ -107,10 +107,12 @@ pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
             .map(str::to_lowercase)
             .as_deref()
         {
-            Ok("dxc") => wgt::Dx12Compiler::Dxc {
-                dxil_path: None,
-                dxc_path: None,
+            Ok("dxc") => wgt::Dx12Compiler::DynamicDxc {
+                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
+                dxil_path: std::path::PathBuf::from("dxil.dll"),
             },
+            #[cfg(feature = "static-dxc")]
+            Ok("static-dxc") => wgt::Dx12Compiler::StaticDxc,
             Ok("fxc") => wgt::Dx12Compiler::Fxc,
             _ => return None,
         },
@@ -136,6 +138,24 @@ pub fn gles_minor_version_from_env() -> Option<wgt::Gles3MinorVersion> {
     )
 }
 
+/// Get an instance descriptor from the following environment variables:
+///
+/// - WGPU_BACKEND
+/// - WGPU_DEBUG
+/// - WGPU_VALIDATION
+/// - WGPU_DX12_COMPILER
+/// - WGPU_GLES_MINOR_VERSION
+///
+/// If variables are missing, falls back to default or build config values
+pub fn instance_descriptor_from_env() -> wgt::InstanceDescriptor {
+    wgt::InstanceDescriptor {
+        backends: backend_bits_from_env().unwrap_or_default(),
+        flags: wgt::InstanceFlags::from_build_config().with_env(),
+        dx12_shader_compiler: dx12_shader_compiler_from_env().unwrap_or_default(),
+        gles_minor_version: gles_minor_version_from_env().unwrap_or_default(),
+    }
+}
+
 /// Determines whether the [`Backends::BROWSER_WEBGPU`] backend is supported.
 ///
 /// The result can only be true if this is called from the main thread or a dedicated worker.
@@ -154,9 +174,7 @@ pub async fn is_browser_webgpu_supported() -> bool {
         let adapter_promise = gpu.request_adapter();
         wasm_bindgen_futures::JsFuture::from(adapter_promise)
             .await
-            .map_or(false, |adapter| {
-                !adapter.is_undefined() && !adapter.is_null()
-            })
+            .is_ok_and(|adapter| !adapter.is_undefined() && !adapter.is_null())
     }
     #[cfg(not(webgpu))]
     {

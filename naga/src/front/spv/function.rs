@@ -111,6 +111,9 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             }
         }
 
+        // Note the index this function's handle will be assigned, for tracing.
+        let function_index = module.functions.len();
+
         // Read body
         self.function_call_graph.add_node(fun_id);
         let mut parameters_sampling =
@@ -122,14 +125,10 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             body_for_label: Default::default(),
             mergers: Default::default(),
             bodies: Default::default(),
+            module,
             function_id: fun_id,
             expressions: &mut fun.expressions,
             local_arena: &mut fun.local_variables,
-            const_arena: &mut module.constants,
-            overrides: &mut module.overrides,
-            global_expressions: &mut module.global_expressions,
-            type_arena: &module.types,
-            global_arena: &module.global_variables,
             arguments: &fun.arguments,
             parameter_sampling: &mut parameters_sampling,
         };
@@ -167,7 +166,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         if let Some(ref prefix) = self.options.block_ctx_dump_prefix {
             let dump_suffix = match self.lookup_entry_point.get(&fun_id) {
                 Some(ep) => format!("block_ctx.{:?}-{}.txt", ep.stage, ep.name),
-                None => format!("block_ctx.Fun-{}.txt", module.functions.len()),
+                None => format!("block_ctx.Fun-{}.txt", function_index),
             };
             let dest = prefix.join(dump_suffix);
             let dump = format!("{block_ctx:#?}");
@@ -569,6 +568,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             stage: ep.stage,
             early_depth_test: ep.early_depth_test,
             workgroup_size: ep.workgroup_size,
+            workgroup_size_overrides: None,
             function,
         });
 
@@ -579,10 +579,10 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 impl BlockContext<'_> {
     pub(super) fn gctx(&self) -> crate::proc::GlobalCtx {
         crate::proc::GlobalCtx {
-            types: self.type_arena,
-            constants: self.const_arena,
-            overrides: self.overrides,
-            global_expressions: self.global_expressions,
+            types: &self.module.types,
+            constants: &self.module.constants,
+            overrides: &self.module.overrides,
+            global_expressions: &self.module.global_expressions,
         }
     }
 

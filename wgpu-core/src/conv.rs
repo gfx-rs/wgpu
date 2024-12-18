@@ -82,7 +82,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         usage.contains(wgt::BufferUsages::UNIFORM),
     );
     u.set(
-        hal::BufferUses::STORAGE_READ | hal::BufferUses::STORAGE_READ_WRITE,
+        hal::BufferUses::STORAGE_READ_ONLY | hal::BufferUses::STORAGE_READ_WRITE,
         usage.contains(wgt::BufferUsages::STORAGE),
     );
     u.set(
@@ -107,6 +107,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
 pub fn map_texture_usage(
     usage: wgt::TextureUsages,
     aspect: hal::FormatAspects,
+    flags: wgt::TextureFormatFeatureFlags,
 ) -> hal::TextureUses {
     let mut u = hal::TextureUses::empty();
     u.set(
@@ -121,10 +122,20 @@ pub fn map_texture_usage(
         hal::TextureUses::RESOURCE,
         usage.contains(wgt::TextureUsages::TEXTURE_BINDING),
     );
-    u.set(
-        hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE,
-        usage.contains(wgt::TextureUsages::STORAGE_BINDING),
-    );
+    if usage.contains(wgt::TextureUsages::STORAGE_BINDING) {
+        u.set(
+            hal::TextureUses::STORAGE_READ_ONLY,
+            flags.contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY),
+        );
+        u.set(
+            hal::TextureUses::STORAGE_WRITE_ONLY,
+            flags.contains(wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY),
+        );
+        u.set(
+            hal::TextureUses::STORAGE_READ_WRITE,
+            flags.contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE),
+        );
+    }
     let is_color = aspect.contains(hal::FormatAspects::COLOR);
     u.set(
         hal::TextureUses::COLOR_TARGET,
@@ -143,7 +154,7 @@ pub fn map_texture_usage_for_texture(
 ) -> hal::TextureUses {
     // Enforce having COPY_DST/DEPTH_STENCIL_WRITE/COLOR_TARGET otherwise we
     // wouldn't be able to initialize the texture.
-    map_texture_usage(desc.usage, desc.format.into())
+    map_texture_usage(desc.usage, desc.format.into(), format_features.flags)
         | if desc.format.is_depth_stencil_format() {
             hal::TextureUses::DEPTH_STENCIL_WRITE
         } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
@@ -179,7 +190,11 @@ pub fn map_texture_usage_from_hal(uses: hal::TextureUses) -> wgt::TextureUsages 
     );
     u.set(
         wgt::TextureUsages::STORAGE_BINDING,
-        uses.contains(hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE),
+        uses.intersects(
+            hal::TextureUses::STORAGE_READ_ONLY
+                | hal::TextureUses::STORAGE_WRITE_ONLY
+                | hal::TextureUses::STORAGE_READ_WRITE,
+        ),
     );
     u.set(
         wgt::TextureUsages::RENDER_ATTACHMENT,

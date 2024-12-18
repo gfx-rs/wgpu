@@ -134,12 +134,9 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                 Some(wgpu_core::command::RenderPassColorAttachment {
                     view: texture_view_resource.1,
                     resolve_target,
-                    channel: wgpu_core::command::PassChannel {
-                        load_op: at.load_op,
-                        store_op: at.store_op,
-                        clear_value: at.clear_value.unwrap_or_default(),
-                        read_only: false,
-                    },
+                    load_op: at.load_op,
+                    store_op: at.store_op,
+                    clear_value: at.clear_value.unwrap_or_default(),
                 })
             } else {
                 None
@@ -159,25 +156,15 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
             Some(wgpu_core::command::RenderPassDepthStencilAttachment {
                 view: texture_view_resource.1,
                 depth: wgpu_core::command::PassChannel {
-                    load_op: attachment
-                        .depth_load_op
-                        .unwrap_or(wgpu_core::command::LoadOp::Load),
-                    store_op: attachment
-                        .depth_store_op
-                        .unwrap_or(wgpu_core::command::StoreOp::Store),
-                    // In "01_webgpu.js", `depthLoadOp` is checked to ensure its value is not "clear"
-                    // when `depthClearValue` is undefined, so the default 0.0 doesn't matter.
-                    clear_value: attachment.depth_clear_value.unwrap_or(0.0),
+                    load_op: attachment.depth_load_op,
+                    store_op: attachment.depth_store_op,
+                    clear_value: Some(attachment.depth_clear_value),
                     read_only: attachment.depth_read_only,
                 },
                 stencil: wgpu_core::command::PassChannel {
-                    load_op: attachment
-                        .stencil_load_op
-                        .unwrap_or(wgpu_core::command::LoadOp::Load),
-                    store_op: attachment
-                        .stencil_store_op
-                        .unwrap_or(wgpu_core::command::StoreOp::Store),
-                    clear_value: attachment.stencil_clear_value,
+                    load_op: attachment.stencil_load_op,
+                    store_op: attachment.stencil_store_op,
+                    clear_value: Some(attachment.stencil_clear_value),
                     read_only: attachment.stencil_read_only,
                 },
             });

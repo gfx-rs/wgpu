@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use crate::{
     hal_api::HalApi,
@@ -82,6 +82,12 @@ impl Global {
             surfaces: self.surfaces.generate_report(),
             hub: self.hub.generate_report(),
         }
+    }
+}
+
+impl fmt::Debug for Global {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Global").finish()
     }
 }
 

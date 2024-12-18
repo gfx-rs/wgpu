@@ -509,6 +509,8 @@ pub enum ConstantEvaluatorError {
     InvalidArrayLengthArg,
     #[error("Constants cannot get the array length of a dynamically sized array")]
     ArrayLengthDynamic,
+    #[error("Cannot call arrayLength on array sized by override-expression")]
+    ArrayLengthOverridden,
     #[error("Constants cannot call functions")]
     Call,
     #[error("Constants don't support workGroupUniformLoad")]
@@ -1311,6 +1313,7 @@ impl<'a> ConstantEvaluator<'a> {
                             let expr = Expression::Literal(Literal::U32(len.get()));
                             self.register_evaluated_expr(expr, span)
                         }
+                        ArraySize::Pending(_) => Err(ConstantEvaluatorError::ArrayLengthOverridden),
                         ArraySize::Dynamic => Err(ConstantEvaluatorError::ArrayLengthDynamic),
                     },
                     _ => Err(ConstantEvaluatorError::InvalidArrayLengthArg),

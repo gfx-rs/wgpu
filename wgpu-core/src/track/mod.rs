@@ -255,7 +255,7 @@ impl TrackerIndexAllocators {
 pub(crate) struct PendingTransition<S: ResourceUses> {
     pub id: u32,
     pub selector: S::Selector,
-    pub usage: ops::Range<S>,
+    pub usage: hal::StateTransition<S>,
 }
 
 pub(crate) type PendingTransitionList = Vec<PendingTransition<hal::TextureUses>>;
@@ -282,8 +282,8 @@ impl PendingTransition<hal::TextureUses> {
         texture: &dyn hal::DynTexture,
     ) -> hal::TextureBarrier<'_, dyn hal::DynTexture> {
         // These showing up in a barrier is always a bug
-        strict_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);
-        strict_assert_ne!(self.usage.end, hal::TextureUses::UNKNOWN);
+        strict_assert_ne!(self.usage.from, hal::TextureUses::UNKNOWN);
+        strict_assert_ne!(self.usage.to, hal::TextureUses::UNKNOWN);
 
         let mip_count = self.selector.mips.end - self.selector.mips.start;
         strict_assert_ne!(mip_count, 0);

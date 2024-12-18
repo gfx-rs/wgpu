@@ -40,9 +40,13 @@ default-members = [
     "wgpu",
 ]
 
+[workspace.lints.clippy]
+manual_c_str_literals = "allow"
+ref_as_ptr = "warn"
+
 [workspace.package]
 edition = "2021"
-rust-version = "1.79"
+rust-version = "1.83"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -70,14 +74,14 @@ path = "./naga"
 version = "23.0.0"
 
 [workspace.dependencies]
-anyhow = "1.0.92"
+anyhow = "1.0.93"
 argh = "0.1.5"
 arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.6"
-bytemuck = { version = "1.19" }
-cfg_aliases = "0.1"
+bytemuck = { version = "1.20" }
+cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
 codespan-reporting = "0.11"
@@ -111,7 +115,7 @@ pico-args = { version = "0.5.0", features = [
     "short-space-opt",
     "combined-flags",
 ] }
-png = "0.17.14"
+png = "0.17.15"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.6"
@@ -120,10 +124,11 @@ renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.132"
+serde_json = "1.0.133"
 smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
+trybuild = "1"
 tracy-client = "0.17"
 thiserror = "1.0.69"
 wgpu = { version = "23.0.1", path = "./wgpu", default-features = false }
@@ -149,6 +154,7 @@ gpu-descriptor = "0.3"
 bit-set = "0.8"
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
+mach-dxcompiler-rs = { version = "0.1.4", default-features = false }
 windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
@@ -165,10 +171,10 @@ windows = { version = "0.58", default-features = false }
 console_error_panic_hook = "0.1.7"
 console_log = "1"
 js-sys = "0.3.70"
-wasm-bindgen = "0.2.95"
+wasm-bindgen = "0.2.97"
 wasm-bindgen-futures = "0.4.45"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.72"
+web-sys = "0.3.74"
 web-time = "0.2.4"
 
 # deno dependencies
@@ -178,7 +184,7 @@ deno_url = "0.179.0"
 deno_web = "0.210.0"
 deno_webidl = "0.179.0"
 deno_webgpu = { version = "0.146.0", path = "./deno_webgpu" }
-tokio = "1.41.0"
+tokio = "1.41.1"
 termcolor = "1.4.1"
 
 # android dependencies

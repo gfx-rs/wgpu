@@ -1859,7 +1859,13 @@ impl Global {
                         height: config.height,
                         depth_or_array_layers: 1,
                     },
-                    usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                    usage: conv::map_texture_usage(
+                        config.usage,
+                        hal::FormatAspects::COLOR,
+                        wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                    ),
                     view_formats: hal_view_formats,
                 };
 

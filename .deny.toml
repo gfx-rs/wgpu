@@ -14,7 +14,6 @@ skip-tree = [
     { name = "deno_permissions", version = "0.39.0" },
 ]
 skip = [
-    { name = "hlsl-snapshots", version = "0.1.0" },
     # Strum uses an old version
     { name = "heck", version = "0.4.0" },
 ]
@@ -33,6 +32,7 @@ allow = [
     "MIT",
     "MIT-0",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "Zlib",
 ]
 

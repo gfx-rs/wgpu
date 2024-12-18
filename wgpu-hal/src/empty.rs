@@ -206,7 +206,6 @@ impl crate::Device for Context {
     ) -> DeviceResult<Encoder> {
         Ok(Encoder)
     }
-    unsafe fn destroy_command_encoder(&self, encoder: Encoder) {}
 
     unsafe fn create_bind_group_layout(
         &self,
