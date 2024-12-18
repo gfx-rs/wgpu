@@ -211,7 +211,6 @@ pub(crate) async fn get_adapter_with_capabilities_or_from_env(
             let required_features = *required_features;
             let adapter_features = adapter.features();
             if !adapter_features.contains(required_features) {
-                println!("{:?}", required_features.difference(adapter_features));
                 continue;
             } else {
                 chosen_adapter = Some(adapter);
