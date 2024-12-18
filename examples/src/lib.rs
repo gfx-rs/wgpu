@@ -15,6 +15,7 @@ pub mod hello_windows;
 pub mod hello_workgroups;
 pub mod mipmap;
 pub mod msaa_line;
+pub mod multiple_render_targets;
 pub mod ray_cube_compute;
 pub mod ray_cube_fragment;
 pub mod ray_scene;

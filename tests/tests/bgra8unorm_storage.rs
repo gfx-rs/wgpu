@@ -44,6 +44,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             label: None,
             format: None,
             dimension: None,
+            usage: None,
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             base_array_layer: 0,

@@ -128,11 +128,13 @@ struct RayIntersection {
     front_face: bool,
     // Matrix for converting from object-space to world-space.
     //
-    // Bug: This matrix need to be transposed currently otherwise it will not work properly.
+    // This matrix needs to be on the left side of the multiplication. Using it the other way round will not work.
+    // Use it this way: `let transformed_vector = intersecion.object_to_world * vec4<f32>(x, y, z, transform_multiplier);
     object_to_world: mat4x3<f32>,
     // Matrix for converting from world-space to object-space
     //
-    // Bug: This matrix need to be transposed currently otherwise it will not work properly.
+    // This matrix needs to be on the left side of the multiplication. Using it the other way round will not work.
+    // Use it this way: `let transformed_vector = intersecion.world_to_object * vec4<f32>(x, y, z, transform_multiplier);
     world_to_object: mat4x3<f32>,
 }
 
