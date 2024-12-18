@@ -427,15 +427,13 @@ impl Writer {
                 &mut tri_block
             };
             let t_id = self.id_gen.next();
-            block
-                .body
-                .push(Instruction::ray_query_get_intersection(
-                    spirv::Op::RayQueryGetIntersectionTKHR,
-                    scalar_type_id,
-                    t_id,
-                    query_id,
-                    intersection_id,
-                ));
+            block.body.push(Instruction::ray_query_get_intersection(
+                spirv::Op::RayQueryGetIntersectionTKHR,
+                scalar_type_id,
+                t_id,
+                query_id,
+                intersection_id,
+            ));
             let idx_id = self.get_index_constant(1);
             let access_idx = self.id_gen.next();
             block.body.push(Instruction::access_chain(
@@ -444,9 +442,7 @@ impl Writer {
                 blank_intersection_id,
                 &[idx_id],
             ));
-            block
-                .body
-                .push(Instruction::store(access_idx, t_id, None));
+            block.body.push(Instruction::store(access_idx, t_id, None));
         }
         not_none_block.body.push(Instruction::selection_merge(
             merge_label_id,
