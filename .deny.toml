@@ -8,6 +8,10 @@ skip-tree = [
     { name = "rustc_version", version = "0.2.3" },
     { name = "sourcemap", version = "7.1.1" },
     { name = "miniz_oxide", version = "0.7.4" },
+
+    # introduced by Deno, to be investigated
+    { name = "deno_core", version = "0.321.0" },
+    { name = "deno_permissions", version = "0.39.0" },
 ]
 skip = [
     # Strum uses an old version

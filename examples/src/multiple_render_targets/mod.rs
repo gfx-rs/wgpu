@@ -69,6 +69,7 @@ impl MultiTargetRenderer {
             label: Some("view"),
             format: None,
             dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: None,
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,

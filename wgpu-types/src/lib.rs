@@ -6102,6 +6102,9 @@ pub struct TextureViewDescriptor<L> {
     /// The dimension of the texture view. For 1D textures, this must be `D1`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `D3`
     pub dimension: Option<TextureViewDimension>,
+    /// The allowed usage(s) for the texture view. Must be a subset of the usage flags of the texture.
+    /// If not provided, defaults to the full set of usage flags of the texture.
+    pub usage: Option<TextureUsages>,
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
     pub aspect: TextureAspect,
     /// Base mip level.

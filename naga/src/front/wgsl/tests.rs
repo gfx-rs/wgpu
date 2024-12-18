@@ -660,6 +660,27 @@ fn parse_missing_workgroup_size() {
 }
 
 mod diagnostic_filter {
+    use crate::front::wgsl::assert_parse_err;
+
+    #[test]
+    fn intended_global_directive() {
+        let shader = "@diagnostic(off, my.lint);";
+        assert_parse_err(
+            shader,
+            "\
+error: `@diagnostic(…)` attribute(s) on semicolons are not supported
+  ┌─ wgsl:1:1
+  │
+1 │ @diagnostic(off, my.lint);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^
+  │
+  = note: `@diagnostic(…)` attributes are only permitted on `fn`s, some statements, and `switch`/`loop` bodies.
+  = note: If you meant to declare a diagnostic filter that applies to the entire module, move this line to the top of the file and remove the `@` symbol.
+
+"
+        );
+    }
+
     mod parse_sites_not_yet_supported {
         use crate::front::wgsl::assert_parse_err;
 

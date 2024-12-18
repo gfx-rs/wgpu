@@ -2683,6 +2683,7 @@ impl dispatch::TextureInterface for WebTexture {
         if let Some(label) = desc.label {
             mapped.set_label(label);
         }
+        mapped.set_usage(desc.usage.unwrap_or(wgt::TextureUsages::empty()).bits());
 
         let view = self.inner.create_view_with_descriptor(&mapped).unwrap();
 

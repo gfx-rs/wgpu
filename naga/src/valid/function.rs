@@ -1012,24 +1012,38 @@ impl super::Validator {
                 } => {
                     //Note: this code uses a lot of `FunctionError::InvalidImageStore`,
                     // and could probably be refactored.
-                    let var = match *context.get_expression(image) {
+                    let global_var;
+                    let image_ty;
+                    match *context.get_expression(image) {
                         crate::Expression::GlobalVariable(var_handle) => {
-                            &context.global_vars[var_handle]
+                            global_var = &context.global_vars[var_handle];
+                            image_ty = global_var.ty;
                         }
-                        // We're looking at a binding index situation, so punch through the index and look at the global behind it.
+                        // The `image` operand is indexing into a binding array,
+                        // so punch through the `Access`* expression and look at
+                        // the global behind it.
                         crate::Expression::Access { base, .. }
                         | crate::Expression::AccessIndex { base, .. } => {
-                            match *context.get_expression(base) {
-                                crate::Expression::GlobalVariable(var_handle) => {
-                                    &context.global_vars[var_handle]
-                                }
-                                _ => {
-                                    return Err(FunctionError::InvalidImageStore(
-                                        ExpressionError::ExpectedGlobalVariable,
-                                    )
-                                    .with_span_handle(image, context.expressions))
-                                }
-                            }
+                            let crate::Expression::GlobalVariable(var_handle) =
+                                *context.get_expression(base)
+                            else {
+                                return Err(FunctionError::InvalidImageStore(
+                                    ExpressionError::ExpectedGlobalVariable,
+                                )
+                                .with_span_handle(image, context.expressions));
+                            };
+                            global_var = &context.global_vars[var_handle];
+
+                            // The global variable must be a binding array.
+                            let Ti::BindingArray { base, .. } = context.types[global_var.ty].inner
+                            else {
+                                return Err(FunctionError::InvalidImageStore(
+                                    ExpressionError::ExpectedBindingArrayType(global_var.ty),
+                                )
+                                .with_span_handle(global_var.ty, context.types));
+                            };
+
+                            image_ty = base;
                         }
                         _ => {
                             return Err(FunctionError::InvalidImageStore(
@@ -1039,77 +1053,73 @@ impl super::Validator {
                         }
                     };
 
-                    // Punch through a binding array to get the underlying type
-                    let global_ty = match context.types[var.ty].inner {
-                        Ti::BindingArray { base, .. } => &context.types[base].inner,
-                        ref inner => inner,
+                    // The `image` operand must be an `Image`.
+                    let Ti::Image {
+                        class,
+                        arrayed,
+                        dim,
+                    } = context.types[image_ty].inner
+                    else {
+                        return Err(FunctionError::InvalidImageStore(
+                            ExpressionError::ExpectedImageType(global_var.ty),
+                        )
+                        .with_span()
+                        .with_handle(global_var.ty, context.types)
+                        .with_handle(image, context.expressions));
                     };
 
-                    let value_ty = match *global_ty {
-                        Ti::Image {
-                            class,
-                            arrayed,
-                            dim,
-                        } => {
-                            match context
-                                .resolve_type(coordinate, &self.valid_expression_set)?
-                                .image_storage_coordinates()
-                            {
-                                Some(coord_dim) if coord_dim == dim => {}
-                                _ => {
-                                    return Err(FunctionError::InvalidImageStore(
-                                        ExpressionError::InvalidImageCoordinateType(
-                                            dim, coordinate,
-                                        ),
-                                    )
-                                    .with_span_handle(coordinate, context.expressions));
-                                }
-                            };
-                            if arrayed != array_index.is_some() {
-                                return Err(FunctionError::InvalidImageStore(
-                                    ExpressionError::InvalidImageArrayIndex,
-                                )
-                                .with_span_handle(coordinate, context.expressions));
-                            }
-                            if let Some(expr) = array_index {
-                                match *context.resolve_type(expr, &self.valid_expression_set)? {
-                                    Ti::Scalar(crate::Scalar {
-                                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                        width: _,
-                                    }) => {}
-                                    _ => {
-                                        return Err(FunctionError::InvalidImageStore(
-                                            ExpressionError::InvalidImageArrayIndexType(expr),
-                                        )
-                                        .with_span_handle(expr, context.expressions));
-                                    }
-                                }
-                            }
-                            match class {
-                                crate::ImageClass::Storage { format, .. } => {
-                                    crate::TypeInner::Vector {
-                                        size: crate::VectorSize::Quad,
-                                        scalar: format.into(),
-                                    }
-                                }
-                                _ => {
-                                    return Err(FunctionError::InvalidImageStore(
-                                        ExpressionError::InvalidImageClass(class),
-                                    )
-                                    .with_span_handle(image, context.expressions));
-                                }
-                            }
-                        }
-                        _ => {
+                    // It had better be a storage image, since we're writing to it.
+                    let crate::ImageClass::Storage { format, .. } = class else {
+                        return Err(FunctionError::InvalidImageStore(
+                            ExpressionError::InvalidImageClass(class),
+                        )
+                        .with_span_handle(image, context.expressions));
+                    };
+
+                    // The `coordinate` operand must be a vector of the appropriate size.
+                    if !context
+                        .resolve_type(coordinate, &self.valid_expression_set)?
+                        .image_storage_coordinates()
+                        .is_some_and(|coord_dim| coord_dim == dim)
+                    {
+                        return Err(FunctionError::InvalidImageStore(
+                            ExpressionError::InvalidImageCoordinateType(dim, coordinate),
+                        )
+                        .with_span_handle(coordinate, context.expressions));
+                    }
+
+                    // The `array_index` operand should be present if and only if
+                    // the image itself is arrayed.
+                    if arrayed != array_index.is_some() {
+                        return Err(FunctionError::InvalidImageStore(
+                            ExpressionError::InvalidImageArrayIndex,
+                        )
+                        .with_span_handle(coordinate, context.expressions));
+                    }
+
+                    // If present, `array_index` must be a scalar integer type.
+                    if let Some(expr) = array_index {
+                        if !matches!(
+                            *context.resolve_type(expr, &self.valid_expression_set)?,
+                            Ti::Scalar(crate::Scalar {
+                                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                                width: _,
+                            })
+                        ) {
                             return Err(FunctionError::InvalidImageStore(
-                                ExpressionError::ExpectedImageType(var.ty),
+                                ExpressionError::InvalidImageArrayIndexType(expr),
                             )
-                            .with_span()
-                            .with_handle(var.ty, context.types)
-                            .with_handle(image, context.expressions))
+                            .with_span_handle(expr, context.expressions));
                         }
+                    }
+
+                    let value_ty = crate::TypeInner::Vector {
+                        size: crate::VectorSize::Quad,
+                        scalar: format.into(),
                     };
 
+                    // The value we're writing had better match the scalar type
+                    // for `image`'s format.
                     if *context.resolve_type(value, &self.valid_expression_set)? != value_ty {
                         return Err(FunctionError::InvalidStoreValue(value)
                             .with_span_handle(value, context.expressions));

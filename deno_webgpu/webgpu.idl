@@ -78,11 +78,11 @@ enum GPUPowerPreference {
 [Exposed=(Window, Worker), SecureContext]
 interface GPUAdapter {
     [SameObject] readonly attribute GPUSupportedFeatures features;
+    [SameObject] readonly attribute GPUAdapterInfo info;
     [SameObject] readonly attribute GPUSupportedLimits limits;
     readonly attribute boolean isFallbackAdapter;
 
     Promise<GPUDevice> requestDevice(optional GPUDeviceDescriptor descriptor = {});
-    Promise<GPUAdapterInfo> requestAdapterInfo();
 };
 
 dictionary GPUDeviceDescriptor
@@ -92,22 +92,19 @@ dictionary GPUDeviceDescriptor
 };
 
 enum GPUFeatureName {
-    // api
     "depth-clip-control",
-    // texture formats
     "depth32float-stencil8",
     "texture-compression-bc",
     "texture-compression-bc-sliced-3d",
     "texture-compression-etc2",
     "texture-compression-astc",
-    // api
     "timestamp-query",
     "indirect-first-instance",
-    // shader
     "shader-f16",
     "rg11b10ufloat-renderable",
     "bgra8unorm-storage",
     "float32-filterable",
+    "dual-source-blending",
 
     // extended from spec
 
@@ -752,6 +749,10 @@ enum GPUBlendFactor {
     "src-alpha-saturated",
     "constant",
     "one-minus-constant",
+    "src1",
+    "one-minus-src1",
+    "src1-alpha",
+    "one-minus-src1-alpha",
 };
 
 enum GPUBlendOperation {
@@ -1109,13 +1110,13 @@ interface GPUQueue {
     undefined writeBuffer(
         GPUBuffer buffer,
         GPUSize64 bufferOffset,
-        [AllowShared] BufferSource data,
+        AllowSharedBufferSource data,
         optional GPUSize64 dataOffset = 0,
         optional GPUSize64 size);
 
     undefined writeTexture(
         GPUTexelCopyTextureInfo destination,
-        [AllowShared] BufferSource data,
+        AllowSharedBufferSource data,
         GPUTexelCopyBufferLayout dataLayout,
         GPUExtent3D size);
 };

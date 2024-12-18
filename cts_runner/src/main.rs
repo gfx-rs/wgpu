@@ -21,6 +21,78 @@ mod native {
     use termcolor::ColorSpec;
     use termcolor::WriteColor;
 
+    // temporary
+    fn get_webgpu_error_class(e: &deno_webgpu::InitError) -> &'static str {
+        match e {
+            deno_webgpu::InitError::Resource(e) => {
+                deno_core::error::get_custom_error_class(e).unwrap_or("Error")
+            }
+            deno_webgpu::InitError::RequestDevice(_) => "DOMExceptionOperationError",
+        }
+    }
+
+    fn get_webgpu_buffer_error_class(e: &deno_webgpu::buffer::BufferError) -> &'static str {
+        match e {
+            deno_webgpu::buffer::BufferError::Resource(e) => {
+                deno_core::error::get_custom_error_class(e).unwrap_or("Error")
+            }
+            deno_webgpu::buffer::BufferError::InvalidUsage => "TypeError",
+            deno_webgpu::buffer::BufferError::Access(_) => "DOMExceptionOperationError",
+            deno_webgpu::buffer::BufferError::Canceled(_) => "Error",
+        }
+    }
+
+    fn get_webgpu_bundle_error_class(e: &deno_webgpu::bundle::BundleError) -> &'static str {
+        match e {
+            deno_webgpu::bundle::BundleError::Resource(e) => {
+                deno_core::error::get_custom_error_class(e).unwrap_or("Error")
+            }
+            deno_webgpu::bundle::BundleError::InvalidSize => "TypeError",
+        }
+    }
+
+    fn get_webgpu_byow_error_class(e: &deno_webgpu::byow::ByowError) -> &'static str {
+        match e {
+            deno_webgpu::byow::ByowError::WebGPUNotInitiated => "TypeError",
+            deno_webgpu::byow::ByowError::InvalidParameters => "TypeError",
+            deno_webgpu::byow::ByowError::CreateSurface(_) => "Error",
+            deno_webgpu::byow::ByowError::InvalidSystem => "TypeError",
+            #[cfg(any(
+                target_os = "windows",
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd"
+            ))]
+            deno_webgpu::byow::ByowError::NullWindow => "TypeError",
+            #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd"))]
+            deno_webgpu::byow::ByowError::NullDisplay => "TypeError",
+            #[cfg(target_os = "macos")]
+            deno_webgpu::byow::ByowError::NSViewDisplay => "TypeError",
+        }
+    }
+
+    fn get_webgpu_render_pass_error_class(
+        e: &deno_webgpu::render_pass::RenderPassError,
+    ) -> &'static str {
+        match e {
+            deno_webgpu::render_pass::RenderPassError::Resource(e) => {
+                deno_core::error::get_custom_error_class(e).unwrap_or("Error")
+            }
+            deno_webgpu::render_pass::RenderPassError::InvalidSize => "TypeError",
+            deno_webgpu::render_pass::RenderPassError::RenderPass(_) => "Error",
+        }
+    }
+
+    fn get_webgpu_surface_error_class(e: &deno_webgpu::surface::SurfaceError) -> &'static str {
+        match e {
+            deno_webgpu::surface::SurfaceError::Resource(e) => {
+                deno_core::error::get_custom_error_class(e).unwrap_or("Error")
+            }
+            deno_webgpu::surface::SurfaceError::Surface(_) => "Error",
+            deno_webgpu::surface::SurfaceError::InvalidStatus => "Error",
+        }
+    }
+
     pub async fn run() -> Result<(), AnyError> {
         let mut args_iter = env::args();
         let _ = args_iter.next();
@@ -112,7 +184,30 @@ mod native {
 
     fn get_error_class_name(e: &AnyError) -> &'static str {
         deno_core::error::get_custom_error_class(e)
-            .or_else(|| deno_webgpu::error::get_error_class_name(e))
+            .or_else(|| {
+                e.downcast_ref::<deno_webgpu::InitError>()
+                    .map(get_webgpu_error_class)
+            })
+            .or_else(|| {
+                e.downcast_ref::<deno_webgpu::buffer::BufferError>()
+                    .map(get_webgpu_buffer_error_class)
+            })
+            .or_else(|| {
+                e.downcast_ref::<deno_webgpu::bundle::BundleError>()
+                    .map(get_webgpu_bundle_error_class)
+            })
+            .or_else(|| {
+                e.downcast_ref::<deno_webgpu::byow::ByowError>()
+                    .map(get_webgpu_byow_error_class)
+            })
+            .or_else(|| {
+                e.downcast_ref::<deno_webgpu::render_pass::RenderPassError>()
+                    .map(get_webgpu_render_pass_error_class)
+            })
+            .or_else(|| {
+                e.downcast_ref::<deno_webgpu::surface::SurfaceError>()
+                    .map(get_webgpu_surface_error_class)
+            })
             .unwrap_or_else(|| {
                 panic!("Error '{e}' contains boxed error of unsupported type: {e:#}");
             })

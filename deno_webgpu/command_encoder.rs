@@ -1,5 +1,6 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
+use super::wgpu_types;
 use crate::WebGpuQuerySet;
 use deno_core::error::AnyError;
 use deno_core::op2;
@@ -79,7 +80,7 @@ pub struct GpuRenderPassColorAttachment {
 #[serde(rename_all = "camelCase")]
 pub struct GpuRenderPassDepthStencilAttachment {
     view: ResourceId,
-    depth_clear_value: f32,
+    depth_clear_value: Option<f32>,
     depth_load_op: Option<wgpu_core::command::LoadOp>,
     depth_store_op: Option<wgpu_core::command::StoreOp>,
     depth_read_only: bool,
@@ -157,7 +158,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                 depth: wgpu_core::command::PassChannel {
                     load_op: attachment.depth_load_op,
                     store_op: attachment.depth_store_op,
-                    clear_value: Some(attachment.depth_clear_value),
+                    clear_value: Some(attachment.depth_clear_value.unwrap_or(0.0)),
                     read_only: attachment.depth_read_only,
                 },
                 stencil: wgpu_core::command::PassChannel {
