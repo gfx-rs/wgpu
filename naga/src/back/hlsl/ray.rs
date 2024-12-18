@@ -131,7 +131,10 @@ impl<W: Write> super::Writer<'_, W> {
             self.out,
             "    ret.instance_custom_index = rq.CandidateInstanceID();"
         )?;
-        writeln!(self.out, "    ret.instance_id = rq.CandidateInstanceIndex();")?;
+        writeln!(
+            self.out,
+            "    ret.instance_id = rq.CandidateInstanceIndex();"
+        )?;
         writeln!(
             self.out,
             "    ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();"
