@@ -290,17 +290,6 @@ impl Writer {
                 intersection_id,
             ));
 
-        let t_id = self.id_gen.next();
-        not_none_block
-            .body
-            .push(Instruction::ray_query_get_intersection(
-                spirv::Op::RayQueryGetIntersectionTKHR,
-                scalar_type_id,
-                t_id,
-                query_id,
-                intersection_id,
-            ));
-
         //Note: there is also `OpRayQueryGetIntersectionCandidateAABBOpaqueKHR`,
         // but it's not a property of an intersection.
 
@@ -324,19 +313,6 @@ impl Writer {
                 query_id,
                 intersection_id,
             ));
-
-        // t
-        let idx_id = self.get_index_constant(1);
-        let access_idx = self.id_gen.next();
-        not_none_block.body.push(Instruction::access_chain(
-            float_pointer_type_id,
-            access_idx,
-            blank_intersection_id,
-            &[idx_id],
-        ));
-        not_none_block
-            .body
-            .push(Instruction::store(access_idx, t_id, None));
 
         // instance custom index
         let idx_id = self.get_index_constant(2);
@@ -443,6 +419,35 @@ impl Writer {
 
         let merge_label_id = self.id_gen.next();
         let merge_block = Block::new(merge_label_id);
+        // t
+        {
+            let block = if is_committed {
+                &mut not_none_block
+            } else {
+                &mut tri_block
+            };
+            let t_id = self.id_gen.next();
+            block
+                .body
+                .push(Instruction::ray_query_get_intersection(
+                    spirv::Op::RayQueryGetIntersectionTKHR,
+                    scalar_type_id,
+                    t_id,
+                    query_id,
+                    intersection_id,
+                ));
+            let idx_id = self.get_index_constant(1);
+            let access_idx = self.id_gen.next();
+            block.body.push(Instruction::access_chain(
+                float_pointer_type_id,
+                access_idx,
+                blank_intersection_id,
+                &[idx_id],
+            ));
+            block
+                .body
+                .push(Instruction::store(access_idx, t_id, None));
+        }
         not_none_block.body.push(Instruction::selection_merge(
             merge_label_id,
             spirv::SelectionControl::NONE,
