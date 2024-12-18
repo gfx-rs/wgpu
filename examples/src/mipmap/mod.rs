@@ -127,6 +127,7 @@ impl Example {
                     label: Some("mip"),
                     format: None,
                     dimension: None,
+                    usage: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
                     mip_level_count: Some(1),

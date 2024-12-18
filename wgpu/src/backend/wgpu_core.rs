@@ -1967,6 +1967,7 @@ impl dispatch::TextureInterface for CoreTexture {
             label: desc.label.map(Borrowed),
             format: desc.format,
             dimension: desc.dimension,
+            usage: desc.usage,
             range: wgt::ImageSubresourceRange {
                 aspect: desc.aspect,
                 base_mip_level: desc.base_mip_level,

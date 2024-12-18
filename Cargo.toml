@@ -178,12 +178,12 @@ web-sys = "0.3.74"
 web-time = "0.2.4"
 
 # deno dependencies
-deno_console = "0.143.0"
-deno_core = "0.272.0"
-deno_url = "0.143.0"
-deno_web = "0.174.0"
-deno_webidl = "0.143.0"
-deno_webgpu = { version = "0.118.0", path = "./deno_webgpu" }
+deno_console = "0.179.0"
+deno_core = "0.321.0"
+deno_url = "0.179.0"
+deno_web = "0.210.0"
+deno_webidl = "0.179.0"
+deno_webgpu = { version = "0.146.0", path = "./deno_webgpu" }
 tokio = "1.41.1"
 termcolor = "1.4.1"
 
