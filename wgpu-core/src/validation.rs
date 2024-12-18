@@ -543,7 +543,7 @@ impl Resource {
                 }
             }
             ResourceType::AccelerationStructure { .. } => match entry.ty {
-                BindingType::AccelerationStructure => (),
+                BindingType::AccelerationStructure { .. } => (),
                 _ => {
                     return Err(BindingError::WrongType {
                         binding: (&entry.ty).into(),

@@ -27,7 +27,7 @@ impl Device {
         if blas_desc
             .flags
             .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-            && !self.features.contains(wgt::Features::RAY_HIT_VERTEX_RETURN)
+            && !self.features.contains(Features::RAY_HIT_VERTEX_RETURN)
         {
             return Err(CreateBlasError::MissingVertexReturnFeature);
         }
@@ -120,7 +120,7 @@ impl Device {
         if desc
             .flags
             .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-            && !self.features.contains(wgt::Features::RAY_HIT_VERTEX_RETURN)
+            && !self.features.contains(Features::RAY_HIT_VERTEX_RETURN)
         {
             return Err(CreateTlasError::MissingVertexReturnFeature);
         }
