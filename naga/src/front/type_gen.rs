@@ -180,13 +180,13 @@ impl crate::Module {
                             offset: 4,
                         },
                         crate::StructMember {
-                            name: Some("instance_custom_index".to_string()),
+                            name: Some("instance_custom_data".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 8,
                         },
                         crate::StructMember {
-                            name: Some("instance_id".to_string()),
+                            name: Some("instance_index".to_string()),
                             ty: ty_flag,
                             binding: None,
                             offset: 12,

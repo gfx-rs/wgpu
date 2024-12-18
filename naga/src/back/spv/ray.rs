@@ -239,23 +239,23 @@ impl Writer {
             Instruction::branch_conditional(not_none_comp_id, not_none_label_id, final_label_id),
         );
 
-        let instance_custom_index_id = self.id_gen.next();
+        let instance_custom_data_id = self.id_gen.next();
         not_none_block
             .body
             .push(Instruction::ray_query_get_intersection(
                 spirv::Op::RayQueryGetIntersectionInstanceCustomIndexKHR,
                 flag_type_id,
-                instance_custom_index_id,
+                instance_custom_data_id,
                 query_id,
                 intersection_id,
             ));
-        let instance_id = self.id_gen.next();
+        let instance_index_id = self.id_gen.next();
         not_none_block
             .body
             .push(Instruction::ray_query_get_intersection(
                 spirv::Op::RayQueryGetIntersectionInstanceIdKHR,
                 flag_type_id,
-                instance_id,
+                instance_index_id,
                 query_id,
                 intersection_id,
             ));
@@ -325,7 +325,7 @@ impl Writer {
         ));
         not_none_block.body.push(Instruction::store(
             access_idx,
-            instance_custom_index_id,
+            instance_custom_data_id,
             None,
         ));
 
@@ -340,7 +340,7 @@ impl Writer {
         ));
         not_none_block
             .body
-            .push(Instruction::store(access_idx, instance_id, None));
+            .push(Instruction::store(access_idx, instance_index_id, None));
 
         let idx_id = self.get_index_constant(4);
         let access_idx = self.id_gen.next();

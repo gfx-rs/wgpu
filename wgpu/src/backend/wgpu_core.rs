@@ -2530,7 +2530,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                         .map(|instance| wgc::ray_tracing::TlasInstance {
                             blas_id: instance.blas.inner.as_core().id,
                             transform: &instance.transform,
-                            custom_index: instance.custom_index,
+                            custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                 });

@@ -109,11 +109,11 @@ struct RayIntersection {
     kind: u32,
     // Distance from starting point, measured in units of `RayDesc::dir`.
     t: f32,
-    // Corresponds to `instance.custom_index` where `instance` is the `TlasInstance`
+    // Corresponds to `instance.custom_data` where `instance` is the `TlasInstance`
     // that the intersected object was contained in.
-    instance_custom_index: u32,
+    instance_custom_data: u32,
     // The index into the `TlasPackage` to get the `TlasInstance` that the hit object is in
-    instance_id: u32,
+    instance_index: u32,
     // The offset into the shader binding table. Currently, this value is always 0.
     sbt_record_offset: u32,
     // The index into the `Blas`'s build descriptor (e.g. if `BlasBuildEntry::geometry` is
