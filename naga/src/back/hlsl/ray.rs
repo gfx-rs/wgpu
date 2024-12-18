@@ -110,6 +110,15 @@ impl<W: Write> super::Writer<'_, W> {
             "        ret.kind = {};",
             RayQueryIntersection::Triangle as u32
         )?;
+        writeln!(self.out, "        ret.t = rq.CandidateTriangleRayT();")?;
+        writeln!(
+            self.out,
+            "        ret.barycentrics = rq.CandidateTriangleBarycentrics();"
+        )?;
+        writeln!(
+            self.out,
+            "        ret.front_face = rq.CandidateTriangleFrontFace();"
+        )?;
         writeln!(self.out, "    }} else {{")?;
         writeln!(
             self.out,
@@ -117,44 +126,31 @@ impl<W: Write> super::Writer<'_, W> {
             RayQueryIntersection::Aabb as u32
         )?;
         writeln!(self.out, "    }}")?;
-        writeln!(self.out, "    ret.t = rq.CommittedRayT();")?;
+
         writeln!(
             self.out,
-            "    ret.instance_custom_index = rq.CommittedInstanceIndex();"
+            "    ret.instance_custom_index = rq.CandidateInstanceIndex();"
         )?;
-        writeln!(self.out, "    ret.instance_id = rq.CommittedInstanceID();")?;
+        writeln!(self.out, "    ret.instance_id = rq.CandidateInstanceID();")?;
         writeln!(
             self.out,
-            "    ret.sbt_record_offset = rq.CommittedInstanceContributionToHitGroupIndex();"
-        )?;
-        writeln!(
-            self.out,
-            "    ret.geometry_index = rq.CommittedGeometryIndex();"
+            "    ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();"
         )?;
         writeln!(
             self.out,
-            "    ret.primitive_index = rq.CommittedPrimitiveIndex();"
+            "    ret.geometry_index = rq.CandidateGeometryIndex();"
         )?;
         writeln!(
             self.out,
-            "    if( rq.CommittedStatus() == COMMITTED_TRIANGLE_HIT ) {{"
+            "    ret.primitive_index = rq.CandidatePrimitiveIndex();"
         )?;
         writeln!(
             self.out,
-            "        ret.barycentrics = rq.CommittedTriangleBarycentrics();"
+            "    ret.object_to_world = rq.CandidateObjectToWorld4x3();"
         )?;
         writeln!(
             self.out,
-            "        ret.front_face = rq.CommittedTriangleFrontFace();"
-        )?;
-        writeln!(self.out, "    }}")?;
-        writeln!(
-            self.out,
-            "    ret.object_to_world = rq.CommittedObjectToWorld4x3();"
-        )?;
-        writeln!(
-            self.out,
-            "    ret.world_to_object = rq.CommittedWorldToObject4x3();"
+            "    ret.world_to_object = rq.CandidateWorldToObject4x3();"
         )?;
         writeln!(self.out, "    return ret;")?;
         writeln!(self.out, "}}")?;

@@ -122,21 +122,19 @@ RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
     CANDIDATE_TYPE kind = rq.CandidateType();
     if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
         ret.kind = 1;
+        ret.t = rq.CandidateTriangleRayT();
+        ret.barycentrics = rq.CandidateTriangleBarycentrics();
+        ret.front_face = rq.CandidateTriangleFrontFace();
     } else {
         ret.kind = 3;
     }
-    ret.t = rq.CommittedRayT();
-    ret.instance_custom_index = rq.CommittedInstanceIndex();
-    ret.instance_id = rq.CommittedInstanceID();
-    ret.sbt_record_offset = rq.CommittedInstanceContributionToHitGroupIndex();
-    ret.geometry_index = rq.CommittedGeometryIndex();
-    ret.primitive_index = rq.CommittedPrimitiveIndex();
-    if( rq.CommittedStatus() == COMMITTED_TRIANGLE_HIT ) {
-        ret.barycentrics = rq.CommittedTriangleBarycentrics();
-        ret.front_face = rq.CommittedTriangleFrontFace();
-    }
-    ret.object_to_world = rq.CommittedObjectToWorld4x3();
-    ret.world_to_object = rq.CommittedWorldToObject4x3();
+    ret.instance_custom_index = rq.CandidateInstanceIndex();
+    ret.instance_id = rq.CandidateInstanceID();
+    ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();
+    ret.geometry_index = rq.CandidateGeometryIndex();
+    ret.primitive_index = rq.CandidatePrimitiveIndex();
+    ret.object_to_world = rq.CandidateObjectToWorld4x3();
+    ret.world_to_object = rq.CandidateWorldToObject4x3();
     return ret;
 }
 
