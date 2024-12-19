@@ -280,10 +280,16 @@ impl super::Validator {
                     }
                 }
 
+                let array_size_indexable_length = if self.allow_overrides {
+                    crate::ArraySize::indexable_length
+                } else {
+                    crate::ArraySize::indexable_length_resolved
+                };
+
                 // If we know both the length and the index, we can do the
                 // bounds check now.
                 if let crate::proc::IndexableLength::Known(known_length) =
-                    base_type.indexable_length(module)?
+                    base_type.indexable_length(module, array_size_indexable_length)?
                 {
                     match module
                         .to_ctx()

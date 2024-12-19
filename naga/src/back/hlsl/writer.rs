@@ -1090,12 +1090,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         write!(self.out, "[")?;
 
-        match size {
-            crate::ArraySize::Constant(size) => {
+        match size.resolve(module.to_ctx())? {
+            proc::ResolvedSize::Constant(size) => {
                 write!(self.out, "{size}")?;
             }
-            crate::ArraySize::Pending(_) => unreachable!(),
-            crate::ArraySize::Dynamic => unreachable!(),
+            proc::ResolvedSize::Runtime => unreachable!(),
         }
 
         write!(self.out, "]")?;
@@ -1140,7 +1139,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             let ty_inner = &module.types[member.ty].inner;
-            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx());
+            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx())?;
 
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
@@ -2851,7 +2850,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             index::IndexableLength::Known(limit) => {
                                 write!(self.out, "{}u", limit - 1)?;
                             }
-                            index::IndexableLength::Pending => unreachable!(),
                             index::IndexableLength::Dynamic => unreachable!(),
                         }
                         write!(self.out, ")")?;

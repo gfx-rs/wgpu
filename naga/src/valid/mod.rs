@@ -345,8 +345,6 @@ pub enum ValidationError {
         handle: Handle<crate::Expression>,
         source: ConstExpressionError,
     },
-    #[error("Array size expression {handle:?} is not strictly positive")]
-    ArraySizeError { handle: Handle<crate::Expression> },
     #[error("Constant {handle:?} '{name}' is invalid")]
     Constant {
         handle: Handle<crate::Constant>,
@@ -616,6 +614,7 @@ impl Validator {
                 .into_boxed_slice(),
         };
 
+        let mut array_override_expr_set = HandleSet::new();
         for (handle, ty) in module.types.iter() {
             let ty_info = self
                 .validate_type(handle, module.to_ctx())
@@ -627,18 +626,32 @@ impl Validator {
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
-            if !self.allow_overrides {
-                if let crate::TypeInner::Array {
-                    size: crate::ArraySize::Pending(_),
-                    ..
-                } = ty.inner
-                {
-                    return Err((ValidationError::Type {
-                        handle,
-                        name: ty.name.clone().unwrap_or_default(),
-                        source: TypeError::UnresolvedOverride(handle),
-                    })
-                    .with_span_handle(handle, &module.types));
+            if let crate::TypeInner::Array {
+                size: crate::ArraySize::Pending(pending_size),
+                ..
+            } = ty.inner
+            {
+                match pending_size {
+                    crate::PendingArraySize::Expression(expr) => {
+                        if !array_override_expr_set.insert(expr) {
+                            return Err((ValidationError::Type {
+                                handle,
+                                name: ty.name.clone().unwrap_or_default(),
+                                source: TypeError::NonUniqueOverrideExpressionForArray(handle),
+                            })
+                            .with_span_handle(handle, &module.types));
+                        }
+                    }
+                    crate::PendingArraySize::Override(_) => {
+                        if !self.allow_overrides {
+                            return Err((ValidationError::Type {
+                                handle,
+                                name: ty.name.clone().unwrap_or_default(),
+                                source: TypeError::UnresolvedOverride(handle),
+                            })
+                            .with_span_handle(handle, &module.types));
+                        }
+                    }
                 }
             }
             mod_info.type_flags.push(ty_info.flags);

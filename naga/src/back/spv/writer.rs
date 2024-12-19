@@ -942,10 +942,10 @@ impl Writer {
 
     fn write_type_declaration_arena(
         &mut self,
-        arena: &UniqueArena<crate::Type>,
+        module: &crate::Module,
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
-        let ty = &arena[handle];
+        let ty = &module.types[handle];
         // If it's a type that needs SPIR-V capabilities, request them now.
         // This needs to happen regardless of the LocalType lookup succeeding,
         // because some types which map to the same LocalType have different
@@ -978,24 +978,26 @@ impl Writer {
                     self.decorate(id, Decoration::ArrayStride, &[stride]);
 
                     let type_id = self.get_type_id(LookupType::Handle(base));
-                    match size {
-                        crate::ArraySize::Constant(length) => {
-                            let length_id = self.get_index_constant(length.get());
+                    match size.resolve(module.to_ctx())? {
+                        crate::proc::ResolvedSize::Constant(length) => {
+                            let length_id = self.get_index_constant(length);
                             Instruction::type_array(id, type_id, length_id)
                         }
-                        crate::ArraySize::Pending(_) => unreachable!(),
-                        crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
+                        crate::proc::ResolvedSize::Runtime => {
+                            Instruction::type_runtime_array(id, type_id)
+                        }
                     }
                 }
                 crate::TypeInner::BindingArray { base, size } => {
                     let type_id = self.get_type_id(LookupType::Handle(base));
-                    match size {
-                        crate::ArraySize::Constant(length) => {
-                            let length_id = self.get_index_constant(length.get());
+                    match size.resolve(module.to_ctx())? {
+                        crate::proc::ResolvedSize::Constant(length) => {
+                            let length_id = self.get_index_constant(length);
                             Instruction::type_array(id, type_id, length_id)
                         }
-                        crate::ArraySize::Pending(_) => unreachable!(),
-                        crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
+                        crate::proc::ResolvedSize::Runtime => {
+                            Instruction::type_runtime_array(id, type_id)
+                        }
                     }
                 }
                 crate::TypeInner::Struct {
@@ -1005,7 +1007,7 @@ impl Writer {
                     let mut has_runtime_array = false;
                     let mut member_ids = Vec::with_capacity(members.len());
                     for (index, member) in members.iter().enumerate() {
-                        let member_ty = &arena[member.ty];
+                        let member_ty = &module.types[member.ty];
                         match member_ty.inner {
                             crate::TypeInner::Array {
                                 base: _,
@@ -1016,7 +1018,7 @@ impl Writer {
                             }
                             _ => (),
                         }
-                        self.decorate_struct_member(id, index, member, arena)?;
+                        self.decorate_struct_member(id, index, member, &module.types)?;
                         let member_id = self.get_type_id(LookupType::Handle(member.ty));
                         member_ids.push(member_id);
                     }
@@ -1954,7 +1956,7 @@ impl Writer {
 
         // write all types
         for (handle, _) in ir_module.types.iter() {
-            self.write_type_declaration_arena(&ir_module.types, handle)?;
+            self.write_type_declaration_arena(ir_module, handle)?;
         }
 
         // write all const-expressions as constants

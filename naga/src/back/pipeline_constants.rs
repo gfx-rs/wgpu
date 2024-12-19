@@ -4,7 +4,7 @@ use crate::{
     proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter},
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
-    Span, Statement, TypeInner, WithSpan,
+    Span, Statement, Type, TypeInner, UniqueArena, WithSpan,
 };
 use std::{borrow::Cow, collections::HashSet, mem};
 use thiserror::Error;
@@ -29,19 +29,29 @@ pub enum PipelineConstantError {
     NegativeWorkgroupSize,
 }
 
-/// Replace all overrides in `module` with constants.
+/// Replace all overrides in `module` with fully-evaluated constant expressions.
 ///
-/// If no changes are needed, this just returns `Cow::Borrowed`
-/// references to `module` and `module_info`. Otherwise, it clones
-/// `module`, edits its [`global_expressions`] arena to contain only
-/// fully-evaluated expressions, and returns `Cow::Owned` values
-/// holding the simplified module and its validation results.
+/// Given `pipeline_constants`, providing values for all overrides in
+/// `module`:
 ///
-/// In either case, the module returned has an empty `overrides`
-/// arena, and the `global_expressions` arena contains only
-/// fully-evaluated expressions.
+/// - Replace all [`Override`] expressions with fully-evaluated
+///   constant expressions.
 ///
-/// [`global_expressions`]: Module::global_expressions
+/// - Replace all [`Override`][paso] array sizes with [`Expression`]
+///   array sizes, referring to fully-evaluated constant expressions.
+///
+/// - Empty out the `module.overrides` arena.
+///
+/// Although the above is described in terms of changes to `module`'s
+/// contents, this function only actually has shared access to
+/// `module`. When changes are needed, this function clones `module`
+/// and returns a [`Cow::Owned`] value. If no changes are needed, this
+/// function returns a [`Cow::Borrowed`] value that just passes along
+/// the original reference.
+///
+/// [`Override`]: Expression::Override
+/// [paso]: crate::PendingArraySize::Override
+/// [`Expression`]: crate::PendingArraySize::Expression
 pub fn process_overrides<'a>(
     module: &'a Module,
     module_info: &'a ModuleInfo,
@@ -51,6 +61,7 @@ pub fn process_overrides<'a>(
         return Ok((Cow::Borrowed(module), Cow::Borrowed(module_info)));
     }
 
+    let original_module_types = &module.types;
     let mut module = module.clone();
 
     // A map from override handles to the handles of the constants
@@ -196,7 +207,12 @@ pub fn process_overrides<'a>(
     }
     module.entry_points = entry_points;
 
-    process_pending(&mut module, &override_map, &adjusted_global_expressions)?;
+    process_pending(
+        &mut module,
+        original_module_types,
+        &override_map,
+        &adjusted_global_expressions,
+    );
 
     // Now that we've rewritten all the expressions, we need to
     // recompute their types and other metadata. For the time being,
@@ -209,60 +225,55 @@ pub fn process_overrides<'a>(
 
 fn process_pending(
     module: &mut Module,
+    original_module_types: &UniqueArena<Type>,
     override_map: &HandleVec<Override, Handle<Constant>>,
     adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
-) -> Result<(), PipelineConstantError> {
-    for (handle, ty) in module.types.clone().iter() {
+) {
+    for (handle, ty) in original_module_types.iter() {
         if let TypeInner::Array {
             base,
             size: crate::ArraySize::Pending(size),
             stride,
         } = ty.inner
         {
-            let expr = match size {
+            match size {
                 crate::PendingArraySize::Expression(size_expr) => {
-                    adjusted_global_expressions[size_expr]
+                    let expr = adjusted_global_expressions[size_expr];
+                    if expr != size_expr {
+                        module.types.replace(
+                            handle,
+                            Type {
+                                name: ty.name.clone(),
+                                inner: TypeInner::Array {
+                                    base,
+                                    size: crate::ArraySize::Pending(
+                                        crate::PendingArraySize::Expression(expr),
+                                    ),
+                                    stride,
+                                },
+                            },
+                        );
+                    }
                 }
                 crate::PendingArraySize::Override(size_override) => {
-                    module.constants[override_map[size_override]].init
+                    let expr = module.constants[override_map[size_override]].init;
+                    module.types.replace(
+                        handle,
+                        Type {
+                            name: ty.name.clone(),
+                            inner: TypeInner::Array {
+                                base,
+                                size: crate::ArraySize::Pending(
+                                    crate::PendingArraySize::Expression(expr),
+                                ),
+                                stride,
+                            },
+                        },
+                    );
                 }
             };
-            let value = module
-                .to_ctx()
-                .eval_expr_to_u32(expr)
-                .map(|n| {
-                    if n == 0 {
-                        Err(PipelineConstantError::ValidationError(
-                            WithSpan::new(ValidationError::ArraySizeError { handle: expr })
-                                .with_span(
-                                    module.global_expressions.get_span(expr),
-                                    "evaluated to zero",
-                                ),
-                        ))
-                    } else {
-                        Ok(std::num::NonZeroU32::new(n).unwrap())
-                    }
-                })
-                .map_err(|_| {
-                    PipelineConstantError::ValidationError(
-                        WithSpan::new(ValidationError::ArraySizeError { handle: expr })
-                            .with_span(module.global_expressions.get_span(expr), "negative"),
-                    )
-                })??;
-            module.types.replace(
-                handle,
-                crate::Type {
-                    name: None,
-                    inner: TypeInner::Array {
-                        base,
-                        size: crate::ArraySize::Constant(value),
-                        stride,
-                    },
-                },
-            );
         }
     }
-    Ok(())
 }
 
 fn process_workgroup_size_override(

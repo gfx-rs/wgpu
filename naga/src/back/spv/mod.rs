@@ -73,6 +73,8 @@ pub enum Error {
     Validation(&'static str),
     #[error("overrides should not be present at this stage")]
     Override,
+    #[error(transparent)]
+    ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
 }
 
 #[derive(Default)]

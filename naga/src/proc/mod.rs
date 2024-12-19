@@ -18,6 +18,7 @@ pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, Indexab
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
+use thiserror::Error;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
 
 impl From<super::StorageFormat> for super::Scalar {
@@ -284,7 +285,7 @@ impl super::TypeInner {
     }
 
     /// Get the size of this type.
-    pub fn size(&self, _gctx: GlobalCtx) -> u32 {
+    pub fn size(&self, gctx: GlobalCtx) -> u32 {
         match *self {
             Self::Scalar(scalar) | Self::Atomic(scalar) => scalar.width as u32,
             Self::Vector { size, scalar } => size as u32 * scalar.width as u32,
@@ -302,9 +303,15 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(count) => count.get(),
-                    // any struct member or array element needing a size at pipeline-creation time
-                    // must have a creation-fixed footprint
-                    super::ArraySize::Pending(_) => 0,
+                    super::ArraySize::Pending(pending_size) => {
+                        let expr = match pending_size {
+                            crate::PendingArraySize::Expression(handle) => handle,
+                            // any struct member or array element needing a size at pipeline-creation time
+                            // must have a creation-fixed footprint
+                            crate::PendingArraySize::Override(_) => return 0,
+                        };
+                        gctx.eval_expr_to_u32(expr).unwrap_or_default()
+                    }
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
                 };
@@ -733,6 +740,56 @@ impl GlobalCtx<'_> {
                 get(*self, self.constants[c].init, self.global_expressions)
             }
             _ => get(*self, handle, arena),
+        }
+    }
+}
+
+pub enum ResolvedSize {
+    Constant(u32),
+    Runtime,
+}
+
+#[derive(Error, Debug, Clone, Copy, PartialEq)]
+pub enum ResolveArraySizeError {
+    #[error("array element count must be positive (> 0)")]
+    ExpectedPositiveArrayLength,
+}
+
+impl crate::ArraySize {
+    /// Return the number of elements that `size` represents, if known at code generation time.
+    ///
+    /// This must only be called after `back::pipeline_constants::process_overrides`, or on modules
+    /// that contain no overrides.
+    ///
+    /// # Panics
+    ///
+    /// - If `module` contains arrays with a pending size of [`crate::PendingArraySize::Override`]
+    /// - If `module` contains override expressions
+    pub fn resolve(&self, gctx: GlobalCtx) -> Result<ResolvedSize, ResolveArraySizeError> {
+        match *self {
+            crate::ArraySize::Constant(length) => Ok(ResolvedSize::Constant(length.get())),
+            crate::ArraySize::Pending(pending_size) => {
+                let expr = match pending_size {
+                    crate::PendingArraySize::Expression(handle) => handle,
+                    crate::PendingArraySize::Override(_) => {
+                        unreachable!("PendingArraySize::Override variants must have been replaced with PendingArraySize::Expression variants");
+                    }
+                };
+
+                let length = gctx.eval_expr_to_u32(expr).map_err(|err| match err {
+                    U32EvalError::NonConst => {
+                        unreachable!("non-const expression in global_expressions arena");
+                    }
+                    U32EvalError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
+                })?;
+
+                if length == 0 {
+                    return Err(ResolveArraySizeError::ExpectedPositiveArrayLength);
+                }
+
+                Ok(ResolvedSize::Constant(length))
+            }
+            crate::ArraySize::Dynamic => Ok(ResolvedSize::Runtime),
         }
     }
 }

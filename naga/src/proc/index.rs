@@ -315,7 +315,9 @@ pub fn access_needs_check(
     // Unwrap safety: `Err` here indicates unindexable base types and invalid
     // length constants, but `access_needs_check` is only used by back ends, so
     // validation should have caught those problems.
-    let length = base_inner.indexable_length(module).unwrap();
+    let length = base_inner
+        .indexable_length(module, crate::ArraySize::indexable_length_resolved)
+        .unwrap();
     index.try_resolve_to_constant(expressions, module);
     if let (&GuardedIndex::Known(index), &IndexableLength::Known(length)) = (&index, &length) {
         if index < length {
@@ -357,8 +359,8 @@ impl GuardedIndex {
 pub enum IndexableLengthError {
     #[error("Type is not indexable, and has no length (validation error)")]
     TypeNotIndexable,
-    #[error("Array length constant {0:?} is invalid")]
-    InvalidArrayLength(Handle<crate::Expression>),
+    #[error(transparent)]
+    ResolveArraySizeError(#[from] super::ResolveArraySizeError),
 }
 
 impl crate::TypeInner {
@@ -376,13 +378,17 @@ impl crate::TypeInner {
     pub fn indexable_length(
         &self,
         module: &crate::Module,
+        array_size_indexable_length: fn(
+            crate::ArraySize,
+            &crate::Module,
+        ) -> Result<IndexableLength, IndexableLengthError>,
     ) -> Result<IndexableLength, IndexableLengthError> {
         use crate::TypeInner as Ti;
         let known_length = match *self {
             Ti::Vector { size, .. } => size as _,
             Ti::Matrix { columns, .. } => columns as _,
             Ti::Array { size, .. } | Ti::BindingArray { size, .. } => {
-                return size.to_indexable_length(module);
+                return array_size_indexable_length(size, module);
             }
             Ti::ValuePointer {
                 size: Some(size), ..
@@ -396,7 +402,7 @@ impl crate::TypeInner {
                     Ti::Vector { size, .. } => size as _,
                     Ti::Matrix { columns, .. } => columns as _,
                     Ti::Array { size, .. } | Ti::BindingArray { size, .. } => {
-                        return size.to_indexable_length(module)
+                        return array_size_indexable_length(size, module);
                     }
                     _ => return Err(IndexableLengthError::TypeNotIndexable),
                 }
@@ -416,21 +422,31 @@ pub enum IndexableLength {
     /// Values of this type always have the given number of elements.
     Known(u32),
 
-    Pending,
-
     /// The number of elements is determined at runtime.
     Dynamic,
 }
 
 impl crate::ArraySize {
-    pub const fn to_indexable_length(
+    /// This function should be used by validators that allow overrides
+    pub const fn indexable_length(
         self,
         _module: &crate::Module,
     ) -> Result<IndexableLength, IndexableLengthError> {
         Ok(match self {
             Self::Constant(length) => IndexableLength::Known(length.get()),
-            Self::Pending(_) => IndexableLength::Pending,
+            Self::Pending(_) => IndexableLength::Dynamic,
             Self::Dynamic => IndexableLength::Dynamic,
         })
+    }
+
+    /// This function should be used by backends and validators that reject overrides
+    pub fn indexable_length_resolved(
+        self,
+        module: &crate::Module,
+    ) -> Result<IndexableLength, IndexableLengthError> {
+        match self.resolve(module.to_ctx())? {
+            super::ResolvedSize::Constant(length) => Ok(IndexableLength::Known(length)),
+            super::ResolvedSize::Runtime => Ok(IndexableLength::Dynamic),
+        }
     }
 }

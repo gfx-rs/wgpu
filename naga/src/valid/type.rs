@@ -150,6 +150,8 @@ pub enum TypeError {
         "The base handle {0:?} has an override-expression that didn't get resolved to a constant"
     )]
     UnresolvedOverride(Handle<crate::Type>),
+    #[error("Array {0:?} has a non-unique handle to an override-expression")]
+    NonUniqueOverrideExpressionForArray(Handle<crate::Type>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
