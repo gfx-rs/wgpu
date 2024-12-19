@@ -197,6 +197,73 @@ impl TextureStateSet {
     fn set_size(&mut self, size: usize) {
         self.simple.resize(size, TextureUses::UNINITIALIZED);
     }
+
+    fn size(&self) -> usize {
+        self.simple.len()
+    }
+
+    /// SAFETY: `index` must be in bounds.
+    unsafe fn get_unchecked(
+        &self,
+        index: usize,
+    ) -> SingleOrManyStates<TextureUses, &ComplexTextureState> {
+        let simple = unsafe { *self.simple.get_unchecked(index) };
+        if simple == TextureUses::COMPLEX {
+            SingleOrManyStates::Many(unsafe { self.complex.get(&index).unwrap_unchecked() })
+        } else {
+            SingleOrManyStates::Single(simple)
+        }
+    }
+
+    /// # Safety
+    ///
+    /// The `index` must be in bounds.
+    unsafe fn get_mut_unchecked(
+        &mut self,
+        index: usize,
+    ) -> SingleOrManyStates<&mut TextureUses, &mut ComplexTextureState> {
+        let simple = unsafe { self.simple.get_unchecked_mut(index) };
+        if *simple == TextureUses::COMPLEX {
+            SingleOrManyStates::Many(unsafe { self.complex.get_mut(&index).unwrap_unchecked() })
+        } else {
+            SingleOrManyStates::Single(simple)
+        }
+    }
+
+    /// # Safety
+    ///
+    /// The `index` must be in bounds.
+    unsafe fn insert_simple_unchecked(&mut self, index: usize, simple: TextureUses) {
+        unsafe { *self.simple.get_unchecked_mut(index) = simple };
+    }
+
+    /// # Safety
+    ///
+    /// The `index` must be in bounds.
+    unsafe fn insert_complex_unchecked(&mut self, index: usize, complex: ComplexTextureState) {
+        unsafe { *self.simple.get_unchecked_mut(index) = TextureUses::COMPLEX };
+        self.complex.insert(index, complex);
+    }
+
+    /// # Safety
+    ///
+    /// The `index` must be in bounds.
+    unsafe fn make_simple_unchecked(&mut self, index: usize, simple: TextureUses) {
+        unsafe { *self.simple.get_unchecked_mut(index) = simple };
+        unsafe { self.complex.remove(&index).unwrap_unchecked() };
+    }
+
+    /// # Safety
+    ///
+    /// The `index` must be in bounds.
+    unsafe fn make_complex_unchecked(&mut self, index: usize, complex: ComplexTextureState) {
+        unsafe { *self.simple.get_unchecked_mut(index) = TextureUses::COMPLEX };
+        self.complex.insert(index, complex);
+    }
+
+    fn tracker_assert_in_bounds(&self, index: usize) {
+        strict_assert!(index < self.size());
+    }
 }
 
 /// Stores all texture state within a single usage scope.
@@ -218,16 +285,7 @@ impl Default for TextureUsageScope {
 impl TextureUsageScope {
     fn tracker_assert_in_bounds(&self, index: usize) {
         self.metadata.tracker_assert_in_bounds(index);
-
-        strict_assert!(index < self.set.simple.len());
-
-        strict_assert!(if self.metadata.contains(index)
-            && self.set.simple[index] == TextureUses::COMPLEX
-        {
-            self.set.complex.contains_key(&index)
-        } else {
-            true
-        });
+        self.set.tracker_assert_in_bounds(index);
     }
 
     pub fn clear(&mut self) {
@@ -262,8 +320,8 @@ impl TextureUsageScope {
         &mut self,
         scope: &Self,
     ) -> Result<(), ResourceUsageCompatibilityError> {
-        let incoming_size = scope.set.simple.len();
-        if incoming_size > self.set.simple.len() {
+        let incoming_size = scope.set.size();
+        if incoming_size > self.set.size() {
             self.set_size(incoming_size);
         }
 
@@ -385,24 +443,8 @@ impl TextureTracker {
 
     fn tracker_assert_in_bounds(&self, index: usize) {
         self.metadata.tracker_assert_in_bounds(index);
-
-        strict_assert!(index < self.start_set.simple.len());
-        strict_assert!(index < self.end_set.simple.len());
-
-        strict_assert!(if self.metadata.contains(index)
-            && self.start_set.simple[index] == TextureUses::COMPLEX
-        {
-            self.start_set.complex.contains_key(&index)
-        } else {
-            true
-        });
-        strict_assert!(if self.metadata.contains(index)
-            && self.end_set.simple[index] == TextureUses::COMPLEX
-        {
-            self.end_set.complex.contains_key(&index)
-        } else {
-            true
-        });
+        self.start_set.tracker_assert_in_bounds(index);
+        self.end_set.tracker_assert_in_bounds(index);
     }
 
     /// Sets the size of all the vectors inside the tracker.
@@ -418,7 +460,7 @@ impl TextureTracker {
 
     /// Extend the vectors to let the given index be valid.
     fn allow_index(&mut self, index: usize) {
-        if index >= self.start_set.simple.len() {
+        if index >= self.start_set.size() {
             self.set_size(index + 1);
         }
     }
@@ -497,8 +539,8 @@ impl TextureTracker {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_tracker(&mut self, tracker: &Self) {
-        let incoming_size = tracker.start_set.simple.len();
-        if incoming_size > self.start_set.simple.len() {
+        let incoming_size = tracker.start_set.size();
+        if incoming_size > self.start_set.size() {
             self.set_size(incoming_size);
         }
 
@@ -537,8 +579,8 @@ impl TextureTracker {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_usage_scope(&mut self, scope: &TextureUsageScope) {
-        let incoming_size = scope.set.simple.len();
-        if incoming_size > self.start_set.simple.len() {
+        let incoming_size = scope.set.size();
+        if incoming_size > self.start_set.size() {
             self.set_size(incoming_size);
         }
 
@@ -587,8 +629,8 @@ impl TextureTracker {
         scope: &mut TextureUsageScope,
         bind_group_state: &TextureViewBindGroupState,
     ) {
-        let incoming_size = scope.set.simple.len();
-        if incoming_size > self.start_set.simple.len() {
+        let incoming_size = scope.set.size();
+        if incoming_size > self.start_set.size() {
             self.set_size(incoming_size);
         }
 
@@ -650,21 +692,12 @@ impl DeviceTextureTracker {
 
     fn tracker_assert_in_bounds(&self, index: usize) {
         self.metadata.tracker_assert_in_bounds(index);
-
-        strict_assert!(index < self.current_state_set.simple.len());
-
-        strict_assert!(if self.metadata.contains(index)
-            && self.current_state_set.simple[index] == TextureUses::COMPLEX
-        {
-            self.current_state_set.complex.contains_key(&index)
-        } else {
-            true
-        });
+        self.current_state_set.tracker_assert_in_bounds(index);
     }
 
     /// Extend the vectors to let the given index be valid.
     fn allow_index(&mut self, index: usize) {
-        if index >= self.current_state_set.simple.len() {
+        if index >= self.current_state_set.size() {
             self.current_state_set.set_size(index + 1);
             self.metadata.set_size(index + 1);
         }
@@ -922,19 +955,12 @@ impl<'a> TextureStateProvider<'a> {
                     SingleOrManyStates::Many(EitherIter::Left(iter::once((selector, state))))
                 }
             }
-            TextureStateProvider::TextureSet { set } => {
-                let new_state = *unsafe { set.simple.get_unchecked(index) };
-
-                if new_state == TextureUses::COMPLEX {
-                    let new_complex = unsafe { set.complex.get(&index).unwrap_unchecked() };
-
-                    SingleOrManyStates::Many(EitherIter::Right(
-                        new_complex.to_selector_state_iter(),
-                    ))
-                } else {
-                    SingleOrManyStates::Single(new_state)
+            TextureStateProvider::TextureSet { set } => match unsafe { set.get_unchecked(index) } {
+                SingleOrManyStates::Single(single) => SingleOrManyStates::Single(single),
+                SingleOrManyStates::Many(complex) => {
+                    SingleOrManyStates::Many(EitherIter::Right(complex.to_selector_state_iter()))
                 }
-            }
+            },
         }
     }
 }
@@ -1074,12 +1100,12 @@ unsafe fn insert<T: Clone>(
             strict_assert_eq!(invalid_resource_state(state), false);
 
             if let Some(start_state) = start_state {
-                unsafe { *start_state.simple.get_unchecked_mut(index) = state };
+                unsafe { start_state.insert_simple_unchecked(index, state) };
             }
 
             // We only need to insert ourselves the end state if there is no end state provider.
             if end_state_provider.is_none() {
-                unsafe { *end_state.simple.get_unchecked_mut(index) = state };
+                unsafe { end_state.insert_simple_unchecked(index, state) };
             }
         }
         SingleOrManyStates::Many(state_iter) => {
@@ -1089,14 +1115,12 @@ unsafe fn insert<T: Clone>(
                 unsafe { ComplexTextureState::from_selector_state_iter(full_range, state_iter) };
 
             if let Some(start_state) = start_state {
-                unsafe { *start_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX };
-                start_state.complex.insert(index, complex.clone());
+                unsafe { start_state.insert_complex_unchecked(index, complex.clone()) };
             }
 
             // We only need to insert ourselves the end state if there is no end state provider.
             if end_state_provider.is_none() {
-                unsafe { *end_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX };
-                end_state.complex.insert(index, complex);
+                unsafe { end_state.insert_complex_unchecked(index, complex) };
             }
         }
     }
@@ -1110,7 +1134,7 @@ unsafe fn insert<T: Clone>(
 
                 // We only need to insert into the end, as there is guaranteed to be
                 // a start state provider.
-                unsafe { *end_state.simple.get_unchecked_mut(index) = state };
+                unsafe { end_state.insert_simple_unchecked(index, state) };
             }
             SingleOrManyStates::Many(state_iter) => {
                 let full_range = texture_selector.unwrap().clone();
@@ -1121,8 +1145,7 @@ unsafe fn insert<T: Clone>(
 
                 // We only need to insert into the end, as there is guaranteed to be
                 // a start state provider.
-                unsafe { *end_state.simple.get_unchecked_mut(index) = TextureUses::COMPLEX };
-                end_state.complex.insert(index, complex);
+                unsafe { end_state.insert_complex_unchecked(index, complex) };
             }
         }
     }
@@ -1141,14 +1164,7 @@ unsafe fn merge(
     state_provider: TextureStateProvider<'_>,
     metadata_provider: ResourceMetadataProvider<'_, Arc<Texture>>,
 ) -> Result<(), ResourceUsageCompatibilityError> {
-    let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
-    let current_state = if *current_simple == TextureUses::COMPLEX {
-        SingleOrManyStates::Many(unsafe {
-            current_state_set.complex.get_mut(&index).unwrap_unchecked()
-        })
-    } else {
-        SingleOrManyStates::Single(current_simple)
-    };
+    let current_state = unsafe { current_state_set.get_mut_unchecked(index) };
 
     let new_state = unsafe { state_provider.get_state(Some(texture_selector), index) };
 
@@ -1203,8 +1219,7 @@ unsafe fn merge(
                 }
             }
 
-            *current_simple = TextureUses::COMPLEX;
-            current_state_set.complex.insert(index, new_complex);
+            unsafe { current_state_set.make_complex_unchecked(index, new_complex) };
         }
         (SingleOrManyStates::Many(current_complex), SingleOrManyStates::Single(new_simple)) => {
             for (mip_id, mip) in current_complex.mips.iter_mut().enumerate() {
@@ -1283,14 +1298,7 @@ unsafe fn barrier(
     state_provider: TextureStateProvider<'_>,
     barriers: &mut Vec<PendingTransition<TextureUses>>,
 ) {
-    let current_simple = unsafe { *current_state_set.simple.get_unchecked(index) };
-    let current_state = if current_simple == TextureUses::COMPLEX {
-        SingleOrManyStates::Many(unsafe {
-            current_state_set.complex.get(&index).unwrap_unchecked()
-        })
-    } else {
-        SingleOrManyStates::Single(current_simple)
-    };
+    let current_state = unsafe { current_state_set.get_unchecked(index) };
 
     let new_state = unsafe { state_provider.get_state(Some(texture_selector), index) };
 
@@ -1392,7 +1400,6 @@ unsafe fn barrier(
     }
 }
 
-#[allow(clippy::needless_option_as_deref)] // we use this for reborrowing Option<&mut T>
 #[inline(always)]
 unsafe fn update(
     texture_selector: &TextureSelector,
@@ -1404,23 +1411,14 @@ unsafe fn update(
     // We only ever need to update the start state here if the state is complex.
     //
     // If the state is simple, the first insert to the tracker would cover it.
-    let mut start_complex = None;
-    if let Some(start_state_set) = start_state_set {
-        let start_simple = unsafe { *start_state_set.simple.get_unchecked(index) };
-        if start_simple == TextureUses::COMPLEX {
-            start_complex =
-                Some(unsafe { start_state_set.complex.get_mut(&index).unwrap_unchecked() });
+    let mut start_complex = start_state_set.and_then(|start_state_set| {
+        match unsafe { start_state_set.get_mut_unchecked(index) } {
+            SingleOrManyStates::Single(_) => None,
+            SingleOrManyStates::Many(complex) => Some(complex),
         }
-    }
+    });
 
-    let current_simple = unsafe { current_state_set.simple.get_unchecked_mut(index) };
-    let current_state = if *current_simple == TextureUses::COMPLEX {
-        SingleOrManyStates::Many(unsafe {
-            current_state_set.complex.get_mut(&index).unwrap_unchecked()
-        })
-    } else {
-        SingleOrManyStates::Single(current_simple)
-    };
+    let current_state = unsafe { current_state_set.get_mut_unchecked(index) };
 
     let new_state = unsafe { state_provider.get_state(Some(texture_selector), index) };
 
@@ -1456,8 +1454,7 @@ unsafe fn update(
                 }
             }
 
-            *current_simple = TextureUses::COMPLEX;
-            current_state_set.complex.insert(index, new_complex);
+            unsafe { current_state_set.make_complex_unchecked(index, new_complex) };
         }
         (SingleOrManyStates::Many(current_complex), SingleOrManyStates::Single(new_single)) => {
             for (mip_id, mip) in current_complex.mips.iter().enumerate() {
@@ -1482,8 +1479,7 @@ unsafe fn update(
                 }
             }
 
-            unsafe { *current_state_set.simple.get_unchecked_mut(index) = new_single };
-            unsafe { current_state_set.complex.remove(&index).unwrap_unchecked() };
+            unsafe { current_state_set.make_simple_unchecked(index, new_single) };
         }
         (SingleOrManyStates::Many(current_complex), SingleOrManyStates::Many(new_many)) => {
             for (selector, new_state) in new_many {
