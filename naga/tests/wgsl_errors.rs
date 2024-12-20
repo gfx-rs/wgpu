@@ -1543,7 +1543,7 @@ fn select() {
             naga::valid::ValidationError::Function {
                 name,
                 source: naga::valid::FunctionError::Expression {
-                    source: naga::valid::ExpressionError::InvalidSelectTypes,
+                    source: naga::valid::ExpressionError::SelectConditionNotABool { .. },
                     ..
                 },
                 ..
