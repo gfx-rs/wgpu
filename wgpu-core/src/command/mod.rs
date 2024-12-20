@@ -395,11 +395,16 @@ impl CommandEncoder {
     /// its own label.
     ///
     /// The underlying hal encoder is put in the "recording" state.
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is already open.
     pub(crate) fn open_pass(
         &mut self,
         label: Option<&str>,
         device: &Device,
     ) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
+        assert!(!self.is_open);
         self.is_open = true;
 
         let hal_label = hal_label(label, device.instance_flags);
