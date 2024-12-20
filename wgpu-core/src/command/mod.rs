@@ -278,12 +278,8 @@ pub(crate) struct CommandEncoder {
 
 //TODO: handle errors better
 impl CommandEncoder {
-    /// Finish the current command buffer, if any, and place it
-    /// at the second-to-last position in our list.
-    ///
-    /// If we have opened this command encoder, finish its current
-    /// command buffer, and insert it just before the last element in
-    /// [`self.list`][l]. If this command buffer is closed, do nothing.
+    /// Finish the current command buffer and insert it just before
+    /// the last element in [`self.list`][l].
     ///
     /// On return, the underlying hal encoder is closed.
     ///
@@ -300,15 +296,19 @@ impl CommandEncoder {
     /// in just before the pass's. This is the function that jams in the
     /// transitions' command buffer.
     ///
+    /// # Panics
+    ///
+    /// - If the encoder is not open.
+    ///
     /// [l]: CommandEncoder::list
     /// [`transition_buffers`]: hal::CommandEncoder::transition_buffers
     /// [`transition_textures`]: hal::CommandEncoder::transition_textures
     fn close_and_swap(&mut self, device: &Device) -> Result<(), DeviceError> {
-        if self.is_open {
-            self.is_open = false;
-            let new = unsafe { self.raw.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
-            self.list.insert(self.list.len() - 1, new);
-        }
+        assert!(self.is_open);
+        self.is_open = false;
+
+        let new = unsafe { self.raw.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
+        self.list.insert(self.list.len() - 1, new);
 
         Ok(())
     }
