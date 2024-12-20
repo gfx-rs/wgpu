@@ -1977,7 +1977,9 @@ impl Global {
         let tracker = &mut cmd_buf_data.trackers;
 
         {
-            let transit = encoder.open(&cmd_buf.device).map_pass_err(pass_scope)?;
+            let transit = encoder
+                .open_pass(Some("(wgpu internal) Pre Pass"), &cmd_buf.device)
+                .map_pass_err(pass_scope)?;
 
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),

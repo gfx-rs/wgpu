@@ -379,13 +379,13 @@ impl CommandEncoder {
         &mut self,
         label: Option<&str>,
         device: &Device,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         self.is_open = true;
 
         let hal_label = hal_label(label, device.instance_flags);
         unsafe { self.raw.begin_encoding(hal_label) }.map_err(|e| device.handle_hal_error(e))?;
 
-        Ok(())
+        Ok(self.raw.as_mut())
     }
 }
 
