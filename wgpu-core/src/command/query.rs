@@ -337,7 +337,7 @@ impl Global {
             });
         }
 
-        let raw_encoder = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let raw_encoder = cmd_buf_data.encoder.open()?;
 
         let query_set = hub.query_sets.get(query_set_id).get()?;
 
@@ -447,7 +447,7 @@ impl Global {
         );
 
         let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
-        let raw_encoder = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let raw_encoder = cmd_buf_data.encoder.open()?;
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.as_slice());
             raw_encoder.copy_query_results(

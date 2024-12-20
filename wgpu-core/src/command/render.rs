@@ -1663,11 +1663,9 @@ impl Global {
             // We automatically keep extending command buffers over time, and because
             // we want to insert a command buffer _before_ what we're about to record,
             // we need to make sure to close the previous one.
+            encoder.close_if_open().map_pass_err(pass_scope)?;
             encoder
-                .close_if_open(&cmd_buf.device)
-                .map_pass_err(pass_scope)?;
-            encoder
-                .open_pass(base.label.as_deref(), &cmd_buf.device)
+                .open_pass(base.label.as_deref())
                 .map_pass_err(pass_scope)?;
 
             let info = RenderPassInfo::start(
@@ -1971,7 +1969,7 @@ impl Global {
                 .finish(state.raw_encoder, state.snatch_guard)
                 .map_pass_err(pass_scope)?;
 
-            encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
+            encoder.close().map_pass_err(pass_scope)?;
             (trackers, pending_discard_init_fixups)
         };
 
@@ -1980,7 +1978,7 @@ impl Global {
 
         {
             let transit = encoder
-                .open_pass(Some("(wgpu internal) Pre Pass"), &cmd_buf.device)
+                .open_pass(Some("(wgpu internal) Pre Pass"))
                 .map_pass_err(pass_scope)?;
 
             fixup_discarded_surfaces(
@@ -1996,9 +1994,7 @@ impl Global {
             CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
         }
 
-        encoder
-            .close_and_swap(&cmd_buf.device)
-            .map_pass_err(pass_scope)?;
+        encoder.close_and_swap().map_pass_err(pass_scope)?;
         cmd_buf_data_guard.mark_successful();
 
         Ok(())

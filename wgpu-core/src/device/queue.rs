@@ -1164,10 +1164,7 @@ impl Queue {
                         };
 
                         // execute resource transitions
-                        if let Err(e) = baked
-                            .encoder
-                            .open_pass(Some("(wgpu internal) Transit"), &self.device)
-                        {
+                        if let Err(e) = baked.encoder.open_pass(Some("(wgpu internal) Transit")) {
                             break 'error Err(e.into());
                         }
 
@@ -1194,7 +1191,7 @@ impl Queue {
                             &snatch_guard,
                         );
 
-                        if let Err(e) = baked.encoder.close_and_push_front(&self.device) {
+                        if let Err(e) = baked.encoder.close_and_push_front() {
                             break 'error Err(e.into());
                         }
 
@@ -1202,9 +1199,7 @@ impl Queue {
                         // Note: we could technically do it after all of the command buffers,
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
-                            if let Err(e) = baked
-                                .encoder
-                                .open_pass(Some("(wgpu internal) Present"), &self.device)
+                            if let Err(e) = baked.encoder.open_pass(Some("(wgpu internal) Present"))
                             {
                                 break 'error Err(e.into());
                             }
@@ -1218,7 +1213,7 @@ impl Queue {
                             unsafe {
                                 baked.encoder.raw.transition_textures(&texture_barriers);
                             };
-                            if let Err(e) = baked.encoder.close(&self.device) {
+                            if let Err(e) = baked.encoder.close() {
                                 break 'error Err(e.into());
                             }
                             used_surface_textures = track::TextureUsageScope::default();
