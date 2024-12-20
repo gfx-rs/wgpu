@@ -415,7 +415,9 @@ impl Global {
         // We automatically keep extending command buffers over time, and because
         // we want to insert a command buffer _before_ what we're about to record,
         // we need to make sure to close the previous one.
-        encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
+        encoder
+            .close_if_open(&cmd_buf.device)
+            .map_pass_err(pass_scope)?;
         let raw_encoder = encoder
             .open_pass(base.label.as_deref(), &cmd_buf.device)
             .map_pass_err(pass_scope)?;

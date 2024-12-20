@@ -153,7 +153,7 @@ impl CommandEncoderStatus {
     fn finish(&mut self, device: &Device) -> Result<(), CommandEncoderError> {
         match mem::replace(self, Self::Error) {
             Self::Recording(mut inner) => {
-                if let Err(e) = inner.encoder.close(device) {
+                if let Err(e) = inner.encoder.close_if_open(device) {
                     Err(e.into())
                 } else {
                     *self = Self::Finished(inner);
@@ -333,6 +333,26 @@ impl CommandEncoder {
         Ok(())
     }
 
+    /// Finish the current command buffer, and push it onto
+    /// the end of [`self.list`][l].
+    ///
+    /// On return, the underlying hal encoder is closed.
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is not open.
+    ///
+    /// [l]: CommandEncoder::list
+    pub(crate) fn close(&mut self, device: &Device) -> Result<(), DeviceError> {
+        assert!(self.is_open);
+        self.is_open = false;
+
+        let cmd_buf = unsafe { self.raw.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
+        self.list.push(cmd_buf);
+
+        Ok(())
+    }
+
     /// Finish the current command buffer, if any, and add it to the
     /// end of [`self.list`][l].
     ///
@@ -343,7 +363,7 @@ impl CommandEncoder {
     /// On return, the underlying hal encoder is closed.
     ///
     /// [l]: CommandEncoder::list
-    pub(crate) fn close(&mut self, device: &Device) -> Result<(), DeviceError> {
+    fn close_if_open(&mut self, device: &Device) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
             let cmd_buf =
