@@ -1165,14 +1165,10 @@ impl Queue {
                         };
 
                         // execute resource transitions
-                        if let Err(e) = unsafe {
-                            baked.encoder.raw.begin_encoding(hal_label(
-                                Some("(wgpu internal) Transit"),
-                                self.device.instance_flags,
-                            ))
-                        }
-                        .map_err(|e| self.device.handle_hal_error(e))
-                        {
+                        if let Err(e) = baked.encoder.open_pass(
+                            hal_label(Some("(wgpu internal) Transit"), self.device.instance_flags),
+                            &self.device,
+                        ) {
                             break 'error Err(e.into());
                         }
 
@@ -1199,21 +1195,21 @@ impl Queue {
                             &snatch_guard,
                         );
 
-                        let transit = unsafe { baked.encoder.raw.end_encoding().unwrap() };
-                        baked.encoder.list.insert(0, transit);
+                        if let Err(e) = baked.encoder.close_and_push_front(&self.device) {
+                            break 'error Err(e.into());
+                        }
 
                         // Transition surface textures into `Present` state.
                         // Note: we could technically do it after all of the command buffers,
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
-                            if let Err(e) = unsafe {
-                                baked.encoder.raw.begin_encoding(hal_label(
+                            if let Err(e) = baked.encoder.open_pass(
+                                hal_label(
                                     Some("(wgpu internal) Present"),
                                     self.device.instance_flags,
-                                ))
-                            }
-                            .map_err(|e| self.device.handle_hal_error(e))
-                            {
+                                ),
+                                &self.device,
+                            ) {
                                 break 'error Err(e.into());
                             }
                             let texture_barriers = trackers
@@ -1223,11 +1219,12 @@ impl Queue {
                                     &snatch_guard,
                                 )
                                 .collect::<Vec<_>>();
-                            let present = unsafe {
+                            unsafe {
                                 baked.encoder.raw.transition_textures(&texture_barriers);
-                                baked.encoder.raw.end_encoding().unwrap()
                             };
-                            baked.encoder.list.push(present);
+                            if let Err(e) = baked.encoder.close(&self.device) {
+                                break 'error Err(e.into());
+                            }
                             used_surface_textures = track::TextureUsageScope::default();
                         }
 
