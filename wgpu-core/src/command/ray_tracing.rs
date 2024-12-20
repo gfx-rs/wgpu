@@ -322,7 +322,7 @@ impl Global {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
 
         let mut descriptors = Vec::new();
 
@@ -674,7 +674,7 @@ impl Global {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
 
         let mut descriptors = Vec::new();
 

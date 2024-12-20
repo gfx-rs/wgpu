@@ -444,7 +444,7 @@ fn handle_texture_init(
 
     // In rare cases we may need to insert an init operation immediately onto the command buffer.
     if !immediate_inits.is_empty() {
-        let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         for init in immediate_inits {
             clear_texture(
                 &init.texture,
@@ -678,7 +678,7 @@ impl Global {
             dst_offset: destination_offset,
             size: wgt::BufferSize::new(size).unwrap(),
         };
-        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         let barriers = src_barrier
             .into_iter()
             .chain(dst_barrier)
@@ -838,7 +838,7 @@ impl Global {
             })
             .collect::<Vec<_>>();
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_textures(&dst_barrier);
             cmd_buf_raw.transition_buffers(src_barrier.as_slice());
@@ -1004,7 +1004,7 @@ impl Global {
                 }
             })
             .collect::<Vec<_>>();
-        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
             cmd_buf_raw.transition_textures(&src_barrier);
@@ -1168,7 +1168,7 @@ impl Global {
                 }
             })
             .collect::<Vec<_>>();
-        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         unsafe {
             cmd_buf_raw.transition_textures(&barriers);
             cmd_buf_raw.copy_texture_to_texture(
