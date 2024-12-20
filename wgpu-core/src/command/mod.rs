@@ -276,7 +276,6 @@ pub(crate) struct CommandEncoder {
     pub(crate) hal_label: Option<String>,
 }
 
-//TODO: handle errors better
 impl CommandEncoder {
     /// Finish the current command buffer and insert it just before
     /// the last element in [`self.list`][l].
