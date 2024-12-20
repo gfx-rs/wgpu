@@ -45,31 +45,8 @@ impl super::Validator {
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
-        for (this_handle, ty) in types.iter() {
-            match ty.inner {
-                crate::TypeInner::Scalar { .. }
-                | crate::TypeInner::Vector { .. }
-                | crate::TypeInner::Matrix { .. }
-                | crate::TypeInner::ValuePointer { .. }
-                | crate::TypeInner::Atomic { .. }
-                | crate::TypeInner::Image { .. }
-                | crate::TypeInner::Sampler { .. }
-                | crate::TypeInner::AccelerationStructure
-                | crate::TypeInner::RayQuery => (),
-                crate::TypeInner::Pointer { base, space: _ } => {
-                    this_handle.check_dep(base)?;
-                }
-                crate::TypeInner::Array { base, .. }
-                | crate::TypeInner::BindingArray { base, .. } => {
-                    this_handle.check_dep(base)?;
-                }
-                crate::TypeInner::Struct {
-                    ref members,
-                    span: _,
-                } => {
-                    this_handle.check_dep_iter(members.iter().map(|m| m.ty))?;
-                }
-            }
+        for handle_and_type in types.iter() {
+            Self::validate_type_handles(handle_and_type)?;
         }
 
         for handle_and_expr in global_expressions.iter() {
@@ -237,6 +214,36 @@ impl super::Validator {
         functions: &Arena<crate::Function>,
     ) -> Result<(), InvalidHandleError> {
         handle.check_valid_for(functions).map(|_| ())
+    }
+
+    fn validate_type_handles(
+        (handle, ty): (Handle<crate::Type>, &crate::Type),
+    ) -> Result<(), InvalidHandleError> {
+        match ty.inner {
+            crate::TypeInner::Scalar { .. }
+            | crate::TypeInner::Vector { .. }
+            | crate::TypeInner::Matrix { .. }
+            | crate::TypeInner::ValuePointer { .. }
+            | crate::TypeInner::Atomic { .. }
+            | crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure
+            | crate::TypeInner::RayQuery => (),
+            crate::TypeInner::Pointer { base, space: _ } => {
+                handle.check_dep(base)?;
+            }
+            crate::TypeInner::Array { base, .. } | crate::TypeInner::BindingArray { base, .. } => {
+                handle.check_dep(base)?;
+            }
+            crate::TypeInner::Struct {
+                ref members,
+                span: _,
+            } => {
+                handle.check_dep_iter(members.iter().map(|m| m.ty))?;
+            }
+        }
+
+        Ok(())
     }
 
     fn validate_const_expression_handles(
