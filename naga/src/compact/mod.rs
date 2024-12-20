@@ -216,30 +216,6 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
-    for (handle, ty) in module.types.clone().iter() {
-        if let crate::TypeInner::Array {
-            base,
-            size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(mut size_expr)),
-            stride,
-        } = ty.inner
-        {
-            module_map.global_expressions.adjust(&mut size_expr);
-            module.types.replace(
-                handle,
-                crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::Array {
-                        base,
-                        size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(
-                            size_expr,
-                        )),
-                        stride,
-                    },
-                },
-            );
-        }
-    }
-
     // Temporary storage to help us reuse allocations of existing
     // named expression tables.
     let mut reused_named_expressions = crate::NamedExpressions::default();

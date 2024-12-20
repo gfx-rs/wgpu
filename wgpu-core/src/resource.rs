@@ -1381,7 +1381,7 @@ impl Global {
         if let Ok(mut cmd_buf_data_guard) = cmd_buf_data_guard {
             let cmd_buf_raw = cmd_buf_data_guard
                 .encoder
-                .open(&cmd_buf.device)
+                .open()
                 .ok()
                 .and_then(|encoder| encoder.as_any_mut().downcast_mut());
             let ret = hal_command_encoder_callback(cmd_buf_raw);
