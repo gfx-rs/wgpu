@@ -37,8 +37,8 @@ use crate::ray_tracing::{BlasAction, TlasAction};
 use crate::resource::{Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet};
 use crate::storage::Storage;
 use crate::track::{DeviceTracker, Tracker, UsageScope};
-use crate::LabelHelpers;
 use crate::{api_log, global::Global, id, resource_log, Label};
+use crate::{hal_label, LabelHelpers};
 
 use thiserror::Error;
 
@@ -377,10 +377,12 @@ impl CommandEncoder {
     /// The underlying hal encoder is put in the "recording" state.
     pub(crate) fn open_pass(
         &mut self,
-        hal_label: Option<&str>,
+        label: Option<&str>,
         device: &Device,
     ) -> Result<(), DeviceError> {
         self.is_open = true;
+
+        let hal_label = hal_label(label, device.instance_flags);
         unsafe { self.raw.begin_encoding(hal_label) }.map_err(|e| device.handle_hal_error(e))?;
 
         Ok(())

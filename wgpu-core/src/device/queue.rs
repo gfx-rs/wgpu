@@ -11,7 +11,6 @@ use crate::{
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
-    hal_label,
     id::{self, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLockWriteGuard},
@@ -1165,10 +1164,10 @@ impl Queue {
                         };
 
                         // execute resource transitions
-                        if let Err(e) = baked.encoder.open_pass(
-                            hal_label(Some("(wgpu internal) Transit"), self.device.instance_flags),
-                            &self.device,
-                        ) {
+                        if let Err(e) = baked
+                            .encoder
+                            .open_pass(Some("(wgpu internal) Transit"), &self.device)
+                        {
                             break 'error Err(e.into());
                         }
 
@@ -1203,13 +1202,10 @@ impl Queue {
                         // Note: we could technically do it after all of the command buffers,
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
-                            if let Err(e) = baked.encoder.open_pass(
-                                hal_label(
-                                    Some("(wgpu internal) Present"),
-                                    self.device.instance_flags,
-                                ),
-                                &self.device,
-                            ) {
+                            if let Err(e) = baked
+                                .encoder
+                                .open_pass(Some("(wgpu internal) Present"), &self.device)
+                            {
                                 break 'error Err(e.into());
                             }
                             let texture_barriers = trackers

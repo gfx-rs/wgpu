@@ -1651,8 +1651,6 @@ impl Global {
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
 
-        let hal_label = hal_label(base.label.as_deref(), device.instance_flags);
-
         let (scope, pending_discard_init_fixups) = {
             device.check_is_valid().map_pass_err(pass_scope)?;
 
@@ -1667,12 +1665,12 @@ impl Global {
             // we need to make sure to close the previous one.
             encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
             encoder
-                .open_pass(hal_label, &cmd_buf.device)
+                .open_pass(base.label.as_deref(), &cmd_buf.device)
                 .map_pass_err(pass_scope)?;
 
             let info = RenderPassInfo::start(
                 device,
-                hal_label,
+                hal_label(base.label.as_deref(), device.instance_flags),
                 pass.color_attachments.take(),
                 pass.depth_stencil_attachment.take(),
                 pass.timestamp_writes.take(),
