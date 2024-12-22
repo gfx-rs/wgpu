@@ -1916,10 +1916,9 @@ impl crate::Device for super::Device {
     ) -> crate::AccelerationStructureBuildSizes {
         let mut geometry_desc;
         let device5 = self.raw.cast::<Direct3D12::ID3D12Device5>().unwrap();
-        let (ty, layout, inputs0, num_desc) = match desc.entries {
+        let (ty, inputs0, num_desc) = match desc.entries {
             AccelerationStructureEntries::Instances(instances) => (
                 Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-                Direct3D12::D3D12_ELEMENTS_LAYOUT::default(),
                 Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
                     InstanceDescs: 0,
                 },
@@ -1959,7 +1958,6 @@ impl crate::Device for super::Device {
                 }
                 (
                     Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
-                    Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
                     Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
                         pGeometryDescs: geometry_desc.as_ptr(),
                     },
@@ -1970,7 +1968,7 @@ impl crate::Device for super::Device {
                 geometry_desc = Vec::with_capacity(aabbs.len());
                 for aabb in aabbs {
                     geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
-                        Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+                        Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS,
                         Flags: conv::map_acceleration_structure_geometry_flags(aabb.flags),
                         Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
                             AABBs: Direct3D12::D3D12_RAYTRACING_GEOMETRY_AABBS_DESC {
@@ -1985,7 +1983,6 @@ impl crate::Device for super::Device {
                 }
                 (
                     Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
-                    Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
                     Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
                         pGeometryDescs: geometry_desc.as_ptr(),
                     },
@@ -1998,7 +1995,7 @@ impl crate::Device for super::Device {
                 Type: ty,
                 Flags: conv::map_acceleration_structure_build_flags(desc.flags, None),
                 NumDescs: num_desc,
-                DescsLayout: layout,
+                DescsLayout: Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
                 Anonymous: inputs0,
             };
         let mut info = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO::default();
