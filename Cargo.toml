@@ -74,13 +74,13 @@ path = "./naga"
 version = "23.0.0"
 
 [workspace.dependencies]
-anyhow = "1.0.93"
-argh = "0.1.5"
+anyhow = "1.0.95"
+argh = "0.1.13"
 arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.6"
-bytemuck = { version = "1.20" }
+bytemuck = { version = "1.21" }
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -97,7 +97,7 @@ glam = "0.28"
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 indexmap = "2"
-itertools = { version = "0.10.5" }
+itertools = { version = "0.13.0" }
 ktx2 = "0.3"
 libc = "0.2"
 libloading = "0.8"
@@ -115,7 +115,7 @@ pico-args = { version = "0.5.0", features = [
     "short-space-opt",
     "combined-flags",
 ] }
-png = "0.17.15"
+png = "0.17.16"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.6"
@@ -124,7 +124,7 @@ renderdoc-sys = "1.1.0"
 ron = "0.8"
 rustc-hash = "1.1.0"
 serde = "1"
-serde_json = "1.0.133"
+serde_json = "1.0.134"
 smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.25.0", features = ["derive"] }
