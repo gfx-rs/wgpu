@@ -103,6 +103,7 @@ a soundness issue, the intent is to move an error from runtime to compile time. 
 #### Bindless (`binding_array`) Grew More Capabilities
 
 - DX12 now supports `PARTIALLY_BOUND_BINDING_ARRAY` on Resource Binding Tier 3 Hardware. This is most D3D12 hardware [D3D12 Feature Table] for more information on what hardware supports this feature. By @cwfitzgerald in [#6734](https://github.com/gfx-rs/wgpu/pull/6734).
+- Buffer Dynamic Offsets and Binding Arrays may not be used in the same bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
 
 [D3D12 Feature Table]: https://d3d12infodb.boolka.dev/FeatureTable.html
 
