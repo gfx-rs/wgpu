@@ -2,7 +2,7 @@
 
 This example assumes you're familiar with the other GP-GPU compute examples in this repository, if you're not you should go look at those first.
 
-Demonstrates how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contiguous buffer on the GPU.
+Demonstrates how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contiguous buffer on the GPU. This is known as 'chunking' and sometimes 'pagination', not to be confused with the web kind, although they're not entirely dissimilar.
 
 - Creates a large set of buffers totalling `1GB`, full of `0.0f32`.
 - Moves those buffers to the DEVICE.
