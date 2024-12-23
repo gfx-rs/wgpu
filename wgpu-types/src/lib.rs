@@ -486,6 +486,31 @@ bitflags::bitflags! {
         // Native Features:
         //
 
+        /// Allows shaders to index uniform buffer binding arrays:
+        ///
+        /// ex. `uniform_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// ex. `uniform_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// WGSL and HLSL do not need any extension.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const UNIFORM_BUFFER_INDEXING = 1 << 17;
         /// Enables R64Uint image atomic min and max.
         ///
         /// Supported platforms:
@@ -703,7 +728,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 30;
-        /// Allows shaders to index uniform buffer and storage texture resource arrays with dynamically non-uniform values:
+        /// Allows shaders to index storage texture resource arrays with dynamically non-uniform values:
         ///
         /// ex. `texture_array[vertex_data]`
         ///
@@ -724,10 +749,10 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing & shaderStorageTextureArrayNonUniformIndexing feature)
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageTextureArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
-        const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 31;
+        const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 31;
         /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
         ///
         /// Supported platforms:

@@ -13,7 +13,7 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
             .features(
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                    | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                     | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             )
             .limits(Limits {
@@ -32,7 +32,7 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY
                     | Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                    | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                     | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             )
             .limits(Limits {

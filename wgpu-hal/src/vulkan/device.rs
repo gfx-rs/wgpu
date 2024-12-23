@@ -1611,11 +1611,19 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
+        let contains_binding_arrays = !desc.layout.binding_arrays.is_empty();
+
+        let desc_set_layout_flags = if contains_binding_arrays {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
+        } else {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
+        };
+
         let mut vk_sets = unsafe {
             self.desc_allocator.lock().allocate(
                 &*self.shared,
                 &desc.layout.raw,
-                gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
+                desc_set_layout_flags,
                 &desc.layout.desc_count,
                 1,
             )?

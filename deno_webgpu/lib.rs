@@ -281,10 +281,8 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     ) {
         return_features.push("sampled-texture-and-storage-buffer-array-non-uniform-indexing");
     }
-    if features.contains(
-        wgpu_types::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-    ) {
-        return_features.push("uniform-buffer-and-storage-texture-array-non-uniform-indexing");
+    if features.contains(wgpu_types::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) {
+        return_features.push("storage-texture-array-non-uniform-indexing");
     }
     if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.push("partially-bound-binding-array");
@@ -553,10 +551,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
                 .contains("sampled-texture-and-storage-buffer-array-non-uniform-indexing"),
         );
         features.set(
-            wgpu_types::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            wgpu_types::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
             required_features
                 .0
-                .contains("uniform-buffer-and-storage-texture-array-non-uniform-indexing"),
+                .contains("storage-texture-array-non-uniform-indexing"),
         );
         features.set(
             wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY,
