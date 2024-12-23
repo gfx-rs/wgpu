@@ -3294,6 +3294,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, " >> 24) / {scale}.0)")?;
                     }
                     fun @ (Function::Unpack4xI8 | Function::Unpack4xU8) => {
+                        write!(self.out, "(")?;
                         if matches!(fun, Function::Unpack4xU8) {
                             write!(self.out, "u")?;
                         }
@@ -3305,7 +3306,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " >> 16, ")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 24) << 24 >> 24")?;
+                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Function::QuantizeToF16 => {
                         write!(self.out, "f16tof32(f32tof16(")?;

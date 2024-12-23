@@ -100,14 +100,13 @@
                     Some((
                         view: Id(0, 1),
                         resolve_target: None,
-                        load_op: clear,
-                        store_op: store,
-                        clear_value: (
+                        load_op: clear(Color(
                             r: 0,
                             g: 0,
                             b: 0,
                             a: 1,
-                        ),
+                        )),
+                        store_op: store,
                     )),
                 ],
                 target_depth_stencil: None,

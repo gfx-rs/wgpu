@@ -72,8 +72,26 @@ pub struct GpuRenderPassColorAttachment {
     view: ResourceId,
     resolve_target: Option<ResourceId>,
     clear_value: Option<wgpu_types::Color>,
-    load_op: wgpu_core::command::LoadOp,
+    load_op: LoadOp,
     store_op: wgpu_core::command::StoreOp,
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LoadOp {
+    /// Clear the output attachment with the clear color. Clearing is faster than loading.
+    Clear = 0,
+    /// Do not clear output attachment.
+    Load = 1,
+}
+
+impl LoadOp {
+    fn into_wgt<V>(self, clear: V) -> wgpu_types::LoadOp<V> {
+        match self {
+            LoadOp::Clear => wgpu_types::LoadOp::Clear(clear),
+            LoadOp::Load => wgpu_types::LoadOp::Load,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -81,11 +99,11 @@ pub struct GpuRenderPassColorAttachment {
 pub struct GpuRenderPassDepthStencilAttachment {
     view: ResourceId,
     depth_clear_value: Option<f32>,
-    depth_load_op: Option<wgpu_core::command::LoadOp>,
+    depth_load_op: Option<LoadOp>,
     depth_store_op: Option<wgpu_core::command::StoreOp>,
     depth_read_only: bool,
     stencil_clear_value: u32,
-    stencil_load_op: Option<wgpu_core::command::LoadOp>,
+    stencil_load_op: Option<LoadOp>,
     stencil_store_op: Option<wgpu_core::command::StoreOp>,
     stencil_read_only: bool,
 }
@@ -134,9 +152,8 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                 Some(wgpu_core::command::RenderPassColorAttachment {
                     view: texture_view_resource.1,
                     resolve_target,
-                    load_op: at.load_op,
+                    load_op: at.load_op.into_wgt(at.clear_value.unwrap_or_default()),
                     store_op: at.store_op,
-                    clear_value: at.clear_value.unwrap_or_default(),
                 })
             } else {
                 None
@@ -156,15 +173,17 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
             Some(wgpu_core::command::RenderPassDepthStencilAttachment {
                 view: texture_view_resource.1,
                 depth: wgpu_core::command::PassChannel {
-                    load_op: attachment.depth_load_op,
+                    load_op: attachment
+                        .depth_load_op
+                        .map(|load_op| load_op.into_wgt(attachment.depth_clear_value)),
                     store_op: attachment.depth_store_op,
-                    clear_value: Some(attachment.depth_clear_value.unwrap_or(0.0)),
                     read_only: attachment.depth_read_only,
                 },
                 stencil: wgpu_core::command::PassChannel {
-                    load_op: attachment.stencil_load_op,
+                    load_op: attachment
+                        .stencil_load_op
+                        .map(|load_op| load_op.into_wgt(Some(attachment.stencil_clear_value))),
                     store_op: attachment.stencil_store_op,
-                    clear_value: Some(attachment.stencil_clear_value),
                     read_only: attachment.stencil_read_only,
                 },
             });
