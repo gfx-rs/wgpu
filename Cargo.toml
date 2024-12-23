@@ -87,13 +87,13 @@ criterion = "0.5"
 codespan-reporting = "0.11"
 ctor = "0.2"
 document-features = "0.2.10"
-encase = "0.9"
+encase = "0.10.0"
 env_logger = "0.11"
-fern = "0.6"
+fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
 getrandom = "0.2"
-glam = "0.28"
+glam = "0.29"
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 indexmap = "2"
@@ -101,7 +101,7 @@ itertools = { version = "0.13.0" }
 ktx2 = "0.3"
 libc = "0.2"
 libloading = "0.8"
-libtest-mimic = "0.6"
+libtest-mimic = "0.8.1"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 # https://github.com/Razaekel/noise-rs/issues/335 (Updated dependencies)
@@ -116,21 +116,21 @@ pico-args = { version = "0.5.0", features = [
     "combined-flags",
 ] }
 png = "0.17.16"
-pollster = "0.3"
+pollster = "0.4"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.6"
 rayon = "1"
 renderdoc-sys = "1.1.0"
 ron = "0.8"
-rustc-hash = "1.1.0"
+rustc-hash = "2.1.0"
 serde = "1"
 serde_json = "1.0.134"
 smallvec = "1"
 static_assertions = "1.1.0"
-strum = { version = "0.25.0", features = ["derive"] }
+strum = { version = "0.26.0", features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
-thiserror = "1.0.69"
+thiserror = "2"
 wgpu = { version = "23.0.1", path = "./wgpu", default-features = false }
 wgpu-core = { version = "23.0.1", path = "./wgpu-core" }
 wgpu-macros = { version = "23.0.0", path = "./wgpu-macros" }
