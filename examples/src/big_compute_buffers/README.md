@@ -2,6 +2,10 @@
 
 This example assumes you're familiar with the other GP-GPU compute examples in this repository, if you're not you should go look at those first.
 
+This example also assumes you've specifically come here looking to do this, because you want at least the following:
+1. To be working on your 'data' in your shader treating it contiguously, not batching etc.
+2. The data you are wanting to work on does **not** fit within a single buffer on your device, see the [hello](https://github.com/gfx-rs/wgpu/tree/trunk/examples/src/hello) example for how to print information about your unique device to explore its maximum supported buffer size.
+
 Demonstrates how to split larger datasets (things too big to fit into a single buffer), across multiple buffers whilst treating them as a single, contiguous buffer on the GPU. This is known as 'chunking' or, sometimes 'pagination', not to be confused with the web kind, although they're not entirely dissimilar.
 
 - Creates a large set of buffers totalling `1GB`, full of `0.0f32`.
