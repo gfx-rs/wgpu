@@ -62,6 +62,15 @@ impl BindGroupState {
 fn run_bench(ctx: &mut Criterion) {
     let state = Lazy::new(BindGroupState::new);
 
+    if !state
+        .device_state
+        .device
+        .features()
+        .contains(wgpu::Features::TEXTURE_BINDING_ARRAY)
+    {
+        return;
+    }
+
     let mut group = ctx.benchmark_group("Bind Group Creation");
 
     for count in [5, 50, 500, 5_000, 50_000] {
