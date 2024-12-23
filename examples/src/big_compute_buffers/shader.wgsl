@@ -5,12 +5,12 @@ const TOTAL_SIZE: u32 = BUFF_LENGTH * NUM_BUFFERS;
 
 
 // `binding_array` requires a custom struct
-struct ContigiousArray{
+struct ContiguousArray{
     inner: array<f32>
 }
 
 @group(0) @binding(0)
-var<storage, read_write> storage_array: binding_array<ContigiousArray, NUM_BUFFERS>;
+var<storage, read_write> storage_array: binding_array<ContiguousArray, NUM_BUFFERS>;
 
 
 @compute @workgroup_size(256, 1, 1)

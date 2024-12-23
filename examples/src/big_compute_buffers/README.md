@@ -17,7 +17,7 @@ const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1; // 65_535
 ```
 
 ## Caution:
-- Large buffers can fail to allocate due to fragmentation issues, you will **always** need not only the appropriate amount of space required for your buffer(s) but, that space will also need to be contigious within GPU/Device memory for this strategy to work. You can read more about fragmentation [here](https://developer.nvidia.com/docs/drive/drive-os/archives/6.0.4/linux/sdk/common/topics/graphics_content/avoiding_memory_fragmentation.html).
+- Large buffers can fail to allocate due to fragmentation issues, you will **always** need not only the appropriate amount of space required for your buffer(s) but, that space will also need to be contiguous within GPU/Device memory for this strategy to work. You can read more about fragmentation [here](https://developer.nvidia.com/docs/drive/drive-os/archives/6.0.4/linux/sdk/common/topics/graphics_content/avoiding_memory_fragmentation.html).
 - `wgsl` is, compared to the GP-GPU compute workhorse languages like CUDA very immature.
 
 ## To Run
