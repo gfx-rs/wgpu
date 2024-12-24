@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 225
+; Bound: 269
 OpCapability Shader
 OpCapability Linkage
 %1 = OpExtInstImport "GLSL.std.450"
@@ -162,6 +162,43 @@ OpDecorate %12 ArrayStride 4
 %89 = OpVariable  %90  Function %21
 OpBranch %128
 %128 = OpLabel
+OpStore %85 %15
+OpStore %87 %18
+OpStore %89 %21
+OpStore %91 %24
+OpStore %92 %24
+OpStore %93 %24
+OpStore %94 %24
+OpStore %95 %31
+OpStore %97 %31
+OpStore %98 %31
+OpStore %99 %31
+OpStore %100 %31
+OpStore %101 %31
+OpStore %102 %31
+OpStore %103 %31
+OpStore %104 %31
+OpStore %105 %33
+OpStore %106 %34
+OpStore %107 %33
+OpStore %108 %36
+OpStore %109 %34
+OpStore %110 %34
+OpStore %111 %37
+OpStore %113 %37
+OpStore %114 %37
+OpStore %115 %37
+OpStore %116 %39
+OpStore %118 %39
+OpStore %119 %39
+OpStore %120 %37
+OpStore %121 %37
+OpStore %122 %37
+OpStore %123 %37
+OpStore %124 %39
+OpStore %125 %37
+OpStore %126 %37
+OpStore %127 %37
 OpReturn
 OpFunctionEnd
 %130 = OpFunction  %2  None %84
@@ -255,5 +292,69 @@ OpStore %176 %222
 %223 = OpLoad  %3  %134
 %224 = OpCompositeConstruct  %12  %32 %223
 OpStore %178 %224
+%225 = OpLoad  %5  %131
+%226 = OpCompositeConstruct  %6  %225 %23
+OpStore %140 %226
+%227 = OpLoad  %5  %131
+%228 = OpCompositeConstruct  %6  %22 %227
+OpStore %142 %228
+%229 = OpLoad  %5  %131
+%230 = OpCompositeConstruct  %6  %229 %23
+OpStore %144 %230
+%231 = OpLoad  %5  %131
+%232 = OpCompositeConstruct  %6  %22 %231
+OpStore %146 %232
+%233 = OpLoad  %7  %137
+%234 = OpCompositeConstruct  %8  %233 %26
+%235 = OpCompositeConstruct  %9  %234 %30
+OpStore %148 %235
+%236 = OpLoad  %7  %137
+%237 = OpCompositeConstruct  %8  %25 %236
+%238 = OpCompositeConstruct  %9  %237 %30
+OpStore %150 %238
+%239 = OpLoad  %7  %137
+%240 = OpCompositeConstruct  %8  %239 %29
+%241 = OpCompositeConstruct  %9  %27 %240
+OpStore %152 %241
+%242 = OpLoad  %7  %137
+%243 = OpCompositeConstruct  %8  %28 %242
+%244 = OpCompositeConstruct  %9  %27 %243
+OpStore %154 %244
+%245 = OpLoad  %7  %137
+%246 = OpCompositeConstruct  %10  %245 %26
+OpStore %156 %246
+%247 = OpLoad  %7  %137
+%248 = OpCompositeConstruct  %10  %25 %247
+OpStore %158 %248
+%249 = OpLoad  %7  %137
+%250 = OpCompositeConstruct  %10  %249 %26
+OpStore %160 %250
+%251 = OpLoad  %7  %137
+%252 = OpCompositeConstruct  %10  %25 %251
+OpStore %162 %252
+%253 = OpLoad  %3  %134
+%254 = OpCompositeConstruct  %12  %253 %38
+OpStore %164 %254
+%255 = OpLoad  %3  %134
+%256 = OpCompositeConstruct  %12  %32 %255
+OpStore %166 %256
+%257 = OpLoad  %7  %137
+%258 = OpCompositeConstruct  %10  %257 %26
+OpStore %168 %258
+%259 = OpLoad  %7  %137
+%260 = OpCompositeConstruct  %10  %25 %259
+OpStore %170 %260
+%261 = OpLoad  %7  %137
+%262 = OpCompositeConstruct  %10  %261 %26
+OpStore %172 %262
+%263 = OpLoad  %7  %137
+%264 = OpCompositeConstruct  %10  %25 %263
+OpStore %174 %264
+%265 = OpLoad  %3  %134
+%266 = OpCompositeConstruct  %12  %265 %38
+OpStore %176 %266
+%267 = OpLoad  %3  %134
+%268 = OpCompositeConstruct  %12  %32 %267
+OpStore %178 %268
 OpReturn
 OpFunctionEnd
