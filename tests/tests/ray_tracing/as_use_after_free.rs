@@ -149,6 +149,6 @@ static ACCELERATION_STRUCTURE_USE_AFTER_FREE: GpuTestConfiguration = GpuTestConf
             .test_features_limits()
             .features(required_features())
             // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::adapter("AMD")),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(acceleration_structure_use_after_free);
