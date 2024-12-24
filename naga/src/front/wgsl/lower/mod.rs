@@ -1700,31 +1700,48 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             } => {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
+                let target_span = ctx.ast_expressions.get_span(ast_target);
 
-                let target = self.expression_for_reference(
-                    ast_target,
-                    &mut ctx.as_expression(block, &mut emitter),
-                )?;
-                let mut value =
-                    self.expression(value, &mut ctx.as_expression(block, &mut emitter))?;
-
+                let mut ectx = ctx.as_expression(block, &mut emitter);
+                let target = self.expression_for_reference(ast_target, &mut ectx)?;
                 let target_handle = match target {
                     Typed::Reference(handle) => handle,
                     Typed::Plain(handle) => {
                         let ty = ctx.invalid_assignment_type(handle);
                         return Err(Error::InvalidAssignment {
-                            span: ctx.ast_expressions.get_span(ast_target),
+                            span: target_span,
                             ty,
                         });
                     }
                 };
 
+                // Usually the value needs to be converted to match the type of
+                // the memory view you're assigning it to. The bit shift
+                // operators are exceptions, in that the right operand is always
+                // a `u32` or `vecN<u32>`.
+                let target_scalar = match op {
+                    Some(crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight) => {
+                        Some(crate::Scalar::U32)
+                    }
+                    _ => resolve_inner!(ectx, target_handle)
+                        .pointer_automatically_convertible_scalar(&ectx.module.types),
+                };
+
+                let value = self.expression_for_abstract(value, &mut ectx)?;
+                let mut value = match target_scalar {
+                    Some(target_scalar) => ectx.try_automatic_conversion_for_leaf_scalar(
+                        value,
+                        target_scalar,
+                        target_span,
+                    )?,
+                    None => value,
+                };
+
                 let value = match op {
                     Some(op) => {
-                        let mut ctx = ctx.as_expression(block, &mut emitter);
-                        let mut left = ctx.apply_load_rule(target)?;
-                        ctx.binary_op_splat(op, &mut left, &mut value)?;
-                        ctx.append_expression(
+                        let mut left = ectx.apply_load_rule(target)?;
+                        ectx.binary_op_splat(op, &mut left, &mut value)?;
+                        ectx.append_expression(
                             crate::Expression::Binary {
                                 op,
                                 left,
