@@ -398,32 +398,3 @@ pub(crate) fn map_acceleration_structure_geometry_flags(
     }
     d3d_flags
 }
-
-pub(crate) fn map_index_format(format: wgt::IndexFormat) -> Dxgi::Common::DXGI_FORMAT {
-    match format {
-        wgt::IndexFormat::Uint16 => Dxgi::Common::DXGI_FORMAT_R16_UINT,
-        wgt::IndexFormat::Uint32 => Dxgi::Common::DXGI_FORMAT_R32_UINT,
-    }
-}
-
-pub(crate) fn map_acceleration_structure_vertex_format(
-    format: wgt::VertexFormat,
-) -> Dxgi::Common::DXGI_FORMAT {
-    match format {
-        wgt::VertexFormat::Unorm8x2 => Dxgi::Common::DXGI_FORMAT_R8G8_UNORM,
-        wgt::VertexFormat::Unorm8x4 => Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM,
-        wgt::VertexFormat::Snorm8x2 => Dxgi::Common::DXGI_FORMAT_R8G8_SNORM,
-        wgt::VertexFormat::Snorm8x4 => Dxgi::Common::DXGI_FORMAT_R8G8B8A8_SNORM,
-        wgt::VertexFormat::Unorm16x2 => Dxgi::Common::DXGI_FORMAT_R16G16_UNORM,
-        wgt::VertexFormat::Unorm16x4 => Dxgi::Common::DXGI_FORMAT_R16G16B16A16_UNORM,
-        wgt::VertexFormat::Snorm16x2 => Dxgi::Common::DXGI_FORMAT_R16G16_SNORM,
-        wgt::VertexFormat::Snorm16x4 => Dxgi::Common::DXGI_FORMAT_R16G16B16A16_SNORM,
-        wgt::VertexFormat::Float16x2 => Dxgi::Common::DXGI_FORMAT_R16G16_FLOAT,
-        wgt::VertexFormat::Float16x4 => Dxgi::Common::DXGI_FORMAT_R16G16B16A16_FLOAT,
-        wgt::VertexFormat::Float32x2 => Dxgi::Common::DXGI_FORMAT_R32G32_FLOAT,
-        wgt::VertexFormat::Float32x3 => Dxgi::Common::DXGI_FORMAT_R32G32B32_FLOAT,
-        wgt::VertexFormat::Unorm10_10_10_2 => Dxgi::Common::DXGI_FORMAT_R10G10B10A2_UNORM,
-        // no other formats are supported
-        _ => unimplemented!("disallowed vertex format"),
-    }
-}

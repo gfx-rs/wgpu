@@ -1282,11 +1282,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for descriptor in descriptors {
             // TODO: This is the same as getting build sizes apart from requiring buffers, should this be de-duped?
             let mut geometry_desc;
-            let (ty, layout, inputs0, num_desc) = match descriptor.entries {
-                AccelerationStructureEntries::Instances(instances) => (
-                    Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
-                    Direct3D12::D3D12_ELEMENTS_LAYOUT::default(),
-                    Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+            let ty;
+            let inputs0;
+            let num_desc;
+            match descriptor.entries {
+                AccelerationStructureEntries::Instances(instances) => {
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
                         InstanceDescs: unsafe {
                             instances
                                 .buffer
@@ -1295,9 +1297,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 .GetGPUVirtualAddress()
                                 + instances.offset as u64
                         },
-                    },
-                    instances.count,
-                ),
+                    };
+                    num_desc = instances.count;
+                },
                 AccelerationStructureEntries::Triangles(triangles) => {
                     geometry_desc = Vec::with_capacity(triangles.len());
                     for triangle in triangles {
@@ -1317,9 +1319,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                         .indices
                                         .as_ref()
                                         .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |indices| {
-                                            conv::map_index_format(indices.format)
+                                            auxil::dxgi::conv::map_index_format(indices.format)
                                         }),
-                                    VertexFormat: conv::map_acceleration_structure_vertex_format(
+                                    VertexFormat: auxil::dxgi::conv::map_vertex_format(
                                         triangle.vertex_format,
                                     ),
                                     IndexCount: triangle
@@ -1355,14 +1357,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             },
                         })
                     }
-                    (
-                        Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
-                        Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
-                        Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
-                            pGeometryDescs: geometry_desc.as_ptr(),
-                        },
-                        geometry_desc.len() as u32,
-                    )
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        pGeometryDescs: geometry_desc.as_ptr(),
+                    };
+                    num_desc = geometry_desc.len() as u32;
                 }
                 AccelerationStructureEntries::AABBs(aabbs) => {
                     geometry_desc = Vec::with_capacity(aabbs.len());
@@ -1387,14 +1386,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             },
                         })
                     }
-                    (
-                        Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
-                        Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
-                        Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
-                            pGeometryDescs: geometry_desc.as_ptr(),
-                        },
-                        geometry_desc.len() as u32,
-                    )
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        pGeometryDescs: geometry_desc.as_ptr(),
+                    };
+                    num_desc = geometry_desc.len() as u32;
                 }
             };
             let acceleration_structure_inputs =
@@ -1405,7 +1401,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         Some(descriptor.mode),
                     ),
                     NumDescs: num_desc,
-                    DescsLayout: layout,
+                    DescsLayout: Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
                     Anonymous: inputs0,
                 };
             let desc = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC {

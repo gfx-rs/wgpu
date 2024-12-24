@@ -1937,9 +1937,9 @@ impl crate::Device for super::Device {
                                     .indices
                                     .as_ref()
                                     .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |indices| {
-                                        conv::map_index_format(indices.format)
+                                        auxil::dxgi::conv::map_index_format(indices.format)
                                     }),
-                                VertexFormat: conv::map_acceleration_structure_vertex_format(
+                                VertexFormat: auxil::dxgi::conv::map_vertex_format(
                                     triangle.vertex_format,
                                 ),
                                 IndexCount: triangle

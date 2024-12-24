@@ -243,7 +243,7 @@ pub(crate) fn free_acceleration_structure_allocation(
     match allocator.lock().allocator.free(allocation.allocation) {
         Ok(_) => (),
         // TODO: Don't panic here
-        Err(e) => panic!("Failed to destroy dx12 buffer, {e}"),
+        Err(e) => panic!("Failed to destroy dx12 acceleration structure, {e}"),
     };
 }
 
@@ -401,7 +401,7 @@ pub(crate) fn create_committed_acceleration_structure_resource(
             &mut resource,
         )
     }
-    .into_device_result("Committed buffer creation")?;
+    .into_device_result("Committed acceleration structure creation")?;
 
     resource.ok_or(crate::DeviceError::Unexpected)
 }
