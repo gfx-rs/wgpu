@@ -668,19 +668,9 @@ impl<'a> ResolveContext<'a> {
                     | Mf::Pow
                     | Mf::QuantizeToF16 => res_arg.clone(),
                     Mf::Modf | Mf::Frexp => {
-                        let (size, width) = match res_arg.inner_with(types) {
-                            &Ti::Scalar(crate::Scalar {
-                                kind: crate::ScalarKind::Float,
-                                width,
-                            }) => (None, width),
-                            &Ti::Vector {
-                                scalar:
-                                    crate::Scalar {
-                                        kind: crate::ScalarKind::Float,
-                                        width,
-                                    },
-                                size,
-                            } => (Some(size), width),
+                        let (size, scalar) = match res_arg.inner_with(types) {
+                            &Ti::Scalar(scalar) => (None, scalar),
+                            &Ti::Vector { scalar, size } => (Some(size), scalar),
                             ref other => {
                                 return Err(ResolveError::IncompatibleOperands(format!(
                                     "{fun:?}({other:?}, _)"
@@ -691,9 +681,9 @@ impl<'a> ResolveContext<'a> {
                             .special_types
                             .predeclared_types
                             .get(&if fun == Mf::Modf {
-                                crate::PredeclaredType::ModfResult { size, width }
+                                crate::PredeclaredType::ModfResult { size, scalar }
                             } else {
-                                crate::PredeclaredType::FrexpResult { size, width }
+                                crate::PredeclaredType::FrexpResult { size, scalar }
                             })
                             .ok_or(ResolveError::MissingSpecialType)?;
                         TypeResolution::Handle(*result)

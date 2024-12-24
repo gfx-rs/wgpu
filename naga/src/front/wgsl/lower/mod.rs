@@ -2287,22 +2287,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     args.finish()?;
 
                     if fun == crate::MathFunction::Modf || fun == crate::MathFunction::Frexp {
-                        if let Some((size, width)) = match *resolve_inner!(ctx, arg) {
-                            crate::TypeInner::Scalar(crate::Scalar { width, .. }) => {
-                                Some((None, width))
+                        if let Some((size, scalar)) = match *resolve_inner!(ctx, arg) {
+                            crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
+                            crate::TypeInner::Vector { size, scalar, .. } => {
+                                Some((Some(size), scalar))
                             }
-                            crate::TypeInner::Vector {
-                                size,
-                                scalar: crate::Scalar { width, .. },
-                                ..
-                            } => Some((Some(size), width)),
                             _ => None,
                         } {
                             ctx.module.generate_predeclared_type(
                                 if fun == crate::MathFunction::Modf {
-                                    crate::PredeclaredType::ModfResult { size, width }
+                                    crate::PredeclaredType::ModfResult { size, scalar }
                                 } else {
-                                    crate::PredeclaredType::FrexpResult { size, width }
+                                    crate::PredeclaredType::FrexpResult { size, scalar }
                                 },
                             );
                         }
