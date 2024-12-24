@@ -193,6 +193,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Reject destroyed buffers in query set resolution. By @ErichDonGubler in [#6579](https://github.com/gfx-rs/wgpu/pull/6579).
 - Fix panic when dropping `Device` on some environments. By @Dinnerbone in [#6681](https://github.com/gfx-rs/wgpu/pull/6681).
 - Reduced the overhead of command buffer validation. By @nical in [#6721](https://github.com/gfx-rs/wgpu/pull/6721).
+- Set index type to NONE in `get_acceleration_structure_build_sizes`. By @Vecvec in [#6802](https://github.com/gfx-rs/wgpu/pull/6802).
 
 #### Naga
 
