@@ -30,9 +30,10 @@ var<private> ivfs_ai: vec2<f32> = vec2(1f);
 var<private> ivfs_af: vec2<f32> = vec2(1f);
 var<private> iafafaf: array<f32, 2> = array<f32, 2>(1f, 2f);
 var<private> iafaiai: array<f32, 2> = array<f32, 2>(1f, 2f);
-var<private> iafpafaf: array<f32, 2> = array<f32, 2>(1f, 2f);
-var<private> iafpaiaf: array<f32, 2> = array<f32, 2>(1f, 2f);
-var<private> iafpafai: array<f32, 2> = array<f32, 2>(1f, 2f);
+var<private> iaipaiai_1: array<i32, 2> = array<i32, 2>(1i, 2i);
+var<private> iafpafaf_1: array<f32, 2> = array<f32, 2>(1f, 2f);
+var<private> iafpaiaf_1: array<f32, 2> = array<f32, 2>(1f, 2f);
+var<private> iafpafai_1: array<f32, 2> = array<f32, 2>(1f, 2f);
 
 fn all_constant_arguments() {
     var xvipaiai: vec2<i32> = vec2<i32>(42i, 43i);
@@ -68,6 +69,10 @@ fn all_constant_arguments() {
     var xafpaiaf: array<f32, 2> = array<f32, 2>(1f, 2f);
     var xafpafai: array<f32, 2> = array<f32, 2>(1f, 2f);
     var xafpafaf: array<f32, 2> = array<f32, 2>(1f, 2f);
+    var iaipaiai: array<i32, 2> = array<i32, 2>(1i, 2i);
+    var iafpaiaf: array<f32, 2> = array<f32, 2>(1f, 2f);
+    var iafpafai: array<f32, 2> = array<f32, 2>(1f, 2f);
+    var iafpafaf: array<f32, 2> = array<f32, 2>(1f, 2f);
 
 }
 

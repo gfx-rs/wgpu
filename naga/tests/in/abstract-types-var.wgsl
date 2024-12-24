@@ -53,6 +53,7 @@ var<private> ivfs_af = vec2<f32>(1.0);
 var<private> iafafaf = array<f32, 2>(1.0, 2.0);
 var<private> iafaiai = array<f32, 2>(1, 2);
 
+var<private> iaipaiai = array(1,   2);
 var<private> iafpafaf = array(1.0, 2.0);
 var<private> iafpaiaf = array(1, 2.0);
 var<private> iafpafai = array(1.0, 2);
@@ -93,13 +94,16 @@ fn all_constant_arguments() {
     var xai_iai: array<i32, 2> = array<i32, 2>(1i, 2);
     var xaiai_i: array<i32, 2> = array<i32, 2>(1, 2i);
 
-    // Ideally these would infer the var type from the initializer,
-    // but we don't support that yet.
     var xaipaiai: array<i32, 2> = array(1,   2);
     var xafpaiai: array<f32, 2> = array(1,   2);
     var xafpaiaf: array<f32, 2> = array(1,   2.0);
     var xafpafai: array<f32, 2> = array(1.0, 2);
     var xafpafaf: array<f32, 2> = array(1.0, 2.0);
+
+    var iaipaiai = array(1,   2);
+    var iafpaiaf = array(1,   2.0);
+    var iafpafai = array(1.0, 2);
+    var iafpafaf = array(1.0, 2.0);
 }
 
 fn mixed_constant_and_runtime_arguments() {

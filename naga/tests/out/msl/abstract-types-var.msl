@@ -46,6 +46,10 @@ void all_constant_arguments(
     type_7 xafpaiaf = type_7 {1.0, 2.0};
     type_7 xafpafai = type_7 {1.0, 2.0};
     type_7 xafpafaf = type_7 {1.0, 2.0};
+    type_8 iaipaiai = type_8 {1, 2};
+    type_7 iafpaiaf = type_7 {1.0, 2.0};
+    type_7 iafpafai = type_7 {1.0, 2.0};
+    type_7 iafpafaf = type_7 {1.0, 2.0};
 }
 
 void mixed_constant_and_runtime_arguments(
