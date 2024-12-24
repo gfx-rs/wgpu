@@ -30,28 +30,16 @@ fn access_all_struct_members(ctx: TestingContext) {
 
     let as_ctx = AsBuildContext::new(&ctx);
 
-    //
-    // Build in the right order, then rebuild the BLAS so the TLAS is invalid, then use the TLAS.
-    //
-
-    let mut encoder_blas = ctx
+    let mut encoder_build = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("BLAS 1"),
+            label: Some("Build"),
         });
 
-    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
-
-    let mut encoder_tlas = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("TLAS 1"),
-        });
-
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_build.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas_package]);
 
     ctx.queue
-        .submit([encoder_blas.finish(), encoder_tlas.finish()]);
+        .submit([encoder_build.finish()]);
 
     //
     // Create shader to use tlas with
@@ -100,7 +88,7 @@ fn access_all_struct_members(ctx: TestingContext) {
         });
         pass.set_pipeline(&compute_pipeline);
         pass.set_bind_group(0, Some(&bind_group), &[]);
-        pass.dispatch_workgroups(1, 2, 1)
+        pass.dispatch_workgroups(1, 1, 1)
     }
 
     ctx.queue.submit([encoder_compute.finish()]);
