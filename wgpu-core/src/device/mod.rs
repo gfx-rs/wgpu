@@ -340,8 +340,7 @@ pub struct MissingFeatures(pub wgt::Features);
 
 #[derive(Clone, Debug, Error)]
 #[error(
-    "Downlevel flags {0:?} are required but not supported on the device.\n{}",
-    DOWNLEVEL_ERROR_MESSAGE
+    "Downlevel flags {0:?} are required but not supported on the device.\n{DOWNLEVEL_ERROR_MESSAGE}",
 )]
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 

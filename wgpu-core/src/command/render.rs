@@ -54,47 +54,19 @@ use super::{
 };
 use super::{DrawKind, Rect};
 
-/// Operation to perform to the output attachment at the start of a renderpass.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
-pub enum LoadOp {
-    /// Clear the output attachment with the clear color. Clearing is faster than loading.
-    Clear = 0,
-    /// Do not clear output attachment.
-    Load = 1,
-}
+pub use wgt::{LoadOp, StoreOp};
 
-impl LoadOp {
-    fn hal_ops(&self) -> hal::AttachmentOps {
-        match self {
-            LoadOp::Load => hal::AttachmentOps::LOAD,
-            LoadOp::Clear => hal::AttachmentOps::empty(),
-        }
+fn load_hal_ops<V>(load: LoadOp<V>) -> hal::AttachmentOps {
+    match load {
+        LoadOp::Load => hal::AttachmentOps::LOAD,
+        LoadOp::Clear(_) => hal::AttachmentOps::empty(),
     }
 }
 
-/// Operation to perform to the output attachment at the end of a renderpass.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
-pub enum StoreOp {
-    /// Discards the content of the render target.
-    ///
-    /// If you don't care about the contents of the target, this can be faster.
-    Discard = 0,
-    /// Store the result of the renderpass.
-    Store = 1,
-}
-
-impl StoreOp {
-    fn hal_ops(&self) -> hal::AttachmentOps {
-        match self {
-            StoreOp::Store => hal::AttachmentOps::STORE,
-            StoreOp::Discard => hal::AttachmentOps::empty(),
-        }
+fn store_hal_ops(store: StoreOp) -> hal::AttachmentOps {
+    match store {
+        StoreOp::Store => hal::AttachmentOps::STORE,
+        StoreOp::Discard => hal::AttachmentOps::empty(),
     }
 }
 
@@ -102,67 +74,83 @@ impl StoreOp {
 #[repr(C)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PassChannel<V, L = Option<LoadOp>, S = Option<StoreOp>> {
+pub struct PassChannel<V> {
     /// Operation to perform to the output attachment at the start of a
     /// renderpass.
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: L,
+    pub load_op: Option<LoadOp<V>>,
     /// Operation to perform to the output attachment at the end of a renderpass.
-    pub store_op: S,
-    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
-    /// color.
-    pub clear_value: V,
+    pub store_op: Option<StoreOp>,
     /// If true, the relevant channel is not changed by a renderpass, and the
     /// corresponding attachment can be used inside the pass by other read-only
     /// usages.
     pub read_only: bool,
 }
 
-impl<V> PassChannel<V, LoadOp, StoreOp> {
-    fn hal_ops(&self) -> hal::AttachmentOps {
-        self.load_op.hal_ops() | self.store_op.hal_ops()
-    }
-}
-
-impl<V: Default> Default for PassChannel<V, LoadOp, StoreOp> {
-    fn default() -> Self {
-        PassChannel {
-            load_op: LoadOp::Load,
-            store_op: StoreOp::Store,
-            clear_value: V::default(),
-            read_only: false,
+impl<V: Copy + Default> PassChannel<Option<V>> {
+    fn resolve(
+        &self,
+        handle_clear: impl Fn(Option<V>) -> Result<V, AttachmentError>,
+    ) -> Result<ResolvedPassChannel<V>, AttachmentError> {
+        if self.read_only {
+            if self.load_op.is_some() {
+                return Err(AttachmentError::ReadOnlyWithLoad);
+            }
+            if self.store_op.is_some() {
+                return Err(AttachmentError::ReadOnlyWithStore);
+            }
+            Ok(ResolvedPassChannel::ReadOnly)
+        } else {
+            Ok(ResolvedPassChannel::Operational(wgt::Operations {
+                load: match self.load_op.ok_or(AttachmentError::NoLoad)? {
+                    LoadOp::Clear(clear_value) => LoadOp::Clear(handle_clear(clear_value)?),
+                    LoadOp::Load => LoadOp::Load,
+                },
+                store: self.store_op.ok_or(AttachmentError::NoStore)?,
+            }))
         }
     }
 }
 
-impl<V: Copy + Default> PassChannel<Option<V>, Option<LoadOp>, Option<StoreOp>> {
-    fn resolve(&self) -> Result<PassChannel<V, LoadOp, StoreOp>, AttachmentError> {
-        let load_op = if self.read_only {
-            if self.load_op.is_some() {
-                return Err(AttachmentError::ReadOnlyWithLoad);
-            } else {
-                LoadOp::Load
-            }
-        } else {
-            self.load_op.ok_or(AttachmentError::NoLoad)?
-        };
-        let store_op = if self.read_only {
-            if self.store_op.is_some() {
-                return Err(AttachmentError::ReadOnlyWithStore);
-            } else {
-                StoreOp::Store
-            }
-        } else {
-            self.store_op.ok_or(AttachmentError::NoStore)?
-        };
-        Ok(PassChannel {
-            load_op,
-            store_op,
-            clear_value: self.clear_value.unwrap_or_default(),
-            read_only: self.read_only,
-        })
+#[derive(Debug)]
+pub enum ResolvedPassChannel<V> {
+    ReadOnly,
+    Operational(wgt::Operations<V>),
+}
+
+impl<V: Copy + Default> ResolvedPassChannel<V> {
+    fn load_op(&self) -> LoadOp<V> {
+        match self {
+            ResolvedPassChannel::ReadOnly => LoadOp::Load,
+            ResolvedPassChannel::Operational(wgt::Operations { load, .. }) => *load,
+        }
+    }
+
+    fn store_op(&self) -> StoreOp {
+        match self {
+            ResolvedPassChannel::ReadOnly => StoreOp::Store,
+            ResolvedPassChannel::Operational(wgt::Operations { store, .. }) => *store,
+        }
+    }
+
+    fn clear_value(&self) -> V {
+        match self {
+            Self::Operational(wgt::Operations {
+                load: LoadOp::Clear(clear_value),
+                ..
+            }) => *clear_value,
+            _ => Default::default(),
+        }
+    }
+
+    fn is_readonly(&self) -> bool {
+        matches!(self, Self::ReadOnly)
+    }
+
+    fn hal_ops(&self) -> hal::AttachmentOps {
+        load_hal_ops(self.load_op()) | store_hal_ops(self.store_op())
     }
 }
 
@@ -180,12 +168,9 @@ pub struct RenderPassColorAttachment {
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: LoadOp,
+    pub load_op: LoadOp<Color>,
     /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: StoreOp,
-    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
-    /// color.
-    pub clear_value: Color,
 }
 
 /// Describes a color attachment to a render pass.
@@ -200,12 +185,21 @@ struct ArcRenderPassColorAttachment {
     ///
     /// This must be clear if it is the first renderpass rendering to a swap
     /// chain image.
-    pub load_op: LoadOp,
+    pub load_op: LoadOp<Color>,
     /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: StoreOp,
-    /// If load_op is [`LoadOp::Clear`], the attachment will be cleared to this
-    /// color.
-    pub clear_value: Color,
+}
+impl ArcRenderPassColorAttachment {
+    fn hal_ops(&self) -> hal::AttachmentOps {
+        load_hal_ops(self.load_op) | store_hal_ops(self.store_op)
+    }
+
+    fn clear_value(&self) -> Color {
+        match self.load_op {
+            LoadOp::Clear(clear_value) => clear_value,
+            LoadOp::Load => Color::default(),
+        }
+    }
 }
 
 /// Describes a depth/stencil attachment to a render pass.
@@ -216,9 +210,9 @@ pub struct RenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: id::TextureViewId,
     /// What operations will be performed on the depth part of the attachment.
-    pub depth: PassChannel<Option<f32>, Option<LoadOp>, Option<StoreOp>>,
+    pub depth: PassChannel<Option<f32>>,
     /// What operations will be performed on the stencil part of the attachment.
-    pub stencil: PassChannel<Option<u32>, Option<LoadOp>, Option<StoreOp>>,
+    pub stencil: PassChannel<Option<u32>>,
 }
 
 /// Describes a depth/stencil attachment to a render pass.
@@ -227,47 +221,9 @@ pub struct ArcRenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: Arc<TextureView>,
     /// What operations will be performed on the depth part of the attachment.
-    pub depth: PassChannel<f32, LoadOp, StoreOp>,
+    pub depth: ResolvedPassChannel<f32>,
     /// What operations will be performed on the stencil part of the attachment.
-    pub stencil: PassChannel<u32, LoadOp, StoreOp>,
-}
-
-impl ArcRenderPassDepthStencilAttachment {
-    /// Validate the given aspects' read-only flags against their load
-    /// and store ops.
-    ///
-    /// When an aspect is read-only, its load and store ops must be
-    /// `LoadOp::Load` and `StoreOp::Store`.
-    ///
-    /// On success, return a pair `(depth, stencil)` indicating
-    /// whether the depth and stencil passes are read-only.
-    fn depth_stencil_read_only(
-        &self,
-        aspects: hal::FormatAspects,
-    ) -> Result<(bool, bool), RenderPassErrorInner> {
-        let mut depth_read_only = true;
-        let mut stencil_read_only = true;
-
-        if aspects.contains(hal::FormatAspects::DEPTH) {
-            if self.depth.read_only
-                && (self.depth.load_op, self.depth.store_op) != (LoadOp::Load, StoreOp::Store)
-            {
-                return Err(RenderPassErrorInner::InvalidDepthOps);
-            }
-            depth_read_only = self.depth.read_only;
-        }
-
-        if aspects.contains(hal::FormatAspects::STENCIL) {
-            if self.stencil.read_only
-                && (self.stencil.load_op, self.stencil.store_op) != (LoadOp::Load, StoreOp::Store)
-            {
-                return Err(RenderPassErrorInner::InvalidStencilOps);
-            }
-            stencil_read_only = self.stencil.read_only;
-        }
-
-        Ok((depth_read_only, stencil_read_only))
-    }
+    pub stencil: ResolvedPassChannel<u32>,
 }
 
 /// Describes the attachments of a render pass.
@@ -855,14 +811,14 @@ struct RenderPassInfo<'d> {
 }
 
 impl<'d> RenderPassInfo<'d> {
-    fn add_pass_texture_init_actions(
-        load_op: LoadOp,
+    fn add_pass_texture_init_actions<V>(
+        load_op: LoadOp<V>,
         store_op: StoreOp,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         view: &TextureView,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
     ) {
-        if load_op == LoadOp::Load {
+        if matches!(load_op, LoadOp::Load) {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
                     texture: view.parent.clone(),
@@ -999,20 +955,20 @@ impl<'d> RenderPassInfo<'d> {
             let ds_aspects = view.desc.aspects();
 
             if !ds_aspects.contains(hal::FormatAspects::STENCIL)
-                || (at.stencil.load_op == at.depth.load_op
-                    && at.stencil.store_op == at.depth.store_op)
+                || (at.stencil.load_op().eq_variant(at.depth.load_op())
+                    && at.stencil.store_op() == at.depth.store_op())
             {
                 Self::add_pass_texture_init_actions(
-                    at.depth.load_op,
-                    at.depth.store_op,
+                    at.depth.load_op(),
+                    at.depth.store_op(),
                     texture_memory_actions,
                     view,
                     &mut pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
                 Self::add_pass_texture_init_actions(
-                    at.stencil.load_op,
-                    at.stencil.store_op,
+                    at.stencil.load_op(),
+                    at.stencil.store_op(),
                     texture_memory_actions,
                     view,
                     &mut pending_discard_init_fixups,
@@ -1040,7 +996,7 @@ impl<'d> RenderPassInfo<'d> {
                 // NeedsInitializedMemory should know that it doesn't need to
                 // clear the aspect that was set to C)
                 let need_init_beforehand =
-                    at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
+                    at.depth.load_op() == LoadOp::Load || at.stencil.load_op() == LoadOp::Load;
                 if need_init_beforehand {
                     pending_discard_init_fixups.extend(
                         texture_memory_actions.register_init_action(&TextureInitTrackerAction {
@@ -1059,7 +1015,7 @@ impl<'d> RenderPassInfo<'d> {
                 // it isn't already set to NeedsInitializedMemory).
                 //
                 // (possible optimization: Delay and potentially drop this zeroing)
-                if at.depth.store_op != at.stencil.store_op {
+                if at.depth.store_op() != at.stencil.store_op() {
                     if !need_init_beforehand {
                         texture_memory_actions.register_implicit_init(
                             &view.parent,
@@ -1067,14 +1023,14 @@ impl<'d> RenderPassInfo<'d> {
                         );
                     }
                     divergent_discarded_depth_stencil_aspect = Some((
-                        if at.depth.store_op == StoreOp::Discard {
+                        if at.depth.store_op() == StoreOp::Discard {
                             wgt::TextureAspect::DepthOnly
                         } else {
                             wgt::TextureAspect::StencilOnly
                         },
                         view.clone(),
                     ));
-                } else if at.depth.store_op == StoreOp::Discard {
+                } else if at.depth.store_op() == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
                         texture: view.parent.clone(),
@@ -1084,7 +1040,8 @@ impl<'d> RenderPassInfo<'d> {
                 }
             }
 
-            (is_depth_read_only, is_stencil_read_only) = at.depth_stencil_read_only(ds_aspects)?;
+            is_depth_read_only = at.depth.is_readonly();
+            is_stencil_read_only = at.stencil.is_readonly();
 
             let usage = if is_depth_read_only
                 && is_stencil_read_only
@@ -1106,7 +1063,7 @@ impl<'d> RenderPassInfo<'d> {
                 },
                 depth_ops: at.depth.hal_ops(),
                 stencil_ops: at.stencil.hal_ops(),
-                clear_value: (at.depth.clear_value, at.stencil.clear_value),
+                clear_value: (at.depth.clear_value(), at.stencil.clear_value()),
             });
         }
 
@@ -1218,8 +1175,8 @@ impl<'d> RenderPassInfo<'d> {
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
-                ops: at.load_op.hal_ops() | at.store_op.hal_ops(),
-                clear_value: at.clear_value,
+                ops: at.hal_ops(),
+                clear_value: at.clear_value(),
             }));
         }
 
@@ -1436,7 +1393,6 @@ impl Global {
                     resolve_target,
                     load_op,
                     store_op,
-                    clear_value,
                 }) = color_attachment
                 {
                     let view = texture_views.get(*view_id).get()?;
@@ -1458,7 +1414,6 @@ impl Global {
                             resolve_target,
                             load_op: *load_op,
                             store_op: *store_op,
-                            clear_value: *clear_value,
                         }));
                 } else {
                     arc_desc.color_attachments.push(None);
@@ -1478,28 +1433,26 @@ impl Global {
                         )));
                     }
 
-                    // If this.depthLoadOp is "clear", this.depthClearValue must be provided and must be between 0.0 and 1.0, inclusive.
-                    if depth_stencil_attachment.depth.load_op == Some(LoadOp::Clear) {
-                        if let Some(clear_value) = depth_stencil_attachment.depth.clear_value {
-                            if !(0.0..=1.0).contains(&clear_value) {
-                                return Err(CommandEncoderError::InvalidAttachment(AttachmentError::ClearValueOutOfRange(clear_value)));
-                            }
-                        } else {
-                            return Err(CommandEncoderError::InvalidAttachment(AttachmentError::NoClearValue));
-                        }
-                    }
-
                     Some(ArcRenderPassDepthStencilAttachment {
                         view,
                         depth: if format.has_depth_aspect() {
-                            depth_stencil_attachment.depth.resolve()?
+                            depth_stencil_attachment.depth.resolve(|clear| if let Some(clear) = clear {
+                                // If this.depthLoadOp is "clear", this.depthClearValue must be provided and must be between 0.0 and 1.0, inclusive.
+                                if !(0.0..=1.0).contains(&clear) {
+                                    Err(AttachmentError::ClearValueOutOfRange(clear))
+                                } else {
+                                    Ok(clear)
+                                }
+                            } else {
+                                Err(AttachmentError::NoClearValue)
+                            })?
                         } else {
-                            Default::default()
+                            ResolvedPassChannel::ReadOnly
                         },
                         stencil: if format.has_stencil_aspect() {
-                            depth_stencil_attachment.stencil.resolve()?
+                            depth_stencil_attachment.stencil.resolve(|clear| Ok(clear.unwrap_or_default()))?
                         } else {
-                            Default::default()
+                            ResolvedPassChannel::ReadOnly
                         },
                     })
                 } else {

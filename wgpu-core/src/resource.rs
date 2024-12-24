@@ -570,10 +570,7 @@ impl Buffer {
                     };
                     Ok(())
                 }
-                Err(e) => {
-                    log::error!("Mapping failed: {e}");
-                    Err(e)
-                }
+                Err(e) => Err(e),
             }
         } else {
             *self.map_state.lock() = BufferMapState::Active {
@@ -1499,8 +1496,8 @@ pub enum CreateTextureError {
     )]
     InvalidMipLevelCount { requested: u32, maximum: u32 },
     #[error(
-        "Texture usages {0:?} are not allowed on a texture of type {1:?}{}",
-        if *.2 { " due to downlevel restrictions" } else { "" }
+        "Texture usages {0:?} are not allowed on a texture of type {1:?}{downlevel_suffix}",
+        downlevel_suffix = if *.2 { " due to downlevel restrictions" } else { "" }
     )]
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
