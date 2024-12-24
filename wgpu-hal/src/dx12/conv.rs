@@ -1,4 +1,4 @@
-use windows::Win32::Graphics::{Direct3D, Direct3D12, Dxgi};
+use windows::Win32::Graphics::{Direct3D, Direct3D12};
 
 pub fn map_buffer_usage_to_resource_flags(
     usage: crate::BufferUses,

@@ -1927,32 +1927,32 @@ impl crate::Device for super::Device {
             AccelerationStructureEntries::Triangles(triangles) => {
                 geometry_desc = Vec::with_capacity(triangles.len());
                 for triangle in triangles {
+                    let index_format = triangle
+                        .indices
+                        .as_ref()
+                        .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |indices| {
+                            auxil::dxgi::conv::map_index_format(indices.format)
+                        });
+                    let index_count = triangle.indices.as_ref().map_or(0, |indices| indices.count);
+
+                    let triangle_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC {
+                        Transform3x4: 0,
+                        IndexFormat: index_format,
+                        VertexFormat: auxil::dxgi::conv::map_vertex_format(triangle.vertex_format),
+                        IndexCount: index_count,
+                        VertexCount: triangle.vertex_count,
+                        IndexBuffer: 0,
+                        VertexBuffer: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                            StartAddress: 0,
+                            StrideInBytes: triangle.vertex_stride,
+                        },
+                    };
+
                     geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
                         Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
                         Flags: conv::map_acceleration_structure_geometry_flags(triangle.flags),
                         Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
-                            Triangles: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC {
-                                Transform3x4: 0,
-                                IndexFormat: triangle
-                                    .indices
-                                    .as_ref()
-                                    .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |indices| {
-                                        auxil::dxgi::conv::map_index_format(indices.format)
-                                    }),
-                                VertexFormat: auxil::dxgi::conv::map_vertex_format(
-                                    triangle.vertex_format,
-                                ),
-                                IndexCount: triangle
-                                    .indices
-                                    .as_ref()
-                                    .map_or(0, |indices| indices.count),
-                                VertexCount: triangle.vertex_count,
-                                IndexBuffer: 0,
-                                VertexBuffer: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
-                                    StartAddress: 0,
-                                    StrideInBytes: triangle.vertex_stride,
-                                },
-                            },
+                            Triangles: triangle_desc,
                         },
                     })
                 }
@@ -1967,17 +1967,18 @@ impl crate::Device for super::Device {
             AccelerationStructureEntries::AABBs(aabbs) => {
                 geometry_desc = Vec::with_capacity(aabbs.len());
                 for aabb in aabbs {
+                    let aabb_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_AABBS_DESC {
+                        AABBCount: aabb.count as u64,
+                        AABBs: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                            StartAddress: 0,
+                            StrideInBytes: aabb.stride,
+                        },
+                    };
                     geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
                         Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS,
                         Flags: conv::map_acceleration_structure_geometry_flags(aabb.flags),
                         Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
-                            AABBs: Direct3D12::D3D12_RAYTRACING_GEOMETRY_AABBS_DESC {
-                                AABBCount: aabb.count as u64,
-                                AABBs: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
-                                    StartAddress: 0,
-                                    StrideInBytes: aabb.stride,
-                                },
-                            },
+                            AABBs: aabb_desc,
                         },
                     })
                 }
@@ -2119,7 +2120,7 @@ impl crate::Device for super::Device {
         };
         let temp: *const _ = &temp;
         unsafe {
-            slice::from_raw_parts::<u8>(
+            slice::from_raw_parts(
                 temp.cast::<u8>(),
                 size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
             )
