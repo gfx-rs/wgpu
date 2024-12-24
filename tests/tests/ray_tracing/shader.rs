@@ -36,10 +36,10 @@ fn access_all_struct_members(ctx: TestingContext) {
             label: Some("Build"),
         });
 
-    encoder_build.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas_package]);
+    encoder_build
+        .build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas_package]);
 
-    ctx.queue
-        .submit([encoder_build.finish()]);
+    ctx.queue.submit([encoder_build.finish()]);
 
     //
     // Create shader to use tlas with
