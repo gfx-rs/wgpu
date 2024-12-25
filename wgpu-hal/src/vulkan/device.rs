@@ -786,7 +786,7 @@ impl super::Device {
 
     /// # Safety
     ///
-    /// - Vulkan 1.1+ (or VK_KHR_external_memory)
+    /// - Vulkan (with VK_KHR_external_memory_win32)
     /// - The `d3d11_shared_handle` must be valid and respecting `desc`
     /// - `VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT` flag is used because we need to hold a reference to the handle
     #[cfg(windows)]
@@ -795,8 +795,12 @@ impl super::Device {
         d3d11_shared_handle: windows::Win32::Foundation::HANDLE,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        if !self.shared.private_caps.external_memory_win32 {
-            log::error!("VK_KHR_external_memory extension is required");
+        if !self
+            .shared
+            .features
+            .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_WIN32)
+        {
+            log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
             return Err(crate::DeviceError::ResourceCreationFailed);
         }
 
