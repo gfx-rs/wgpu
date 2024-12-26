@@ -6,7 +6,7 @@ struct Uniforms {
 var<uniform> uniforms: Uniforms;
 
 @group(0) @binding(1)
-var output: texture_storage_2d<bgra8unorm, write>;
+var output: texture_storage_2d<rgba8unorm, write>;
 
 @group(0) @binding(2)
 var acc_struct: acceleration_structure;

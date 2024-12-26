@@ -284,9 +284,9 @@ impl<A: hal::Api> Example<A> {
         dbg!(&surface_caps.formats);
         let surface_format = if surface_caps
             .formats
-            .contains(&wgt::TextureFormat::Bgra8Unorm)
+            .contains(&wgt::TextureFormat::Rgba8Unorm)
         {
-            wgt::TextureFormat::Bgra8Unorm
+            wgt::TextureFormat::Rgba8Unorm
         } else {
             *surface_caps.formats.first().unwrap()
         };
@@ -581,10 +581,10 @@ impl<A: hal::Api> Example<A> {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgt::TextureDimension::D2,
-            format: wgt::TextureFormat::Bgra8Unorm,
+            format: wgt::TextureFormat::Rgba8Unorm,
             usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::empty(),
-            view_formats: vec![wgt::TextureFormat::Bgra8Unorm],
+            view_formats: vec![wgt::TextureFormat::Rgba8Unorm],
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
