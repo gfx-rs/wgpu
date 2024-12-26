@@ -141,9 +141,6 @@ pub fn create_factory(
         if let Ok(Some(_)) = lib_dxgi.debug_interface1() {
             factory_flags |= Dxgi::DXGI_CREATE_FACTORY_DEBUG;
         }
-
-        // Intercept `OutputDebugString` calls
-        super::exception::register_exception_handler();
     }
 
     let factory4 = match lib_dxgi.create_factory4(factory_flags) {
