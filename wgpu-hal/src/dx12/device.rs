@@ -37,6 +37,13 @@ impl super::Device {
         library: &Arc<D3D12Lib>,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, crate::DeviceError> {
+        if private_caps
+            .instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION)
+        {
+            auxil::dxgi::exception::register_exception_handler();
+        }
+
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw, memory_hints)?;
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
