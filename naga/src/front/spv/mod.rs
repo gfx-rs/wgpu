@@ -36,7 +36,6 @@ mod null;
 use convert::*;
 pub use error::Error;
 use function::*;
-use indexmap::IndexSet;
 
 use crate::{
     arena::{Arena, Handle, UniqueArena},
@@ -46,6 +45,8 @@ use crate::{
 
 use petgraph::graphmap::GraphMap;
 use std::{convert::TryInto, mem, num::NonZeroU32, path::PathBuf};
+
+use super::atomic_upgrade::Upgrades;
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
@@ -557,45 +558,6 @@ struct BlockContext<'function> {
     parameter_sampling: &'function mut [image::SamplingFlags],
 }
 
-impl BlockContext<'_> {
-    /// Descend into the expression with the given handle, locating a contained
-    /// global variable.
-    ///
-    /// If the expression doesn't actually refer to something in a global
-    /// variable, we can't upgrade its type in a way that Naga validation would
-    /// pass, so reject the input instead.
-    ///
-    /// This is used to track atomic upgrades.
-    fn get_contained_global_variable(
-        &self,
-        mut handle: Handle<crate::Expression>,
-    ) -> Result<Handle<crate::GlobalVariable>, Error> {
-        log::debug!("\t\tlocating global variable in {handle:?}");
-        loop {
-            match self.expressions[handle] {
-                crate::Expression::Access { base, index: _ } => {
-                    handle = base;
-                    log::debug!("\t\t  access {handle:?}");
-                }
-                crate::Expression::AccessIndex { base, index: _ } => {
-                    handle = base;
-                    log::debug!("\t\t  access index {handle:?}");
-                }
-                crate::Expression::GlobalVariable(h) => {
-                    log::debug!("\t\t  found {h:?}");
-                    return Ok(h);
-                }
-                _ => {
-                    break;
-                }
-            }
-        }
-        Err(Error::AtomicUpgradeError(
-            crate::front::atomic_upgrade::Error::GlobalVariableMissing,
-        ))
-    }
-}
-
 enum SignAnchor {
     Result,
     Operand,
@@ -612,11 +574,12 @@ pub struct Frontend<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
     handle_sampling: FastHashMap<Handle<crate::GlobalVariable>, image::SamplingFlags>,
-    /// The set of all global variables accessed by [`Atomic`] statements we've
+
+    /// A record of what is accessed by [`Atomic`] statements we've
     /// generated, so we can upgrade the types of their operands.
     ///
     /// [`Atomic`]: crate::Statement::Atomic
-    upgrade_atomics: IndexSet<Handle<crate::GlobalVariable>>,
+    upgrade_atomics: Upgrades,
 
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: Option<spirv::Word>,
@@ -1481,8 +1444,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         block.push(stmt, span);
 
         // Store any associated global variables so we can upgrade their types later
-        self.upgrade_atomics
-            .insert(ctx.get_contained_global_variable(p_lexp_handle)?);
+        self.record_atomic_access(ctx, p_lexp_handle)?;
 
         Ok(())
     }
@@ -4178,8 +4140,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
 
                     // Store any associated global variables so we can upgrade their types later
-                    self.upgrade_atomics
-                        .insert(ctx.get_contained_global_variable(p_lexp_handle)?);
+                    self.record_atomic_access(ctx, p_lexp_handle)?;
                 }
                 Op::AtomicStore => {
                     inst.expect(5)?;
@@ -4208,8 +4169,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     emitter.start(ctx.expressions);
 
                     // Store any associated global variables so we can upgrade their types later
-                    self.upgrade_atomics
-                        .insert(ctx.get_contained_global_variable(p_lexp_handle)?);
+                    self.record_atomic_access(ctx, p_lexp_handle)?;
                 }
                 Op::AtomicIIncrement | Op::AtomicIDecrement => {
                     inst.expect(6)?;
@@ -4273,8 +4233,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     block.push(stmt, span);
 
                     // Store any associated global variables so we can upgrade their types later
-                    self.upgrade_atomics
-                        .insert(ctx.get_contained_global_variable(p_exp_h)?);
+                    self.record_atomic_access(ctx, p_exp_h)?;
                 }
                 Op::AtomicCompareExchange => {
                     inst.expect(9)?;
@@ -4369,8 +4328,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     block.push(stmt, span);
 
                     // Store any associated global variables so we can upgrade their types later
-                    self.upgrade_atomics
-                        .insert(ctx.get_contained_global_variable(p_exp_h)?);
+                    self.record_atomic_access(ctx, p_exp_h)?;
                 }
                 Op::AtomicExchange
                 | Op::AtomicIAdd
@@ -4685,7 +4643,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         if !self.upgrade_atomics.is_empty() {
             log::info!("Upgrading atomic pointers...");
-            module.upgrade_atomics(mem::take(&mut self.upgrade_atomics))?;
+            module.upgrade_atomics(&self.upgrade_atomics)?;
         }
 
         // Do entry point specific processing after all functions are parsed so that we can
@@ -5371,7 +5329,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let parent_decor = self.future_decor.remove(&id);
         let is_storage_buffer = parent_decor
             .as_ref()
-            .map_or(false, |decor| decor.storage_buffer);
+            .is_some_and(|decor| decor.storage_buffer);
 
         self.layouter.update(module.to_ctx()).unwrap();
 
@@ -5979,6 +5937,59 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             },
         );
         Ok(())
+    }
+
+    /// Record an atomic access to some component of a global variable.
+    ///
+    /// Given `handle`, an expression referring to a scalar that has had an
+    /// atomic operation applied to it, descend into the expression, noting
+    /// which global variable it ultimately refers to, and which struct fields
+    /// of that global's value it accesses.
+    ///
+    /// Return the handle of the type of the expression.
+    ///
+    /// If the expression doesn't actually refer to something in a global
+    /// variable, we can't upgrade its type in a way that Naga validation would
+    /// pass, so reject the input instead.
+    fn record_atomic_access(
+        &mut self,
+        ctx: &BlockContext,
+        handle: Handle<crate::Expression>,
+    ) -> Result<Handle<crate::Type>, Error> {
+        log::debug!("\t\tlocating global variable in {handle:?}");
+        match ctx.expressions[handle] {
+            crate::Expression::Access { base, index } => {
+                log::debug!("\t\t  access {handle:?} {index:?}");
+                let ty = self.record_atomic_access(ctx, base)?;
+                let crate::TypeInner::Array { base, .. } = ctx.module.types[ty].inner else {
+                    unreachable!("Atomic operations on Access expressions only work for arrays");
+                };
+                Ok(base)
+            }
+            crate::Expression::AccessIndex { base, index } => {
+                log::debug!("\t\t  access index {handle:?} {index:?}");
+                let ty = self.record_atomic_access(ctx, base)?;
+                match ctx.module.types[ty].inner {
+                    crate::TypeInner::Struct { ref members, .. } => {
+                        let index = index as usize;
+                        self.upgrade_atomics.insert_field(ty, index);
+                        Ok(members[index].ty)
+                    }
+                    crate::TypeInner::Array { base, .. } => {
+                        Ok(base)
+                    }
+                    _ => unreachable!("Atomic operations on AccessIndex expressions only work for structs and arrays"),
+                }
+            }
+            crate::Expression::GlobalVariable(h) => {
+                log::debug!("\t\t  found {h:?}");
+                self.upgrade_atomics.insert_global(h);
+                Ok(ctx.module.global_variables[h].ty)
+            }
+            _ => Err(Error::AtomicUpgradeError(
+                crate::front::atomic_upgrade::Error::GlobalVariableMissing,
+            )),
+        }
     }
 }
 

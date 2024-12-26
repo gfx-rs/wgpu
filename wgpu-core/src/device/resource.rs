@@ -1086,6 +1086,39 @@ impl Device {
                         .saturating_sub(desc.range.base_array_layer),
                 });
 
+        let resolved_usage = {
+            let usage = desc.usage.unwrap_or(wgt::TextureUsages::empty());
+            if usage.is_empty() {
+                texture.desc.usage
+            } else if texture.desc.usage.contains(usage) {
+                usage
+            } else {
+                return Err(resource::CreateTextureViewError::InvalidTextureViewUsage {
+                    view: usage,
+                    texture: texture.desc.usage,
+                });
+            }
+        };
+
+        let allowed_format_usages = self
+            .describe_format_features(resolved_format)?
+            .allowed_usages;
+        if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+        {
+            return Err(
+                resource::CreateTextureViewError::TextureViewFormatNotRenderable(resolved_format),
+            );
+        }
+
+        if resolved_usage.contains(wgt::TextureUsages::STORAGE_BINDING)
+            && !allowed_format_usages.contains(wgt::TextureUsages::STORAGE_BINDING)
+        {
+            return Err(
+                resource::CreateTextureViewError::TextureViewFormatNotStorage(resolved_format),
+            );
+        }
+
         // validate TextureViewDescriptor
 
         let aspects = hal::FormatAspects::new(texture.desc.format, desc.range.aspect);
@@ -1207,12 +1240,8 @@ impl Device {
 
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
         let render_extent = 'error: {
-            if !texture
-                .desc
-                .usage
-                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-            {
-                break 'error Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
+            if !resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
             }
 
             if !(resolved_dimension == TextureViewDimension::D2
@@ -1309,6 +1338,7 @@ impl Device {
                 texture_format: texture.desc.format,
                 format: resolved_format,
                 dimension: resolved_dimension,
+                usage: resolved_usage,
                 range: resolved_range,
             },
             format_features: texture.format_features,
@@ -2090,7 +2120,7 @@ impl Device {
     {
         view.same_device(self)?;
 
-        let (pub_usage, internal_use) = self.texture_use_parameters(
+        let internal_use = self.texture_use_parameters(
             binding,
             decl,
             view,
@@ -2100,7 +2130,6 @@ impl Device {
         used.views.insert_single(view.clone(), internal_use);
 
         let texture = &view.parent;
-        texture.check_usage(pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
             texture: texture.clone(),
@@ -2399,7 +2428,7 @@ impl Device {
         decl: &wgt::BindGroupLayoutEntry,
         view: &TextureView,
         expected: &'static str,
-    ) -> Result<(wgt::TextureUsages, hal::TextureUses), binding_model::CreateBindGroupError> {
+    ) -> Result<hal::TextureUses, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
         if view
             .desc
@@ -2458,10 +2487,8 @@ impl Device {
                         view_dimension: view.desc.dimension,
                     });
                 }
-                Ok((
-                    wgt::TextureUsages::TEXTURE_BINDING,
-                    hal::TextureUses::RESOURCE,
-                ))
+                view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
+                Ok(hal::TextureUses::RESOURCE)
             }
             wgt::BindingType::StorageTexture {
                 access,
@@ -2524,7 +2551,8 @@ impl Device {
                         hal::TextureUses::STORAGE_READ_WRITE
                     }
                 };
-                Ok((wgt::TextureUsages::STORAGE_BINDING, internal_use))
+                view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;
+                Ok(internal_use)
             }
             _ => Err(Error::WrongBindingType {
                 binding,
@@ -2612,10 +2640,17 @@ impl Device {
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
+        let additional_flags = if cfg!(feature = "indirect-validation") {
+            hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
+        } else {
+            hal::PipelineLayoutFlags::empty()
+        };
+
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             flags: hal::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE
-                | hal::PipelineLayoutFlags::NUM_WORK_GROUPS,
+                | hal::PipelineLayoutFlags::NUM_WORK_GROUPS
+                | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
             push_constant_ranges: desc.push_constant_ranges.as_ref(),
         };
@@ -2640,11 +2675,11 @@ impl Device {
 
     pub(crate) fn derive_pipeline_layout(
         self: &Arc<Self>,
-        mut derived_group_layouts: ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>,
+        mut derived_group_layouts: Box<ArrayVec<bgl::EntryMap, { hal::MAX_BIND_GROUPS }>>,
     ) -> Result<Arc<binding_model::PipelineLayout>, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
-            .map_or(false, |map| map.is_empty())
+            .is_some_and(|map| map.is_empty())
         {
             derived_group_layouts.pop();
         }

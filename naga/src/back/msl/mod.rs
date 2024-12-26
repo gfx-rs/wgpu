@@ -317,10 +317,16 @@ pub enum VertexFormat {
     /// Four signed ints (i32). `vec4<i32>` in shaders.
     Sint32x4 = 38,
     /// Three unsigned 10-bit integers and one 2-bit integer, packed into a 32-bit integer (u32). [0, 1024] converted to float [0, 1] `vec4<f32>` in shaders.
-    #[cfg_attr(feature = "serde", serde(rename = "unorm10-10-10-2"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "unorm10-10-10-2")
+    )]
     Unorm10_10_10_2 = 43,
     /// Four unsigned 8-bit integers, packed into a 32-bit integer (u32). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
-    #[cfg_attr(feature = "serde", serde(rename = "unorm8x4-bgra"))]
+    #[cfg_attr(
+        any(feature = "serialize", feature = "deserialize"),
+        serde(rename = "unorm8x4-bgra")
+    )]
     Unorm8x4Bgra = 44,
 }
 

@@ -129,6 +129,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 #### Naga
 
+- Support atomic operations on fields of global structs in the SPIR-V frontend. By @schell in [#6693](https://github.com/gfx-rs/wgpu/pull/6693).
 - Clean up tests for atomic operations support in SPIR-V frontend. By @schell in [#6692](https://github.com/gfx-rs/wgpu/pull/6692)
 - Fix an issue where `naga` CLI would incorrectly skip the first positional argument when `--stdin-file-path` was specified. By @ErichDonGubler in [#6480](https://github.com/gfx-rs/wgpu/pull/6480).
 - Fix textureNumLevels in the GLSL backend. By @magcius in [#6483](https://github.com/gfx-rs/wgpu/pull/6483).
@@ -156,6 +157,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 - Show types of LHS and RHS in binary operation type mismatch errors. By @ErichDonGubler in [#6450](https://github.com/gfx-rs/wgpu/pull/6450).
 - The GLSL parser now uses less expressions for function calls. By @magcius in [#6604](https://github.com/gfx-rs/wgpu/pull/6604).
+- Add a note to help with a common syntax error case for global diagnostic filter directives. By @e-hat in [#6718](https://github.com/gfx-rs/wgpu/pull/6718)
 
 #### General
 
@@ -192,11 +194,17 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Reject destroyed buffers in query set resolution. By @ErichDonGubler in [#6579](https://github.com/gfx-rs/wgpu/pull/6579).
 - Fix panic when dropping `Device` on some environments. By @Dinnerbone in [#6681](https://github.com/gfx-rs/wgpu/pull/6681).
 - Reduced the overhead of command buffer validation. By @nical in [#6721](https://github.com/gfx-rs/wgpu/pull/6721).
+- Set index type to NONE in `get_acceleration_structure_build_sizes`. By @Vecvec in [#6802](https://github.com/gfx-rs/wgpu/pull/6802).
 
 #### Naga
 
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
 - Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
+ 
+### Examples
+
+- Add multiple render targets example. By @kaphula in [#5297](https://github.com/gfx-rs/wgpu/pull/5313)
+
 
 ### Testing
 

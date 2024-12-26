@@ -37,8 +37,8 @@ use crate::ray_tracing::{BlasAction, TlasAction};
 use crate::resource::{Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet};
 use crate::storage::Storage;
 use crate::track::{DeviceTracker, Tracker, UsageScope};
-use crate::LabelHelpers;
 use crate::{api_log, global::Global, id, resource_log, Label};
+use crate::{hal_label, LabelHelpers};
 
 use thiserror::Error;
 
@@ -150,10 +150,10 @@ impl CommandEncoderStatus {
         }
     }
 
-    fn finish(&mut self, device: &Device) -> Result<(), CommandEncoderError> {
+    fn finish(&mut self) -> Result<(), CommandEncoderError> {
         match mem::replace(self, Self::Error) {
             Self::Recording(mut inner) => {
-                if let Err(e) = inner.encoder.close(device) {
+                if let Err(e) = inner.encoder.close_if_open() {
                     Err(e.into())
                 } else {
                     *self = Self::Finished(inner);
@@ -276,14 +276,9 @@ pub(crate) struct CommandEncoder {
     pub(crate) hal_label: Option<String>,
 }
 
-//TODO: handle errors better
 impl CommandEncoder {
-    /// Finish the current command buffer, if any, and place it
-    /// at the second-to-last position in our list.
-    ///
-    /// If we have opened this command encoder, finish its current
-    /// command buffer, and insert it just before the last element in
-    /// [`self.list`][l]. If this command buffer is closed, do nothing.
+    /// Finish the current command buffer and insert it just before
+    /// the last element in [`self.list`][l].
     ///
     /// On return, the underlying hal encoder is closed.
     ///
@@ -300,15 +295,62 @@ impl CommandEncoder {
     /// in just before the pass's. This is the function that jams in the
     /// transitions' command buffer.
     ///
+    /// # Panics
+    ///
+    /// - If the encoder is not open.
+    ///
     /// [l]: CommandEncoder::list
     /// [`transition_buffers`]: hal::CommandEncoder::transition_buffers
     /// [`transition_textures`]: hal::CommandEncoder::transition_textures
-    fn close_and_swap(&mut self, device: &Device) -> Result<(), DeviceError> {
-        if self.is_open {
-            self.is_open = false;
-            let new = unsafe { self.raw.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
-            self.list.insert(self.list.len() - 1, new);
-        }
+    fn close_and_swap(&mut self) -> Result<(), DeviceError> {
+        assert!(self.is_open);
+        self.is_open = false;
+
+        let new =
+            unsafe { self.raw.end_encoding() }.map_err(|e| self.device.handle_hal_error(e))?;
+        self.list.insert(self.list.len() - 1, new);
+
+        Ok(())
+    }
+
+    /// Finish the current command buffer and insert it at the beginning
+    /// of [`self.list`][l].
+    ///
+    /// On return, the underlying hal encoder is closed.
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is not open.
+    ///
+    /// [l]: CommandEncoder::list
+    pub(crate) fn close_and_push_front(&mut self) -> Result<(), DeviceError> {
+        assert!(self.is_open);
+        self.is_open = false;
+
+        let new =
+            unsafe { self.raw.end_encoding() }.map_err(|e| self.device.handle_hal_error(e))?;
+        self.list.insert(0, new);
+
+        Ok(())
+    }
+
+    /// Finish the current command buffer, and push it onto
+    /// the end of [`self.list`][l].
+    ///
+    /// On return, the underlying hal encoder is closed.
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is not open.
+    ///
+    /// [l]: CommandEncoder::list
+    pub(crate) fn close(&mut self) -> Result<(), DeviceError> {
+        assert!(self.is_open);
+        self.is_open = false;
+
+        let cmd_buf =
+            unsafe { self.raw.end_encoding() }.map_err(|e| self.device.handle_hal_error(e))?;
+        self.list.push(cmd_buf);
 
         Ok(())
     }
@@ -323,11 +365,11 @@ impl CommandEncoder {
     /// On return, the underlying hal encoder is closed.
     ///
     /// [l]: CommandEncoder::list
-    fn close(&mut self, device: &Device) -> Result<(), DeviceError> {
+    fn close_if_open(&mut self) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
             let cmd_buf =
-                unsafe { self.raw.end_encoding() }.map_err(|e| device.handle_hal_error(e))?;
+                unsafe { self.raw.end_encoding() }.map_err(|e| self.device.handle_hal_error(e))?;
             self.list.push(cmd_buf);
         }
 
@@ -337,15 +379,12 @@ impl CommandEncoder {
     /// Begin recording a new command buffer, if we haven't already.
     ///
     /// The underlying hal encoder is put in the "recording" state.
-    pub(crate) fn open(
-        &mut self,
-        device: &Device,
-    ) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
+    pub(crate) fn open(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
             let hal_label = self.hal_label.as_deref();
             unsafe { self.raw.begin_encoding(hal_label) }
-                .map_err(|e| device.handle_hal_error(e))?;
+                .map_err(|e| self.device.handle_hal_error(e))?;
         }
 
         Ok(self.raw.as_mut())
@@ -355,11 +394,22 @@ impl CommandEncoder {
     /// its own label.
     ///
     /// The underlying hal encoder is put in the "recording" state.
-    fn open_pass(&mut self, hal_label: Option<&str>, device: &Device) -> Result<(), DeviceError> {
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is already open.
+    pub(crate) fn open_pass(
+        &mut self,
+        label: Option<&str>,
+    ) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
+        assert!(!self.is_open);
         self.is_open = true;
-        unsafe { self.raw.begin_encoding(hal_label) }.map_err(|e| device.handle_hal_error(e))?;
 
-        Ok(())
+        let hal_label = hal_label(label, self.device.instance_flags);
+        unsafe { self.raw.begin_encoding(hal_label) }
+            .map_err(|e| self.device.handle_hal_error(e))?;
+
+        Ok(self.raw.as_mut())
     }
 }
 
@@ -418,9 +468,8 @@ pub struct CommandBufferMutable {
 impl CommandBufferMutable {
     pub(crate) fn open_encoder_and_tracker(
         &mut self,
-        device: &Device,
     ) -> Result<(&mut dyn hal::DynCommandEncoder, &mut Tracker), DeviceError> {
-        let encoder = self.encoder.open(device)?;
+        let encoder = self.encoder.open()?;
         let tracker = &mut self.trackers;
 
         Ok((encoder, tracker))
@@ -703,7 +752,7 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        let error = match cmd_buf.data.lock().finish(&cmd_buf.device) {
+        let error = match cmd_buf.data.lock().finish() {
             Ok(_) => None,
             Err(e) => Some(e),
         };
@@ -731,7 +780,7 @@ impl Global {
             list.push(TraceCommand::PushDebugGroup(label.to_string()));
         }
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         if !cmd_buf
             .device
             .instance_flags
@@ -771,7 +820,7 @@ impl Global {
             .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
         {
-            let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
             unsafe {
                 cmd_buf_raw.insert_debug_marker(label);
             }
@@ -800,7 +849,7 @@ impl Global {
             list.push(TraceCommand::PopDebugGroup);
         }
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         if !cmd_buf
             .device
             .instance_flags

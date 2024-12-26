@@ -2134,6 +2134,7 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        write!(self.out, "(")?;
                         if matches!(fun, Mf::Unpack4xU8) {
                             write!(self.out, "u")?;
                         }
@@ -2145,7 +2146,7 @@ impl<W: Write> Writer<W> {
                         self.put_expression(arg, context, true)?;
                         write!(self.out, " >> 16, ")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 24) << 24 >> 24")?;
+                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Mf::QuantizeToF16 => {
                         match *context.resolve_type(arg) {
@@ -5264,7 +5265,7 @@ template <typename A>
                             AttributeMappingResolved {
                                 ty_name: ty_name.to_string(),
                                 dimension: ty_name.vertex_input_dimension(),
-                                ty_is_int: ty_name.scalar().map_or(false, scalar_is_int),
+                                ty_is_int: ty_name.scalar().is_some_and(scalar_is_int),
                                 name: name.to_string(),
                             },
                         );

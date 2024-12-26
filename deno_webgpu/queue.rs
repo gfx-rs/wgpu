@@ -1,5 +1,6 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
+use super::wgpu_types;
 use crate::command_encoder::WebGpuCommandBuffer;
 use crate::Instance;
 use deno_core::error::AnyError;

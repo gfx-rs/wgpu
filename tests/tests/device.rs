@@ -688,6 +688,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
             label: None,
             format: None,
             dimension: None,
+            usage: None,
             aspect: wgt::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,

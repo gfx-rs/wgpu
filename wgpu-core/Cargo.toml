@@ -29,6 +29,9 @@ targets = [
 # Cargo machete can't check build.rs dependencies. See https://github.com/bnjbvr/cargo-machete/issues/100
 ignored = ["cfg_aliases"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
+
 [lib]
 
 [features]

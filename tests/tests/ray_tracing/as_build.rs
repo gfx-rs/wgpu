@@ -90,7 +90,7 @@ static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::adapter("AMD")),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(unbuilt_blas);
 
@@ -120,7 +120,7 @@ static OUT_OF_ORDER_AS_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::adapter("AMD")),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(out_of_order_as_build);
 
@@ -198,7 +198,7 @@ static OUT_OF_ORDER_AS_BUILD_USE: GpuTestConfiguration = GpuTestConfiguration::n
                     | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
             )
             // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::adapter("AMD")),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(out_of_order_as_build_use);
 

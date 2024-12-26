@@ -2347,6 +2347,7 @@ impl crate::Device for super::Device {
                 for triangles in in_geometries {
                     let mut triangle_data =
                         vk::AccelerationStructureGeometryTrianglesDataKHR::default()
+                            .index_type(vk::IndexType::NONE_KHR)
                             .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                             .max_vertex(triangles.vertex_count)
                             .vertex_stride(triangles.vertex_stride);
