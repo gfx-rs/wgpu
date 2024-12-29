@@ -1814,9 +1814,7 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
                                 ConstantEvaluatorError::Overflow("subtraction".into())
                             })?,
-                            BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("multiplication".into())
-                            })?,
+                            BinaryOperator::Multiply => a.wrapping_mul(b),
                             BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
                                 if b == 0 {
                                     ConstantEvaluatorError::DivisionByZero
