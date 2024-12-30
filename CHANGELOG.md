@@ -149,7 +149,10 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Return submission index in `map_async` and `on_submitted_work_done` to track down completion of async callbacks. By @eliemichel in [#6360](https://github.com/gfx-rs/wgpu/pull/6360).
 - Move raytracing alignments into HAL instead of in core. By @Vecvec in [#6563](https://github.com/gfx-rs/wgpu/pull/6563).
 - Allow for statically linking DXC rather than including separate `.dll` files. By @DouglasDwyer in [#6574](https://github.com/gfx-rs/wgpu/pull/6574).
-- Support DXR in wgpu-hal. By @Vecvec in [#6777](https://github.com/gfx-rs/wgpu/pull/6777)
+
+#### D3D12
+
+- Support DXR (DirectX Ray-tracing) in wgpu-hal. By @Vecvec in [#6777](https://github.com/gfx-rs/wgpu/pull/6777)
 
 ### Changes
 
