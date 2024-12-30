@@ -1808,27 +1808,23 @@ impl<'a> ConstantEvaluator<'a> {
 
                     _ => match (left_value, right_value) {
                         (Literal::I32(a), Literal::I32(b)) => Literal::I32(match op {
-                            BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("addition".into())
-                            })?,
-                            BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("subtraction".into())
-                            })?,
+                            BinaryOperator::Add => a.wrapping_add(b),
+                            BinaryOperator::Subtract => a.wrapping_sub(b),
                             BinaryOperator::Multiply => a.wrapping_mul(b),
-                            BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
+                            BinaryOperator::Divide => {
                                 if b == 0 {
-                                    ConstantEvaluatorError::DivisionByZero
+                                    return Err(ConstantEvaluatorError::DivisionByZero);
                                 } else {
-                                    ConstantEvaluatorError::Overflow("division".into())
+                                    a.wrapping_div(b)
                                 }
-                            })?,
-                            BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
+                            }
+                            BinaryOperator::Modulo => {
                                 if b == 0 {
-                                    ConstantEvaluatorError::RemainderByZero
+                                    return Err(ConstantEvaluatorError::RemainderByZero);
                                 } else {
-                                    ConstantEvaluatorError::Overflow("remainder".into())
+                                    a.wrapping_rem(b)
                                 }
-                            })?,
+                            }
                             BinaryOperator::And => a & b,
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
