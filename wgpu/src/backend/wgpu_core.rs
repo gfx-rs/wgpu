@@ -404,30 +404,28 @@ fn map_store_op(op: StoreOp) -> wgc::command::StoreOp {
     }
 }
 
-fn map_load_op<V: Default>(op: LoadOp<V>) -> (wgc::command::LoadOp, V) {
+fn map_load_op<V>(op: LoadOp<V>) -> (wgc::command::LoadOp, Option<V>) {
     match op {
-        LoadOp::Clear(v) => (wgc::command::LoadOp::Clear, v),
-        LoadOp::Load => (wgc::command::LoadOp::Load, V::default()),
+        LoadOp::Clear(v) => (wgc::command::LoadOp::Clear, Some(v)),
+        LoadOp::Load => (wgc::command::LoadOp::Load, None),
     }
 }
 
-fn map_pass_channel<V: Copy + Default>(
-    ops: Option<&Operations<V>>,
-) -> wgc::command::PassChannel<V> {
+fn map_pass_channel<V: Copy>(ops: Option<&Operations<V>>) -> wgc::command::PassChannel<Option<V>> {
     match ops {
         Some(&Operations { load, store }) => {
             let (load_op, clear_value) = map_load_op(load);
             wgc::command::PassChannel {
-                load_op,
-                store_op: map_store_op(store),
+                load_op: Some(load_op),
+                store_op: Some(map_store_op(store)),
                 clear_value,
                 read_only: false,
             }
         }
         None => wgc::command::PassChannel {
-            load_op: wgc::command::LoadOp::Load,
-            store_op: wgc::command::StoreOp::Store,
-            clear_value: V::default(),
+            load_op: None,
+            store_op: None,
+            clear_value: None,
             read_only: true,
         },
     }
@@ -969,11 +967,11 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_shader_module(
         &self,
         desc: crate::ShaderModuleDescriptor<'_>,
-        shader_bound_checks: wgt::ShaderBoundChecks,
+        shader_bound_checks: wgt::ShaderRuntimeChecks,
     ) -> dispatch::DispatchShaderModule {
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
-            shader_bound_checks,
+            runtime_checks: shader_bound_checks,
         };
         let source = match desc.source {
             #[cfg(feature = "spirv")]
@@ -1034,7 +1032,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             label: desc.label.map(Borrowed),
             // Doesn't matter the value since spirv shaders aren't mutated to include
             // runtime checks
-            shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
+            runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
         };
         let (id, error) = unsafe {
             self.context.0.device_create_shader_module_spirv(
@@ -2254,7 +2252,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                         resolve_target: at.resolve_target.map(|view| view.inner.as_core().id),
                         load_op,
                         store_op: map_store_op(at.ops.store),
-                        clear_value,
+                        clear_value: clear_value.unwrap_or_default(),
                     }
                 })
             })

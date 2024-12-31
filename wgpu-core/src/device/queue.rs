@@ -1568,8 +1568,7 @@ fn validate_command_buffer(
                     TextureInner::Native { .. } => false,
                     TextureInner::Surface { .. } => {
                         // Compare the Arcs by pointer as Textures don't implement Eq.
-                        submit_surface_textures_owned
-                            .insert(Arc::as_ptr(&texture), texture.clone());
+                        submit_surface_textures_owned.insert(Arc::as_ptr(texture), texture.clone());
 
                         true
                     }
@@ -1577,7 +1576,7 @@ fn validate_command_buffer(
                 if should_extend {
                     unsafe {
                         used_surface_textures
-                            .merge_single(&texture, None, hal::TextureUses::PRESENT)
+                            .merge_single(texture, None, hal::TextureUses::PRESENT)
                             .unwrap();
                     };
                 }

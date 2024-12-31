@@ -1513,10 +1513,15 @@ bitflags!(
     /// Pipeline layout creation flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
-        /// Include support for `first_vertex` / `first_instance` drawing.
+        /// D3D12: Add support for `first_vertex` and `first_instance` builtins
+        /// via push constants for direct execution.
         const FIRST_VERTEX_INSTANCE = 1 << 0;
-        /// Include support for num work groups builtin.
+        /// D3D12: Add support for `num_workgroups` builtins via push constants
+        /// for direct execution.
         const NUM_WORK_GROUPS = 1 << 1;
+        /// D3D12: Add support for the builtins that the other flags enable for
+        /// indirect execution.
+        const INDIRECT_BUILTIN_UPDATE = 1 << 2;
     }
 );
 
@@ -2101,26 +2106,12 @@ pub enum ShaderInput<'a> {
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
 
-    /// Enforce bounds checks in shaders, even if the underlying driver doesn't
-    /// support doing so natively.
+    /// # Safety
     ///
-    /// When this is `true`, `wgpu_hal` promises that shaders can only read or
-    /// write the [accessible region][ar] of a bindgroup's buffer bindings. If
-    /// the underlying graphics platform cannot implement these bounds checks
-    /// itself, `wgpu_hal` will inject bounds checks before presenting the
-    /// shader to the platform.
+    /// See the documentation for each flag in [`ShaderRuntimeChecks`][src].
     ///
-    /// When this is `false`, `wgpu_hal` only enforces such bounds checks if the
-    /// underlying platform provides a way to do so itself. `wgpu_hal` does not
-    /// itself add any bounds checks to generated shader code.
-    ///
-    /// Note that `wgpu_hal` users may try to initialize only those portions of
-    /// buffers that they anticipate might be read from. Passing `false` here
-    /// may allow shaders to see wider regions of the buffers than expected,
-    /// making such deferred initialization visible to the application.
-    ///
-    /// [ar]: struct.BufferBinding.html#accessible-region
-    pub runtime_checks: bool,
+    /// [src]: wgt::ShaderRuntimeChecks
+    pub runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 #[derive(Debug, Clone)]

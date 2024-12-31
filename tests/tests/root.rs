@@ -13,6 +13,7 @@ mod regression {
 mod bgra8unorm_storage;
 mod bind_group_layout_dedup;
 mod bind_groups;
+mod binding_array;
 mod buffer;
 mod buffer_copy;
 mod buffer_usages;
@@ -30,7 +31,6 @@ mod mem_leaks;
 mod nv12_texture;
 mod occlusion_query;
 mod oob_indexing;
-mod partially_bounded_arrays;
 mod pipeline;
 mod pipeline_cache;
 mod poll;

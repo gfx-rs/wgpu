@@ -75,6 +75,15 @@ We have the Matrix space [![Matrix Space](https://img.shields.io/static/v1?label
 
 We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge base.
 
+## Extension Specifications
+
+While the core of wgpu is based on the WebGPU standard, we also support extensions that allow for features that the standard does not have yet.
+For high-level documentation on how to use these extensions, see the individual specifications:
+
+🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
+
+- 🧪EXPERIMENTAL🧪 [Ray Tracing](./etc/specs/ray_tracing.md).
+
 ## Supported Platforms
 
 | API    | Windows            | Linux/Android      | macOS/iOS          | Web (wasm)         |
@@ -124,7 +133,7 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 Due to complex dependants, we have two MSRV policies:
 
 - `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
-- The rest of the workspace has an MSRV of **1.76** as well right now, but may be higher than above listed crates.
+- The rest of the workspace has an MSRV of **1.83** as well right now, but may be higher than above listed crates.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.

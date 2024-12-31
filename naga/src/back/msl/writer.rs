@@ -606,6 +606,8 @@ struct ExpressionContext<'a> {
     /// accesses. These may need to be cached in temporary variables. See
     /// `index::find_checked_indexes` for details.
     guarded_indices: HandleSet<crate::Expression>,
+    /// See [`Writer::emit_force_bounded_loop_macro`] for details.
+    force_loop_bounding: bool,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -3077,13 +3079,15 @@ impl<W: Write> Writer<W> {
                         writeln!(self.out, "{level}while(true) {{",)?;
                     }
                     self.put_block(level.next(), body, context)?;
-                    self.emit_force_bounded_loop_macro()?;
-                    writeln!(
-                        self.out,
-                        "{}{}",
-                        level.next(),
-                        self.force_bounded_loop_macro_name
-                    )?;
+                    if context.expression.force_loop_bounding {
+                        self.emit_force_bounded_loop_macro()?;
+                        writeln!(
+                            self.out,
+                            "{}{}",
+                            level.next(),
+                            self.force_bounded_loop_macro_name
+                        )?;
+                    }
                     writeln!(self.out, "{level}}}")?;
                 }
                 crate::Statement::Break => {
@@ -4019,6 +4023,13 @@ template <typename A>
     ) -> Result<(String, u32, u32), Error> {
         use back::msl::VertexFormat::*;
         match format {
+            Uint8 => {
+                let name = self.namer.call("unpackUint8");
+                writeln!(self.out, "uint {name}(metal::uchar b0) {{")?;
+                writeln!(self.out, "{}return uint(b0);", back::INDENT)?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
+            }
             Uint8x2 => {
                 let name = self.namer.call("unpackUint8x2");
                 writeln!(
@@ -4046,6 +4057,13 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
+            }
+            Sint8 => {
+                let name = self.namer.call("unpackSint8");
+                writeln!(self.out, "int {name}(metal::uchar b0) {{")?;
+                writeln!(self.out, "{}return int(as_type<char>(b0));", back::INDENT)?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
             }
             Sint8x2 => {
                 let name = self.namer.call("unpackSint8x2");
@@ -4083,6 +4101,17 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
             }
+            Unorm8 => {
+                let name = self.namer.call("unpackUnorm8");
+                writeln!(self.out, "float {name}(metal::uchar b0) {{")?;
+                writeln!(
+                    self.out,
+                    "{}return float(float(b0) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
+            }
             Unorm8x2 => {
                 let name = self.namer.call("unpackUnorm8x2");
                 writeln!(
@@ -4119,6 +4148,17 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
             }
+            Snorm8 => {
+                let name = self.namer.call("unpackSnorm8");
+                writeln!(self.out, "float {name}(metal::uchar b0) {{")?;
+                writeln!(
+                    self.out,
+                    "{}return float(metal::max(-1.0f, as_type<char>(b0) / 127.0f));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
+            }
             Snorm8x2 => {
                 let name = self.namer.call("unpackSnorm8x2");
                 writeln!(
@@ -4154,6 +4194,21 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
+            }
+            Uint16 => {
+                let name = self.namer.call("unpackUint16");
+                writeln!(
+                    self.out,
+                    "metal::uint {name}(metal::uint b0, \
+                                        metal::uint b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint(b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
             }
             Uint16x2 => {
                 let name = self.namer.call("unpackUint16x2");
@@ -4197,6 +4252,21 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
             }
+            Sint16 => {
+                let name = self.namer.call("unpackSint16");
+                writeln!(
+                    self.out,
+                    "int {name}(metal::ushort b0, \
+                                metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return int(as_type<short>(metal::ushort(b1 << 8 | b0)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
+            }
             Sint16x2 => {
                 let name = self.namer.call("unpackSint16x2");
                 writeln!(
@@ -4238,6 +4308,21 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
+            }
+            Unorm16 => {
+                let name = self.namer.call("unpackUnorm16");
+                writeln!(
+                    self.out,
+                    "float {name}(metal::ushort b0, \
+                                  metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return float(float(b1 << 8 | b0) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
             }
             Unorm16x2 => {
                 let name = self.namer.call("unpackUnorm16x2");
@@ -4281,6 +4366,21 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
             }
+            Snorm16 => {
+                let name = self.namer.call("unpackSnorm16");
+                writeln!(
+                    self.out,
+                    "float {name}(metal::ushort b0, \
+                                  metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::unpack_snorm2x16_to_float(b1 << 8 | b0).x;",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
+            }
             Snorm16x2 => {
                 let name = self.namer.call("unpackSnorm16x2");
                 writeln!(
@@ -4319,6 +4419,21 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
+            }
+            Float16 => {
+                let name = self.namer.call("unpackFloat16");
+                writeln!(
+                    self.out,
+                    "float {name}(metal::ushort b0, \
+                                  metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return float(as_type<half>(metal::ushort(b1 << 8 | b0)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
             }
             Float16x2 => {
                 let name = self.namer.call("unpackFloat16x2");
@@ -4684,6 +4799,26 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
             }
+            Unorm8x4Bgra => {
+                let name = self.namer.call("unpackUnorm8x4Bgra");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::uchar b0, \
+                                          metal::uchar b1, \
+                                          metal::uchar b2, \
+                                          metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(float(b2) / 255.0f, \
+                                            float(b1) / 255.0f, \
+                                            float(b0) / 255.0f, \
+                                            float(b3) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
         }
     }
 
@@ -4894,6 +5029,7 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
+                    force_loop_bounding: options.force_loop_bounding,
                 },
                 result_struct: None,
             };
@@ -5137,7 +5273,7 @@ template <typename A>
                             AttributeMappingResolved {
                                 ty_name: ty_name.to_string(),
                                 dimension: ty_name.vertex_input_dimension(),
-                                ty_is_int: ty_name.scalar().map_or(false, scalar_is_int),
+                                ty_is_int: ty_name.scalar().is_some_and(scalar_is_int),
                                 name: name.to_string(),
                             },
                         );
@@ -5794,6 +5930,7 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
+                    force_loop_bounding: options.force_loop_bounding,
                 },
                 result_struct: Some(&stage_out_name),
             };

@@ -147,7 +147,7 @@ impl ParsingContext<'_> {
     }
 
     pub fn peek_type_qualifier(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::Invariant
             | TokenValue::Interpolation(_)
             | TokenValue::Sampling(_)
@@ -379,7 +379,7 @@ impl ParsingContext<'_> {
     }
 
     pub fn peek_type_name(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::TypeName(_) | TokenValue::Void => true,
             TokenValue::Struct => true,
             TokenValue::Identifier(ref ident) => frontend.lookup_type.contains_key(ident),

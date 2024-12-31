@@ -11,9 +11,9 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use crate::DeviceState;
 
 fn draw_count() -> usize {
-    // On CI we only want to run a very lightweight version of the benchmark
+    // When testing we only want to run a very lightweight version of the benchmark
     // to ensure that it does not break.
-    if std::env::var("WGPU_TESTING").is_ok() {
+    if std::env::var("NEXTEST").is_ok() {
         8
     } else {
         10_000

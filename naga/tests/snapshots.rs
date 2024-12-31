@@ -1077,6 +1077,7 @@ fn convert_spv_all() {
     convert_spv("atomic_compare_exchange", false, Targets::WGSL);
     convert_spv("atomic_i_decrement", false, Targets::WGSL);
     convert_spv("atomic_i_add_sub", false, Targets::WGSL);
+    convert_spv("atomic_global_struct_field_vertex", false, Targets::WGSL);
     convert_spv(
         "fetch_depth",
         false,

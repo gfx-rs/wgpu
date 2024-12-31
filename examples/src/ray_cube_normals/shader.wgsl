@@ -76,7 +76,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
         var positions : array<vec3f, 3> = getCommittedHitVertexPositions(&rq);
         // The cube should change colour as it rotates because it's normals are changing
-        let normals = normalize(cross(positions[0] - positions[1], positions[0] - positions[2])) * intersection.world_to_object;
+        let normals = intersection.object_to_world * vec4f(normalize(cross(positions[0] - positions[1], positions[0] - positions[2])), 0.0);
         // the y is negated because the texture coordinates are inverted
         color = vec4f(normals.x, -normals.y, normals.z, 1.0);
     }
