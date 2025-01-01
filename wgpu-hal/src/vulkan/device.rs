@@ -1008,6 +1008,7 @@ impl super::Device {
         &self.shared.instance
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_descriptors(
         &self,
         set: &gpu_descriptor::DescriptorSet<vk::DescriptorSet>,

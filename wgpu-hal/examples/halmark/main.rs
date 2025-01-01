@@ -457,6 +457,7 @@ impl<A: hal::Api> Example<A> {
             };
             let global_group_desc = hal::BindGroupDescriptor {
                 label: Some("global"),
+                flags: hal::BindGroupFlags::empty(),
                 layout: &global_group_layout,
                 buffers: &[global_buffer_binding],
                 samplers: &[&sampler],
@@ -467,16 +468,19 @@ impl<A: hal::Api> Example<A> {
                         binding: 0,
                         resource_index: 0,
                         count: 1,
+                        array_element_offset: None,
                     },
                     hal::BindGroupEntry {
                         binding: 1,
                         resource_index: 0,
                         count: 1,
+                        array_element_offset: None,
                     },
                     hal::BindGroupEntry {
                         binding: 2,
                         resource_index: 0,
                         count: 1,
+                        array_element_offset: None,
                     },
                 ],
             };
@@ -491,6 +495,7 @@ impl<A: hal::Api> Example<A> {
             };
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),
+                flags: hal::BindGroupFlags::empty(),
                 layout: &local_group_layout,
                 buffers: &[local_buffer_binding],
                 samplers: &[],
@@ -499,6 +504,7 @@ impl<A: hal::Api> Example<A> {
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource_index: 0,
+                    array_element_offset: None,
                     count: 1,
                 }],
             };

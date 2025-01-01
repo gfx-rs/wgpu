@@ -404,6 +404,7 @@ impl super::Device {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_descriptors<'a>(
         &self,
         dst_views_index: Option<descriptor::DescriptorIndex>,
@@ -553,11 +554,13 @@ impl super::Device {
                         cpu_index += 1;
                     }
                     multi_update_dst_range_view_sizes.push(entry.count);
-                    multi_update_dst_range_view_handles.push(self.shared.heap_views.cpu_descriptor_at(
-                        dst_views_index.unwrap()
-                            + view_gpu_offset as u64
-                            + entry.array_element_offset.unwrap_or(0) as u64,
-                    ));
+                    multi_update_dst_range_view_handles.push(
+                        self.shared.heap_views.cpu_descriptor_at(
+                            dst_views_index.unwrap()
+                                + view_gpu_offset as u64
+                                + entry.array_element_offset.unwrap_or(0) as u64,
+                        ),
+                    );
                     view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
                 }
                 wgt::BindingType::Texture { .. } => {
@@ -569,11 +572,13 @@ impl super::Device {
                         inner.stage.push(handle.raw);
                     }
                     multi_update_dst_range_view_sizes.push(entry.count);
-                    multi_update_dst_range_view_handles.push(self.shared.heap_views.cpu_descriptor_at(
-                        dst_views_index.unwrap()
-                            + view_gpu_offset as u64
-                            + entry.array_element_offset.unwrap_or(0) as u64,
-                    ));
+                    multi_update_dst_range_view_handles.push(
+                        self.shared.heap_views.cpu_descriptor_at(
+                            dst_views_index.unwrap()
+                                + view_gpu_offset as u64
+                                + entry.array_element_offset.unwrap_or(0) as u64,
+                        ),
+                    );
                     view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
                 }
                 wgt::BindingType::StorageTexture { .. } => {
@@ -585,11 +590,13 @@ impl super::Device {
                         inner.stage.push(handle.raw);
                     }
                     multi_update_dst_range_view_sizes.push(entry.count);
-                    multi_update_dst_range_view_handles.push(self.shared.heap_views.cpu_descriptor_at(
-                        dst_views_index.unwrap()
-                            + view_gpu_offset as u64
-                            + entry.array_element_offset.unwrap_or(0) as u64,
-                    ));
+                    multi_update_dst_range_view_handles.push(
+                        self.shared.heap_views.cpu_descriptor_at(
+                            dst_views_index.unwrap()
+                                + view_gpu_offset as u64
+                                + entry.array_element_offset.unwrap_or(0) as u64,
+                        ),
+                    );
                     view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
                 }
                 wgt::BindingType::Sampler { .. } => {

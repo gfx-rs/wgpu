@@ -866,6 +866,8 @@ pub trait Device: WasmNotSendSync {
             <Self::A as Api>::AccelerationStructure,
         >,
     ) -> Result<<Self::A as Api>::BindGroup, DeviceError>;
+
+    #[allow(clippy::type_complexity)]
     unsafe fn update_bind_group(
         &self,
         bind_group: &<Self::A as Api>::BindGroup,
@@ -877,6 +879,7 @@ pub trait Device: WasmNotSendSync {
             <Self::A as Api>::AccelerationStructure,
         >,
     ) -> Result<(), DeviceError>;
+
     unsafe fn destroy_bind_group(&self, group: <Self::A as Api>::BindGroup);
 
     unsafe fn create_shader_module(

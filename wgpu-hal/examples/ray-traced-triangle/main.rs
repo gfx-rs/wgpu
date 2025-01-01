@@ -608,6 +608,7 @@ impl<A: hal::Api> Example<A> {
             };
             let group_desc = hal::BindGroupDescriptor {
                 label: Some("bind group"),
+                flags: hal::BindGroupFlags::empty(),
                 layout: &bgl,
                 buffers: &[buffer_binding],
                 samplers: &[],
@@ -618,16 +619,19 @@ impl<A: hal::Api> Example<A> {
                         binding: 0,
                         resource_index: 0,
                         count: 1,
+                        array_element_offset: None,
                     },
                     hal::BindGroupEntry {
                         binding: 1,
                         resource_index: 0,
                         count: 1,
+                        array_element_offset: None,
                     },
                     hal::BindGroupEntry {
                         binding: 2,
                         resource_index: 0,
                         count: 1,
+                        array_element_offset: None,
                     },
                 ],
             };
