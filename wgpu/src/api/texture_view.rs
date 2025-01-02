@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::*;
 
 /// Handle to a texture view.
@@ -6,9 +8,9 @@ use crate::*;
 /// [`RenderPipeline`] or [`BindGroup`].
 ///
 /// Corresponds to [WebGPU `GPUTextureView`](https://gpuweb.github.io/gpuweb/#gputextureview).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextureView {
-    pub(crate) inner: dispatch::DispatchTextureView,
+    pub(crate) inner: Arc<dispatch::DispatchTextureView>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);

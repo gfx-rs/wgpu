@@ -70,7 +70,7 @@ impl RenderPass<'_> {
         Option<&'a BindGroup>: From<BG>,
     {
         let bg: Option<&'a BindGroup> = bind_group.into();
-        let bg = bg.map(|bg| &bg.inner);
+        let bg = bg.map(|bg| &*bg.inner);
 
         self.inner.set_bind_group(index, bg, offsets);
     }
@@ -97,7 +97,7 @@ impl RenderPass<'_> {
     /// use `buffer` as the source index buffer.
     pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         self.inner.set_index_buffer(
-            &buffer_slice.buffer.inner,
+            &buffer_slice.buffer.shared.inner,
             index_format,
             buffer_slice.offset,
             buffer_slice.size,
@@ -117,7 +117,7 @@ impl RenderPass<'_> {
     pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         self.inner.set_vertex_buffer(
             slot,
-            &buffer_slice.buffer.inner,
+            &buffer_slice.buffer.shared.inner,
             buffer_slice.offset,
             buffer_slice.size,
         );
@@ -237,7 +237,7 @@ impl RenderPass<'_> {
     /// See details on the individual flags for more information.
     pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         self.inner
-            .draw_indirect(&indirect_buffer.inner, indirect_offset);
+            .draw_indirect(&indirect_buffer.shared.inner, indirect_offset);
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -260,7 +260,7 @@ impl RenderPass<'_> {
         indirect_offset: BufferAddress,
     ) {
         self.inner
-            .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset);
+            .draw_indexed_indirect(&indirect_buffer.shared.inner, indirect_offset);
     }
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
@@ -272,7 +272,7 @@ impl RenderPass<'_> {
         &mut self,
         render_bundles: I,
     ) {
-        let mut render_bundles = render_bundles.into_iter().map(|rb| &rb.inner);
+        let mut render_bundles = render_bundles.into_iter().map(|rb| &*rb.inner);
 
         self.inner.execute_bundles(&mut render_bundles);
     }
@@ -297,7 +297,7 @@ impl RenderPass<'_> {
         count: u32,
     ) {
         self.inner
-            .multi_draw_indirect(&indirect_buffer.inner, indirect_offset, count);
+            .multi_draw_indirect(&indirect_buffer.shared.inner, indirect_offset, count);
     }
 
     /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
@@ -317,8 +317,11 @@ impl RenderPass<'_> {
         indirect_offset: BufferAddress,
         count: u32,
     ) {
-        self.inner
-            .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count);
+        self.inner.multi_draw_indexed_indirect(
+            &indirect_buffer.shared.inner,
+            indirect_offset,
+            count,
+        );
     }
 }
 
@@ -355,9 +358,9 @@ impl RenderPass<'_> {
         max_count: u32,
     ) {
         self.inner.multi_draw_indirect_count(
-            &indirect_buffer.inner,
+            &indirect_buffer.shared.inner,
             indirect_offset,
-            &count_buffer.inner,
+            &count_buffer.shared.inner,
             count_offset,
             max_count,
         );
@@ -397,9 +400,9 @@ impl RenderPass<'_> {
         max_count: u32,
     ) {
         self.inner.multi_draw_indexed_indirect_count(
-            &indirect_buffer.inner,
+            &indirect_buffer.shared.inner,
             indirect_offset,
-            &count_buffer.inner,
+            &count_buffer.shared.inner,
             count_offset,
             max_count,
         );

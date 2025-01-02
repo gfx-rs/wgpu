@@ -101,7 +101,7 @@ impl DownloadBuffer {
     ) {
         let size = match buffer.size {
             Some(size) => size.into(),
-            None => buffer.buffer.map_context.lock().total_size - buffer.offset,
+            None => buffer.buffer.shared.map_context.lock().total_size - buffer.offset,
         };
 
         let download = Arc::new(device.create_buffer(&super::BufferDescriptor {
@@ -126,7 +126,7 @@ impl DownloadBuffer {
                     return;
                 }
 
-                let mapped_range = download.inner.get_mapped_range(0..size);
+                let mapped_range = download.shared.inner.get_mapped_range(0..size);
                 callback(Ok(Self {
                     _gpu_buffer: download,
                     mapped_range,

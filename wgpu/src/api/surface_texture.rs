@@ -1,4 +1,4 @@
-use std::{error, fmt, thread};
+use std::{error, fmt, sync::Arc, thread};
 
 use crate::*;
 
@@ -8,7 +8,7 @@ use crate::*;
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// the [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context) provides
 /// a texture without any additional information.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
     pub texture: Texture,
@@ -16,12 +16,12 @@ pub struct SurfaceTexture {
     /// but should be recreated for maximum performance.
     pub suboptimal: bool,
     pub(crate) presented: bool,
-    pub(crate) detail: dispatch::DispatchSurfaceOutputDetail,
+    pub(crate) detail: Arc<dispatch::DispatchSurfaceOutputDetail>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
 
-crate::cmp::impl_eq_ord_hash_proxy!(SurfaceTexture => .texture.inner);
+crate::cmp::impl_eq_ord_hash_proxy!(SurfaceTexture => .texture.shared.inner);
 
 impl SurfaceTexture {
     /// Schedule this texture to be presented on the owning surface.

@@ -1,11 +1,21 @@
 use std::{
     error, fmt,
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
+    sync::Arc,
 };
 
 use parking_lot::Mutex;
 
 use crate::*;
+
+#[derive(Debug)]
+pub(crate) struct BufferShared {
+    pub inner: dispatch::DispatchBuffer,
+    pub map_context: Mutex<MapContext>,
+    pub size: wgt::BufferAddress,
+    pub usage: BufferUsages,
+    // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
+}
 
 /// Handle to a GPU-accessible buffer.
 ///
@@ -167,18 +177,14 @@ use crate::*;
 /// [mac]: BufferDescriptor::mapped_at_creation
 /// [`MAP_READ`]: BufferUsages::MAP_READ
 /// [`MAP_WRITE`]: BufferUsages::MAP_WRITE
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Buffer {
-    pub(crate) inner: dispatch::DispatchBuffer,
-    pub(crate) map_context: Mutex<MapContext>,
-    pub(crate) size: wgt::BufferAddress,
-    pub(crate) usage: BufferUsages,
-    // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
+    pub(crate) shared: Arc<BufferShared>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
-crate::cmp::impl_eq_ord_hash_proxy!(Buffer => .inner);
+crate::cmp::impl_eq_ord_hash_proxy!(Buffer => .shared.inner);
 
 impl Buffer {
     /// Return the binding view of the entire buffer.
@@ -206,7 +212,7 @@ impl Buffer {
         &self,
         hal_buffer_callback: F,
     ) -> R {
-        if let Some(buffer) = self.inner.as_core_opt() {
+        if let Some(buffer) = self.shared.inner.as_core_opt() {
             unsafe {
                 buffer
                     .context
@@ -233,7 +239,7 @@ impl Buffer {
     /// end of the buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds);
-        check_buffer_bounds(self.size, offset, size);
+        check_buffer_bounds(self.shared.size, offset, size);
         BufferSlice {
             buffer: self,
             offset,
@@ -243,27 +249,27 @@ impl Buffer {
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.
     pub fn unmap(&self) {
-        self.map_context.lock().reset();
-        self.inner.unmap();
+        self.shared.map_context.lock().reset();
+        self.shared.inner.unmap();
     }
 
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        self.inner.destroy();
+        self.shared.inner.destroy();
     }
 
     /// Returns the length of the buffer allocation in bytes.
     ///
     /// This is always equal to the `size` that was specified when creating the buffer.
     pub fn size(&self) -> BufferAddress {
-        self.size
+        self.shared.size
     }
 
     /// Returns the allowed usages for this `Buffer`.
     ///
     /// This is always equal to the `usage` that was specified when creating the buffer.
     pub fn usage(&self) -> BufferUsages {
-        self.usage
+        self.shared.usage
     }
 }
 
@@ -330,7 +336,7 @@ impl<'a> BufferSlice<'a> {
         mode: MapMode,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
-        let mut mc = self.buffer.map_context.lock();
+        let mut mc = self.buffer.shared.map_context.lock();
         assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
         let end = match self.size {
             Some(s) => self.offset + s.get(),
@@ -339,6 +345,7 @@ impl<'a> BufferSlice<'a> {
         mc.initial_range = self.offset..end;
 
         self.buffer
+            .shared
             .inner
             .map_async(mode, self.offset..end, Box::new(callback));
     }
@@ -358,8 +365,13 @@ impl<'a> BufferSlice<'a> {
     ///
     /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range(&self) -> BufferView<'a> {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let range = self.buffer.inner.get_mapped_range(self.offset..end);
+        let end = self
+            .buffer
+            .shared
+            .map_context
+            .lock()
+            .add(self.offset, self.size);
+        let range = self.buffer.shared.inner.get_mapped_range(self.offset..end);
         BufferView {
             slice: *self,
             inner: range,
@@ -376,9 +388,15 @@ impl<'a> BufferSlice<'a> {
     /// This is only available on WebGPU, on any other backends this will return `None`.
     #[cfg(webgpu)]
     pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+        let end = self
+            .buffer
+            .shared
+            .map_context
+            .lock()
+            .add(self.offset, self.size);
 
         self.buffer
+            .shared
             .inner
             .get_mapped_range_as_array_buffer(self.offset..end)
     }
@@ -398,12 +416,17 @@ impl<'a> BufferSlice<'a> {
     ///
     /// [mapped]: Buffer#mapping-buffers
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let range = self.buffer.inner.get_mapped_range(self.offset..end);
+        let end = self
+            .buffer
+            .shared
+            .map_context
+            .lock()
+            .add(self.offset, self.size);
+        let range = self.buffer.shared.inner.get_mapped_range(self.offset..end);
         BufferViewMut {
             slice: *self,
             inner: range,
-            readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
+            readable: self.buffer.shared.usage.contains(BufferUsages::MAP_READ),
         }
     }
 }
@@ -628,6 +651,7 @@ impl Drop for BufferView<'_> {
     fn drop(&mut self) {
         self.slice
             .buffer
+            .shared
             .map_context
             .lock()
             .remove(self.slice.offset, self.slice.size);
@@ -638,6 +662,7 @@ impl Drop for BufferViewMut<'_> {
     fn drop(&mut self) {
         self.slice
             .buffer
+            .shared
             .map_context
             .lock()
             .remove(self.slice.offset, self.slice.size);

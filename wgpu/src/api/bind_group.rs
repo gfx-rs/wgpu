@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::*;
 
 /// Handle to a binding group.
@@ -8,9 +10,9 @@ use crate::*;
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
 ///
 /// Corresponds to [WebGPU `GPUBindGroup`](https://gpuweb.github.io/gpuweb/#gpubindgroup).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BindGroup {
-    pub(crate) inner: dispatch::DispatchBindGroup,
+    pub(crate) inner: Arc<dispatch::DispatchBindGroup>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);
