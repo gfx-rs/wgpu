@@ -17,7 +17,10 @@ struct Data {
 
 cbuffer r_data : register(b0) { Data r_data; }
 TextureCube<float4> r_texture : register(t0);
-SamplerState r_sampler : register(s0, space1);
+SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s0, space1);
+StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t0, space2);
+static const SamplerState r_sampler = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
 
 struct VertexOutput_vs_main {
     float3 uv : LOC0;

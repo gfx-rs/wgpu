@@ -24,6 +24,8 @@ pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 pub(crate) const EXTRACT_BITS_FUNCTION: &str = "naga_extractBits";
 pub(crate) const INSERT_BITS_FUNCTION: &str = "naga_insertBits";
+pub(crate) const SAMPLER_HEAP_VAR: &str = "nagaSamplerHeap";
+pub(crate) const COMPARISON_SAMPLER_HEAP_VAR: &str = "nagaComparisonSamplerHeap";
 
 struct EpStructMember {
     name: String,
@@ -94,6 +96,16 @@ const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
     )
 }
 
+/// Information for how to generate a `binding_array<sampler>` access.
+struct BindingArraySamplerInfo {
+    /// Variable name of the sampler heap
+    sampler_heap_name: &'static str,
+    /// Variable name of the sampler index buffer
+    sampler_index_buffer_name: String,
+    /// Variable name of the base index _into_ the sampler index buffer
+    binding_array_base_index_name: String,
+}
+
 impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub fn new(out: W, options: &'a Options) -> Self {
         Self {
@@ -143,11 +155,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) {
         use crate::Expression;
         self.need_bake_expressions.clear();
-        for (fun_handle, expr) in func.expressions.iter() {
-            let expr_info = &info[fun_handle];
-            let min_ref_count = func.expressions[fun_handle].bake_ref_count();
+        for (exp_handle, expr) in func.expressions.iter() {
+            let expr_info = &info[exp_handle];
+            let min_ref_count = func.expressions[exp_handle].bake_ref_count();
             if min_ref_count <= expr_info.ref_count {
-                self.need_bake_expressions.insert(fun_handle);
+                self.need_bake_expressions.insert(exp_handle);
             }
 
             if let Expression::Math { fun, arg, .. } = *expr {
@@ -172,7 +184,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::CountLeadingZeros => {
-                        let inner = info[fun_handle].ty.inner_with(&module.types);
+                        let inner = info[exp_handle].ty.inner_with(&module.types);
                         if let Some(ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }
@@ -185,6 +197,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
                 if axis == Axis::Width && (ctrl == Ctrl::Coarse || ctrl == Ctrl::Fine) {
                     self.need_bake_expressions.insert(expr);
+                }
+            }
+
+            if let Expression::GlobalVariable(_) = *expr {
+                let inner = info[exp_handle].ty.inner_with(&module.types);
+
+                if let TypeInner::Sampler { .. } = *inner {
+                    self.need_bake_expressions.insert(exp_handle);
                 }
             }
         }
@@ -814,6 +834,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
+        let handle_ty = match *inner {
+            TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,
+            _ => inner,
+        };
+
+        // Samplers are handled entirely differently, so defer entirely to that method.
+        let is_sampler = matches!(*handle_ty, TypeInner::Sampler { .. });
+
+        if is_sampler {
+            return self.write_global_sampler(module, handle, global);
+        }
+
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
         let register_ty = match global.space {
             crate::AddressSpace::Function => unreachable!("Function address space"),
@@ -843,13 +875,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 register
             }
             crate::AddressSpace::Handle => {
-                let handle_ty = match *inner {
-                    TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,
-                    _ => inner,
-                };
-
                 let register = match *handle_ty {
-                    TypeInner::Sampler { .. } => "s",
                     // all storage textures are UAV, unconditionally
                     TypeInner::Image {
                         class: crate::ImageClass::Storage { .. },
@@ -952,6 +978,66 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         } else {
             writeln!(self.out, ";")?;
         }
+
+        Ok(())
+    }
+
+    fn write_global_sampler(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::GlobalVariable>,
+        global: &crate::GlobalVariable,
+    ) -> BackendResult {
+        let binding = *global.binding.as_ref().unwrap();
+
+        let key = super::SamplerIndexBufferKey {
+            group: binding.group,
+        };
+        self.write_wrapped_sampler_buffer(key)?;
+
+        // This was already validated, so we can confidently unwrap it.
+        let bt = self.options.resolve_resource_binding(&binding).unwrap();
+
+        match module.types[global.ty].inner {
+            TypeInner::Sampler { comparison } => {
+                // If we are generating a static access, we create a variable for the sampler.
+                //
+                // This prevents the DXIL from containing multiple lookups for the sampler, which
+                // the backend compiler will then have to eliminate. AMD does seem to be able to
+                // eliminate these, but better safe than sorry.
+
+                write!(self.out, "static const ")?;
+                self.write_type(module, global.ty)?;
+
+                let heap_var = if comparison {
+                    COMPARISON_SAMPLER_HEAP_VAR
+                } else {
+                    SAMPLER_HEAP_VAR
+                };
+
+                let index_buffer_name = &self.wrapped.sampler_index_buffers[&key];
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                writeln!(
+                    self.out,
+                    " {name} = {heap_var}[{index_buffer_name}[{register}]];",
+                    register = bt.register
+                )?;
+            }
+            TypeInner::BindingArray { .. } => {
+                // If we are generating a binding array, we cannot directly access the sampler as the index
+                // into the sampler index buffer is unknown at compile time. Instead we generate a constant
+                // that represents the "base" index into the sampler index buffer. This constant is added
+                // to the user provided index to get the final index into the sampler index buffer.
+
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                writeln!(
+                    self.out,
+                    "static const uint {name} = {register};",
+                    register = bt.register
+                )?;
+            }
+            _ => unreachable!(),
+        };
 
         Ok(())
     }
@@ -2670,7 +2756,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     };
 
                     self.write_expr(module, base, func_ctx)?;
-                    write!(self.out, "[")?;
+
+                    let array_sampler_info = self.sampler_binding_array_info_from_expression(
+                        module, func_ctx, base, resolved,
+                    );
+
+                    if let Some(ref info) = array_sampler_info {
+                        write!(self.out, "{}[", info.sampler_heap_name)?;
+                    } else {
+                        write!(self.out, "[")?;
+                    }
 
                     let needs_bound_check = self.options.restrict_indexing
                         && !indexing_binding_array
@@ -2715,7 +2810,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if non_uniform_qualifier {
                             write!(self.out, "NonUniformResourceIndex(")?;
                         }
+                        if let Some(ref info) = array_sampler_info {
+                            write!(
+                                self.out,
+                                "{}[{} + ",
+                                info.sampler_index_buffer_name, info.binding_array_base_index_name,
+                            )?;
+                        }
                         self.write_expr(module, index, func_ctx)?;
+                        if array_sampler_info.is_some() {
+                            write!(self.out, "]")?;
+                        }
                         if non_uniform_qualifier {
                             write!(self.out, ")")?;
                         }
@@ -2730,43 +2835,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
-                    fn write_access<W: fmt::Write>(
-                        writer: &mut super::Writer<'_, W>,
-                        resolved: &TypeInner,
-                        base_ty_handle: Option<Handle<crate::Type>>,
-                        index: u32,
-                    ) -> BackendResult {
-                        match *resolved {
-                            // We specifically lift the ValuePointer to this case. While `[0]` is valid
-                            // HLSL for any vector behind a value pointer, FXC completely miscompiles
-                            // it and generates completely nonsensical DXBC.
-                            //
-                            // See https://github.com/gfx-rs/naga/issues/2095 for more details.
-                            TypeInner::Vector { .. } | TypeInner::ValuePointer { .. } => {
-                                // Write vector access as a swizzle
-                                write!(writer.out, ".{}", back::COMPONENTS[index as usize])?
-                            }
-                            TypeInner::Matrix { .. }
-                            | TypeInner::Array { .. }
-                            | TypeInner::BindingArray { .. } => write!(writer.out, "[{index}]")?,
-                            TypeInner::Struct { .. } => {
-                                // This will never panic in case the type is a `Struct`, this is not true
-                                // for other types so we can only check while inside this match arm
-                                let ty = base_ty_handle.unwrap();
-
-                                write!(
-                                    writer.out,
-                                    ".{}",
-                                    &writer.names[&NameKey::StructMember(ty, index)]
-                                )?
-                            }
-                            ref other => {
-                                return Err(Error::Custom(format!("Cannot index {other:?}")))
-                            }
-                        }
-                        Ok(())
-                    }
-
                     // We write the matrix column access in a special way since
                     // the type of `base` is our special __matCx2 struct.
                     if let Some(MatrixType {
@@ -2816,8 +2884,60 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
 
+                    let array_sampler_info = self.sampler_binding_array_info_from_expression(
+                        module, func_ctx, base, resolved,
+                    );
+
+                    if let Some(ref info) = array_sampler_info {
+                        write!(
+                            self.out,
+                            "{}[{}",
+                            info.sampler_heap_name, info.sampler_index_buffer_name
+                        )?;
+                    }
+
                     self.write_expr(module, base, func_ctx)?;
-                    write_access(self, resolved, base_ty_handle, index)?;
+
+                    match *resolved {
+                        // We specifically lift the ValuePointer to this case. While `[0]` is valid
+                        // HLSL for any vector behind a value pointer, FXC completely miscompiles
+                        // it and generates completely nonsensical DXBC.
+                        //
+                        // See https://github.com/gfx-rs/naga/issues/2095 for more details.
+                        TypeInner::Vector { .. } | TypeInner::ValuePointer { .. } => {
+                            // Write vector access as a swizzle
+                            write!(self.out, ".{}", back::COMPONENTS[index as usize])?
+                        }
+                        TypeInner::Matrix { .. }
+                        | TypeInner::Array { .. }
+                        | TypeInner::BindingArray { .. } => {
+                            if let Some(ref info) = array_sampler_info {
+                                write!(
+                                    self.out,
+                                    "[{} + {index}]",
+                                    info.binding_array_base_index_name
+                                )?;
+                            } else {
+                                write!(self.out, "[{index}]")?;
+                            }
+                        }
+                        TypeInner::Struct { .. } => {
+                            // This will never panic in case the type is a `Struct`, this is not true
+                            // for other types so we can only check while inside this match arm
+                            let ty = base_ty_handle.unwrap();
+
+                            write!(
+                                self.out,
+                                ".{}",
+                                &self.names[&NameKey::StructMember(ty, index)]
+                            )?
+                        }
+                        ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
+                    }
+
+                    if array_sampler_info.is_some() {
+                        write!(self.out, "]")?;
+                    }
                 }
             }
             Expression::FunctionArgument(pos) => {
@@ -2958,13 +3078,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, ".x")?;
                 }
             }
-            Expression::GlobalVariable(handle) => match module.global_variables[handle].space {
-                crate::AddressSpace::Storage { .. } => {}
-                _ => {
+            Expression::GlobalVariable(handle) => {
+                let global_variable = &module.global_variables[handle];
+                let ty = &module.types[global_variable.ty].inner;
+
+                // In the case of binding arrays of samplers, we need to not write anything
+                // as the we are in the wrong position to fully write the expression.
+                //
+                // The entire writing is done by AccessIndex.
+                let is_binding_array_of_samplers = match *ty {
+                    TypeInner::BindingArray { base, .. } => {
+                        let base_ty = &module.types[base].inner;
+                        matches!(*base_ty, TypeInner::Sampler { .. })
+                    }
+                    _ => false,
+                };
+
+                let is_storage_space =
+                    matches!(global_variable.space, crate::AddressSpace::Storage { .. });
+
+                if !is_binding_array_of_samplers && !is_storage_space {
                     let name = &self.names[&NameKey::GlobalVariable(handle)];
                     write!(self.out, "{name}")?;
                 }
-            },
+            }
             Expression::LocalVariable(handle) => {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }
@@ -3678,6 +3815,52 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, "{closing_bracket}")?;
         }
         Ok(())
+    }
+
+    /// Find the [`BindingArraySamplerInfo`] from an expression so that such an access
+    /// can be generated later.
+    fn sampler_binding_array_info_from_expression(
+        &mut self,
+        module: &Module,
+        func_ctx: &back::FunctionCtx<'_>,
+        base: Handle<crate::Expression>,
+        resolved: &TypeInner,
+    ) -> Option<BindingArraySamplerInfo> {
+        if let TypeInner::BindingArray {
+            base: base_ty_handle,
+            ..
+        } = *resolved
+        {
+            let base_ty = &module.types[base_ty_handle].inner;
+            if let TypeInner::Sampler { comparison, .. } = *base_ty {
+                let base = &func_ctx.expressions[base];
+
+                if let crate::Expression::GlobalVariable(handle) = *base {
+                    let variable = &module.global_variables[handle];
+
+                    let sampler_heap_name = match comparison {
+                        true => COMPARISON_SAMPLER_HEAP_VAR,
+                        false => SAMPLER_HEAP_VAR,
+                    };
+
+                    return Some(BindingArraySamplerInfo {
+                        sampler_heap_name,
+                        sampler_index_buffer_name: self
+                            .wrapped
+                            .sampler_index_buffers
+                            .get(&super::SamplerIndexBufferKey {
+                                group: variable.binding.unwrap().group,
+                            })
+                            .unwrap()
+                            .clone(),
+                        binding_array_base_index_name: self.names[&NameKey::GlobalVariable(handle)]
+                            .clone(),
+                    });
+                }
+            }
+        }
+
+        None
     }
 
     fn write_named_expr(
