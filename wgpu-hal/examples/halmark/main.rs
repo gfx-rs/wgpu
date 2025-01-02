@@ -499,7 +499,7 @@ impl<A: hal::Api> Example<A> {
             local_alignment,
             global_buffer,
             sampler,
-            textures: textures,
+            textures,
             contexts: vec![ExecutionContext {
                 encoder: cmd_encoder,
                 fence,
