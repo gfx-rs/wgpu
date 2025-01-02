@@ -892,6 +892,13 @@ impl Fence {
 pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,
+    /// For each item in `entries`, this has its descriptor offset in the corresponding heap (SRV/CBV/UAV heap or
+    /// Sampler heap).
+    ///
+    /// The value is the sum of the `count` of every previous value in the `entries` list (or 1 if the `count` is `None`).
+    ///
+    /// This is used for creating or updating the descriptors using this layout.
+    entry_binding_descriptor_offsets: Vec<u32>,
     // These CPU heaps are stored to be re-used whenever a new `BindGroup` is created using this layout.
     // In `create_bind_group`, the mutex for the re-usable heaps is acquired, the stage buffer is cleared
     // and it is used before a call to CopyDescriptors copies it to the GPU, then it is ready to be

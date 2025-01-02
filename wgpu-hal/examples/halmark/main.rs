@@ -25,6 +25,8 @@ const BUNNY_SIZE: f32 = 0.15 * 256.0;
 const GRAVITY: f32 = -9.8 * 100.0;
 const MAX_VELOCITY: f32 = 750.0;
 const DESIRED_MAX_LATENCY: u32 = 2;
+const MUTABLE_BIND_GROUP: bool = true;
+const MUTABLE_BIND_GROUP_UPDATE_FRAMES: usize = 100;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -71,7 +73,7 @@ struct Example<A: hal::Api> {
     surface_format: wgt::TextureFormat,
     device: A::Device,
     queue: A::Queue,
-    global_group: A::BindGroup,
+    global_group: [A::BindGroup; 2],
     local_group: A::BindGroup,
     global_group_layout: A::BindGroupLayout,
     local_group_layout: A::BindGroupLayout,
@@ -83,8 +85,7 @@ struct Example<A: hal::Api> {
     local_alignment: u32,
     global_buffer: A::Buffer,
     sampler: A::Sampler,
-    texture: A::Texture,
-    texture_view: A::TextureView,
+    textures: Vec<(A::Texture, A::TextureView)>,
     contexts: Vec<ExecutionContext<A>>,
     context_index: usize,
     extent: [u32; 2],
@@ -187,7 +188,12 @@ impl<A: hal::Api> Example<A> {
 
         let global_bgl_desc = hal::BindGroupLayoutDescriptor {
             label: None,
-            flags: hal::BindGroupLayoutFlags::empty(),
+            flags: if MUTABLE_BIND_GROUP {
+                hal::BindGroupLayoutFlags::UPDATE_AFTER_BIND
+                    | hal::BindGroupLayoutFlags::PARTIALLY_BOUND
+            } else {
+                hal::BindGroupLayoutFlags::empty()
+            },
             entries: &[
                 wgt::BindGroupLayoutEntry {
                     binding: 0,
@@ -286,7 +292,7 @@ impl<A: hal::Api> Example<A> {
         let texture_data = [0xFFu8; 4];
 
         let staging_buffer_desc = hal::BufferDescriptor {
-            label: Some("stage"),
+            label: Some("Staging Buffer"),
             size: texture_data.len() as wgt::BufferAddress,
             usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
@@ -305,77 +311,24 @@ impl<A: hal::Api> Example<A> {
             assert!(mapping.is_coherent);
         }
 
-        let texture_desc = hal::TextureDescriptor {
-            label: None,
-            size: wgt::Extent3d {
-                width: 1,
-                height: 1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgt::TextureDimension::D2,
-            format: wgt::TextureFormat::Rgba8UnormSrgb,
-            usage: hal::TextureUses::COPY_DST | hal::TextureUses::RESOURCE,
-            memory_flags: hal::MemoryFlags::empty(),
-            view_formats: vec![],
-        };
-        let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
-
         let cmd_encoder_desc = hal::CommandEncoderDescriptor {
             label: None,
             queue: &queue,
         };
         let mut cmd_encoder = unsafe { device.create_command_encoder(&cmd_encoder_desc).unwrap() };
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
-        {
-            let buffer_barrier = hal::BufferBarrier {
-                buffer: &staging_buffer,
-                usage: hal::StateTransition {
-                    from: hal::BufferUses::empty(),
-                    to: hal::BufferUses::COPY_SRC,
-                },
-            };
-            let texture_barrier1 = hal::TextureBarrier {
-                texture: &texture,
-                range: wgt::ImageSubresourceRange::default(),
-                usage: hal::StateTransition {
-                    from: hal::TextureUses::UNINITIALIZED,
-                    to: hal::TextureUses::COPY_DST,
-                },
-            };
-            let texture_barrier2 = hal::TextureBarrier {
-                texture: &texture,
-                range: wgt::ImageSubresourceRange::default(),
-                usage: hal::StateTransition {
-                    from: hal::TextureUses::COPY_DST,
-                    to: hal::TextureUses::RESOURCE,
-                },
-            };
-            let copy = hal::BufferTextureCopy {
-                buffer_layout: wgt::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4),
-                    rows_per_image: None,
-                },
-                texture_base: hal::TextureCopyBase {
-                    origin: wgt::Origin3d::ZERO,
-                    mip_level: 0,
-                    array_layer: 0,
-                    aspect: hal::FormatAspects::COLOR,
-                },
-                size: hal::CopyExtent {
-                    width: 1,
-                    height: 1,
-                    depth: 1,
-                },
-            };
-            unsafe {
-                cmd_encoder.transition_buffers(iter::once(buffer_barrier));
-                cmd_encoder.transition_textures(iter::once(texture_barrier1));
-                cmd_encoder.copy_buffer_to_texture(&staging_buffer, &texture, iter::once(copy));
-                cmd_encoder.transition_textures(iter::once(texture_barrier2));
-            }
+
+        let texture_count = if MUTABLE_BIND_GROUP { 6 } else { 1 };
+        let mut textures = Vec::with_capacity(texture_count);
+        let mut staging_buffers = Vec::with_capacity(texture_count);
+        for i in 0..texture_count {
+            let (texture, texture_view, staging_buffer) = Self::create_texture(
+                (i + 1) as f32 / texture_count as f32,
+                &device,
+                &mut cmd_encoder,
+            );
+            textures.push((texture, texture_view));
+            staging_buffers.push(staging_buffer);
         }
 
         let sampler_desc = hal::SamplerDescriptor {
@@ -436,15 +389,6 @@ impl<A: hal::Api> Example<A> {
         };
         let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
-        let view_desc = hal::TextureViewDescriptor {
-            label: None,
-            format: texture_desc.format,
-            dimension: wgt::TextureViewDimension::D2,
-            usage: hal::TextureUses::RESOURCE,
-            range: wgt::ImageSubresourceRange::default(),
-        };
-        let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
-
         let global_group = {
             let global_buffer_binding = hal::BufferBinding {
                 buffer: &global_buffer,
@@ -452,12 +396,16 @@ impl<A: hal::Api> Example<A> {
                 size: None,
             };
             let texture_binding = hal::TextureBinding {
-                view: &texture_view,
+                view: &textures[0].1,
                 usage: hal::TextureUses::RESOURCE,
             };
             let global_group_desc = hal::BindGroupDescriptor {
                 label: Some("global"),
-                flags: hal::BindGroupFlags::empty(),
+                flags: if MUTABLE_BIND_GROUP {
+                    hal::BindGroupFlags::empty()
+                } else {
+                    hal::BindGroupFlags::ALLOW_UPDATES
+                },
                 layout: &global_group_layout,
                 buffers: &[global_buffer_binding],
                 samplers: &[&sampler],
@@ -484,7 +432,10 @@ impl<A: hal::Api> Example<A> {
                     },
                 ],
             };
-            unsafe { device.create_bind_group(&global_group_desc).unwrap() }
+            [
+                unsafe { device.create_bind_group(&global_group_desc).unwrap() },
+                unsafe { device.create_bind_group(&global_group_desc).unwrap() },
+            ]
         };
 
         let local_group = {
@@ -523,6 +474,11 @@ impl<A: hal::Api> Example<A> {
             cmd_encoder.reset_all(iter::once(init_cmd));
             fence
         };
+        for staging_buffer in staging_buffers.drain(..) {
+            unsafe {
+                device.destroy_buffer(staging_buffer);
+            }
+        }
 
         Ok(Example {
             instance,
@@ -543,8 +499,7 @@ impl<A: hal::Api> Example<A> {
             local_alignment,
             global_buffer,
             sampler,
-            texture,
-            texture_view,
+            textures: textures,
             contexts: vec![ExecutionContext {
                 encoder: cmd_encoder,
                 fence,
@@ -579,11 +534,15 @@ impl<A: hal::Api> Example<A> {
             }
 
             self.device.destroy_bind_group(self.local_group);
-            self.device.destroy_bind_group(self.global_group);
+            for global_group in self.global_group.into_iter() {
+                self.device.destroy_bind_group(global_group);
+            }
             self.device.destroy_buffer(self.local_buffer);
             self.device.destroy_buffer(self.global_buffer);
-            self.device.destroy_texture_view(self.texture_view);
-            self.device.destroy_texture(self.texture);
+            for (texture, texture_view) in self.textures.drain(..) {
+                self.device.destroy_texture_view(texture_view);
+                self.device.destroy_texture(texture);
+            }
             self.device.destroy_sampler(self.sampler);
             self.device.destroy_shader_module(self.shader);
             self.device.destroy_render_pipeline(self.pipeline);
@@ -633,6 +592,112 @@ impl<A: hal::Api> Example<A> {
         }
     }
 
+    fn create_texture(
+        value: f32,
+        device: &A::Device,
+        encoder: &mut A::CommandEncoder,
+    ) -> (A::Texture, A::TextureView, A::Buffer) {
+        let texture_data = [(value.fract() * u8::MAX as f32) as u8; 4];
+
+        let staging_buffer_desc = hal::BufferDescriptor {
+            label: Some("Staging Buffer"),
+            size: texture_data.len() as wgt::BufferAddress,
+            usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
+            memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+        };
+        let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
+        unsafe {
+            let mapping = device
+                .map_buffer(&staging_buffer, 0..staging_buffer_desc.size)
+                .unwrap();
+            ptr::copy_nonoverlapping(
+                texture_data.as_ptr(),
+                mapping.ptr.as_ptr(),
+                texture_data.len(),
+            );
+            device.unmap_buffer(&staging_buffer);
+            assert!(mapping.is_coherent);
+        }
+
+        let texture_desc = hal::TextureDescriptor {
+            label: Some("Halmark Texture (Updated)"),
+            size: wgt::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgt::TextureDimension::D2,
+            format: wgt::TextureFormat::Rgba8UnormSrgb,
+            usage: hal::TextureUses::COPY_DST | hal::TextureUses::RESOURCE,
+            memory_flags: hal::MemoryFlags::empty(),
+            view_formats: vec![],
+        };
+        let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
+
+        {
+            let buffer_barrier = hal::BufferBarrier {
+                buffer: &staging_buffer,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::empty(),
+                    to: hal::BufferUses::COPY_SRC,
+                },
+            };
+            let texture_barrier1 = hal::TextureBarrier {
+                texture: &texture,
+                range: wgt::ImageSubresourceRange::default(),
+                usage: hal::StateTransition {
+                    from: hal::TextureUses::UNINITIALIZED,
+                    to: hal::TextureUses::COPY_DST,
+                },
+            };
+            let texture_barrier2 = hal::TextureBarrier {
+                texture: &texture,
+                range: wgt::ImageSubresourceRange::default(),
+                usage: hal::StateTransition {
+                    from: hal::TextureUses::COPY_DST,
+                    to: hal::TextureUses::RESOURCE,
+                },
+            };
+            let copy = hal::BufferTextureCopy {
+                buffer_layout: wgt::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: None,
+                },
+                texture_base: hal::TextureCopyBase {
+                    origin: wgt::Origin3d::ZERO,
+                    mip_level: 0,
+                    array_layer: 0,
+                    aspect: hal::FormatAspects::COLOR,
+                },
+                size: hal::CopyExtent {
+                    width: 1,
+                    height: 1,
+                    depth: 1,
+                },
+            };
+            unsafe {
+                encoder.transition_buffers(iter::once(buffer_barrier));
+                encoder.transition_textures(iter::once(texture_barrier1));
+                encoder.copy_buffer_to_texture(&staging_buffer, &texture, iter::once(copy));
+                encoder.transition_textures(iter::once(texture_barrier2));
+            }
+        }
+
+        let view_desc = hal::TextureViewDescriptor {
+            label: None,
+            format: texture_desc.format,
+            dimension: wgt::TextureViewDimension::D2,
+            usage: hal::TextureUses::RESOURCE,
+            range: wgt::ImageSubresourceRange::default(),
+        };
+        let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
+
+        (texture, texture_view, staging_buffer)
+    }
+
     fn render(&mut self) {
         let delta = 0.01;
         for bunny in self.bunnies.iter_mut() {
@@ -668,6 +733,41 @@ impl<A: hal::Api> Example<A> {
         }
 
         let ctx = &mut self.contexts[self.context_index];
+        let frame = ctx.fence_value as usize;
+        let global_group_idx = if MUTABLE_BIND_GROUP {
+            (frame / MUTABLE_BIND_GROUP_UPDATE_FRAMES) % 2
+        } else {
+            0
+        };
+        if MUTABLE_BIND_GROUP && frame % MUTABLE_BIND_GROUP_UPDATE_FRAMES == 0 {
+            let texture_id = frame % self.textures.len();
+            let texture_view = &self.textures[texture_id].1;
+            let texture_binding = hal::TextureBinding {
+                view: texture_view,
+                usage: hal::TextureUses::RESOURCE,
+            };
+
+            unsafe {
+                self.device
+                    .update_bind_group(
+                        &self.global_group[global_group_idx],
+                        &hal::UpdateBindGroupDescriptor {
+                            layout: &self.global_group_layout,
+                            entries: &[hal::BindGroupEntry {
+                                binding: 1,
+                                resource_index: 0,
+                                count: 1,
+                                array_element_offset: None,
+                            }],
+                            buffers: &[],
+                            samplers: &[],
+                            textures: &[texture_binding],
+                            acceleration_structures: &[],
+                        },
+                    )
+                    .unwrap();
+            }
+        }
 
         let surface_tex = unsafe {
             self.surface
@@ -732,8 +832,12 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             ctx.encoder.begin_render_pass(&pass_desc);
             ctx.encoder.set_render_pipeline(&self.pipeline);
-            ctx.encoder
-                .set_bind_group(&self.pipeline_layout, 0, &self.global_group, &[]);
+            ctx.encoder.set_bind_group(
+                &self.pipeline_layout,
+                0,
+                &self.global_group[global_group_idx],
+                &[],
+            );
         }
 
         for i in 0..self.bunnies.len() {

@@ -442,18 +442,17 @@ impl super::Device {
         let mut multi_update_dst_range_view_handles = Vec::new();
         let mut multi_update_dst_range_sampler_sizes = Vec::new();
         let mut multi_update_dst_range_sampler_handles = Vec::new();
-        let mut view_gpu_offset = 0u32;
-        let mut sampler_gpu_offset = 0u32;
 
         let layout_and_entry_iter = entries.iter().map(|entry| {
-            let layout = layout
+            let (layout, descriptor_offset) = layout
                 .entries
                 .iter()
-                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .zip(layout.entry_binding_descriptor_offsets.iter())
+                .find(|(layout_entry, _)| layout_entry.binding == entry.binding)
                 .expect("internal error: no layout entry found with binding slot");
-            (layout, entry)
+            (layout, entry, *descriptor_offset)
         });
-        for (layout_entry, entry) in layout_and_entry_iter {
+        for (layout_entry, entry, descriptor_offset) in layout_and_entry_iter {
             // We can't skip array elements if the bind group isn't partially bound
             if !partially_bound {
                 debug_assert_eq!(entry.array_element_offset.unwrap_or(0), 0);
@@ -557,11 +556,10 @@ impl super::Device {
                     multi_update_dst_range_view_handles.push(
                         self.shared.heap_views.cpu_descriptor_at(
                             dst_views_index.unwrap()
-                                + view_gpu_offset as u64
+                                + descriptor_offset as u64
                                 + entry.array_element_offset.unwrap_or(0) as u64,
                         ),
                     );
-                    view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
                 }
                 wgt::BindingType::Texture { .. } => {
                     let inner = cpu_views.as_mut().unwrap();
@@ -575,11 +573,10 @@ impl super::Device {
                     multi_update_dst_range_view_handles.push(
                         self.shared.heap_views.cpu_descriptor_at(
                             dst_views_index.unwrap()
-                                + view_gpu_offset as u64
+                                + descriptor_offset as u64
                                 + entry.array_element_offset.unwrap_or(0) as u64,
                         ),
                     );
-                    view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
                 }
                 wgt::BindingType::StorageTexture { .. } => {
                     let inner = cpu_views.as_mut().unwrap();
@@ -593,11 +590,10 @@ impl super::Device {
                     multi_update_dst_range_view_handles.push(
                         self.shared.heap_views.cpu_descriptor_at(
                             dst_views_index.unwrap()
-                                + view_gpu_offset as u64
+                                + descriptor_offset as u64
                                 + entry.array_element_offset.unwrap_or(0) as u64,
                         ),
                     );
-                    view_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
                 }
                 wgt::BindingType::Sampler { .. } => {
                     let start = entry.resource_index as usize;
@@ -607,13 +603,12 @@ impl super::Device {
                     }
                     multi_update_dst_range_sampler_sizes.push(entry.count);
                     multi_update_dst_range_sampler_handles.push(
-                        self.shared.heap_views.cpu_descriptor_at(
+                        self.shared.heap_samplers.cpu_descriptor_at(
                             dst_samplers_index.unwrap()
-                                + sampler_gpu_offset as u64
+                                + descriptor_offset as u64
                                 + entry.array_element_offset.unwrap_or(0) as u64,
                         ),
                     );
-                    sampler_gpu_offset += layout_entry.count.map(|it| it.get()).unwrap_or(0);
                 }
                 wgt::BindingType::AccelerationStructure => todo!(),
             }
@@ -999,8 +994,25 @@ impl crate::Device for super::Device {
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Result<super::BindGroupLayout, crate::DeviceError> {
         let (mut num_buffer_views, mut num_samplers, mut num_texture_views) = (0, 0, 0);
+        let mut entry_binding_descriptor_offsets = Vec::with_capacity(desc.entries.len());
         for entry in desc.entries.iter() {
             let count = entry.count.map_or(1, NonZeroU32::get);
+            match entry.ty {
+                wgt::BindingType::Buffer {
+                    has_dynamic_offset: false,
+                    ..
+                }
+                | wgt::BindingType::Texture { .. }
+                | wgt::BindingType::StorageTexture { .. } => {
+                    entry_binding_descriptor_offsets.push(num_buffer_views + num_texture_views);
+                }
+                wgt::BindingType::Sampler(_) => {
+                    entry_binding_descriptor_offsets.push(num_samplers);
+                }
+                _ => {
+                    entry_binding_descriptor_offsets.push(0);
+                }
+            }
             match entry.ty {
                 wgt::BindingType::Buffer {
                     has_dynamic_offset: true,
@@ -1020,6 +1032,7 @@ impl crate::Device for super::Device {
         let num_views = num_buffer_views + num_texture_views;
         Ok(super::BindGroupLayout {
             entries: desc.entries.to_vec(),
+            entry_binding_descriptor_offsets,
             scratch_views_cpu_heap: if num_views != 0 {
                 let heap = descriptor::CpuHeap::new(
                     &self.raw,
@@ -1635,15 +1648,17 @@ impl crate::Device for super::Device {
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
         if let Some(cpu_views) = update_params.view_cpu_heap {
             if partially_bound {
-                unsafe {
-                    descriptor::multi_update(
-                        &self.raw,
-                        &cpu_views,
-                        self.shared.heap_views.ty,
-                        &update_params.view_handles,
-                        &update_params.view_range_sizes,
-                        &desc.layout.copy_counts,
-                    );
+                if !update_params.view_handles.is_empty() {
+                    unsafe {
+                        descriptor::multi_update(
+                            &self.raw,
+                            &cpu_views,
+                            self.shared.heap_views.ty,
+                            &update_params.view_handles,
+                            &update_params.view_range_sizes,
+                            &desc.layout.copy_counts,
+                        );
+                    }
                 }
             } else {
                 unsafe {
@@ -1662,15 +1677,17 @@ impl crate::Device for super::Device {
 
         if let Some(cpu_samplers) = update_params.sampler_cpu_heap {
             if partially_bound {
-                unsafe {
-                    descriptor::multi_update(
-                        &self.raw,
-                        &cpu_samplers,
-                        self.shared.heap_samplers.ty,
-                        &update_params.sampler_handles,
-                        &update_params.sampler_sizes,
-                        &desc.layout.copy_counts,
-                    );
+                if !update_params.sampler_handles.is_empty() {
+                    unsafe {
+                        descriptor::multi_update(
+                            &self.raw,
+                            &cpu_samplers,
+                            self.shared.heap_samplers.ty,
+                            &update_params.sampler_handles,
+                            &update_params.sampler_sizes,
+                            &desc.layout.copy_counts,
+                        );
+                    }
                 }
             } else {
                 unsafe {

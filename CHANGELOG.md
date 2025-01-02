@@ -174,6 +174,9 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 - Replace `usage: Range<T>`, for `BufferUses`, `TextureUses`, and `AccelerationStructureBarrier` with a new `StateTransition<T>`. By @atlv24 in [#6703](https://github.com/gfx-rs/wgpu/pull/6703)
 - Change the `DropCallback` API to use `FnOnce` instead of `FnMut`. By @jerzywilczek in [#6482](https://github.com/gfx-rs/wgpu/pull/6482)
+- Mutable bind groups are now supported in DX12 and Vulkan on `wgpu-hal`. When creating a BindGroup using `create_bind_group` in `wgpu-hal`, set the `ALLOW_UPDATES` flag to allow updating the bind group after creation. Update the bind group using `update_bind_group`, similarly to how it's cr
+- DX12 now supports partially bound bind groups, allowing you to skip entries. These will then not get written when calling `create_bind_group`.
+- Added `array_element_offset` to `BindGroupLayoutEntry`, to allow for more free-form creating and updating of mutable bind groups for bindless resources.
 
 ### Bug Fixes
 
