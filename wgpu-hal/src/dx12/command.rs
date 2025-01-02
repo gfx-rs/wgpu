@@ -85,7 +85,7 @@ impl super::CommandEncoder {
         unsafe {
             list.SetDescriptorHeaps(&[
                 Some(self.shared.heap_views.raw.clone()),
-                Some(self.shared.heap_samplers.raw.clone()),
+                Some(self.shared.sampler_heap.heap().clone()),
             ])
         };
     }
@@ -241,6 +241,21 @@ impl super::CommandEncoder {
                         (Pk::Transfer, _) => (),
                     }
                 }
+                super::RootElement::SamplerHeap => match self.pass.kind {
+                    Pk::Render => unsafe {
+                        list.SetGraphicsRootDescriptorTable(
+                            index,
+                            self.shared.sampler_heap.gpu_descriptor_table(),
+                        )
+                    },
+                    Pk::Compute => unsafe {
+                        list.SetComputeRootDescriptorTable(
+                            index,
+                            self.shared.sampler_heap.gpu_descriptor_table(),
+                        )
+                    },
+                    Pk::Transfer => (),
+                },
             }
         }
     }
@@ -253,6 +268,9 @@ impl super::CommandEncoder {
                     first_instance: 0,
                     other: 0,
                 };
+        }
+        if let Some(root_index) = layout.sampler_heap_root_index {
+            self.pass.root_elements[root_index as usize] = super::RootElement::SamplerHeap;
         }
         self.pass.layout = layout.clone();
         self.pass.dirty_root_elements = (1 << layout.total_root_elements) - 1;
@@ -904,13 +922,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if info.tables.contains(super::TableTypes::SRV_CBV_UAV) {
             self.pass.root_elements[root_index] =
                 super::RootElement::Table(group.handle_views.unwrap().gpu);
-            root_index += 1;
-        }
-
-        // Bind Sampler descriptor tables.
-        if info.tables.contains(super::TableTypes::SAMPLERS) {
-            self.pass.root_elements[root_index] =
-                super::RootElement::Table(group.handle_samplers.unwrap().gpu);
             root_index += 1;
         }
 

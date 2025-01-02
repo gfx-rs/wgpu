@@ -1521,9 +1521,9 @@ impl Device {
         };
         for (_, var) in module.global_variables.iter() {
             match var.binding {
-                Some(ref br) if br.group >= self.limits.max_bind_groups => {
+                Some(br) if br.group >= self.limits.max_bind_groups => {
                     return Err(pipeline::CreateShaderModuleError::InvalidGroupIndex {
-                        bind: br.clone(),
+                        bind: br,
                         group: br.group,
                         limit: self.limits.max_bind_groups,
                     });

@@ -920,7 +920,7 @@ impl Interface {
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
             let bind = match var.binding {
-                Some(ref br) => br.clone(),
+                Some(br) => br,
                 _ => continue,
             };
             let naga_ty = &module.types[var.ty].inner;
@@ -1057,7 +1057,7 @@ impl Interface {
                     BindingLayoutSource::Provided(layouts) => {
                         // update the required binding size for this buffer
                         if let ResourceType::Buffer { size } = res.ty {
-                            match shader_binding_sizes.entry(res.bind.clone()) {
+                            match shader_binding_sizes.entry(res.bind) {
                                 Entry::Occupied(e) => {
                                     *e.into_mut() = size.max(*e.get());
                                 }
@@ -1117,7 +1117,7 @@ impl Interface {
                 }
             };
             if let Err(error) = result {
-                return Err(StageError::Binding(res.bind.clone(), error));
+                return Err(StageError::Binding(res.bind, error));
             }
         }
 
@@ -1158,8 +1158,8 @@ impl Interface {
 
                 if let Some(error) = error {
                     return Err(StageError::Filtering {
-                        texture: texture_bind.clone(),
-                        sampler: sampler_bind.clone(),
+                        texture: *texture_bind,
+                        sampler: *sampler_bind,
                         error,
                     });
                 }
