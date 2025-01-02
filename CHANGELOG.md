@@ -40,26 +40,26 @@ Bottom level categories:
 
 ## Unreleased
 
-## Major changes
+### Major changes
 
-### Refactored Dispatch Between `wgpu-core` and `webgpu`
+#### Refactored Dispatch Between `wgpu-core` and `webgpu`
 
 The crate `wgpu` has two different "backends", one which targets webgpu in the browser, one which targets `wgpu_core` on native platforms and webgl. This was previously very difficult to traverse and add new features to. The entire system was refactored to make it simpler. Additionally the new system has zero overhead if there is only one "backend" in use. You can see the new system in action by using go-to-definition on any wgpu functions in your IDE.
 
 By @cwfitzgerald in [#6619](https://github.com/gfx-rs/wgpu/pull/6619).
 
-### Render and Compute Passes Now Properly Enforce Their Lifetime
+#### Render and Compute Passes Now Properly Enforce Their Lifetime
 
 A regression introduced in 23.0.0 caused lifetimes of render and compute passes to be incorrectly enforced. While this is not
 a soundness issue, the intent is to move an error from runtime to compile time. This issue has been fixed and restored to the 22.0.0 behavior.
 
-### Bindless (`binding_array`) Grew More Capabilities
+#### Bindless (`binding_array`) Grew More Capabilities
 
 - DX12 now supports `PARTIALLY_BOUND_BINDING_ARRAY` on Resource Binding Tier 3 Hardware. This is most D3D12 hardware [D3D12 Feature Table] for more information on what hardware supports this feature. By @cwfitzgerald in [#6734](https://github.com/gfx-rs/wgpu/pull/6734).
 
 [D3D12 Feature Table]: https://d3d12infodb.boolka.dev/FeatureTable.html
 
-### `Device::create_shader_module_unchecked` Renamed and Now Has Configuration Options
+#### `Device::create_shader_module_unchecked` Renamed and Now Has Configuration Options
 
 `create_shader_module_unchecked` became `create_shader_module_trusted`.
 
@@ -75,7 +75,7 @@ let desc: ShaderModuleDescriptor = include_wgsl!(...)
 
 By @cwfitzgerald and @rudderbucky in [#6662](https://github.com/gfx-rs/wgpu/pull/6662).
 
-### The `diagnostic(…);` directive is now supported in WGSL
+#### The `diagnostic(…);` directive is now supported in WGSL
 
 Naga now parses `diagnostic(…);` directives according to the WGSL spec. This allows users to control certain lints, similar to Rust's `allow`, `warn`, and `deny` attributes. For example, in standard WGSL (but, notably, not Naga yet—see <https://github.com/gfx-rs/wgpu/issues/4369>) this snippet would emit a uniformity error:
 
@@ -125,9 +125,9 @@ There are some limitations to keep in mind with this new functionality:
 
 By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148](https://github.com/gfx-rs/wgpu/pull/6148), [#6533](https://github.com/gfx-rs/wgpu/pull/6533), [#6353](https://github.com/gfx-rs/wgpu/pull/6353), [#6537](https://github.com/gfx-rs/wgpu/pull/6537).
 
-### New Features
+#### New Features
 
-#### Naga
+##### Naga
 
 - Support atomic operations on fields of global structs in the SPIR-V frontend. By @schell in [#6693](https://github.com/gfx-rs/wgpu/pull/6693).
 - Clean up tests for atomic operations support in SPIR-V frontend. By @schell in [#6692](https://github.com/gfx-rs/wgpu/pull/6692)
@@ -143,22 +143,22 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Implement type inference for abstract arguments to user-defined functions. By @jamienicol in [#6577](https://github.com/gfx-rs/wgpu/pull/6577).
 - Allow for override-expressions in array sizes. By @KentSlaney in [#6654](https://github.com/gfx-rs/wgpu/pull/6654).
 
-#### General
+##### General
 
 - Add unified documentation for ray-tracing. By @Vecvec in [#6747](https://github.com/gfx-rs/wgpu/pull/6747)
 - Return submission index in `map_async` and `on_submitted_work_done` to track down completion of async callbacks. By @eliemichel in [#6360](https://github.com/gfx-rs/wgpu/pull/6360).
 - Move raytracing alignments into HAL instead of in core. By @Vecvec in [#6563](https://github.com/gfx-rs/wgpu/pull/6563).
 - Allow for statically linking DXC rather than including separate `.dll` files. By @DouglasDwyer in [#6574](https://github.com/gfx-rs/wgpu/pull/6574).
 
-### Changes
+#### Changes
 
-#### Naga
+##### Naga
 
 - Show types of LHS and RHS in binary operation type mismatch errors. By @ErichDonGubler in [#6450](https://github.com/gfx-rs/wgpu/pull/6450).
 - The GLSL parser now uses less expressions for function calls. By @magcius in [#6604](https://github.com/gfx-rs/wgpu/pull/6604).
 - Add a note to help with a common syntax error case for global diagnostic filter directives. By @e-hat in [#6718](https://github.com/gfx-rs/wgpu/pull/6718)
 
-#### General
+##### General
 
 - Align Storage Access enums to the webgpu spec. By @atlv24 in [#6642](https://github.com/gfx-rs/wgpu/pull/6642)
 - Make `Surface::as_hal` take an immutable reference to the surface. By @jerzywilczek in [#9999](https://github.com/gfx-rs/wgpu/pull/9999)
@@ -166,11 +166,11 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Improve binding error to give a clearer message when there is a mismatch between resource binding as it is in the shader and as it is in the binding layout. By @eliemichel in [#6553](https://github.com/gfx-rs/wgpu/pull/6553).
 - `Surface::configure` and `Surface::get_current_texture` are no longer fatal. By @alokedesai in [#6253](https://github.com/gfx-rs/wgpu/pull/6253)
 
-#### D3D12
+##### D3D12
 
 - Avoid using FXC as fallback when the DXC container was passed at instance creation. Paths to `dxcompiler.dll` & `dxil.dll` are also now required. By @teoxoy in [#6643](https://github.com/gfx-rs/wgpu/pull/6643).
 
-#### HAL
+##### HAL
 
 - Replace `usage: Range<T>`, for `BufferUses`, `TextureUses`, and `AccelerationStructureBarrier` with a new `StateTransition<T>`. By @atlv24 in [#6703](https://github.com/gfx-rs/wgpu/pull/6703)
 - Change the `DropCallback` API to use `FnOnce` instead of `FnMut`. By @jerzywilczek in [#6482](https://github.com/gfx-rs/wgpu/pull/6482)
@@ -199,7 +199,11 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
 - Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
- 
+
+#### D3D12
+
+- Fix no longer showing software rasterizer adapters. By @wumpf in [#6843](https://github.com/gfx-rs/wgpu/pull/6843).
+
 ### Examples
 
 - Add multiple render targets example. By @kaphula in [#5297](https://github.com/gfx-rs/wgpu/pull/5313)
