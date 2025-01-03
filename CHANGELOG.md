@@ -165,6 +165,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Add actual sample type to `CreateBindGroupError::InvalidTextureSampleType` error message. By @ErichDonGubler in [#6530](https://github.com/gfx-rs/wgpu/pull/6530).
 - Improve binding error to give a clearer message when there is a mismatch between resource binding as it is in the shader and as it is in the binding layout. By @eliemichel in [#6553](https://github.com/gfx-rs/wgpu/pull/6553).
 - `Surface::configure` and `Surface::get_current_texture` are no longer fatal. By @alokedesai in [#6253](https://github.com/gfx-rs/wgpu/pull/6253)
+- `Instance::new` now takes `InstanceDescriptor` by reference. `InstanceDescriptor` is now cloneable. By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 
 ##### D3D12
 
