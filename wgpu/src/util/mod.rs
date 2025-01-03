@@ -24,7 +24,13 @@ pub use wgt::{
 };
 
 use crate::{
-    dispatch, PipelineLayoutDescriptor, RenderPipelineDescriptor, ShaderSource,
+    dispatch, AddressMode, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, ColorTargetState, ColorWrites,
+    CommandEncoder, Device, Face, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState,
+    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerBindingType,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, TextureFormat,
+    TextureSampleType, TextureView, TextureViewDimension, VertexState,
 };
 
 /// Treat the given byte slice as a SPIR-V module.
@@ -193,50 +199,50 @@ pub fn pipeline_cache_key(adapter_info: &wgt::AdapterInfo) -> Option<String> {
     }
 }
 
-
+/// A texture blitting utility
 pub struct TextureBlitter {
-    pipeline: crate::RenderPipeline,
-    bind_group_layout: crate::BindGroupLayout,
-    sampler: crate::Sampler,
+    pipeline: RenderPipeline,
+    bind_group_layout: BindGroupLayout,
+    sampler: Sampler,
 }
 
 impl TextureBlitter {
-    pub fn new(
-        device: crate::Device,
-        format: crate::TextureFormat,
-        sample_type: crate::FilterMode,
-    ) -> Self {
-        let sampler = device.create_sampler(&crate::SamplerDescriptor {
+    /// Returns a new [`TextureBlitter`]
+    /// # Arguments
+    /// - `device` - A [`Device`]
+    /// - `format` - The [`TextureFormat`] of the texture that will be copied to
+    /// - `sample_type` - The [`Sampler`] Filtering Mode
+    pub fn new(device: Device, format: TextureFormat, sample_type: FilterMode) -> Self {
+        let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("wgpu::util::TextureBlitter::sampler"),
-            address_mode_u: crate::AddressMode::ClampToEdge,
-            address_mode_v: crate::AddressMode::ClampToEdge,
-            address_mode_w: crate::AddressMode::ClampToEdge,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
             mag_filter: sample_type,
             ..Default::default()
         });
 
-        let bind_group_layout =
-            device.create_bind_group_layout(&crate::BindGroupLayoutDescriptor {
-                label: Some("wgpu::util::TextureBlitter::bind_group_layout"),
-                entries: &[
-                    crate::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: crate::ShaderStages::FRAGMENT,
-                        ty: crate::BindingType::Texture {
-                            sample_type: crate::TextureSampleType::Float { filterable: false },
-                            view_dimension: crate::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("wgpu::util::TextureBlitter::bind_group_layout"),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: false },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
                     },
-                    crate::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: crate::ShaderStages::FRAGMENT,
-                        ty: crate::BindingType::Sampler(crate::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("wgpu::util::TextureBlitter::pipeline_layout"),
@@ -244,7 +250,7 @@ impl TextureBlitter {
             push_constant_ranges: &[],
         });
 
-        let shader = device.create_shader_module(crate::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("wgpu::util::TextureBlitter::shader"),
             source: ShaderSource::Wgsl(Cow::Borrowed(
                 r#"
@@ -284,31 +290,31 @@ impl TextureBlitter {
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("wgpu::uti::TextureBlitter::pipeline"),
             layout: Some(&pipeline_layout),
-            vertex: crate::VertexState {
+            vertex: VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                compilation_options: crate::PipelineCompilationOptions::default(),
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
-            primitive: crate::PrimitiveState {
-                topology: crate::PrimitiveTopology::TriangleList,
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
-                front_face: crate::FrontFace::Ccw,
-                cull_mode: Some(crate::Face::Back),
+                front_face: FrontFace::Ccw,
+                cull_mode: Some(Face::Back),
                 unclipped_depth: false,
                 polygon_mode: wgt::PolygonMode::Fill,
                 conservative: false,
             },
             depth_stencil: None,
-            multisample: crate::MultisampleState::default(),
-            fragment: Some(crate::FragmentState {
+            multisample: MultisampleState::default(),
+            fragment: Some(FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
-                compilation_options: crate::PipelineCompilationOptions::default(),
-                targets: &[Some(crate::ColorTargetState {
+                compilation_options: PipelineCompilationOptions::default(),
+                targets: &[Some(ColorTargetState {
                     format,
                     blend: None,
-                    write_mask: crate::ColorWrites::ALL,
+                    write_mask: ColorWrites::ALL,
                 })],
             }),
             multiview: None,
@@ -322,36 +328,43 @@ impl TextureBlitter {
         }
     }
 
+    /// Copies the data from the source [`TextureView`] to the target [`TextureView`]
+    ///
+    /// # Arguments
+    /// - `device` - A [`Device`]
+    /// - `encoder` - A [`CommandEncoder`]
+    /// - `source` - A [`TextureView`] that gets copied from
+    /// - `target` - A [`TextureView`] that gets the data copied from the `source`
     pub fn copy(
         &self,
-        device: &crate::Device,
-        encoder: &mut crate::CommandEncoder,
-        target: &crate::TextureView,
-        source: &crate::TextureView,
+        device: &Device,
+        encoder: &mut CommandEncoder,
+        source: &TextureView,
+        target: &TextureView,
     ) {
-        let bind_group = device.create_bind_group(&crate::BindGroupDescriptor {
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("wgpu::util::TextureBlitter::bind_group"),
             layout: &self.bind_group_layout,
             entries: &[
-                crate::BindGroupEntry {
+                BindGroupEntry {
                     binding: 0,
                     resource: crate::BindingResource::TextureView(source),
                 },
-                crate::BindGroupEntry {
+                BindGroupEntry {
                     binding: 1,
                     resource: crate::BindingResource::Sampler(&self.sampler),
                 },
             ],
         });
 
-        let mut pass = encoder.begin_render_pass(&crate::RenderPassDescriptor {
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("wgpu::util::TextureBlitter::pass"),
             color_attachments: &[Some(crate::RenderPassColorAttachment {
                 view: target,
                 resolve_target: None,
                 ops: wgt::Operations {
-                    load: crate::LoadOp::Load,
-                    store: crate::StoreOp::Store,
+                    load: LoadOp::Load,
+                    store: StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
