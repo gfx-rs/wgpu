@@ -23,7 +23,9 @@ pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
 
-use crate::dispatch;
+use crate::{
+    dispatch, PipelineLayout, PipelineLayoutDescriptor, RenderPipelineDescriptor, ShaderSource,
+};
 
 /// Treat the given byte slice as a SPIR-V module.
 ///
@@ -188,5 +190,178 @@ pub fn pipeline_cache_key(adapter_info: &wgt::AdapterInfo) -> Option<String> {
             adapter_info.vendor, adapter_info.device
         )),
         _ => None,
+    }
+}
+
+struct TextureBlitter {
+    pipeline: RenderPipeline,
+    pipeline_layout: PipelineLayout,
+    bind_group_layout: crate::BindGroupLayout,
+    sampler: crate::Sampler,
+}
+
+impl TextureBlitter {
+    pub fn new(
+        device: crate::Device,
+        format: TextureFormat,
+        sample_type: crate::FilterMode,
+    ) -> Self {
+        let sampler = device.create_sampler(&crate::SamplerDescriptor {
+            label: Some("wgpu::util::TextureBlitter::sampler"),
+            address_mode_u: crate::AddressMode::ClampToEdge,
+            address_mode_v: crate::AddressMode::ClampToEdge,
+            address_mode_w: crate::AddressMode::ClampToEdge,
+            mag_filter: sample_type,
+            ..Default::default()
+        });
+
+        let bind_group_layout =
+            device.create_bind_group_layout(&crate::BindGroupLayoutDescriptor {
+                label: Some("wgpu::util::TextureBlitter::bind_group_layout"),
+                entries: &[
+                    crate::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: crate::ShaderStages::FRAGMENT,
+                        ty: crate::BindingType::Texture {
+                            sample_type: crate::TextureSampleType::Float { filterable: false },
+                            view_dimension: crate::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    crate::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: crate::ShaderStages::FRAGMENT,
+                        ty: crate::BindingType::Sampler(crate::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("wgpu::util::TextureBlitter::layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let shader = device.create_shader_module(crate::ShaderModuleDescriptor {
+            label: Some("wgpu::util::TextureBlitter::shader"),
+            source: ShaderSource::Wgsl(Cow::Borrowed(
+                r#"
+                struct VertexOutput {
+                    @builtin(position) position: vec4<f32>,
+                    @location(0) tex_coords: vec2<f32>,
+                }
+
+                @vertex
+                fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
+                    var out: VertexOutput;
+
+                    out.tex_coords = vec2<f32>(
+                        f32(vi  << 1u),
+                        f32(vi & u2),
+                    );
+
+                    out.position = vec4<f32>(out.uv * 2.0 - 1.0, 0.0, 1.0);
+
+                   // Invert y so the texture is not upside down
+                   out.tex_coords.y = 1.0 - out.tex_coords.y;
+                   return out;
+                  }
+
+                 @group(0) @binding(0)
+                 var texture: texture_2d<f32>;
+                 @group(0) @binding(0)
+                 var texture_sampler: Sampler;
+
+                 @fragment
+                 fn fs_main(vs: VertexOutput) -> @location(0) vec4<f32> {
+                    return textureSample(texture, texture_sampler, vs.uv);
+                 }
+                "#,
+            )),
+        });
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("wgpu::uti::TextureBlitter::pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: crate::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: crate::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            primitive: crate::PrimitiveState {
+                topology: crate::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: crate::FrontFace::Ccw,
+                cull_mode: Some(crate::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgt::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: None,
+            fragment: Some(crate::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: crate::PipelineCompilationOptions::default(),
+                targets: &[Some(crate::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: crate::ColorWrites::ALL,
+                })],
+            }),
+            multiview: None,
+            cache: None,
+        });
+
+        Self {
+            pipeline,
+            pipeline_layout,
+            bind_group_layout,
+            sampler,
+        }
+    }
+
+    pub fn copy(
+        &self,
+        device: &crate::Device,
+        encoder: &mut crate::CommandEncoder,
+        target: &TextureView,
+        source: &TextureView,
+    ) {
+        let bind_group = device.create_bind_group(&crate::BindGroupDescriptor {
+            label: Some("wgpu::util::TextureBlitter::bind_group"),
+            layout: &self.bind_group_layout,
+            entries: &[
+                crate::BindGroupEntry {
+                    binding: 0,
+                    resource: crate::BindingResource::TextureView(source),
+                },
+                crate::BindGroupEntry {
+                    binding: 1,
+                    resource: crate::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        });
+
+        let mut pass = encoder.begin_render_pass(&crate::RenderPassDescriptor {
+            label: Some("wgpu::util::TextureBlitter::pass"),
+            color_attachments: &[Some(crate::RenderPassColorAttachment {
+                view: &target,
+                resolve_target: None,
+                ops: wgt::Operations {
+                    load: crate::LoadOp::Load,
+                    store: crate::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.draw(0..3, 0..1);
     }
 }
