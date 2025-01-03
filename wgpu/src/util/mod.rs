@@ -278,7 +278,7 @@ impl TextureBlitter {
                  @group(0) @binding(0)
                  var texture: texture_2d<f32>;
                  @group(0) @binding(0)
-                 var texture_sampler: Sampler;
+                 var texture_sampler: sampler;
 
                  @fragment
                  fn fs_main(vs: VertexOutput) -> @location(0) vec4<f32> {
