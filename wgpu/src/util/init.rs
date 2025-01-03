@@ -199,8 +199,9 @@ pub async fn is_browser_webgpu_supported() -> bool {
 /// this method will panic, see [`Instance::enabled_backend_features()`].
 #[allow(unused_mut)]
 pub async fn new_instance_with_webgpu_detection(
-    mut instance_desc: wgt::InstanceDescriptor,
+    instance_desc: impl std::ops::Deref<Target = wgt::InstanceDescriptor>,
 ) -> crate::Instance {
+    let mut instance_desc = instance_desc.clone();
     if instance_desc
         .backends
         .contains(wgt::Backends::BROWSER_WEBGPU)
@@ -209,5 +210,5 @@ pub async fn new_instance_with_webgpu_detection(
         instance_desc.backends.remove(wgt::Backends::BROWSER_WEBGPU);
     }
 
-    crate::Instance::new(instance_desc)
+    crate::Instance::new(&instance_desc)
 }

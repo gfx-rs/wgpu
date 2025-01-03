@@ -2,7 +2,7 @@
 
 async fn get() -> wgpu::Adapter {
     let adapter = {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::util::backend_bits_from_env().unwrap_or_default(),
             ..Default::default()
         });

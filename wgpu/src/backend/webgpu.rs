@@ -1461,7 +1461,7 @@ impl dispatch::InterfaceTypes for ContextWebGpu {
 }
 
 impl dispatch::InstanceInterface for ContextWebGpu {
-    fn new(_desc: crate::InstanceDescriptor) -> Self
+    fn new(_desc: &crate::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {

@@ -85,7 +85,7 @@ pub trait InterfaceTypes {
 }
 
 pub trait InstanceInterface: CommonTraits {
-    fn new(desc: crate::InstanceDescriptor) -> Self
+    fn new(desc: &wgt::InstanceDescriptor) -> Self
     where
         Self: Sized;
 

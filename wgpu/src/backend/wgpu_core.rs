@@ -767,7 +767,7 @@ impl InterfaceTypes for ContextWgpuCore {
 }
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
-    fn new(desc: wgt::InstanceDescriptor) -> Self
+    fn new(desc: &wgt::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {

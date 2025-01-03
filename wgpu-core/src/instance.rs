@@ -63,7 +63,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, instance_desc: wgt::InstanceDescriptor) -> Self {
+    pub fn new(name: &str, instance_desc: &wgt::InstanceDescriptor) -> Self {
         fn init<A: HalApi>(
             _: A,
             instance_desc: &wgt::InstanceDescriptor,
@@ -99,13 +99,13 @@ impl Instance {
         let mut instance_per_backend = Vec::new();
 
         #[cfg(vulkan)]
-        init(hal::api::Vulkan, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Vulkan, instance_desc, &mut instance_per_backend);
         #[cfg(metal)]
-        init(hal::api::Metal, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Metal, instance_desc, &mut instance_per_backend);
         #[cfg(dx12)]
-        init(hal::api::Dx12, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Dx12, instance_desc, &mut instance_per_backend);
         #[cfg(gles)]
-        init(hal::api::Gles, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Gles, instance_desc, &mut instance_per_backend);
 
         Self {
             name: name.to_string(),
