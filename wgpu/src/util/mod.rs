@@ -264,7 +264,7 @@ impl TextureBlitter {
                     var out: VertexOutput;
 
                     out.tex_coords = vec2<f32>(
-                        f32(vi  << 1u),
+                        f32(vi << 1u),
                         f32(vi & u2),
                     );
 
