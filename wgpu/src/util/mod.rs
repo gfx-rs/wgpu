@@ -24,7 +24,7 @@ pub use wgt::{
 };
 
 use crate::{
-    dispatch, PipelineLayout, PipelineLayoutDescriptor, RenderPipelineDescriptor, ShaderSource,
+    dispatch, PipelineLayoutDescriptor, RenderPipelineDescriptor, ShaderSource,
 };
 
 /// Treat the given byte slice as a SPIR-V module.
@@ -193,9 +193,9 @@ pub fn pipeline_cache_key(adapter_info: &wgt::AdapterInfo) -> Option<String> {
     }
 }
 
-struct TextureBlitter {
-    pipeline: RenderPipeline,
-    pipeline_layout: PipelineLayout,
+
+pub struct TextureBlitter {
+    pipeline: crate::RenderPipeline,
     bind_group_layout: crate::BindGroupLayout,
     sampler: crate::Sampler,
 }
@@ -203,7 +203,7 @@ struct TextureBlitter {
 impl TextureBlitter {
     pub fn new(
         device: crate::Device,
-        format: TextureFormat,
+        format: crate::TextureFormat,
         sample_type: crate::FilterMode,
     ) -> Self {
         let sampler = device.create_sampler(&crate::SamplerDescriptor {
@@ -239,7 +239,7 @@ impl TextureBlitter {
             });
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("wgpu::util::TextureBlitter::layout"),
+            label: Some("wgpu::util::TextureBlitter::pipeline_layout"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
@@ -300,7 +300,7 @@ impl TextureBlitter {
                 conservative: false,
             },
             depth_stencil: None,
-            multisample: None,
+            multisample: crate::MultisampleState::default(),
             fragment: Some(crate::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
@@ -317,7 +317,6 @@ impl TextureBlitter {
 
         Self {
             pipeline,
-            pipeline_layout,
             bind_group_layout,
             sampler,
         }
@@ -327,8 +326,8 @@ impl TextureBlitter {
         &self,
         device: &crate::Device,
         encoder: &mut crate::CommandEncoder,
-        target: &TextureView,
-        source: &TextureView,
+        target: &crate::TextureView,
+        source: &crate::TextureView,
     ) {
         let bind_group = device.create_bind_group(&crate::BindGroupDescriptor {
             label: Some("wgpu::util::TextureBlitter::bind_group"),
@@ -348,7 +347,7 @@ impl TextureBlitter {
         let mut pass = encoder.begin_render_pass(&crate::RenderPassDescriptor {
             label: Some("wgpu::util::TextureBlitter::pass"),
             color_attachments: &[Some(crate::RenderPassColorAttachment {
-                view: &target,
+                view: target,
                 resolve_target: None,
                 ops: wgt::Operations {
                     load: crate::LoadOp::Load,
