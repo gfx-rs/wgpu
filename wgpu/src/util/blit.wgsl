@@ -8,7 +8,7 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
     var out: VertexOutput;
 
     out.tex_coords = vec2<f32>(
-        f32(vi << 1u),
+        f32((vi << 1u) & 2u),
         f32(vi & 2u),
     );
 
