@@ -6,7 +6,8 @@ members = [
 
     # default members
     "benches",
-    "examples",
+    "examples/features",
+    # "examples/standalone/*",
     "lock-analyzer",
     "naga-cli",
     "naga",
@@ -24,7 +25,8 @@ members = [
 exclude = []
 default-members = [
     "benches",
-    "examples",
+    "examples/features",
+    # "examples/standalone/*",
     "lock-analyzer",
     "naga-cli",
     "naga",
