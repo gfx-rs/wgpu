@@ -9,10 +9,10 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
 
     out.tex_coords = vec2<f32>(
         f32(vi << 1u),
-        f32(vi & u2),
+        f32(vi & 2u),
     );
 
-    out.position = vec4<f32>(out.uv * 2.0 - 1.0, 0.0, 1.0);
+    out.position = vec4<f32>(out.tex_coords * 2.0 - 1.0, 0.0, 1.0);
 
     // Invert y so the texture is not upside down
     out.tex_coords.y = 1.0 - out.tex_coords.y;
@@ -21,10 +21,10 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
 
 @group(0) @binding(0)
 var texture: texture_2d<f32>;
-@group(0) @binding(0)
+@group(0) @binding(1)
 var texture_sampler: sampler;
 
 @fragment
 fn fs_main(vs: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(texture, texture_sampler, vs.uv);
+    return textureSample(texture, texture_sampler, vs.tex_coords);
 }
