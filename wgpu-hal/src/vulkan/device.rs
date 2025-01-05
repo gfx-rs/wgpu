@@ -417,6 +417,10 @@ impl
                 vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
                 descriptor_count.storage_buffer_dynamic,
             ),
+            (
+                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                descriptor_count.acceleration_structure,
+            ),
         ];
 
         let filtered_counts = unfiltered_counts
