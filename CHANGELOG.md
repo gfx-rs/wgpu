@@ -201,6 +201,10 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
 - Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
 
+#### Vulkan
+
+- Allocate descriptors for acceleration structures. By @Vecvec in [#6861](https://github.com/gfx-rs/wgpu/pull/6861).
+
 #### D3D12
 
 - Fix no longer showing software rasterizer adapters. By @wumpf in [#6843](https://github.com/gfx-rs/wgpu/pull/6843).
