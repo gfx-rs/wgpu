@@ -128,7 +128,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 #### `wgpu::Instance::new` now takes `InstanceDescriptor` by reference
 
 Previously `wgpu::Instance::new` took `InstanceDescriptor` by value (which is overall fairly uncommon in wgpu).
-Furthermore, `InstanceDescriptor` is now clonable.
+Furthermore, `InstanceDescriptor` is now cloneable.
 
 ```diff
 - let instance = wgpu::Instance::new(instance_desc);
