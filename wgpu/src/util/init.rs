@@ -199,7 +199,7 @@ pub async fn is_browser_webgpu_supported() -> bool {
 /// this method will panic, see [`Instance::enabled_backend_features()`].
 #[allow(unused_mut)]
 pub async fn new_instance_with_webgpu_detection(
-    instance_desc: impl std::ops::Deref<Target = wgt::InstanceDescriptor>,
+    instance_desc: &wgt::InstanceDescriptor,
 ) -> crate::Instance {
     let mut instance_desc = instance_desc.clone();
     if instance_desc
