@@ -33,18 +33,6 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
-        name: "hello",
-        function: wgpu_examples::hello::main,
-        webgl: false, // No canvas for WebGL
-        webgpu: true,
-    },
-    ExampleDesc {
-        name: "hello_compute",
-        function: wgpu_examples::hello_compute::main,
-        webgl: false, // No compute
-        webgpu: true,
-    },
-    ExampleDesc {
         name: "hello_synchronization",
         function: wgpu_examples::hello_synchronization::main,
         webgl: false, // No canvas for WebGL

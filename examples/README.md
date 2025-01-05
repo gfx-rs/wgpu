@@ -1,20 +1,30 @@
-## Structure
+> [!NOTE]  
+> These are the examples for the development version of wgpu. If you want to see the examples for the latest crates.io release
+> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v24/examples#readme).
 
-For the simplest examples without using any helping code (see `framework.rs` here), check out:
+# Examples
 
-- `hello` for printing adapter information
-- `hello_triangle` for graphics and presentation
-- `hello_compute` for pure computing
+If you are just starting your graphics programming journey entirely, we recommend going through [Learn-WGPU](https://sotrh.github.io/learn-wgpu/)
+for a mode guided tutorial, which will also teach you the basics of graphics programming.
 
-### Summary of examples
+## Standalone Examples
 
-A summary of the basic examples as split along the graphics and compute "pathways" laid out roughly in order of building on each other. Those further indented, and thus more roughly dependent on more other examples, tend to be more complicated as well as those further down. It should be noted, though, that computing examples, even though they are mentioned further down (because rendering to a window is by far the most common use case), tend to be less complex as they require less surrounding context to create and manage a window to render to.
+All the standalone examples are separate crates and include all boilerplate inside the example itself. They can
+be cloned out of the repository to serve as a starting point for your own projects and are fully commented.
 
-The rest of the examples are for demonstrating specific features that you can come back for later when you know what those features are.
+| Name   | Description | Platforms |
+|--------|-------------|-----------|
+| [hello compute](standalone/1_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
 
-#### General
+You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 
-- `hello` - Demonstrates the basics of the WGPU library by getting a default Adapter and debugging it to the screen
+```sh
+cargo generate gfx-rs/wgpu --branch v24
+```
+
+## Framework Examples
+
+These examples use a common framework to handle wgpu init, window creation, and event handling. This allows the example to focus on the unique code in the example itself. Refer to the standalone examples for a more detailed look at the boilerplate code.
 
 #### Graphics
 
@@ -44,69 +54,8 @@ The rest of the examples are for demonstrating specific features that you can co
 - `ray_cube_compute` - Demonstrates using ray queries with a compute shader.
 - `ray_traced_triangle` - A simpler example demonstrating using ray queries with a compute shader
 
-## Feature matrix
-
-| Feature                      | boids  | bunnymark | conservative_raster | cube   | hello_synchronization | hello_workgroups | mipmap | msaa_line | render_to_texture | repeated_compute | shadow | skybox | stencil_triangles | storage_texture | texture_arrays | uniform_values | water  | ray_cube_compute | ray_cube_fragment | ray_scene | ray_shadows | ray_traced_triangle |
-|------------------------------| ------ | --------- | ------------------- | ------ | --------------------- | ---------------- | ------ | --------- | ----------------- | ---------------- | ------ | ------ | ----------------- | --------------- | -------------- | -------------- | ------ |------------------|-------------------|-----------|-------------|---------------------|
-| vertex attributes            | :star: |           |                     | :star: |                       |                  |        | :star:    |                   |                  | :star: | :star: |                   |                 | :star:         |                | :star: |                  |                   |           |             |                     |
-| instancing                   | :star: |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| lines and points             |        |           | :star:              |        |                       |                  |        | :star:    |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| dynamic buffer offsets       |        | :star:    |                     |        |                       |                  |        |           |                   |                  | :star: |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| implicit layout              |        |           |                     |        |                       |                  | :star: |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| sampled color textures       | :star: | :star:    | :star:              | :star: |                       |                  | :star: |           |                   |                  |        | :star: |                   |                 | :star:         |                | :star: |                  |                   |           |             |                     |
-| storage textures             | :star: |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   | :star:          |                |                |        | :star:           |                   |           |             | :star:              |
-| comparison samplers          |        |           |                     |        |                       |                  |        |           |                   |                  | :star: |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| subresource views            |        |           |                     |        |                       |                  | :star: |           |                   |                  | :star: |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| cubemaps                     |        |           |                     |        |                       |                  |        |           |                   |                  |        | :star: |                   |                 |                |                |        |                  |                   |           |             |                     |
-| multisampling                |        |           |                     |        |                       |                  |        | :star:    |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| off-screen rendering         |        |           | :star:              |        |                       |                  |        |           | :star:            |                  | :star: |        |                   |                 |                |                | :star: |                  |                   |           |             |                     |
-| stencil testing              |        |           |                     |        |                       |                  |        |           |                   |                  |        |        | :star:            |                 |                |                |        |                  |                   |           |             |                     |
-| depth testing                |        |           |                     |        |                       |                  |        |           |                   |                  | :star: | :star: |                   |                 |                |                | :star: |                  |                   |           |             |                     |
-| depth biasing                |        |           |                     |        |                       |                  |        |           |                   |                  | :star: |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| read-only depth              |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                | :star: |                  |                   |           |             |                     |
-| blending                     |        | :star:    |                     | :star: |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                | :star: |                  |                   |           |             |                     |
-| render bundles               |        |           |                     |        |                       |                  |        | :star:    |                   |                  |        |        |                   |                 |                |                | :star: |                  |                   |           |             |                     |
-| uniform buffers              |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                | :star:         |        |                  |                   |           |             |                     |
-| compute passes               | :star: |           |                     |        | :star:                | :star:           |        |           |                   | :star:           |        |        |                   | :star:          |                |                |        |                  |                   |           |             |                     |
-| buffer mapping               |        |           |                     |        | :star:                | :star:           |        |           |                   | :star:           |        |        |                   | :star:          |                |                |        |                  |                   |           |             |                     |
-| error scopes                 |        |           |                     | :star: |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| compute workgroups           |        |           |                     |        | :star:                | :star:           |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| compute synchronization      |        |           |                     |        | :star:                |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| _optional extensions_        |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 | :star:         |                |        |                  |                   |           |             |                     |
-| - SPIR-V shaders             |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - binding array              |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 | :star:         |                |        |                  |                   |           |             |                     |
-| - push constants             |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           | :star:      |                     |
-| - depth clamping             |        |           |                     |        |                       |                  |        |           |                   |                  | :star: |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - compressed textures        |        |           |                     |        |                       |                  |        |           |                   |                  |        | :star: |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - polygon mode               |        |           |                     | :star: |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - queries                    |        |           |                     |        |                       |                  | :star: |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - conservative rasterization |        |           | :star:              |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - ray queries                |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        | :star:           | :star:            | :star:    | :star:      | :star:              |
-| _integrations_               |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - staging belt               |        |           |                     |        |                       |                  |        |           |                   |                  |        | :star: |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - typed arena                |        |           |                     |        |                       |                  |        |           |                   |                  |        |        |                   |                 |                |                |        |                  |                   |           |             |                     |
-| - obj loading                |        |           |                     |        |                       |                  |        |           |                   |                  |        | :star: |                   |                 |                |                |        |                  |                   | :star:    |             |                     |
-
 ## Running on the Web
 
 To run the examples in a browser, run `cargo xtask run-wasm`.
 Then open `http://localhost:8000` in your browser, and you can choose an example to run.
 Naturally, in order to display any of the WebGPU based examples, you need to make sure your browser supports it.
-
-Note that many cannot be downleveled to WebGL as WebGL does (among other things) not support storage texture, storage buffers and compute shaders. Running any example using these feature in a browser will require that browser to support WebGPU.
-
-## Additional notes
-
-Note that the examples regarding computing build off of each other; repeated_compute extends hello_compute, hello_workgroups assumes you know the basic workflow of GPU computation, and hello_synchronization assumes you know what a workgroup is.
-
-All the examples use [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) shaders unless specified otherwise.
-
-All framework-based examples render to the window and are reftested against the screenshot in the directory.
-
-## Hacking
-
-You can record an API trace for any of the framework-based examples by starting them as:
-
-```sh
-mkdir -p trace && WGPU_TRACE=trace cargo run --features trace --bin wgpu-examples <example-name>
-```

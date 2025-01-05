@@ -8,8 +8,6 @@ pub mod boids;
 pub mod bunnymark;
 pub mod conservative_raster;
 pub mod cube;
-pub mod hello;
-pub mod hello_compute;
 pub mod hello_synchronization;
 pub mod hello_triangle;
 pub mod hello_windows;
