@@ -776,6 +776,11 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(google::display_timing::NAME),
         );
 
+        features.set(
+            F::VULKAN_EXTERNAL_MEMORY_WIN32,
+            caps.supports_extension(khr::external_memory_win32::NAME),
+        );
+
         (features, dl_flags)
     }
 
@@ -1554,9 +1559,6 @@ impl super::Instance {
                 .is_some_and(|ext| ext.shader_zero_initialize_workgroup_memory == vk::TRUE),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(khr::image_format_list::NAME),
-            #[cfg(windows)]
-            external_memory_win32: phd_capabilities
-                .supports_extension(khr::external_memory_win32::NAME),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),

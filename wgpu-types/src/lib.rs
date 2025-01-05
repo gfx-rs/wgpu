@@ -942,6 +942,16 @@ bitflags::bitflags! {
         /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
         /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
         const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 62;
+
+        /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_KHR_external_memory_win32])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
+        const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 63;
     }
 }
 

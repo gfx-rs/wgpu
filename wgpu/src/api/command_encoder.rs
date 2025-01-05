@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use crate::{
     api::{
@@ -35,6 +35,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CommandEncoder => .inner);
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 
+use parking_lot::Mutex;
 pub use wgt::TexelCopyBufferInfo as TexelCopyBufferInfoBase;
 /// View of a buffer which can be used to copy to/from a texture.
 ///
@@ -59,7 +60,7 @@ impl CommandEncoder {
         let buffer = self.inner.finish();
 
         CommandBuffer {
-            inner: Some(buffer),
+            inner: Arc::new(Mutex::new(Some(buffer))),
         }
     }
 
@@ -121,9 +122,9 @@ impl CommandEncoder {
         copy_size: BufferAddress,
     ) {
         self.inner.copy_buffer_to_buffer(
-            &source.inner,
+            &source.shared.inner,
             source_offset,
-            &destination.inner,
+            &destination.shared.inner,
             destination_offset,
             copy_size,
         );
@@ -182,7 +183,8 @@ impl CommandEncoder {
     /// - `CLEAR_TEXTURE` extension not enabled
     /// - Range is out of bounds
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
-        self.inner.clear_texture(&texture.inner, subresource_range);
+        self.inner
+            .clear_texture(&texture.shared.inner, subresource_range);
     }
 
     /// Clears buffer to zero.
@@ -197,7 +199,7 @@ impl CommandEncoder {
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) {
-        self.inner.clear_buffer(&buffer.inner, offset, size);
+        self.inner.clear_buffer(&buffer.shared.inner, offset, size);
     }
 
     /// Inserts debug marker.
@@ -230,7 +232,7 @@ impl CommandEncoder {
             &query_set.inner,
             query_range.start,
             query_range.end - query_range.start,
-            &destination.inner,
+            &destination.shared.inner,
             destination_offset,
         );
     }

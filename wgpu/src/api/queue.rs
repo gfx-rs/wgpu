@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use crate::*;
 
@@ -9,9 +12,9 @@ use crate::*;
 /// It can be created along with a [`Device`] by calling [`Adapter::request_device`].
 ///
 /// Corresponds to [WebGPU `GPUQueue`](https://gpuweb.github.io/gpuweb/#gpu-queue).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Queue {
-    pub(crate) inner: dispatch::DispatchQueue,
+    pub(crate) inner: Arc<dispatch::DispatchQueue>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
@@ -77,7 +80,7 @@ impl Drop for QueueWriteBufferView<'_> {
     fn drop(&mut self) {
         self.queue
             .inner
-            .write_staging_buffer(&self.buffer.inner, self.offset, &self.inner);
+            .write_staging_buffer(&self.buffer.shared.inner, self.offset, &self.inner);
     }
 }
 
@@ -103,7 +106,7 @@ impl Queue {
     /// method avoids an intermediate copy and is often able to transfer data
     /// more efficiently than this one.
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
-        self.inner.write_buffer(&buffer.inner, offset, data);
+        self.inner.write_buffer(&buffer.shared.inner, offset, data);
     }
 
     /// Write to a buffer via a directly mapped staging buffer.
@@ -143,7 +146,7 @@ impl Queue {
     ) -> Option<QueueWriteBufferView<'a>> {
         profiling::scope!("Queue::write_buffer_with");
         self.inner
-            .validate_write_buffer(&buffer.inner, offset, size)?;
+            .validate_write_buffer(&buffer.shared.inner, offset, size)?;
         let staging_buffer = self.inner.create_staging_buffer(size)?;
         Some(QueueWriteBufferView {
             queue: self,
@@ -204,9 +207,12 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
-        let mut command_buffers = command_buffers
-            .into_iter()
-            .map(|mut comb| comb.inner.take().unwrap());
+        let mut command_buffers = command_buffers.into_iter().map(|comb| {
+            comb.inner
+                .lock()
+                .take()
+                .expect("Command buffer already submitted")
+        });
 
         let index = self.inner.submit(&mut command_buffers);
 

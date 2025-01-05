@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::*;
 
 /// Handle to a pipeline layout.
@@ -6,9 +8,9 @@ use crate::*;
 /// It can be created with [`Device::create_pipeline_layout`].
 ///
 /// Corresponds to [WebGPU `GPUPipelineLayout`](https://gpuweb.github.io/gpuweb/#gpupipelinelayout).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipelineLayout {
-    pub(crate) inner: dispatch::DispatchPipelineLayout,
+    pub(crate) inner: Arc<dispatch::DispatchPipelineLayout>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::*;
 
 /// Handle to a pipeline cache, which is used to accelerate
@@ -62,9 +64,9 @@ use crate::*;
 /// This type is unique to the Rust API of `wgpu`.
 ///
 /// [renaming]: std::fs::rename
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipelineCache {
-    pub(crate) inner: dispatch::DispatchPipelineCache,
+    pub(crate) inner: Arc<dispatch::DispatchPipelineCache>,
 }
 
 #[cfg(send_sync)]
