@@ -663,8 +663,9 @@ impl super::Adapter {
                 .min(crate::MAX_COLOR_ATTACHMENTS as i32) as u32
         };
 
-        // TODO: programmatically determine this.
-        let max_color_attachment_bytes_per_sample = 32;
+        // 16 bytes per sample is the maximum size of a color attachment.
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,

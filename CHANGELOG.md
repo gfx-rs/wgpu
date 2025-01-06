@@ -217,10 +217,12 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 #### Vulkan
 
 - Allocate descriptors for acceleration structures. By @Vecvec in [#6861](https://github.com/gfx-rs/wgpu/pull/6861).
+- `max_color_attachment_bytes_per_sample` is now correctly set to 128. By @cwfitzgerald in [#6866](https://github.com/gfx-rs/wgpu/pull/6866)
 
 #### D3D12
 
 - Fix no longer showing software rasterizer adapters. By @wumpf in [#6843](https://github.com/gfx-rs/wgpu/pull/6843).
+- `max_color_attachment_bytes_per_sample` is now correctly set to 128. By @cwfitzgerald in [#6866](https://github.com/gfx-rs/wgpu/pull/6866)
 
 ### Examples
 

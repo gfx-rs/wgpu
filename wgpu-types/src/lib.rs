@@ -1192,7 +1192,10 @@ pub struct Limits {
     /// The maximum allowed number of color attachments.
     pub max_color_attachments: u32,
     /// The maximum number of bytes necessary to hold one sample (pixel or subpixel) of render
-    /// pipeline output data, across all color attachments.
+    /// pipeline output data, across all color attachments as described by [`TextureFormat::target_pixel_byte_cost`]
+    /// and [`TextureFormat::target_component_alignment`]. Defaults to 32. Higher is "better".
+    ///
+    /// ⚠️ `Rgba8Unorm`/`Rgba8Snorm`/`Bgra8Unorm`/`Bgra8Snorm` are deceptively 8 bytes per sample. ⚠️
     pub max_color_attachment_bytes_per_sample: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
     /// 16384. Higher is "better".
@@ -3775,6 +3778,9 @@ impl TextureFormat {
         }
     }
 
+    /// The largest number that can be returned by [`Self::target_pixel_byte_cost`].
+    pub const MAX_TARGET_PIXEL_BYTE_COST: u32 = 16;
+
     /// The number of bytes occupied per pixel in a color attachment
     /// <https://gpuweb.github.io/gpuweb/#render-target-pixel-byte-cost>
     #[must_use]
@@ -3800,11 +3806,13 @@ impl TextureFormat {
             | Self::R32Uint
             | Self::R32Sint
             | Self::R32Float => Some(4),
+            // Despite being 4 bytes per pixel, these are 8 bytes per pixel in the table
             Self::Rgba8Unorm
             | Self::Rgba8UnormSrgb
             | Self::Rgba8Snorm
             | Self::Bgra8Unorm
             | Self::Bgra8UnormSrgb
+            // ---
             | Self::Rgba16Uint
             | Self::Rgba16Sint
             | Self::Rgba16Unorm
@@ -3817,6 +3825,7 @@ impl TextureFormat {
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Ufloat => Some(8),
             Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
+            // ⚠️ If you add formats with larger sizes, make sure you change `MAX_TARGET_PIXEL_BYTE_COST`` ⚠️
             Self::Stencil8
             | Self::Depth16Unorm
             | Self::Depth24Plus

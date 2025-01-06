@@ -1052,8 +1052,13 @@ impl PhysicalDeviceProperties {
 
         // TODO: programmatically determine this, if possible. It's unclear whether we can
         // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
-        // We could increase the limit when we aren't on a tiled GPU.
-        let max_color_attachment_bytes_per_sample = 32;
+        //
+        // In theory some tilers may not support this much. We can't tell however, and
+        // the driver will throw a DEVICE_REMOVED if it goes too high in usage. This is fine.
+        //
+        // 16 bytes per sample is the maximum size for a color attachment.
+        let max_color_attachment_bytes_per_sample =
+            limits.max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
