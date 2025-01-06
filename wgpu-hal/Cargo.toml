@@ -53,6 +53,7 @@ vulkan = [
     "dep:libloading",
     "dep:smallvec",
     "dep:android_system_properties",
+    "dep:ordered-float",
 ]
 gles = [
     "naga/glsl-out",
@@ -125,6 +126,7 @@ profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 thiserror.workspace = true
 once_cell.workspace = true
+ordered-float = { workspace = true, optional = true }
 
 # backends common
 arrayvec.workspace = true

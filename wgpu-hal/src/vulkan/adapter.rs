@@ -1559,6 +1559,10 @@ impl super::Instance {
                 .is_some_and(|ext| ext.shader_zero_initialize_workgroup_memory == vk::TRUE),
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(khr::image_format_list::NAME),
+            maximum_samplers: phd_capabilities
+                .properties
+                .limits
+                .max_sampler_allocation_count,
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1907,6 +1911,9 @@ impl super::Adapter {
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
             framebuffers: Mutex::new(Default::default()),
+            sampler_cache: Mutex::new(super::sampler::SamplerCache::new(
+                self.private_caps.maximum_samplers,
+            )),
             memory_allocations_counter: Default::default(),
         });
 

@@ -183,6 +183,10 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 
 - Avoid using FXC as fallback when the DXC container was passed at instance creation. Paths to `dxcompiler.dll` & `dxil.dll` are also now required. By @teoxoy in [#6643](https://github.com/gfx-rs/wgpu/pull/6643).
 
+##### Vulkan
+
+- Add a cache for samplers, deduplicating any samplers, allowing more programs to stay within the global sampler limit. By @cwfitzgerald in [#6847](https://github.com/gfx-rs/wgpu/pull/6847)
+
 ##### HAL
 
 - Replace `usage: Range<T>`, for `BufferUses`, `TextureUses`, and `AccelerationStructureBarrier` with a new `StateTransition<T>`. By @atlv24 in [#6703](https://github.com/gfx-rs/wgpu/pull/6703)
