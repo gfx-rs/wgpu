@@ -37,6 +37,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
             &ctx.device,
             wgpu::TextureFormat::Rgba8UnormSrgb,
             wgpu::FilterMode::Linear,
+            None,
         );
 
         let mut encoder = ctx
@@ -88,6 +89,7 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
             &ctx.device,
             wgpu::TextureFormat::Rgba8UnormSrgb,
             wgpu::FilterMode::Nearest,
+            None,
         );
 
         let mut encoder = ctx

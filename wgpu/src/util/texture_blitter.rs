@@ -1,3 +1,5 @@
+use wgt::BlendState;
+
 use crate::{
     include_wgsl, AddressMode, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, ColorTargetState, ColorWrites,
@@ -24,7 +26,13 @@ impl TextureBlitter {
     /// - `device` - A [`Device`]
     /// - `format` - The [`TextureFormat`] of the texture that will be copied to. This has to be renderable.
     /// - `sample_type` - The [`Sampler`] Filtering Mode
-    pub fn new(device: &Device, format: TextureFormat, sample_type: FilterMode) -> Self {
+    /// - `blend_state` - The [`BlendState`] used
+    pub fn new(
+        device: &Device,
+        format: TextureFormat,
+        sample_type: FilterMode,
+        blend_state: Option<BlendState>,
+    ) -> Self {
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("wgpu::util::TextureBlitter::sampler"),
             address_mode_u: AddressMode::ClampToEdge,
@@ -95,7 +103,7 @@ impl TextureBlitter {
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(ColorTargetState {
                     format,
-                    blend: None,
+                    blend: blend_state,
                     write_mask: ColorWrites::ALL,
                 })],
             }),
