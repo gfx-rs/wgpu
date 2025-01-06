@@ -347,16 +347,15 @@ fn build_with_transform(ctx: TestingContext) {
         usage: BufferUsages::BLAS_INPUT,
     });
 
-    let transform = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(&[
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0,
-            0.0, 0.0, 0.0,
-        ]),
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
-    });
+    let transform = ctx
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&[
+                1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+            ]),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
+        });
 
     let blas_size = BlasTriangleGeometrySizeDescriptor {
         vertex_format: VertexFormat::Float32x3,
@@ -392,22 +391,27 @@ fn build_with_transform(ctx: TestingContext) {
         0xFF,
     ));
 
-    let mut encoder_build = ctx.device.create_command_encoder(&CommandEncoderDescriptor {
-        label: Some("BUILD 1"),
-    });
+    let mut encoder_build = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BUILD 1"),
+        });
 
-    encoder_build.build_acceleration_structures([&BlasBuildEntry {
-        blas: &blas,
-        geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
-            size: &blas_size,
-            vertex_buffer: &vertices,
-            first_vertex: 0,
-            vertex_stride: mem::size_of::<[f32; 3]>() as BufferAddress,
-            index_buffer: None,
-            index_buffer_offset: None,
-            transform_buffer: Some(&transform),
-            transform_buffer_offset: Some(0),
-        }]),
-    }], [&tlas_package]);
+    encoder_build.build_acceleration_structures(
+        [&BlasBuildEntry {
+            blas: &blas,
+            geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                size: &blas_size,
+                vertex_buffer: &vertices,
+                first_vertex: 0,
+                vertex_stride: mem::size_of::<[f32; 3]>() as BufferAddress,
+                index_buffer: None,
+                index_buffer_offset: None,
+                transform_buffer: Some(&transform),
+                transform_buffer_offset: Some(0),
+            }]),
+        }],
+        [&tlas_package],
+    );
     ctx.queue.submit([encoder_build.finish()]);
 }

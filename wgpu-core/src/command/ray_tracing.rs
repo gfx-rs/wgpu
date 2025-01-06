@@ -1186,7 +1186,8 @@ fn iter_buffers<'a, 'b>(
             cmd_buf_data.buffer_memory_init_actions.extend(
                 transform_buffer.initialization_status.read().create_action(
                     transform_buffer,
-                    mesh.transform_buffer_offset.unwrap()..(mesh.transform_buffer_offset.unwrap() + 48),
+                    mesh.transform_buffer_offset.unwrap()
+                        ..(mesh.transform_buffer_offset.unwrap() + 48),
                     MemoryInitKind::NeedsInitializedMemory,
                 ),
             );
