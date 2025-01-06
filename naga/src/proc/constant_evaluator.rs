@@ -1887,6 +1887,20 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Modulo => a % b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
+                        (Literal::AbstractInt(a), Literal::U32(b)) => {
+                            Literal::AbstractInt(match op {
+                                BinaryOperator::ShiftLeft => {
+                                    if (if a.is_negative() { !a } else { a }).leading_zeros() <= b {
+                                        return Err(ConstantEvaluatorError::Overflow(
+                                            "<<".to_string(),
+                                        ));
+                                    }
+                                    a.checked_shl(b).unwrap_or(0)
+                                }
+                                BinaryOperator::ShiftRight => a.checked_shr(b).unwrap_or(0),
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
                         (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
                             Literal::AbstractInt(match op {
                                 BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
