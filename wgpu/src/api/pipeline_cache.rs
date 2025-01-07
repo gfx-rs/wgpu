@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::*;
 
 /// Handle to a pipeline cache, which is used to accelerate
@@ -66,7 +64,7 @@ use crate::*;
 /// [renaming]: std::fs::rename
 #[derive(Debug, Clone)]
 pub struct PipelineCache {
-    pub(crate) inner: Arc<dispatch::DispatchPipelineCache>,
+    pub(crate) inner: dispatch::DispatchPipelineCache,
 }
 
 #[cfg(send_sync)]

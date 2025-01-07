@@ -78,6 +78,7 @@ log = "0.4"
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
 serde = { version = "1.0.217", features = ["derive"], optional = true }
+# Hold on updating to 0.7 until https://github.com/petgraph/petgraph/pull/714 is on crates.io
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }

@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc};
+use std::future::Future;
 
 use crate::*;
 
@@ -15,7 +15,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUAdapter`](https://gpuweb.github.io/gpuweb/#gpu-adapter).
 #[derive(Debug, Clone)]
 pub struct Adapter {
-    pub(crate) inner: Arc<dispatch::DispatchAdapter>,
+    pub(crate) inner: dispatch::DispatchAdapter,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
@@ -65,16 +65,9 @@ impl Adapter {
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let device = self.inner.request_device(desc, trace_path);
         async move {
-            device.await.map(|(device, queue)| {
-                (
-                    Device {
-                        inner: Arc::new(device),
-                    },
-                    Queue {
-                        inner: Arc::new(queue),
-                    },
-                )
-            })
+            device
+                .await
+                .map(|(device, queue)| (Device { inner: device }, Queue { inner: queue }))
         }
     }
 
@@ -100,10 +93,10 @@ impl Adapter {
 
         Ok((
             Device {
-                inner: Arc::new(device.into()),
+                inner: device.into(),
             },
             Queue {
-                inner: Arc::new(queue.into()),
+                inner: queue.into(),
             },
         ))
     }

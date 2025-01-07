@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::*;
 
 /// Handle to a sampler.
@@ -13,7 +11,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUSampler`](https://gpuweb.github.io/gpuweb/#sampler-interface).
 #[derive(Debug, Clone)]
 pub struct Sampler {
-    pub(crate) inner: Arc<dispatch::DispatchSampler>,
+    pub(crate) inner: dispatch::DispatchSampler,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Sampler: Send, Sync);

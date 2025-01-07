@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::*;
 
 /// Handle to a compute pipeline.
@@ -10,7 +8,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUComputePipeline`](https://gpuweb.github.io/gpuweb/#compute-pipeline).
 #[derive(Debug, Clone)]
 pub struct ComputePipeline {
-    pub(crate) inner: Arc<dispatch::DispatchComputePipeline>,
+    pub(crate) inner: dispatch::DispatchComputePipeline,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
@@ -27,9 +25,7 @@ impl ComputePipeline {
     /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
         let bind_group = self.inner.get_bind_group_layout(index);
-        BindGroupLayout {
-            inner: Arc::new(bind_group),
-        }
+        BindGroupLayout { inner: bind_group }
     }
 }
 

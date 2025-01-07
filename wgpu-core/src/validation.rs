@@ -1295,7 +1295,7 @@ pub fn validate_color_attachment_bytes_per_sample(
     attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
     limit: u32,
 ) -> Result<(), u32> {
-    let mut total_bytes_per_sample = 0;
+    let mut total_bytes_per_sample: u32 = 0;
     for format in attachment_formats {
         let Some(format) = format else {
             continue;
@@ -1304,10 +1304,7 @@ pub fn validate_color_attachment_bytes_per_sample(
         let byte_cost = format.target_pixel_byte_cost().unwrap();
         let alignment = format.target_component_alignment().unwrap();
 
-        let rem = total_bytes_per_sample % alignment;
-        if rem != 0 {
-            total_bytes_per_sample += alignment - rem;
-        }
+        total_bytes_per_sample = total_bytes_per_sample.next_multiple_of(alignment);
         total_bytes_per_sample += byte_cost;
     }
 
