@@ -102,8 +102,8 @@ pub struct BlasTriangleGeometry<'a> {
     pub vertex_stride: wgt::BufferAddress,
     /// Index buffer (optional).
     pub index_buffer: Option<&'a Buffer>,
-    /// Index buffer offset in bytes (optional, required if index buffer is present).
-    pub index_buffer_offset: Option<wgt::BufferAddress>,
+    /// Index buffer offset as a factor of the size of the index type (optional, required if index buffer is present).
+    pub first_index: Option<u32>,
     /// Transform buffer containing 3x4 (rows x columns, row major) affine transform matrices `[f32; 12]` (optional).
     pub transform_buffer: Option<&'a Buffer>,
     /// Transform buffer offset in bytes (optional, required if transform buffer is present).

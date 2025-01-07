@@ -133,7 +133,7 @@ impl GlobalPlay for wgc::global::Global {
                                         transform_buffer: tg.transform_buffer,
                                         first_vertex: tg.first_vertex,
                                         vertex_stride: tg.vertex_stride,
-                                        index_buffer_offset: tg.index_buffer_offset,
+                                        first_index: tg.first_index,
                                         transform_buffer_offset: tg.transform_buffer_offset,
                                     }
                                 });
@@ -171,7 +171,7 @@ impl GlobalPlay for wgc::global::Global {
                                         transform_buffer: tg.transform_buffer,
                                         first_vertex: tg.first_vertex,
                                         vertex_stride: tg.vertex_stride,
-                                        index_buffer_offset: tg.index_buffer_offset,
+                                        first_index: tg.first_index,
                                         transform_buffer_offset: tg.transform_buffer_offset,
                                     }
                                 });

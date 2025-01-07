@@ -109,7 +109,7 @@ impl Global {
                                     transform_buffer: tg.transform_buffer,
                                     first_vertex: tg.first_vertex,
                                     vertex_stride: tg.vertex_stride,
-                                    index_buffer_offset: tg.index_buffer_offset,
+                                    first_index: tg.first_index,
                                     transform_buffer_offset: tg.transform_buffer_offset,
                                 })
                                 .collect(),
@@ -149,7 +149,7 @@ impl Global {
                         transform_buffer: tg.transform_buffer,
                         first_vertex: tg.first_vertex,
                         vertex_stride: tg.vertex_stride,
-                        index_buffer_offset: tg.index_buffer_offset,
+                        first_index: tg.first_index,
                         transform_buffer_offset: tg.transform_buffer_offset,
                     });
                     BlasGeometries::TriangleGeometries(Box::new(iter))
@@ -408,7 +408,7 @@ impl Global {
                                     transform_buffer: tg.transform_buffer,
                                     first_vertex: tg.first_vertex,
                                     vertex_stride: tg.vertex_stride,
-                                    index_buffer_offset: tg.index_buffer_offset,
+                                    first_index: tg.first_index,
                                     transform_buffer_offset: tg.transform_buffer_offset,
                                 })
                                 .collect(),
@@ -461,7 +461,7 @@ impl Global {
                         transform_buffer: tg.transform_buffer,
                         first_vertex: tg.first_vertex,
                         vertex_stride: tg.vertex_stride,
-                        index_buffer_offset: tg.index_buffer_offset,
+                        first_index: tg.first_index,
                         transform_buffer_offset: tg.transform_buffer_offset,
                     });
                     BlasGeometries::TriangleGeometries(Box::new(iter))
@@ -979,7 +979,7 @@ fn iter_blas<'a>(
                             Ok(buffer) => buffer,
                             Err(_) => return Err(BuildAccelerationStructureError::InvalidBufferId),
                         };
-                        if mesh.index_buffer_offset.is_none()
+                        if mesh.first_index.is_none()
                             || mesh.size.index_count.is_none()
                             || mesh.size.index_count.is_none()
                         {
@@ -1110,11 +1110,8 @@ fn iter_buffers<'a, 'b>(
                 wgt::IndexFormat::Uint16 => 2,
                 wgt::IndexFormat::Uint32 => 4,
             };
-            if mesh.index_buffer_offset.unwrap() % index_stride != 0 {
-                return Err(BuildAccelerationStructureError::UnalignedIndexBufferOffset(
-                    index_buffer.error_ident(),
-                ));
-            }
+            // since byte sizes of all the index formats are powers of two we could bitshift instead of multiplying
+            let offset = mesh.first_index.unwrap() as u64 * index_stride;
             let index_buffer_size = mesh.size.index_count.unwrap() as u64 * index_stride;
 
             if mesh.size.index_count.unwrap() % 3 != 0 {
@@ -1123,23 +1120,18 @@ fn iter_buffers<'a, 'b>(
                     mesh.size.index_count.unwrap(),
                 ));
             }
-            if index_buffer.size
-                < mesh.size.index_count.unwrap() as u64 * index_stride
-                    + mesh.index_buffer_offset.unwrap()
-            {
+            if index_buffer.size < mesh.size.index_count.unwrap() as u64 * index_stride + offset {
                 return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                     index_buffer.error_ident(),
                     index_buffer.size,
-                    mesh.size.index_count.unwrap() as u64 * index_stride
-                        + mesh.index_buffer_offset.unwrap(),
+                    mesh.size.index_count.unwrap() as u64 * index_stride + offset,
                 ));
             }
 
             cmd_buf_data.buffer_memory_init_actions.extend(
                 index_buffer.initialization_status.read().create_action(
                     index_buffer,
-                    mesh.index_buffer_offset.unwrap()
-                        ..(mesh.index_buffer_offset.unwrap() + index_buffer_size),
+                    offset..(offset + index_buffer_size),
                     MemoryInitKind::NeedsInitializedMemory,
                 ),
             );
@@ -1204,13 +1196,19 @@ fn iter_buffers<'a, 'b>(
             first_vertex: mesh.first_vertex,
             vertex_count: mesh.size.vertex_count,
             vertex_stride: mesh.vertex_stride,
-            indices: index_buffer.map(|index_buffer| hal::AccelerationStructureTriangleIndices::<
-                dyn hal::DynBuffer,
-            > {
-                format: mesh.size.index_format.unwrap(),
-                buffer: Some(index_buffer.as_ref()),
-                offset: mesh.index_buffer_offset.unwrap() as u32,
-                count: mesh.size.index_count.unwrap(),
+            indices: index_buffer.map(|index_buffer| {
+                let index_stride = match mesh.size.index_format.unwrap() {
+                    wgt::IndexFormat::Uint16 => 2,
+                    wgt::IndexFormat::Uint32 => 4,
+                };
+                hal::AccelerationStructureTriangleIndices::<
+                    dyn hal::DynBuffer,
+                > {
+                    format: mesh.size.index_format.unwrap(),
+                    buffer: Some(index_buffer.as_ref()),
+                    offset: mesh.first_index.unwrap() * index_stride,
+                    count: mesh.size.index_count.unwrap(),
+                }
             }),
             transform: transform_buffer.map(|transform_buffer| {
                 hal::AccelerationStructureTriangleTransform {
