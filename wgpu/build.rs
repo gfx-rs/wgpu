@@ -14,5 +14,6 @@ fn main() {
         // This alias is _only_ if _we_ need naga in the wrapper. wgpu-core provides
         // its own re-export of naga, which can be used in other situations
         naga: { any(feature = "naga-ir", feature = "spirv", feature = "glsl") },
+        static_dxc: { all(target_os = "windows", feature = "static-dxc", not(target_arch = "aarch64")) },
     }
 }

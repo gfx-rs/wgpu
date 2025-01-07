@@ -5,6 +5,7 @@ authors = ["Automatically generated"]
 publish = false
 edition = "2018"
 license = "MIT OR Apache-2.0"
+build = "build.rs"
 
 [package.metadata]
 cargo-fuzz = true
@@ -18,6 +19,9 @@ libfuzzer-sys = ">0.4.0,<=0.4.7"
 path = ".."
 version = "23.0.0"
 features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in"]
+
+[build-dependencies]
+cfg_aliases.workspace = true
 
 [[bin]]
 name = "spv_parser"

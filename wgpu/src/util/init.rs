@@ -111,7 +111,7 @@ pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
                 dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
                 dxil_path: std::path::PathBuf::from("dxil.dll"),
             },
-            #[cfg(feature = "static-dxc")]
+            #[cfg(static_dxc)]
             Ok("static-dxc") => wgt::Dx12Compiler::StaticDxc,
             Ok("fxc") => wgt::Dx12Compiler::Fxc,
             _ => return None,

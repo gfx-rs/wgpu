@@ -88,6 +88,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             kind: native
 
+          # Windows
+          - name: Windows aarch64
+            os: windows-2022
+            target: aarch64-pc-windows-msvc
+            kind: native
+
           # MacOS
           - name: MacOS x86_64
             os: macos-14
