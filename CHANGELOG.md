@@ -179,6 +179,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Add actual sample type to `CreateBindGroupError::InvalidTextureSampleType` error message. By @ErichDonGubler in [#6530](https://github.com/gfx-rs/wgpu/pull/6530).
 - Improve binding error to give a clearer message when there is a mismatch between resource binding as it is in the shader and as it is in the binding layout. By @eliemichel in [#6553](https://github.com/gfx-rs/wgpu/pull/6553).
 - `Surface::configure` and `Surface::get_current_texture` are no longer fatal. By @alokedesai in [#6253](https://github.com/gfx-rs/wgpu/pull/6253)
+- Rename `BlasTriangleGeometry::index_buffer_offset` to `BlasTriangleGeometry::first_index`. By @Vecvec in [#6873](https://github.com/gfx-rs/wgpu/pull/6873/files)
 
 ##### D3D12
 
