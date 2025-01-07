@@ -1201,9 +1201,7 @@ fn iter_buffers<'a, 'b>(
                     wgt::IndexFormat::Uint16 => 2,
                     wgt::IndexFormat::Uint32 => 4,
                 };
-                hal::AccelerationStructureTriangleIndices::<
-                    dyn hal::DynBuffer,
-                > {
+                hal::AccelerationStructureTriangleIndices::<dyn hal::DynBuffer> {
                     format: mesh.size.index_format.unwrap(),
                     buffer: Some(index_buffer.as_ref()),
                     offset: mesh.first_index.unwrap() * index_stride,
