@@ -1753,7 +1753,7 @@ pub enum ShaderModel {
 
 /// Supported physical device types.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeviceType {
     /// Other or Unknown.
@@ -1771,7 +1771,7 @@ pub enum DeviceType {
 //TODO: convert `vendor` and `device` to `u32`
 
 /// Information about an adapter.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
