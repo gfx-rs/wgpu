@@ -2060,11 +2060,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                         lowered_base.map(|base| crate::Expression::AccessIndex { base, index })
                     }
-                    crate::TypeInner::Vector { .. } | crate::TypeInner::Matrix { .. } => {
+                    crate::TypeInner::Vector { .. } => {
                         match Components::new(field.name, field.span)? {
                             Components::Swizzle { size, pattern } => {
-                                // Swizzles aren't allowed on matrices, but
-                                // validation will catch that.
                                 Typed::Plain(crate::Expression::Swizzle {
                                     size,
                                     vector: ctx.apply_load_rule(lowered_base)?,

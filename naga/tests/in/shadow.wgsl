@@ -37,7 +37,7 @@ fn vs_main(
     let w = u_entity.world;
     let world_pos = u_entity.world * vec4<f32>(position);
     var out: VertexOutput;
-    out.world_normal = mat3x3<f32>(w.x.xyz, w.y.xyz, w.z.xyz) * vec3<f32>(normal.xyz);
+    out.world_normal = mat3x3<f32>(w[0].xyz, w[1].xyz, w[2].xyz) * vec3<f32>(normal.xyz);
     out.world_position = world_pos;
     out.proj_position = u_globals.view_proj * world_pos;
     return out;

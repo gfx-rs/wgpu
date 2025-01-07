@@ -1238,8 +1238,8 @@ fn pointer_type_equivalence() {
 
             fn g() {
                var m: mat2x2<f32>;
-               let pv: ptr<function, vec2<f32>> = &m.x;
-               let pf: ptr<function, f32> = &m.x.x;
+               let pv: ptr<function, vec2<f32>> = &m[0];
+               let pf: ptr<function, f32> = &m[0].x;
 
                f(pv, pf);
             }
