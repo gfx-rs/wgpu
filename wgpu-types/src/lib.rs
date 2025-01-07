@@ -641,12 +641,12 @@ bitflags::bitflags! {
         /// Natively Supported Platforms:
         /// - DX12
         /// - Vulkan
-        /// 
+        ///
         /// Emulated Platforms:
         /// - Metal
         /// - OpenGL
         /// - WebGPU
-        /// 
+        ///
         /// Emulation is preformed by looping over the individual indirect draw calls in the backend. This is still significantly
         /// faster than enulating it yourself, as wgpu only does draw call validation once.
         ///
