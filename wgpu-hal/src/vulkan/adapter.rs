@@ -560,21 +560,13 @@ impl PhysicalDeviceFeatures {
             self.core.shader_sampled_image_array_dynamic_indexing != 0,
         );
         features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
-        if Self::all_features_supported(
-            &features,
-            &[
-                (
-                    F::BUFFER_BINDING_ARRAY,
-                    self.core.shader_storage_buffer_array_dynamic_indexing,
-                ),
-                (
-                    F::TEXTURE_BINDING_ARRAY,
-                    self.core.shader_storage_image_array_dynamic_indexing,
-                ),
-            ],
-        ) {
-            features.insert(F::STORAGE_RESOURCE_BINDING_ARRAY);
-        }
+        features.set(
+            F::STORAGE_RESOURCE_BINDING_ARRAY,
+            (features.contains(F::BUFFER_BINDING_ARRAY)
+                && self.core.shader_storage_buffer_array_dynamic_indexing != 0)
+                || (features.contains(F::TEXTURE_BINDING_ARRAY)
+                    && self.core.shader_storage_image_array_dynamic_indexing != 0),
+        );
         //if self.core.shader_storage_image_array_dynamic_indexing != 0 {
         //if self.core.shader_clip_distance != 0 {
         //if self.core.shader_cull_distance != 0 {
@@ -605,36 +597,22 @@ impl PhysicalDeviceFeatures {
 
         if let Some(ref descriptor_indexing) = self.descriptor_indexing {
             const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
-            if Self::all_features_supported(
-                &features,
-                &[
-                    (
-                        F::TEXTURE_BINDING_ARRAY,
-                        descriptor_indexing.shader_sampled_image_array_non_uniform_indexing,
-                    ),
-                    (
-                        F::BUFFER_BINDING_ARRAY | STORAGE,
-                        descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing,
-                    ),
-                ],
-            ) {
-                features.insert(F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
-            }
-            if Self::all_features_supported(
-                &features,
-                &[
-                    (
-                        F::BUFFER_BINDING_ARRAY,
-                        descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing,
-                    ),
-                    (
-                        F::TEXTURE_BINDING_ARRAY | STORAGE,
-                        descriptor_indexing.shader_storage_image_array_non_uniform_indexing,
-                    ),
-                ],
-            ) {
-                features.insert(F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING);
-            }
+            features.set(
+                F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                (features.contains(F::TEXTURE_BINDING_ARRAY)
+                    && descriptor_indexing.shader_sampled_image_array_non_uniform_indexing != 0)
+                    && (features.contains(F::BUFFER_BINDING_ARRAY | STORAGE)
+                        && descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing
+                            != 0),
+            );
+            features.set(
+                F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                (features.contains(F::BUFFER_BINDING_ARRAY)
+                    && descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing != 0)
+                    && (features.contains(F::TEXTURE_BINDING_ARRAY | STORAGE)
+                        && descriptor_indexing.shader_storage_image_array_non_uniform_indexing
+                            != 0),
+            );
             if descriptor_indexing.descriptor_binding_partially_bound != 0 && !intel_windows {
                 features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
             }
@@ -782,15 +760,6 @@ impl PhysicalDeviceFeatures {
         );
 
         (features, dl_flags)
-    }
-
-    fn all_features_supported(
-        features: &wgt::Features,
-        implications: &[(wgt::Features, vk::Bool32)],
-    ) -> bool {
-        implications
-            .iter()
-            .all(|&(flag, support)| !features.contains(flag) || support != 0)
     }
 }
 
