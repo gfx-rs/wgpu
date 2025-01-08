@@ -87,7 +87,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
                         .char_indices()
                         .find(|char_indices| is_comment_end(char_indices.1))
                     {
-                        let end_position = end_position.0 + 1;
+                        let end_position = end_position.0;
                         return (
                             if chars.next() == Some('!') {
                                 Token::CommentModule(&input[..end_position])
@@ -97,7 +97,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
                             &input[end_position..],
                         );
                     }
-                    (Token::Comment(input), &input[input.len() - 1..])
+                    (Token::Comment(input), &og_chars)
                 }
                 Some('*') => {
                     let mut depth = 1;
