@@ -5053,6 +5053,7 @@ pub enum IndexFormat {
 }
 
 impl IndexFormat {
+    /// Returns the size in bytes of the index format
     pub fn byte_size(&self) -> usize {
         match self {
             IndexFormat::Uint16 => 2,
