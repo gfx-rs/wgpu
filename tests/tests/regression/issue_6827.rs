@@ -5,14 +5,9 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, Tes
 #[gpu_test]
 static TEST_SINGLE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
-        TestParameters::default()
-            // See https://github.com/gfx-rs/wgpu/issues/6827
-            .expect_fail(FailureCase::backend_adapter(
-                wgpu::Backends::METAL,
-                "Apple M", // M1,M2 etc
-            )),
+        TestParameters::default(),
     )
-    .run_async(|ctx| async move { run_test(ctx, true).await });
+    .run_async(|ctx| async move { run_test(ctx, false).await });
 
 #[gpu_test]
 static TEST_SCATTER: GpuTestConfiguration = GpuTestConfiguration::new()
