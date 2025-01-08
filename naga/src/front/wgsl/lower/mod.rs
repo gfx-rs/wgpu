@@ -2060,11 +2060,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                         lowered_base.map(|base| crate::Expression::AccessIndex { base, index })
                     }
-                    crate::TypeInner::Vector { .. } | crate::TypeInner::Matrix { .. } => {
+                    crate::TypeInner::Vector { .. } => {
                         match Components::new(field.name, field.span)? {
                             Components::Swizzle { size, pattern } => {
-                                // Swizzles aren't allowed on matrices, but
-                                // validation will catch that.
                                 Typed::Plain(crate::Expression::Swizzle {
                                     size,
                                     vector: ctx.apply_load_rule(lowered_base)?,
@@ -2304,22 +2302,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     args.finish()?;
 
                     if fun == crate::MathFunction::Modf || fun == crate::MathFunction::Frexp {
-                        if let Some((size, width)) = match *resolve_inner!(ctx, arg) {
-                            crate::TypeInner::Scalar(crate::Scalar { width, .. }) => {
-                                Some((None, width))
+                        if let Some((size, scalar)) = match *resolve_inner!(ctx, arg) {
+                            crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
+                            crate::TypeInner::Vector { size, scalar, .. } => {
+                                Some((Some(size), scalar))
                             }
-                            crate::TypeInner::Vector {
-                                size,
-                                scalar: crate::Scalar { width, .. },
-                                ..
-                            } => Some((Some(size), width)),
                             _ => None,
                         } {
                             ctx.module.generate_predeclared_type(
                                 if fun == crate::MathFunction::Modf {
-                                    crate::PredeclaredType::ModfResult { size, width }
+                                    crate::PredeclaredType::ModfResult { size, scalar }
                                 } else {
-                                    crate::PredeclaredType::FrexpResult { size, width }
+                                    crate::PredeclaredType::FrexpResult { size, scalar }
                                 },
                             );
                         }
