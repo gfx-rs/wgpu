@@ -61,7 +61,7 @@ impl Surface<'_> {
         let caps = self.get_capabilities(adapter);
         Some(SurfaceConfiguration {
             usage: wgt::TextureUsages::RENDER_ATTACHMENT,
-            format: *caps.formats.first()?,
+            format: wgt::TextureFormat::Rgba8UnormSrgb,
             width,
             height,
             desired_maximum_frame_latency: 2,
