@@ -92,7 +92,7 @@ impl super::Validator {
             // types and expressions behind `global_exprs_iter`, and none of
             // those refer to `th`/`t`, because they passed the same checks
             // before we reached `th`/`t`.
-            if let Some(max_expr) = Self::validate_type_handles((th, t))? {
+            if let Some(max_expr) = Self::validate_type_handles((th, t), overrides)? {
                 max_expr.check_valid_for(global_expressions)?;
                 // Since `t` refers to `max_expr`, if we want our invariants to
                 // remain true, we must advance `global_exprs_iter` beyond
@@ -299,6 +299,7 @@ impl super::Validator {
     /// expression and type arenas.
     fn validate_type_handles(
         (handle, ty): (Handle<crate::Type>, &crate::Type),
+        overrides: &Arena<crate::Override>,
     ) -> Result<Option<Handle<crate::Expression>>, InvalidHandleError> {
         let max_expr = match ty.inner {
             crate::TypeInner::Scalar { .. }
@@ -320,7 +321,12 @@ impl super::Validator {
                 match size {
                     crate::ArraySize::Pending(pending) => match pending {
                         crate::PendingArraySize::Expression(expr) => Some(expr),
-                        crate::PendingArraySize::Override(_) => None,
+                        crate::PendingArraySize::Override(h) => {
+                            Self::validate_override_handle(h, overrides)?;
+                            let override_ = &overrides[h];
+                            handle.check_dep(override_.ty)?;
+                            override_.init
+                        }
                     },
                     crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => None,
                 }
@@ -890,7 +896,7 @@ fn constant_deps() {
 }
 
 #[test]
-fn override_deps() {
+fn array_size_deps() {
     use super::Validator;
     use crate::{ArraySize, Expression, PendingArraySize, Scalar, Span, Type, TypeInner};
 
@@ -926,5 +932,89 @@ fn override_deps() {
     // Mutate `ex_zero`'s type to `ty_arr`, introducing a cycle.
     // Validation should catch the cycle.
     m.global_expressions[ex_zero] = Expression::ZeroValue(ty_arr);
+    assert!(Validator::validate_module_handles(&m).is_err());
+}
+
+#[test]
+fn array_size_override() {
+    use super::Validator;
+    use crate::{ArraySize, Override, PendingArraySize, Scalar, Span, Type, TypeInner};
+
+    let nowhere = Span::default();
+
+    let mut m = crate::Module::default();
+
+    let ty_u32 = m.types.insert(
+        Type {
+            name: Some("u32".to_string()),
+            inner: TypeInner::Scalar(Scalar::U32),
+        },
+        nowhere,
+    );
+
+    let bad_override: Handle<Override> = Handle::new(NonMaxU32::new(1000).unwrap());
+    let _ty_arr = m.types.insert(
+        Type {
+            name: Some("bad_array".to_string()),
+            inner: TypeInner::Array {
+                base: ty_u32,
+                size: ArraySize::Pending(PendingArraySize::Override(bad_override)),
+                stride: 4,
+            },
+        },
+        nowhere,
+    );
+
+    assert!(Validator::validate_module_handles(&m).is_err());
+}
+
+#[test]
+fn override_init_deps() {
+    use super::Validator;
+    use crate::{ArraySize, Expression, Override, PendingArraySize, Scalar, Span, Type, TypeInner};
+
+    let nowhere = Span::default();
+
+    let mut m = crate::Module::default();
+
+    let ty_u32 = m.types.insert(
+        Type {
+            name: Some("u32".to_string()),
+            inner: TypeInner::Scalar(Scalar::U32),
+        },
+        nowhere,
+    );
+    let ex_zero = m
+        .global_expressions
+        .append(Expression::ZeroValue(ty_u32), nowhere);
+    let r#override = m.overrides.append(
+        Override {
+            name: Some("bad_override".into()),
+            id: None,
+            ty: ty_u32,
+            init: Some(ex_zero),
+        },
+        nowhere,
+    );
+    let ty_arr = m.types.insert(
+        Type {
+            name: Some("bad_array".to_string()),
+            inner: TypeInner::Array {
+                base: ty_u32,
+                size: ArraySize::Pending(PendingArraySize::Override(r#override)),
+                stride: 4,
+            },
+        },
+        nowhere,
+    );
+    let ex_arr = m
+        .global_expressions
+        .append(Expression::ZeroValue(ty_arr), nowhere);
+
+    assert!(Validator::validate_module_handles(&m).is_ok());
+
+    // Mutate `r#override`'s initializer to `ex_arr`, introducing a cycle.
+    // Validation should catch the cycle.
+    m.overrides[r#override].init = Some(ex_arr);
     assert!(Validator::validate_module_handles(&m).is_err());
 }
