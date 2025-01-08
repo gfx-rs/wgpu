@@ -337,18 +337,18 @@
         },
         functions: {
             "collatz_iterations": [
-                "// The Collatz Conjecture states that for any integer n:\n",
-                "// If n is even, n = n/2\n",
-                "// If n is odd, n = 3n+1\n",
-                "// And repeat this process for each new n, you will always eventually reach 1.\n",
-                "// Though the conjecture has not been proven, no counterexample has ever been found.\n",
-                "// This function returns how many times this recurrence needs to be applied to reach 1.\n",
+                "// The Collatz Conjecture states that for any integer n:",
+                "// If n is even, n = n/2",
+                "// If n is odd, n = 3n+1",
+                "// And repeat this process for each new n, you will always eventually reach 1.",
+                "// Though the conjecture has not been proven, no counterexample has ever been found.",
+                "// This function returns how many times this recurrence needs to be applied to reach 1.",
             ],
         },
         constants: {},
         global_variables: {
             0: [
-                "// this is used as both input and output for convenience\n",
+                "// this is used as both input and output for convenience",
             ],
         },
         module: [],
