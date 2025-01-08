@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::*;
 
 /// Handle to a binding group.
@@ -12,7 +10,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUBindGroup`](https://gpuweb.github.io/gpuweb/#gpubindgroup).
 #[derive(Debug, Clone)]
 pub struct BindGroup {
-    pub(crate) inner: Arc<dispatch::DispatchBindGroup>,
+    pub(crate) inner: dispatch::DispatchBindGroup,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);

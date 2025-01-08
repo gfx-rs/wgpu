@@ -16,7 +16,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUDevice`](https://gpuweb.github.io/gpuweb/#gpu-device).
 #[derive(Debug, Clone)]
 pub struct Device {
-    pub(crate) inner: Arc<dispatch::DispatchDevice>,
+    pub(crate) inner: dispatch::DispatchDevice,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Device: Send, Sync);
@@ -170,9 +170,7 @@ impl Device {
     #[must_use]
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> BindGroup {
         let group = self.inner.create_bind_group(desc);
-        BindGroup {
-            inner: Arc::new(group),
-        }
+        BindGroup { inner: group }
     }
 
     /// Creates a [`BindGroupLayout`].
@@ -182,36 +180,28 @@ impl Device {
         desc: &BindGroupLayoutDescriptor<'_>,
     ) -> BindGroupLayout {
         let layout = self.inner.create_bind_group_layout(desc);
-        BindGroupLayout {
-            inner: Arc::new(layout),
-        }
+        BindGroupLayout { inner: layout }
     }
 
     /// Creates a [`PipelineLayout`].
     #[must_use]
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> PipelineLayout {
         let layout = self.inner.create_pipeline_layout(desc);
-        PipelineLayout {
-            inner: Arc::new(layout),
-        }
+        PipelineLayout { inner: layout }
     }
 
     /// Creates a [`RenderPipeline`].
     #[must_use]
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> RenderPipeline {
         let pipeline = self.inner.create_render_pipeline(desc);
-        RenderPipeline {
-            inner: Arc::new(pipeline),
-        }
+        RenderPipeline { inner: pipeline }
     }
 
     /// Creates a [`ComputePipeline`].
     #[must_use]
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
         let pipeline = self.inner.create_compute_pipeline(desc);
-        ComputePipeline {
-            inner: Arc::new(pipeline),
-        }
+        ComputePipeline { inner: pipeline }
     }
 
     /// Creates a [`Buffer`].
@@ -225,12 +215,10 @@ impl Device {
         let buffer = self.inner.create_buffer(desc);
 
         Buffer {
-            shared: Arc::new(BufferShared {
-                inner: buffer,
-                map_context: Mutex::new(map_context),
-                size: desc.size,
-                usage: desc.usage,
-            }),
+            inner: buffer,
+            map_context: Arc::new(Mutex::new(map_context)),
+            size: desc.size,
+            usage: desc.usage,
         }
     }
 
@@ -242,14 +230,12 @@ impl Device {
         let texture = self.inner.create_texture(desc);
 
         Texture {
-            shared: Arc::new(TextureShared {
-                inner: texture,
-                descriptor: TextureDescriptor {
-                    label: None,
-                    view_formats: &[],
-                    ..desc.clone()
-                },
-            }),
+            inner: texture,
+            descriptor: TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
     }
 
@@ -274,14 +260,12 @@ impl Device {
                 .create_texture_from_hal::<A>(hal_texture, core_device, desc)
         };
         Texture {
-            shared: Arc::new(TextureShared {
-                inner: texture.into(),
-                descriptor: TextureDescriptor {
-                    label: None,
-                    view_formats: &[],
-                    ..desc.clone()
-                },
-            }),
+            inner: texture.into(),
+            descriptor: TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
         }
     }
 
@@ -312,12 +296,10 @@ impl Device {
         };
 
         Buffer {
-            shared: Arc::new(BufferShared {
-                inner: buffer.into(),
-                map_context: Mutex::new(map_context),
-                size: desc.size,
-                usage: desc.usage,
-            }),
+            inner: buffer.into(),
+            map_context: Arc::new(Mutex::new(map_context)),
+            size: desc.size,
+            usage: desc.usage,
         }
     }
 
@@ -327,18 +309,14 @@ impl Device {
     #[must_use]
     pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Sampler {
         let sampler = self.inner.create_sampler(desc);
-        Sampler {
-            inner: Arc::new(sampler),
-        }
+        Sampler { inner: sampler }
     }
 
     /// Creates a new [`QuerySet`].
     #[must_use]
     pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
         let query_set = self.inner.create_query_set(desc);
-        QuerySet {
-            inner: Arc::new(query_set),
-        }
+        QuerySet { inner: query_set }
     }
 
     /// Set a callback for errors that are not handled in error scopes.
@@ -478,9 +456,7 @@ impl Device {
         desc: &PipelineCacheDescriptor<'_>,
     ) -> PipelineCache {
         let cache = unsafe { self.inner.create_pipeline_cache(desc) };
-        PipelineCache {
-            inner: Arc::new(cache),
-        }
+        PipelineCache { inner: cache }
     }
 }
 
@@ -511,7 +487,7 @@ impl Device {
         let (handle, blas) = self.inner.create_blas(desc, sizes);
 
         Blas {
-            inner: Arc::new(blas),
+            inner: blas,
             handle,
         }
     }

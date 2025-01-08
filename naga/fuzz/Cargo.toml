@@ -5,18 +5,23 @@ authors = ["Automatically generated"]
 publish = false
 edition = "2018"
 license = "MIT OR Apache-2.0"
+build = "build.rs"
 
 [package.metadata]
 cargo-fuzz = true
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
 arbitrary = { version = "1.4.1", features = ["derive"] }
-libfuzzer-sys = "0.4"
+# See https://github.com/rust-fuzz/libfuzzer/issues/126
+libfuzzer-sys = ">0.4.0,<=0.4.7"
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies.naga]
 path = ".."
 version = "23.0.0"
 features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in"]
+
+[build-dependencies]
+cfg_aliases.workspace = true
 
 [[bin]]
 name = "spv_parser"

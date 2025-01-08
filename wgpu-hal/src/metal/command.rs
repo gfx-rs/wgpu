@@ -750,6 +750,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     Some(res.as_native()),
                 );
             }
+
+            // Call useResource on all textures and buffers used indirectly so they are alive
+            for (resource, use_info) in group.resources_to_use.iter() {
+                encoder.use_resource_at(resource.as_native(), use_info.uses, use_info.stages);
+            }
         }
 
         if let Some(ref encoder) = self.state.compute {
@@ -806,6 +811,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     (bg_info.base_resource_indices.cs.textures + index) as u64,
                     Some(res.as_native()),
                 );
+            }
+
+            // Call useResource on all textures and buffers used indirectly so they are alive
+            for (resource, use_info) in group.resources_to_use.iter() {
+                if !use_info.visible_in_compute {
+                    continue;
+                }
+                encoder.use_resource(resource.as_native(), use_info.uses);
             }
         }
     }

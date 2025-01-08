@@ -26,6 +26,7 @@ mod surface;
 mod time;
 
 use std::{
+    collections::HashMap,
     fmt, iter, ops,
     ptr::NonNull,
     sync::{atomic, Arc},
@@ -199,7 +200,7 @@ struct PrivateCapabilities {
     msaa_apple3: bool,
     msaa_apple7: bool,
     resource_heaps: bool,
-    argument_buffers: bool,
+    argument_buffers: metal::MTLArgumentBuffersTier,
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
@@ -651,9 +652,22 @@ trait AsNative {
     fn as_native(&self) -> &Self::Native;
 }
 
+type ResourcePtr = NonNull<metal::MTLResource>;
 type BufferPtr = NonNull<metal::MTLBuffer>;
 type TexturePtr = NonNull<metal::MTLTexture>;
 type SamplerPtr = NonNull<metal::MTLSamplerState>;
+
+impl AsNative for ResourcePtr {
+    type Native = metal::ResourceRef;
+    #[inline]
+    fn from(native: &Self::Native) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &Self::Native {
+        unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+}
 
 impl AsNative for BufferPtr {
     type Native = metal::BufferRef;
@@ -710,12 +724,32 @@ struct BufferResource {
     binding_location: u32,
 }
 
+#[derive(Debug)]
+struct UseResourceInfo {
+    uses: metal::MTLResourceUsage,
+    stages: metal::MTLRenderStages,
+    visible_in_compute: bool,
+}
+
+impl Default for UseResourceInfo {
+    fn default() -> Self {
+        Self {
+            uses: metal::MTLResourceUsage::empty(),
+            stages: metal::MTLRenderStages::empty(),
+            visible_in_compute: false,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BindGroup {
     counters: MultiStageResourceCounters,
     buffers: Vec<BufferResource>,
     samplers: Vec<SamplerPtr>,
     textures: Vec<TexturePtr>,
+
+    argument_buffers: Vec<metal::Buffer>,
+    resources_to_use: HashMap<ResourcePtr, UseResourceInfo>,
 }
 
 impl crate::DynBindGroup for BindGroup {}

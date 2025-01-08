@@ -1,5 +1,6 @@
-#![no_main]
-#[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
+#![cfg_attr(enable_fuzzing, no_main)]
+
+#[cfg(enable_fuzzing)]
 mod fuzz {
     use arbitrary::Arbitrary;
     use libfuzzer_sys::fuzz_target;
@@ -47,3 +48,6 @@ mod fuzz {
         let _result = parser.parse(&options.into(), &source);
     });
 }
+
+#[cfg(not(enable_fuzzing))]
+fn main() {}

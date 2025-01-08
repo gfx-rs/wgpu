@@ -634,7 +634,7 @@ fn map_texture_view_dimension(
 fn map_buffer_copy_view(
     view: crate::TexelCopyBufferInfo<'_>,
 ) -> webgpu_sys::GpuTexelCopyBufferInfo {
-    let buffer = view.buffer.shared.inner.as_webgpu();
+    let buffer = view.buffer.inner.as_webgpu();
     let mapped = webgpu_sys::GpuTexelCopyBufferInfo::new(&buffer.inner);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
         mapped.set_bytes_per_row(bytes_per_row);
@@ -649,7 +649,7 @@ fn map_buffer_copy_view(
 fn map_texture_copy_view(
     view: crate::TexelCopyTextureInfo<'_>,
 ) -> webgpu_sys::GpuTexelCopyTextureInfo {
-    let texture = view.texture.shared.inner.as_webgpu();
+    let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuTexelCopyTextureInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
     mapped.set_origin(&map_origin_3d(view.origin));
@@ -659,7 +659,7 @@ fn map_texture_copy_view(
 fn map_tagged_texture_copy_view(
     view: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
 ) -> webgpu_sys::GpuCopyExternalImageDestInfo {
-    let texture = view.texture.shared.inner.as_webgpu();
+    let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuCopyExternalImageDestInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
     mapped.set_origin(&map_origin_3d(view.origin));
@@ -783,7 +783,8 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
 ];
 
 fn map_wgt_features(supported_features: webgpu_sys::GpuSupportedFeatures) -> wgt::Features {
-    let mut features = wgt::Features::empty();
+    // We emulate MDI.
+    let mut features = wgt::Features::MULTI_DRAW_INDIRECT;
     for (wgpu_feat, web_feat) in FEATURES_MAPPING {
         match wasm_bindgen::JsValue::from(web_feat).as_string() {
             Some(value) if supported_features.has(&value) => features |= wgpu_feat,
@@ -1461,7 +1462,7 @@ impl dispatch::InterfaceTypes for ContextWebGpu {
 }
 
 impl dispatch::InstanceInterface for ContextWebGpu {
-    fn new(_desc: crate::InstanceDescriptor) -> Self
+    fn new(_desc: &crate::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {
@@ -1938,7 +1939,7 @@ impl dispatch::DeviceInterface for WebDevice {
                         offset,
                         size,
                     }) => {
-                        let buffer = buffer.shared.inner.as_webgpu();
+                        let buffer = buffer.inner.as_webgpu();
                         let mapped_buffer_binding =
                             webgpu_sys::GpuBufferBinding::new(&buffer.inner);
                         mapped_buffer_binding.set_offset(offset as f64);

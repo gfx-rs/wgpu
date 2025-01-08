@@ -125,6 +125,18 @@ There are some limitations to keep in mind with this new functionality:
 
 By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148](https://github.com/gfx-rs/wgpu/pull/6148), [#6533](https://github.com/gfx-rs/wgpu/pull/6533), [#6353](https://github.com/gfx-rs/wgpu/pull/6353), [#6537](https://github.com/gfx-rs/wgpu/pull/6537).
 
+#### `wgpu::Instance::new` now takes `InstanceDescriptor` by reference
+
+Previously `wgpu::Instance::new` took `InstanceDescriptor` by value (which is overall fairly uncommon in wgpu).
+Furthermore, `InstanceDescriptor` is now cloneable.
+
+```diff
+- let instance = wgpu::Instance::new(instance_desc);
++ let instance = wgpu::Instance::new(&instance_desc);
+```
+
+By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
+
 #### New Features
 
 ##### Naga
@@ -149,6 +161,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Return submission index in `map_async` and `on_submitted_work_done` to track down completion of async callbacks. By @eliemichel in [#6360](https://github.com/gfx-rs/wgpu/pull/6360).
 - Move raytracing alignments into HAL instead of in core. By @Vecvec in [#6563](https://github.com/gfx-rs/wgpu/pull/6563).
 - Allow for statically linking DXC rather than including separate `.dll` files. By @DouglasDwyer in [#6574](https://github.com/gfx-rs/wgpu/pull/6574).
+- `DeviceType` and `AdapterInfo` now impl `Hash` by @cwfitzgerald in [#6868](https://github.com/gfx-rs/wgpu/pull/6868)
 
 #### D3D12
 
@@ -161,6 +174,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Show types of LHS and RHS in binary operation type mismatch errors. By @ErichDonGubler in [#6450](https://github.com/gfx-rs/wgpu/pull/6450).
 - The GLSL parser now uses less expressions for function calls. By @magcius in [#6604](https://github.com/gfx-rs/wgpu/pull/6604).
 - Add a note to help with a common syntax error case for global diagnostic filter directives. By @e-hat in [#6718](https://github.com/gfx-rs/wgpu/pull/6718)
+- Change arithmetic operations between two i32 variables to wrap on overflow to match WGSL spec. By @matthew-wong1 in [#6835](https://github.com/gfx-rs/wgpu/pull/6835).
 
 ##### General
 
@@ -173,6 +187,10 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 ##### D3D12
 
 - Avoid using FXC as fallback when the DXC container was passed at instance creation. Paths to `dxcompiler.dll` & `dxil.dll` are also now required. By @teoxoy in [#6643](https://github.com/gfx-rs/wgpu/pull/6643).
+
+##### Vulkan
+
+- Add a cache for samplers, deduplicating any samplers, allowing more programs to stay within the global sampler limit. By @cwfitzgerald in [#6847](https://github.com/gfx-rs/wgpu/pull/6847)
 
 ##### HAL
 
@@ -199,15 +217,22 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Reduced the overhead of command buffer validation. By @nical in [#6721](https://github.com/gfx-rs/wgpu/pull/6721).
 - Set index type to NONE in `get_acceleration_structure_build_sizes`. By @Vecvec in [#6802](https://github.com/gfx-rs/wgpu/pull/6802).
 - Fix `wgpu-info` not showing dx12 adapters. By @wumpf in [#6844](https://github.com/gfx-rs/wgpu/pull/6844).
+- Use `transform_buffer_offset` when initialising `transform_buffer`. By @Vecvec in [#6864](https://github.com/gfx-rs/wgpu/pull/6864).
 
 #### Naga
 
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
 - Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
 
+#### Vulkan
+
+- Allocate descriptors for acceleration structures. By @Vecvec in [#6861](https://github.com/gfx-rs/wgpu/pull/6861).
+- `max_color_attachment_bytes_per_sample` is now correctly set to 128. By @cwfitzgerald in [#6866](https://github.com/gfx-rs/wgpu/pull/6866)
+
 #### D3D12
 
 - Fix no longer showing software rasterizer adapters. By @wumpf in [#6843](https://github.com/gfx-rs/wgpu/pull/6843).
+- `max_color_attachment_bytes_per_sample` is now correctly set to 128. By @cwfitzgerald in [#6866](https://github.com/gfx-rs/wgpu/pull/6866)
 
 ### Examples
 

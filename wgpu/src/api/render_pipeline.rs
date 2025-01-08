@@ -1,4 +1,4 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::num::NonZeroU32;
 
 use crate::*;
 
@@ -10,7 +10,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPURenderPipeline`](https://gpuweb.github.io/gpuweb/#render-pipeline).
 #[derive(Debug, Clone)]
 pub struct RenderPipeline {
-    pub(crate) inner: Arc<dispatch::DispatchRenderPipeline>,
+    pub(crate) inner: dispatch::DispatchRenderPipeline,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
@@ -26,9 +26,7 @@ impl RenderPipeline {
     /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
         let layout = self.inner.get_bind_group_layout(index);
-        BindGroupLayout {
-            inner: Arc::new(layout),
-        }
+        BindGroupLayout { inner: layout }
     }
 }
 

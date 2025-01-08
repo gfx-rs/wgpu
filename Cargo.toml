@@ -109,6 +109,8 @@ noise = { version = "0.8", git = "https://github.com/Razaekel/noise-rs.git", rev
 nv-flip = "0.1"
 obj = "0.10"
 once_cell = "1.20.2"
+# Firefox has 3.4.0 vendored, so we allow that version in our dependencies
+ordered-float = ">=3,<=4.6"
 parking_lot = "0.12.1"
 pico-args = { version = "0.5.0", features = [
     "eq-separator",
@@ -140,9 +142,9 @@ wgpu-types = { version = "23.0.0", path = "./wgpu-types" }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
+metal = { version = "0.30.0", git = "https://github.com/gfx-rs/metal-rs.git", rev = "ef768ff9d7" }
 block = "0.1"
 core-graphics-types = "0.1"
-metal = { version = "0.30.0" }
 objc = "0.2.5"
 
 # Vulkan dependencies

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::*;
 
 /// Pre-prepared reusable bundle of GPU operations.
@@ -13,7 +11,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPURenderBundle`](https://gpuweb.github.io/gpuweb/#render-bundle).
 #[derive(Debug, Clone)]
 pub struct RenderBundle {
-    pub(crate) inner: Arc<dispatch::DispatchRenderBundle>,
+    pub(crate) inner: dispatch::DispatchRenderBundle,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
