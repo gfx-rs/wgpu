@@ -171,6 +171,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - The GLSL parser now uses less expressions for function calls. By @magcius in [#6604](https://github.com/gfx-rs/wgpu/pull/6604).
 - Add a note to help with a common syntax error case for global diagnostic filter directives. By @e-hat in [#6718](https://github.com/gfx-rs/wgpu/pull/6718)
 - Change arithmetic operations between two i32 variables to wrap on overflow to match WGSL spec. By @matthew-wong1 in [#6835](https://github.com/gfx-rs/wgpu/pull/6835).
+- Add directives to suggestions in error message for parsing global items. By @e-hat in [#6723](https://github.com/gfx-rs/wgpu/pull/6723).
 
 ##### General
 
