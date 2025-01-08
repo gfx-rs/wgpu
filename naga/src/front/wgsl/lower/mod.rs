@@ -2753,7 +2753,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut struct_alignment = Alignment::ONE;
         let mut members = Vec::with_capacity(s.members.len());
 
-        let mut comments = Vec::new();
+        let mut comments: Vec<Option<Vec<String>>> = Vec::new();
 
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, ctx)?;
@@ -2794,7 +2794,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             offset = member_alignment.round_up(offset);
             struct_alignment = struct_alignment.max(member_alignment);
 
-            comments.push(member.comments.iter().map(|s| s.to_string()).collect());
+            if !member.comments.is_empty() {
+                comments.push(Some(
+                    member.comments.iter().map(|s| s.to_string()).collect(),
+                ));
+            }
             members.push(crate::StructMember {
                 name: Some(member.name.name.to_owned()),
                 ty,
@@ -2819,7 +2823,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             span,
         );
         for (i, c) in comments.drain(..).enumerate() {
-            ctx.module.comments.struct_members.insert((handle, i), c);
+            if let Some(comment) = c {
+                ctx.module
+                    .comments
+                    .struct_members
+                    .insert((handle, i), comment);
+            }
         }
         Ok(handle)
     }
