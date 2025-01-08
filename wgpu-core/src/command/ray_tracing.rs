@@ -1106,11 +1106,7 @@ fn iter_buffers<'a, 'b>(
             {
                 input_barriers.push(barrier);
             }
-            let index_stride = match mesh.size.index_format.unwrap() {
-                wgt::IndexFormat::Uint16 => 2,
-                wgt::IndexFormat::Uint32 => 4,
-            };
-            // since byte sizes of all the index formats are powers of two we could bitshift instead of multiplying
+            let index_stride = mesh.size.index_format.unwrap().byte_size() as u64;
             let offset = mesh.first_index.unwrap() as u64 * index_stride;
             let index_buffer_size = mesh.size.index_count.unwrap() as u64 * index_stride;
 
@@ -1197,10 +1193,7 @@ fn iter_buffers<'a, 'b>(
             vertex_count: mesh.size.vertex_count,
             vertex_stride: mesh.vertex_stride,
             indices: index_buffer.map(|index_buffer| {
-                let index_stride = match mesh.size.index_format.unwrap() {
-                    wgt::IndexFormat::Uint16 => 2,
-                    wgt::IndexFormat::Uint32 => 4,
-                };
+                let index_stride = mesh.size.index_format.unwrap().byte_size() as u32;
                 hal::AccelerationStructureTriangleIndices::<dyn hal::DynBuffer> {
                     format: mesh.size.index_format.unwrap(),
                     buffer: Some(index_buffer.as_ref()),

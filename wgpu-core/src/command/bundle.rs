@@ -1174,10 +1174,7 @@ impl IndexState {
     ///
     /// Panic if no index buffer has been set.
     fn limit(&self) -> u64 {
-        let bytes_per_index = match self.format {
-            wgt::IndexFormat::Uint16 => 2,
-            wgt::IndexFormat::Uint32 => 4,
-        };
+        let bytes_per_index = self.format.byte_size() as u64;
 
         (self.range.end - self.range.start) / bytes_per_index
     }
