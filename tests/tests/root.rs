@@ -8,6 +8,7 @@ mod regression {
     mod issue_5553;
     mod issue_6317;
     mod issue_6467;
+    mod issue_6827;
 }
 
 mod bgra8unorm_storage;
