@@ -2218,6 +2218,27 @@ pub struct SpecialTypes {
     pub predeclared_types: FastIndexMap<PredeclaredType, Handle<Type>>,
 }
 
+/// Comments preceding items.
+///
+/// These can be used to generate automated documentation,
+/// IDE hover information or translate shaders with their context comments.
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct Comments {
+    pub types: FastIndexMap<Handle<Type>, Vec<String>>,
+    // The key is:
+    // - key.0: the handle to the Struct
+    // - key.1: the index of the `StructMember`.
+    pub struct_members: FastIndexMap<(Handle<Type>, usize), Vec<String>>,
+    pub functions: FastIndexMap<String, Vec<String>>,
+    pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
+    pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
+    // top level comments, appearing before any space.
+    pub module: Vec<String>,
+}
+
 /// Shader module.
 ///
 /// A module is a set of constants, global variables and functions, as well as
@@ -2265,25 +2286,4 @@ pub struct Module {
     pub entry_points: Vec<EntryPoint>,
     /// Comments, usually serving as documentation
     pub comments: Comments,
-}
-
-/// Comments preceding items.
-///
-/// These can be used to generate automated documentation,
-/// IDE hover information or translate shaders with their context comments.
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub struct Comments {
-    pub types: FastIndexMap<Handle<Type>, Vec<String>>,
-    // The key is:
-    // - key.0: the handle to the Struct
-    // - key.1: the index of the `StructMember`.
-    pub struct_members: FastIndexMap<(Handle<Type>, usize), Vec<String>>,
-    pub functions: FastIndexMap<String, Vec<String>>,
-    pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
-    pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
-    // top level comments, appearing before any space.
-    pub module: Vec<String>,
 }
