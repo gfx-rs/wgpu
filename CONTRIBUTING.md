@@ -135,14 +135,85 @@ TODO
         into fixing and (2) otherwise isn't being prioritized are likely to
         be closed.
 
-### What to expect when you submit a PR
-
-TODO: It is strongly recommended that you validate your contributions before
-you make significant efforts…
-
-The "Assigned" field on a PR indicates who has taken responsibility
-for reviewing the PR, not who is responsible for the content of the
-PR.
+### Pull requests
 
 You can see some common things that PR reviewers are going to look for in
 [`docs/review-checklist.md`].
+
+A draft pull request is taken to be not yet ready for review. Marking
+drafts as such helps the maintainers triage review work.
+
+The `Assigned` field on a pull request indicates who has taken
+responsibility for shepherding it through the review process, not who
+is responsible for authoring it. The assignee is usually the reviewer,
+but they can also delegate the review to someone else. The intent of
+assignment is simply to ensure that pull requests don't get neglected.
+
+#### Designing new features
+
+As an open source project, WGPU wants to serve a broad audience. This
+helps us cast a wide net for contributors, and widens the impact of
+their work. However, WGPU does not promise to incorporate every
+proposed feature.
+
+Large efforts that are ultimately rejected tend to burn contributors
+out on both sides of a review. To avoid this, we strongly encourage
+you to validate time-consuming contributions by engaging
+maintainership before you invest yourself too heavily. Try to build a
+consensus on the approach, including API changes, shader language
+extensions, implementation architecture, error handling, testing
+plans, benchmarking, and so on.
+
+#### Large pull requests are risky
+
+Contributors should anticipate that the larger and more complex a pull
+request is, the less likely it is that reviewers will accept it,
+regardless of its merits.
+
+The WGPU project has had poor experiences with large, complex pull
+requests:
+
+- Complex pull requests are difficult to review effectively. It is
+  common for us to debug a problem in WGPU and find that it was
+  introduced by some massive pull request that we had reviewed and
+  accepted, showing that we obviously hadn't understood it as well as
+  we'd thought.
+
+- A large, complex pull request obviously represents a significant
+  effort on the part of the author. At a personal level, it is quite
+  stressful to question its design decisions, knowing that changing
+  them will require the author to essentially reimplement the project
+  from scratch. Such pull requests make it hard for maintainers to
+  uphold their responsibility to keep WGPU maintainable. Incremental
+  changes are easier to discuss and revise without drama.
+
+These problems are serious enough that maintainers may choose to
+reject large, complex pull requests, regardless of the value of the
+feature or the technical merit of the code.
+
+The problem isn't really the *size* of the pull request: a simple
+rename, with no changes to functionality, might touch hundreds of
+files, but be easy to review. Or, a change to Naga might affect dozens
+of snapshot test output files, without being hard to understand.
+
+Rather, the problem is the *complexity* of the pull request: how many
+moving pieces does the reviewer need to assess at once? In our
+experience, almost every large change can be pared down by separating
+out:
+
+- Preparatory refactors that are at least harmless in isolation, and
+  perhaps beneficial.
+
+- Helpers and utilities that can be used elsewhere in the code base,
+  even if they don't show their full value until the whole thing is
+  merged.
+  
+- Renames and code motion with no semantic effect, like changes to
+  types or behavior. When putting these in a separate pull request
+  would be awkward, they should at least be segregated into their own
+  commits within a pull request.
+
+Brevity for brevity's sake is not the goal. Rather, the goal is to
+help the reviewer anticipate the changes' consequences. When a pull
+request addresses only a single issue, even if it is textually large,
+a trustworthy review becomes more achievable.
