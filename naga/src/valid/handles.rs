@@ -2,13 +2,13 @@
 
 use crate::{
     arena::{BadHandle, BadRangeError},
-    Handle,
+    EntryPoint, Handle,
 };
 
 use crate::non_max_u32::NonMaxU32;
 use crate::{Arena, UniqueArena};
 
-use super::ValidationError;
+use super::{TypeError, ValidationError};
 
 use std::{convert::TryInto, hash::Hash};
 
@@ -39,8 +39,7 @@ impl super::Validator {
             ref types,
             ref special_types,
             ref global_expressions,
-            // TODO: validate comments (shouldn't have invalid handle or spans ?)
-            ..
+            ref comments,
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
@@ -182,6 +181,66 @@ impl super::Validator {
             validate_type(ty)?;
         }
 
+        let &crate::Comments {
+            module: _,
+            types: ref comment_types,
+            struct_members: ref comment_struct_members,
+            entry_points: ref comment_entry_points,
+            functions: ref comment_functions,
+            constants: ref comment_constants,
+            global_variables: ref comment_global_variables,
+        } = comments;
+
+        for comment_type in comment_types.iter() {
+            validate_type(*comment_type.0)?;
+        }
+        for comment_struct_members in comment_struct_members.iter() {
+            validate_type(comment_struct_members.0 .0)?;
+            let struct_member_type = types.get_handle(comment_struct_members.0 .0).unwrap();
+            match &struct_member_type.inner {
+                crate::TypeInner::Struct {
+                    members,
+                    span: _span,
+                } => {
+                    (0..members.len())
+                        .contains(&comment_struct_members.0 .1)
+                        .then(|| ())
+                        // TODO: what errors should this be?
+                        .ok_or_else(|| ValidationError::Type {
+                            handle: comment_struct_members.0 .0,
+                            name: struct_member_type
+                                .name
+                                .as_ref()
+                                .map_or_else(|| "Unknown".to_string(), |name| name.to_string()),
+                            source: TypeError::InvalidData(comment_struct_members.0 .0),
+                        })?;
+                }
+                _ => {
+                    // TODO: internal error ? We should never get here.
+                    return Err(ValidationError::Type {
+                        handle: comment_struct_members.0 .0,
+                        name: struct_member_type
+                            .name
+                            .as_ref()
+                            .map_or_else(|| "Unknown".to_string(), |name| name.to_string()),
+                        source: TypeError::InvalidData(comment_struct_members.0 .0),
+                    });
+                }
+            }
+        }
+        for comment_function in comment_functions.iter() {
+            Self::validate_function_handle(*comment_function.0, functions)?;
+        }
+        for comment_entry_point in comment_entry_points.iter() {
+            Self::validate_entry_point_index(*comment_entry_point.0, entry_points)?;
+        }
+        for comment_constant in comment_constants.iter() {
+            Self::validate_constant_handle(*comment_constant.0, constants)?;
+        }
+        for comment_global_variable in comment_global_variables.iter() {
+            Self::validate_global_variable_handle(*comment_global_variable.0, global_variables)?;
+        }
+
         Ok(())
     }
 
@@ -195,6 +254,13 @@ impl super::Validator {
     fn validate_constant_handle(
         handle: Handle<crate::Constant>,
         constants: &Arena<crate::Constant>,
+    ) -> Result<(), InvalidHandleError> {
+        handle.check_valid_for(constants).map(|_| ())
+    }
+
+    fn validate_global_variable_handle(
+        handle: Handle<crate::GlobalVariable>,
+        constants: &Arena<crate::GlobalVariable>,
     ) -> Result<(), InvalidHandleError> {
         handle.check_valid_for(constants).map(|_| ())
     }
@@ -218,6 +284,22 @@ impl super::Validator {
         functions: &Arena<crate::Function>,
     ) -> Result<(), InvalidHandleError> {
         handle.check_valid_for(functions).map(|_| ())
+    }
+
+    fn validate_entry_point_index(
+        entry_point_index: usize,
+        entry_points: &Vec<EntryPoint>,
+    ) -> Result<(), InvalidHandleError> {
+        (0..entry_points.len())
+            .contains(&entry_point_index)
+            .then(|| ())
+            .ok_or_else(|| {
+                BadHandle {
+                    kind: "EntryPoint",
+                    index: entry_point_index,
+                }
+                .into()
+            })
     }
 
     fn validate_const_expression_handles(

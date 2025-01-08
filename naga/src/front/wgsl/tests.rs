@@ -16,20 +16,25 @@ fn parse_comment() {
 
 #[test]
 fn parse_types_with_comments() {
-    parse_str(
+    let module = parse_str(
         "/*
-    a comment with nested one /*
+    🍽️ /*
         nested comment
     */
     */
     const a : i32 = 2;",
     )
     .unwrap();
-    parse_str(
+    assert_eq!(
+        module.comments.constants[0][0],
+        "/*\n    🍽️ /*\n        nested comment\n    */\n    */"
+    );
+    let module = parse_str(
         "// test
     var t: texture_2d<f32>;",
     )
     .unwrap();
+    assert_eq!(module.comments.global_variables[0][0], "// test");
 }
 
 #[test]

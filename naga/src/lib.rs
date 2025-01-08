@@ -2232,7 +2232,8 @@ pub struct Comments {
     /// - key.0: the handle to the Struct
     /// - key.1: the index of the `StructMember`.
     pub struct_members: FastIndexMap<(Handle<Type>, usize), Vec<String>>,
-    pub functions: FastIndexMap<String, Vec<String>>,
+    pub entry_points: FastIndexMap<usize, Vec<String>>,
+    pub functions: FastIndexMap<Handle<Function>, Vec<String>>,
     pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
     pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
     /// Top level comments, appearing before any space.

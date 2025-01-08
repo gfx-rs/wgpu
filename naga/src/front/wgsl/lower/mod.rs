@@ -825,7 +825,7 @@ enum LoweredGlobalDecl {
     Const(Handle<crate::Constant>),
     Override(Handle<crate::Override>),
     Type(Handle<crate::Type>),
-    EntryPoint,
+    EntryPoint(usize),
 }
 
 enum Texture {
@@ -934,10 +934,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ast::GlobalDeclKind::Fn(ref f) => {
                     let lowered_decl = self.function(f, span, &mut ctx)?;
                     if !f.comments.is_empty() {
-                        ctx.module.comments.functions.insert(
-                            f.name.name.to_string(),
-                            f.comments.iter().map(|s| s.to_string()).collect(),
-                        );
+                        match lowered_decl {
+                            LoweredGlobalDecl::Function(handle) => {
+                                ctx.module.comments.functions.insert(
+                                    handle,
+                                    f.comments.iter().map(|s| s.to_string()).collect(),
+                                );
+                            }
+                            LoweredGlobalDecl::EntryPoint(index) => {
+                                ctx.module.comments.entry_points.insert(
+                                    index,
+                                    f.comments.iter().map(|s| s.to_string()).collect(),
+                                );
+                            }
+                            _ => {}
+                        }
                     }
                     ctx.globals.insert(f.name.name, lowered_decl);
                 }
@@ -1233,7 +1244,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 workgroup_size,
                 function,
             });
-            Ok(LoweredGlobalDecl::EntryPoint)
+            Ok(LoweredGlobalDecl::EntryPoint(
+                ctx.module.entry_points.len() - 1,
+            ))
         } else {
             let handle = ctx.module.functions.append(function, span);
             Ok(LoweredGlobalDecl::Function(handle))
@@ -1722,7 +1735,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                     LoweredGlobalDecl::Function(_)
                     | LoweredGlobalDecl::Type(_)
-                    | LoweredGlobalDecl::EntryPoint => {
+                    | LoweredGlobalDecl::EntryPoint(_) => {
                         return Err(Error::Unexpected(span, ExpectedToken::Variable));
                     }
                 };
@@ -1985,7 +1998,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 | &LoweredGlobalDecl::Override(_)
                 | &LoweredGlobalDecl::Var(_),
             ) => Err(Error::Unexpected(function.span, ExpectedToken::Function)),
-            Some(&LoweredGlobalDecl::EntryPoint) => Err(Error::CalledEntryPoint(function.span)),
+            Some(&LoweredGlobalDecl::EntryPoint(_)) => Err(Error::CalledEntryPoint(function.span)),
             Some(&LoweredGlobalDecl::Function(function)) => {
                 let arguments = arguments
                     .iter()

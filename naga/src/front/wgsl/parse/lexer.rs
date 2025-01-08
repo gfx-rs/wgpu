@@ -48,7 +48,6 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
 fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
-    let full_chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
         None => return (Token::End, ""),
@@ -97,31 +96,31 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
                             &input[end_position..],
                         );
                     }
-                    (Token::Comment(input), &og_chars)
+                    (Token::Comment(input), "")
                 }
                 Some('*') => {
                     let mut depth = 1;
                     let mut prev = None;
-                    let mut nb_characters = 2;
-                    for c in &mut chars {
+                    let mut char_indices = input.char_indices();
+                    // Skip '/' and '*'
+                    char_indices.next();
+                    char_indices.next();
+                    while let Some((index, c)) = char_indices.next() {
                         match (prev, c) {
                             (Some('*'), '/') => {
                                 prev = None;
                                 depth -= 1;
-                                nb_characters += 1;
                                 if depth == 0 {
-                                    let doc = &full_chars.as_str()[..nb_characters];
-                                    return (Token::Comment(doc), chars.as_str());
+                                    let doc = &input[..=index];
+                                    return (Token::Comment(doc), &input[(index + 1)..]);
                                 }
                             }
                             (Some('/'), '*') => {
                                 prev = None;
                                 depth += 1;
-                                nb_characters += 1;
                             }
                             _ => {
                                 prev = Some(c);
-                                nb_characters += 1;
                             }
                         }
                     }
@@ -742,7 +741,9 @@ fn test_tokens() {
         "*/*/***/*//=/*****//",
         &[
             Token::Operation('*'),
+            Token::Comment("/*/***/*/"),
             Token::AssignmentOperation('/'),
+            Token::Comment("/*****/"),
             Token::Operation('/'),
         ],
     );
