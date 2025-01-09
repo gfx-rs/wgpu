@@ -3,7 +3,7 @@ name = "wgpu-types"
 version = "23.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
-description = "WebGPU types"
+description = "Common types and utilities for wgpu, the cross-platform, safe, pure-rust graphics API"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
@@ -33,6 +33,9 @@ fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }

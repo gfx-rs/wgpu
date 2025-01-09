@@ -1,6 +1,7 @@
 use crate::{api::blas::TlasInstance, dispatch};
 use crate::{BindingResource, Buffer, Label};
 use std::ops::{Index, IndexMut, Range};
+use std::sync::Arc;
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.
@@ -8,6 +9,12 @@ pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 
 #[derive(Debug)]
+pub(crate) struct TlasShared {
+    pub(crate) inner: dispatch::DispatchTlas,
+    pub(crate) max_instances: u32,
+}
+
+#[derive(Debug, Clone)]
 /// Top Level Acceleration Structure (TLAS).
 ///
 /// A TLAS contains a series of [TLAS instances], which are a reference to
@@ -18,17 +25,16 @@ static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 ///
 /// [TLAS instances]: TlasInstance
 pub struct Tlas {
-    pub(crate) inner: dispatch::DispatchTlas,
-    pub(crate) max_instances: u32,
+    pub(crate) shared: Arc<TlasShared>,
 }
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
-crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .inner);
+crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .shared.inner);
 
 impl Tlas {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        self.inner.destroy();
+        self.shared.inner.destroy();
     }
 }
 
@@ -56,7 +62,7 @@ static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
 impl TlasPackage {
     /// Construct [TlasPackage] consuming the [Tlas] (prevents modification of the [Tlas] without using this package).
     pub fn new(tlas: Tlas) -> Self {
-        let max_instances = tlas.max_instances;
+        let max_instances = tlas.shared.max_instances;
         Self::new_with_instances(tlas, vec![None; max_instances as usize])
     }
 

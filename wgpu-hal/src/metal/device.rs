@@ -1,7 +1,6 @@
 use parking_lot::Mutex;
 use std::{
-    num::NonZeroU32,
-    ptr,
+    ptr::NonNull,
     sync::{atomic, Arc},
     thread, time,
 };
@@ -9,6 +8,8 @@ use std::{
 use super::conv;
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
+
+use metal::foreign_types::ForeignType;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -62,22 +63,31 @@ fn create_depth_stencil_desc(state: &wgt::DepthStencilState) -> metal::DepthSten
 
 const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
     match format {
+        wgt::VertexFormat::Uint8 => naga::back::msl::VertexFormat::Uint8,
         wgt::VertexFormat::Uint8x2 => naga::back::msl::VertexFormat::Uint8x2,
         wgt::VertexFormat::Uint8x4 => naga::back::msl::VertexFormat::Uint8x4,
+        wgt::VertexFormat::Sint8 => naga::back::msl::VertexFormat::Sint8,
         wgt::VertexFormat::Sint8x2 => naga::back::msl::VertexFormat::Sint8x2,
         wgt::VertexFormat::Sint8x4 => naga::back::msl::VertexFormat::Sint8x4,
+        wgt::VertexFormat::Unorm8 => naga::back::msl::VertexFormat::Unorm8,
         wgt::VertexFormat::Unorm8x2 => naga::back::msl::VertexFormat::Unorm8x2,
         wgt::VertexFormat::Unorm8x4 => naga::back::msl::VertexFormat::Unorm8x4,
+        wgt::VertexFormat::Snorm8 => naga::back::msl::VertexFormat::Snorm8,
         wgt::VertexFormat::Snorm8x2 => naga::back::msl::VertexFormat::Snorm8x2,
         wgt::VertexFormat::Snorm8x4 => naga::back::msl::VertexFormat::Snorm8x4,
+        wgt::VertexFormat::Uint16 => naga::back::msl::VertexFormat::Uint16,
         wgt::VertexFormat::Uint16x2 => naga::back::msl::VertexFormat::Uint16x2,
         wgt::VertexFormat::Uint16x4 => naga::back::msl::VertexFormat::Uint16x4,
+        wgt::VertexFormat::Sint16 => naga::back::msl::VertexFormat::Sint16,
         wgt::VertexFormat::Sint16x2 => naga::back::msl::VertexFormat::Sint16x2,
         wgt::VertexFormat::Sint16x4 => naga::back::msl::VertexFormat::Sint16x4,
+        wgt::VertexFormat::Unorm16 => naga::back::msl::VertexFormat::Unorm16,
         wgt::VertexFormat::Unorm16x2 => naga::back::msl::VertexFormat::Unorm16x2,
         wgt::VertexFormat::Unorm16x4 => naga::back::msl::VertexFormat::Unorm16x4,
+        wgt::VertexFormat::Snorm16 => naga::back::msl::VertexFormat::Snorm16,
         wgt::VertexFormat::Snorm16x2 => naga::back::msl::VertexFormat::Snorm16x2,
         wgt::VertexFormat::Snorm16x4 => naga::back::msl::VertexFormat::Snorm16x4,
+        wgt::VertexFormat::Float16 => naga::back::msl::VertexFormat::Float16,
         wgt::VertexFormat::Float16x2 => naga::back::msl::VertexFormat::Float16x2,
         wgt::VertexFormat::Float16x4 => naga::back::msl::VertexFormat::Float16x4,
         wgt::VertexFormat::Float32 => naga::back::msl::VertexFormat::Float32,
@@ -93,7 +103,14 @@ const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back:
         wgt::VertexFormat::Sint32x3 => naga::back::msl::VertexFormat::Sint32x3,
         wgt::VertexFormat::Sint32x4 => naga::back::msl::VertexFormat::Sint32x4,
         wgt::VertexFormat::Unorm10_10_10_2 => naga::back::msl::VertexFormat::Unorm10_10_10_2,
-        _ => unimplemented!(),
+        wgt::VertexFormat::Unorm8x4Bgra => naga::back::msl::VertexFormat::Unorm8x4Bgra,
+
+        wgt::VertexFormat::Float64
+        | wgt::VertexFormat::Float64x2
+        | wgt::VertexFormat::Float64x3
+        | wgt::VertexFormat::Float64x4 => {
+            unimplemented!()
+        }
     }
 }
 
@@ -117,7 +134,7 @@ impl super::Device {
 
         let ep_resources = &layout.per_stage_map[naga_stage];
 
-        let bounds_check_policy = if stage.module.runtime_checks {
+        let bounds_check_policy = if stage.module.bounds_checks.bounds_checks {
             naga::proc::BoundsCheckPolicy::Restrict
         } else {
             naga::proc::BoundsCheckPolicy::Unchecked
@@ -151,6 +168,7 @@ impl super::Device {
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
             zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+            force_loop_bounding: stage.module.bounds_checks.force_loop_bounding,
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
@@ -367,7 +385,7 @@ impl crate::Device for super::Device {
         let ptr = buffer.raw.contents().cast::<u8>();
         assert!(!ptr.is_null());
         Ok(crate::BufferMapping {
-            ptr: ptr::NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
+            ptr: NonNull::new(unsafe { ptr.offset(range.start as isize) }).unwrap(),
             is_coherent: true,
         })
     }
@@ -563,6 +581,9 @@ impl crate::Device for super::Device {
             if let Some(label) = desc.label {
                 descriptor.set_label(label);
             }
+            if self.features.contains(wgt::Features::TEXTURE_BINDING_ARRAY) {
+                descriptor.set_support_argument_buffers(true);
+            }
             let raw = self.shared.device.lock().new_sampler(&descriptor);
 
             self.counters.samplers.add(1);
@@ -681,36 +702,41 @@ impl crate::Device for super::Device {
                     }
 
                     let mut target = naga::back::msl::BindTarget::default();
-                    let count = entry.count.map_or(1, NonZeroU32::get);
-                    target.binding_array_size = entry.count.map(NonZeroU32::get);
-                    match entry.ty {
-                        wgt::BindingType::Buffer { ty, .. } => {
-                            target.buffer = Some(info.counters.buffers as _);
-                            info.counters.buffers += count;
-                            if let wgt::BufferBindingType::Storage { read_only } = ty {
-                                target.mutable = !read_only;
+                    // Bindless path
+                    if let Some(_) = entry.count {
+                        target.buffer = Some(info.counters.buffers as _);
+                        info.counters.buffers += 1;
+                    } else {
+                        match entry.ty {
+                            wgt::BindingType::Buffer { ty, .. } => {
+                                target.buffer = Some(info.counters.buffers as _);
+                                info.counters.buffers += 1;
+                                if let wgt::BufferBindingType::Storage { read_only } = ty {
+                                    target.mutable = !read_only;
+                                }
                             }
+                            wgt::BindingType::Sampler { .. } => {
+                                target.sampler =
+                                    Some(naga::back::msl::BindSamplerTarget::Resource(
+                                        info.counters.samplers as _,
+                                    ));
+                                info.counters.samplers += 1;
+                            }
+                            wgt::BindingType::Texture { .. } => {
+                                target.texture = Some(info.counters.textures as _);
+                                info.counters.textures += 1;
+                            }
+                            wgt::BindingType::StorageTexture { access, .. } => {
+                                target.texture = Some(info.counters.textures as _);
+                                info.counters.textures += 1;
+                                target.mutable = match access {
+                                    wgt::StorageTextureAccess::ReadOnly => false,
+                                    wgt::StorageTextureAccess::WriteOnly => true,
+                                    wgt::StorageTextureAccess::ReadWrite => true,
+                                };
+                            }
+                            wgt::BindingType::AccelerationStructure => unimplemented!(),
                         }
-                        wgt::BindingType::Sampler { .. } => {
-                            target.sampler = Some(naga::back::msl::BindSamplerTarget::Resource(
-                                info.counters.samplers as _,
-                            ));
-                            info.counters.samplers += count;
-                        }
-                        wgt::BindingType::Texture { .. } => {
-                            target.texture = Some(info.counters.textures as _);
-                            info.counters.textures += count;
-                        }
-                        wgt::BindingType::StorageTexture { access, .. } => {
-                            target.texture = Some(info.counters.textures as _);
-                            info.counters.textures += count;
-                            target.mutable = match access {
-                                wgt::StorageTextureAccess::ReadOnly => false,
-                                wgt::StorageTextureAccess::WriteOnly => true,
-                                wgt::StorageTextureAccess::ReadWrite => true,
-                            };
-                        }
-                        wgt::BindingType::AccelerationStructure => unimplemented!(),
                     }
 
                     let br = naga::ResourceBinding {
@@ -788,90 +814,162 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> DeviceResult<super::BindGroup> {
-        let mut bg = super::BindGroup::default();
-        for (&stage, counter) in super::NAGA_STAGES.iter().zip(bg.counters.iter_mut()) {
-            let stage_bit = map_naga_stage(stage);
-            let mut dynamic_offsets_count = 0u32;
-            let layout_and_entry_iter = desc.entries.iter().map(|entry| {
-                let layout = desc
-                    .layout
-                    .entries
-                    .iter()
-                    .find(|layout_entry| layout_entry.binding == entry.binding)
-                    .expect("internal error: no layout entry found with binding slot");
-                (entry, layout)
-            });
-            for (entry, layout) in layout_and_entry_iter {
-                let size = layout.count.map_or(1, |c| c.get());
-                if let wgt::BindingType::Buffer {
-                    has_dynamic_offset: true,
-                    ..
-                } = layout.ty
-                {
-                    dynamic_offsets_count += size;
-                }
-                if !layout.visibility.contains(stage_bit) {
-                    continue;
-                }
-                match layout.ty {
-                    wgt::BindingType::Buffer {
-                        ty,
-                        has_dynamic_offset,
-                        ..
-                    } => {
-                        let start = entry.resource_index as usize;
-                        let end = start + size as usize;
-                        bg.buffers
-                            .extend(desc.buffers[start..end].iter().map(|source| {
-                                // Given the restrictions on `BufferBinding::offset`,
-                                // this should never be `None`.
-                                let remaining_size =
-                                    wgt::BufferSize::new(source.buffer.size - source.offset);
-                                let binding_size = match ty {
-                                    wgt::BufferBindingType::Storage { .. } => {
-                                        source.size.or(remaining_size)
-                                    }
-                                    _ => None,
-                                };
-                                super::BufferResource {
-                                    ptr: source.buffer.as_raw(),
-                                    offset: source.offset,
-                                    dynamic_index: if has_dynamic_offset {
-                                        Some(dynamic_offsets_count - 1)
-                                    } else {
-                                        None
-                                    },
-                                    binding_size,
-                                    binding_location: layout.binding,
-                                }
-                            }));
-                        counter.buffers += 1;
-                    }
-                    wgt::BindingType::Sampler { .. } => {
-                        let start = entry.resource_index as usize;
-                        let end = start + size as usize;
-                        bg.samplers
-                            .extend(desc.samplers[start..end].iter().map(|samp| samp.as_raw()));
-                        counter.samplers += size;
-                    }
-                    wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
-                        let start = entry.resource_index as usize;
-                        let end = start + size as usize;
-                        bg.textures.extend(
-                            desc.textures[start..end]
-                                .iter()
-                                .map(|tex| tex.view.as_raw()),
+        objc::rc::autoreleasepool(|| {
+            let mut bg = super::BindGroup::default();
+            for (&stage, counter) in super::NAGA_STAGES.iter().zip(bg.counters.iter_mut()) {
+                let stage_bit = map_naga_stage(stage);
+                let mut dynamic_offsets_count = 0u32;
+                let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+                    let layout = desc
+                        .layout
+                        .entries
+                        .iter()
+                        .find(|layout_entry| layout_entry.binding == entry.binding)
+                        .expect("internal error: no layout entry found with binding slot");
+                    (entry, layout)
+                });
+                for (entry, layout) in layout_and_entry_iter {
+                    // Bindless path
+                    if layout.count.is_some() {
+                        let count = entry.count;
+
+                        let stages = conv::map_render_stages(layout.visibility);
+                        let uses = conv::map_resource_usage(&layout.ty);
+
+                        // Create argument buffer for this array
+                        let buffer = self.shared.device.lock().new_buffer(
+                            8 * count as u64,
+                            metal::MTLResourceOptions::HazardTrackingModeUntracked
+                                | metal::MTLResourceOptions::StorageModeShared,
                         );
-                        counter.textures += size;
+
+                        let contents: &mut [metal::MTLResourceID] = unsafe {
+                            std::slice::from_raw_parts_mut(buffer.contents().cast(), count as usize)
+                        };
+
+                        match layout.ty {
+                            wgt::BindingType::Texture { .. }
+                            | wgt::BindingType::StorageTexture { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + count as usize;
+                                let textures = &desc.textures[start..end];
+
+                                for (idx, tex) in textures.iter().enumerate() {
+                                    contents[idx] = tex.view.raw.gpu_resource_id();
+
+                                    let use_info = bg
+                                        .resources_to_use
+                                        .entry(tex.view.as_raw().cast())
+                                        .or_default();
+                                    use_info.stages |= stages;
+                                    use_info.uses |= uses;
+                                    use_info.visible_in_compute |=
+                                        layout.visibility.contains(wgt::ShaderStages::COMPUTE);
+                                }
+                            }
+                            wgt::BindingType::Sampler { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + count as usize;
+                                let samplers = &desc.samplers[start..end];
+
+                                for (idx, &sampler) in samplers.iter().enumerate() {
+                                    contents[idx] = sampler.raw.gpu_resource_id();
+                                    // Samplers aren't resources like buffers and textures, so don't
+                                    // need to be passed to useResource
+                                }
+                            }
+                            _ => {
+                                unimplemented!();
+                            }
+                        }
+
+                        bg.buffers.push(super::BufferResource {
+                            ptr: unsafe { NonNull::new_unchecked(buffer.as_ptr()) },
+                            offset: 0,
+                            dynamic_index: None,
+                            binding_size: None,
+                            binding_location: layout.binding,
+                        });
+                        counter.buffers += 1;
+
+                        bg.argument_buffers.push(buffer)
                     }
-                    wgt::BindingType::AccelerationStructure => unimplemented!(),
+                    // Bindfull path
+                    else {
+                        if let wgt::BindingType::Buffer {
+                            has_dynamic_offset: true,
+                            ..
+                        } = layout.ty
+                        {
+                            dynamic_offsets_count += 1;
+                        }
+                        if !layout.visibility.contains(stage_bit) {
+                            continue;
+                        }
+                        match layout.ty {
+                            wgt::BindingType::Buffer {
+                                ty,
+                                has_dynamic_offset,
+                                ..
+                            } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + 1;
+                                bg.buffers
+                                    .extend(desc.buffers[start..end].iter().map(|source| {
+                                        // Given the restrictions on `BufferBinding::offset`,
+                                        // this should never be `None`.
+                                        let remaining_size = wgt::BufferSize::new(
+                                            source.buffer.size - source.offset,
+                                        );
+                                        let binding_size = match ty {
+                                            wgt::BufferBindingType::Storage { .. } => {
+                                                source.size.or(remaining_size)
+                                            }
+                                            _ => None,
+                                        };
+                                        super::BufferResource {
+                                            ptr: source.buffer.as_raw(),
+                                            offset: source.offset,
+                                            dynamic_index: if has_dynamic_offset {
+                                                Some(dynamic_offsets_count - 1)
+                                            } else {
+                                                None
+                                            },
+                                            binding_size,
+                                            binding_location: layout.binding,
+                                        }
+                                    }));
+                                counter.buffers += 1;
+                            }
+                            wgt::BindingType::Sampler { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + 1;
+                                bg.samplers.extend(
+                                    desc.samplers[start..end].iter().map(|samp| samp.as_raw()),
+                                );
+                                counter.samplers += 1;
+                            }
+                            wgt::BindingType::Texture { .. }
+                            | wgt::BindingType::StorageTexture { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + 1;
+                                bg.textures.extend(
+                                    desc.textures[start..end]
+                                        .iter()
+                                        .map(|tex| tex.view.as_raw()),
+                                );
+                                counter.textures += 1;
+                            }
+                            wgt::BindingType::AccelerationStructure => unimplemented!(),
+                        }
+                    }
                 }
             }
-        }
 
-        self.counters.bind_groups.add(1);
+            self.counters.bind_groups.add(1);
 
-        Ok(bg)
+            Ok(bg)
+        })
     }
 
     unsafe fn destroy_bind_group(&self, _group: super::BindGroup) {
@@ -888,7 +986,7 @@ impl crate::Device for super::Device {
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 naga,
-                runtime_checks: desc.runtime_checks,
+                bounds_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")

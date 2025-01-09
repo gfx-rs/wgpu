@@ -48,7 +48,7 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let global = wgc::global::Global::new("player", wgt::InstanceDescriptor::default());
+    let global = wgc::global::Global::new("player", &wgt::InstanceDescriptor::default());
     let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
 
     #[cfg(feature = "winit")]

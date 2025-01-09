@@ -15,7 +15,7 @@ use crate::{
 
 impl ParsingContext<'_> {
     pub fn peek_parameter_qualifier(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::In | TokenValue::Out | TokenValue::InOut | TokenValue::Const => true,
             _ => false,
         })

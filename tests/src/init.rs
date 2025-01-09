@@ -34,10 +34,10 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
     let dx12_shader_compiler = if force_fxc {
         wgpu::Dx12Compiler::Fxc
     } else {
-        wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default()
+        wgpu::util::dx12_shader_compiler_from_env().unwrap_or(wgpu::Dx12Compiler::StaticDxc)
     };
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
-    Instance::new(wgpu::InstanceDescriptor {
+    Instance::new(&wgpu::InstanceDescriptor {
         backends,
         flags: wgpu::InstanceFlags::debugging().with_env(),
         dx12_shader_compiler,

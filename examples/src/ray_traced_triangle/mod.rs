@@ -30,7 +30,6 @@ impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
             | wgpu::Features::EXPERIMENTAL_RAY_QUERY
-            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
     }
 
     fn required_limits() -> wgpu::Limits {

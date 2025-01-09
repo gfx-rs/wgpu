@@ -37,6 +37,13 @@ impl super::Device {
         library: &Arc<D3D12Lib>,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, crate::DeviceError> {
+        if private_caps
+            .instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION)
+        {
+            auxil::dxgi::exception::register_exception_handler();
+        }
+
         let mem_allocator = super::suballocation::create_allocator_wrapper(&raw, memory_hints)?;
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
@@ -273,12 +280,12 @@ impl super::Device {
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
             != layout.naga_options.zero_initialize_workgroup_memory
-            || stage.module.runtime_checks != layout.naga_options.restrict_indexing;
+            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
             temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
-            temp_options.restrict_indexing = stage.module.runtime_checks;
+            temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
             &temp_options
         } else {
             &layout.naga_options
@@ -577,7 +584,9 @@ impl crate::Device for super::Device {
                 None
             },
             handle_uav: if desc.usage.intersects(
-                crate::TextureUses::STORAGE_READ_ONLY | crate::TextureUses::STORAGE_READ_WRITE,
+                crate::TextureUses::STORAGE_READ_ONLY
+                    | crate::TextureUses::STORAGE_WRITE_ONLY
+                    | crate::TextureUses::STORAGE_READ_WRITE,
             ) {
                 match unsafe { view_desc.to_uav() } {
                     Some(raw_desc) => {
@@ -1120,78 +1129,85 @@ impl crate::Device for super::Device {
         .into_device_result("Root signature creation")?;
 
         let special_constants = if let Some(root_index) = special_constants_root_index {
-            let constant_indirect_argument_desc = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
-                Anonymous: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0 {
-                    Constant: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_1 {
-                        RootParameterIndex: root_index,
-                        DestOffsetIn32BitValues: 0,
-                        Num32BitValuesToSet: 3,
+            let cmd_signatures = if desc
+                .flags
+                .contains(crate::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE)
+            {
+                let constant_indirect_argument_desc = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                    Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
+                    Anonymous: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0 {
+                        Constant: Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_1 {
+                            RootParameterIndex: root_index,
+                            DestOffsetIn32BitValues: 0,
+                            Num32BitValuesToSet: 3,
+                        },
                     },
-                },
-            };
-            let special_constant_buffer_args_len = {
-                // Hack: construct a dummy value of the special constants buffer value we need to
-                // fill, and calculate the size of each member.
-                let super::RootElement::SpecialConstantBuffer {
-                    first_vertex,
-                    first_instance,
-                    other,
-                } = (super::RootElement::SpecialConstantBuffer {
-                    first_vertex: 0,
-                    first_instance: 0,
-                    other: 0,
-                })
-                else {
-                    unreachable!();
                 };
-                size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
+                let special_constant_buffer_args_len = {
+                    // Hack: construct a dummy value of the special constants buffer value we need to
+                    // fill, and calculate the size of each member.
+                    let super::RootElement::SpecialConstantBuffer {
+                        first_vertex,
+                        first_instance,
+                        other,
+                    } = (super::RootElement::SpecialConstantBuffer {
+                        first_vertex: 0,
+                        first_instance: 0,
+                        other: 0,
+                    })
+                    else {
+                        unreachable!();
+                    };
+                    size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
+                };
+                Some(super::CommandSignatures {
+                    draw: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len + size_of::<wgt::DrawIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?,
+                    draw_indexed: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len
+                            + size_of::<wgt::DrawIndexedIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?,
+                    dispatch: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?,
+                })
+            } else {
+                None
             };
-            let cmd_signatures = super::CommandSignatures {
-                draw: Self::create_command_signature(
-                    &self.raw,
-                    Some(&raw),
-                    special_constant_buffer_args_len + size_of::<wgt::DrawIndirectArgs>(),
-                    &[
-                        constant_indirect_argument_desc,
-                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
-                            ..Default::default()
-                        },
-                    ],
-                    0,
-                )?,
-                draw_indexed: Self::create_command_signature(
-                    &self.raw,
-                    Some(&raw),
-                    special_constant_buffer_args_len + size_of::<wgt::DrawIndexedIndirectArgs>(),
-                    &[
-                        constant_indirect_argument_desc,
-                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
-                            ..Default::default()
-                        },
-                    ],
-                    0,
-                )?,
-                dispatch: Self::create_command_signature(
-                    &self.raw,
-                    Some(&raw),
-                    special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
-                    &[
-                        constant_indirect_argument_desc,
-                        Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
-                            ..Default::default()
-                        },
-                    ],
-                    0,
-                )?,
-            };
-
             Some(super::PipelineLayoutSpecialConstants {
                 root_index,
-                cmd_signatures,
+                indirect_cmd_signatures: cmd_signatures,
             })
         } else {
             None

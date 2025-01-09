@@ -12,14 +12,6 @@ use windows::{
 use super::SurfaceTarget;
 use crate::{auxil, dx12::D3D12Lib};
 
-impl Drop for super::Instance {
-    fn drop(&mut self) {
-        if self.flags.contains(wgt::InstanceFlags::VALIDATION) {
-            auxil::dxgi::exception::unregister_exception_handler();
-        }
-    }
-}
-
 impl crate::Instance for super::Instance {
     type A = super::Api;
 

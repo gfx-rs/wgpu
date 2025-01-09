@@ -10,7 +10,7 @@
 
 `wgpu` is a cross-platform, safe, pure-rust graphics API. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 
-The API is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox and Deno.
+The API is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox, Servo, and Deno.
 
 ## Repo Overview
 
@@ -21,7 +21,6 @@ The repository hosts the following libraries:
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - Internal unsafe GPU API abstraction layer.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
 - [![Crates.io](https://img.shields.io/crates/v/naga.svg?label=naga)](https://crates.io/crates/naga) [![docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga/) - Stand-alone shader translation library.
-- [![Crates.io](https://img.shields.io/crates/v/d3d12.svg?label=d3d12)](https://crates.io/crates/d3d12) [![docs.rs](https://docs.rs/d3d12/badge.svg)](https://docs.rs/d3d12/) - Collection of thin abstractions over d3d12.
 - [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
 
 The following binaries:
@@ -34,6 +33,10 @@ The following binaries:
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
 
 ## Getting Started
+
+### Play with our Examples
+
+Go to [https://wgpu.rs/examples/] to play with our examples in your browser. Requires a browser supporting WebGPU for the WebGPU examples.
 
 ### Rust
 
@@ -71,6 +74,15 @@ We have the Matrix space [![Matrix Space](https://img.shields.io/static/v1?label
 ## Wiki
 
 We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge base.
+
+## Extension Specifications
+
+While the core of wgpu is based on the WebGPU standard, we also support extensions that allow for features that the standard does not have yet.
+For high-level documentation on how to use these extensions, see the individual specifications:
+
+🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
+
+- 🧪EXPERIMENTAL🧪 [Ray Tracing](./etc/specs/ray_tracing.md).
 
 ## Supported Platforms
 
@@ -120,8 +132,8 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
-- The rest of the workspace has an MSRV of **1.76** as well right now, but may be higher than above listed crates.
+- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
+- The rest of the workspace has an MSRV of **1.83** as well right now, but may be higher than above listed crates.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.

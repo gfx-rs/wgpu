@@ -5,7 +5,7 @@ use crate::*;
 /// It can be created with [`Device::create_texture`].
 ///
 /// Corresponds to [WebGPU `GPUTexture`](https://gpuweb.github.io/gpuweb/#texture-interface).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Texture {
     pub(crate) inner: dispatch::DispatchTexture,
     pub(crate) descriptor: TextureDescriptor<'static>,

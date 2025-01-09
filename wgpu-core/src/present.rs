@@ -153,12 +153,16 @@ impl Surface {
                     usage: config.usage,
                     view_formats: config.view_formats,
                 };
-                let hal_usage = conv::map_texture_usage(config.usage, config.format.into());
                 let format_features = wgt::TextureFormatFeatures {
                     allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
                     flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
                         | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
                 };
+                let hal_usage = conv::map_texture_usage(
+                    config.usage,
+                    config.format.into(),
+                    format_features.flags,
+                );
                 let clear_view_desc = hal::TextureViewDescriptor {
                     label: hal_label(
                         Some("(wgpu internal) clear surface texture view"),

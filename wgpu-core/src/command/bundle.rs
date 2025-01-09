@@ -484,10 +484,10 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::MultiDrawIndirect {
+                RenderCommand::DrawIndirect {
                     buffer_id,
                     offset,
-                    count: None,
+                    count: 1,
                     indexed,
                 } => {
                     let scope = PassErrorScope::Draw {
@@ -504,7 +504,7 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::MultiDrawIndirect { .. }
+                RenderCommand::DrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
@@ -887,10 +887,10 @@ fn multi_draw_indirect(
 
     state.flush_vertices();
     state.flush_binds(used_bind_groups, dynamic_offsets);
-    state.commands.push(ArcRenderCommand::MultiDrawIndirect {
+    state.commands.push(ArcRenderCommand::DrawIndirect {
         buffer,
         offset,
-        count: None,
+        count: 1,
         indexed,
     });
     Ok(())
@@ -1101,25 +1101,25 @@ impl RenderBundle {
                         )
                     };
                 }
-                Cmd::MultiDrawIndirect {
+                Cmd::DrawIndirect {
                     buffer,
                     offset,
-                    count: None,
+                    count: 1,
                     indexed: false,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
                     unsafe { raw.draw_indirect(buffer, *offset, 1) };
                 }
-                Cmd::MultiDrawIndirect {
+                Cmd::DrawIndirect {
                     buffer,
                     offset,
-                    count: None,
+                    count: 1,
                     indexed: true,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
                     unsafe { raw.draw_indexed_indirect(buffer, *offset, 1) };
                 }
-                Cmd::MultiDrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
+                Cmd::DrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
                     return Err(ExecutionError::Unimplemented("multi-draw-indirect"))
                 }
                 Cmd::PushDebugGroup { .. } | Cmd::InsertDebugMarker { .. } | Cmd::PopDebugGroup => {
@@ -1727,10 +1727,10 @@ pub mod bundle_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle.base.commands.push(RenderCommand::MultiDrawIndirect {
+        bundle.base.commands.push(RenderCommand::DrawIndirect {
             buffer_id,
             offset,
-            count: None,
+            count: 1,
             indexed: false,
         });
     }
@@ -1740,10 +1740,10 @@ pub mod bundle_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle.base.commands.push(RenderCommand::MultiDrawIndirect {
+        bundle.base.commands.push(RenderCommand::DrawIndirect {
             buffer_id,
             offset,
-            count: None,
+            count: 1,
             indexed: true,
         });
     }

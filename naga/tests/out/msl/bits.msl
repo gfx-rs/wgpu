@@ -42,9 +42,9 @@ kernel void main_(
     uint _e50 = u;
     f2_ = float2(as_type<half2>(_e50));
     uint _e52 = u;
-    i4_ = int4(_e52, _e52 >> 8, _e52 >> 16, _e52 >> 24) << 24 >> 24;
+    i4_ = (int4(_e52, _e52 >> 8, _e52 >> 16, _e52 >> 24) << 24 >> 24);
     uint _e54 = u;
-    u4_ = uint4(_e54, _e54 >> 8, _e54 >> 16, _e54 >> 24) << 24 >> 24;
+    u4_ = (uint4(_e54, _e54 >> 8, _e54 >> 16, _e54 >> 24) << 24 >> 24);
     int _e56 = i;
     int _e57 = i;
     i = metal::insert_bits(_e56, _e57, metal::min(5u, 32u), metal::min(10u, 32u - metal::min(5u, 32u)));

@@ -1238,8 +1238,8 @@ fn pointer_type_equivalence() {
 
             fn g() {
                var m: mat2x2<f32>;
-               let pv: ptr<function, vec2<f32>> = &m.x;
-               let pf: ptr<function, f32> = &m.x.x;
+               let pv: ptr<function, vec2<f32>> = &m[0];
+               let pf: ptr<function, f32> = &m[0].x;
 
                f(pv, pf);
             }
@@ -1543,7 +1543,7 @@ fn select() {
             naga::valid::ValidationError::Function {
                 name,
                 source: naga::valid::FunctionError::Expression {
-                    source: naga::valid::ExpressionError::InvalidSelectTypes,
+                    source: naga::valid::ExpressionError::SelectConditionNotABool { .. },
                     ..
                 },
                 ..
@@ -2108,10 +2108,10 @@ fn compaction_preserves_spans() {
     let source = r#"
         fn f() {
            var a: i32 = -(-(-(-42i)));
-           var x: i32;
-           x = 42u;
+           var x: array<i32,1>;
+           var y = x[1.0];
         }
-    "#; //     ^^^   correct error span: 95..98
+    "#; //         ^^^   correct error span: 108..114
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
     naga::compact::compact(&mut module);
     let err = naga::valid::Validator::new(
@@ -2135,7 +2135,10 @@ fn compaction_preserves_spans() {
         .0;
     if !matches!(
         dest_span.to_range(),
-        Some(std::ops::Range { start: 95, end: 98 })
+        Some(std::ops::Range {
+            start: 108,
+            end: 114
+        })
     ) {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }

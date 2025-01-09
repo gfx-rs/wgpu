@@ -605,6 +605,13 @@ pub struct Device {
 impl Drop for Device {
     fn drop(&mut self) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
+        if self
+            .private_caps
+            .instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION)
+        {
+            auxil::dxgi::exception::unregister_exception_handler();
+        }
     }
 }
 
@@ -946,7 +953,7 @@ unsafe impl Sync for PipelineLayoutShared {}
 #[derive(Debug, Clone)]
 struct PipelineLayoutSpecialConstants {
     root_index: RootIndex,
-    cmd_signatures: CommandSignatures,
+    indirect_cmd_signatures: Option<CommandSignatures>,
 }
 
 unsafe impl Send for PipelineLayoutSpecialConstants {}
@@ -967,7 +974,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
-    runtime_checks: bool,
+    runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}

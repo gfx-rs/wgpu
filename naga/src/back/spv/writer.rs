@@ -981,6 +981,7 @@ impl Writer {
                             let length_id = self.get_index_constant(length.get());
                             Instruction::type_array(id, type_id, length_id)
                         }
+                        crate::ArraySize::Pending(_) => unreachable!(),
                         crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
                     }
                 }
@@ -991,6 +992,7 @@ impl Writer {
                             let length_id = self.get_index_constant(length.get());
                             Instruction::type_array(id, type_id, length_id)
                         }
+                        crate::ArraySize::Pending(_) => unreachable!(),
                         crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
                     }
                 }

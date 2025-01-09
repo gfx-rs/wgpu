@@ -9,7 +9,7 @@ use crate::*;
 /// It can be created along with a [`Device`] by calling [`Adapter::request_device`].
 ///
 /// Corresponds to [WebGPU `GPUQueue`](https://gpuweb.github.io/gpuweb/#gpu-queue).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Queue {
     pub(crate) inner: dispatch::DispatchQueue,
 }
@@ -204,9 +204,12 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
-        let mut command_buffers = command_buffers
-            .into_iter()
-            .map(|mut comb| comb.inner.take().unwrap());
+        let mut command_buffers = command_buffers.into_iter().map(|comb| {
+            comb.inner
+                .lock()
+                .take()
+                .expect("Command buffer already submitted")
+        });
 
         let index = self.inner.submit(&mut command_buffers);
 

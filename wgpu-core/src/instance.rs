@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
-    api_log,
+    api_log, api_log_debug,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
     hal_api::HalApi,
@@ -63,7 +63,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, instance_desc: wgt::InstanceDescriptor) -> Self {
+    pub fn new(name: &str, instance_desc: &wgt::InstanceDescriptor) -> Self {
         fn init<A: HalApi>(
             _: A,
             instance_desc: &wgt::InstanceDescriptor,
@@ -99,13 +99,13 @@ impl Instance {
         let mut instance_per_backend = Vec::new();
 
         #[cfg(vulkan)]
-        init(hal::api::Vulkan, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Vulkan, instance_desc, &mut instance_per_backend);
         #[cfg(metal)]
-        init(hal::api::Metal, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Metal, instance_desc, &mut instance_per_backend);
         #[cfg(dx12)]
-        init(hal::api::Dx12, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Dx12, instance_desc, &mut instance_per_backend);
         #[cfg(gles)]
-        init(hal::api::Gles, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Gles, instance_desc, &mut instance_per_backend);
 
         Self {
             name: name.to_string(),
@@ -305,7 +305,7 @@ impl Instance {
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
                 let adapter = Adapter::new(raw);
-                log::info!("Adapter {:?}", adapter.raw.info);
+                api_log_debug!("Adapter {:?}", adapter.raw.info);
                 adapters.push(adapter);
             }
         }
@@ -336,8 +336,19 @@ impl Instance {
                 backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
             }
             if let Some(surface) = desc.compatible_surface {
-                backend_adapters
-                    .retain(|exposed| surface.get_capabilities_with_raw(exposed).is_ok());
+                backend_adapters.retain(|exposed| {
+                    let capabilities = surface.get_capabilities_with_raw(exposed);
+                    if let Err(err) = capabilities {
+                        log::debug!(
+                            "Adapter {:?} not compatible with surface: {}",
+                            exposed.info,
+                            err
+                        );
+                        false
+                    } else {
+                        true
+                    }
+                });
             }
             adapters.extend(backend_adapters);
         }
@@ -378,8 +389,22 @@ impl Instance {
             }
         }
 
+        // `request_adapter` can be a bit of a black box.
+        // Shine some light on its decision in debug log.
+        if adapters.is_empty() {
+            log::debug!("Request adapter didn't find compatible adapters.");
+        } else {
+            log::debug!(
+                "Found {} compatible adapters. Sorted by preference:",
+                adapters.len()
+            );
+            for adapter in &adapters {
+                log::debug!("* {:?}", adapter.info);
+            }
+        }
+
         if let Some(adapter) = adapters.into_iter().next() {
-            log::info!("Adapter {:?}", adapter.info);
+            api_log_debug!("Request adapter result {:?}", adapter.info);
             let adapter = Adapter::new(adapter);
             Ok(adapter)
         } else {

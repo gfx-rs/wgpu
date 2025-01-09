@@ -140,7 +140,7 @@ impl Frontend {
                 )?
             }
             TypeInner::Vector { size, scalar } => {
-                if vector_size.map_or(true, |s| s != size) {
+                if vector_size != Some(size) {
                     value = ctx.vector_resize(size, value, expr_meta)?;
                 }
 
@@ -1366,6 +1366,7 @@ impl Frontend {
             early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
                 .filter(|_| self.meta.early_fragment_tests),
             workgroup_size: self.meta.workgroup_size,
+            workgroup_size_overrides: None,
             function: Function {
                 arguments,
                 expressions,

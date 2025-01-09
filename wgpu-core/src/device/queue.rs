@@ -11,7 +11,6 @@ use crate::{
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
-    hal_label,
     id::{self, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLockWriteGuard},
@@ -74,7 +73,10 @@ impl Queue {
                 .command_encoder
                 .transition_buffers(&[hal::BufferBarrier {
                     buffer: zero_buffer,
-                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                    usage: hal::StateTransition {
+                        from: hal::BufferUses::empty(),
+                        to: hal::BufferUses::COPY_DST,
+                    },
                 }]);
             pending_writes
                 .command_encoder
@@ -83,7 +85,10 @@ impl Queue {
                 .command_encoder
                 .transition_buffers(&[hal::BufferBarrier {
                     buffer: zero_buffer,
-                    usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
+                    usage: hal::StateTransition {
+                        from: hal::BufferUses::COPY_DST,
+                        to: hal::BufferUses::COPY_SRC,
+                    },
                 }]);
         }
 
@@ -628,7 +633,10 @@ impl Queue {
         };
         let barriers = iter::once(hal::BufferBarrier {
             buffer: staging_buffer.raw(),
-            usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+            usage: hal::StateTransition {
+                from: hal::BufferUses::MAP_WRITE,
+                to: hal::BufferUses::COPY_SRC,
+            },
         })
         .chain(transition.map(|pending| pending.into_hal(&buffer, &snatch_guard)))
         .collect::<Vec<_>>();
@@ -847,7 +855,10 @@ impl Queue {
         {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: staging_buffer.raw(),
-                usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::MAP_WRITE,
+                    to: hal::BufferUses::COPY_SRC,
+                },
             };
 
             let mut trackers = self.device.trackers.lock();
@@ -1153,14 +1164,7 @@ impl Queue {
                         };
 
                         // execute resource transitions
-                        if let Err(e) = unsafe {
-                            baked.encoder.raw.begin_encoding(hal_label(
-                                Some("(wgpu internal) Transit"),
-                                self.device.instance_flags,
-                            ))
-                        }
-                        .map_err(|e| self.device.handle_hal_error(e))
-                        {
+                        if let Err(e) = baked.encoder.open_pass(Some("(wgpu internal) Transit")) {
                             break 'error Err(e.into());
                         }
 
@@ -1187,20 +1191,15 @@ impl Queue {
                             &snatch_guard,
                         );
 
-                        let transit = unsafe { baked.encoder.raw.end_encoding().unwrap() };
-                        baked.encoder.list.insert(0, transit);
+                        if let Err(e) = baked.encoder.close_and_push_front() {
+                            break 'error Err(e.into());
+                        }
 
                         // Transition surface textures into `Present` state.
                         // Note: we could technically do it after all of the command buffers,
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
-                            if let Err(e) = unsafe {
-                                baked.encoder.raw.begin_encoding(hal_label(
-                                    Some("(wgpu internal) Present"),
-                                    self.device.instance_flags,
-                                ))
-                            }
-                            .map_err(|e| self.device.handle_hal_error(e))
+                            if let Err(e) = baked.encoder.open_pass(Some("(wgpu internal) Present"))
                             {
                                 break 'error Err(e.into());
                             }
@@ -1211,11 +1210,12 @@ impl Queue {
                                     &snatch_guard,
                                 )
                                 .collect::<Vec<_>>();
-                            let present = unsafe {
+                            unsafe {
                                 baked.encoder.raw.transition_textures(&texture_barriers);
-                                baked.encoder.raw.end_encoding().unwrap()
                             };
-                            baked.encoder.list.push(present);
+                            if let Err(e) = baked.encoder.close() {
+                                break 'error Err(e.into());
+                            }
                             used_surface_textures = track::TextureUsageScope::default();
                         }
 
@@ -1556,8 +1556,7 @@ fn validate_command_buffer(
                     TextureInner::Native { .. } => false,
                     TextureInner::Surface { .. } => {
                         // Compare the Arcs by pointer as Textures don't implement Eq.
-                        submit_surface_textures_owned
-                            .insert(Arc::as_ptr(&texture), texture.clone());
+                        submit_surface_textures_owned.insert(Arc::as_ptr(texture), texture.clone());
 
                         true
                     }
@@ -1565,7 +1564,7 @@ fn validate_command_buffer(
                 if should_extend {
                     unsafe {
                         used_surface_textures
-                            .merge_single(&texture, None, hal::TextureUses::PRESENT)
+                            .merge_single(texture, None, hal::TextureUses::PRESENT)
                             .unwrap();
                     };
                 }

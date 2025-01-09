@@ -258,6 +258,7 @@ bitflags::bitflags! {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 pub struct Options {
     /// The GLSL version to be used.
     pub version: Version,
@@ -746,14 +747,17 @@ impl<'a, W: Write> Writer<'a, W> {
         // Write functions to create special types.
         for (type_key, struct_ty) in self.module.special_types.predeclared_types.iter() {
             match type_key {
-                &crate::PredeclaredType::ModfResult { size, width }
-                | &crate::PredeclaredType::FrexpResult { size, width } => {
+                &crate::PredeclaredType::ModfResult { size, scalar }
+                | &crate::PredeclaredType::FrexpResult { size, scalar } => {
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
-                        arg_type_name_owner =
-                            format!("{}vec{}", if width == 8 { "d" } else { "" }, size as u8);
+                        arg_type_name_owner = format!(
+                            "{}vec{}",
+                            if scalar.width == 8 { "d" } else { "" },
+                            size as u8
+                        );
                         &arg_type_name_owner
-                    } else if width == 8 {
+                    } else if scalar.width == 8 {
                         "double"
                     } else {
                         "float"
@@ -977,6 +981,7 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::ArraySize::Constant(size) => {
                 write!(self.out, "{size}")?;
             }
+            crate::ArraySize::Pending(_) => unreachable!(),
             crate::ArraySize::Dynamic => (),
         }
 
@@ -4095,7 +4100,7 @@ impl<'a, W: Write> Writer<'a, W> {
     ) -> Result<(), Error> {
         use crate::ImageDimension as IDim;
 
-        // NOTE: openGL requires that `imageStore`s have no effets when the texel is invalid
+        // NOTE: openGL requires that `imageStore`s have no effects when the texel is invalid
         // so we don't need to generate bounds checks (OpenGL 4.2 Core §3.9.20)
 
         // This will only panic if the module is invalid
@@ -4458,6 +4463,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     .expect("Bad array size")
                 {
                     proc::IndexableLength::Known(count) => count,
+                    proc::IndexableLength::Pending => unreachable!(),
                     proc::IndexableLength::Dynamic => return Ok(()),
                 };
                 self.write_type(base)?;

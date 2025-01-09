@@ -34,9 +34,9 @@ env:
   # We sometimes need nightly to use special things in CI.
   #
   # In order to prevent CI regressions, we pin the nightly version.
-  NIGHTLY_VERSION: "nightly-2023-12-17"
+  NIGHTLY_VERSION: "nightly-2024-10-10"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.76"
+  REPO_MSRV: "1.83"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.76"
@@ -48,7 +48,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   WGPU_DX12_COMPILER: dxc
-  RUST_LOG: info
+  RUST_LOG: debug
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: -D warnings
@@ -86,6 +86,12 @@ jobs:
           - name: Windows x86_64
             os: windows-2022
             target: x86_64-pc-windows-msvc
+            kind: native
+
+          # Windows
+          - name: Windows aarch64
+            os: windows-2022
+            target: aarch64-pc-windows-msvc
             kind: native
 
           # MacOS
@@ -629,7 +635,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.28.1
+        uses: crate-ci/typos@v1.29.4
 
   check-cts-runner:
     # runtime is normally 2 minutes
