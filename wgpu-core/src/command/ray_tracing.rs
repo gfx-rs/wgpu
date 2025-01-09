@@ -86,7 +86,7 @@ impl Global {
         }
         let encoder = cmd_buf_data
             .encoder
-            .open(device)
+            .open()
             .map_err(CompactBlasError::from)?;
         let buffer = src_blas
             .compacted_size_buffer
@@ -205,7 +205,7 @@ impl Global {
 
             if !src_blas
                 .flags
-                .contains(wgt::AccelerationStructureFlags::ALLOW_COMPACTION)
+                .contains(AccelerationStructureFlags::ALLOW_COMPACTION)
             {
                 break 'err CompactBlasError::BlasMissingAllowCompaction(src_blas.error_ident());
             }
@@ -1155,7 +1155,7 @@ fn iter_blas<'a>(
             BlasGeometries::TriangleGeometries(triangle_geometries) => {
                 for (i, mesh) in triangle_geometries.enumerate() {
                     let size_desc = match &blas.sizes {
-                        wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => descriptors,
+                        BlasGeometrySizeDescriptors::Triangles { descriptors } => descriptors,
                     };
                     if i >= size_desc.len() {
                         return Err(BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
@@ -1582,9 +1582,8 @@ fn build_blas<'a>(
                 cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
                     buffer: buf.as_ref(),
                     usage: hal::StateTransition {
-                        from: hal::BufferUses::ACCELERATION_STRUCTURE_QUERY,
-                        to: hal::BufferUses::MAP_READ
-                            | hal::BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                        from: BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                        to: BufferUses::MAP_READ | BufferUses::ACCELERATION_STRUCTURE_QUERY,
                     },
                 }]);
             }
