@@ -404,7 +404,7 @@ impl super::Validator {
                         | TypeFlags::SIZED
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::CREATION_RESOLVED,
-                    Alignment::from_width(width),
+                    Alignment::from_width(scalar.width),
                 )
             }
             Ti::Pointer { base, space } => {
