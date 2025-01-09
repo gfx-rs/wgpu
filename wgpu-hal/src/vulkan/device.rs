@@ -417,6 +417,10 @@ impl
                 vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
                 descriptor_count.storage_buffer_dynamic,
             ),
+            (
+                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                descriptor_count.acceleration_structure,
+            ),
         ];
 
         let filtered_counts = unfiltered_counts
@@ -1300,7 +1304,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
-        let mut vk_info = vk::SamplerCreateInfo::default()
+        let mut create_info = vk::SamplerCreateInfo::default()
             .flags(vk::SamplerCreateFlags::empty())
             .mag_filter(conv::map_filter_mode(desc.mag_filter))
             .min_filter(conv::map_filter_mode(desc.min_filter))
@@ -1312,7 +1316,7 @@ impl crate::Device for super::Device {
             .max_lod(desc.lod_clamp.end);
 
         if let Some(fun) = desc.compare {
-            vk_info = vk_info
+            create_info = create_info
                 .compare_enable(true)
                 .compare_op(conv::map_comparison(fun));
         }
@@ -1320,32 +1324,38 @@ impl crate::Device for super::Device {
         if desc.anisotropy_clamp != 1 {
             // We only enable anisotropy if it is supported, and wgpu-hal interface guarantees
             // the clamp is in the range [1, 16] which is always supported if anisotropy is.
-            vk_info = vk_info
+            create_info = create_info
                 .anisotropy_enable(true)
                 .max_anisotropy(desc.anisotropy_clamp as f32);
         }
 
         if let Some(color) = desc.border_color {
-            vk_info = vk_info.border_color(conv::map_border_color(color));
+            create_info = create_info.border_color(conv::map_border_color(color));
         }
 
-        let raw = unsafe {
-            self.shared
-                .raw
-                .create_sampler(&vk_info, None)
-                .map_err(super::map_host_device_oom_and_ioca_err)?
-        };
+        let raw = self
+            .shared
+            .sampler_cache
+            .lock()
+            .create_sampler(&self.shared.raw, create_info)?;
 
+        // Note: Cached samplers will just continually overwrite the label
+        //
+        // https://github.com/gfx-rs/wgpu/issues/6867
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
         self.counters.samplers.add(1);
 
-        Ok(super::Sampler { raw })
+        Ok(super::Sampler { raw, create_info })
     }
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
-        unsafe { self.shared.raw.destroy_sampler(sampler.raw, None) };
+        self.shared.sampler_cache.lock().destroy_sampler(
+            &self.shared.raw,
+            sampler.create_info,
+            sampler.raw,
+        );
 
         self.counters.samplers.sub(1);
     }

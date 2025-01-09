@@ -331,3 +331,31 @@ pub fn get_blit_option(
         metal::MTLBlitOption::None
     }
 }
+
+pub fn map_render_stages(stage: wgt::ShaderStages) -> metal::MTLRenderStages {
+    let mut raw_stages = metal::MTLRenderStages::empty();
+
+    if stage.contains(wgt::ShaderStages::VERTEX) {
+        raw_stages |= metal::MTLRenderStages::Vertex;
+    }
+    if stage.contains(wgt::ShaderStages::FRAGMENT) {
+        raw_stages |= metal::MTLRenderStages::Fragment;
+    }
+
+    raw_stages
+}
+
+pub fn map_resource_usage(ty: &wgt::BindingType) -> metal::MTLResourceUsage {
+    match ty {
+        wgt::BindingType::Texture { .. } => metal::MTLResourceUsage::Sample,
+        wgt::BindingType::StorageTexture { access, .. } => match access {
+            wgt::StorageTextureAccess::WriteOnly => metal::MTLResourceUsage::Write,
+            wgt::StorageTextureAccess::ReadOnly => metal::MTLResourceUsage::Read,
+            wgt::StorageTextureAccess::ReadWrite => {
+                metal::MTLResourceUsage::Read | metal::MTLResourceUsage::Write
+            }
+        },
+        wgt::BindingType::Sampler(..) => metal::MTLResourceUsage::empty(),
+        _ => unreachable!(),
+    }
+}

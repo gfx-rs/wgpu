@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::*;
 
 /// Handle to a query set.
@@ -9,7 +7,7 @@ use crate::*;
 /// Corresponds to [WebGPU `GPUQuerySet`](https://gpuweb.github.io/gpuweb/#queryset).
 #[derive(Debug, Clone)]
 pub struct QuerySet {
-    pub(crate) inner: Arc<dispatch::DispatchQuerySet>,
+    pub(crate) inner: dispatch::DispatchQuerySet,
 }
 #[cfg(send_sync)]
 #[cfg(send_sync)]

@@ -122,9 +122,9 @@ impl CommandEncoder {
         copy_size: BufferAddress,
     ) {
         self.inner.copy_buffer_to_buffer(
-            &source.shared.inner,
+            &source.inner,
             source_offset,
-            &destination.shared.inner,
+            &destination.inner,
             destination_offset,
             copy_size,
         );
@@ -183,8 +183,7 @@ impl CommandEncoder {
     /// - `CLEAR_TEXTURE` extension not enabled
     /// - Range is out of bounds
     pub fn clear_texture(&mut self, texture: &Texture, subresource_range: &ImageSubresourceRange) {
-        self.inner
-            .clear_texture(&texture.shared.inner, subresource_range);
+        self.inner.clear_texture(&texture.inner, subresource_range);
     }
 
     /// Clears buffer to zero.
@@ -199,7 +198,7 @@ impl CommandEncoder {
         offset: BufferAddress,
         size: Option<BufferAddress>,
     ) {
-        self.inner.clear_buffer(&buffer.shared.inner, offset, size);
+        self.inner.clear_buffer(&buffer.inner, offset, size);
     }
 
     /// Inserts debug marker.
@@ -232,7 +231,7 @@ impl CommandEncoder {
             &query_set.inner,
             query_range.start,
             query_range.end - query_range.start,
-            &destination.shared.inner,
+            &destination.inner,
             destination_offset,
         );
     }

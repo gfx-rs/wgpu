@@ -399,6 +399,14 @@ fn parse_postfix() {
     }",
     )
     .unwrap();
+
+    let err = parse_str(
+        "fn foo() {
+        let v = mat4x4<f32>().x;
+    }",
+    )
+    .unwrap_err();
+    assert_eq!(err.message(), "invalid field accessor `x`");
 }
 
 #[test]

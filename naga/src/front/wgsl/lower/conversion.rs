@@ -93,7 +93,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             }))
         };
 
-        let expr_scalar = match expr_inner.scalar() {
+        let expr_scalar = match expr_inner.automatically_convertible_scalar(&self.module.types) {
             Some(scalar) => scalar,
             None => return Err(make_error()),
         };
@@ -429,6 +429,32 @@ impl crate::TypeInner {
             | Ti::Pointer { .. }
             | Ti::ValuePointer { .. }
             | Ti::Struct { .. }
+            | Ti::Image { .. }
+            | Ti::Sampler { .. }
+            | Ti::AccelerationStructure
+            | Ti::RayQuery
+            | Ti::BindingArray { .. } => None,
+        }
+    }
+
+    /// Return the leaf scalar type of `pointer`.
+    ///
+    /// `pointer` must be a `TypeInner` representing a pointer type.
+    pub fn pointer_automatically_convertible_scalar(
+        &self,
+        types: &crate::UniqueArena<crate::Type>,
+    ) -> Option<crate::Scalar> {
+        use crate::TypeInner as Ti;
+        match *self {
+            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } | Ti::Matrix { scalar, .. } => {
+                Some(scalar)
+            }
+            Ti::Atomic(_) => None,
+            Ti::Pointer { base, .. } | Ti::Array { base, .. } => {
+                types[base].inner.automatically_convertible_scalar(types)
+            }
+            Ti::ValuePointer { scalar, .. } => Some(scalar),
+            Ti::Struct { .. }
             | Ti::Image { .. }
             | Ti::Sampler { .. }
             | Ti::AccelerationStructure

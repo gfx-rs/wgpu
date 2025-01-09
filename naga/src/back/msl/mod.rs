@@ -59,8 +59,6 @@ pub struct BindTarget {
     pub buffer: Option<Slot>,
     pub texture: Option<Slot>,
     pub sampler: Option<BindSamplerTarget>,
-    /// If the binding is an unsized binding array, this overrides the size.
-    pub binding_array_size: Option<u32>,
     pub mutable: bool,
 }
 

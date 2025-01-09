@@ -676,10 +676,9 @@ pub enum RenderPassErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
     UnalignedIndirectBufferOffset(BufferAddress),
-    #[error("Indirect draw uses bytes {offset}..{end_offset} {} which overruns indirect buffer of size {buffer_size}",
-        count.map_or_else(String::new, |v| format!("(using count {v})")))]
+    #[error("Indirect draw uses bytes {offset}..{end_offset} using count {count} which overruns indirect buffer of size {buffer_size}")]
     IndirectBufferOverrun {
-        count: Option<NonZeroU32>,
+        count: u32,
         offset: u64,
         end_offset: u64,
         buffer_size: u64,
@@ -1787,14 +1786,14 @@ impl Global {
                         )
                         .map_pass_err(scope)?;
                     }
-                    ArcRenderCommand::MultiDrawIndirect {
+                    ArcRenderCommand::DrawIndirect {
                         buffer,
                         offset,
                         count,
                         indexed,
                     } => {
                         let scope = PassErrorScope::Draw {
-                            kind: if count.is_some() {
+                            kind: if count != 1 {
                                 DrawKind::MultiDrawIndirect
                             } else {
                                 DrawKind::DrawIndirect
@@ -2467,7 +2466,7 @@ fn multi_draw_indirect(
     cmd_buf: &Arc<CommandBuffer>,
     indirect_buffer: Arc<crate::resource::Buffer>,
     offset: u64,
-    count: Option<NonZeroU32>,
+    count: u32,
     indexed: bool,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!(
@@ -2482,7 +2481,7 @@ fn multi_draw_indirect(
         true => size_of::<wgt::DrawIndexedIndirectArgs>(),
     };
 
-    if count.is_some() {
+    if count != 1 {
         state
             .device
             .require_features(wgt::Features::MULTI_DRAW_INDIRECT)?;
@@ -2502,13 +2501,11 @@ fn multi_draw_indirect(
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
     let indirect_raw = indirect_buffer.try_raw(state.snatch_guard)?;
 
-    let actual_count = count.map_or(1, |c| c.get());
-
     if offset % 4 != 0 {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
-    let end_offset = offset + stride as u64 * actual_count as u64;
+    let end_offset = offset + stride as u64 * count as u64;
     if end_offset > indirect_buffer.size {
         return Err(RenderPassErrorInner::IndirectBufferOverrun {
             count,
@@ -2528,14 +2525,12 @@ fn multi_draw_indirect(
 
     match indexed {
         false => unsafe {
-            state
-                .raw_encoder
-                .draw_indirect(indirect_raw, offset, actual_count);
+            state.raw_encoder.draw_indirect(indirect_raw, offset, count);
         },
         true => unsafe {
             state
                 .raw_encoder
-                .draw_indexed_indirect(indirect_raw, offset, actual_count);
+                .draw_indexed_indirect(indirect_raw, offset, count);
         },
     }
     Ok(())
@@ -2599,7 +2594,7 @@ fn multi_draw_indirect_count(
     let end_offset = offset + stride * max_count as u64;
     if end_offset > indirect_buffer.size {
         return Err(RenderPassErrorInner::IndirectBufferOverrun {
-            count: None,
+            count: 1,
             offset,
             end_offset,
             buffer_size: indirect_buffer.size,
@@ -3103,10 +3098,10 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        base.commands.push(ArcRenderCommand::MultiDrawIndirect {
+        base.commands.push(ArcRenderCommand::DrawIndirect {
             buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
             offset,
-            count: None,
+            count: 1,
             indexed: false,
         });
 
@@ -3125,10 +3120,10 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        base.commands.push(ArcRenderCommand::MultiDrawIndirect {
+        base.commands.push(ArcRenderCommand::DrawIndirect {
             buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
             offset,
-            count: None,
+            count: 1,
             indexed: true,
         });
 
@@ -3148,10 +3143,10 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        base.commands.push(ArcRenderCommand::MultiDrawIndirect {
+        base.commands.push(ArcRenderCommand::DrawIndirect {
             buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
             offset,
-            count: NonZeroU32::new(count),
+            count,
             indexed: false,
         });
 
@@ -3171,10 +3166,10 @@ impl Global {
         };
         let base = pass.base_mut(scope)?;
 
-        base.commands.push(ArcRenderCommand::MultiDrawIndirect {
+        base.commands.push(ArcRenderCommand::DrawIndirect {
             buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
             offset,
-            count: NonZeroU32::new(count),
+            count,
             indexed: true,
         });
 

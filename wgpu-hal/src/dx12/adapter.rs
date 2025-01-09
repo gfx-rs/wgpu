@@ -425,9 +425,8 @@ impl super::Adapter {
 
         // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
         let max_color_attachments = 8;
-        // TODO: determine this programmatically if possible.
-        // https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447
-        let max_color_attachment_bytes_per_sample = 64;
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {

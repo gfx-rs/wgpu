@@ -390,7 +390,7 @@ impl<'a> Error<'a> {
                         "workgroup size separator (',') or a closing parenthesis".to_string()
                     }
                     ExpectedToken::GlobalItem => concat!(
-                        "global item ('struct', 'const', 'var', 'alias', ';', 'fn') ",
+                        "global item ('struct', 'const', 'var', 'alias', 'fn', 'diagnostic', 'enable', 'requires', ';') ",
                         "or the end of the file"
                     )
                     .to_string(),

@@ -201,7 +201,7 @@ impl Corpus {
 
                 let global = wgc::global::Global::new(
                     "test",
-                    wgt::InstanceDescriptor {
+                    &wgt::InstanceDescriptor {
                         backends: backend.into(),
                         flags: wgt::InstanceFlags::debugging(),
                         dx12_shader_compiler: wgt::Dx12Compiler::Fxc,

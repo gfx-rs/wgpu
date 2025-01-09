@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::*;
 
 /// Handle to a binding group layout.
@@ -15,7 +13,7 @@ use crate::*;
 /// https://gpuweb.github.io/gpuweb/#gpubindgrouplayout).
 #[derive(Debug, Clone)]
 pub struct BindGroupLayout {
-    pub(crate) inner: Arc<dispatch::DispatchBindGroupLayout>,
+    pub(crate) inner: dispatch::DispatchBindGroupLayout,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);

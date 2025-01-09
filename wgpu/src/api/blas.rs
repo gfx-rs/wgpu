@@ -1,6 +1,5 @@
 use crate::dispatch;
 use crate::{Buffer, Label};
-use std::sync::Arc;
 use wgt::WasmNotSendSync;
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
@@ -44,7 +43,7 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 /// [TlasPackage]: crate::TlasPackage
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
-    pub(crate) blas: Arc<dispatch::DispatchBlas>,
+    pub(crate) blas: dispatch::DispatchBlas,
     /// Affine transform matrix 3x4 (rows x columns, row major order).
     pub transform: [f32; 12],
     /// Custom index for the instance used inside the shader.
@@ -138,7 +137,7 @@ static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 /// [Tlas]: crate::Tlas
 pub struct Blas {
     pub(crate) handle: Option<u64>,
-    pub(crate) inner: Arc<dispatch::DispatchBlas>,
+    pub(crate) inner: dispatch::DispatchBlas,
 }
 static_assertions::assert_impl_all!(Blas: WasmNotSendSync);
 

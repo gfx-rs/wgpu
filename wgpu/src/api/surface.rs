@@ -1,4 +1,4 @@
-use std::{error, fmt, sync::Arc};
+use std::{error, fmt};
 
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -128,14 +128,12 @@ impl Surface<'_> {
         texture
             .map(|texture| SurfaceTexture {
                 texture: Texture {
-                    shared: Arc::new(TextureShared {
-                        inner: texture,
-                        descriptor,
-                    }),
+                    inner: texture,
+                    descriptor,
                 },
                 suboptimal,
                 presented: false,
-                detail: Arc::new(detail),
+                detail,
             })
             .ok_or(SurfaceError::Lost)
     }

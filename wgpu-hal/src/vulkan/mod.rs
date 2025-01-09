@@ -29,6 +29,7 @@ mod command;
 mod conv;
 mod device;
 mod instance;
+mod sampler;
 
 use std::{
     borrow::Borrow,
@@ -532,6 +533,7 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
+    maximum_samplers: u32,
 }
 
 bitflags::bitflags!(
@@ -641,6 +643,7 @@ struct DeviceShared {
     features: wgt::Features,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
 
@@ -828,6 +831,7 @@ impl TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
+    create_info: vk::SamplerCreateInfo<'static>,
 }
 
 impl crate::DynSampler for Sampler {}
