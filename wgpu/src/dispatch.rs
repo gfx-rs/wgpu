@@ -554,7 +554,7 @@ pub trait BufferMappedRangeInterface: CommonTraits {
 /// Generates Dispatch types for each of the interfaces. Each type is a wrapper around the
 /// wgpu_core and webgpu types, and derefs to the appropriate interface trait-object.
 ///
-/// When there is only one backend, deviritualization fires and all dispatches should turn into
+/// When there is only one backend, devirtualization fires and all dispatches should turn into
 /// direct calls. If there are multiple, some dispatching will occur.
 ///
 /// This also provides `as_*` methods so that the backend implementations can dereference other
