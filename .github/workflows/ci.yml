@@ -111,6 +111,12 @@ jobs:
             target: aarch64-apple-ios
             kind: native
 
+          # VisionOS
+          - name: VisionOS aarch64
+            os: macos-14
+            target: aarch64-apple-visionos
+            kind: native
+
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04

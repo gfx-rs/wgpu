@@ -256,7 +256,7 @@ fn main() {
 
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
-    target_os = "ios", target_os = "visionos"
+    target_vendor = "apple"
 ))]
 fn main() {
     eprintln!("This example is not supported on Windows and non-emscripten wasm32")
@@ -264,7 +264,7 @@ fn main() {
 
 #[cfg(not(any(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
-    target_os = "ios", target_os = "visionos"
+    target_vendor = "apple"
 )))]
 fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height: u32) {
     use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
