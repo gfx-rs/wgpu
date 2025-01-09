@@ -1,3 +1,5 @@
+#![cfg(feature = "wgsl")]
+
 use wgt::BlendState;
 
 use crate::{
@@ -10,10 +12,12 @@ use crate::{
     TextureViewDimension, VertexState,
 };
 
-/// A texture blitting utility
-/// Use this if you want to just render/copy texture A to texture B where [CommandEncoder::copy_texture_to_texture] would not work because of either
-/// - Textures are in incompatible formats
-/// - Textures are of different sizes
+/// Texture Blitting (Copying) Utility
+///
+/// Use this if you want to just render/copy texture A to texture B where [`CommandEncoder::copy_texture_to_texture`] would not work because:
+/// - Textures are in incompatible formats.
+/// - Textures are of different sizes.
+/// - Your copy destination is the surface texture and does not have the `COPY_DST` usage.
 pub struct TextureBlitter {
     pipeline: RenderPipeline,
     bind_group_layout: BindGroupLayout,
@@ -21,12 +25,13 @@ pub struct TextureBlitter {
 }
 
 impl TextureBlitter {
-    /// Returns a new [`TextureBlitter`]
+    /// Returns a new [`TextureBlitter`] with given settings.
+    ///
     /// # Arguments
     /// - `device` - A [`Device`]
-    /// - `format` - The [`TextureFormat`] of the texture that will be copied to. This has to be renderable.
+    /// - `format` - The [`TextureFormat`] of the texture that will be copied to. This has to be have the `RENDER_TARGET` usage..
     /// - `sample_type` - The [`Sampler`] Filtering Mode
-    /// - `blend_state` - The [`BlendState`] used
+    /// - `blend_state` - The [`BlendState`] used by the pipeline.
     pub fn new(
         device: &Device,
         format: TextureFormat,
