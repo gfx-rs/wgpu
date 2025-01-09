@@ -4,9 +4,7 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, Tes
 
 #[gpu_test]
 static TEST_SINGLE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default(),
-    )
+    .parameters(TestParameters::default())
     .run_async(|ctx| async move { run_test(ctx, false).await });
 
 #[gpu_test]
