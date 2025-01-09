@@ -2004,7 +2004,6 @@ pub enum Statement {
         /// [`Exchange { compare: None }`]: AtomicFunction::Exchange
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
-        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         result: Option<Handle<Expression>>,
     },
     /// Load uniformly from a uniform pointer in the workgroup address space.
