@@ -924,7 +924,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             const_typifier: &mut Typifier::new(),
             global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker::new(),
         };
-        ctx.module.comments.module = tu.comments.iter().map(|s| s.to_string()).collect();
+        ctx.module.get_comments_or_insert_default().module =
+            tu.comments.iter().map(|s| s.to_string()).collect();
 
         for decl_handle in self.index.visit_ordered() {
             let span = tu.decls.get_span(decl_handle);
@@ -936,16 +937,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     if !f.comments.is_empty() {
                         match lowered_decl {
                             LoweredGlobalDecl::Function(handle) => {
-                                ctx.module.comments.functions.insert(
-                                    handle,
-                                    f.comments.iter().map(|s| s.to_string()).collect(),
-                                );
+                                ctx.module
+                                    .get_comments_or_insert_default()
+                                    .functions
+                                    .insert(
+                                        handle,
+                                        f.comments.iter().map(|s| s.to_string()).collect(),
+                                    );
                             }
                             LoweredGlobalDecl::EntryPoint(index) => {
-                                ctx.module.comments.entry_points.insert(
-                                    index,
-                                    f.comments.iter().map(|s| s.to_string()).collect(),
-                                );
+                                ctx.module
+                                    .get_comments_or_insert_default()
+                                    .entry_points
+                                    .insert(
+                                        index,
+                                        f.comments.iter().map(|s| s.to_string()).collect(),
+                                    );
                             }
                             _ => {}
                         }
@@ -1002,7 +1009,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     if !v.comments.is_empty() {
                         ctx.module
-                            .comments
+                            .get_comments_or_insert_default()
                             .global_variables
                             .insert(handle, v.comments.iter().map(|s| s.to_string()).collect());
                     }
@@ -1051,8 +1058,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.globals
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
                     if !c.comments.is_empty() {
-                        ctx.module
-                            .comments
+                        let comments = ctx
+                            .module
+                            .get_comments_or_insert_default()
                             .constants
                             .insert(handle, c.comments.iter().map(|s| s.to_string()).collect());
                     }
@@ -1122,7 +1130,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .insert(s.name.name, LoweredGlobalDecl::Type(handle));
                     if !s.comments.is_empty() {
                         ctx.module
-                            .comments
+                            .get_comments_or_insert_default()
                             .types
                             .insert(handle, s.comments.iter().map(|s| s.to_string()).collect());
                     }
@@ -2824,10 +2832,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         );
         for (i, c) in comments.drain(..).enumerate() {
             if let Some(comment) = c {
-                ctx.module
-                    .comments
-                    .struct_members
-                    .insert((handle, i), comment);
+                if ctx.module.comments.is_none() {
+                    ctx.module.comments = Some(Default::default());
+                }
+                let comments = ctx.module.get_comments_or_insert_default();
+                comments.struct_members.insert((handle, i), comment);
             }
         }
         Ok(handle)

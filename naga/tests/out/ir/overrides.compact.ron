@@ -196,12 +196,13 @@
             ),
         ),
     ],
-    comments: (
+    comments: Some((
         types: {},
         struct_members: {},
+        entry_points: {},
         functions: {},
         constants: {},
         global_variables: {},
         module: [],
-    ),
+    )),
 )

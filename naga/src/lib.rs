@@ -2286,5 +2286,12 @@ pub struct Module {
     /// Entry points.
     pub entry_points: Vec<EntryPoint>,
     /// Comments, usually serving as documentation
-    pub comments: Comments,
+    pub comments: Option<Box<Comments>>,
+}
+
+impl Module {
+    pub fn get_comments_or_insert_default(&mut self) -> &mut Box<Comments> {
+        self.comments
+            .get_or_insert_with(|| Box::new(Comments::default()))
+    }
 }

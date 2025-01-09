@@ -2231,26 +2231,14 @@
             ),
         ),
     ],
-    comments: (
+    comments: Some((
         types: {
             3: [
                 "// This snapshot tests accessing various containers, dereferencing pointers.",
             ],
         },
-        struct_members: {
-            (3, 0): [],
-            (3, 1): [],
-            (3, 2): [],
-            (4, 0): [],
-            (13, 0): [],
-            (13, 1): [],
-            (13, 2): [],
-            (13, 3): [],
-            (13, 4): [],
-            (13, 5): [],
-            (15, 0): [],
-            (20, 0): [],
-        },
+        struct_members: {},
+        entry_points: {},
         functions: {},
         constants: {},
         global_variables: {
@@ -2259,5 +2247,5 @@
             ],
         },
         module: [],
-    ),
+    )),
 )

@@ -330,13 +330,12 @@
             ),
         ),
     ],
-    comments: (
+    comments: Some((
         types: {},
-        struct_members: {
-            (2, 0): [],
-        },
+        struct_members: {},
+        entry_points: {},
         functions: {
-            "collatz_iterations": [
+            0: [
                 "// The Collatz Conjecture states that for any integer n:",
                 "// If n is even, n = n/2",
                 "// If n is odd, n = 3n+1",
@@ -352,5 +351,5 @@
             ],
         },
         module: [],
-    ),
+    )),
 )

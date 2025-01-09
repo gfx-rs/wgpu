@@ -910,6 +910,7 @@ fn convert_wgsl() {
             Targets::IR | Targets::SPIRV | Targets::METAL,
         ),
         ("vertex-pulling-transform", Targets::METAL),
+        ("types_with_comments", Targets::WGSL),
     ];
 
     for &(name, targets) in inputs.iter() {
