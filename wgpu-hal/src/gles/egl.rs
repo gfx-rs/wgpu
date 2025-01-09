@@ -1313,7 +1313,7 @@ impl crate::Surface for Surface {
                         let window_ptr = handle.ns_view.as_ptr();
                         #[cfg(target_os = "macos")]
                         let window_ptr = {
-                            use objc::{msg_send, runtime::Object, sel};
+                            use objc::{msg_send, runtime::Object, sel, sel_impl};
                             // ns_view always have a layer and don't need to verify that it exists.
                             let layer: *mut Object =
                                 msg_send![handle.ns_view.as_ptr().cast::<Object>(), layer];

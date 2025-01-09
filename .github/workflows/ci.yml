@@ -34,7 +34,7 @@ env:
   # We sometimes need nightly to use special things in CI.
   #
   # In order to prevent CI regressions, we pin the nightly version.
-  NIGHTLY_VERSION: "nightly-2024-10-10"
+  NIGHTLY_VERSION: "nightly-2024-09-05"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.83"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
@@ -115,7 +115,9 @@ jobs:
           - name: VisionOS aarch64
             os: macos-14
             target: aarch64-apple-visionos
-            kind: native
+            kind: wgpu-only
+            toolchain: nightly
+            extra-flags: -Zbuild-std
 
           # Linux
           - name: Linux x86_64
@@ -143,7 +145,7 @@ jobs:
           - name: Emscripten
             os: ubuntu-22.04
             target: wasm32-unknown-emscripten
-            kind: em
+            kind: wgpu-only
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -152,10 +154,19 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Repo MSRV toolchain
+      - name: Install Toolchain (Repo MSRV)
+        if: matrix.toolchain != 'nightly'
         run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup target add ${{ matrix.target }} --toolchain ${{ env.REPO_MSRV }}
           rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      - name: Install Toolchain (Nightly)
+        if: matrix.toolchain == 'nightly'
+        run: |
+          rustup toolchain install ${{ env.NIGHTLY_VERSION }} --no-self-update --profile=minimal --component clippy,rust-src
+          rustup override set ${{ env.NIGHTLY_VERSION }}
           cargo -V
 
       - name: disable debug
@@ -196,28 +207,28 @@ jobs:
           set -e
 
           # build for WebGPU
-          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
-          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
-          cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
+          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl,spirv
 
           # all features
-          cargo clippy --target ${{ matrix.target }} --tests --all-features
-          cargo doc --target ${{ matrix.target }} --no-deps --all-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --all-features
+          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --all-features
 
-      - name: check em
-        if: matrix.kind == 'em'
+      - name: check wgpu only
+        if: matrix.kind == 'wgpu-only'
         shell: bash
         run: |
           set -e
 
-          # build for Emscripten
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
+          # check with no features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu -p wgpu-hal --no-default-features
 
           # Don't check samples since we use winit in our samples which has dropped support for Emscripten.
 
-          # all features
-          cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu --all-features
+          # Check with all features.
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
 
       - name: check native
         if: matrix.kind == 'native'
@@ -226,13 +237,13 @@ jobs:
           set -e
 
           # check with no features
-          cargo clippy --target ${{ matrix.target }} --no-default-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }} --tests --benches --all-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features
 
           # build docs
-          cargo doc --target ${{ matrix.target }} --all-features --no-deps
+          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
       - name: check private item docs
         if: matrix.kind == 'native'
@@ -241,7 +252,7 @@ jobs:
           set -e
 
           # wgpu_core package
-          cargo doc --target ${{ matrix.target }} \
+          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
                 --package wgpu-core \
                 --package wgpu-hal \
                 --package naga \
