@@ -15,6 +15,10 @@ static TEST_SCATTER: GpuTestConfiguration = GpuTestConfiguration::new()
             .expect_fail(FailureCase::backend_adapter(
                 wgpu::Backends::METAL,
                 "Apple M", // M1,M2 etc
+            ))
+            .expect_fail(FailureCase::backend_adapter(
+                wgpu::Backends::METAL,
+                "Apple Paravirtual device", // CI on M1
             )),
     )
     .run_async(|ctx| async move { run_test(ctx, true).await });
