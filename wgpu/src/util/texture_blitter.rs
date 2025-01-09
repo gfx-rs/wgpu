@@ -158,7 +158,7 @@ impl TextureBlitter {
                 view: target,
                 resolve_target: None,
                 ops: wgt::Operations {
-                    load: LoadOp::Clear(crate::Color::BLACK),
+                    load: LoadOp::Load,
                     store: StoreOp::Store,
                 },
             })],
