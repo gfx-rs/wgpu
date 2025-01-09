@@ -34,7 +34,7 @@ env:
   # We sometimes need nightly to use special things in CI.
   #
   # In order to prevent CI regressions, we pin the nightly version.
-  NIGHTLY_VERSION: "nightly-2024-09-05"
+  NIGHTLY_VERSION: "nightly-2024-10-17"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.83"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
@@ -155,19 +155,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Toolchain (Repo MSRV)
-        if: matrix.toolchain != 'nightly'
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
           rustup target add ${{ matrix.target }} --toolchain ${{ env.REPO_MSRV }}
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: Install Toolchain (Nightly)
+      - name: Pretend Stable is Nightly
         if: matrix.toolchain == 'nightly'
         run: |
-          rustup toolchain install ${{ env.NIGHTLY_VERSION }} --no-self-update --profile=minimal --component clippy,rust-src
-          rustup override set ${{ env.NIGHTLY_VERSION }}
-          cargo -V
+          rustup component add rust-src --toolchain ${{ env.REPO_MSRV }}
+          echo "RUST_BOOTSTRAP=1" >> "$GITHUB_ENV"
 
       - name: disable debug
         shell: bash
@@ -200,6 +198,7 @@ jobs:
           # the android sdk doesn't use the conventional name for ar, so explicitly set it.
           echo "AR_aarch64_linux_android=llvm-ar" >> "$GITHUB_ENV"
 
+      # Building for wasm32 requires a series of specific tests for the WebGPU backend.
       - name: check web
         if: matrix.kind == 'web'
         shell: bash
@@ -215,6 +214,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --all-features
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --all-features
 
+      # Building for platforms where the tests do not compile.
       - name: check wgpu only
         if: matrix.kind == 'wgpu-only'
         shell: bash
@@ -230,6 +230,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
 
+      # Building for native platforms with standard tests.
       - name: check native
         if: matrix.kind == 'native'
         shell: bash
