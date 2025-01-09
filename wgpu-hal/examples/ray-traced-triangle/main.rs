@@ -239,9 +239,9 @@ impl<A: hal::Api> Example<A> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgt::InstanceFlags::default(),
-            dx12_shader_compiler: wgt::Dx12Compiler::Dxc {
-                dxil_path: None,
-                dxc_path: None,
+            dx12_shader_compiler: wgt::Dx12Compiler::DynamicDxc {
+                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
+                dxil_path: std::path::PathBuf::from("dxil.dll"),
             },
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
@@ -371,7 +371,7 @@ impl<A: hal::Api> Example<A> {
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,
-            runtime_checks: false,
+            runtime_checks: wgt::ShaderRuntimeChecks::checked(),
         };
         let shader_module = unsafe {
             device
@@ -731,8 +731,10 @@ impl<A: hal::Api> Example<A> {
 
         unsafe {
             cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::AccelerationStructureUses::empty()
-                    ..hal::AccelerationStructureUses::BUILD_OUTPUT,
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::empty(),
+                    to: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                },
             });
 
             cmd_encoder.build_acceleration_structures(
@@ -750,14 +752,18 @@ impl<A: hal::Api> Example<A> {
 
             let scratch_buffer_barrier = hal::BufferBarrier {
                 buffer: &scratch_buffer,
-                usage: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
-                    ..hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    to: hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                },
             };
             cmd_encoder.transition_buffers(iter::once(scratch_buffer_barrier));
 
             cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                    ..hal::AccelerationStructureUses::BUILD_INPUT,
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                    to: hal::AccelerationStructureUses::BUILD_INPUT,
+                },
             });
 
             cmd_encoder.build_acceleration_structures(
@@ -774,14 +780,19 @@ impl<A: hal::Api> Example<A> {
             );
 
             cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                    ..hal::AccelerationStructureUses::SHADER_INPUT,
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                    to: hal::AccelerationStructureUses::SHADER_INPUT,
+                },
             });
 
             let texture_barrier = hal::TextureBarrier {
                 texture: &texture,
                 range: wgt::ImageSubresourceRange::default(),
-                usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::STORAGE_READ_WRITE,
+                usage: hal::StateTransition {
+                    from: hal::TextureUses::UNINITIALIZED,
+                    to: hal::TextureUses::STORAGE_READ_WRITE,
+                },
             };
 
             cmd_encoder.transition_textures(iter::once(texture_barrier));
@@ -852,7 +863,10 @@ impl<A: hal::Api> Example<A> {
         let target_barrier0 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::UNINITIALIZED..hal::TextureUses::COPY_DST,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::UNINITIALIZED,
+                to: hal::TextureUses::COPY_DST,
+            },
         };
 
         let instances_buffer_size =
@@ -890,8 +904,10 @@ impl<A: hal::Api> Example<A> {
 
             ctx.encoder
                 .place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                    usage: hal::AccelerationStructureUses::SHADER_INPUT
-                        ..hal::AccelerationStructureUses::BUILD_INPUT,
+                    usage: hal::StateTransition {
+                        from: hal::AccelerationStructureUses::SHADER_INPUT,
+                        to: hal::AccelerationStructureUses::BUILD_INPUT,
+                    },
                 });
 
             ctx.encoder.build_acceleration_structures(
@@ -909,14 +925,18 @@ impl<A: hal::Api> Example<A> {
 
             ctx.encoder
                 .place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                    usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                        ..hal::AccelerationStructureUses::SHADER_INPUT,
+                    usage: hal::StateTransition {
+                        from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                        to: hal::AccelerationStructureUses::SHADER_INPUT,
+                    },
                 });
 
             let scratch_buffer_barrier = hal::BufferBarrier {
                 buffer: &self.scratch_buffer,
-                usage: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT
-                    ..hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    to: hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                },
             };
             ctx.encoder
                 .transition_buffers(iter::once(scratch_buffer_barrier));
@@ -952,17 +972,26 @@ impl<A: hal::Api> Example<A> {
         let target_barrier1 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::COPY_DST..hal::TextureUses::PRESENT,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::COPY_DST,
+                to: hal::TextureUses::PRESENT,
+            },
         };
         let target_barrier2 = hal::TextureBarrier {
             texture: &self.texture,
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::STORAGE_READ_WRITE..hal::TextureUses::COPY_SRC,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::STORAGE_READ_WRITE,
+                to: hal::TextureUses::COPY_SRC,
+            },
         };
         let target_barrier3 = hal::TextureBarrier {
             texture: &self.texture,
             range: wgt::ImageSubresourceRange::default(),
-            usage: hal::TextureUses::COPY_SRC..hal::TextureUses::STORAGE_READ_WRITE,
+            usage: hal::StateTransition {
+                from: hal::TextureUses::COPY_SRC,
+                to: hal::TextureUses::STORAGE_READ_WRITE,
+            },
         };
         unsafe {
             ctx.encoder.end_compute_pass();
@@ -1046,7 +1075,7 @@ impl<A: hal::Api> Example<A> {
 
             for mut ctx in self.contexts {
                 ctx.wait_and_clear(&self.device);
-                self.device.destroy_command_encoder(ctx.encoder);
+                drop(ctx.encoder);
                 self.device.destroy_fence(ctx.fence);
             }
 

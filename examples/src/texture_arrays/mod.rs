@@ -195,7 +195,7 @@ impl crate::framework::Example for Example {
         queue.write_texture(
             red_texture.as_image_copy(),
             &red_texture_data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4),
                 rows_per_image: None,
@@ -205,7 +205,7 @@ impl crate::framework::Example for Example {
         queue.write_texture(
             green_texture.as_image_copy(),
             &green_texture_data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4),
                 rows_per_image: None,
@@ -215,7 +215,7 @@ impl crate::framework::Example for Example {
         queue.write_texture(
             blue_texture.as_image_copy(),
             &blue_texture_data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4),
                 rows_per_image: None,
@@ -225,7 +225,7 @@ impl crate::framework::Example for Example {
         queue.write_texture(
             white_texture.as_image_copy(),
             &white_texture_data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4),
                 rows_per_image: None,

@@ -1,9 +1,9 @@
 [package]
 name = "wgpu-hal"
-version = "23.0.0"
+version = "23.0.1"
 authors = ["gfx-rs developers"]
 edition = "2021"
-description = "WebGPU hardware abstraction layer"
+description = "Hardware abstraction layer for wgpu, the cross-platform, safe, pure-rust graphics API"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
@@ -53,6 +53,7 @@ vulkan = [
     "dep:libloading",
     "dep:smallvec",
     "dep:android_system_properties",
+    "dep:ordered-float",
 ]
 gles = [
     "naga/glsl-out",
@@ -91,6 +92,8 @@ dx12 = [
     "windows/Win32_System_Threading",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
+## Enables statically linking DXC.
+static-dxc = ["dep:mach-dxcompiler-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
 # Panic when running into an out-of-memory error (for debugging purposes).
@@ -106,6 +109,9 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
 [[example]]
 name = "halmark"
 
@@ -120,6 +126,7 @@ profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 thiserror.workspace = true
 once_cell.workspace = true
+ordered-float = { workspace = true, optional = true }
 
 # backends common
 arrayvec.workspace = true
@@ -164,7 +171,13 @@ windows-core = { workspace = true, optional = true }
 # backend: Gles
 glutin_wgl_sys = { workspace = true, optional = true }
 
-[target.'cfg(any(target_os="macos", target_os="ios", target_os="visionos"))'.dependencies]
+# This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
+#
+# ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
+[target.'cfg(all(windows, not(target_arch = "aarch64")))'.dependencies]
+mach-dxcompiler-rs = { workspace = true, optional = true }
+
+[target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
 block = { workspace = true, optional = true }
 

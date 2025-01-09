@@ -783,8 +783,7 @@ impl super::Queue {
                         .buffer_layout
                         .bytes_per_row
                         .unwrap_or(copy.size.width * block_size);
-                    let minimum_rows_per_image =
-                        (copy.size.height + block_height - 1) / block_height;
+                    let minimum_rows_per_image = copy.size.height.div_ceil(block_height);
                     let rows_per_image = copy
                         .buffer_layout
                         .rows_per_image
@@ -1226,7 +1225,7 @@ impl super::Queue {
                     flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::BufferUses::STORAGE_READ | crate::BufferUses::STORAGE_READ_WRITE,
+                    crate::BufferUses::STORAGE_READ_ONLY | crate::BufferUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_STORAGE_BARRIER_BIT;
                 }
@@ -1238,7 +1237,9 @@ impl super::Queue {
                     flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::TextureUses::STORAGE_READ | crate::TextureUses::STORAGE_READ_WRITE,
+                    crate::TextureUses::STORAGE_READ_ONLY
+                        | crate::TextureUses::STORAGE_WRITE_ONLY
+                        | crate::TextureUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
                 }

@@ -162,7 +162,18 @@ macro_rules! api_log {
 macro_rules! api_log {
     ($($arg:tt)+) => (log::trace!($($arg)+))
 }
+
+#[cfg(feature = "api_log_info")]
+macro_rules! api_log_debug {
+    ($($arg:tt)+) => (log::info!($($arg)+))
+}
+#[cfg(not(feature = "api_log_info"))]
+macro_rules! api_log_debug {
+    ($($arg:tt)+) => (log::debug!($($arg)+))
+}
+
 pub(crate) use api_log;
+pub(crate) use api_log_debug;
 
 #[cfg(feature = "resource_log_info")]
 macro_rules! resource_log {

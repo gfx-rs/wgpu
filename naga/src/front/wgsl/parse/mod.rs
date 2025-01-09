@@ -2,7 +2,7 @@ use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
     ShouldConflictOnFullDuplicate, StandardFilterableTriggeringRule,
 };
-use crate::front::wgsl::error::{Error, ExpectedToken};
+use crate::front::wgsl::error::{DiagnosticAttributeNotSupportedPosition, Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, EnableExtensions, UnimplementedEnableExtension,
 };
@@ -134,7 +134,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
 /// This is used for error checking. `Parser` maintains a stack of
 /// these and (occasionally) checks that it is being pushed and popped
 /// as expected.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum Rule {
     Attribute,
     VariableDecl,
@@ -147,6 +147,8 @@ enum Rule {
     UnaryExpr,
     GeneralExpr,
     Directive,
+    GenericExpr,
+    EnclosedExpr,
 }
 
 struct ParsedAttribute<T> {
@@ -282,6 +284,16 @@ impl Parser {
     fn peek_rule_span(&mut self, lexer: &Lexer<'_>) -> Span {
         let &(_, initial) = self.rules.last().unwrap();
         lexer.span_from(initial)
+    }
+
+    fn race_rules(&self, rule0: Rule, rule1: Rule) -> Option<Rule> {
+        Some(
+            self.rules
+                .iter()
+                .rev()
+                .find(|&x| x.0 == rule0 || x.0 == rule1)?
+                .0,
+        )
     }
 
     fn switch_value<'a>(
@@ -547,7 +559,7 @@ impl Parser {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
                 let size = if lexer.skip(Token::Separator(',')) {
-                    let expr = self.unary_expression(lexer, ctx)?;
+                    let expr = self.const_generic_expression(lexer, ctx)?;
                     ast::ArraySize::Constant(expr)
                 } else {
                     ast::ArraySize::Dynamic
@@ -566,6 +578,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Vec<Handle<ast::Expression<'a>>>, Error<'a>> {
+        self.push_rule_span(Rule::EnclosedExpr, lexer);
         lexer.open_arguments()?;
         let mut arguments = Vec::new();
         loop {
@@ -580,7 +593,19 @@ impl Parser {
             arguments.push(arg);
         }
 
+        self.pop_rule_span(lexer);
         Ok(arguments)
+    }
+
+    fn enclosed_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+        self.push_rule_span(Rule::EnclosedExpr, lexer);
+        let expr = self.general_expression(lexer, ctx)?;
+        self.pop_rule_span(lexer);
+        Ok(expr)
     }
 
     /// Expects [`Rule::PrimaryExpr`] or [`Rule::SingularExpr`] on top; does not pop it.
@@ -655,11 +680,19 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
         self.push_rule_span(Rule::PrimaryExpr, lexer);
+        const fn literal_ray_flag<'b>(flag: crate::RayFlag) -> ast::Expression<'b> {
+            ast::Expression::Literal(ast::Literal::Number(Number::U32(flag.bits())))
+        }
+        const fn literal_ray_intersection<'b>(
+            intersection: crate::RayQueryIntersection,
+        ) -> ast::Expression<'b> {
+            ast::Expression::Literal(ast::Literal::Number(Number::U32(intersection as u32)))
+        }
 
         let expr = match lexer.peek() {
             (Token::Paren('('), _) => {
                 let _ = lexer.next();
-                let expr = self.general_expression(lexer, ctx)?;
+                let expr = self.enclosed_expression(lexer, ctx)?;
                 lexer.expect(Token::Paren(')'))?;
                 self.pop_rule_span(lexer);
                 return Ok(expr);
@@ -687,15 +720,63 @@ impl Parser {
             }
             (Token::Word("RAY_FLAG_NONE"), _) => {
                 let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Number(Number::U32(0)))
+                literal_ray_flag(crate::RayFlag::empty())
+            }
+            (Token::Word("RAY_FLAG_FORCE_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::FORCE_OPAQUE)
+            }
+            (Token::Word("RAY_FLAG_FORCE_NO_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::FORCE_NO_OPAQUE)
             }
             (Token::Word("RAY_FLAG_TERMINATE_ON_FIRST_HIT"), _) => {
                 let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Number(Number::U32(4)))
+                literal_ray_flag(crate::RayFlag::TERMINATE_ON_FIRST_HIT)
+            }
+            (Token::Word("RAY_FLAG_SKIP_CLOSEST_HIT_SHADER"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::SKIP_CLOSEST_HIT_SHADER)
+            }
+            (Token::Word("RAY_FLAG_CULL_BACK_FACING"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_BACK_FACING)
+            }
+            (Token::Word("RAY_FLAG_CULL_FRONT_FACING"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_FRONT_FACING)
+            }
+            (Token::Word("RAY_FLAG_CULL_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_OPAQUE)
+            }
+            (Token::Word("RAY_FLAG_CULL_NO_OPAQUE"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::CULL_NO_OPAQUE)
+            }
+            (Token::Word("RAY_FLAG_SKIP_TRIANGLES"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::SKIP_TRIANGLES)
+            }
+            (Token::Word("RAY_FLAG_SKIP_AABBS"), _) => {
+                let _ = lexer.next();
+                literal_ray_flag(crate::RayFlag::SKIP_AABBS)
             }
             (Token::Word("RAY_QUERY_INTERSECTION_NONE"), _) => {
                 let _ = lexer.next();
-                ast::Expression::Literal(ast::Literal::Number(Number::U32(0)))
+                literal_ray_intersection(crate::RayQueryIntersection::None)
+            }
+            (Token::Word("RAY_QUERY_INTERSECTION_TRIANGLE"), _) => {
+                let _ = lexer.next();
+                literal_ray_intersection(crate::RayQueryIntersection::Triangle)
+            }
+            (Token::Word("RAY_QUERY_INTERSECTION_GENERATED"), _) => {
+                let _ = lexer.next();
+                literal_ray_intersection(crate::RayQueryIntersection::Generated)
+            }
+            (Token::Word("RAY_QUERY_INTERSECTION_AABB"), _) => {
+                let _ = lexer.next();
+                literal_ray_intersection(crate::RayQueryIntersection::Aabb)
             }
             (Token::Word(word), span) => {
                 let start = lexer.start_byte_offset();
@@ -747,7 +828,7 @@ impl Parser {
                 }
                 Token::Paren('[') => {
                     let _ = lexer.next();
-                    let index = self.general_expression(lexer, ctx)?;
+                    let index = self.enclosed_expression(lexer, ctx)?;
                     lexer.expect(Token::Paren(']'))?;
 
                     ast::Expression::Index { base: expr, index }
@@ -759,6 +840,17 @@ impl Parser {
             expr = ctx.expressions.append(expression, span);
         }
 
+        Ok(expr)
+    }
+
+    fn const_generic_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+        self.push_rule_span(Rule::GenericExpr, lexer);
+        let expr = self.general_expression(lexer, ctx)?;
+        self.pop_rule_span(lexer);
         Ok(expr)
     }
 
@@ -852,27 +944,47 @@ impl Parser {
             },
             // relational_expression
             |lexer, context| {
+                let enclosing = self.race_rules(Rule::GenericExpr, Rule::EnclosedExpr);
                 context.parse_binary_op(
                     lexer,
-                    |token| match token {
-                        Token::Paren('<') => Some(crate::BinaryOperator::Less),
-                        Token::Paren('>') => Some(crate::BinaryOperator::Greater),
-                        Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
-                        Token::LogicalOperation('>') => Some(crate::BinaryOperator::GreaterEqual),
-                        _ => None,
+                    match enclosing {
+                        Some(Rule::GenericExpr) => |token| match token {
+                            Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
+                            Token::LogicalOperation('>') => {
+                                Some(crate::BinaryOperator::GreaterEqual)
+                            }
+                            _ => None,
+                        },
+                        _ => |token| match token {
+                            Token::Paren('<') => Some(crate::BinaryOperator::Less),
+                            Token::Paren('>') => Some(crate::BinaryOperator::Greater),
+                            Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
+                            Token::LogicalOperation('>') => {
+                                Some(crate::BinaryOperator::GreaterEqual)
+                            }
+                            _ => None,
+                        },
                     },
                     // shift_expression
                     |lexer, context| {
                         context.parse_binary_op(
                             lexer,
-                            |token| match token {
-                                Token::ShiftOperation('<') => {
-                                    Some(crate::BinaryOperator::ShiftLeft)
-                                }
-                                Token::ShiftOperation('>') => {
-                                    Some(crate::BinaryOperator::ShiftRight)
-                                }
-                                _ => None,
+                            match enclosing {
+                                Some(Rule::GenericExpr) => |token| match token {
+                                    Token::ShiftOperation('<') => {
+                                        Some(crate::BinaryOperator::ShiftLeft)
+                                    }
+                                    _ => None,
+                                },
+                                _ => |token| match token {
+                                    Token::ShiftOperation('<') => {
+                                        Some(crate::BinaryOperator::ShiftLeft)
+                                    }
+                                    Token::ShiftOperation('>') => {
+                                        Some(crate::BinaryOperator::ShiftRight)
+                                    }
+                                    _ => None,
+                                },
                             },
                             // additive_expression
                             |lexer, context| {
@@ -1308,7 +1420,7 @@ impl Parser {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
                 let size = if lexer.skip(Token::Separator(',')) {
-                    let size = self.unary_expression(lexer, ctx)?;
+                    let size = self.const_generic_expression(lexer, ctx)?;
                     ast::ArraySize::Constant(size)
                 } else {
                     ast::ArraySize::Dynamic
@@ -2267,7 +2379,7 @@ impl Parser {
             ready = lexer.skip(Token::Separator(','));
         }
         // read return type
-        let result = if lexer.skip(Token::Arrow) && !lexer.skip(Token::Word("void")) {
+        let result = if lexer.skip(Token::Arrow) {
             let binding = self.varying_binding(lexer, &mut ctx)?;
             let ty = self.type_decl(lexer, &mut ctx)?;
             Some(ast::FunctionResult { ty, binding })
@@ -2353,17 +2465,16 @@ impl Parser {
             unresolved: &mut dependencies,
         };
         let mut diagnostic_filters = DiagnosticFilterMap::new();
-        let ensure_no_diag_attrs =
-            |on_what_plural, filters: DiagnosticFilterMap| -> Result<(), Error> {
-                if filters.is_empty() {
-                    Ok(())
-                } else {
-                    Err(Error::DiagnosticAttributeNotSupported {
-                        on_what_plural,
-                        spans: filters.spans().collect(),
-                    })
-                }
-            };
+        let ensure_no_diag_attrs = |on_what, filters: DiagnosticFilterMap| -> Result<(), Error> {
+            if filters.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::DiagnosticAttributeNotSupported {
+                    on_what,
+                    spans: filters.spans().collect(),
+                })
+            }
+        };
 
         self.push_rule_span(Rule::Attribute, lexer);
         while lexer.skip(Token::Attribute) {
@@ -2450,14 +2561,17 @@ impl Parser {
         let start = lexer.start_byte_offset();
         let kind = match lexer.next() {
             (Token::Separator(';'), _) => {
-                ensure_no_diag_attrs("semicolons", diagnostic_filters)?;
+                ensure_no_diag_attrs(
+                    DiagnosticAttributeNotSupportedPosition::SemicolonInModulePosition,
+                    diagnostic_filters,
+                )?;
                 None
             }
             (Token::Word(word), directive_span) if DirectiveKind::from_ident(word).is_some() => {
                 return Err(Error::DirectiveAfterFirstGlobalDecl { directive_span });
             }
             (Token::Word("struct"), _) => {
-                ensure_no_diag_attrs("`struct`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`struct`s".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2465,7 +2579,7 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
             }
             (Token::Word("alias"), _) => {
-                ensure_no_diag_attrs("`alias`es", diagnostic_filters)?;
+                ensure_no_diag_attrs("`alias`es".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2475,7 +2589,7 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Type(ast::TypeAlias { name, ty }))
             }
             (Token::Word("const"), _) => {
-                ensure_no_diag_attrs("`const`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`const`s".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2493,7 +2607,7 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Const(ast::Const { name, ty, init }))
             }
             (Token::Word("override"), _) => {
-                ensure_no_diag_attrs("`override`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`override`s".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2519,7 +2633,7 @@ impl Parser {
                 }))
             }
             (Token::Word("var"), _) => {
-                ensure_no_diag_attrs("`var`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`var`s".into(), diagnostic_filters)?;
 
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
@@ -2550,7 +2664,7 @@ impl Parser {
                 }))
             }
             (Token::Word("const_assert"), _) => {
-                ensure_no_diag_attrs("`const_assert`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`const_assert`s".into(), diagnostic_filters)?;
 
                 // parentheses are optional
                 let paren = lexer.skip(Token::Paren('('));

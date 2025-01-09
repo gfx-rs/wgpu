@@ -4,7 +4,6 @@ Frontend for [WGSL][wgsl] (WebGPU Shading Language).
 [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 */
 
-mod diagnostic_filter;
 mod error;
 mod index;
 mod lower;

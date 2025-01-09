@@ -64,7 +64,7 @@ fn element_or_member_type(
     }
 }
 
-impl<'source> ParsingContext<'source> {
+impl ParsingContext<'_> {
     pub fn parse_external_declaration(
         &mut self,
         frontend: &mut Frontend,
@@ -186,7 +186,7 @@ impl<'source> ParsingContext<'source> {
         // Consume any leading comma, e.g. this is valid: `float, a=1;`
         if self
             .peek(frontend)
-            .map_or(false, |t| t.value == TokenValue::Comma)
+            .is_some_and(|t| t.value == TokenValue::Comma)
         {
             self.next(frontend);
         }

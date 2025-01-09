@@ -1,0 +1,89 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 65
+; Schema: 0
+               OpCapability Shader
+               OpCapability VulkanMemoryModel
+               OpMemoryModel Logical Vulkan
+               OpEntryPoint GLCompute %1 "stage::test_atomic_compare_exchange" %2 %3
+               OpExecutionMode %1 LocalSize 32 1 1
+               OpMemberDecorate %_struct_9 0 Offset 0
+               OpMemberDecorate %_struct_9 1 Offset 4
+               OpDecorate %_struct_10 Block
+               OpMemberDecorate %_struct_10 0 Offset 0
+               OpDecorate %2 Binding 0
+               OpDecorate %2 DescriptorSet 0
+               OpDecorate %3 NonWritable
+               OpDecorate %3 Binding 1
+               OpDecorate %3 DescriptorSet 0
+       %uint = OpTypeInt 32 0
+       %void = OpTypeVoid
+         %13 = OpTypeFunction %void
+       %bool = OpTypeBool
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+      %false = OpConstantFalse %bool
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+     %uint_1 = OpConstant %uint 1
+  %_struct_9 = OpTypeStruct %uint %uint
+         %20 = OpUndef %_struct_9
+     %uint_3 = OpConstant %uint 3
+        %int = OpTypeInt 32 1
+         %23 = OpUndef %bool
+       %true = OpConstantTrue %bool
+ %_struct_10 = OpTypeStruct %uint
+%_ptr_StorageBuffer__struct_10 = OpTypePointer StorageBuffer %_struct_10
+          %2 = OpVariable %_ptr_StorageBuffer__struct_10 StorageBuffer
+          %3 = OpVariable %_ptr_StorageBuffer__struct_10 StorageBuffer
+   %uint_256 = OpConstant %uint 256
+          %1 = OpFunction %void None %13
+         %27 = OpLabel
+         %28 = OpInBoundsAccessChain %_ptr_StorageBuffer_uint %2 %uint_0
+         %29 = OpInBoundsAccessChain %_ptr_StorageBuffer_uint %3 %uint_0
+         %30 = OpLoad %uint %29
+         %31 = OpCompositeConstruct %_struct_9 %uint_0 %30
+               OpBranch %32
+         %32 = OpLabel
+         %33 = OpPhi %_struct_9 %31 %27 %34 %35
+               OpLoopMerge %36 %35 None
+               OpBranch %37
+         %37 = OpLabel
+         %38 = OpCompositeExtract %uint %33 0
+         %39 = OpCompositeExtract %uint %33 1
+         %40 = OpULessThan %bool %38 %39
+               OpSelectionMerge %41 None
+               OpBranchConditional %40 %42 %43
+         %42 = OpLabel
+         %45 = OpIAdd %uint %38 %uint_1
+         %46 = OpCompositeInsert %_struct_9 %45 %33 0
+         %47 = OpCompositeConstruct %_struct_9 %uint_1 %38
+               OpBranch %41
+         %43 = OpLabel
+         %48 = OpCompositeInsert %_struct_9 %uint_0 %20 0
+               OpBranch %41
+         %41 = OpLabel
+         %34 = OpPhi %_struct_9 %46 %42 %33 %43
+         %49 = OpPhi %_struct_9 %47 %42 %48 %43
+         %50 = OpCompositeExtract %uint %49 0
+         %51 = OpCompositeExtract %uint %49 1
+         %52 = OpBitcast %int %50
+               OpSelectionMerge %53 None
+               OpSwitch %52 %54 0 %55 1 %56
+         %54 = OpLabel
+               OpBranch %53
+         %55 = OpLabel
+               OpBranch %53
+         %56 = OpLabel
+         %57 = OpAtomicCompareExchange %uint %28 %uint_2 %uint_256 %uint_256 %51 %uint_3
+         %58 = OpIEqual %bool %57 %uint_3
+         %64 = OpSelect %bool %58 %false %true
+               OpBranch %53
+         %53 = OpLabel
+         %63 = OpPhi %bool %23 %54 %false %55 %64 %56
+               OpBranch %35
+         %35 = OpLabel
+               OpBranchConditional %63 %32 %36
+         %36 = OpLabel
+               OpReturn
+               OpFunctionEnd

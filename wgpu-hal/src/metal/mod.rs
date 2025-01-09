@@ -26,6 +26,7 @@ mod surface;
 mod time;
 
 use std::{
+    collections::HashMap,
     fmt, iter, ops,
     ptr::NonNull,
     sync::{atomic, Arc},
@@ -199,7 +200,7 @@ struct PrivateCapabilities {
     msaa_apple3: bool,
     msaa_apple7: bool,
     resource_heaps: bool,
-    argument_buffers: bool,
+    argument_buffers: metal::MTLArgumentBuffersTier,
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
@@ -289,6 +290,8 @@ struct PrivateCapabilities {
     supports_simd_scoped_operations: bool,
     int64: bool,
     int64_atomics: bool,
+    float_atomics: bool,
+    supports_shared_event: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -355,7 +358,7 @@ impl Queue {
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
-    counters: wgt::HalCounters,
+    counters: Arc<wgt::HalCounters>,
 }
 
 pub struct Surface {
@@ -428,6 +431,10 @@ impl crate::Queue for Queue {
                 signal_fence
                     .pending_command_buffers
                     .push((signal_value, raw.to_owned()));
+
+                if let Some(shared_event) = signal_fence.shared_event.as_ref() {
+                    raw.encode_signal_event(shared_event, signal_value);
+                }
                 // only return an extra one if it's extra
                 match command_buffers.last() {
                     Some(_) => None,
@@ -646,9 +653,22 @@ trait AsNative {
     fn as_native(&self) -> &Self::Native;
 }
 
+type ResourcePtr = NonNull<metal::MTLResource>;
 type BufferPtr = NonNull<metal::MTLBuffer>;
 type TexturePtr = NonNull<metal::MTLTexture>;
 type SamplerPtr = NonNull<metal::MTLSamplerState>;
+
+impl AsNative for ResourcePtr {
+    type Native = metal::ResourceRef;
+    #[inline]
+    fn from(native: &Self::Native) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &Self::Native {
+        unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+}
 
 impl AsNative for BufferPtr {
     type Native = metal::BufferRef;
@@ -705,12 +725,32 @@ struct BufferResource {
     binding_location: u32,
 }
 
+#[derive(Debug)]
+struct UseResourceInfo {
+    uses: metal::MTLResourceUsage,
+    stages: metal::MTLRenderStages,
+    visible_in_compute: bool,
+}
+
+impl Default for UseResourceInfo {
+    fn default() -> Self {
+        Self {
+            uses: metal::MTLResourceUsage::empty(),
+            stages: metal::MTLRenderStages::empty(),
+            visible_in_compute: false,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BindGroup {
     counters: MultiStageResourceCounters,
     buffers: Vec<BufferResource>,
     samplers: Vec<SamplerPtr>,
     textures: Vec<TexturePtr>,
+
+    argument_buffers: Vec<metal::Buffer>,
+    resources_to_use: HashMap<ResourcePtr, UseResourceInfo>,
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -721,7 +761,7 @@ unsafe impl Sync for BindGroup {}
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
-    runtime_checks: bool,
+    bounds_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
@@ -818,6 +858,7 @@ pub struct Fence {
     completed_value: Arc<atomic::AtomicU64>,
     /// The pending fence values have to be ascending.
     pending_command_buffers: Vec<(crate::FenceValue, metal::CommandBuffer)>,
+    shared_event: Option<metal::SharedEvent>,
 }
 
 impl crate::DynFence for Fence {}
@@ -840,6 +881,10 @@ impl Fence {
         let latest = self.get_latest();
         self.pending_command_buffers
             .retain(|&(value, _)| value > latest);
+    }
+
+    pub fn raw_shared_event(&self) -> Option<&metal::SharedEvent> {
+        self.shared_event.as_ref()
     }
 }
 
@@ -900,6 +945,7 @@ pub struct CommandEncoder {
     raw_cmd_buf: Option<metal::CommandBuffer>,
     state: CommandState,
     temp: Temp,
+    counters: Arc<wgt::HalCounters>,
 }
 
 impl fmt::Debug for CommandEncoder {

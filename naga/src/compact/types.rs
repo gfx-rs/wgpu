@@ -6,7 +6,7 @@ pub struct TypeTracer<'a> {
     pub types_used: &'a mut HandleSet<crate::Type>,
 }
 
-impl<'a> TypeTracer<'a> {
+impl TypeTracer<'_> {
     /// Propagate usage through `self.types`, starting with `self.types_used`.
     ///
     /// Treat `self.types_used` as the initial set of "known
@@ -82,9 +82,17 @@ impl ModuleMap {
             } => adjust(base),
             Ti::Array {
                 ref mut base,
-                size: _,
+                ref mut size,
                 stride: _,
-            } => adjust(base),
+            } => {
+                adjust(base);
+                if let crate::ArraySize::Pending(crate::PendingArraySize::Expression(
+                    ref mut size_expr,
+                )) = *size
+                {
+                    self.global_expressions.adjust(size_expr);
+                }
+            }
             Ti::Struct {
                 ref mut members,
                 span: _,

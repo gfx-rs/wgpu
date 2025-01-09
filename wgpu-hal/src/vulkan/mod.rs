@@ -29,6 +29,7 @@ mod command;
 mod conv;
 mod device;
 mod instance;
+mod sampler;
 
 use std::{
     borrow::Borrow,
@@ -532,8 +533,7 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
-    #[cfg(windows)]
-    external_memory_win32: bool,
+    maximum_samplers: u32,
 }
 
 bitflags::bitflags!(
@@ -643,6 +643,7 @@ struct DeviceShared {
     features: wgt::Features,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
     framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
 
@@ -669,7 +670,7 @@ pub struct Device {
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
-    counters: wgt::HalCounters,
+    counters: Arc<wgt::HalCounters>,
 }
 
 impl Drop for Device {
@@ -830,6 +831,7 @@ impl TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
+    create_info: vk::SamplerCreateInfo<'static>,
 }
 
 impl crate::DynSampler for Sampler {}
@@ -918,6 +920,30 @@ pub struct CommandEncoder {
     /// If set, the end of the next render/compute pass will write a timestamp at
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
+
+    counters: Arc<wgt::HalCounters>,
+}
+
+impl Drop for CommandEncoder {
+    fn drop(&mut self) {
+        // SAFETY:
+        //
+        // VUID-vkDestroyCommandPool-commandPool-00041: wgpu_hal requires that a
+        // `CommandBuffer` must live until its execution is complete, and that a
+        // `CommandBuffer` must not outlive the `CommandEncoder` that built it.
+        // Thus, we know that none of our `CommandBuffers` are in the "pending"
+        // state.
+        //
+        // The other VUIDs are pretty obvious.
+        unsafe {
+            // `vkDestroyCommandPool` also frees any command buffers allocated
+            // from that pool, so there's no need to explicitly call
+            // `vkFreeCommandBuffers` on `cmd_encoder`'s `free` and `discarded`
+            // fields.
+            self.device.raw.destroy_command_pool(self.raw, None);
+        }
+        self.counters.command_encoders.sub(1);
+    }
 }
 
 impl CommandEncoder {
@@ -950,7 +976,7 @@ pub enum ShaderModule {
     Raw(vk::ShaderModule),
     Intermediate {
         naga_shader: crate::NagaShader,
-        runtime_checks: bool,
+        runtime_checks: wgt::ShaderRuntimeChecks,
     },
 }
 

@@ -12,7 +12,7 @@ use crate::{
     AddressSpace, ArraySize, Handle, Span, Type, TypeInner,
 };
 
-impl<'source> ParsingContext<'source> {
+impl ParsingContext<'_> {
     /// Parses an optional array_specifier returning whether or not it's present
     /// and modifying the type handle if it exists
     pub fn parse_array_specifier(
@@ -147,7 +147,7 @@ impl<'source> ParsingContext<'source> {
     }
 
     pub fn peek_type_qualifier(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::Invariant
             | TokenValue::Interpolation(_)
             | TokenValue::Sampling(_)
@@ -379,7 +379,7 @@ impl<'source> ParsingContext<'source> {
     }
 
     pub fn peek_type_name(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::TypeName(_) | TokenValue::Void => true,
             TokenValue::Struct => true,
             TokenValue::Identifier(ref ident) => frontend.lookup_type.contains_key(ident),

@@ -509,6 +509,8 @@ pub enum ConstantEvaluatorError {
     InvalidArrayLengthArg,
     #[error("Constants cannot get the array length of a dynamically sized array")]
     ArrayLengthDynamic,
+    #[error("Cannot call arrayLength on array sized by override-expression")]
+    ArrayLengthOverridden,
     #[error("Constants cannot call functions")]
     Call,
     #[error("Constants don't support workGroupUniformLoad")]
@@ -1311,6 +1313,7 @@ impl<'a> ConstantEvaluator<'a> {
                             let expr = Expression::Literal(Literal::U32(len.get()));
                             self.register_evaluated_expr(expr, span)
                         }
+                        ArraySize::Pending(_) => Err(ConstantEvaluatorError::ArrayLengthOverridden),
                         ArraySize::Dynamic => Err(ConstantEvaluatorError::ArrayLengthDynamic),
                     },
                     _ => Err(ConstantEvaluatorError::InvalidArrayLengthArg),
@@ -1742,6 +1745,7 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::Literal(value) => Expression::Literal(match op {
                 UnaryOperator::Negate => match value {
                     Literal::I32(v) => Literal::I32(v.wrapping_neg()),
+                    Literal::I64(v) => Literal::I64(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
                     Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
@@ -1753,7 +1757,9 @@ impl<'a> ConstantEvaluator<'a> {
                 },
                 UnaryOperator::BitwiseNot => match value {
                     Literal::I32(v) => Literal::I32(!v),
+                    Literal::I64(v) => Literal::I64(!v),
                     Literal::U32(v) => Literal::U32(!v),
+                    Literal::U64(v) => Literal::U64(!v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(!v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
@@ -1802,29 +1808,23 @@ impl<'a> ConstantEvaluator<'a> {
 
                     _ => match (left_value, right_value) {
                         (Literal::I32(a), Literal::I32(b)) => Literal::I32(match op {
-                            BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("addition".into())
-                            })?,
-                            BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("subtraction".into())
-                            })?,
-                            BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("multiplication".into())
-                            })?,
-                            BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
+                            BinaryOperator::Add => a.wrapping_add(b),
+                            BinaryOperator::Subtract => a.wrapping_sub(b),
+                            BinaryOperator::Multiply => a.wrapping_mul(b),
+                            BinaryOperator::Divide => {
                                 if b == 0 {
-                                    ConstantEvaluatorError::DivisionByZero
+                                    return Err(ConstantEvaluatorError::DivisionByZero);
                                 } else {
-                                    ConstantEvaluatorError::Overflow("division".into())
+                                    a.wrapping_div(b)
                                 }
-                            })?,
-                            BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
+                            }
+                            BinaryOperator::Modulo => {
                                 if b == 0 {
-                                    ConstantEvaluatorError::RemainderByZero
+                                    return Err(ConstantEvaluatorError::RemainderByZero);
                                 } else {
-                                    ConstantEvaluatorError::Overflow("remainder".into())
+                                    a.wrapping_rem(b)
                                 }
-                            })?,
+                            }
                             BinaryOperator::And => a & b,
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
@@ -1881,6 +1881,20 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Modulo => a % b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
+                        (Literal::AbstractInt(a), Literal::U32(b)) => {
+                            Literal::AbstractInt(match op {
+                                BinaryOperator::ShiftLeft => {
+                                    if (if a.is_negative() { !a } else { a }).leading_zeros() <= b {
+                                        return Err(ConstantEvaluatorError::Overflow(
+                                            "<<".to_string(),
+                                        ));
+                                    }
+                                    a.checked_shl(b).unwrap_or(0)
+                                }
+                                BinaryOperator::ShiftRight => a.checked_shr(b).unwrap_or(0),
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
                         (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
                             Literal::AbstractInt(match op {
                                 BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {

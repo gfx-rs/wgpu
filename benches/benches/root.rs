@@ -1,6 +1,7 @@
 use criterion::criterion_main;
 use pollster::block_on;
 
+mod bind_groups;
 mod computepass;
 mod renderpass;
 mod resource_creation;
@@ -24,7 +25,7 @@ impl DeviceState {
             wgpu::Backends::all()
         };
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::util::backend_bits_from_env().unwrap_or(base_backend),
             flags: wgpu::InstanceFlags::empty(),
             dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env()
@@ -61,6 +62,7 @@ impl DeviceState {
 }
 
 criterion_main!(
+    bind_groups::bind_groups,
     renderpass::renderpass,
     computepass::computepass,
     resource_creation::resource_creation,

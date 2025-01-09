@@ -177,6 +177,7 @@ impl crate::framework::Example for Example {
             label: None,
             format: Some(wgpu::TextureFormat::Rgba8Unorm),
             dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: None,
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,

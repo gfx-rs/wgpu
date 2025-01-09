@@ -321,8 +321,9 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         cmd_buf
             .device
@@ -336,7 +337,7 @@ impl Global {
             });
         }
 
-        let raw_encoder = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let raw_encoder = cmd_buf_data.encoder.open()?;
 
         let query_set = hub.query_sets.get(query_set_id).get()?;
 
@@ -344,6 +345,7 @@ impl Global {
 
         cmd_buf_data.trackers.query_sets.insert_single(query_set);
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
@@ -361,8 +363,9 @@ impl Global {
         let cmd_buf = hub
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.try_get()?;
-        cmd_buf_data.check_recording()?;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -444,7 +447,7 @@ impl Global {
         );
 
         let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
-        let raw_encoder = cmd_buf_data.encoder.open(&cmd_buf.device)?;
+        let raw_encoder = cmd_buf_data.encoder.open()?;
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.as_slice());
             raw_encoder.copy_query_results(
@@ -458,6 +461,7 @@ impl Global {
 
         cmd_buf_data.trackers.query_sets.insert_single(query_set);
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 }

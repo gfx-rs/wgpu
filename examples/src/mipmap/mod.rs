@@ -127,6 +127,7 @@ impl Example {
                     label: Some("mip"),
                     format: None,
                     dimension: None,
+                    usage: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
                     mip_level_count: Some(1),
@@ -246,9 +247,9 @@ impl crate::framework::Example for Example {
             usage: wgpu::BufferUsages::COPY_SRC,
         });
         init_encoder.copy_buffer_to_texture(
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &temp_buf,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4 * size),
                     rows_per_image: None,

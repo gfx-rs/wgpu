@@ -253,6 +253,7 @@ An override expression can be evaluated at pipeline creation time.
 mod arena;
 pub mod back;
 mod block;
+pub mod common;
 #[cfg(feature = "compact")]
 pub mod compact;
 pub mod diagnostic_filter;
@@ -486,6 +487,15 @@ pub struct Scalar {
     pub width: Bytes,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum PendingArraySize {
+    Expression(Handle<Expression>),
+    Override(Handle<Override>),
+}
+
 /// Size of an array.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -495,6 +505,8 @@ pub struct Scalar {
 pub enum ArraySize {
     /// The array size is constant.
     Constant(std::num::NonZeroU32),
+    /// The array size is an override-expression.
+    Pending(PendingArraySize),
     /// The array size can change at runtime.
     Dynamic,
 }
@@ -1937,14 +1949,18 @@ pub enum Statement {
         /// If [`SHADER_INT64_ATOMIC_MIN_MAX`] or [`SHADER_INT64_ATOMIC_ALL_OPS`] are
         /// enabled, this may also be [`I64`] or [`U64`].
         ///
+        /// If [`SHADER_FLOAT32_ATOMIC`] is enabled, this may be [`F32`].
+        ///
         /// [`Pointer`]: TypeInner::Pointer
         /// [`Atomic`]: TypeInner::Atomic
         /// [`I32`]: Scalar::I32
         /// [`U32`]: Scalar::U32
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         /// [`I64`]: Scalar::I64
         /// [`U64`]: Scalar::U64
+        /// [`F32`]: Scalar::F32
         pointer: Handle<Expression>,
 
         /// Function to run on the atomic value.
@@ -1955,14 +1971,24 @@ pub enum Statement {
         ///   value here.
         ///
         /// - The [`SHADER_INT64_ATOMIC_MIN_MAX`] capability allows
-        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`] here.
+        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`]
+        ///   in the [`Storage`] address space here.
         ///
         /// - If neither of those capabilities are present, then 64-bit scalar
         ///   atomics are not allowed.
         ///
+        /// If [`pointer`] refers to a 32-bit floating-point atomic value, then:
+        ///
+        /// - The [`SHADER_FLOAT32_ATOMIC`] capability allows [`AtomicFunction::Add`],
+        ///   [`AtomicFunction::Subtract`], and [`AtomicFunction::Exchange { compare: None }`]
+        ///   in the [`Storage`] address space here.
+        ///
+        /// [`AtomicFunction::Exchange { compare: None }`]: AtomicFunction::Exchange
         /// [`pointer`]: Statement::Atomic::pointer
+        /// [`Storage`]: AddressSpace::Storage
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         fun: AtomicFunction,
 
         /// Value to use in the function.
@@ -2186,6 +2212,8 @@ pub struct EntryPoint {
     pub early_depth_test: Option<EarlyDepthTest>,
     /// Workgroup size for compute stages
     pub workgroup_size: [u32; 3],
+    /// Override expressions for workgroup size in the global_expressions arena
+    pub workgroup_size_overrides: Option<[Option<Handle<Expression>>; 3]>,
     /// The entrance function.
     pub function: Function,
 }
@@ -2203,11 +2231,11 @@ pub enum PredeclaredType {
     AtomicCompareExchangeWeakResult(Scalar),
     ModfResult {
         size: Option<VectorSize>,
-        width: Bytes,
+        scalar: Scalar,
     },
     FrexpResult {
         size: Option<VectorSize>,
-        width: Bytes,
+        scalar: Scalar,
     },
 }
 
@@ -2234,6 +2262,62 @@ pub struct SpecialTypes {
     /// Call [`Module::generate_predeclared_type`] to populate this if
     /// needed and return the handle.
     pub predeclared_types: FastIndexMap<PredeclaredType, Handle<Type>>,
+}
+
+bitflags::bitflags! {
+    /// Ray flags used when casting rays.
+    /// Matching vulkan constants can be found in
+    /// https://github.com/KhronosGroup/SPIRV-Registry/blob/main/extensions/KHR/ray_common/ray_flags_section.txt
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
+    #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    pub struct RayFlag: u32 {
+        /// Force all intersections to be treated as opaque.
+        const FORCE_OPAQUE = 0x1;
+        /// Force all intersections to be treated as non-opaque.
+        const FORCE_NO_OPAQUE = 0x2;
+        /// Stop traversal after the first hit.
+        const TERMINATE_ON_FIRST_HIT = 0x4;
+        /// Don't execute the closest hit shader.
+        const SKIP_CLOSEST_HIT_SHADER = 0x8;
+        /// Cull back facing geometry.
+        const CULL_BACK_FACING = 0x10;
+        /// Cull front facing geometry.
+        const CULL_FRONT_FACING = 0x20;
+        /// Cull opaque geometry.
+        const CULL_OPAQUE = 0x40;
+        /// Cull non-opaque geometry.
+        const CULL_NO_OPAQUE = 0x80;
+        /// Skip triangular geometry.
+        const SKIP_TRIANGLES = 0x100;
+        /// Skip axis-aligned bounding boxes.
+        const SKIP_AABBS = 0x200;
+    }
+}
+
+/// Type of a ray query intersection.
+/// Matching vulkan constants can be found in
+/// <https://github.com/KhronosGroup/SPIRV-Registry/blob/main/extensions/KHR/SPV_KHR_ray_query.asciidoc>
+/// but the actual values are different for candidate intersections.
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum RayQueryIntersection {
+    /// No intersection found.
+    /// Matches `RayQueryCommittedIntersectionNoneKHR`.
+    #[default]
+    None = 0,
+    /// Intersecting with triangles.
+    /// Matches `RayQueryCommittedIntersectionTriangleKHR` and `RayQueryCandidateIntersectionTriangleKHR`.
+    Triangle = 1,
+    /// Intersecting with generated primitives.
+    /// Matches `RayQueryCommittedIntersectionGeneratedKHR`.
+    Generated = 2,
+    /// Intersecting with Axis Aligned Bounding Boxes.
+    /// Matches `RayQueryCandidateIntersectionAABBKHR`.
+    Aabb = 3,
 }
 
 /// Shader module.

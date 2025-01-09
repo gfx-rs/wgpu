@@ -12,14 +12,6 @@ use windows::{
 use super::SurfaceTarget;
 use crate::{auxil, dx12::D3D12Lib};
 
-impl Drop for super::Instance {
-    fn drop(&mut self) {
-        if self.flags.contains(wgt::InstanceFlags::VALIDATION) {
-            auxil::dxgi::exception::unregister_exception_handler();
-        }
-    }
-}
-
 impl crate::Instance for super::Instance {
     type A = super::Api;
 
@@ -76,16 +68,31 @@ impl crate::Instance for super::Instance {
 
         // Initialize DXC shader compiler
         let dxc_container = match desc.dx12_shader_compiler.clone() {
-            wgt::Dx12Compiler::Dxc {
+            wgt::Dx12Compiler::DynamicDxc {
                 dxil_path,
                 dxc_path,
             } => {
-                let container = super::shader_compilation::get_dxc_container(dxc_path, dxil_path)
-                    .map_err(|e| {
-                    crate::InstanceError::with_source(String::from("Failed to load DXC"), e)
-                })?;
+                let container =
+                    super::shader_compilation::get_dynamic_dxc_container(dxc_path, dxil_path)
+                        .map_err(|e| {
+                            crate::InstanceError::with_source(
+                                String::from("Failed to load dynamic DXC"),
+                                e,
+                            )
+                        })?;
 
-                container.map(Arc::new)
+                Some(Arc::new(container))
+            }
+            wgt::Dx12Compiler::StaticDxc => {
+                let container =
+                    super::shader_compilation::get_static_dxc_container().map_err(|e| {
+                        crate::InstanceError::with_source(
+                            String::from("Failed to load static DXC"),
+                            e,
+                        )
+                    })?;
+
+                Some(Arc::new(container))
             }
             wgt::Dx12Compiler::Fxc => None,
         };

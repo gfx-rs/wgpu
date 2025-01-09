@@ -1,9 +1,7 @@
-use crate::api::blas::{ContextTlasInstance, DynContextTlasInstance, TlasInstance};
-use crate::context::{Context, DynContext};
-use crate::{BindingResource, Buffer, Data, Label, C};
+use crate::{api::blas::TlasInstance, dispatch};
+use crate::{BindingResource, Buffer, Label};
 use std::ops::{Index, IndexMut, Range};
 use std::sync::Arc;
-use std::thread;
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.
@@ -11,6 +9,12 @@ pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 
 #[derive(Debug)]
+pub(crate) struct TlasShared {
+    pub(crate) inner: dispatch::DispatchTlas,
+    pub(crate) max_instances: u32,
+}
+
+#[derive(Debug, Clone)]
 /// Top Level Acceleration Structure (TLAS).
 ///
 /// A TLAS contains a series of [TLAS instances], which are a reference to
@@ -21,24 +25,16 @@ static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 ///
 /// [TLAS instances]: TlasInstance
 pub struct Tlas {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
-    pub(crate) max_instances: u32,
+    pub(crate) shared: Arc<TlasShared>,
 }
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
+
+crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .shared.inner);
 
 impl Tlas {
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::tlas_destroy(&*self.context, self.data.as_ref());
-    }
-}
-
-impl Drop for Tlas {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.tlas_drop(self.data.as_ref());
-        }
+        self.shared.inner.destroy();
     }
 }
 
@@ -66,7 +62,7 @@ static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
 impl TlasPackage {
     /// Construct [TlasPackage] consuming the [Tlas] (prevents modification of the [Tlas] without using this package).
     pub fn new(tlas: Tlas) -> Self {
-        let max_instances = tlas.max_instances;
+        let max_instances = tlas.shared.max_instances;
         Self::new_with_instances(tlas, vec![None; max_instances as usize])
     }
 
@@ -167,32 +163,4 @@ impl IndexMut<Range<usize>> for TlasPackage {
         }
         idx
     }
-}
-
-pub(crate) struct DynContextTlasBuildEntry<'a> {
-    pub(crate) tlas_data: &'a Data,
-    pub(crate) instance_buffer_data: &'a Data,
-    pub(crate) instance_count: u32,
-}
-
-pub(crate) struct DynContextTlasPackage<'a> {
-    pub(crate) tlas_data: &'a Data,
-    pub(crate) instances: Box<dyn Iterator<Item = Option<DynContextTlasInstance<'a>>> + 'a>,
-    pub(crate) lowest_unmodified: u32,
-}
-
-/// Context version see [TlasBuildEntry].
-#[allow(dead_code)]
-pub struct ContextTlasBuildEntry<'a, T: Context> {
-    pub(crate) tlas_data: &'a T::TlasData,
-    pub(crate) instance_buffer_data: &'a T::BufferData,
-    pub(crate) instance_count: u32,
-}
-
-/// Context version see [TlasPackage].
-#[allow(dead_code)]
-pub struct ContextTlasPackage<'a, T: Context> {
-    pub(crate) tlas_data: &'a T::TlasData,
-    pub(crate) instances: Box<dyn Iterator<Item = Option<ContextTlasInstance<'a, T>>> + 'a>,
-    pub(crate) lowest_unmodified: u32,
 }

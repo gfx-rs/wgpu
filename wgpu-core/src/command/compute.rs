@@ -8,8 +8,8 @@ use crate::{
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites, BasePass,
-        BindGroupStateChange, CommandBuffer, CommandEncoderError, CommandEncoderStatus, MapPassErr,
-        PassErrorScope, PassTimestampWrites, QueryUseError, StateChange,
+        BindGroupStateChange, CommandBuffer, CommandEncoderError, MapPassErr, PassErrorScope,
+        PassTimestampWrites, QueryUseError, StateChange,
     },
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
@@ -30,8 +30,7 @@ use wgt::{BufferAddress, DynamicOffset};
 
 use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
 use crate::ray_tracing::TlasAction;
-use std::sync::Arc;
-use std::{fmt, mem::size_of, str};
+use std::{fmt, mem::size_of, str, sync::Arc};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -282,7 +281,9 @@ impl Global {
     /// If creation fails, an invalid pass is returned.
     /// Any operation on an invalid pass will return an error.
     ///
-    /// If successful, puts the encoder into the [`CommandEncoderStatus::Locked`] state.
+    /// If successful, puts the encoder into the [`Locked`] state.
+    ///
+    /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
     pub fn command_encoder_create_compute_pass(
         &self,
         encoder_id: id::CommandEncoderId,
@@ -299,11 +300,7 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        match cmd_buf
-            .try_get()
-            .map_err(|e| e.into())
-            .and_then(|mut cmd_buf_data| cmd_buf_data.lock_encoder())
-        {
+        match cmd_buf.data.lock().lock_encoder() {
             Ok(_) => {}
             Err(e) => return make_err(e, arc_desc),
         };
@@ -340,7 +337,8 @@ impl Global {
                 .hub
                 .command_buffers
                 .get(encoder_id.into_command_buffer_id());
-            let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
+            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_buf_data = cmd_buf_data.get_inner().map_pass_err(pass_scope)?;
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunComputePass {
@@ -408,20 +406,19 @@ impl Global {
         let device = &cmd_buf.device;
         device.check_is_valid().map_pass_err(pass_scope)?;
 
-        let mut cmd_buf_data = cmd_buf.try_get().map_pass_err(pass_scope)?;
-        cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
-        let cmd_buf_data = &mut *cmd_buf_data;
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.unlock_encoder().map_pass_err(pass_scope)?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         let encoder = &mut cmd_buf_data.encoder;
-        let status = &mut cmd_buf_data.status;
 
         // We automatically keep extending command buffers over time, and because
         // we want to insert a command buffer _before_ what we're about to record,
         // we need to make sure to close the previous one.
-        encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
-        // will be reset to true if recording is done without errors
-        *status = CommandEncoderStatus::Error;
-        let raw_encoder = encoder.open(&cmd_buf.device).map_pass_err(pass_scope)?;
+        encoder.close_if_open().map_pass_err(pass_scope)?;
+        let raw_encoder = encoder
+            .open_pass(base.label.as_deref())
+            .map_pass_err(pass_scope)?;
 
         let mut state = State {
             binder: Binder::new(),
@@ -590,10 +587,6 @@ impl Global {
             state.raw_encoder.end_compute_pass();
         }
 
-        // We've successfully recorded the compute pass, bring the
-        // command buffer out of the error state.
-        *status = CommandEncoderStatus::Recording;
-
         let State {
             snatch_guard,
             tracker,
@@ -603,12 +596,14 @@ impl Global {
         } = state;
 
         // Stop the current command buffer.
-        encoder.close(&cmd_buf.device).map_pass_err(pass_scope)?;
+        encoder.close().map_pass_err(pass_scope)?;
 
         // Create a new command buffer, which we will insert _before_ the body of the compute pass.
         //
         // Use that buffer to insert barriers and clear discarded images.
-        let transit = encoder.open(&cmd_buf.device).map_pass_err(pass_scope)?;
+        let transit = encoder
+            .open_pass(Some("(wgpu internal) Pre Pass"))
+            .map_pass_err(pass_scope)?;
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             transit,
@@ -623,9 +618,8 @@ impl Global {
             &snatch_guard,
         );
         // Close the command buffer, and swap it with the previous.
-        encoder
-            .close_and_swap(&cmd_buf.device)
-            .map_pass_err(pass_scope)?;
+        encoder.close_and_swap().map_pass_err(pass_scope)?;
+        cmd_buf_data_guard.mark_successful();
 
         Ok(())
     }
@@ -944,7 +938,7 @@ fn dispatch_indirect(
         let src_transition = state
             .intermediate_trackers
             .buffers
-            .set_single(&buffer, hal::BufferUses::STORAGE_READ);
+            .set_single(&buffer, hal::BufferUses::STORAGE_READ_ONLY);
         let src_barrier =
             src_transition.map(|transition| transition.into_hal(&buffer, &state.snatch_guard));
         unsafe {
@@ -954,7 +948,10 @@ fn dispatch_indirect(
         unsafe {
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
-                usage: hal::BufferUses::INDIRECT..hal::BufferUses::STORAGE_READ_WRITE,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::INDIRECT,
+                    to: hal::BufferUses::STORAGE_READ_WRITE,
+                },
             }]);
         }
 
@@ -998,7 +995,10 @@ fn dispatch_indirect(
         unsafe {
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
-                usage: hal::BufferUses::STORAGE_READ_WRITE..hal::BufferUses::INDIRECT,
+                usage: hal::StateTransition {
+                    from: hal::BufferUses::STORAGE_READ_WRITE,
+                    to: hal::BufferUses::INDIRECT,
+                },
             }]);
         }
 

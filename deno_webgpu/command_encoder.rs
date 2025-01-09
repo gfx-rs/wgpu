@@ -1,5 +1,6 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
+use super::wgpu_types;
 use crate::WebGpuQuerySet;
 use deno_core::error::AnyError;
 use deno_core::op2;
@@ -71,20 +72,38 @@ pub struct GpuRenderPassColorAttachment {
     view: ResourceId,
     resolve_target: Option<ResourceId>,
     clear_value: Option<wgpu_types::Color>,
-    load_op: wgpu_core::command::LoadOp,
+    load_op: LoadOp,
     store_op: wgpu_core::command::StoreOp,
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LoadOp {
+    /// Clear the output attachment with the clear color. Clearing is faster than loading.
+    Clear = 0,
+    /// Do not clear output attachment.
+    Load = 1,
+}
+
+impl LoadOp {
+    fn into_wgt<V>(self, clear: V) -> wgpu_types::LoadOp<V> {
+        match self {
+            LoadOp::Clear => wgpu_types::LoadOp::Clear(clear),
+            LoadOp::Load => wgpu_types::LoadOp::Load,
+        }
+    }
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GpuRenderPassDepthStencilAttachment {
     view: ResourceId,
-    depth_clear_value: f32,
-    depth_load_op: Option<wgpu_core::command::LoadOp>,
+    depth_clear_value: Option<f32>,
+    depth_load_op: Option<LoadOp>,
     depth_store_op: Option<wgpu_core::command::StoreOp>,
     depth_read_only: bool,
     stencil_clear_value: u32,
-    stencil_load_op: Option<wgpu_core::command::LoadOp>,
+    stencil_load_op: Option<LoadOp>,
     stencil_store_op: Option<wgpu_core::command::StoreOp>,
     stencil_read_only: bool,
 }
@@ -133,12 +152,8 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                 Some(wgpu_core::command::RenderPassColorAttachment {
                     view: texture_view_resource.1,
                     resolve_target,
-                    channel: wgpu_core::command::PassChannel {
-                        load_op: at.load_op,
-                        store_op: at.store_op,
-                        clear_value: at.clear_value.unwrap_or_default(),
-                        read_only: false,
-                    },
+                    load_op: at.load_op.into_wgt(at.clear_value.unwrap_or_default()),
+                    store_op: at.store_op,
                 })
             } else {
                 None
@@ -160,21 +175,15 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
                 depth: wgpu_core::command::PassChannel {
                     load_op: attachment
                         .depth_load_op
-                        .unwrap_or(wgpu_core::command::LoadOp::Load),
-                    store_op: attachment
-                        .depth_store_op
-                        .unwrap_or(wgpu_core::command::StoreOp::Store),
-                    clear_value: attachment.depth_clear_value,
+                        .map(|load_op| load_op.into_wgt(attachment.depth_clear_value)),
+                    store_op: attachment.depth_store_op,
                     read_only: attachment.depth_read_only,
                 },
                 stencil: wgpu_core::command::PassChannel {
                     load_op: attachment
                         .stencil_load_op
-                        .unwrap_or(wgpu_core::command::LoadOp::Load),
-                    store_op: attachment
-                        .stencil_store_op
-                        .unwrap_or(wgpu_core::command::StoreOp::Store),
-                    clear_value: attachment.stencil_clear_value,
+                        .map(|load_op| load_op.into_wgt(Some(attachment.stencil_clear_value))),
+                    store_op: attachment.stencil_store_op,
                     read_only: attachment.stencil_read_only,
                 },
             });
@@ -311,7 +320,7 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_buffer(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GpuImageCopyBuffer {
+pub struct GpuTexelCopyBufferInfo {
     buffer: ResourceId,
     offset: u64,
     bytes_per_row: Option<u32>,
@@ -320,7 +329,7 @@ pub struct GpuImageCopyBuffer {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GpuImageCopyTexture {
+pub struct GpuTexelCopyTextureInfo {
     pub texture: ResourceId,
     pub mip_level: u32,
     pub origin: wgpu_types::Origin3d,
@@ -332,8 +341,8 @@ pub struct GpuImageCopyTexture {
 pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
     state: &mut OpState,
     #[smi] command_encoder_rid: ResourceId,
-    #[serde] source: GpuImageCopyBuffer,
-    #[serde] destination: GpuImageCopyTexture,
+    #[serde] source: GpuTexelCopyBufferInfo,
+    #[serde] destination: GpuTexelCopyTextureInfo,
     #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -348,15 +357,15 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
         .resource_table
         .get::<super::texture::WebGpuTexture>(destination.texture)?;
 
-    let source = wgpu_core::command::ImageCopyBuffer {
+    let source = wgpu_core::command::TexelCopyBufferInfo {
         buffer: source_buffer_resource.1,
-        layout: wgpu_types::ImageDataLayout {
+        layout: wgpu_types::TexelCopyBufferLayout {
             offset: source.offset,
             bytes_per_row: source.bytes_per_row,
             rows_per_image: source.rows_per_image,
         },
     };
-    let destination = wgpu_core::command::ImageCopyTexture {
+    let destination = wgpu_core::command::TexelCopyTextureInfo {
         texture: destination_texture_resource.id,
         mip_level: destination.mip_level,
         origin: destination.origin,
@@ -375,8 +384,8 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
 pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
     state: &mut OpState,
     #[smi] command_encoder_rid: ResourceId,
-    #[serde] source: GpuImageCopyTexture,
-    #[serde] destination: GpuImageCopyBuffer,
+    #[serde] source: GpuTexelCopyTextureInfo,
+    #[serde] destination: GpuTexelCopyBufferInfo,
     #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -391,15 +400,15 @@ pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
         .resource_table
         .get::<super::buffer::WebGpuBuffer>(destination.buffer)?;
 
-    let source = wgpu_core::command::ImageCopyTexture {
+    let source = wgpu_core::command::TexelCopyTextureInfo {
         texture: source_texture_resource.id,
         mip_level: source.mip_level,
         origin: source.origin,
         aspect: source.aspect,
     };
-    let destination = wgpu_core::command::ImageCopyBuffer {
+    let destination = wgpu_core::command::TexelCopyBufferInfo {
         buffer: destination_buffer_resource.1,
-        layout: wgpu_types::ImageDataLayout {
+        layout: wgpu_types::TexelCopyBufferLayout {
             offset: destination.offset,
             bytes_per_row: destination.bytes_per_row,
             rows_per_image: destination.rows_per_image,
@@ -418,8 +427,8 @@ pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
 pub fn op_webgpu_command_encoder_copy_texture_to_texture(
     state: &mut OpState,
     #[smi] command_encoder_rid: ResourceId,
-    #[serde] source: GpuImageCopyTexture,
-    #[serde] destination: GpuImageCopyTexture,
+    #[serde] source: GpuTexelCopyTextureInfo,
+    #[serde] destination: GpuTexelCopyTextureInfo,
     #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -434,13 +443,13 @@ pub fn op_webgpu_command_encoder_copy_texture_to_texture(
         .resource_table
         .get::<super::texture::WebGpuTexture>(destination.texture)?;
 
-    let source = wgpu_core::command::ImageCopyTexture {
+    let source = wgpu_core::command::TexelCopyTextureInfo {
         texture: source_texture_resource.id,
         mip_level: source.mip_level,
         origin: source.origin,
         aspect: source.aspect,
     };
-    let destination = wgpu_core::command::ImageCopyTexture {
+    let destination = wgpu_core::command::TexelCopyTextureInfo {
         texture: destination_texture_resource.id,
         mip_level: destination.mip_level,
         origin: destination.origin,

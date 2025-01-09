@@ -1,7 +1,5 @@
-use crate::context::{Context, DynContext};
-use crate::{Buffer, Data, Label, C};
-use std::sync::Arc;
-use std::thread;
+use crate::dispatch;
+use crate::{Buffer, Label};
 use wgt::WasmNotSendSync;
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
@@ -35,8 +33,8 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 ///
 /// Each one contains:
 /// - A reference to a BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
-/// TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
-/// using [Blas::destroy]) the TlasInstance becomes invalid
+///   TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
+///   using [Blas::destroy]) the TlasInstance becomes invalid
 /// - A user accessible transformation matrix
 /// - A user accessible mask
 /// - A user accessible custom index
@@ -45,7 +43,7 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 /// [TlasPackage]: crate::TlasPackage
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
-    pub(crate) blas: Arc<BlasShared>,
+    pub(crate) blas: dispatch::DispatchBlas,
     /// Affine transform matrix 3x4 (rows x columns, row major order).
     pub transform: [f32; 12],
     /// Custom index for the instance used inside the shader.
@@ -72,7 +70,7 @@ impl TlasInstance {
     /// generate a validation error.
     pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
         Self {
-            blas: blas.shared.clone(),
+            blas: blas.inner.clone(),
             transform,
             custom_index,
             mask,
@@ -84,24 +82,8 @@ impl TlasInstance {
     /// See the note on [TlasInstance] about the
     /// guarantees of keeping a BLAS alive.
     pub fn set_blas(&mut self, blas: &Blas) {
-        self.blas = blas.shared.clone();
+        self.blas = blas.inner.clone();
     }
-}
-
-pub(crate) struct DynContextTlasInstance<'a> {
-    pub(crate) blas: &'a Data,
-    pub(crate) transform: &'a [f32; 12],
-    pub(crate) custom_index: u32,
-    pub(crate) mask: u8,
-}
-
-/// Context version of [TlasInstance].
-#[allow(dead_code)]
-pub struct ContextTlasInstance<'a, T: Context> {
-    pub(crate) blas_data: &'a T::BlasData,
-    pub(crate) transform: &'a [f32; 12],
-    pub(crate) custom_index: u32,
-    pub(crate) mask: u8,
 }
 
 #[derive(Debug)]
@@ -145,14 +127,7 @@ pub struct BlasBuildEntry<'a> {
 }
 static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 
-#[derive(Debug)]
-pub(crate) struct BlasShared {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
-}
-static_assertions::assert_impl_all!(BlasShared: WasmNotSendSync);
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Bottom Level Acceleration Structure (BLAS).
 ///
 /// A BLAS is a device-specific raytracing acceleration structure that contains geometry data.
@@ -162,9 +137,11 @@ static_assertions::assert_impl_all!(BlasShared: WasmNotSendSync);
 /// [Tlas]: crate::Tlas
 pub struct Blas {
     pub(crate) handle: Option<u64>,
-    pub(crate) shared: Arc<BlasShared>,
+    pub(crate) inner: dispatch::DispatchBlas,
 }
 static_assertions::assert_impl_all!(Blas: WasmNotSendSync);
+
+crate::cmp::impl_eq_ord_hash_proxy!(Blas => .inner);
 
 impl Blas {
     /// Raw handle to the acceleration structure, used inside raw instance buffers.
@@ -173,45 +150,17 @@ impl Blas {
     }
     /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
-        DynContext::blas_destroy(&*self.shared.context, self.shared.data.as_ref());
+        self.inner.destroy();
     }
-}
-
-impl Drop for BlasShared {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.blas_drop(self.data.as_ref());
-        }
-    }
-}
-
-pub(crate) struct DynContextBlasTriangleGeometry<'a> {
-    pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
-    pub(crate) vertex_buffer: &'a Data,
-    pub(crate) index_buffer: Option<&'a Data>,
-    pub(crate) transform_buffer: Option<&'a Data>,
-    pub(crate) first_vertex: u32,
-    pub(crate) vertex_stride: wgt::BufferAddress,
-    pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
-    pub(crate) transform_buffer_offset: Option<wgt::BufferAddress>,
-}
-
-pub(crate) enum DynContextBlasGeometries<'a> {
-    TriangleGeometries(Box<dyn Iterator<Item = DynContextBlasTriangleGeometry<'a>> + 'a>),
-}
-
-pub(crate) struct DynContextBlasBuildEntry<'a> {
-    pub(crate) blas_data: &'a Data,
-    pub(crate) geometries: DynContextBlasGeometries<'a>,
 }
 
 /// Context version of [BlasTriangleGeometry].
 #[allow(dead_code)]
-pub struct ContextBlasTriangleGeometry<'a, T: Context> {
+pub struct ContextBlasTriangleGeometry<'a> {
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
-    pub(crate) vertex_buffer: &'a T::BufferData,
-    pub(crate) index_buffer: Option<&'a T::BufferData>,
-    pub(crate) transform_buffer: Option<&'a T::BufferData>,
+    pub(crate) vertex_buffer: &'a dispatch::DispatchBuffer,
+    pub(crate) index_buffer: Option<&'a dispatch::DispatchBuffer>,
+    pub(crate) transform_buffer: Option<&'a dispatch::DispatchBuffer>,
     pub(crate) first_vertex: u32,
     pub(crate) vertex_stride: wgt::BufferAddress,
     pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
@@ -219,14 +168,14 @@ pub struct ContextBlasTriangleGeometry<'a, T: Context> {
 }
 
 /// Context version of [BlasGeometries].
-pub enum ContextBlasGeometries<'a, T: Context> {
+pub enum ContextBlasGeometries<'a> {
     /// Triangle geometries.
-    TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a, T>> + 'a>),
+    TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a>> + 'a>),
 }
 
 /// Context version see [BlasBuildEntry].
 #[allow(dead_code)]
-pub struct ContextBlasBuildEntry<'a, T: Context> {
-    pub(crate) blas_data: &'a T::BlasData,
-    pub(crate) geometries: ContextBlasGeometries<'a, T>,
+pub struct ContextBlasBuildEntry<'a> {
+    pub(crate) blas: &'a dispatch::DispatchBlas,
+    pub(crate) geometries: ContextBlasGeometries<'a>,
 }

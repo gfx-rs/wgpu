@@ -398,18 +398,18 @@ fn copy_texture_to_buffer_with_aspect(
     );
     let mip_level = 0;
     encoder.copy_texture_to_buffer(
-        ImageCopyTexture {
+        TexelCopyTextureInfo {
             texture,
             mip_level,
             origin: Origin3d::ZERO,
             aspect,
         },
-        ImageCopyBuffer {
+        TexelCopyBufferInfo {
             buffer: match aspect {
                 TextureAspect::StencilOnly => buffer_stencil.as_ref().unwrap(),
                 _ => buffer,
             },
-            layout: ImageDataLayout {
+            layout: TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(bytes_per_row),
                 rows_per_image: Some(texture.height() / block_height),

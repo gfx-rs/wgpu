@@ -1,5 +1,3 @@
-use std::{sync::Arc, thread};
-
 use crate::*;
 
 /// Handle to a pipeline layout.
@@ -8,23 +6,14 @@ use crate::*;
 /// It can be created with [`Device::create_pipeline_layout`].
 ///
 /// Corresponds to [WebGPU `GPUPipelineLayout`](https://gpuweb.github.io/gpuweb/#gpupipelinelayout).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipelineLayout {
-    pub(crate) context: Arc<C>,
-    pub(crate) data: Box<Data>,
+    pub(crate) inner: dispatch::DispatchPipelineLayout,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
-super::impl_partialeq_eq_hash!(PipelineLayout);
-
-impl Drop for PipelineLayout {
-    fn drop(&mut self) {
-        if !thread::panicking() {
-            self.context.pipeline_layout_drop(self.data.as_ref());
-        }
-    }
-}
+crate::cmp::impl_eq_ord_hash_proxy!(PipelineLayout => .inner);
 
 /// Describes a [`PipelineLayout`].
 ///

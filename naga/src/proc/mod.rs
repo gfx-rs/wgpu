@@ -297,6 +297,9 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(count) => count.get(),
+                    // any struct member or array element needing a size at pipeline-creation time
+                    // must have a creation-fixed footprint
+                    super::ArraySize::Pending(_) => 0,
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
                 };

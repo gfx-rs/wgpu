@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt};
 
-use super::{builtins::MacroCall, context::ExprPos, Span};
+use super::{builtins::MacroCall, Span};
 use crate::{
     AddressSpace, BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle,
     Interpolation, Literal, Sampling, StorageAccess, Type, UnaryOperator,
@@ -374,14 +374,6 @@ impl ParameterQualifier {
         match *self {
             ParameterQualifier::Out | ParameterQualifier::InOut => true,
             _ => false,
-        }
-    }
-
-    /// Converts from a parameter qualifier into a [`ExprPos`]
-    pub const fn as_pos(&self) -> ExprPos {
-        match *self {
-            ParameterQualifier::Out | ParameterQualifier::InOut => ExprPos::Lhs,
-            _ => ExprPos::Rhs,
         }
     }
 }

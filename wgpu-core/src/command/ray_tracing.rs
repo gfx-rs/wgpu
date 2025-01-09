@@ -126,7 +126,7 @@ impl Global {
         #[cfg(feature = "trace")]
         let trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
+        if let Some(ref mut list) = cmd_buf.data.lock().get_inner()?.commands {
             list.push(
                 crate::device::trace::Command::BuildAccelerationStructuresUnsafeTlas {
                     blas: trace_blas.clone(),
@@ -170,7 +170,8 @@ impl Global {
         let mut scratch_buffer_blas_size = 0;
         let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         iter_blas(
             blas_iter,
@@ -276,7 +277,10 @@ impl Global {
 
         let scratch_size =
             match wgt::BufferSize::new(max(scratch_buffer_blas_size, scratch_buffer_tlas_size)) {
-                None => return Ok(()),
+                None => {
+                    cmd_buf_data_guard.mark_successful();
+                    return Ok(());
+                }
                 Some(size) => size,
             };
 
@@ -285,8 +289,10 @@ impl Global {
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
-            usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH
-                ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            usage: hal::StateTransition {
+                from: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                to: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            },
         };
 
         let mut tlas_descriptors = Vec::new();
@@ -316,7 +322,7 @@ impl Global {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
 
         let mut descriptors = Vec::new();
 
@@ -339,8 +345,10 @@ impl Global {
 
                 cmd_buf_raw.place_acceleration_structure_barrier(
                     hal::AccelerationStructureBarrier {
-                        usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                            ..hal::AccelerationStructureUses::SHADER_INPUT,
+                        usage: hal::StateTransition {
+                            from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                            to: hal::AccelerationStructureUses::SHADER_INPUT,
+                        },
                     },
                 );
             }
@@ -353,6 +361,7 @@ impl Global {
                 .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
         }
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 
@@ -435,7 +444,7 @@ impl Global {
             .collect();
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
+        if let Some(ref mut list) = cmd_buf.data.lock().get_inner()?.commands {
             list.push(crate::device::trace::Command::BuildAccelerationStructures {
                 blas: trace_blas.clone(),
                 tlas: trace_tlas.clone(),
@@ -486,7 +495,8 @@ impl Global {
         let mut scratch_buffer_blas_size = 0;
         let mut blas_storage = Vec::new();
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
 
         iter_blas(
             blas_iter,
@@ -611,7 +621,10 @@ impl Global {
         let scratch_size =
             match wgt::BufferSize::new(max(scratch_buffer_blas_size, scratch_buffer_tlas_size)) {
                 // if the size is zero there is nothing to build
-                None => return Ok(()),
+                None => {
+                    cmd_buf_data_guard.mark_successful();
+                    return Ok(());
+                }
                 Some(size) => size,
             };
 
@@ -620,8 +633,10 @@ impl Global {
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
-            usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH
-                ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            usage: hal::StateTransition {
+                from: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                to: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            },
         };
 
         let mut tlas_descriptors = Vec::with_capacity(tlas_storage.len());
@@ -659,7 +674,7 @@ impl Global {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf_data.encoder.open(device)?;
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
 
         let mut descriptors = Vec::new();
 
@@ -694,7 +709,10 @@ impl Global {
                 if let Some(ref staging_buffer) = staging_buffer {
                     cmd_buf_raw.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: staging_buffer.raw(),
-                        usage: BufferUses::MAP_WRITE..BufferUses::COPY_SRC,
+                        usage: hal::StateTransition {
+                            from: BufferUses::MAP_WRITE,
+                            to: BufferUses::COPY_SRC,
+                        },
                     }]);
                 }
             }
@@ -711,12 +729,18 @@ impl Global {
                 };
                 instance_buffer_barriers.push(hal::BufferBarrier::<dyn hal::DynBuffer> {
                     buffer: tlas.instance_buffer.as_ref(),
-                    usage: BufferUses::COPY_DST..BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    usage: hal::StateTransition {
+                        from: BufferUses::COPY_DST,
+                        to: BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    },
                 });
                 unsafe {
                     cmd_buf_raw.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: tlas.instance_buffer.as_ref(),
-                        usage: BufferUses::MAP_READ..BufferUses::COPY_DST,
+                        usage: hal::StateTransition {
+                            from: BufferUses::MAP_READ,
+                            to: BufferUses::COPY_DST,
+                        },
                     }]);
                     let temp = hal::BufferCopy {
                         src_offset: range.start as u64,
@@ -740,8 +764,10 @@ impl Global {
 
                 cmd_buf_raw.place_acceleration_structure_barrier(
                     hal::AccelerationStructureBarrier {
-                        usage: hal::AccelerationStructureUses::BUILD_OUTPUT
-                            ..hal::AccelerationStructureUses::SHADER_INPUT,
+                        usage: hal::StateTransition {
+                            from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                            to: hal::AccelerationStructureUses::SHADER_INPUT,
+                        },
                     },
                 );
             }
@@ -763,6 +789,7 @@ impl Global {
                 .consume_temp(TempResource::ScratchBuffer(scratch_buffer));
         }
 
+        cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 }
@@ -805,7 +832,7 @@ impl CommandBufferMutable {
                     dependencies,
                 } => {
                     *action.tlas.built_index.write() = Some(*build_index);
-                    *action.tlas.dependencies.write() = dependencies.clone();
+                    action.tlas.dependencies.write().clone_from(dependencies);
                 }
                 crate::ray_tracing::TlasActionKind::Use => {
                     let tlas_build_index = action.tlas.built_index.read();
@@ -1142,24 +1169,27 @@ fn iter_buffers<'a, 'b>(
             {
                 input_barriers.push(barrier);
             }
-            if mesh.transform_buffer_offset.unwrap() % wgt::TRANSFORM_BUFFER_ALIGNMENT != 0 {
+
+            let offset = mesh.transform_buffer_offset.unwrap();
+
+            if offset % wgt::TRANSFORM_BUFFER_ALIGNMENT != 0 {
                 return Err(
                     BuildAccelerationStructureError::UnalignedTransformBufferOffset(
                         transform_buffer.error_ident(),
                     ),
                 );
             }
-            if transform_buffer.size < 48 + mesh.transform_buffer_offset.unwrap() {
+            if transform_buffer.size < 48 + offset {
                 return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                     transform_buffer.error_ident(),
                     transform_buffer.size,
-                    48 + mesh.transform_buffer_offset.unwrap(),
+                    48 + offset,
                 ));
             }
             cmd_buf_data.buffer_memory_init_actions.extend(
                 transform_buffer.initialization_status.read().create_action(
                     transform_buffer,
-                    mesh.transform_buffer_offset.unwrap()..(mesh.index_buffer_offset.unwrap() + 48),
+                    offset..(offset + 48),
                     MemoryInitKind::NeedsInitializedMemory,
                 ),
             );
@@ -1265,8 +1295,10 @@ fn build_blas<'a>(
     if blas_present {
         unsafe {
             cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-                usage: hal::AccelerationStructureUses::BUILD_INPUT
-                    ..hal::AccelerationStructureUses::BUILD_OUTPUT,
+                usage: hal::StateTransition {
+                    from: hal::AccelerationStructureUses::BUILD_INPUT,
+                    to: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                },
             });
 
             cmd_buf_raw.build_acceleration_structures(blas_descriptors);
@@ -1291,7 +1323,10 @@ fn build_blas<'a>(
     }
     unsafe {
         cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
-            usage: source_usage..destination_usage,
+            usage: hal::StateTransition {
+                from: source_usage,
+                to: destination_usage,
+            },
         });
     }
 }
