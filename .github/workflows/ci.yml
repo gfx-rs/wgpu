@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["*"]
+    branches-ignore: ["trunk"]
     tags: [v0.*]
   pull_request:
   merge_group:
