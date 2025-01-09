@@ -163,21 +163,21 @@ jobs:
           cargo -V
 
       # In order to build on platforms that require a nightly toolchain, we install stable as expected,
-      # add the rust-src component, then tell stable to consider itself nightly by setting RUST_BOOTSTRAP=1.
+      # add the rust-src component, then tell stable to consider itself nightly by setting RUSTC_BOOTSTRAP=1.
       #
       # This is not formally "correct" thing to do, but it saves significant maintainer burden. If we were to
       # use a proper nightly toolchain we would have to manually find a date that works. Even with a date that is
       # carefully coordinated with the version of stable we are using, there are often mismatches of clippy lints
-      # between nightly and stable. This is a real mess. By using RUST_BOOTSTRAP=1, we get access to all the nice
+      # between nightly and stable. This is a real mess. By using RUSTC_BOOTSTRAP=1, we get access to all the nice
       # nightly features without needing to go through the hassle of maintaining a nightly toolchain.
       #
-      # RUST_BOOTSTRAP=1 is how the rust project builds itself when bootstrapping the compiler, so while not "stable"
+      # RUSTC_BOOTSTRAP=1 is how the rust project builds itself when bootstrapping the compiler, so while not "stable"
       # it has been around for many years and don't anticipate it going away any time soon.
       - name: Install Toolchain (Repo MSRV - Pseudo Nightly)
         if: matrix.toolchain == 'nightly'
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy,rust-src
-          echo "RUST_BOOTSTRAP=1" >> "$GITHUB_ENV"
+          echo "RUSTC_BOOTSTRAP=1" >> "$GITHUB_ENV"
 
       - name: disable debug
         shell: bash
