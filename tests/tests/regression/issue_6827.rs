@@ -28,9 +28,7 @@ static TEST_SCATTER: GpuTestConfiguration = GpuTestConfiguration::new()
                     .validation_error(
                         "D3D12_PLACED_SUBRESOURCE_FOOTPRINT::Offset must be a multiple of 512",
                     )
-                    .validation_error(
-                        "GraphicsCommandList::close failed: The parameter is incorrect",
-                    ),
+                    .panic("GraphicsCommandList::close failed: The parameter is incorrect"),
             ),
     )
     .run_async(|ctx| async move { run_test(ctx, true).await });
