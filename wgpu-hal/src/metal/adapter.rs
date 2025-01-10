@@ -838,6 +838,10 @@ impl super::PrivateCapabilities {
                 && ((device.supports_family(MTLGPUFamily::Apple8)
                     && device.supports_family(MTLGPUFamily::Mac2))
                     || device.supports_family(MTLGPUFamily::Apple9)),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
+            float_atomics: family_check
+                && (device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
         }
     }
@@ -912,6 +916,10 @@ impl super::PrivateCapabilities {
         features.set(
             F::SHADER_INT64_ATOMIC_MIN_MAX,
             self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
+        );
+        features.set(
+            F::SHADER_FLOAT32_ATOMIC,
+            self.float_atomics && self.msl_version >= MTLLanguageVersion::V3_0,
         );
 
         features.set(

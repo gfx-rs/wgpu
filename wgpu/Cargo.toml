@@ -150,7 +150,7 @@ features = ["indirect-validation"]
 
 # Enable `wgc` by default on macOS and iOS to allow the `metal` crate feature to
 # enable the Metal backend while being no-op on other targets.
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.wgc]
+[target.'cfg(target_vendor = "apple")'.dependencies.wgc]
 workspace = true
 
 # We want the wgpu-core Direct3D backend and OpenGL (via WGL) on Windows.
@@ -159,12 +159,12 @@ workspace = true
 features = ["gles"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not emscripten, macOS, iOS) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_vendor = "apple"))))'.dependencies.wgc]
 workspace = true
 features = ["vulkan"]
 
 # We want the wgpu-core GLES backend on Unix (but not macOS, iOS).
-[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies.wgc]
+[target.'cfg(all(unix, not(target_vendor = "apple")))'.dependencies.wgc]
 workspace = true
 features = ["gles"]
 
@@ -175,7 +175,7 @@ workspace = true
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies]
 hal = { workspace = true }
 
-[target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
+[target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_vendor = "apple")))'.dependencies]
 hal = { workspace = true, features = ["renderdoc"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -187,6 +187,7 @@ optional = true
 
 [dependencies]
 arrayvec.workspace = true
+bitflags.workspace = true
 document-features.workspace = true
 log.workspace = true
 parking_lot.workspace = true

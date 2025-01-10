@@ -10,7 +10,7 @@ fn main() {
             all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
         ) },
         dx12: { all(target_os = "windows", feature = "dx12") },
-        metal: { all(any(target_os = "ios", target_os = "macos"), feature = "metal") },
+        metal: { all(target_vendor = "apple", feature = "metal") },
         // This alias is _only_ if _we_ need naga in the wrapper. wgpu-core provides
         // its own re-export of naga, which can be used in other situations
         naga: { any(feature = "naga-ir", feature = "spirv", feature = "glsl") },

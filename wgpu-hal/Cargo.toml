@@ -177,7 +177,7 @@ glutin_wgl_sys = { workspace = true, optional = true }
 [target.'cfg(all(windows, not(target_arch = "aarch64")))'.dependencies]
 mach-dxcompiler-rs = { workspace = true, optional = true }
 
-[target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
+[target.'cfg(target_vendor = "apple")'.dependencies]
 # backend: Metal
 block = { workspace = true, optional = true }
 
@@ -221,7 +221,7 @@ env_logger.workspace = true
 glam.workspace = true       # for ray-traced-triangle example
 winit.workspace = true      # for "halmark" example
 
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dev-dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = [
     "egl",
     "wgl",

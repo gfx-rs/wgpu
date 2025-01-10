@@ -1949,14 +1949,18 @@ pub enum Statement {
         /// If [`SHADER_INT64_ATOMIC_MIN_MAX`] or [`SHADER_INT64_ATOMIC_ALL_OPS`] are
         /// enabled, this may also be [`I64`] or [`U64`].
         ///
+        /// If [`SHADER_FLOAT32_ATOMIC`] is enabled, this may be [`F32`].
+        ///
         /// [`Pointer`]: TypeInner::Pointer
         /// [`Atomic`]: TypeInner::Atomic
         /// [`I32`]: Scalar::I32
         /// [`U32`]: Scalar::U32
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         /// [`I64`]: Scalar::I64
         /// [`U64`]: Scalar::U64
+        /// [`F32`]: Scalar::F32
         pointer: Handle<Expression>,
 
         /// Function to run on the atomic value.
@@ -1967,14 +1971,24 @@ pub enum Statement {
         ///   value here.
         ///
         /// - The [`SHADER_INT64_ATOMIC_MIN_MAX`] capability allows
-        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`] here.
+        ///   [`AtomicFunction::Min`] and [`AtomicFunction::Max`]
+        ///   in the [`Storage`] address space here.
         ///
         /// - If neither of those capabilities are present, then 64-bit scalar
         ///   atomics are not allowed.
         ///
+        /// If [`pointer`] refers to a 32-bit floating-point atomic value, then:
+        ///
+        /// - The [`SHADER_FLOAT32_ATOMIC`] capability allows [`AtomicFunction::Add`],
+        ///   [`AtomicFunction::Subtract`], and [`AtomicFunction::Exchange { compare: None }`]
+        ///   in the [`Storage`] address space here.
+        ///
+        /// [`AtomicFunction::Exchange { compare: None }`]: AtomicFunction::Exchange
         /// [`pointer`]: Statement::Atomic::pointer
+        /// [`Storage`]: AddressSpace::Storage
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
+        /// [`SHADER_FLOAT32_ATOMIC`]: crate::valid::Capabilities::SHADER_FLOAT32_ATOMIC
         fun: AtomicFunction,
 
         /// Value to use in the function.
