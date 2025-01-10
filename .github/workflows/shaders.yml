@@ -2,7 +2,12 @@ name: Shaders
 
 on:
   push:
-    branches-ignore: ["trunk"]
+    branches-ignore: [
+      # CI is running on the merge queue, so we don't need to run on trunk at all.
+      "trunk",
+      # This is the branch the merge queue creates.
+      "gh-readonly-queue/*"
+    ]
     tags: [v0.*]
   pull_request:
   merge_group:
