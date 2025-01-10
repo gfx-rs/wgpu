@@ -851,6 +851,18 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             Err(err) => self.handle_error_fatal(err, "Instance::poll_all_devices"),
         }
     }
+
+    #[cfg(feature = "wgsl")]
+    fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures {
+        wgc::naga::front::wgsl::ImplementedLanguageExtension::all()
+            .iter()
+            .copied()
+            .fold(
+                crate::WgslLanguageFeatures::empty(),
+                #[allow(unreachable_code)]
+                |acc, wle| acc | match wle {},
+            )
+    }
 }
 
 impl dispatch::AdapterInterface for CoreAdapter {

@@ -100,6 +100,9 @@ pub trait InstanceInterface: CommonTraits {
     ) -> Pin<Box<dyn RequestAdapterFuture>>;
 
     fn poll_all_devices(&self, force_wait: bool) -> bool;
+
+    #[cfg(feature = "wgsl")]
+    fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures;
 }
 
 pub trait AdapterInterface: CommonTraits {

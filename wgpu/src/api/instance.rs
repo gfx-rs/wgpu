@@ -4,6 +4,23 @@ use crate::{dispatch::InstanceInterface, *};
 
 use std::future::Future;
 
+bitflags::bitflags! {
+    /// WGSL language extensions.
+    ///
+    /// WGSL spec.: <https://www.w3.org/TR/WGSL/#language-extensions-sec>
+    #[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
+    pub struct WgslLanguageFeatures: u32 {
+        /// <https://www.w3.org/TR/WGSL/#language_extension-readonly_and_readwrite_storage_textures>
+        const ReadOnlyAndReadWriteStorageTextures = 1 << 0;
+        /// <https://www.w3.org/TR/WGSL/#language_extension-packed_4x8_integer_dot_product>
+        const Packed4x8IntegerDotProduct = 1 << 1;
+        /// <https://www.w3.org/TR/WGSL/#language_extension-unrestricted_pointer_parameters>
+        const UnrestrictedPointerParameters = 1 << 2;
+        /// <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+        const PointerCompositeAccess = 1 << 3;
+    }
+}
+
 /// Context for all other wgpu objects. Instance of wgpu.
 ///
 /// This is the first thing you create when using wgpu.
@@ -382,5 +399,13 @@ impl Instance {
     #[cfg(wgpu_core)]
     pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
         self.inner.as_core_opt().map(|ctx| ctx.generate_report())
+    }
+
+    /// Returns set of supported WGSL language extensions supported by this instance.
+    ///
+    /// <https://www.w3.org/TR/webgpu/#gpuwgsllanguagefeatures>
+    #[cfg(feature = "wgsl")]
+    pub fn wgsl_language_features(&self) -> WgslLanguageFeatures {
+        self.inner.wgsl_language_features()
     }
 }

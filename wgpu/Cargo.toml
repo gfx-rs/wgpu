@@ -187,6 +187,7 @@ optional = true
 
 [dependencies]
 arrayvec.workspace = true
+bitflags.workspace = true
 document-features.workspace = true
 log.workspace = true
 parking_lot.workspace = true

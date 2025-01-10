@@ -4701,16 +4701,18 @@ fn texture_format_deserialize() {
     );
 }
 
+/// Color write mask. Disabled color channels will not be written to.
+///
+/// Corresponds to [WebGPU `GPUColorWriteFlags`](
+/// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
+#[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ColorWrites(u32);
+
 bitflags::bitflags! {
-    /// Color write mask. Disabled color channels will not be written to.
-    ///
-    /// Corresponds to [WebGPU `GPUColorWriteFlags`](
-    /// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
-    #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    #[cfg_attr(feature = "serde", serde(transparent))]
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct ColorWrites: u32 {
+    impl ColorWrites: u32 {
         /// Enable red channel writes
         const RED = 1 << 0;
         /// Enable green channel writes

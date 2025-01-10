@@ -3980,6 +3980,7 @@ name = "wgpu"
 version = "23.0.1"
 dependencies = [
  "arrayvec",
+ "bitflags 2.6.0",
  "cfg_aliases 0.2.1",
  "document-features",
  "js-sys",

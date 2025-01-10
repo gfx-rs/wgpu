@@ -163,6 +163,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Allow for statically linking DXC rather than including separate `.dll` files. By @DouglasDwyer in [#6574](https://github.com/gfx-rs/wgpu/pull/6574).
 - `DeviceType` and `AdapterInfo` now impl `Hash` by @cwfitzgerald in [#6868](https://github.com/gfx-rs/wgpu/pull/6868)
 - Add build support for Apple Vision Pro. By @guusw in [#6611](https://github.com/gfx-rs/wgpu/pull/6611).
+- Add `wgsl_language_features` for obtaining available WGSL language feature by @sagudev in [#6814](https://github.com/gfx-rs/wgpu/pull/6814)
 
 ##### Vulkan
 
