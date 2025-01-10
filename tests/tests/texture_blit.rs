@@ -33,13 +33,12 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
             view_formats: &[],
         });
 
-        let blitter = wgpu::util::TextureBlitter::new(
+        let blitter = wgpu::util::TextureBlitterBuilder::new(
             &ctx.device,
             wgpu::TextureFormat::Rgba8UnormSrgb,
-            wgpu::FilterMode::Linear,
-            None,
-        );
-
+        )
+        .sample_type(wgpu::FilterMode::Linear)
+        .build();
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -85,12 +84,12 @@ static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConf
             view_formats: &[],
         });
 
-        let blitter = wgpu::util::TextureBlitter::new(
+        let blitter = wgpu::util::TextureBlitterBuilder::new(
             &ctx.device,
             wgpu::TextureFormat::Rgba8UnormSrgb,
-            wgpu::FilterMode::Nearest,
-            None,
-        );
+        )
+        .sample_type(wgpu::FilterMode::Linear)
+        .build();
 
         let mut encoder = ctx
             .device
