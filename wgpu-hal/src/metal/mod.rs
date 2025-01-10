@@ -518,6 +518,15 @@ pub struct Texture {
     copy_size: crate::CopyExtent,
 }
 
+impl Texture {
+    /// # Safety
+    ///
+    /// - The texture handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> &metal::Texture {
+        &self.raw
+    }
+}
+
 impl crate::DynTexture for Texture {}
 
 unsafe impl Send for Texture {}
