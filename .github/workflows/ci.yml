@@ -151,6 +151,17 @@ jobs:
             os: ubuntu-22.04
             target: wasm32-unknown-emscripten
             kind: wgpu-only
+          
+          - name: WebAssembly Core 1.0
+            os: ubuntu-22.04
+            target: wasm32v1-none
+            kind: no-std
+          
+          # Bare-metal x86-64
+          - name: Bare-metal x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-none
+            kind: no-std
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -246,6 +257,19 @@ jobs:
           # Check with all features.
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
+        
+      # Building for no_std platforms where every feature is enabled except "std".
+      - name: check no_std
+        if: matrix.kind == 'no_std'
+        shell: bash
+        run: |
+          set -e
+
+          # check with no features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+
+          # Check with all features except "std".
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
 
       # Building for native platforms with standard tests.
       - name: check native
