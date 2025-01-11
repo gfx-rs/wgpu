@@ -25,9 +25,6 @@ use core::{
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "std")]
-use std::path::PathBuf;
-
 pub mod assertions;
 mod counters;
 pub mod math;
@@ -7702,7 +7699,6 @@ impl Default for ShaderRuntimeChecks {
 ///
 /// `wgpu::utils::init::dx12_shader_compiler_from_env` can be used to set the compiler
 /// from the `WGPU_DX12_SHADER_COMPILER` environment variable, but this should only be used for testing.
-#[cfg(feature = "std")]
 #[derive(Clone, Debug, Default)]
 pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
@@ -7720,9 +7716,9 @@ pub enum Dx12Compiler {
     /// It also requires WDDM 2.1 (Windows 10 version 1607).
     DynamicDxc {
         /// Path to `dxcompiler.dll`.
-        dxc_path: PathBuf,
+        dxc_path: String,
         /// Path to `dxil.dll`.
-        dxil_path: PathBuf,
+        dxil_path: String,
     },
     /// The statically-linked variant of Dxc.
     ///
@@ -7751,7 +7747,6 @@ pub enum Gles3MinorVersion {
 }
 
 /// Options for creating an instance.
-#[cfg(feature = "std")]
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
@@ -7764,7 +7759,6 @@ pub struct InstanceDescriptor {
     pub gles_minor_version: Gles3MinorVersion,
 }
 
-#[cfg(feature = "std")]
 impl Default for InstanceDescriptor {
     fn default() -> Self {
         Self {
