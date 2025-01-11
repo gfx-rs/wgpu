@@ -173,6 +173,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 
 - Allow using some 32-bit floating-point atomic operations (load, store, add, sub, exchange) in shaders. It requires Metal 3.0+ with Apple 7, 8, 9 or Mac 2. By @AsherJingkongChen in [#6234](https://github.com/gfx-rs/wgpu/pull/6234).
 - Add build support for Apple Vision Pro. By @guusw in [#6611](https://github.com/gfx-rs/wgpu/pull/6611).
+- Add `raw_handle` method to access raw Metal textures in [#6894](https://github.com/gfx-rs/wgpu/pull/6894).
 
 #### Changes
 
