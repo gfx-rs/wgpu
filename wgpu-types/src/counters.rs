@@ -1,9 +1,7 @@
+use alloc::{string::String, vec::Vec};
 #[cfg(feature = "counters")]
 use core::sync::atomic::{AtomicIsize, Ordering};
 use core::{fmt, ops::Range};
-
-#[cfg(feature = "alloc")]
-use alloc::{string::String, vec::Vec};
 
 /// An internal counter for debugging purposes
 ///
@@ -148,7 +146,6 @@ pub struct InternalCounters {
 }
 
 /// Describes an allocation in the [`AllocatorReport`].
-#[cfg(feature = "alloc")]
 #[derive(Clone)]
 pub struct AllocationReport {
     /// The name provided to the `allocate()` function.
@@ -170,7 +167,6 @@ pub struct MemoryBlockReport {
 }
 
 /// A report that can be generated for informational purposes using `Allocator::generate_report()`.
-#[cfg(feature = "alloc")]
 #[derive(Clone)]
 pub struct AllocatorReport {
     /// All live allocations, sub-allocated from memory blocks.
@@ -183,7 +179,6 @@ pub struct AllocatorReport {
     pub total_reserved_bytes: u64,
 }
 
-#[cfg(feature = "alloc")]
 impl fmt::Debug for AllocationReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = if !self.name.is_empty() {
@@ -195,7 +190,6 @@ impl fmt::Debug for AllocationReport {
     }
 }
 
-#[cfg(feature = "alloc")]
 impl fmt::Debug for AllocatorReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut allocations = self.allocations.clone();
@@ -220,10 +214,6 @@ impl fmt::Debug for AllocatorReport {
     }
 }
 
-#[cfg_attr(
-    not(feature = "alloc"),
-    expect(dead_code, reason = "only required with alloc feature")
-)]
 struct FmtBytes(u64);
 
 impl fmt::Display for FmtBytes {

@@ -12,9 +12,9 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(feature = "alloc")]
 extern crate alloc;
 
+use alloc::{string::String, vec, vec::Vec};
 use core::hash::{Hash, Hasher};
 use core::mem::size_of;
 use core::{num::NonZeroU32, ops::Range};
@@ -25,9 +25,6 @@ use serde::Serialize;
 
 #[cfg(feature = "std")]
 use std::path::PathBuf;
-
-#[cfg(feature = "alloc")]
-use alloc::{string::String, vec, vec::Vec};
 
 pub mod assertions;
 mod counters;
@@ -997,7 +994,6 @@ impl Features {
     }
 
     /// Vertex formats allowed for creating and building BLASes
-    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
         let mut formats = Vec::new();
@@ -1804,7 +1800,6 @@ pub enum DeviceType {
 //TODO: convert `vendor` and `device` to `u32`
 
 /// Information about an adapter.
-#[cfg(feature = "alloc")]
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AdapterInfo {
@@ -2448,7 +2443,6 @@ impl TextureFormatFeatureFlags {
 
     /// A `Vec` of supported sample counts.
     #[must_use]
-    #[cfg(feature = "alloc")]
     pub fn supported_sample_counts(&self) -> Vec<u32> {
         let all_possible_sample_counts: [u32; 5] = [1, 2, 4, 8, 16];
         all_possible_sample_counts
@@ -4149,7 +4143,6 @@ impl TextureFormat {
     }
 }
 
-#[cfg(feature = "alloc")]
 #[test]
 fn texture_format_serialize() {
     use alloc::string::ToString;
@@ -5727,7 +5720,6 @@ bitflags::bitflags! {
 }
 
 /// Defines the capabilities of a given surface and adapter.
-#[cfg(feature = "alloc")]
 #[derive(Debug)]
 pub struct SurfaceCapabilities {
     /// List of supported formats to use with the given adapter. The first format in the vector is preferred.
@@ -5748,7 +5740,6 @@ pub struct SurfaceCapabilities {
     pub usages: TextureUsages,
 }
 
-#[cfg(feature = "alloc")]
 impl Default for SurfaceCapabilities {
     fn default() -> Self {
         Self {
@@ -7266,7 +7257,7 @@ impl ExternalImageSource {
 }
 
 #[cfg(target_arch = "wasm32")]
-impl std::ops::Deref for ExternalImageSource {
+impl core::ops::Deref for ExternalImageSource {
     type Target = js_sys::Object;
 
     fn deref(&self) -> &Self::Target {
@@ -7827,7 +7818,6 @@ pub struct BlasTriangleGeometrySizeDescriptor {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
-#[cfg(feature = "alloc")]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for all size defining attributes of all geometries inside a bottom level acceleration structure.

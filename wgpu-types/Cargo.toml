@@ -29,8 +29,7 @@ targets = [
 
 [features]
 default = ["std"]
-std = ["alloc", "js-sys/std", "web-sys/std"]
-alloc = ["serde?/alloc"]
+std = ["js-sys/std", "web-sys/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde"]
@@ -43,6 +42,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
 serde = { workspace = true, default-features = false, features = [
+    "alloc",
     "derive",
 ], optional = true }
 
