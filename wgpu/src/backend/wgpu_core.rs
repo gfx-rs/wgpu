@@ -854,14 +854,17 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
 
     #[cfg(feature = "wgsl")]
     fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures {
-        wgc::naga::front::wgsl::ImplementedLanguageExtension::all()
-            .iter()
-            .copied()
-            .fold(
-                crate::WgslLanguageFeatures::empty(),
-                #[expect(unreachable_code)]
-                |acc, wle| acc | match wle {},
-            )
+        use wgc::naga::front::wgsl::ImplementedLanguageExtension;
+        ImplementedLanguageExtension::all().iter().copied().fold(
+            crate::WgslLanguageFeatures::empty(),
+            |acc, wle| {
+                acc | match wle {
+                    ImplementedLanguageExtension::PointerCompositeAccess => {
+                        crate::WgslLanguageFeatures::PointerCompositeAccess
+                    }
+                }
+            },
+        )
     }
 }
 
