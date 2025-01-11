@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{f32::consts, mem::size_of};
+use std::f32::consts;
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
 const IMAGE_SIZE: u32 = 256;
@@ -379,7 +379,7 @@ impl crate::framework::Example for Example {
         }
     }
 
-    #[allow(clippy::single_match)]
+    #[expect(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             winit::event::WindowEvent::CursorMoved { position, .. } => {

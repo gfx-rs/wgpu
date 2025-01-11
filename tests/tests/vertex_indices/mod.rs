@@ -3,7 +3,7 @@
 //! We need tests for these as the backends use various schemes to work around the lack
 //! of support for things like `gl_BaseInstance` in shaders.
 
-use std::{mem::size_of_val, num::NonZeroU64, ops::Range};
+use std::{num::NonZeroU64, ops::Range};
 
 use itertools::Itertools;
 use strum::IntoEnumIterator;

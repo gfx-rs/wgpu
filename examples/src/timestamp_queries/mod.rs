@@ -17,8 +17,6 @@
 //! The period, i.e. the unit of time, of the timestamps in wgpu is undetermined and needs to be queried with `wgpu::Queue::get_timestamp_period`
 //! in order to get comparable results.
 
-use std::mem::size_of;
-
 use wgpu::util::DeviceExt;
 
 struct Queries {
@@ -49,7 +47,10 @@ impl QueryResults {
     // * compute end
     const NUM_QUERIES: u64 = 8;
 
-    #[allow(clippy::redundant_closure)] // False positive
+    #[expect(
+        clippy::redundant_closure,
+        reason = "false positive for `get_next_slot`, which needs to be used by reference"
+    )]
     fn from_raw_results(timestamps: Vec<u64>, timestamps_inside_passes: bool) -> Self {
         assert_eq!(timestamps.len(), Self::NUM_QUERIES as usize);
 
@@ -77,7 +78,6 @@ impl QueryResults {
         }
     }
 
-    #[cfg_attr(test, allow(unused))]
     fn print(&self, queue: &wgpu::Queue) {
         let period = queue.get_timestamp_period();
         let elapsed_us = |start, end: u64| end.wrapping_sub(start) as f64 * period as f64 / 1000.0;
@@ -177,7 +177,6 @@ impl Queries {
     }
 }
 
-#[cfg_attr(test, allow(unused))]
 async fn run() {
     // Instantiates instance of wgpu
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();

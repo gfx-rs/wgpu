@@ -16,7 +16,12 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
-#![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
+#![warn(
+    clippy::allow_attributes,
+    missing_docs,
+    rust_2018_idioms,
+    unsafe_op_in_unsafe_fn
+)]
 #![allow(clippy::arc_with_non_send_sync)]
 
 //
@@ -66,12 +71,12 @@ pub use wgt::{
     MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
     QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub use wgt::{ImageCopyBuffer, ImageCopyTexture, ImageCopyTextureTagged, ImageDataLayout};
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(any(webgpu, webgl))]
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub use wgt::ImageCopyExternalImage;
 #[cfg(any(webgpu, webgl))]
 pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};

@@ -1,14 +1,10 @@
-use std::mem::size_of_val;
-
 const ARR_SIZE: usize = 128;
 
 struct ExecuteResults {
     patient_workgroup_results: Vec<u32>,
-    #[cfg_attr(test, allow(unused))]
     hasty_workgroup_results: Vec<u32>,
 }
 
-#[cfg_attr(test, allow(unused))]
 async fn run() {
     let instance = wgpu::Instance::default();
     let adapter = instance

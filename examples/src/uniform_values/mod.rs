@@ -16,7 +16,7 @@
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
-use std::{mem::size_of, sync::Arc};
+use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated WGPU storage buffers.
 use encase::ShaderType;
@@ -343,7 +343,10 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
 
 pub fn main() {
     let event_loop = EventLoop::new().unwrap();
-    #[allow(unused_mut)]
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unused_mut, reason = "`wasm32` re-assigns to specify canvas")
+    )]
     let mut builder = winit::window::WindowBuilder::new()
         .with_title("Remember: Use U/D to change sample count!")
         .with_inner_size(winit::dpi::LogicalSize::new(900, 900));
