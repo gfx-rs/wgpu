@@ -4149,8 +4149,11 @@ impl TextureFormat {
     }
 }
 
+#[cfg(feature = "alloc")]
 #[test]
 fn texture_format_serialize() {
+    use alloc::string::ToString;
+
     assert_eq!(
         serde_json::to_string(&TextureFormat::R8Unorm).unwrap(),
         "\"r8unorm\"".to_string()
