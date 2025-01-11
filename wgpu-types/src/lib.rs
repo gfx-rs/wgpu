@@ -15,13 +15,15 @@ extern crate std;
 extern crate alloc;
 
 use alloc::{string::String, vec, vec::Vec};
-use core::hash::{Hash, Hasher};
-use core::mem::size_of;
-use core::{num::NonZeroU32, ops::Range};
+use core::{
+    hash::{Hash, Hasher},
+    mem::size_of,
+    num::NonZeroU32,
+    ops::Range,
+};
+
 #[cfg(any(feature = "serde", test))]
-use serde::Deserialize;
-#[cfg(any(feature = "serde", test))]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use std::path::PathBuf;
