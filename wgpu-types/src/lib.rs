@@ -2846,57 +2846,6 @@ pub enum TextureFormat {
 }
 
 #[cfg(any(feature = "serde", test))]
-const fn astc_texture_format_to_str(block: AstcBlock, channel: AstcChannel) -> &'static str {
-    use AstcBlock::*;
-    use AstcChannel::*;
-
-    match (block, channel) {
-        (B4x4, Unorm) => "astc-4x4-unorm",
-        (B5x4, Unorm) => "astc-5x4-unorm",
-        (B5x5, Unorm) => "astc-5x5-unorm",
-        (B6x5, Unorm) => "astc-6x5-unorm",
-        (B6x6, Unorm) => "astc-6x6-unorm",
-        (B8x5, Unorm) => "astc-8x5-unorm",
-        (B8x6, Unorm) => "astc-8x6-unorm",
-        (B8x8, Unorm) => "astc-8x8-unorm",
-        (B10x5, Unorm) => "astc-10x5-unorm",
-        (B10x6, Unorm) => "astc-10x6-unorm",
-        (B10x8, Unorm) => "astc-10x8-unorm",
-        (B10x10, Unorm) => "astc-10x10-unorm",
-        (B12x10, Unorm) => "astc-12x10-unorm",
-        (B12x12, Unorm) => "astc-12x12-unorm",
-        (B4x4, UnormSrgb) => "astc-4x4-unorm-srgb",
-        (B5x4, UnormSrgb) => "astc-5x4-unorm-srgb",
-        (B5x5, UnormSrgb) => "astc-5x5-unorm-srgb",
-        (B6x5, UnormSrgb) => "astc-6x5-unorm-srgb",
-        (B6x6, UnormSrgb) => "astc-6x6-unorm-srgb",
-        (B8x5, UnormSrgb) => "astc-8x5-unorm-srgb",
-        (B8x6, UnormSrgb) => "astc-8x6-unorm-srgb",
-        (B8x8, UnormSrgb) => "astc-8x8-unorm-srgb",
-        (B10x5, UnormSrgb) => "astc-10x5-unorm-srgb",
-        (B10x6, UnormSrgb) => "astc-10x6-unorm-srgb",
-        (B10x8, UnormSrgb) => "astc-10x8-unorm-srgb",
-        (B10x10, UnormSrgb) => "astc-10x10-unorm-srgb",
-        (B12x10, UnormSrgb) => "astc-12x10-unorm-srgb",
-        (B12x12, UnormSrgb) => "astc-12x12-unorm-srgb",
-        (B4x4, Hdr) => "astc-4x4-hdr",
-        (B5x4, Hdr) => "astc-5x4-hdr",
-        (B5x5, Hdr) => "astc-5x5-hdr",
-        (B6x5, Hdr) => "astc-6x5-hdr",
-        (B6x6, Hdr) => "astc-6x6-hdr",
-        (B8x5, Hdr) => "astc-8x5-hdr",
-        (B8x6, Hdr) => "astc-8x6-hdr",
-        (B8x8, Hdr) => "astc-8x8-hdr",
-        (B10x5, Hdr) => "astc-10x5-hdr",
-        (B10x6, Hdr) => "astc-10x6-hdr",
-        (B10x8, Hdr) => "astc-10x8-hdr",
-        (B10x10, Hdr) => "astc-10x10-hdr",
-        (B12x10, Hdr) => "astc-12x10-hdr",
-        (B12x12, Hdr) => "astc-12x12-hdr",
-    }
-}
-
-#[cfg(any(feature = "serde", test))]
 impl<'de> Deserialize<'de> for TextureFormat {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -3041,6 +2990,7 @@ impl Serialize for TextureFormat {
     where
         S: serde::Serializer,
     {
+        let s: String;
         let name = match *self {
             TextureFormat::R8Unorm => "r8unorm",
             TextureFormat::R8Snorm => "r8snorm",
@@ -3116,7 +3066,33 @@ impl Serialize for TextureFormat {
             TextureFormat::EacR11Snorm => "eac-r11snorm",
             TextureFormat::EacRg11Unorm => "eac-rg11unorm",
             TextureFormat::EacRg11Snorm => "eac-rg11snorm",
-            TextureFormat::Astc { block, channel } => astc_texture_format_to_str(block, channel),
+            TextureFormat::Astc { block, channel } => {
+                let block = match block {
+                    AstcBlock::B4x4 => "4x4",
+                    AstcBlock::B5x4 => "5x4",
+                    AstcBlock::B5x5 => "5x5",
+                    AstcBlock::B6x5 => "6x5",
+                    AstcBlock::B6x6 => "6x6",
+                    AstcBlock::B8x5 => "8x5",
+                    AstcBlock::B8x6 => "8x6",
+                    AstcBlock::B8x8 => "8x8",
+                    AstcBlock::B10x5 => "10x5",
+                    AstcBlock::B10x6 => "10x6",
+                    AstcBlock::B10x8 => "10x8",
+                    AstcBlock::B10x10 => "10x10",
+                    AstcBlock::B12x10 => "12x10",
+                    AstcBlock::B12x12 => "12x12",
+                };
+
+                let channel = match channel {
+                    AstcChannel::Unorm => "unorm",
+                    AstcChannel::UnormSrgb => "unorm-srgb",
+                    AstcChannel::Hdr => "hdr",
+                };
+
+                s = format!("astc-{block}-{channel}");
+                &s
+            }
         };
         serializer.serialize_str(name)
     }
