@@ -153,6 +153,7 @@ jobs:
             kind: wgpu-only
           
           # TODO: Uncomment once web-sys updates past 0.3.76
+          # See https://github.com/rustwasm/wasm-bindgen/pull/4378 for details
           # - name: WebAssembly Core 1.0
           #   os: ubuntu-22.04
           #   target: wasm32v1-none
@@ -160,6 +161,8 @@ jobs:
           #   toolchain: nightly
           
           # Bare-metal x86-64
+          # TODO: Remove once web-sys updates past 0.3.76
+          # Included while wasm32v1-none is failing to ensure `no_std` does not regress
           - name: Bare-metal x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-none
