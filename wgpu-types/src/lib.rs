@@ -29,9 +29,6 @@ use std::path::PathBuf;
 #[cfg(feature = "alloc")]
 use alloc::{string::String, vec, vec::Vec};
 
-#[cfg(all(feature = "alloc", feature = "serde"))]
-use alloc::format;
-
 pub mod assertions;
 mod counters;
 pub mod math;
