@@ -23,7 +23,10 @@ use core::{
 };
 
 #[cfg(any(feature = "serde", test))]
-use serde::{Deserialize, Serialize};
+use {
+    alloc::format,
+    serde::{Deserialize, Serialize},
+};
 
 pub mod assertions;
 mod counters;
