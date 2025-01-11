@@ -1084,14 +1084,18 @@ impl InstanceFlags {
     /// The environment variables are named after the flags prefixed with "WGPU_". For example:
     /// - WGPU_DEBUG
     /// - WGPU_VALIDATION
-    #[cfg(feature = "std")]
     #[must_use]
     pub fn with_env(mut self) -> Self {
-        fn env(key: &str) -> Option<bool> {
-            std::env::var(key).ok().map(|s| match s.as_str() {
+        fn env(_key: &str) -> Option<bool> {
+            #[cfg(feature = "std")]
+            return std::env::var(_key).ok().map(|s| match s.as_str() {
                 "0" => false,
                 _ => true,
-            })
+            });
+
+            // Without access to std, environment variables are considered unset
+            #[cfg(not(feature = "std"))]
+            return None;
         }
 
         if let Some(bit) = env("WGPU_VALIDATION") {
