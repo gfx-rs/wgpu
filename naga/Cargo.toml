@@ -78,7 +78,10 @@ log = "0.4"
 strum.workspace = true
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.217", features = ["derive"], optional = true }
+serde = { version = "1.0.217", features = [
+    "default",
+    "derive",
+], optional = true }
 # Hold on updating to 0.7 until https://github.com/petgraph/petgraph/pull/714 is on crates.io
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
@@ -101,5 +104,5 @@ hlsl-snapshots = { path = "./hlsl-snapshots" }
 # incompatible with our tests because we do a syntactic diff and not a semantic one.
 ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["default", "derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }

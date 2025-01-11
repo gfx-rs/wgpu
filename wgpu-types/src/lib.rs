@@ -7,15 +7,30 @@
     clippy::match_like_matches_macro,
 )]
 #![warn(clippy::ptr_as_ptr, missing_docs, unsafe_op_in_unsafe_fn)]
+#![no_std]
 
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+use core::hash::{Hash, Hasher};
+use core::mem::size_of;
+use core::{num::NonZeroU32, ops::Range};
 #[cfg(any(feature = "serde", test))]
 use serde::Deserialize;
 #[cfg(any(feature = "serde", test))]
 use serde::Serialize;
-use std::hash::{Hash, Hasher};
-use std::mem::size_of;
+
+#[cfg(feature = "std")]
 use std::path::PathBuf;
-use std::{num::NonZeroU32, ops::Range};
+
+#[cfg(feature = "alloc")]
+use alloc::{string::String, vec, vec::Vec};
+
+#[cfg(all(feature = "alloc", feature = "serde"))]
+use alloc::format;
 
 pub mod assertions;
 mod counters;
@@ -26,7 +41,7 @@ pub use counters::*;
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
-pub type BufferSize = std::num::NonZeroU64;
+pub type BufferSize = core::num::NonZeroU64;
 /// Integral type used for binding locations in shaders.
 pub type ShaderLocation = u32;
 /// Integral type used for dynamic bind group offsets.
@@ -88,8 +103,8 @@ impl Backend {
     }
 }
 
-impl std::fmt::Display for Backend {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Backend {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.to_str())
     }
 }
@@ -985,6 +1000,7 @@ impl Features {
     }
 
     /// Vertex formats allowed for creating and building BLASes
+    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
         let mut formats = Vec::new();
@@ -1076,6 +1092,7 @@ impl InstanceFlags {
     /// The environment variables are named after the flags prefixed with "WGPU_". For example:
     /// - WGPU_DEBUG
     /// - WGPU_VALIDATION
+    #[cfg(feature = "std")]
     #[must_use]
     pub fn with_env(mut self) -> Self {
         fn env(key: &str) -> Option<bool> {
@@ -1479,7 +1496,7 @@ impl Limits {
         fatal: bool,
         mut fail_fn: impl FnMut(&'static str, u64, u64),
     ) {
-        use std::cmp::Ordering;
+        use core::cmp::Ordering;
 
         macro_rules! compare {
             ($name:ident, $ordering:ident) => {
@@ -1790,6 +1807,7 @@ pub enum DeviceType {
 //TODO: convert `vendor` and `device` to `u32`
 
 /// Information about an adapter.
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AdapterInfo {
@@ -2433,6 +2451,7 @@ impl TextureFormatFeatureFlags {
 
     /// A `Vec` of supported sample counts.
     #[must_use]
+    #[cfg(feature = "alloc")]
     pub fn supported_sample_counts(&self) -> Vec<u32> {
         let all_possible_sample_counts: [u32; 5] = [1, 2, 4, 8, 16];
         all_possible_sample_counts
@@ -2836,6 +2855,57 @@ pub enum TextureFormat {
 }
 
 #[cfg(any(feature = "serde", test))]
+const fn astc_texture_format_to_str(block: AstcBlock, channel: AstcChannel) -> &'static str {
+    use AstcBlock::*;
+    use AstcChannel::*;
+
+    match (block, channel) {
+        (B4x4, Unorm) => "astc-4x4-unorm",
+        (B5x4, Unorm) => "astc-5x4-unorm",
+        (B5x5, Unorm) => "astc-5x5-unorm",
+        (B6x5, Unorm) => "astc-6x5-unorm",
+        (B6x6, Unorm) => "astc-6x6-unorm",
+        (B8x5, Unorm) => "astc-8x5-unorm",
+        (B8x6, Unorm) => "astc-8x6-unorm",
+        (B8x8, Unorm) => "astc-8x8-unorm",
+        (B10x5, Unorm) => "astc-10x5-unorm",
+        (B10x6, Unorm) => "astc-10x6-unorm",
+        (B10x8, Unorm) => "astc-10x8-unorm",
+        (B10x10, Unorm) => "astc-10x10-unorm",
+        (B12x10, Unorm) => "astc-12x10-unorm",
+        (B12x12, Unorm) => "astc-12x12-unorm",
+        (B4x4, UnormSrgb) => "astc-4x4-unorm-srgb",
+        (B5x4, UnormSrgb) => "astc-5x4-unorm-srgb",
+        (B5x5, UnormSrgb) => "astc-5x5-unorm-srgb",
+        (B6x5, UnormSrgb) => "astc-6x5-unorm-srgb",
+        (B6x6, UnormSrgb) => "astc-6x6-unorm-srgb",
+        (B8x5, UnormSrgb) => "astc-8x5-unorm-srgb",
+        (B8x6, UnormSrgb) => "astc-8x6-unorm-srgb",
+        (B8x8, UnormSrgb) => "astc-8x8-unorm-srgb",
+        (B10x5, UnormSrgb) => "astc-10x5-unorm-srgb",
+        (B10x6, UnormSrgb) => "astc-10x6-unorm-srgb",
+        (B10x8, UnormSrgb) => "astc-10x8-unorm-srgb",
+        (B10x10, UnormSrgb) => "astc-10x10-unorm-srgb",
+        (B12x10, UnormSrgb) => "astc-12x10-unorm-srgb",
+        (B12x12, UnormSrgb) => "astc-12x12-unorm-srgb",
+        (B4x4, Hdr) => "astc-4x4-hdr",
+        (B5x4, Hdr) => "astc-5x4-hdr",
+        (B5x5, Hdr) => "astc-5x5-hdr",
+        (B6x5, Hdr) => "astc-6x5-hdr",
+        (B6x6, Hdr) => "astc-6x6-hdr",
+        (B8x5, Hdr) => "astc-8x5-hdr",
+        (B8x6, Hdr) => "astc-8x6-hdr",
+        (B8x8, Hdr) => "astc-8x8-hdr",
+        (B10x5, Hdr) => "astc-10x5-hdr",
+        (B10x6, Hdr) => "astc-10x6-hdr",
+        (B10x8, Hdr) => "astc-10x8-hdr",
+        (B10x10, Hdr) => "astc-10x10-hdr",
+        (B12x10, Hdr) => "astc-12x10-hdr",
+        (B12x12, Hdr) => "astc-12x12-hdr",
+    }
+}
+
+#[cfg(any(feature = "serde", test))]
 impl<'de> Deserialize<'de> for TextureFormat {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -2848,7 +2918,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
         impl de::Visitor<'_> for TextureFormatVisitor {
             type Value = TextureFormat;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
                 formatter.write_str("a valid texture format")
             }
 
@@ -2980,7 +3050,6 @@ impl Serialize for TextureFormat {
     where
         S: serde::Serializer,
     {
-        let s: String;
         let name = match *self {
             TextureFormat::R8Unorm => "r8unorm",
             TextureFormat::R8Snorm => "r8snorm",
@@ -3056,33 +3125,7 @@ impl Serialize for TextureFormat {
             TextureFormat::EacR11Snorm => "eac-r11snorm",
             TextureFormat::EacRg11Unorm => "eac-rg11unorm",
             TextureFormat::EacRg11Snorm => "eac-rg11snorm",
-            TextureFormat::Astc { block, channel } => {
-                let block = match block {
-                    AstcBlock::B4x4 => "4x4",
-                    AstcBlock::B5x4 => "5x4",
-                    AstcBlock::B5x5 => "5x5",
-                    AstcBlock::B6x5 => "6x5",
-                    AstcBlock::B6x6 => "6x6",
-                    AstcBlock::B8x5 => "8x5",
-                    AstcBlock::B8x6 => "8x6",
-                    AstcBlock::B8x8 => "8x8",
-                    AstcBlock::B10x5 => "10x5",
-                    AstcBlock::B10x6 => "10x6",
-                    AstcBlock::B10x8 => "10x8",
-                    AstcBlock::B10x10 => "10x10",
-                    AstcBlock::B12x10 => "12x10",
-                    AstcBlock::B12x12 => "12x12",
-                };
-
-                let channel = match channel {
-                    AstcChannel::Unorm => "unorm",
-                    AstcChannel::UnormSrgb => "unorm-srgb",
-                    AstcChannel::Hdr => "hdr",
-                };
-
-                s = format!("astc-{block}-{channel}");
-                &s
-            }
+            TextureFormat::Astc { block, channel } => astc_texture_format_to_str(block, channel),
         };
         serializer.serialize_str(name)
     }
@@ -5684,6 +5727,7 @@ bitflags::bitflags! {
 }
 
 /// Defines the capabilities of a given surface and adapter.
+#[cfg(feature = "alloc")]
 #[derive(Debug)]
 pub struct SurfaceCapabilities {
     /// List of supported formats to use with the given adapter. The first format in the vector is preferred.
@@ -5704,6 +5748,7 @@ pub struct SurfaceCapabilities {
     pub usages: TextureUsages,
 }
 
+#[cfg(feature = "alloc")]
 impl Default for SurfaceCapabilities {
     fn default() -> Self {
         Self {
@@ -5961,8 +6006,8 @@ impl Origin2d {
     }
 }
 
-impl std::fmt::Debug for Origin2d {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Origin2d {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         (self.x, self.y).fmt(f)
     }
 }
@@ -6004,8 +6049,8 @@ impl Default for Origin3d {
     }
 }
 
-impl std::fmt::Debug for Origin3d {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Origin3d {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         (self.x, self.y, self.z).fmt(f)
     }
 }
@@ -6028,8 +6073,8 @@ pub struct Extent3d {
     pub depth_or_array_layers: u32,
 }
 
-impl std::fmt::Debug for Extent3d {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Extent3d {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         (self.width, self.height, self.depth_or_array_layers).fmt(f)
     }
 }
@@ -7546,8 +7591,8 @@ impl DrawIndirectArgs {
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
-            std::mem::transmute(std::slice::from_raw_parts(
-                std::ptr::from_ref(self).cast::<u8>(),
+            core::mem::transmute(core::slice::from_raw_parts(
+                core::ptr::from_ref(self).cast::<u8>(),
                 size_of::<Self>(),
             ))
         }
@@ -7577,8 +7622,8 @@ impl DrawIndexedIndirectArgs {
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
-            std::mem::transmute(std::slice::from_raw_parts(
-                std::ptr::from_ref(self).cast::<u8>(),
+            core::mem::transmute(core::slice::from_raw_parts(
+                core::ptr::from_ref(self).cast::<u8>(),
                 size_of::<Self>(),
             ))
         }
@@ -7602,8 +7647,8 @@ impl DispatchIndirectArgs {
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
-            std::mem::transmute(std::slice::from_raw_parts(
-                std::ptr::from_ref(self).cast::<u8>(),
+            core::mem::transmute(core::slice::from_raw_parts(
+                core::ptr::from_ref(self).cast::<u8>(),
                 size_of::<Self>(),
             ))
         }
@@ -7688,6 +7733,7 @@ impl Default for ShaderRuntimeChecks {
 ///
 /// `wgpu::utils::init::dx12_shader_compiler_from_env` can be used to set the compiler
 /// from the `WGPU_DX12_SHADER_COMPILER` environment variable, but this should only be used for testing.
+#[cfg(feature = "std")]
 #[derive(Clone, Debug, Default)]
 pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
@@ -7736,6 +7782,7 @@ pub enum Gles3MinorVersion {
 }
 
 /// Options for creating an instance.
+#[cfg(feature = "std")]
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
@@ -7748,6 +7795,7 @@ pub struct InstanceDescriptor {
     pub gles_minor_version: Gles3MinorVersion,
 }
 
+#[cfg(feature = "std")]
 impl Default for InstanceDescriptor {
     fn default() -> Self {
         Self {
@@ -7779,6 +7827,7 @@ pub struct BlasTriangleGeometrySizeDescriptor {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for all size defining attributes of all geometries inside a bottom level acceleration structure.

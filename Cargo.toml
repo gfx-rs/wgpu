@@ -127,7 +127,7 @@ ron = "0.8"
 # rustc-hash 2.0 is a completely different hasher with different performance characteristics
 serde_json = "1.0.134"
 rustc-hash = "1"
-serde = "1"
+serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.26.0", features = ["derive"] }
@@ -173,11 +173,11 @@ windows = { version = "0.58", default-features = false }
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"
-js-sys = "0.3.70"
+js-sys = { version = "0.3.70", default-features = false }
 wasm-bindgen = "0.2.97"
 wasm-bindgen-futures = "0.4.45"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.74"
+web-sys = { version = "0.3.74", default-features = false }
 web-time = "0.2.4"
 
 # deno dependencies

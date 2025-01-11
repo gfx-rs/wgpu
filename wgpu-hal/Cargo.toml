@@ -188,12 +188,13 @@ core-graphics-types.workspace = true
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = [
+    "default",
     "Window",
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys.workspace = true
+js-sys = { workspace = true, features = ["default"] }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

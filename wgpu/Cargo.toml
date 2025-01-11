@@ -193,7 +193,7 @@ log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true
 raw-window-handle = { workspace = true, features = ["std"] }
-serde = { workspace = true, features = ["derive"], optional = true }
+serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
 
@@ -211,6 +211,7 @@ features = ["wgsl-in"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, features = [
+    "default",
     "Document",
     "Navigator",
     "Node",
@@ -227,6 +228,6 @@ web-sys = { workspace = true, features = [
     "EventTarget",
 ] }
 wasm-bindgen.workspace = true
-js-sys.workspace = true
+js-sys = { workspace = true, features = ["default"] }
 wasm-bindgen-futures.workspace = true
 parking_lot.workspace = true

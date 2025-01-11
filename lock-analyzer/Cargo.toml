@@ -16,4 +16,4 @@ anyhow.workspace = true
 
 [dependencies.serde]
 workspace = true
-features = ["serde_derive"]
+features = ["default", "serde_derive"]
