@@ -152,16 +152,19 @@ jobs:
             target: wasm32-unknown-emscripten
             kind: wgpu-only
           
-          - name: WebAssembly Core 1.0
-            os: ubuntu-22.04
-            target: wasm32v1-none
-            kind: no-std
+          # TODO: Uncomment once web-sys updates past 0.3.76
+          # - name: WebAssembly Core 1.0
+          #   os: ubuntu-22.04
+          #   target: wasm32v1-none
+          #   kind: no-std
+          #   toolchain: nightly
           
           # Bare-metal x86-64
           - name: Bare-metal x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-none
             kind: no-std
+            toolchain: nightly
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
