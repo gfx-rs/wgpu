@@ -266,7 +266,7 @@ jobs:
         
       # Building for no_std platforms where every feature is enabled except "std".
       - name: check no_std
-        if: matrix.kind == 'no_std'
+        if: matrix.kind == 'no-std'
         shell: bash
         run: |
           set -e
