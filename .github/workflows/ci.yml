@@ -163,7 +163,7 @@ jobs:
           # Bare-metal x86-64
           # TODO: Remove once web-sys updates past 0.3.76
           # Included while wasm32v1-none is failing to ensure `no_std` does not regress
-          - name: Bare-metal x86_64
+          - name: no-std x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-none
             kind: no-std
