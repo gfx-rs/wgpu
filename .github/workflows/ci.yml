@@ -91,29 +91,34 @@ jobs:
           - name: Windows x86_64
             os: windows-2022
             target: x86_64-pc-windows-msvc
+            tier: 1
             kind: native
 
           # Windows
           - name: Windows aarch64
             os: windows-2022
             target: aarch64-pc-windows-msvc
+            tier: 2
             kind: native
 
           # MacOS
           - name: MacOS x86_64
             os: macos-14
             target: x86_64-apple-darwin
+            tier: 1
             kind: native
 
           - name: MacOS aarch64
             os: macos-14
             target: aarch64-apple-darwin
+            tier: 1
             kind: native
 
           # IOS
           - name: IOS aarch64
             os: macos-14
             target: aarch64-apple-ios
+            tier: 2
             kind: native
 
           # VisionOS
@@ -121,35 +126,40 @@ jobs:
             os: macos-14
             target: aarch64-apple-visionos
             kind: wgpu-only
-            toolchain: nightly
+            tier: 3
             extra-flags: -Zbuild-std
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            tier: 1
             kind: native
 
           - name: Linux aarch64
             os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
+            tier: 1
             kind: native
 
           # Android
           - name: Android aarch64
             os: ubuntu-22.04
             target: aarch64-linux-android
+            tier: 2
             kind: native
 
           # WebGPU/WebGL
           - name: WebAssembly
             os: ubuntu-22.04
             target: wasm32-unknown-unknown
+            tier: 2
             kind: web
 
           - name: Emscripten
             os: ubuntu-22.04
             target: wasm32-unknown-emscripten
+            tier: 2
             kind: wgpu-only
           
           # TODO: Uncomment once web-sys updates past 0.3.76
@@ -157,16 +167,17 @@ jobs:
           # - name: WebAssembly Core 1.0
           #   os: ubuntu-22.04
           #   target: wasm32v1-none
-          #   kind: no-std
-          #   toolchain: nightly
+          #   tier: 2
+          #   kind: no_std
           
           # Bare-metal x86-64
           # TODO: Remove once web-sys updates past 0.3.76
           # Included while wasm32v1-none is failing to ensure `no_std` does not regress
-          - name: no-std x86_64
+          - name: no_std x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-none
-            kind: no-std
+            tier: 2
+            kind: no_std
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -175,8 +186,8 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Toolchain (Repo MSRV)
-        if: matrix.toolchain != 'nightly'
+      - name: Install Toolchain (Repo MSRV - Tier 1 or 2)
+        if: matrix.tier == 1 || matrix.tier == 2
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
           rustup target add ${{ matrix.target }} --toolchain ${{ env.REPO_MSRV }}
@@ -194,8 +205,8 @@ jobs:
       #
       # RUSTC_BOOTSTRAP=1 is how the rust project builds itself when bootstrapping the compiler, so while not "stable"
       # it has been around for many years and don't anticipate it going away any time soon.
-      - name: Install Toolchain (Repo MSRV - Pseudo Nightly)
-        if: matrix.toolchain == 'nightly'
+      - name: Install Toolchain (Repo MSRV - Tier 3)
+        if: matrix.tier == 3
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy,rust-src
           echo "RUSTC_BOOTSTRAP=1" >> "$GITHUB_ENV"
@@ -265,7 +276,7 @@ jobs:
         
       # Building for no_std platforms where every feature is enabled except "std".
       - name: check no_std
-        if: matrix.kind == 'no-std'
+        if: matrix.kind == 'no_std'
         shell: bash
         run: |
           set -e
