@@ -167,7 +167,6 @@ jobs:
             os: ubuntu-22.04
             target: x86_64-unknown-none
             kind: no-std
-            toolchain: nightly
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
