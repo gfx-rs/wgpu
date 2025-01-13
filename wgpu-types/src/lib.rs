@@ -207,7 +207,208 @@ impl<S> Default for RequestAdapterOptions<S> {
 
 //TODO: make robust resource access configurable
 
-bitflags::bitflags! {
+
+macro_rules! bitflags_array_impl {
+    ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
+        impl core::ops::$impl_name for $name {
+            type Output = Self;
+
+            #[inline]
+            fn $inner_name(self, other: Self) -> Self {
+                Self {
+                    $($struct_names: self.$struct_names $op other.$struct_names)*
+                }
+            }
+        }
+    )
+}
+
+macro_rules! bitflags_array_impl_assign {
+    ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
+        impl core::ops::$impl_name for $name {
+            #[inline]
+            fn $inner_name(&mut self, other: Self) {
+                $(self.$struct_names $op other.$struct_names)*
+            }
+        }
+    )
+}
+
+macro_rules! bit_array_impl {
+    ($impl_name:ident $inner_name:ident $name:ident $op:tt) => (
+        impl core::ops::$impl_name for $name {
+            type Output = Self;
+
+            #[inline]
+            fn $inner_name(mut self, other: Self) -> Self {
+                for (inner, other) in self.0.iter_mut().zip(other.0.iter()) {
+                    *inner $op *other;
+                }
+                self
+            }
+        }
+    )
+}
+
+macro_rules! bitflags_array {
+    (
+    $(#[$outer:meta])* pub struct $name:ident: [$T:ty; $Len:expr];
+    $($(#[$bit_outer:meta])*
+    $vis:vis struct $inner_name:ident $lower_inner_name:ident {
+        $(
+            $(#[$inner:ident $($args:tt)*])*
+            const $Flag:tt = $value:expr;
+        )*
+    })*
+    ) => {
+        $(
+        bitflags::bitflags! {
+            $(#[$bit_outer])*
+            $vis struct $inner_name: $T {
+                $(
+                    $(#[$inner $($args)*])*
+                    const $Flag = $value;
+                )*
+            }
+        }
+        )*
+
+        $(#[$outer])*
+        pub struct $name{ $($lower_inner_name: $inner_name,)* }
+
+        #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
+        /// Bits in array form
+        pub struct Bits(pub [$T; $Len]);
+
+        bitflags_array_impl! { BitOr bitor $name | $($lower_inner_name)* }
+        bitflags_array_impl! { BitAnd bitand $name & $($lower_inner_name)* }
+        bitflags_array_impl! { Sub sub $name - $($lower_inner_name)* }
+
+        bitflags_array_impl_assign! { BitOrAssign bitor_assign $name |= $($lower_inner_name)* }
+        bitflags_array_impl_assign! { BitAndAssign bitand_assign $name &= $($lower_inner_name)* }
+
+        bit_array_impl! { BitOr bitor Bits |= }
+        bit_array_impl! { BitAnd bitand Bits &= }
+        bit_array_impl! { BitXor bitxor Bits ^= }
+
+        impl core::ops::Not for Bits {
+            type Output = Self;
+
+            #[inline]
+            fn not(mut self) -> Self {
+                for inner in self.0.iter_mut() {
+                    *inner = (*inner).not();
+                }
+                self
+            }
+        }
+
+        impl bitflags::Bits for Bits {
+            const EMPTY: Self = $name::empty().const_bits();
+
+            const ALL: Self = $name::all().const_bits();
+        }
+
+        impl bitflags::Flags for $name {
+            const FLAGS: &'static [Flag<Self>] = &[$($(Flag::new(stringify!($Flag), $name::$Flag),)*)*];
+
+            type Bits = Bits;
+
+            fn bits(&self) -> Bits {
+                self.const_bits()
+            }
+
+            fn from_bits_retain(bits:Bits) -> Self {
+                let [$($lower_inner_name,)*] = bits.0;
+                Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
+            }
+        }
+
+        impl $name {
+            /// Constant function for `bits()`
+            const fn const_bits(&self) -> Bits {
+                Bits([$(self.$lower_inner_name.bits())*])
+            }
+
+            /// No bits set
+            pub const fn empty() -> Self {
+                Self { $($lower_inner_name: $inner_name::empty())* }
+            }
+
+            /// All bits set
+            pub const fn all() -> Self {
+                Self { $($lower_inner_name: $inner_name::all())* }
+            }
+
+            /// Whether all the bits set in `other` are all set in `self`
+            pub const fn contains(self, other:Self) -> bool {
+                // we need an annoying true to catch the last && >:(
+                $(self.$lower_inner_name.contains(other.$lower_inner_name) &&)* true
+            }
+
+            /// Whether any bit set in self matched any bit set in other
+            pub const fn intersects(self, other:Self) -> bool {
+                $(self.$lower_inner_name.intersects(other.$lower_inner_name) ||)* false
+            }
+
+            /// returns whether the struct is empty
+            pub const fn is_empty(self) -> bool {
+                $(self.$lower_inner_name.is_empty() &&)* true
+            }
+
+            /// Bitwise or of self & other
+            pub const fn union(self, other:Self) -> Self {
+                Self { $($lower_inner_name: self.$lower_inner_name.union(other.$lower_inner_name))* }
+            }
+
+            /// Calls [Self::insert] if set is true and [Self::remove] otherwise
+            pub fn set(&mut self, other:Self, set: bool) {
+                $(self.$lower_inner_name.set(other.$lower_inner_name, set))*
+            }
+
+            /// Inserts specified flag(s)
+            pub fn insert(&mut self, other:Self) {
+                $(self.$lower_inner_name.insert(other.$lower_inner_name))*
+            }
+
+            /// Removes specified flag(s)
+            pub fn remove(&mut self, other:Self) {
+                $(self.$lower_inner_name.remove(other.$lower_inner_name))*
+            }
+
+            $(
+            $(
+            $(#[$inner $($args)*])*
+            #[allow(clippy::needless_update)]
+            pub const $Flag: Self = Self {
+                $lower_inner_name: $inner_name::from_bits_truncate($value),
+                ..Self::empty()
+            };
+            )*
+            )*
+        }
+    };
+}
+
+//TODO: make robust resource access configurable
+
+bitflags_array! {
+    /// Features that are not guaranteed to be supported.
+    ///
+    /// These are either part of the webgpu standard, or are extension features supported by
+    /// wgpu when targeting native.
+    ///
+    /// If you want to use a feature, you need to first verify that the adapter supports
+    /// the feature. If the adapter does not support the feature, requesting a device with it enabled
+    /// will panic.
+    ///
+    /// Corresponds to [WebGPU `GPUFeatureName`](
+    /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct Features: [u64; 1];
+
     /// Features that are not guaranteed to be supported.
     ///
     /// These are either part of the webgpu standard, or are extension features supported by
@@ -223,7 +424,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct Features: u64 {
+    pub struct FeaturesWGPU features_wgpu {
         //
         // ---- Start numbering at 1 << 0 ----
         //
