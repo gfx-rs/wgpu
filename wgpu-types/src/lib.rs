@@ -304,9 +304,9 @@ macro_rules! bitflags_array {
         }
 
         impl bitflags::Bits for Bits {
-            const EMPTY: Self = $name::empty().const_bits();
+            const EMPTY: Self = $name::empty().bits();
 
-            const ALL: Self = $name::all().const_bits();
+            const ALL: Self = $name::all().bits();
         }
 
         impl bitflags::Flags for $name {
@@ -315,7 +315,7 @@ macro_rules! bitflags_array {
             type Bits = Bits;
 
             fn bits(&self) -> Bits {
-                self.const_bits()
+                Bits([$(self.$lower_inner_name.bits())*])
             }
 
             fn from_bits_retain(bits:Bits) -> Self {
@@ -326,7 +326,7 @@ macro_rules! bitflags_array {
 
         impl $name {
             /// Constant function for `bits()`
-            const fn const_bits(&self) -> Bits {
+            pub const fn bits(&self) -> Bits {
                 Bits([$(self.$lower_inner_name.bits())*])
             }
 
@@ -374,6 +374,18 @@ macro_rules! bitflags_array {
             /// Removes specified flag(s)
             pub fn remove(&mut self, other:Self) {
                 $(self.$lower_inner_name.remove(other.$lower_inner_name))*
+            }
+
+            /// Takes in `Bits` and returns Self with only valid bits
+            pub const fn from_bits_truncate(bits:Bits) -> Self {
+                let [$($lower_inner_name,)*] = bits.0;
+                Self { $($lower_inner_name: $inner_name::from_bits_truncate($lower_inner_name),)* }
+            }
+
+            /// Takes in `Bits` and returns Self with only all bits
+            pub const fn from_bits_retain(bits:Bits) -> Self {
+                let [$($lower_inner_name,)*] = bits.0;
+                Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
 
             $(
@@ -1187,13 +1199,13 @@ impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
     #[must_use]
     pub const fn all_webgpu_mask() -> Self {
-        Self::from_bits_truncate(0x7FFFF)
+        Self::from_bits_truncate(Bits([0x7FFFF]))
     }
 
     /// Mask of all features that are only available when targeting native (not web).
     #[must_use]
     pub const fn all_native_mask() -> Self {
-        Self::from_bits_truncate(!Self::all_webgpu_mask().bits())
+        Self::from_bits_truncate(Bits([!0x7FFFF]))
     }
 
     /// Vertex formats allowed for creating and building BLASes
