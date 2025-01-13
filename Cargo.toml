@@ -79,7 +79,7 @@ argh = "0.1.13"
 arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
-bitflags = "2.6"
+bitflags = "2.7"
 bytemuck = { version = "1.21" }
 cfg_aliases = "0.2.1"
 cfg-if = "1"
