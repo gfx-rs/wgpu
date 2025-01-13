@@ -207,7 +207,6 @@ impl<S> Default for RequestAdapterOptions<S> {
 
 //TODO: make robust resource access configurable
 
-
 macro_rules! bitflags_array_impl {
     ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
         impl core::ops::$impl_name for $name {
@@ -216,7 +215,7 @@ macro_rules! bitflags_array_impl {
             #[inline]
             fn $inner_name(self, other: Self) -> Self {
                 Self {
-                    $($struct_names: self.$struct_names $op other.$struct_names)*
+                    $($struct_names: self.$struct_names $op other.$struct_names,)*
                 }
             }
         }
@@ -228,7 +227,7 @@ macro_rules! bitflags_array_impl_assign {
         impl core::ops::$impl_name for $name {
             #[inline]
             fn $inner_name(&mut self, other: Self) {
-                $(self.$struct_names $op other.$struct_names)*
+                $(self.$struct_names $op other.$struct_names;)*
             }
         }
     )
@@ -315,7 +314,7 @@ macro_rules! bitflags_array {
             type Bits = Bits;
 
             fn bits(&self) -> Bits {
-                Bits([$(self.$lower_inner_name.bits())*])
+                Bits([$(self.$lower_inner_name.bits(),)*])
             }
 
             fn from_bits_retain(bits:Bits) -> Self {
@@ -327,17 +326,17 @@ macro_rules! bitflags_array {
         impl $name {
             /// Constant function for `bits()`
             pub const fn bits(&self) -> Bits {
-                Bits([$(self.$lower_inner_name.bits())*])
+                Bits([$(self.$lower_inner_name.bits(),)*])
             }
 
             /// No bits set
             pub const fn empty() -> Self {
-                Self { $($lower_inner_name: $inner_name::empty())* }
+                Self { $($lower_inner_name: $inner_name::empty(),)* }
             }
 
             /// All bits set
             pub const fn all() -> Self {
-                Self { $($lower_inner_name: $inner_name::all())* }
+                Self { $($lower_inner_name: $inner_name::all(),)* }
             }
 
             /// Whether all the bits set in `other` are all set in `self`
@@ -358,22 +357,22 @@ macro_rules! bitflags_array {
 
             /// Bitwise or of self & other
             pub const fn union(self, other:Self) -> Self {
-                Self { $($lower_inner_name: self.$lower_inner_name.union(other.$lower_inner_name))* }
+                Self { $($lower_inner_name: self.$lower_inner_name.union(other.$lower_inner_name),)* }
             }
 
             /// Calls [Self::insert] if set is true and [Self::remove] otherwise
             pub fn set(&mut self, other:Self, set: bool) {
-                $(self.$lower_inner_name.set(other.$lower_inner_name, set))*
+                $(self.$lower_inner_name.set(other.$lower_inner_name, set);)*
             }
 
             /// Inserts specified flag(s)
             pub fn insert(&mut self, other:Self) {
-                $(self.$lower_inner_name.insert(other.$lower_inner_name))*
+                $(self.$lower_inner_name.insert(other.$lower_inner_name);)*
             }
 
             /// Removes specified flag(s)
             pub fn remove(&mut self, other:Self) {
-                $(self.$lower_inner_name.remove(other.$lower_inner_name))*
+                $(self.$lower_inner_name.remove(other.$lower_inner_name);)*
             }
 
             /// Takes in `Bits` and returns Self with only valid bits
@@ -416,15 +415,14 @@ bitflags_array! {
     ///
     /// Corresponds to [WebGPU `GPUFeatureName`](
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
+    #[repr(C)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct Features: [u64; 1];
+    pub struct Features: [u64; 2];
 
     /// Features that are not guaranteed to be supported.
     ///
-    /// These are either part of the webgpu standard, or are extension features supported by
-    /// wgpu when targeting native.
+    /// These are extension features supported by wgpu when targeting native. for all features see [`Features`]
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
@@ -437,6 +435,586 @@ bitflags_array! {
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FeaturesWGPU features_wgpu {
+        /// Allows shaders to use f32 atomic load, store, add, sub, and exchange.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 3.0+ and Apple7+/Mac2)
+        /// - Vulkan (with [VK_EXT_shader_atomic_float])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_EXT_shader_atomic_float]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_shader_atomic_float.html
+        const SHADER_FLOAT32_ATOMIC = 1 << 0;
+
+        // The features starting with a ? are features that might become part of the spec or
+        // at the very least we can implement as native features; since they should cover all
+        // possible formats and capabilities across backends.
+        //
+        // ? const FORMATS_TIER_1 = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3837)
+        // ? const RW_STORAGE_TEXTURE_TIER_1 = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3838)
+        // ? const NORM16_FILTERABLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
+        // ? const NORM16_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
+        // ? const FLOAT32_BLENDABLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3556)
+        // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
+        // ? const 32BIT_FORMAT_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
+        // ? const TEXTURE_COMPRESSION_ASTC_HDR = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3856)
+        // TEXTURE_FORMAT_16BIT_NORM & TEXTURE_COMPRESSION_ASTC_HDR will most likely become web features as well
+        // TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES might not be necessary if we have all the texture features implemented
+
+        // Texture Formats:
+
+        /// Enables normalized `16-bit` texture formats.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const TEXTURE_FORMAT_16BIT_NORM = 1 << 1;
+        /// Enables ASTC HDR family of compressed textures.
+        ///
+        /// Compressed textures sacrifice some quality in exchange for significantly reduced
+        /// bandwidth usage.
+        ///
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with the HDR channel type.
+        /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
+        ///
+        /// Supported Platforms:
+        /// - Metal
+        /// - Vulkan
+        /// - OpenGL
+        ///
+        /// This is a native only feature.
+        const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 2;
+        /// Enables device specific texture format features.
+        ///
+        /// See `TextureFormatFeatures` for a listing of the features in question.
+        ///
+        /// By default only texture format properties as defined by the WebGPU specification are allowed.
+        /// Enabling this feature flag extends the features of each format to the ones supported by the current device.
+        /// Note that without this flag, read/write storage access is not allowed at all.
+        ///
+        /// This extension does not enable additional formats.
+        ///
+        /// This is a native only feature.
+        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 3;
+
+        // API:
+
+        /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
+        /// performed between the start and stop call. Call [`RenderPass::begin_pipeline_statistics_query`] to start
+        /// a query, then call [`RenderPass::end_pipeline_statistics_query`] to stop one.
+        ///
+        /// They must be resolved using [`CommandEncoder::resolve_query_set`] into a buffer.
+        /// The rules on how these resolve into buffers are detailed in the documentation for [`PipelineStatisticsTypes`].
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/pipeline-statistics-query.md) for the web.
+        const PIPELINE_STATISTICS_QUERY = 1 << 4;
+        /// Allows for timestamp queries directly on command encoders.
+        ///
+        /// Implies [`Features::TIMESTAMP_QUERY`] is supported.
+        ///
+        /// Additionally allows for timestamp writes on command encoders
+        /// using  [`CommandEncoder::write_timestamp`].
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const TIMESTAMP_QUERY_INSIDE_ENCODERS = 1 << 5;
+        /// Allows for timestamp queries directly on command encoders.
+        ///
+        /// Implies [`Features::TIMESTAMP_QUERY`] & [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] is supported.
+        ///
+        /// Additionally allows for timestamp queries to be used inside render & compute passes using:
+        /// - [`RenderPass::write_timestamp`]
+        /// - [`ComputePass::write_timestamp`]
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal (AMD & Intel, not Apple GPUs)
+        ///
+        /// This is generally not available on tile-based rasterization GPUs.
+        ///
+        /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
+        const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 6;
+        /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
+        /// COPY_DST and COPY_SRC respectively. This removes this requirement.
+        ///
+        /// This is only beneficial on systems that share memory between CPU and GPU. If enabled
+        /// on a system that doesn't, this can severely hinder performance. Only use if you understand
+        /// the consequences.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const MAPPABLE_PRIMARY_BUFFERS = 1 << 7;
+        /// Allows the user to create uniform arrays of textures in shaders:
+        ///
+        /// ex.
+        /// - `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)
+        /// - `uniform texture2D textures[10]` (GLSL)
+        ///
+        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
+        /// may also create uniform arrays of storage textures.
+        ///
+        /// ex.
+        /// - `var textures: array<texture_storage_2d<r32float, write>, 10>` (WGSL)
+        /// - `uniform image2D textures[10]` (GLSL)
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const TEXTURE_BINDING_ARRAY = 1 << 8;
+        /// Allows the user to create arrays of buffers in shaders:
+        ///
+        /// ex.
+        /// - `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)
+        /// - `uniform myBuffer { ... } buffer_array[10]` (GLSL)
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform
+        /// values.
+        ///
+        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
+        /// may also create arrays of storage buffers.
+        ///
+        /// ex.
+        /// - `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)
+        /// - `buffer myBuffer { ... } buffer_array[10]` (GLSL)
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const BUFFER_BINDING_ARRAY = 1 << 9;
+        /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
+        /// if resp. [`Features::BUFFER_BINDING_ARRAY`] or [`Features::TEXTURE_BINDING_ARRAY`]
+        /// is supported.
+        ///
+        /// This capability allows them to exist and to be indexed by dynamically uniform
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 2.2+ on macOS 10.13+)
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const STORAGE_RESOURCE_BINDING_ARRAY = 1 << 10;
+        /// Allows shaders to index sampled texture and storage buffer resource arrays with dynamically non-uniform values:
+        ///
+        /// ex. `texture_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// WGSL and HLSL do not need any extension.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing & shaderStorageBufferArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 11;
+        /// Allows shaders to index uniform buffer and storage texture resource arrays with dynamically non-uniform values:
+        ///
+        /// ex. `texture_array[vertex_data]`
+        ///
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
+        ///
+        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
+        ///
+        /// or as `nonuniformEXT` constructor:
+        ///
+        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
+        ///
+        /// WGSL and HLSL do not need any extension.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing & shaderStorageTextureArrayNonUniformIndexing feature)
+        ///
+        /// This is a native only feature.
+        const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 12;
+        /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
+        /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
+        ///
+        /// Allows multiple indirect calls to be dispatched from a single buffer.
+        ///
+        /// Natively Supported Platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// Emulated Platforms:
+        /// - Metal
+        /// - OpenGL
+        /// - WebGPU
+        ///
+        /// Emulation is preformed by looping over the individual indirect draw calls in the backend. This is still significantly
+        /// faster than enulating it yourself, as wgpu only does draw call validation once.
+        ///
+        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
+        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
+        const MULTI_DRAW_INDIRECT = 1 << 14;
+        /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
+        ///
+        /// This allows the use of a buffer containing the actual number of draw calls.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
+        ///
+        /// This is a native only feature.
+        ///
+        /// [`RenderPass::multi_draw_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect_count
+        /// [`RenderPass::multi_draw_indexed_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect_count
+        const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
+        /// Allows the use of push constants: small, fast bits of memory that can be updated
+        /// inside a [`RenderPass`].
+        ///
+        /// Allows the user to call [`RenderPass::set_push_constants`], provide a non-empty array
+        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_push_constant_size`].
+        ///
+        /// A block of push constants can be declared in WGSL with `var<push_constant>`:
+        ///
+        /// ```rust,ignore
+        /// struct PushConstants { example: f32, }
+        /// var<push_constant> c: PushConstants;
+        /// ```
+        ///
+        /// In GLSL, this corresponds to `layout(push_constant) uniform Name {..}`.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL (emulated with uniforms)
+        ///
+        /// This is a native only feature.
+        ///
+        /// [`RenderPass`]: ../wgpu/struct.RenderPass.html
+        /// [`PipelineLayoutDescriptor`]: ../wgpu/struct.PipelineLayoutDescriptor.html
+        /// [`RenderPass::set_push_constants`]: ../wgpu/struct.RenderPass.html#method.set_push_constants
+        const PUSH_CONSTANTS = 1 << 16;
+        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
+        /// of [`SamplerBorderColor::Zero`].
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL
+        ///
+        /// This is a native only feature.
+        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 17;
+        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
+        /// other than [`SamplerBorderColor::Zero`].
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal (macOS 10.12+ only)
+        /// - OpenGL
+        ///
+        /// This is a native only feature.
+        const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 18;
+        /// Allows the user to set [`PolygonMode::Line`] in [`PrimitiveState::polygon_mode`]
+        ///
+        /// This allows drawing polygons/triangles as lines (wireframe) instead of filled
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const POLYGON_MODE_LINE = 1 << 19;
+        /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
+        ///
+        /// This allows only drawing the vertices of polygons/triangles instead of filled
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const POLYGON_MODE_POINT = 1 << 20;
+        /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
+        ///
+        /// Processing of degenerate triangles/lines is hardware specific.
+        /// Only triangles are supported.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const CONSERVATIVE_RASTERIZATION = 1 << 21;
+        /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
+        ///
+        /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
+        ///
+        /// Supported Platforms:
+        /// - All
+        ///
+        /// This is a native only feature.
+        const VERTEX_WRITABLE_STORAGE = 1 << 22;
+        /// Enables clear to zero for textures.
+        ///
+        /// Supported platforms:
+        /// - All
+        ///
+        /// This is a native only feature.
+        const CLEAR_TEXTURE = 1 << 23;
+        /// Enables creating shader modules from SPIR-V binary data (unsafe).
+        ///
+        /// SPIR-V data is not parsed or interpreted in any way; you can use
+        /// [`wgpu::make_spirv_raw!`] to check for alignment and magic number when converting from
+        /// raw bytes.
+        ///
+        /// Supported platforms:
+        /// - Vulkan, in case shader's requested capabilities and extensions agree with
+        /// Vulkan implementation.
+        ///
+        /// This is a native only feature.
+        const SPIRV_SHADER_PASSTHROUGH = 1 << 24;
+        /// Enables multiview render passes and `builtin(view_index)` in vertex shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - OpenGL (web only)
+        ///
+        /// This is a native only feature.
+        const MULTIVIEW = 1 << 25;
+        /// Enables using 64-bit types for vertex attributes.
+        ///
+        /// Requires SHADER_FLOAT64.
+        ///
+        /// Supported Platforms: N/A
+        ///
+        /// This is a native only feature.
+        const VERTEX_ATTRIBUTE_64BIT = 1 << 26;
+        /// Allows for creation of textures of format [`TextureFormat::NV12`]
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const TEXTURE_FORMAT_NV12 = 1 << 27;
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
+        /// Allows for the creation of ray-tracing acceleration structures. Currently,
+        /// ray-tracing acceleration structures are only useful when used with [Features::EXPERIMENTAL_RAY_QUERY]
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 28;
+
+        // Shader:
+
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in it and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+        ///
+        /// Allows for the creation of ray-tracing queries within shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const EXPERIMENTAL_RAY_QUERY = 1 << 29;
+        /// Enables 64-bit floating point types in SPIR-V shaders.
+        ///
+        /// Note: even when supported by GPU hardware, 64-bit floating point operations are
+        /// frequently between 16 and 64 _times_ slower than equivalent operations on 32-bit floats.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const SHADER_F64 = 1 << 30;
+        /// Allows shaders to use i16. Not currently supported in `naga`, only available through `spirv-passthrough`.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const SHADER_I16 = 1 << 31;
+        /// Enables `builtin(primitive_index)` in fragment shaders.
+        ///
+        /// Note: enables geometry processing for pipelines using the builtin.
+        /// This may come with a significant performance impact on some hardware.
+        /// Other pipelines are not affected.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal (some)
+        /// - OpenGL (some)
+        ///
+        /// This is a native only feature.
+        const SHADER_PRIMITIVE_INDEX = 1 << 32;
+        /// Allows shaders to use the `early_depth_test` attribute.
+        ///
+        /// Supported platforms:
+        /// - GLES 3.1+
+        ///
+        /// This is a native only feature.
+        const SHADER_EARLY_DEPTH_TEST = 1 << 33;
+        /// Allows two outputs from a shader to be used for blending.
+        /// Note that dual-source blending doesn't support multiple render targets.
+        ///
+        /// For more info see the OpenGL ES extension GL_EXT_blend_func_extended.
+        ///
+        /// Supported platforms:
+        /// - OpenGL ES (with GL_EXT_blend_func_extended)
+        /// - Metal (with MSL 1.2+)
+        /// - Vulkan (with dualSrcBlend)
+        /// - DX12
+        const DUAL_SOURCE_BLENDING = 1 << 34;
+        /// Allows shaders to use i64 and u64.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12 (DXC only)
+        /// - Metal (with MSL 2.3+)
+        ///
+        /// This is a native only feature.
+        const SHADER_INT64 = 1 << 35;
+        /// Allows compute and fragment shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP = 1 << 36;
+        /// Allows vertex shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_VERTEX = 1 << 37;
+        /// Allows shaders to use the subgroup barrier
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_BARRIER = 1 << 38;
+        /// Allows the use of pipeline cache objects
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// Unimplemented Platforms:
+        /// - DX12
+        /// - Metal
+        const PIPELINE_CACHE = 1 << 39;
+        /// Allows shaders to use i64 and u64 atomic min and max.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_shader_atomic_int64)
+        /// - DX12 (with SM 6.6+)
+        /// - Metal (with MSL 2.4+)
+        ///
+        /// This is a native only feature.
+        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 40;
+        /// Allows shaders to use all i64 and u64 atomic operations.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_shader_atomic_int64)
+        /// - DX12 (with SM 6.6+)
+        ///
+        /// This is a native only feature.
+        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 41;
+        /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
+        ///
+        /// This is used for frame pacing to reduce latency, and is generally only available on Android.
+        ///
+        /// This feature does not have a `wgpu`-level API, and so users of wgpu wishing
+        /// to use this functionality must access it using various `as_hal` functions,
+        /// primarily [`Surface::as_hal()`], to then use.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_GOOGLE_display_timing])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
+        /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
+        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 42;
+
+        /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_KHR_external_memory_win32])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
+        const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 43;
+    }
+
+    /// Features that are not guaranteed to be supported.
+    ///
+    /// These are part of the webgpu standard. For all features see [`Features`]
+    ///
+    /// If you want to use a feature, you need to first verify that the adapter supports
+    /// the feature. If the adapter does not support the feature, requesting a device with it enabled
+    /// will panic.
+    ///
+    /// Corresponds to [WebGPU `GPUFeatureName`](
+    /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
+    #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct FeaturesWebGPU features_webgpu {
         //
         // ---- Start numbering at 1 << 0 ----
         //
@@ -618,580 +1196,6 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         const FLOAT32_FILTERABLE = 1 << 11;
-
-        // Bits 12-19 available for webgpu features. Should you chose to use some of them for
-        // for native features, don't forget to update `all_webgpu_mask` and `all_native_mask`
-        // accordingly.
-
-        //
-        // ---- Restart Numbering for Native Features ---
-        //
-        // Native Features:
-        //
-
-        /// Allows shaders to use f32 atomic load, store, add, sub, and exchange.
-        ///
-        /// Supported platforms:
-        /// - Metal (with MSL 3.0+ and Apple7+/Mac2)
-        /// - Vulkan (with [VK_EXT_shader_atomic_float])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_EXT_shader_atomic_float]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_shader_atomic_float.html
-        const SHADER_FLOAT32_ATOMIC = 1 << 19;
-
-        // The features starting with a ? are features that might become part of the spec or
-        // at the very least we can implement as native features; since they should cover all
-        // possible formats and capabilities across backends.
-        //
-        // ? const FORMATS_TIER_1 = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3837)
-        // ? const RW_STORAGE_TEXTURE_TIER_1 = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3838)
-        // ? const NORM16_FILTERABLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
-        // ? const NORM16_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
-        // ? const FLOAT32_BLENDABLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3556)
-        // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
-        // ? const 32BIT_FORMAT_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
-        // ? const TEXTURE_COMPRESSION_ASTC_HDR = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3856)
-        // TEXTURE_FORMAT_16BIT_NORM & TEXTURE_COMPRESSION_ASTC_HDR will most likely become web features as well
-        // TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES might not be necessary if we have all the texture features implemented
-
-        // Texture Formats:
-
-        /// Enables normalized `16-bit` texture formats.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const TEXTURE_FORMAT_16BIT_NORM = 1 << 20;
-        /// Enables ASTC HDR family of compressed textures.
-        ///
-        /// Compressed textures sacrifice some quality in exchange for significantly reduced
-        /// bandwidth usage.
-        ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with the HDR channel type.
-        /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
-        ///
-        /// Supported Platforms:
-        /// - Metal
-        /// - Vulkan
-        /// - OpenGL
-        ///
-        /// This is a native only feature.
-        const TEXTURE_COMPRESSION_ASTC_HDR = 1 << 21;
-        /// Enables device specific texture format features.
-        ///
-        /// See `TextureFormatFeatures` for a listing of the features in question.
-        ///
-        /// By default only texture format properties as defined by the WebGPU specification are allowed.
-        /// Enabling this feature flag extends the features of each format to the ones supported by the current device.
-        /// Note that without this flag, read/write storage access is not allowed at all.
-        ///
-        /// This extension does not enable additional formats.
-        ///
-        /// This is a native only feature.
-        const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 22;
-
-        // API:
-
-        /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
-        /// performed between the start and stop call. Call [`RenderPass::begin_pipeline_statistics_query`] to start
-        /// a query, then call [`RenderPass::end_pipeline_statistics_query`] to stop one.
-        ///
-        /// They must be resolved using [`CommandEncoder::resolve_query_set`] into a buffer.
-        /// The rules on how these resolve into buffers are detailed in the documentation for [`PipelineStatisticsTypes`].
-        ///
-        /// Supported Platforms:
-        /// - Vulkan
-        /// - DX12
-        ///
-        /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/pipeline-statistics-query.md) for the web.
-        const PIPELINE_STATISTICS_QUERY = 1 << 23;
-        /// Allows for timestamp queries directly on command encoders.
-        ///
-        /// Implies [`Features::TIMESTAMP_QUERY`] is supported.
-        ///
-        /// Additionally allows for timestamp writes on command encoders
-        /// using  [`CommandEncoder::write_timestamp`].
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const TIMESTAMP_QUERY_INSIDE_ENCODERS = 1 << 24;
-        /// Allows for timestamp queries directly on command encoders.
-        ///
-        /// Implies [`Features::TIMESTAMP_QUERY`] & [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] is supported.
-        ///
-        /// Additionally allows for timestamp queries to be used inside render & compute passes using:
-        /// - [`RenderPass::write_timestamp`]
-        /// - [`ComputePass::write_timestamp`]
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal (AMD & Intel, not Apple GPUs)
-        ///
-        /// This is generally not available on tile-based rasterization GPUs.
-        ///
-        /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
-        const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 25;
-        /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
-        /// COPY_DST and COPY_SRC respectively. This removes this requirement.
-        ///
-        /// This is only beneficial on systems that share memory between CPU and GPU. If enabled
-        /// on a system that doesn't, this can severely hinder performance. Only use if you understand
-        /// the consequences.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const MAPPABLE_PRIMARY_BUFFERS = 1 << 26;
-        /// Allows the user to create uniform arrays of textures in shaders:
-        ///
-        /// ex.
-        /// - `var textures: binding_array<texture_2d<f32>, 10>` (WGSL)
-        /// - `uniform texture2D textures[10]` (GLSL)
-        ///
-        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
-        /// may also create uniform arrays of storage textures.
-        ///
-        /// ex.
-        /// - `var textures: array<texture_storage_2d<r32float, write>, 10>` (WGSL)
-        /// - `uniform image2D textures[10]` (GLSL)
-        ///
-        /// This capability allows them to exist and to be indexed by dynamically uniform
-        /// values.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const TEXTURE_BINDING_ARRAY = 1 << 27;
-        /// Allows the user to create arrays of buffers in shaders:
-        ///
-        /// ex.
-        /// - `var<uniform> buffer_array: array<MyBuffer, 10>` (WGSL)
-        /// - `uniform myBuffer { ... } buffer_array[10]` (GLSL)
-        ///
-        /// This capability allows them to exist and to be indexed by dynamically uniform
-        /// values.
-        ///
-        /// If [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] is supported as well as this, the user
-        /// may also create arrays of storage buffers.
-        ///
-        /// ex.
-        /// - `var<storage> buffer_array: array<MyBuffer, 10>` (WGSL)
-        /// - `buffer myBuffer { ... } buffer_array[10]` (GLSL)
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const BUFFER_BINDING_ARRAY = 1 << 28;
-        /// Allows the user to create uniform arrays of storage buffers or textures in shaders,
-        /// if resp. [`Features::BUFFER_BINDING_ARRAY`] or [`Features::TEXTURE_BINDING_ARRAY`]
-        /// is supported.
-        ///
-        /// This capability allows them to exist and to be indexed by dynamically uniform
-        /// values.
-        ///
-        /// Supported platforms:
-        /// - Metal (with MSL 2.2+ on macOS 10.13+)
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const STORAGE_RESOURCE_BINDING_ARRAY = 1 << 29;
-        /// Allows shaders to index sampled texture and storage buffer resource arrays with dynamically non-uniform values:
-        ///
-        /// ex. `texture_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
-        ///
-        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
-        ///
-        /// or as `nonuniformEXT` constructor:
-        ///
-        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
-        ///
-        /// WGSL and HLSL do not need any extension.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing & shaderStorageBufferArrayNonUniformIndexing feature)
-        ///
-        /// This is a native only feature.
-        const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 30;
-        /// Allows shaders to index uniform buffer and storage texture resource arrays with dynamically non-uniform values:
-        ///
-        /// ex. `texture_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
-        ///
-        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
-        ///
-        /// or as `nonuniformEXT` constructor:
-        ///
-        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
-        ///
-        /// WGSL and HLSL do not need any extension.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing & shaderStorageTextureArrayNonUniformIndexing feature)
-        ///
-        /// This is a native only feature.
-        const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 31;
-        /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        ///
-        /// This is a native only feature.
-        const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 32;
-        /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
-        ///
-        /// Allows multiple indirect calls to be dispatched from a single buffer.
-        ///
-        /// Natively Supported Platforms:
-        /// - DX12
-        /// - Vulkan
-        ///
-        /// Emulated Platforms:
-        /// - Metal
-        /// - OpenGL
-        /// - WebGPU
-        ///
-        /// Emulation is preformed by looping over the individual indirect draw calls in the backend. This is still significantly
-        /// faster than enulating it yourself, as wgpu only does draw call validation once.
-        ///
-        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
-        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
-        const MULTI_DRAW_INDIRECT = 1 << 33;
-        /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
-        ///
-        /// This allows the use of a buffer containing the actual number of draw calls.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
-        ///
-        /// This is a native only feature.
-        ///
-        /// [`RenderPass::multi_draw_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect_count
-        /// [`RenderPass::multi_draw_indexed_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect_count
-        const MULTI_DRAW_INDIRECT_COUNT = 1 << 34;
-        /// Allows the use of push constants: small, fast bits of memory that can be updated
-        /// inside a [`RenderPass`].
-        ///
-        /// Allows the user to call [`RenderPass::set_push_constants`], provide a non-empty array
-        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_push_constant_size`].
-        ///
-        /// A block of push constants can be declared in WGSL with `var<push_constant>`:
-        ///
-        /// ```rust,ignore
-        /// struct PushConstants { example: f32, }
-        /// var<push_constant> c: PushConstants;
-        /// ```
-        ///
-        /// In GLSL, this corresponds to `layout(push_constant) uniform Name {..}`.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL (emulated with uniforms)
-        ///
-        /// This is a native only feature.
-        ///
-        /// [`RenderPass`]: ../wgpu/struct.RenderPass.html
-        /// [`PipelineLayoutDescriptor`]: ../wgpu/struct.PipelineLayoutDescriptor.html
-        /// [`RenderPass::set_push_constants`]: ../wgpu/struct.RenderPass.html#method.set_push_constants
-        const PUSH_CONSTANTS = 1 << 35;
-        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
-        /// of [`SamplerBorderColor::Zero`].
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL
-        ///
-        /// This is a native only feature.
-        const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 36;
-        /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
-        /// other than [`SamplerBorderColor::Zero`].
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        /// - Metal (macOS 10.12+ only)
-        /// - OpenGL
-        ///
-        /// This is a native only feature.
-        const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 37;
-        /// Allows the user to set [`PolygonMode::Line`] in [`PrimitiveState::polygon_mode`]
-        ///
-        /// This allows drawing polygons/triangles as lines (wireframe) instead of filled
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const POLYGON_MODE_LINE = 1 << 38;
-        /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
-        ///
-        /// This allows only drawing the vertices of polygons/triangles instead of filled
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const POLYGON_MODE_POINT = 1 << 39;
-        /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
-        ///
-        /// Processing of degenerate triangles/lines is hardware specific.
-        /// Only triangles are supported.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const CONSERVATIVE_RASTERIZATION = 1 << 40;
-        /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
-        ///
-        /// Note: some (tiled-based) platforms do not support vertex shaders with any side-effects.
-        ///
-        /// Supported Platforms:
-        /// - All
-        ///
-        /// This is a native only feature.
-        const VERTEX_WRITABLE_STORAGE = 1 << 41;
-        /// Enables clear to zero for textures.
-        ///
-        /// Supported platforms:
-        /// - All
-        ///
-        /// This is a native only feature.
-        const CLEAR_TEXTURE = 1 << 42;
-        /// Enables creating shader modules from SPIR-V binary data (unsafe).
-        ///
-        /// SPIR-V data is not parsed or interpreted in any way; you can use
-        /// [`wgpu::make_spirv_raw!`] to check for alignment and magic number when converting from
-        /// raw bytes.
-        ///
-        /// Supported platforms:
-        /// - Vulkan, in case shader's requested capabilities and extensions agree with
-        /// Vulkan implementation.
-        ///
-        /// This is a native only feature.
-        const SPIRV_SHADER_PASSTHROUGH = 1 << 43;
-        /// Enables multiview render passes and `builtin(view_index)` in vertex shaders.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - OpenGL (web only)
-        ///
-        /// This is a native only feature.
-        const MULTIVIEW = 1 << 44;
-        /// Enables using 64-bit types for vertex attributes.
-        ///
-        /// Requires SHADER_FLOAT64.
-        ///
-        /// Supported Platforms: N/A
-        ///
-        /// This is a native only feature.
-        const VERTEX_ATTRIBUTE_64BIT = 1 << 45;
-        /// Allows for creation of textures of format [`TextureFormat::NV12`]
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const TEXTURE_FORMAT_NV12 = 1 << 47;
-        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
-        /// major bugs in them and are expected to be subject to breaking changes, suggestions
-        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
-        ///
-        /// Allows for the creation of ray-tracing acceleration structures. Currently,
-        /// ray-tracing acceleration structures are only useful when used with [Features::EXPERIMENTAL_RAY_QUERY]
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native-only feature.
-        const EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 48;
-
-        // Shader:
-
-        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
-        /// major bugs in it and are expected to be subject to breaking changes, suggestions
-        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
-        ///
-        /// Allows for the creation of ray-tracing queries within shaders.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native-only feature.
-        const EXPERIMENTAL_RAY_QUERY = 1 << 49;
-        /// Enables 64-bit floating point types in SPIR-V shaders.
-        ///
-        /// Note: even when supported by GPU hardware, 64-bit floating point operations are
-        /// frequently between 16 and 64 _times_ slower than equivalent operations on 32-bit floats.
-        ///
-        /// Supported Platforms:
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const SHADER_F64 = 1 << 50;
-        /// Allows shaders to use i16. Not currently supported in `naga`, only available through `spirv-passthrough`.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const SHADER_I16 = 1 << 51;
-        /// Enables `builtin(primitive_index)` in fragment shaders.
-        ///
-        /// Note: enables geometry processing for pipelines using the builtin.
-        /// This may come with a significant performance impact on some hardware.
-        /// Other pipelines are not affected.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal (some)
-        /// - OpenGL (some)
-        ///
-        /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 1 << 52;
-        /// Allows shaders to use the `early_depth_test` attribute.
-        ///
-        /// Supported platforms:
-        /// - GLES 3.1+
-        ///
-        /// This is a native only feature.
-        const SHADER_EARLY_DEPTH_TEST = 1 << 53;
-        /// Allows two outputs from a shader to be used for blending.
-        /// Note that dual-source blending doesn't support multiple render targets.
-        ///
-        /// For more info see the OpenGL ES extension GL_EXT_blend_func_extended.
-        ///
-        /// Supported platforms:
-        /// - OpenGL ES (with GL_EXT_blend_func_extended)
-        /// - Metal (with MSL 1.2+)
-        /// - Vulkan (with dualSrcBlend)
-        /// - DX12
-        const DUAL_SOURCE_BLENDING = 1 << 54;
-        /// Allows shaders to use i64 and u64.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        /// - DX12 (DXC only)
-        /// - Metal (with MSL 2.3+)
-        ///
-        /// This is a native only feature.
-        const SHADER_INT64 = 1 << 55;
-        /// Allows compute and fragment shaders to use the subgroup operation built-ins
-        ///
-        /// Supported Platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const SUBGROUP = 1 << 56;
-        /// Allows vertex shaders to use the subgroup operation built-ins
-        ///
-        /// Supported Platforms:
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const SUBGROUP_VERTEX = 1 << 57;
-        /// Allows shaders to use the subgroup barrier
-        ///
-        /// Supported Platforms:
-        /// - Vulkan
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const SUBGROUP_BARRIER = 1 << 58;
-        /// Allows the use of pipeline cache objects
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// Unimplemented Platforms:
-        /// - DX12
-        /// - Metal
-        const PIPELINE_CACHE = 1 << 59;
-        /// Allows shaders to use i64 and u64 atomic min and max.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with VK_KHR_shader_atomic_int64)
-        /// - DX12 (with SM 6.6+)
-        /// - Metal (with MSL 2.4+)
-        ///
-        /// This is a native only feature.
-        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 60;
-        /// Allows shaders to use all i64 and u64 atomic operations.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with VK_KHR_shader_atomic_int64)
-        /// - DX12 (with SM 6.6+)
-        ///
-        /// This is a native only feature.
-        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 61;
-        /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
-        ///
-        /// This is used for frame pacing to reduce latency, and is generally only available on Android.
-        ///
-        /// This feature does not have a `wgpu`-level API, and so users of wgpu wishing
-        /// to use this functionality must access it using various `as_hal` functions,
-        /// primarily [`Surface::as_hal()`], to then use.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_GOOGLE_display_timing])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
-        /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
-        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 62;
-
-        /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
-        ///
-        /// Supported platforms:
-        /// - Vulkan (with [VK_KHR_external_memory_win32])
-        ///
-        /// This is a native only feature.
-        ///
-        /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
-        const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 63;
     }
 }
 
@@ -1199,13 +1203,19 @@ impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
     #[must_use]
     pub const fn all_webgpu_mask() -> Self {
-        Self::from_bits_truncate(Bits([0x7FFFF]))
+        Self::from_bits_truncate(Bits([
+            FeaturesWGPU::empty().bits(),
+            FeaturesWebGPU::all().bits(),
+        ]))
     }
 
     /// Mask of all features that are only available when targeting native (not web).
     #[must_use]
     pub const fn all_native_mask() -> Self {
-        Self::from_bits_truncate(Bits([!0x7FFFF]))
+        Self::from_bits_truncate(Bits([
+            FeaturesWGPU::all().bits(),
+            FeaturesWebGPU::empty().bits(),
+        ]))
     }
 
     /// Vertex formats allowed for creating and building BLASes
