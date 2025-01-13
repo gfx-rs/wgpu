@@ -33,8 +33,7 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 ///
 /// Each one contains:
 /// - A reference to a BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
-///   TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
-///   using [Blas::destroy]) the TlasInstance becomes invalid
+///   TlasInstance that references a BLAS keeps that BLAS from being dropped
 /// - A user accessible transformation matrix
 /// - A user accessible mask
 /// - A user accessible custom index
@@ -147,10 +146,6 @@ impl Blas {
     /// Raw handle to the acceleration structure, used inside raw instance buffers.
     pub fn handle(&self) -> Option<u64> {
         self.handle
-    }
-    /// Destroy the associated native resources as soon as possible.
-    pub fn destroy(&self) {
-        self.inner.destroy();
     }
 }
 

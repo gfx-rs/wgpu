@@ -451,17 +451,11 @@ impl GlobalPlay for wgc::global::Global {
             Action::CreateBlas { id, desc, sizes } => {
                 self.device_create_blas(device, &desc, sizes, Some(id));
             }
-            Action::FreeBlas(id) => {
-                self.blas_destroy(id).unwrap();
-            }
             Action::DestroyBlas(id) => {
                 self.blas_drop(id);
             }
             Action::CreateTlas { id, desc } => {
                 self.device_create_tlas(device, &desc, Some(id));
-            }
-            Action::FreeTlas(id) => {
-                self.tlas_destroy(id).unwrap();
             }
             Action::DestroyTlas(id) => {
                 self.tlas_drop(id);

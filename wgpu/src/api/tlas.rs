@@ -31,13 +31,6 @@ static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .shared.inner);
 
-impl Tlas {
-    /// Destroy the associated native resources as soon as possible.
-    pub fn destroy(&self) {
-        self.shared.inner.destroy();
-    }
-}
-
 /// Entry for a top level acceleration structure build.
 /// Used with raw instance buffers for an unvalidated builds.
 /// See [TlasPackage] for the safe version.
