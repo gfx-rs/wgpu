@@ -281,10 +281,22 @@ macro_rules! bitflags_array {
 
         bitflags_array_impl! { BitOr bitor $name | $($lower_inner_name)* }
         bitflags_array_impl! { BitAnd bitand $name & $($lower_inner_name)* }
+        bitflags_array_impl! { BitXor bitxor $name ^ $($lower_inner_name)* }
+        impl core::ops::Not for $name {
+            type Output = Self;
+
+            #[inline]
+            fn not(self) -> Self {
+                Self {
+                   $($lower_inner_name: !self.$lower_inner_name,)*
+                }
+            }
+        }
         bitflags_array_impl! { Sub sub $name - $($lower_inner_name)* }
 
         bitflags_array_impl_assign! { BitOrAssign bitor_assign $name |= $($lower_inner_name)* }
         bitflags_array_impl_assign! { BitAndAssign bitand_assign $name &= $($lower_inner_name)* }
+        bitflags_array_impl_assign! { BitXorAssign bitxor_assign $name ^= $($lower_inner_name)* }
 
         bit_array_impl! { BitOr bitor Bits |= }
         bit_array_impl! { BitAnd bitand Bits &= }
@@ -294,11 +306,9 @@ macro_rules! bitflags_array {
             type Output = Self;
 
             #[inline]
-            fn not(mut self) -> Self {
-                for inner in self.0.iter_mut() {
-                    *inner = (*inner).not();
-                }
-                self
+            fn not(self) -> Self {
+                let [$($lower_inner_name,)*] = self.0;
+                Self([$(!$lower_inner_name,)*])
             }
         }
 
