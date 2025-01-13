@@ -72,6 +72,10 @@ struct AssignToMember {
     uint x;
 };
 
+struct S {
+    int m;
+};
+
 GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     GlobalConst ret = (GlobalConst)0;
     ret.a = arg0;
@@ -258,6 +262,35 @@ void assign_to_arg_ptr_array_element(inout uint p_4[4])
     return;
 }
 
+typedef bool ret_Constructarray1_bool_[1];
+ret_Constructarray1_bool_ Constructarray1_bool_(bool arg0) {
+    bool ret[1] = { arg0 };
+    return ret;
+}
+
+bool index_ptr(bool value)
+{
+    bool a_1[1] = (bool[1])0;
+
+    a_1 = Constructarray1_bool_(value);
+    bool _e4 = a_1[0];
+    return _e4;
+}
+
+S ConstructS(int arg0) {
+    S ret = (S)0;
+    ret.m = arg0;
+    return ret;
+}
+
+int member_ptr()
+{
+    S s = ConstructS(42);
+
+    int _e4 = s.m;
+    return _e4;
+}
+
 typedef int ret_Constructarray5_int_[5];
 ret_Constructarray5_int_ Constructarray5_int_(int arg0, int arg1, int arg2, int arg3, int arg4) {
     int ret[5] = { arg0, arg1, arg2, arg3, arg4 };
@@ -294,14 +327,14 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     float4x3 _matrix = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
     uint2 arr_1[2] = Constructarray2_uint2_(asuint(bar.Load2(144+0)), asuint(bar.Load2(144+8)));
     float b = asfloat(bar.Load(0+3u*16+0));
-    int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
+    int a_2 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
     int2 c = asint(qux.Load2(0));
     const float _e33 = read_from_private(foo);
-    c2_ = Constructarray5_int_(a_1, int(b), 3, 4, 5);
+    c2_ = Constructarray5_int_(a_2, int(b), 3, 4, 5);
     c2_[min(uint((vi + 1u)), 4u)] = 42;
-    int value = c2_[min(uint(vi), 4u)];
+    int value_1 = c2_[min(uint(vi), 4u)];
     const float _e47 = test_arr_as_arg(ZeroValuearray5_array10_float__());
-    return float4(mul(float4((value).xxxx), _matrix), 2.0);
+    return float4(mul(float4((value_1).xxxx), _matrix), 2.0);
 }
 
 int2 ZeroValueint2() {

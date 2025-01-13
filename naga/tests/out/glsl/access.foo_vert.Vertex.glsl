@@ -20,6 +20,9 @@ struct MatCx2InArray {
 struct AssignToMember {
     uint x;
 };
+struct S {
+    int m;
+};
 layout(std430) buffer Bar_block_0Vertex {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -145,6 +148,19 @@ void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
     return;
 }
 
+bool index_ptr(bool value) {
+    bool a_1[1] = bool[1](false);
+    a_1 = bool[1](value);
+    bool _e4 = a_1[0];
+    return _e4;
+}
+
+int member_ptr() {
+    S s = S(42);
+    int _e4 = s.m;
+    return _e4;
+}
+
 void main() {
     uint vi = uint(gl_VertexID);
     float foo = 0.0;
@@ -156,14 +172,14 @@ void main() {
     mat4x3 _matrix = _group_0_binding_0_vs._matrix;
     uvec2 arr_1[2] = _group_0_binding_0_vs.arr;
     float b = _group_0_binding_0_vs._matrix[3u][0];
-    int a_1 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
+    int a_2 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     ivec2 c = _group_0_binding_2_vs;
     float _e33 = read_from_private(foo);
-    c2_ = int[5](a_1, int(b), 3, 4, 5);
+    c2_ = int[5](a_2, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
-    int value = c2_[vi];
+    int value_1 = c2_[vi];
     float _e47 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
-    gl_Position = vec4((_matrix * vec4(ivec4(value))), 2.0);
+    gl_Position = vec4((_matrix * vec4(ivec4(value_1))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }

@@ -353,6 +353,35 @@
                 space: Function,
             ),
         ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 33,
+                size: Constant(1),
+                stride: 1,
+            ),
+        ),
+        (
+            name: Some("S"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -1843,6 +1872,115 @@
                 ),
                 Return(
                     value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("index_ptr"),
+            arguments: [
+                (
+                    name: Some("value"),
+                    ty: 33,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 33,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("a"),
+                    ty: 34,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                FunctionArgument(0),
+                Compose(
+                    ty: 34,
+                    components: [
+                        0,
+                    ],
+                ),
+                LocalVariable(0),
+                AccessIndex(
+                    base: 2,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 3,
+                ),
+            ],
+            named_expressions: {
+                0: "value",
+                2: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Store(
+                    pointer: 2,
+                    value: 1,
+                ),
+                Emit((
+                    start: 3,
+                    end: 5,
+                )),
+                Return(
+                    value: Some(4),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("member_ptr"),
+            arguments: [],
+            result: Some((
+                ty: 2,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("s"),
+                    ty: 35,
+                    init: Some(1),
+                ),
+            ],
+            expressions: [
+                Literal(I32(42)),
+                Compose(
+                    ty: 35,
+                    components: [
+                        0,
+                    ],
+                ),
+                LocalVariable(0),
+                AccessIndex(
+                    base: 2,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 3,
+                ),
+            ],
+            named_expressions: {
+                2: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Emit((
+                    start: 3,
+                    end: 5,
+                )),
+                Return(
+                    value: Some(4),
                 ),
             ],
             diagnostic_filter_leaf: None,

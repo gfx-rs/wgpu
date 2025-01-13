@@ -29,6 +29,10 @@ struct AssignToMember {
     x: u32,
 }
 
+struct S {
+    m: i32,
+}
+
 var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0i);
 @group(0) @binding(0) 
 var<storage, read_write> bar: Bar;
@@ -150,6 +154,21 @@ fn assign_to_arg_ptr_array_element(p_4: ptr<function, array<u32, 4>>) {
     return;
 }
 
+fn index_ptr(value: bool) -> bool {
+    var a_1: array<bool, 1>;
+
+    a_1 = array<bool, 1>(value);
+    let _e4 = a_1[0];
+    return _e4;
+}
+
+fn member_ptr() -> i32 {
+    var s: S = S(42i);
+
+    let _e4 = s.m;
+    return _e4;
+}
+
 @vertex 
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     var foo: f32 = 0f;
@@ -162,15 +181,15 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let _matrix = bar._matrix;
     let arr_1 = bar.arr;
     let b = bar._matrix[3u][0];
-    let a_1 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
+    let a_2 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let c = qux;
     let data_pointer = (&bar.data[0].value);
     let _e33 = read_from_private((&foo));
-    c2_ = array<i32, 5>(a_1, i32(b), 3i, 4i, 5i);
+    c2_ = array<i32, 5>(a_2, i32(b), 3i, 4i, 5i);
     c2_[(vi + 1u)] = 42i;
-    let value = c2_[vi];
+    let value_1 = c2_[vi];
     let _e47 = test_arr_as_arg(array<array<f32, 10>, 5>());
-    return vec4<f32>((_matrix * vec4<f32>(vec4(value))), 2f);
+    return vec4<f32>((_matrix * vec4<f32>(vec4(value_1))), 2f);
 }
 
 @fragment 

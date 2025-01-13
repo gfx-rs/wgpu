@@ -63,6 +63,12 @@ struct AssignToMember {
 struct type_25 {
     uint inner[4];
 };
+struct type_28 {
+    bool inner[1];
+};
+struct S {
+    int m;
+};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
@@ -193,6 +199,22 @@ void assign_to_arg_ptr_array_element(
     return;
 }
 
+bool index_ptr(
+    bool value
+) {
+    type_28 a_1 = {};
+    a_1 = type_28 {value};
+    bool _e4 = a_1.inner[0];
+    return _e4;
+}
+
+int member_ptr(
+) {
+    S s = S {42};
+    int _e4 = s.m;
+    return _e4;
+}
+
 struct foo_vertInput {
 };
 struct foo_vertOutput {
@@ -215,14 +237,14 @@ vertex foo_vertOutput foo_vert(
     metal::float4x3 _matrix = bar._matrix;
     type_10 arr_1 = bar.arr;
     float b = bar._matrix[3u].x;
-    int a_1 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
+    int a_2 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
     float _e33 = read_from_private(foo);
-    c2_ = type_20 {a_1, static_cast<int>(b), 3, 4, 5};
+    c2_ = type_20 {a_2, static_cast<int>(b), 3, 4, 5};
     c2_.inner[vi + 1u] = 42;
-    int value = c2_.inner[vi];
+    int value_1 = c2_.inner[vi];
     float _e47 = test_arr_as_arg(type_18 {});
-    return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value)), 2.0) };
+    return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value_1)), 2.0) };
 }
 
 

@@ -20,6 +20,9 @@ struct MatCx2InArray {
 struct AssignToMember {
     uint x;
 };
+struct S {
+    int m;
+};
 layout(std430) buffer Bar_block_0Fragment {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -70,6 +73,19 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
 void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
     p_4[1] = 10u;
     return;
+}
+
+bool index_ptr(bool value) {
+    bool a_1[1] = bool[1](false);
+    a_1 = bool[1](value);
+    bool _e4 = a_1[0];
+    return _e4;
+}
+
+int member_ptr() {
+    S s = S(42);
+    int _e4 = s.m;
+    return _e4;
 }
 
 void main() {

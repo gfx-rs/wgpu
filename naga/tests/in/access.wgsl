@@ -198,3 +198,17 @@ fn assign_to_ptr_components() {
    assign_to_arg_ptr_array_element(&a1);
    fetch_arg_ptr_array_element(&a1);
 }
+
+fn index_ptr(value: bool) -> bool {
+    var a = array<bool, 1>(value);
+    let p = &a;
+    return p[0];
+}
+
+struct S { m: i32 };
+
+fn member_ptr() -> i32 {
+    var s: S = S(42);
+    let p = &s;
+    return p.m;
+}

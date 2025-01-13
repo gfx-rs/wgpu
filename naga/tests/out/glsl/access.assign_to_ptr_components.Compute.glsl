@@ -22,6 +22,9 @@ struct MatCx2InArray {
 struct AssignToMember {
     uint x;
 };
+struct S {
+    int m;
+};
 
 float read_from_private(inout float foo_1) {
     float _e1 = foo_1;
@@ -60,6 +63,19 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
 void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
     p_4[1] = 10u;
     return;
+}
+
+bool index_ptr(bool value) {
+    bool a_1[1] = bool[1](false);
+    a_1 = bool[1](value);
+    bool _e4 = a_1[0];
+    return _e4;
+}
+
+int member_ptr() {
+    S s = S(42);
+    int _e4 = s.m;
+    return _e4;
 }
 
 void main() {
