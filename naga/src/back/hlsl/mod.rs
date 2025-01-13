@@ -211,6 +211,9 @@ pub struct Options {
     pub zero_initialize_workgroup_memory: bool,
     /// Should we restrict indexing of vectors, matrices and arrays?
     pub restrict_indexing: bool,
+    /// If set, loops will have code injected into them, forcing the compiler
+    /// to think the number of iterations is bounded.
+    pub force_loop_bounding: bool,
 }
 
 impl Default for Options {
@@ -223,6 +226,7 @@ impl Default for Options {
             push_constants_target: None,
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
+            force_loop_bounding: true,
         }
     }
 }

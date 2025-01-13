@@ -31,7 +31,10 @@ void switch_case_break(
 void loop_switch_continue(
     int x
 ) {
+    uint2 loop_bound = uint2(0u);
     while(true) {
+        if (metal::all(loop_bound == uint2(4294967295u))) { break; }
+        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
         switch(x) {
             case 1: {
                 continue;
@@ -40,8 +43,6 @@ void loop_switch_continue(
                 break;
             }
         }
-#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
-        LOOP_IS_BOUNDED
     }
     return;
 }
@@ -51,7 +52,10 @@ void loop_switch_continue_nesting(
     int y,
     int z
 ) {
+    uint2 loop_bound_1 = uint2(0u);
     while(true) {
+        if (metal::all(loop_bound_1 == uint2(4294967295u))) { break; }
+        loop_bound_1 += uint2(loop_bound_1.y == 4294967295u, 1u);
         switch(x_1) {
             case 1: {
                 continue;
@@ -62,7 +66,10 @@ void loop_switch_continue_nesting(
                         continue;
                     }
                     default: {
+                        uint2 loop_bound_2 = uint2(0u);
                         while(true) {
+                            if (metal::all(loop_bound_2 == uint2(4294967295u))) { break; }
+                            loop_bound_2 += uint2(loop_bound_2.y == 4294967295u, 1u);
                             switch(z) {
                                 case 1: {
                                     continue;
@@ -71,7 +78,6 @@ void loop_switch_continue_nesting(
                                     break;
                                 }
                             }
-                            LOOP_IS_BOUNDED
                         }
                         break;
                     }
@@ -87,9 +93,11 @@ void loop_switch_continue_nesting(
                 continue;
             }
         }
-        LOOP_IS_BOUNDED
     }
+    uint2 loop_bound_3 = uint2(0u);
     while(true) {
+        if (metal::all(loop_bound_3 == uint2(4294967295u))) { break; }
+        loop_bound_3 += uint2(loop_bound_3.y == 4294967295u, 1u);
         switch(y) {
             case 1:
             default: {
@@ -101,7 +109,6 @@ void loop_switch_continue_nesting(
                 break;
             }
         }
-        LOOP_IS_BOUNDED
     }
     return;
 }
@@ -113,7 +120,10 @@ void loop_switch_omit_continue_variable_checks(
     int w
 ) {
     int pos_1 = 0;
+    uint2 loop_bound_4 = uint2(0u);
     while(true) {
+        if (metal::all(loop_bound_4 == uint2(4294967295u))) { break; }
+        loop_bound_4 += uint2(loop_bound_4.y == 4294967295u, 1u);
         switch(x_2) {
             case 1: {
                 pos_1 = 1;
@@ -123,9 +133,11 @@ void loop_switch_omit_continue_variable_checks(
                 break;
             }
         }
-        LOOP_IS_BOUNDED
     }
+    uint2 loop_bound_5 = uint2(0u);
     while(true) {
+        if (metal::all(loop_bound_5 == uint2(4294967295u))) { break; }
+        loop_bound_5 += uint2(loop_bound_5.y == 4294967295u, 1u);
         switch(x_2) {
             case 1: {
                 break;
@@ -154,7 +166,6 @@ void loop_switch_omit_continue_variable_checks(
                 break;
             }
         }
-        LOOP_IS_BOUNDED
     }
     return;
 }
