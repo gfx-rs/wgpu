@@ -310,7 +310,7 @@ macro_rules! bitflags_array {
         }
 
         impl bitflags::Flags for $name {
-            const FLAGS: &'static [Flag<Self>] = &[$($(Flag::new(stringify!($Flag), $name::$Flag),)*)*];
+            const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
 
             type Bits = Bits;
 
