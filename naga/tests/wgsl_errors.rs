@@ -52,7 +52,7 @@ fn reserved_identifier_prefix() {
 fn function_without_identifier() {
     check(
         "fn () {}",
-        r###"error: expected identifier, found '('
+        r###"error: expected identifier, found "("
   ┌─ wgsl:1:4
   │
 1 │ fn () {}
@@ -66,7 +66,7 @@ fn function_without_identifier() {
 fn invalid_integer() {
     check(
         "fn foo([location(1.)] x: i32) {}",
-        r###"error: expected identifier, found '['
+        r###"error: expected identifier, found "["
   ┌─ wgsl:1:8
   │
 1 │ fn foo([location(1.)] x: i32) {}
@@ -80,7 +80,7 @@ fn invalid_integer() {
 fn invalid_float() {
     check(
         "const scale: f32 = 1.1.;",
-        r###"error: expected identifier, found ';'
+        r###"error: expected identifier, found ";"
   ┌─ wgsl:1:24
   │
 1 │ const scale: f32 = 1.1.;
@@ -1797,7 +1797,7 @@ fn binary_statement() {
             3 + 5;
         }
     ",
-        r###"error: expected assignment or increment/decrement, found ';'
+        r###"error: expected assignment or increment/decrement, found ";"
   ┌─ wgsl:3:18
   │
 3 │             3 + 5;
@@ -2430,5 +2430,19 @@ fn const_assert_failed() {
   │                          ^^^^^ evaluates to false
 
 "###,
+    );
+}
+
+#[test]
+fn reject_utf8_bom() {
+    check(
+        "\u{FEFF}fn main() {}",
+        r#"error: expected global item ('struct', 'const', 'var', 'alias', 'fn', 'diagnostic', 'enable', 'requires', ';') or the end of the file, found "\u{feff}"
+  ┌─ wgsl:1:1
+  │
+1 │ ﻿fn main() {}
+  │  expected global item ('struct', 'const', 'var', 'alias', 'fn', 'diagnostic', 'enable', 'requires', ';') or the end of the file
+
+"#,
     );
 }

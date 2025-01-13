@@ -409,7 +409,7 @@ impl<'a> Error<'a> {
                 };
                 ParseError {
                     message: format!(
-                        "expected {}, found '{}'",
+                        "expected {}, found {:?}",
                         expected_str, &source[unexpected_span],
                     ),
                     labels: vec![(unexpected_span, format!("expected {expected_str}").into())],
