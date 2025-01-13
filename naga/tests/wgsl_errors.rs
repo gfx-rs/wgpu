@@ -38,7 +38,7 @@ fn very_negative_integers() {
 fn reserved_identifier_prefix() {
     check(
         "var __bad;",
-        r###"error: Identifier starts with a reserved prefix: '__bad'
+        r###"error: Identifier starts with a reserved prefix: `__bad`
   ┌─ wgsl:1:5
   │
 1 │ var __bad;
@@ -112,7 +112,7 @@ fn unknown_identifier() {
                   return x * schmoo;
               }
           "###,
-        r###"error: no definition in scope for identifier: 'schmoo'
+        r###"error: no definition in scope for identifier: `schmoo`
   ┌─ wgsl:3:30
   │
 3 │                   return x * schmoo;
@@ -134,7 +134,7 @@ fn bad_texture() {
                 return textureSample(a, sampler1, vec2<f32>(0.0));
             }
         "#,
-        r#"error: expected an image, but found 'a' which is not an image
+        r#"error: expected an image, but found `a` which is not an image
   ┌─ wgsl:7:38
   │
 7 │                 return textureSample(a, sampler1, vec2<f32>(0.0));
@@ -266,7 +266,7 @@ fn bad_for_initializer() {
                 for ({};;) {}
             }
         "#,
-        r#"error: for(;;) initializer is not an assignment or a function call: '{}'
+        r#"error: for(;;) initializer is not an assignment or a function call: `{}`
   ┌─ wgsl:3:22
   │
 3 │                 for ({};;) {}
@@ -282,7 +282,7 @@ fn unknown_storage_class() {
         r#"
             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
         "#,
-        r#"error: unknown address space: 'bad'
+        r#"error: unknown address space: `bad`
   ┌─ wgsl:2:39
   │
 2 │             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
@@ -299,7 +299,7 @@ fn unknown_attribute() {
             @a
             fn x() {}
         "#,
-        r#"error: unknown attribute: 'a'
+        r#"error: unknown attribute: `a`
   ┌─ wgsl:2:14
   │
 2 │             @a
@@ -315,7 +315,7 @@ fn unknown_built_in() {
         r#"
             fn x(@builtin(unknown_built_in) y: u32) {}
         "#,
-        r#"error: unknown builtin: 'unknown_built_in'
+        r#"error: unknown builtin: `unknown_built_in`
   ┌─ wgsl:2:27
   │
 2 │             fn x(@builtin(unknown_built_in) y: u32) {}
@@ -331,7 +331,7 @@ fn unknown_access() {
         r#"
             var<storage,unknown_access> x: array<u32>;
         "#,
-        r#"error: unknown access: 'unknown_access'
+        r#"error: unknown access: `unknown_access`
   ┌─ wgsl:2:25
   │
 2 │             var<storage,unknown_access> x: array<u32>;
@@ -349,7 +349,7 @@ fn unknown_ident() {
                 let a = b;
             }
         "#,
-        r#"error: no definition in scope for identifier: 'b'
+        r#"error: no definition in scope for identifier: `b`
   ┌─ wgsl:3:25
   │
 3 │                 let a = b;
@@ -365,7 +365,7 @@ fn unknown_scalar_type() {
         r#"
             const a = vec2<vec2f>();
         "#,
-        r#"error: unknown scalar type: 'vec2f'
+        r#"error: unknown scalar type: `vec2f`
   ┌─ wgsl:2:28
   │
 2 │             const a = vec2<vec2f>();
@@ -383,7 +383,7 @@ fn unknown_type() {
         r#"
             const a: Vec = 10;
         "#,
-        r#"error: unknown type: 'Vec'
+        r#"error: unknown type: `Vec`
   ┌─ wgsl:2:22
   │
 2 │             const a: Vec = 10;
@@ -399,7 +399,7 @@ fn unknown_storage_format() {
         r#"
             const storage1: texture_storage_1d<rgba>;
         "#,
-        r#"error: unknown storage format: 'rgba'
+        r#"error: unknown storage format: `rgba`
   ┌─ wgsl:2:48
   │
 2 │             const storage1: texture_storage_1d<rgba>;
@@ -415,7 +415,7 @@ fn unknown_conservative_depth() {
         r#"
             @early_depth_test(abc) fn main() {}
         "#,
-        r#"error: unknown conservative depth: 'abc'
+        r#"error: unknown conservative depth: `abc`
   ┌─ wgsl:2:31
   │
 2 │             @early_depth_test(abc) fn main() {}
@@ -503,7 +503,7 @@ fn unknown_local_function() {
                 for (a();;) {}
             }
         "#,
-        r#"error: no definition in scope for identifier: 'a'
+        r#"error: no definition in scope for identifier: `a`
   ┌─ wgsl:3:22
   │
 3 │                 for (a();;) {}
@@ -1010,11 +1010,11 @@ fn invalid_arrays() {
 
     check(
         "alias Bad = array<f32, true>;",
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
+        r###"error: must be a const-expression that resolves to a concrete integer scalar (`u32` or `i32`)
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, true>;
-  │                        ^^^^ must resolve to u32 or i32
+  │                        ^^^^ must resolve to `u32` or `i32`
 
 "###,
     );
@@ -1024,11 +1024,11 @@ fn invalid_arrays() {
             const length: f32 = 2.718;
             alias Bad = array<f32, length>;
         "#,
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
+        r###"error: must be a const-expression that resolves to a concrete integer scalar (`u32` or `i32`)
   ┌─ wgsl:3:36
   │
 3 │             alias Bad = array<f32, length>;
-  │                                    ^^^^^^ must resolve to u32 or i32
+  │                                    ^^^^^^ must resolve to `u32` or `i32`
 
 "###,
     );
@@ -1842,7 +1842,7 @@ fn assign_to_let() {
 4 │             a = 20;
   │             ^ cannot assign to this expression
   │
-  = note: consider declaring 'a' with `var` instead of `let`
+  = note: consider declaring `a` with `var` instead of `let`
 
 "###,
     );
@@ -1862,7 +1862,7 @@ fn assign_to_let() {
 4 │             a[0] = 1;
   │             ^^^^ cannot assign to this expression
   │
-  = note: consider declaring 'a' with `var` instead of `let`
+  = note: consider declaring `a` with `var` instead of `let`
 
 "###,
     );
@@ -1884,7 +1884,7 @@ fn assign_to_let() {
 6 │             a.a = 20;
   │             ^^^ cannot assign to this expression
   │
-  = note: consider declaring 'a' with `var` instead of `let`
+  = note: consider declaring `a` with `var` instead of `let`
 
 "###,
     );
@@ -1954,7 +1954,7 @@ fn switch_signed_unsigned_mismatch() {
 4 │                 case 1: {}
   │                      ^ expected unsigned integer
   │
-  = note: suffix the integer with a `u`: '1u'
+  = note: suffix the integer with a `u`: `1u`
 
 "###,
     );
@@ -1973,7 +1973,7 @@ fn switch_signed_unsigned_mismatch() {
 4 │                 case 1u: {}
   │                      ^^ expected signed integer
   │
-  = note: remove the `u` suffix: '1'
+  = note: remove the `u` suffix: `1`
 
 "###,
     );
@@ -2407,11 +2407,11 @@ fn const_assert_must_be_bool() {
         "
             const_assert(5); // 5 is not bool
         ",
-        r###"error: must be a const-expression that resolves to a bool
+        r###"error: must be a const-expression that resolves to a `bool`
   ┌─ wgsl:2:26
   │
 2 │             const_assert(5); // 5 is not bool
-  │                          ^ must resolve to bool
+  │                          ^ must resolve to `bool`
 
 "###,
     );
@@ -2423,11 +2423,11 @@ fn const_assert_failed() {
         "
             const_assert(false);
         ",
-        r###"error: const_assert failure
+        r###"error: `const_assert` failure
   ┌─ wgsl:2:26
   │
 2 │             const_assert(false);
-  │                          ^^^^^ evaluates to false
+  │                          ^^^^^ evaluates to `false`
 
 "###,
     );
@@ -2437,11 +2437,11 @@ fn const_assert_failed() {
 fn reject_utf8_bom() {
     check(
         "\u{FEFF}fn main() {}",
-        r#"error: expected global item ('struct', 'const', 'var', 'alias', 'fn', 'diagnostic', 'enable', 'requires', ';') or the end of the file, found "\u{feff}"
+        r#"error: expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file, found "\u{feff}"
   ┌─ wgsl:1:1
   │
 1 │ ﻿fn main() {}
-  │  expected global item ('struct', 'const', 'var', 'alias', 'fn', 'diagnostic', 'enable', 'requires', ';') or the end of the file
+  │  expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file
 
 "#,
     );
