@@ -37,8 +37,10 @@ use thiserror::Error;
 pub enum BindGroupLayoutEntryError {
     #[error("Cube dimension is not expected for texture storage")]
     StorageTextureCube,
-    #[error("Read-write and read-only storage textures are not allowed by webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
+    #[error("Read-write and read-only storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
     StorageTextureReadWrite,
+    #[error("Atomic storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
+    StorageTextureAtomic,
     #[error("Arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
     #[error("Multisampled binding with sample type `TextureSampleType::Float` must have filterable set to false.")]
@@ -185,6 +187,8 @@ pub enum CreateBindGroupError {
     DepthStencilAspect,
     #[error("The adapter does not support read access for storage textures of format {0:?}")]
     StorageReadNotSupported(wgt::TextureFormat),
+    #[error("The adapter does not support atomics for storage textures of format {0:?}")]
+    StorageAtomicNotSupported(wgt::TextureFormat),
     #[error("The adapter does not support write access for storage textures of format {0:?}")]
     StorageWriteNotSupported(wgt::TextureFormat),
     #[error("The adapter does not support read-write access for storage textures of format {0:?}")]

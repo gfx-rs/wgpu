@@ -1931,6 +1931,10 @@ impl dispatch::DeviceInterface for WebDevice {
                             wgt::StorageTextureAccess::ReadWrite => {
                                 webgpu_sys::GpuStorageTextureAccess::ReadWrite
                             }
+                            wgt::StorageTextureAccess::Atomic => {
+                                // Validated out by `BindGroupLayoutEntryError::StorageTextureAtomic`
+                                unreachable!()
+                            }
                         };
                         let storage_texture = webgpu_sys::GpuStorageTextureBindingLayout::new(
                             map_texture_format(format),

@@ -443,6 +443,9 @@ impl<'a> Lexer<'a> {
             "read" => Ok(crate::StorageAccess::LOAD),
             "write" => Ok(crate::StorageAccess::STORE),
             "read_write" => Ok(crate::StorageAccess::LOAD | crate::StorageAccess::STORE),
+            "atomic" => Ok(crate::StorageAccess::ATOMIC
+                | crate::StorageAccess::LOAD
+                | crate::StorageAccess::STORE),
             _ => Err(Error::UnknownAccess(span)),
         }
     }

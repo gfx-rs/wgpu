@@ -27,6 +27,11 @@ pub fn map_texture_usage(
         format.is_combined_depth_stencil_format(),
     );
 
+    mtl_usage.set(
+        metal::MTLTextureUsage::ShaderAtomic,
+        usage.intersects(Tu::STORAGE_ATOMIC),
+    );
+
     mtl_usage
 }
 
@@ -351,7 +356,7 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> metal::MTLResourceUsage {
         wgt::BindingType::StorageTexture { access, .. } => match access {
             wgt::StorageTextureAccess::WriteOnly => metal::MTLResourceUsage::Write,
             wgt::StorageTextureAccess::ReadOnly => metal::MTLResourceUsage::Read,
-            wgt::StorageTextureAccess::ReadWrite => {
+            wgt::StorageTextureAccess::Atomic | wgt::StorageTextureAccess::ReadWrite => {
                 metal::MTLResourceUsage::Read | metal::MTLResourceUsage::Write
             }
         },

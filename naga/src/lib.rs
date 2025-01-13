@@ -597,6 +597,8 @@ bitflags::bitflags! {
         const LOAD = 0x1;
         /// Storage can be used as a target for store ops.
         const STORE = 0x2;
+        /// Storage can be used as a target for atomic ops.
+        const ATOMIC = 0x4;
     }
 }
 
@@ -2016,6 +2018,49 @@ pub enum Statement {
         /// [`SHADER_INT64_ATOMIC_MIN_MAX`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_MIN_MAX
         /// [`SHADER_INT64_ATOMIC_ALL_OPS`]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
         result: Option<Handle<Expression>>,
+    },
+    /// Performs an atomic operation on a texel value of an image.
+    ///
+    /// Doing atomics on images with mipmaps is not supported, so there is no
+    /// `level` operand.
+    ImageAtomic {
+        /// The image to perform an atomic operation on. This must have type
+        /// [`Image`]. (This will necessarily be a [`GlobalVariable`] or
+        /// [`FunctionArgument`] expression, since no other expressions are
+        /// allowed to have that type.)
+        ///
+        /// [`Image`]: TypeInner::Image
+        /// [`GlobalVariable`]: Expression::GlobalVariable
+        /// [`FunctionArgument`]: Expression::FunctionArgument
+        image: Handle<Expression>,
+
+        /// The coordinate of the texel we wish to load. This must be a scalar
+        /// for [`D1`] images, a [`Bi`] vector for [`D2`] images, and a [`Tri`]
+        /// vector for [`D3`] images. (Array indices, sample indices, and
+        /// explicit level-of-detail values are supplied separately.) Its
+        /// component type must be [`Sint`].
+        ///
+        /// [`D1`]: ImageDimension::D1
+        /// [`D2`]: ImageDimension::D2
+        /// [`D3`]: ImageDimension::D3
+        /// [`Bi`]: VectorSize::Bi
+        /// [`Tri`]: VectorSize::Tri
+        /// [`Sint`]: ScalarKind::Sint
+        coordinate: Handle<Expression>,
+
+        /// The index into an arrayed image. If the [`arrayed`] flag in
+        /// `image`'s type is `true`, then this must be `Some(expr)`, where
+        /// `expr` is a [`Sint`] scalar. Otherwise, it must be `None`.
+        ///
+        /// [`arrayed`]: TypeInner::Image::arrayed
+        /// [`Sint`]: ScalarKind::Sint
+        array_index: Option<Handle<Expression>>,
+
+        /// The kind of atomic operation to perform on the texel.
+        fun: AtomicFunction,
+
+        /// The value with which to perform the atomic operation.
+        value: Handle<Expression>,
     },
     /// Load uniformly from a uniform pointer in the workgroup address space.
     ///

@@ -148,6 +148,12 @@ pub enum FunctionError {
     },
     #[error("Image store parameters are invalid")]
     InvalidImageStore(#[source] ExpressionError),
+    #[error("Image atomic parameters are invalid")]
+    InvalidImageAtomic(#[source] ExpressionError),
+    #[error("Image atomic function is invalid")]
+    InvalidImageAtomicFunction(crate::AtomicFunction),
+    #[error("Image atomic value is invalid")]
+    InvalidImageAtomicValue(Handle<crate::Expression>),
     #[error("Call to {function:?} is invalid")]
     InvalidCall {
         function: Handle<crate::Function>,
@@ -1186,6 +1192,161 @@ impl super::Validator {
                     result,
                 } => {
                     self.validate_atomic(pointer, fun, value, result, span, context)?;
+                }
+                S::ImageAtomic {
+                    image,
+                    coordinate,
+                    array_index,
+                    fun,
+                    value,
+                } => {
+                    let var = match *context.get_expression(image) {
+                        crate::Expression::GlobalVariable(var_handle) => {
+                            &context.global_vars[var_handle]
+                        }
+                        // We're looking at a binding index situation, so punch through the index and look at the global behind it.
+                        crate::Expression::Access { base, .. }
+                        | crate::Expression::AccessIndex { base, .. } => {
+                            match *context.get_expression(base) {
+                                crate::Expression::GlobalVariable(var_handle) => {
+                                    &context.global_vars[var_handle]
+                                }
+                                _ => {
+                                    return Err(FunctionError::InvalidImageAtomic(
+                                        ExpressionError::ExpectedGlobalVariable,
+                                    )
+                                    .with_span_handle(image, context.expressions))
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(FunctionError::InvalidImageAtomic(
+                                ExpressionError::ExpectedGlobalVariable,
+                            )
+                            .with_span_handle(image, context.expressions))
+                        }
+                    };
+
+                    // Punch through a binding array to get the underlying type
+                    let global_ty = match context.types[var.ty].inner {
+                        Ti::BindingArray { base, .. } => &context.types[base].inner,
+                        ref inner => inner,
+                    };
+
+                    let value_ty = match *global_ty {
+                        Ti::Image {
+                            class,
+                            arrayed,
+                            dim,
+                        } => {
+                            match context
+                                .resolve_type(coordinate, &self.valid_expression_set)?
+                                .image_storage_coordinates()
+                            {
+                                Some(coord_dim) if coord_dim == dim => {}
+                                _ => {
+                                    return Err(FunctionError::InvalidImageAtomic(
+                                        ExpressionError::InvalidImageCoordinateType(
+                                            dim, coordinate,
+                                        ),
+                                    )
+                                    .with_span_handle(coordinate, context.expressions));
+                                }
+                            };
+                            if arrayed != array_index.is_some() {
+                                return Err(FunctionError::InvalidImageAtomic(
+                                    ExpressionError::InvalidImageArrayIndex,
+                                )
+                                .with_span_handle(coordinate, context.expressions));
+                            }
+                            if let Some(expr) = array_index {
+                                match *context.resolve_type(expr, &self.valid_expression_set)? {
+                                    Ti::Scalar(crate::Scalar {
+                                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                                        width: _,
+                                    }) => {}
+                                    _ => {
+                                        return Err(FunctionError::InvalidImageAtomic(
+                                            ExpressionError::InvalidImageArrayIndexType(expr),
+                                        )
+                                        .with_span_handle(expr, context.expressions));
+                                    }
+                                }
+                            }
+                            match class {
+                                crate::ImageClass::Storage { format, access } => {
+                                    if !access.contains(crate::StorageAccess::ATOMIC) {
+                                        return Err(FunctionError::InvalidImageAtomic(
+                                            ExpressionError::InvalidImageStorageAccess(access),
+                                        )
+                                        .with_span_handle(image, context.expressions));
+                                    }
+                                    match format {
+                                        crate::StorageFormat::R32Sint
+                                        | crate::StorageFormat::R32Uint => {
+                                            if !self
+                                                .capabilities
+                                                .intersects(super::Capabilities::TEXTURE_ATOMIC)
+                                            {
+                                                return Err(FunctionError::MissingCapability(
+                                                    super::Capabilities::TEXTURE_ATOMIC,
+                                                )
+                                                .with_span_static(
+                                                    span,
+                                                    "missing capability for this operation",
+                                                ));
+                                            }
+                                            match fun {
+                                                crate::AtomicFunction::Add
+                                                | crate::AtomicFunction::And
+                                                | crate::AtomicFunction::ExclusiveOr
+                                                | crate::AtomicFunction::InclusiveOr
+                                                | crate::AtomicFunction::Min
+                                                | crate::AtomicFunction::Max => {}
+                                                _ => {
+                                                    return Err(
+                                                        FunctionError::InvalidImageAtomicFunction(
+                                                            fun,
+                                                        )
+                                                        .with_span_handle(
+                                                            image,
+                                                            context.expressions,
+                                                        ),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        _ => {
+                                            return Err(FunctionError::InvalidImageAtomic(
+                                                ExpressionError::InvalidImageFormat(format),
+                                            )
+                                            .with_span_handle(image, context.expressions));
+                                        }
+                                    }
+                                    crate::TypeInner::Scalar(format.into())
+                                }
+                                _ => {
+                                    return Err(FunctionError::InvalidImageAtomic(
+                                        ExpressionError::InvalidImageClass(class),
+                                    )
+                                    .with_span_handle(image, context.expressions));
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(FunctionError::InvalidImageAtomic(
+                                ExpressionError::ExpectedImageType(var.ty),
+                            )
+                            .with_span()
+                            .with_handle(var.ty, context.types)
+                            .with_handle(image, context.expressions))
+                        }
+                    };
+
+                    if *context.resolve_type(value, &self.valid_expression_set)? != value_ty {
+                        return Err(FunctionError::InvalidImageAtomicValue(value)
+                            .with_span_handle(value, context.expressions));
+                    }
                 }
                 S::WorkGroupUniformLoad { pointer, result } => {
                     stages &= super::ShaderStages::COMPUTE;

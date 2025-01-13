@@ -82,8 +82,7 @@ serde = { version = "1.0.217", features = [
     "default",
     "derive",
 ], optional = true }
-# Hold on updating to 0.7 until https://github.com/petgraph/petgraph/pull/714 is on crates.io
-petgraph = { version = "0.6", optional = true }
+petgraph = { version = "0.7", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.6", optional = true }

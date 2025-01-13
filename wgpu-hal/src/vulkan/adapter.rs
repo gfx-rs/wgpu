@@ -494,7 +494,8 @@ impl PhysicalDeviceFeatures {
             | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
-            | F::PIPELINE_CACHE;
+            | F::PIPELINE_CACHE
+            | F::TEXTURE_ATOMIC;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -2135,7 +2136,10 @@ impl crate::Adapter for super::Adapter {
         //     features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX),
         // );
         flags.set(
-            Tfc::STORAGE_READ_WRITE | Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY,
+            Tfc::STORAGE_READ_WRITE
+                | Tfc::STORAGE_WRITE_ONLY
+                | Tfc::STORAGE_READ_ONLY
+                | Tfc::STORAGE_ATOMIC,
             features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE),
         );
         flags.set(
@@ -2161,6 +2165,10 @@ impl crate::Adapter for super::Adapter {
         flags.set(
             Tfc::COPY_DST,
             features.intersects(vk::FormatFeatureFlags::TRANSFER_DST),
+        );
+        flags.set(
+            Tfc::STORAGE_ATOMIC,
+            features.intersects(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC),
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());

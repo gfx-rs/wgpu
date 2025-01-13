@@ -736,6 +736,20 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 | crate::AtomicFunction::Exchange { compare: None } => {}
             }
         }
+        Statement::ImageAtomic {
+            ref mut image,
+            ref mut coordinate,
+            ref mut array_index,
+            fun: _,
+            ref mut value,
+        } => {
+            adjust(image);
+            adjust(coordinate);
+            if let Some(ref mut array_index) = *array_index {
+                adjust(array_index);
+            }
+            adjust(value);
+        }
         Statement::WorkGroupUniformLoad {
             ref mut pointer,
             ref mut result,

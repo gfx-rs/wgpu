@@ -109,6 +109,12 @@ impl crate::Adapter for super::Adapter {
             ],
         );
 
+        let image_atomic_if = if pc.msl_version >= MTLLanguageVersion::V3_1 {
+            Tfc::STORAGE_ATOMIC
+        } else {
+            Tfc::empty()
+        };
+
         // Metal defined pixel format capabilities
         let all_caps = Tfc::SAMPLED_LINEAR
             | Tfc::STORAGE_WRITE_ONLY
@@ -154,7 +160,11 @@ impl crate::Adapter for super::Adapter {
                 Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::R32Uint | Tf::R32Sint => {
-                read_write_tier1_if | Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
+                read_write_tier1_if
+                    | Tfc::STORAGE_WRITE_ONLY
+                    | Tfc::COLOR_ATTACHMENT
+                    | msaa_count
+                    | image_atomic_if
             }
             Tf::R32Float => {
                 let flags = if pc.format_r32float_all {
@@ -916,6 +926,10 @@ impl super::PrivateCapabilities {
         features.set(
             F::SHADER_INT64_ATOMIC_MIN_MAX,
             self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
+        );
+        features.set(
+            F::TEXTURE_ATOMIC,
+            self.msl_version >= MTLLanguageVersion::V3_1,
         );
         features.set(
             F::SHADER_FLOAT32_ATOMIC,
