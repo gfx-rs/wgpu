@@ -2744,22 +2744,14 @@ impl Drop for WebTexture {
     }
 }
 
-impl dispatch::BlasInterface for WebBlas {
-    fn destroy(&self) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-}
+impl dispatch::BlasInterface for WebBlas {}
 impl Drop for WebBlas {
     fn drop(&mut self) {
         // no-op
     }
 }
 
-impl dispatch::TlasInterface for WebTlas {
-    fn destroy(&self) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-}
+impl dispatch::TlasInterface for WebTlas {}
 impl Drop for WebTlas {
     fn drop(&mut self) {
         // no-op

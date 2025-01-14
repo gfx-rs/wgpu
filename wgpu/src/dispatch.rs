@@ -269,12 +269,8 @@ pub trait TextureInterface: CommonTraits {
 
     fn destroy(&self);
 }
-pub trait BlasInterface: CommonTraits {
-    fn destroy(&self);
-}
-pub trait TlasInterface: CommonTraits {
-    fn destroy(&self);
-}
+pub trait BlasInterface: CommonTraits {}
+pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {}
 pub trait PipelineLayoutInterface: CommonTraits {}
 pub trait RenderPipelineInterface: CommonTraits {
