@@ -262,7 +262,7 @@ impl super::Validator {
                     | Ti::Array { .. }
                     | Ti::Pointer { .. }
                     | Ti::ValuePointer { size: Some(_), .. }
-                    | Ti::BindingArray { .. } => false,
+                    | Ti::BindingArray { .. } => {}
                     ref other => {
                         log::error!("Indexing of {:?}", other);
                         return Err(ExpressionError::InvalidBaseType(base));

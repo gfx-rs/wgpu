@@ -2004,12 +2004,7 @@ impl Drop for CoreTexture {
     }
 }
 
-impl dispatch::BlasInterface for CoreBlas {
-    fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.blas_destroy(self.id);
-    }
-}
+impl dispatch::BlasInterface for CoreBlas {}
 
 impl Drop for CoreBlas {
     fn drop(&mut self) {
@@ -2017,12 +2012,7 @@ impl Drop for CoreBlas {
     }
 }
 
-impl dispatch::TlasInterface for CoreTlas {
-    fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.tlas_destroy(self.id);
-    }
-}
+impl dispatch::TlasInterface for CoreTlas {}
 
 impl Drop for CoreTlas {
     fn drop(&mut self) {
