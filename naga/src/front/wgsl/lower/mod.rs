@@ -2425,6 +2425,50 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
+                        "textureAtomicMin" | "textureAtomicMax" | "textureAtomicAdd"
+                        | "textureAtomicAnd" | "textureAtomicOr" | "textureAtomicXor" => {
+                            let mut args = ctx.prepare_args(arguments, 3, span);
+
+                            let image = args.next()?;
+                            let image_span = ctx.ast_expressions.get_span(image);
+                            let image = self.expression(image, ctx)?;
+
+                            let coordinate = self.expression(args.next()?, ctx)?;
+
+                            let (_, arrayed) = ctx.image_data(image, image_span)?;
+                            let array_index = arrayed
+                                .then(|| {
+                                    args.min_args += 1;
+                                    self.expression(args.next()?, ctx)
+                                })
+                                .transpose()?;
+
+                            let value = self.expression(args.next()?, ctx)?;
+
+                            args.finish()?;
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .extend(rctx.emitter.finish(&rctx.function.expressions));
+                            rctx.emitter.start(&rctx.function.expressions);
+                            let stmt = crate::Statement::ImageAtomic {
+                                image,
+                                coordinate,
+                                array_index,
+                                fun: match function.name {
+                                    "textureAtomicMin" => crate::AtomicFunction::Min,
+                                    "textureAtomicMax" => crate::AtomicFunction::Max,
+                                    "textureAtomicAdd" => crate::AtomicFunction::Add,
+                                    "textureAtomicAnd" => crate::AtomicFunction::And,
+                                    "textureAtomicOr" => crate::AtomicFunction::InclusiveOr,
+                                    "textureAtomicXor" => crate::AtomicFunction::ExclusiveOr,
+                                    _ => unreachable!(),
+                                },
+                                value,
+                            };
+                            rctx.block.push(stmt, span);
+                            return Ok(None);
+                        }
                         "storageBarrier" => {
                             ctx.prepare_args(arguments, 0, span).finish()?;
 

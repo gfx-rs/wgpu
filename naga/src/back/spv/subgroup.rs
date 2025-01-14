@@ -135,13 +135,15 @@ impl BlockContext<'_> {
             &[spirv::Capability::GroupNonUniformBallot],
         )?;
         match *mode {
-            crate::GatherMode::BroadcastFirst | crate::GatherMode::Broadcast(_) => {
+            crate::GatherMode::BroadcastFirst => {
                 self.writer.require_any(
                     "GroupNonUniformBallot",
                     &[spirv::Capability::GroupNonUniformBallot],
                 )?;
             }
-            crate::GatherMode::Shuffle(_) | crate::GatherMode::ShuffleXor(_) => {
+            crate::GatherMode::Shuffle(_)
+            | crate::GatherMode::ShuffleXor(_)
+            | crate::GatherMode::Broadcast(_) => {
                 self.writer.require_any(
                     "GroupNonUniformShuffle",
                     &[spirv::Capability::GroupNonUniformShuffle],

@@ -254,6 +254,21 @@ impl StatementGraph {
                     }
                     "Atomic"
                 }
+                S::ImageAtomic {
+                    image,
+                    coordinate,
+                    array_index,
+                    fun: _,
+                    value,
+                } => {
+                    self.dependencies.push((id, image, "image"));
+                    self.dependencies.push((id, coordinate, "coordinate"));
+                    if let Some(expr) = array_index {
+                        self.dependencies.push((id, expr, "array_index"));
+                    }
+                    self.dependencies.push((id, value, "value"));
+                    "ImageAtomic"
+                }
                 S::WorkGroupUniformLoad { pointer, result } => {
                     self.emits.push((id, result));
                     self.dependencies.push((id, pointer, "pointer"));

@@ -14,6 +14,6 @@ anyhow.workspace = true
 bitflags.workspace = true
 env_logger.workspace = true
 pico-args.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["default"] }
 serde_json.workspace = true
 wgpu = { workspace = true, features = ["serde", "dx12", "metal", "static-dxc"] }

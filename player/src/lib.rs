@@ -1,7 +1,7 @@
 //! This is a player library for WebGPU traces.
 
 #![cfg(not(target_arch = "wasm32"))]
-#![warn(unsafe_op_in_unsafe_fn)]
+#![warn(clippy::allow_attributes, unsafe_op_in_unsafe_fn)]
 
 use wgc::device::trace;
 

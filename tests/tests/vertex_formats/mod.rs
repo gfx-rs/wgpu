@@ -1,6 +1,6 @@
 //! Tests that vertex formats pass through to vertex shaders accurately.
 
-use std::{mem::size_of_val, num::NonZeroU64};
+use std::num::NonZeroU64;
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 

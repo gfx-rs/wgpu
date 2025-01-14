@@ -2,11 +2,13 @@
 //!
 //! The focal point of this module is the [`LanguageExtension`] API.
 
-/// A language extension not guaranteed to be present in all environments.
+use strum::VariantArray;
+
+/// A language extension recognized by Naga, but not guaranteed to be present in all environments.
 ///
 /// WGSL spec.: <https://www.w3.org/TR/WGSL/#language-extensions-sec>
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum LanguageExtension {
+pub enum LanguageExtension {
     #[allow(unused)]
     Implemented(ImplementedLanguageExtension),
     Unimplemented(UnimplementedLanguageExtension),
@@ -41,7 +43,7 @@ impl LanguageExtension {
     /// Maps this [`LanguageExtension`] into the sentinel word associated with it in WGSL.
     pub const fn to_ident(self) -> &'static str {
         match self {
-            Self::Implemented(kind) => match kind {},
+            Self::Implemented(kind) => kind.to_ident(),
             Self::Unimplemented(kind) => match kind {
                 UnimplementedLanguageExtension::ReadOnlyAndReadWriteStorageTextures => {
                     Self::READONLY_AND_READWRITE_STORAGE_TEXTURES
@@ -61,12 +63,24 @@ impl LanguageExtension {
 }
 
 /// A variant of [`LanguageExtension::Implemented`].
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum ImplementedLanguageExtension {}
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, VariantArray)]
+pub enum ImplementedLanguageExtension {}
+
+impl ImplementedLanguageExtension {
+    /// Returns slice of all variants of [`ImplementedLanguageExtension`].
+    pub const fn all() -> &'static [Self] {
+        Self::VARIANTS
+    }
+
+    /// Maps this [`ImplementedLanguageExtension`] into the sentinel word associated with it in WGSL.
+    pub const fn to_ident(self) -> &'static str {
+        match self {}
+    }
+}
 
 /// A variant of [`LanguageExtension::Unimplemented`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum UnimplementedLanguageExtension {
+pub enum UnimplementedLanguageExtension {
     ReadOnlyAndReadWriteStorageTextures,
     Packed4x8IntegerDotProduct,
     UnrestrictedPointerParameters,

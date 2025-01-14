@@ -174,7 +174,7 @@ pub(super) fn map_storage_class(word: spirv::Word) -> Result<super::ExtendedClas
         Some(Sc::UniformConstant) => Ec::Global(crate::AddressSpace::Handle),
         Some(Sc::StorageBuffer) => Ec::Global(crate::AddressSpace::Storage {
             //Note: this is restricted by decorations later
-            access: crate::StorageAccess::all(),
+            access: crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
         }),
         // we expect the `Storage` case to be filtered out before calling this function.
         Some(Sc::Uniform) => Ec::Global(crate::AddressSpace::Uniform),

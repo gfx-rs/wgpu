@@ -121,7 +121,7 @@ impl crate::Instance for Instance {
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
         match window_handle {
-            #[cfg(target_os = "ios")]
+            #[cfg(any(target_os = "ios", target_os = "visionos"))]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 Ok(unsafe { Surface::from_view(handle.ui_view.cast()) })
             }
@@ -290,6 +290,7 @@ struct PrivateCapabilities {
     supports_simd_scoped_operations: bool,
     int64: bool,
     int64_atomics: bool,
+    float_atomics: bool,
     supports_shared_event: bool,
 }
 
@@ -515,6 +516,15 @@ pub struct Texture {
     array_layers: u32,
     mip_levels: u32,
     copy_size: crate::CopyExtent,
+}
+
+impl Texture {
+    /// # Safety
+    ///
+    /// - The texture handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> &metal::Texture {
+        &self.raw
+    }
 }
 
 impl crate::DynTexture for Texture {}

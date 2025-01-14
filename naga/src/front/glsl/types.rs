@@ -154,7 +154,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
 
                 let class = ImageClass::Storage {
                     format: crate::StorageFormat::R8Uint,
-                    access: crate::StorageAccess::all(),
+                    access: crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
                 };
 
                 // TODO: glsl support multisampled storage images, naga doesn't

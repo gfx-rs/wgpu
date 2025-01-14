@@ -382,7 +382,7 @@ fn map_texture_copy_view(
 
 #[cfg_attr(
     any(not(target_arch = "wasm32"), target_os = "emscripten"),
-    allow(unused)
+    expect(unused)
 )]
 fn map_texture_tagged_copy_view(
     view: wgt::CopyExternalImageDestInfo<&api::Texture>,
@@ -851,6 +851,18 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             Err(err) => self.handle_error_fatal(err, "Instance::poll_all_devices"),
         }
     }
+
+    #[cfg(feature = "wgsl")]
+    fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures {
+        wgc::naga::front::wgsl::ImplementedLanguageExtension::all()
+            .iter()
+            .copied()
+            .fold(
+                crate::WgslLanguageFeatures::empty(),
+                #[expect(unreachable_code)]
+                |acc, wle| acc | match wle {},
+            )
+    }
 }
 
 impl dispatch::AdapterInterface for CoreAdapter {
@@ -951,7 +963,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             feature = "wgsl",
             feature = "naga-ir"
         )),
-        allow(unreachable_code, unused)
+        expect(unused)
     )]
     fn create_shader_module(
         &self,

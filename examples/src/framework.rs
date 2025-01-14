@@ -362,8 +362,7 @@ async fn start<E: Example>(title: &str) {
     }
 
     log::info!("Entering event loop...");
-    // On native this is a result, but on wasm it's a unit type.
-    #[allow(clippy::let_unit_value)]
+    #[cfg_attr(target_arch = "wasm32", expect(clippy::let_unit_value))]
     let _ = (event_loop_function)(
         window_loop.event_loop,
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {

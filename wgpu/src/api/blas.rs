@@ -155,15 +155,22 @@ impl Blas {
 }
 
 /// Context version of [BlasTriangleGeometry].
-#[allow(dead_code)]
 pub struct ContextBlasTriangleGeometry<'a> {
+    #[expect(dead_code)]
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
+    #[expect(dead_code)]
     pub(crate) vertex_buffer: &'a dispatch::DispatchBuffer,
+    #[expect(dead_code)]
     pub(crate) index_buffer: Option<&'a dispatch::DispatchBuffer>,
+    #[expect(dead_code)]
     pub(crate) transform_buffer: Option<&'a dispatch::DispatchBuffer>,
+    #[expect(dead_code)]
     pub(crate) first_vertex: u32,
+    #[expect(dead_code)]
     pub(crate) vertex_stride: wgt::BufferAddress,
+    #[expect(dead_code)]
     pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
+    #[expect(dead_code)]
     pub(crate) transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 
@@ -174,8 +181,9 @@ pub enum ContextBlasGeometries<'a> {
 }
 
 /// Context version see [BlasBuildEntry].
-#[allow(dead_code)]
 pub struct ContextBlasBuildEntry<'a> {
+    #[expect(dead_code)]
     pub(crate) blas: &'a dispatch::DispatchBlas,
+    #[expect(dead_code)]
     pub(crate) geometries: ContextBlasGeometries<'a>,
 }

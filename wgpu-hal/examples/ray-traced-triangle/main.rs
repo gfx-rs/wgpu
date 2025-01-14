@@ -240,8 +240,8 @@ impl<A: hal::Api> Example<A> {
             name: "example",
             flags: wgt::InstanceFlags::default(),
             dx12_shader_compiler: wgt::Dx12Compiler::DynamicDxc {
-                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
-                dxil_path: std::path::PathBuf::from("dxil.dll"),
+                dxc_path: "dxcompiler.dll".to_string(),
+                dxil_path: "dxil.dll".to_string(),
             },
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
@@ -1107,7 +1107,7 @@ impl<A: hal::Api> Example<A> {
 
 cfg_if::cfg_if! {
     // Apple + Metal
-    if #[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))] {
+    if #[cfg(all(target_vendor = "apple", feature = "metal"))] {
         type Api = hal::api::Metal;
     }
     // Wasm + Vulkan
