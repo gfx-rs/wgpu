@@ -232,6 +232,12 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
 - Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
+- Correctly validate handles in override-sized array types. By @jimblandy in [#6882](https://github.com/gfx-rs/wgpu/pull/6882).
+- Clean up validation of `Statement::ImageStore`. By @jimblandy in [#6729](https://github.com/gfx-rs/wgpu-pull/6729).
+- In compaction, avoid cloning the type arena. By @jimblandy in [#6790](https://github.com/gfx-rs/wgpu-pull/6790)
+- In validation, forbid cycles between global expressions and types. By @jimblandy in [#6800](https://github.com/gfx-rs/wgpu-pull/6800)
+- Allow abstract scalars in modf and frexp results. By @jimblandy in [#6821](https://github.com/gfx-rs/wgpu-pull/6821)
+- In the WGSL front end, apply automatic conversions to values being assigned. By @jimblandy in [#6822](https://github.com/gfx-rs/wgpu-pull/6822)
 
 #### Vulkan
 
