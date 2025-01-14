@@ -446,6 +446,16 @@ macro_rules! bitflags_array {
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
 
+            /// Takes in a name and returns Self if it matches
+            pub const fn from_name(name: &str) -> Option<Self> {
+                $($({
+                    if name == stringify!($Flag) {
+                        return Some(Self::$Flag);
+                    }
+                })*)*
+                None
+            }
+
             $(
             $(
             $(#[$inner $($args)*])*
