@@ -1194,7 +1194,7 @@ bitflags_array! {
         /// This is a web and native feature.
         const RG11B10UFLOAT_RENDERABLE = 1 << 9;
 
-        /// Allows the [`wgpu::TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8unorm`]
+        /// Allows the [`wgpu::TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8Unorm`]
         ///
         /// Supported Platforms:
         /// - Vulkan
