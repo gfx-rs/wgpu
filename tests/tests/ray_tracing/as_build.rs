@@ -1,6 +1,7 @@
 use std::iter;
 
 use crate::ray_tracing::AsBuildContext;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use wgpu_test::{
     fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
@@ -266,7 +267,7 @@ static BUILD_WITH_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
 fn build_with_transform(ctx: TestingContext) {
     let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
+        contents: &[0; size_of::<[[f32; 3]; 3]>()],
         usage: BufferUsages::BLAS_INPUT,
     });
 
@@ -327,7 +328,7 @@ fn build_with_transform(ctx: TestingContext) {
                 size: &blas_size,
                 vertex_buffer: &vertices,
                 first_vertex: 0,
-                vertex_stride: mem::size_of::<[f32; 3]>() as BufferAddress,
+                vertex_stride: size_of::<[f32; 3]>() as BufferAddress,
                 index_buffer: None,
                 index_buffer_offset: None,
                 transform_buffer: Some(&transform),
