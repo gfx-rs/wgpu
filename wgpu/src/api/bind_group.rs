@@ -8,7 +8,7 @@ use crate::*;
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
 ///
 /// Corresponds to [WebGPU `GPUBindGroup`](https://gpuweb.github.io/gpuweb/#gpubindgroup).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BindGroup {
     pub(crate) inner: dispatch::DispatchBindGroup,
 }

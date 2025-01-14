@@ -519,7 +519,14 @@ impl Resource {
                         let naga_access = match access {
                             wgt::StorageTextureAccess::ReadOnly => naga::StorageAccess::LOAD,
                             wgt::StorageTextureAccess::WriteOnly => naga::StorageAccess::STORE,
-                            wgt::StorageTextureAccess::ReadWrite => naga::StorageAccess::all(),
+                            wgt::StorageTextureAccess::ReadWrite => {
+                                naga::StorageAccess::LOAD | naga::StorageAccess::STORE
+                            }
+                            wgt::StorageTextureAccess::Atomic => {
+                                naga::StorageAccess::ATOMIC
+                                    | naga::StorageAccess::LOAD
+                                    | naga::StorageAccess::STORE
+                            }
                         };
                         naga::ImageClass::Storage {
                             format: naga_format,
@@ -610,11 +617,15 @@ impl Resource {
                     },
                     naga::ImageClass::Storage { format, access } => BindingType::StorageTexture {
                         access: {
-                            const LOAD_STORE: naga::StorageAccess = naga::StorageAccess::all();
+                            const LOAD_STORE: naga::StorageAccess =
+                                naga::StorageAccess::LOAD.union(naga::StorageAccess::STORE);
                             match access {
                                 naga::StorageAccess::LOAD => wgt::StorageTextureAccess::ReadOnly,
                                 naga::StorageAccess::STORE => wgt::StorageTextureAccess::WriteOnly,
                                 LOAD_STORE => wgt::StorageTextureAccess::ReadWrite,
+                                _ if access.contains(naga::StorageAccess::ATOMIC) => {
+                                    wgt::StorageTextureAccess::Atomic
+                                }
                                 _ => unreachable!(),
                             }
                         },
@@ -1295,7 +1306,7 @@ pub fn validate_color_attachment_bytes_per_sample(
     attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
     limit: u32,
 ) -> Result<(), u32> {
-    let mut total_bytes_per_sample = 0;
+    let mut total_bytes_per_sample: u32 = 0;
     for format in attachment_formats {
         let Some(format) = format else {
             continue;
@@ -1304,10 +1315,7 @@ pub fn validate_color_attachment_bytes_per_sample(
         let byte_cost = format.target_pixel_byte_cost().unwrap();
         let alignment = format.target_component_alignment().unwrap();
 
-        let rem = total_bytes_per_sample % alignment;
-        if rem != 0 {
-            total_bytes_per_sample += alignment - rem;
-        }
+        total_bytes_per_sample = total_bytes_per_sample.next_multiple_of(alignment);
         total_bytes_per_sample += byte_cost;
     }
 

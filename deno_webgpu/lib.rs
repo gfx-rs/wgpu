@@ -388,7 +388,7 @@ pub fn op_webgpu_request_adapter(
     } else {
         state.put(std::sync::Arc::new(wgpu_core::global::Global::new(
             "webgpu",
-            wgpu_types::InstanceDescriptor {
+            &wgpu_types::InstanceDescriptor {
                 backends,
                 flags: wgpu_types::InstanceFlags::from_build_config(),
                 dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,

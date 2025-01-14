@@ -65,7 +65,6 @@ macro_rules! impl_eq_ord_hash_proxy {
 /// ```ignore
 /// impl_eq_ord_hash_arc_address!(MyType => .field);
 /// ```
-#[cfg_attr(not(wgpu_core), allow(unused_macros))]
 macro_rules! impl_eq_ord_hash_arc_address {
     ($type:ty => $($access:tt)*) => {
         impl PartialEq for $type {
@@ -103,5 +102,4 @@ macro_rules! impl_eq_ord_hash_arc_address {
     };
 }
 
-#[cfg_attr(not(wgpu_core), allow(unused_imports))]
 pub(crate) use {impl_eq_ord_hash_arc_address, impl_eq_ord_hash_proxy};

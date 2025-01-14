@@ -141,8 +141,6 @@ mod native {
                 .unwrap();
         }
 
-        js_runtime.op_state().borrow_mut().put(Permissions {});
-
         let mod_id = js_runtime.load_main_es_module(&specifier).await?;
         let result = js_runtime.mod_evaluate(mod_id);
         js_runtime.run_event_loop(Default::default()).await?;
@@ -157,6 +155,9 @@ mod native {
         ops = [op_exit, op_read_file_sync, op_write_file_sync],
         esm_entry_point = "ext:cts_runner/src/bootstrap.js",
         esm = ["src/bootstrap.js"],
+        state = |state| {
+            state.put(Permissions {});
+        }
     );
 
     #[op2(fast)]

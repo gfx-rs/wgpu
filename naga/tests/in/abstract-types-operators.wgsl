@@ -24,6 +24,16 @@ const bitflip_uai: u32 = ~0xffffffff & (0x100000000 - 1);
 const least_i32: i32 = -2147483648;
 const least_f32: f32 = -3.40282347e+38;
 
+const shl_iaiai: i32 = 1 << 2;
+const shl_iai_u: i32 = 1 << 2u;
+const shl_uaiai: u32 = 1 << 2;
+const shl_uai_u: u32 = 1 << 2u;
+
+const shr_iaiai: i32 = 1 >> 2;
+const shr_iai_u: i32 = 1 >> 2u;
+const shr_uaiai: u32 = 1 >> 2;
+const shr_uai_u: u32 = 1 >> 2u;
+
 fn runtime_values() {
   var f: f32 = 42;
   var i: i32 = 43;

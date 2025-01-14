@@ -98,7 +98,6 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 mod buffer;
 mod metadata;
 mod range;
-mod ray_tracing;
 mod stateless;
 mod texture;
 
@@ -113,7 +112,6 @@ use crate::{
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
-use crate::track::ray_tracing::AccelerationStructureTracker;
 pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };
@@ -602,8 +600,8 @@ impl DeviceTracker {
 pub(crate) struct Tracker {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
-    pub blas_s: AccelerationStructureTracker<resource::Blas>,
-    pub tlas_s: AccelerationStructureTracker<resource::Tlas>,
+    pub blas_s: StatelessTracker<resource::Blas>,
+    pub tlas_s: StatelessTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
@@ -617,8 +615,8 @@ impl Tracker {
         Self {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
-            blas_s: AccelerationStructureTracker::new(),
-            tlas_s: AccelerationStructureTracker::new(),
+            blas_s: StatelessTracker::new(),
+            tlas_s: StatelessTracker::new(),
             views: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),
             compute_pipelines: StatelessTracker::new(),

@@ -5,7 +5,7 @@ use std::{
 
 use criterion::{criterion_group, Criterion, Throughput};
 use nanorand::{Rng, WyRand};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::DeviceState;
 
@@ -60,7 +60,16 @@ impl BindGroupState {
 }
 
 fn run_bench(ctx: &mut Criterion) {
-    let state = Lazy::new(BindGroupState::new);
+    let state = LazyLock::new(BindGroupState::new);
+
+    if !state
+        .device_state
+        .device
+        .features()
+        .contains(wgpu::Features::TEXTURE_BINDING_ARRAY)
+    {
+        return;
+    }
 
     let mut group = ctx.benchmark_group("Bind Group Creation");
 

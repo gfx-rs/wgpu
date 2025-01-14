@@ -6,7 +6,7 @@ use crate::*;
 /// [`RenderPipeline`] or [`BindGroup`].
 ///
 /// Corresponds to [WebGPU `GPUTextureView`](https://gpuweb.github.io/gpuweb/#gputextureview).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextureView {
     pub(crate) inner: dispatch::DispatchTextureView,
 }

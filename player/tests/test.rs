@@ -14,7 +14,6 @@ use player::GlobalPlay;
 use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
-    mem::size_of,
     path::{Path, PathBuf},
     slice,
 };
@@ -201,7 +200,7 @@ impl Corpus {
 
                 let global = wgc::global::Global::new(
                     "test",
-                    wgt::InstanceDescriptor {
+                    &wgt::InstanceDescriptor {
                         backends: backend.into(),
                         flags: wgt::InstanceFlags::debugging(),
                         dx12_shader_compiler: wgt::Dx12Compiler::Fxc,

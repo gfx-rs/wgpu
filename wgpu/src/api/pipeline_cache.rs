@@ -62,7 +62,7 @@ use crate::*;
 /// This type is unique to the Rust API of `wgpu`.
 ///
 /// [renaming]: std::fs::rename
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipelineCache {
     pub(crate) inner: dispatch::DispatchPipelineCache,
 }

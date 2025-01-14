@@ -1728,20 +1728,22 @@ bitflags::bitflags! {
         const STORAGE_WRITE_ONLY = 1 << 9;
         /// Read-write storage texture usage.
         const STORAGE_READ_WRITE = 1 << 10;
+        /// Image atomic enabled storage
+        const STORAGE_ATOMIC = 1 << 11;
         /// The combination of states that a texture may be in _at the same time_.
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
         /// The combination of states that a texture must exclusively be in.
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
         const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
-        const COMPLEX = 1 << 11;
+        const COMPLEX = 1 << 12;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
-        const UNKNOWN = 1 << 12;
+        const UNKNOWN = 1 << 13;
     }
 }
 

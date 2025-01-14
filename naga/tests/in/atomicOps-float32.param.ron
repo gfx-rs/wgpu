@@ -1,0 +1,15 @@
+(
+	god_mode: true,
+	spv: (
+		version: (1, 1),
+		capabilities: [ AtomicFloat32AddEXT ],
+	),
+	msl: (
+		lang_version: (3, 0),
+		per_entry_point_map: {},
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: true,
+		zero_initialize_workgroup_memory: false,
+	),
+)

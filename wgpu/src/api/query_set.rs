@@ -5,7 +5,7 @@ use crate::*;
 /// It can be created with [`Device::create_query_set`].
 ///
 /// Corresponds to [WebGPU `GPUQuerySet`](https://gpuweb.github.io/gpuweb/#queryset).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QuerySet {
     pub(crate) inner: dispatch::DispatchQuerySet,
 }

@@ -2,7 +2,7 @@ use std::{error, fmt, future::Future, sync::Arc};
 
 use parking_lot::Mutex;
 
-use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, BlasShared, CreateBlasDescriptor};
+use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
 use crate::*;
 
@@ -14,7 +14,7 @@ use crate::*;
 /// A device may be requested from an adapter with [`Adapter::request_device`].
 ///
 /// Corresponds to [WebGPU `GPUDevice`](https://gpuweb.github.io/gpuweb/#gpu-device).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Device {
     pub(crate) inner: dispatch::DispatchDevice,
 }
@@ -216,7 +216,7 @@ impl Device {
 
         Buffer {
             inner: buffer,
-            map_context: Mutex::new(map_context),
+            map_context: Arc::new(Mutex::new(map_context)),
             size: desc.size,
             usage: desc.usage,
         }
@@ -297,7 +297,7 @@ impl Device {
 
         Buffer {
             inner: buffer.into(),
-            map_context: Mutex::new(map_context),
+            map_context: Arc::new(Mutex::new(map_context)),
             size: desc.size,
             usage: desc.usage,
         }
@@ -487,7 +487,7 @@ impl Device {
         let (handle, blas) = self.inner.create_blas(desc, sizes);
 
         Blas {
-            shared: Arc::new(BlasShared { inner: blas }),
+            inner: blas,
             handle,
         }
     }
@@ -506,8 +506,10 @@ impl Device {
         let tlas = self.inner.create_tlas(desc);
 
         Tlas {
-            inner: tlas,
-            max_instances: desc.max_instances,
+            shared: Arc::new(TlasShared {
+                inner: tlas,
+                max_instances: desc.max_instances,
+            }),
         }
     }
 }

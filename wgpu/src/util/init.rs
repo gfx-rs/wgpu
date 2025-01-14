@@ -108,10 +108,10 @@ pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
             .as_deref()
         {
             Ok("dxc") => wgt::Dx12Compiler::DynamicDxc {
-                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
-                dxil_path: std::path::PathBuf::from("dxil.dll"),
+                dxc_path: "dxcompiler.dll".to_string(),
+                dxil_path: "dxil.dll".to_string(),
             },
-            #[cfg(feature = "static-dxc")]
+            #[cfg(static_dxc)]
             Ok("static-dxc") => wgt::Dx12Compiler::StaticDxc,
             Ok("fxc") => wgt::Dx12Compiler::Fxc,
             _ => return None,
@@ -197,10 +197,10 @@ pub async fn is_browser_webgpu_supported() -> bool {
 ///
 /// If no backend feature for the active target platform is enabled,
 /// this method will panic, see [`Instance::enabled_backend_features()`].
-#[allow(unused_mut)]
 pub async fn new_instance_with_webgpu_detection(
-    mut instance_desc: wgt::InstanceDescriptor,
+    instance_desc: &wgt::InstanceDescriptor,
 ) -> crate::Instance {
+    let mut instance_desc = instance_desc.clone();
     if instance_desc
         .backends
         .contains(wgt::Backends::BROWSER_WEBGPU)
@@ -209,5 +209,5 @@ pub async fn new_instance_with_webgpu_detection(
         instance_desc.backends.remove(wgt::Backends::BROWSER_WEBGPU);
     }
 
-    crate::Instance::new(instance_desc)
+    crate::Instance::new(&instance_desc)
 }

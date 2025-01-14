@@ -319,7 +319,8 @@ impl super::Adapter {
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
             | wgt::Features::TEXTURE_FORMAT_NV12
-            | wgt::Features::FLOAT32_FILTERABLE;
+            | wgt::Features::FLOAT32_FILTERABLE
+            | wgt::Features::TEXTURE_ATOMIC;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -425,9 +426,8 @@ impl super::Adapter {
 
         // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
         let max_color_attachments = 8;
-        // TODO: determine this programmatically if possible.
-        // https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447
-        let max_color_attachment_bytes_per_sample = 64;
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -682,6 +682,12 @@ impl crate::Adapter for super::Adapter {
             data_srv_uav
                 .Support2
                 .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD),
+        );
+        caps.set(
+            Tfc::STORAGE_ATOMIC,
+            data_srv_uav
+                .Support2
+                .contains(Direct3D12::D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX),
         );
         caps.set(
             Tfc::STORAGE_WRITE_ONLY,

@@ -1,6 +1,6 @@
 //! Utilitary math functions.
 
-use std::ops::{Add, Rem, Sub};
+use core::ops::{Add, Rem, Sub};
 
 ///
 /// Aligns a `value` to an `alignment`.

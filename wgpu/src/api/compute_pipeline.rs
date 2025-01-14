@@ -6,7 +6,7 @@ use crate::*;
 /// It can be created with [`Device::create_compute_pipeline`].
 ///
 /// Corresponds to [WebGPU `GPUComputePipeline`](https://gpuweb.github.io/gpuweb/#compute-pipeline).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ComputePipeline {
     pub(crate) inner: dispatch::DispatchComputePipeline,
 }

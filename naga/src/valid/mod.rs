@@ -81,56 +81,56 @@ bitflags::bitflags! {
         /// Support for [`AddressSpace::PushConstant`][1].
         ///
         /// [1]: crate::AddressSpace::PushConstant
-        const PUSH_CONSTANT = 0x1;
+        const PUSH_CONSTANT = 1 << 0;
         /// Float values with width = 8.
-        const FLOAT64 = 0x2;
+        const FLOAT64 = 1 << 1;
         /// Support for [`BuiltIn::PrimitiveIndex`][1].
         ///
         /// [1]: crate::BuiltIn::PrimitiveIndex
-        const PRIMITIVE_INDEX = 0x4;
+        const PRIMITIVE_INDEX = 1 << 2;
         /// Support for non-uniform indexing of sampled textures and storage buffer arrays.
-        const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 0x8;
+        const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 3;
         /// Support for non-uniform indexing of uniform buffers and storage texture arrays.
-        const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x10;
+        const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 4;
         /// Support for non-uniform indexing of samplers.
-        const SAMPLER_NON_UNIFORM_INDEXING = 0x20;
+        const SAMPLER_NON_UNIFORM_INDEXING = 1 << 5;
         /// Support for [`BuiltIn::ClipDistance`].
         ///
         /// [`BuiltIn::ClipDistance`]: crate::BuiltIn::ClipDistance
-        const CLIP_DISTANCE = 0x40;
+        const CLIP_DISTANCE = 1 << 6;
         /// Support for [`BuiltIn::CullDistance`].
         ///
         /// [`BuiltIn::CullDistance`]: crate::BuiltIn::CullDistance
-        const CULL_DISTANCE = 0x80;
+        const CULL_DISTANCE = 1 << 7;
         /// Support for 16-bit normalized storage texture formats.
-        const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 0x100;
+        const STORAGE_TEXTURE_16BIT_NORM_FORMATS = 1 << 8;
         /// Support for [`BuiltIn::ViewIndex`].
         ///
         /// [`BuiltIn::ViewIndex`]: crate::BuiltIn::ViewIndex
-        const MULTIVIEW = 0x200;
+        const MULTIVIEW = 1 << 9;
         /// Support for `early_depth_test`.
-        const EARLY_DEPTH_TEST = 0x400;
+        const EARLY_DEPTH_TEST = 1 << 10;
         /// Support for [`BuiltIn::SampleIndex`] and [`Sampling::Sample`].
         ///
         /// [`BuiltIn::SampleIndex`]: crate::BuiltIn::SampleIndex
         /// [`Sampling::Sample`]: crate::Sampling::Sample
-        const MULTISAMPLED_SHADING = 0x800;
+        const MULTISAMPLED_SHADING = 1 << 11;
         /// Support for ray queries and acceleration structures.
-        const RAY_QUERY = 0x1000;
+        const RAY_QUERY = 1 << 12;
         /// Support for generating two sources for blending from fragment shaders.
-        const DUAL_SOURCE_BLENDING = 0x2000;
+        const DUAL_SOURCE_BLENDING = 1 << 13;
         /// Support for arrayed cube textures.
-        const CUBE_ARRAY_TEXTURES = 0x4000;
+        const CUBE_ARRAY_TEXTURES = 1 << 14;
         /// Support for 64-bit signed and unsigned integers.
-        const SHADER_INT64 = 0x8000;
+        const SHADER_INT64 = 1 << 15;
         /// Support for subgroup operations.
         /// Implies support for subgroup operations in both fragment and compute stages,
         /// but not necessarily in the vertex stage, which requires [`Capabilities::SUBGROUP_VERTEX_STAGE`].
-        const SUBGROUP = 0x10000;
+        const SUBGROUP = 1 << 16;
         /// Support for subgroup barriers.
-        const SUBGROUP_BARRIER = 0x20000;
+        const SUBGROUP_BARRIER = 1 << 17;
         /// Support for subgroup operations in the vertex stage.
-        const SUBGROUP_VERTEX_STAGE = 0x40000;
+        const SUBGROUP_VERTEX_STAGE = 1 << 18;
         /// Support for [`AtomicFunction::Min`] and [`AtomicFunction::Max`] on
         /// 64-bit integers in the [`Storage`] address space, when the return
         /// value is not used.
@@ -140,9 +140,20 @@ bitflags::bitflags! {
         /// [`AtomicFunction::Min`]: crate::AtomicFunction::Min
         /// [`AtomicFunction::Max`]: crate::AtomicFunction::Max
         /// [`Storage`]: crate::AddressSpace::Storage
-        const SHADER_INT64_ATOMIC_MIN_MAX = 0x80000;
+        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 19;
         /// Support for all atomic operations on 64-bit integers.
-        const SHADER_INT64_ATOMIC_ALL_OPS = 0x100000;
+        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 20;
+        /// Support for [`AtomicFunction::Add`], [`AtomicFunction::Sub`],
+        /// and [`AtomicFunction::Exchange { compare: None }`] on 32-bit floating-point numbers
+        /// in the [`Storage`] address space.
+        ///
+        /// [`AtomicFunction::Add`]: crate::AtomicFunction::Add
+        /// [`AtomicFunction::Sub`]: crate::AtomicFunction::Sub
+        /// [`AtomicFunction::Exchange { compare: None }`]: crate::AtomicFunction::Exchange
+        /// [`Storage`]: crate::AddressSpace::Storage
+        const SHADER_FLOAT32_ATOMIC = 1 << 21;
+        /// Support for atomic operations on images.
+        const TEXTURE_ATOMIC = 1 << 22;
     }
 }
 

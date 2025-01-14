@@ -3,7 +3,7 @@ mod point_gen;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use nanorand::{Rng, WyRand};
-use std::{f32::consts, iter, mem::size_of};
+use std::{f32::consts, iter};
 use wgpu::util::DeviceExt;
 
 ///
@@ -691,10 +691,10 @@ impl crate::framework::Example for Example {
         self.reflect_view = reflect_view;
     }
 
-    #[allow(clippy::eq_op)]
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;
+        #[expect(clippy::eq_op, reason = "keeping common divisor on all elements")]
         let back_color = wgpu::Color {
             r: 161.0 / 255.0,
             g: 246.0 / 255.0,
