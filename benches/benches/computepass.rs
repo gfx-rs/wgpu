@@ -550,7 +550,7 @@ fn run_bench(ctx: &mut Criterion) {
 
             // Need bindless to run this benchmark
             if state.bindless_bind_group.is_none() {
-                return Duration::from_secs_f32(1.0);
+                return Duration::from_secs(1);
             }
 
             let mut duration = Duration::ZERO;
