@@ -26,11 +26,8 @@ impl DeviceState {
         };
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::util::backend_bits_from_env().unwrap_or(base_backend),
-            flags: wgpu::InstanceFlags::empty(),
-            dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env()
-                .unwrap_or(wgpu::Dx12Compiler::Fxc),
-            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+            backends: wgpu::Backends::from_env().unwrap_or(base_backend),
+            ..wgpu::InstanceDescriptor::from_env_or_default()
         });
 
         let adapter = block_on(wgpu::util::initialize_adapter_from_env_or_default(

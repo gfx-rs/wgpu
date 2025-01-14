@@ -30,9 +30,12 @@ use {
 
 pub mod assertions;
 mod counters;
+mod env;
+pub mod instance;
 pub mod math;
 
 pub use counters::*;
+pub use instance::*;
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -123,6 +126,19 @@ pub enum PowerPreference {
     HighPerformance = 2,
 }
 
+impl PowerPreference {
+    /// Get a power preference from the environment variable `WGPU_POWER_PREF`.
+    pub fn from_env() -> Option<Self> {
+        let env = crate::env::var("WGPU_POWER_PREF")?;
+        match env.to_lowercase().as_str() {
+            "low" => Some(Self::LowPower),
+            "high" => Some(Self::HighPerformance),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// Represents the backends that wgpu will use.
     #[repr(transparent)]
@@ -173,6 +189,60 @@ impl Default for Backends {
 impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
         Self::from_bits(1 << backend as u32).unwrap()
+    }
+}
+
+impl Backends {
+    /// Gets a set of backends from the environment variable `WGPU_BACKEND`.
+    ///
+    /// See [`Self::from_comma_list()`] for the format of the string.
+    pub fn from_env() -> Option<Self> {
+        let env = crate::env::var("WGPU_BACKEND")?;
+        Some(Self::from_comma_list(&env))
+    }
+
+    /// Takes the given options, modifies them based on the `WGPU_BACKEND` environment variable, and returns the result.
+    pub fn with_env(&self) -> Self {
+        if let Some(env) = Self::from_env() {
+            env
+        } else {
+            *self
+        }
+    }
+
+    /// Generates a set of backends from a comma separated list of case-insensitive backend names.
+    ///
+    /// Whitespace is stripped, so both 'gl, dx12' and 'gl,dx12' are valid.
+    ///
+    /// Always returns WEBGPU on wasm over webgpu.
+    ///
+    /// Names:
+    /// - vulkan = "vulkan" or "vk"
+    /// - dx12   = "dx12" or "d3d12"
+    /// - metal  = "metal" or "mtl"
+    /// - gles   = "opengl" or "gles" or "gl"
+    /// - webgpu = "webgpu"
+    pub fn from_comma_list(string: &str) -> Self {
+        let mut backends = Self::empty();
+        for backend in string.to_lowercase().split(',') {
+            backends |= match backend.trim() {
+                "vulkan" | "vk" => Self::VULKAN,
+                "dx12" | "d3d12" => Self::DX12,
+                "metal" | "mtl" => Self::METAL,
+                "opengl" | "gles" | "gl" => Self::GL,
+                "webgpu" => Self::BROWSER_WEBGPU,
+                b => {
+                    log::warn!("unknown backend string '{}'", b);
+                    continue;
+                }
+            }
+        }
+
+        if backends.is_empty() {
+            log::warn!("no valid backend strings found!");
+        }
+
+        backends
     }
 }
 
@@ -1012,118 +1082,6 @@ impl Features {
             formats.push(VertexFormat::Float32x3);
         }
         formats
-    }
-}
-
-bitflags::bitflags! {
-    /// Instance debugging flags.
-    ///
-    /// These are not part of the webgpu standard.
-    ///
-    /// Defaults to enabling debugging-related flags if the build configuration has `debug_assertions`.
-    #[repr(transparent)]
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct InstanceFlags: u32 {
-        /// Generate debug information in shaders and objects.
-        const DEBUG = 1 << 0;
-        /// Enable validation, if possible.
-        const VALIDATION = 1 << 1;
-        /// Don't pass labels to wgpu-hal.
-        const DISCARD_HAL_LABELS = 1 << 2;
-        /// Whether wgpu should expose adapters that run on top of non-compliant adapters.
-        ///
-        /// Turning this on might mean that some of the functionality provided by the wgpu
-        /// adapter/device is not working or is broken. It could be that all the functionality
-        /// wgpu currently exposes works but we can't tell for sure since we have no additional
-        /// transparency into what is working and what is not on the underlying adapter.
-        ///
-        /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
-        /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
-        const ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER = 1 << 3;
-        /// Enable GPU-based validation. Implies [`Self::VALIDATION`]. Currently, this only changes
-        /// behavior on the DX12 and Vulkan backends.
-        ///
-        /// Supported platforms:
-        ///
-        /// - D3D12; called ["GPU-based validation", or
-        ///   "GBV"](https://web.archive.org/web/20230206120404/https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-d3d12-debug-layer-gpu-based-validation)
-        /// - Vulkan, via the `VK_LAYER_KHRONOS_validation` layer; called ["GPU-Assisted
-        ///   Validation"](https://github.com/KhronosGroup/Vulkan-ValidationLayers/blob/e45aeb85079e0835694cb8f03e6681fd18ae72c9/docs/gpu_validation.md#gpu-assisted-validation)
-        const GPU_BASED_VALIDATION = 1 << 4;
-    }
-}
-
-impl Default for InstanceFlags {
-    fn default() -> Self {
-        Self::from_build_config()
-    }
-}
-
-impl InstanceFlags {
-    /// Enable recommended debugging and validation flags.
-    #[must_use]
-    pub fn debugging() -> Self {
-        InstanceFlags::DEBUG | InstanceFlags::VALIDATION
-    }
-
-    /// Enable advanced debugging and validation flags (potentially very slow).
-    #[must_use]
-    pub fn advanced_debugging() -> Self {
-        Self::debugging() | InstanceFlags::GPU_BASED_VALIDATION
-    }
-
-    /// Infer good defaults from the build type
-    ///
-    /// Returns the default flags and add debugging flags if the build configuration has `debug_assertions`.
-    #[must_use]
-    pub fn from_build_config() -> Self {
-        if cfg!(debug_assertions) {
-            return InstanceFlags::debugging();
-        }
-
-        InstanceFlags::empty()
-    }
-
-    /// Returns this set of flags, affected by environment variables.
-    ///
-    /// The presence of an environment variable implies that the corresponding flag should be set
-    /// unless the value is "0" in which case the flag is unset. If the environment variable is
-    /// not present, then the flag is unaffected.
-    ///
-    /// For example `let flags = InstanceFlags::debugging().with_env();` with `WGPU_VALIDATION=0`
-    /// does not contain `InstanceFlags::VALIDATION`.
-    ///
-    /// The environment variables are named after the flags prefixed with "WGPU_". For example:
-    /// - WGPU_DEBUG
-    /// - WGPU_VALIDATION
-    #[must_use]
-    pub fn with_env(mut self) -> Self {
-        fn env(_key: &str) -> Option<bool> {
-            #[cfg(feature = "std")]
-            return std::env::var(_key).ok().map(|s| match s.as_str() {
-                "0" => false,
-                _ => true,
-            });
-
-            // Without access to std, environment variables are considered unset
-            #[cfg(not(feature = "std"))]
-            return None;
-        }
-
-        if let Some(bit) = env("WGPU_VALIDATION") {
-            self.set(Self::VALIDATION, bit);
-        }
-        if let Some(bit) = env("WGPU_DEBUG") {
-            self.set(Self::DEBUG, bit);
-        }
-        if let Some(bit) = env("WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER") {
-            self.set(Self::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER, bit);
-        }
-        if let Some(bit) = env("WGPU_GPU_BASED_VALIDATION") {
-            self.set(Self::GPU_BASED_VALIDATION, bit);
-        }
-
-        self
     }
 }
 
@@ -7752,84 +7710,6 @@ impl ShaderRuntimeChecks {
 impl Default for ShaderRuntimeChecks {
     fn default() -> Self {
         Self::checked()
-    }
-}
-
-/// Selects which DX12 shader compiler to use.
-///
-/// If the `Dxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
-/// then this will fall back to the Fxc compiler at runtime and log an error.
-///
-/// `wgpu::utils::init::dx12_shader_compiler_from_env` can be used to set the compiler
-/// from the `WGPU_DX12_SHADER_COMPILER` environment variable, but this should only be used for testing.
-#[derive(Clone, Debug, Default)]
-pub enum Dx12Compiler {
-    /// The Fxc compiler (default) is old, slow and unmaintained.
-    ///
-    /// However, it doesn't require any additional .dlls to be shipped with the application.
-    #[default]
-    Fxc,
-    /// The Dxc compiler is new, fast and maintained.
-    ///
-    /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
-    /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
-    ///
-    /// Minimum supported version: [v1.5.2010](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.5.2010)
-    ///
-    /// It also requires WDDM 2.1 (Windows 10 version 1607).
-    DynamicDxc {
-        /// Path to `dxcompiler.dll`.
-        dxc_path: String,
-        /// Path to `dxil.dll`.
-        dxil_path: String,
-    },
-    /// The statically-linked variant of Dxc.
-    ///
-    /// The `static-dxc` feature is required for this setting to be used successfully on DX12.
-    /// Not available on `windows-aarch64-pc-*` targets.
-    StaticDxc,
-}
-
-/// Selects which OpenGL ES 3 minor version to request.
-///
-/// When using ANGLE as an OpenGL ES/EGL implementation, explicitly requesting `Version1` can provide a non-conformant ES 3.1 on APIs like D3D11.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
-pub enum Gles3MinorVersion {
-    /// No explicit minor version is requested, the driver automatically picks the highest available.
-    #[default]
-    Automatic,
-
-    /// Request an ES 3.0 context.
-    Version0,
-
-    /// Request an ES 3.1 context.
-    Version1,
-
-    /// Request an ES 3.2 context.
-    Version2,
-}
-
-/// Options for creating an instance.
-#[derive(Clone, Debug)]
-pub struct InstanceDescriptor {
-    /// Which `Backends` to enable.
-    pub backends: Backends,
-    /// Flags to tune the behavior of the instance.
-    pub flags: InstanceFlags,
-    /// Which DX12 shader compiler to use.
-    pub dx12_shader_compiler: Dx12Compiler,
-    /// Which OpenGL ES 3 minor version to request. Will be ignored if OpenGL is available.
-    pub gles_minor_version: Gles3MinorVersion,
-}
-
-impl Default for InstanceDescriptor {
-    fn default() -> Self {
-        Self {
-            backends: Backends::all(),
-            flags: InstanceFlags::default(),
-            dx12_shader_compiler: Dx12Compiler::default(),
-            gles_minor_version: Gles3MinorVersion::default(),
-        }
     }
 }
 

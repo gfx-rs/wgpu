@@ -75,6 +75,74 @@ let desc: ShaderModuleDescriptor = include_wgsl!(...)
 
 By @cwfitzgerald and @rudderbucky in [#6662](https://github.com/gfx-rs/wgpu/pull/6662).
 
+#### `wgpu::Instance::new` now takes `InstanceDescriptor` by reference
+
+Previously `wgpu::Instance::new` took `InstanceDescriptor` by value (which is overall fairly uncommon in wgpu).
+Furthermore, `InstanceDescriptor` is now cloneable.
+
+```diff
+- let instance = wgpu::Instance::new(instance_desc);
++ let instance = wgpu::Instance::new(&instance_desc);
+```
+
+By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
+
+#### Environment Variable Handling Overhaul
+
+Previously how various bits of code handled reading settings from environment variables was inconsistent and unideomatic.
+We have unified it to `Type::from_env()` for all types.
+
+```diff
+- wgpu::util::backend_bits_from_env()
++ wgpu::Backends::from_env()
+
+- wgpu::util::power_preference_from_env()
++ wgpu::PowerPreference::from_env()
+
+- wgpu::util::dx12_shader_compiler_from_env()
++ wgpu::Dx12Compiler::from_env()
+
+- wgpu::util::gles_minor_version_from_env()
++ wgpu::Gles3MinorVersion::from_env()
+
+- wgpu::util::instance_descriptor_from_env()
++ wgpu::InstanceDescriptor::from_env()
+
+- wgpu::util::parse_backends_from_comma_list(&str)
++ wgpu::Backends::from_comma_list(&str)
+```
+
+By @cwfitzgerald in [#6895](https://github.com/gfx-rs/wgpu/pull/6895)
+
+#### Backend-specific instance options are now in separate structs
+
+In order to better facilitate growing more interesting backend options, we have put them into individual structs. This allows users to more easily understand what options can be defaulted and which they care about. All of these new structs implement `from_env()` and delegate to their respective `from_env()` methods.
+
+```diff
+- let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+-     backends: wgpu::Backends::all(),
+-     flags: wgpu::InstanceFlags::default(),
+-     dx12_shader_compiler: wgpu::Dx12Compiler::Dxc,
+-     gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+- });
++ let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
++     backends: wgpu::Backends::all(),
++     flags: wgpu::InstanceFlags::default(),
++     backend_options: wgpu::BackendOptions {
++         dx12: wgpu::Dx12BackendOptions {
++             shader_compiler: wgpu::Dx12ShaderCompiler::Dxc,
++         },
++         gl: wgpu::GlBackendOptions {
++             gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
++         },
++     },
++ });
+```
+
+If you do not need any of these options, or only need one backend's info use the `default()` impl to fill out the remaining feelds.
+
+By @cwfitzgerald in [#6895](https://github.com/gfx-rs/wgpu/pull/6895)
+
 #### The `diagnostic(…);` directive is now supported in WGSL
 
 Naga now parses `diagnostic(…);` directives according to the WGSL spec. This allows users to control certain lints, similar to Rust's `allow`, `warn`, and `deny` attributes. For example, in standard WGSL (but, notably, not Naga yet—see <https://github.com/gfx-rs/wgpu/issues/4369>) this snippet would emit a uniformity error:
@@ -124,18 +192,6 @@ There are some limitations to keep in mind with this new functionality:
 - Finally, `diagnostic(…)` rules are not yet emitted in WGSL output. This means that `wgsl-in` → `wgsl-out` is currently a lossy process. We felt that it was important to unblock users who needed `diagnostic(…)` rules (i.e., <https://github.com/gfx-rs/wgpu/issues/3135>) before we took significant effort to fix this (tracked in <https://github.com/gfx-rs/wgpu/issues/6496>).
 
 By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148](https://github.com/gfx-rs/wgpu/pull/6148), [#6533](https://github.com/gfx-rs/wgpu/pull/6533), [#6353](https://github.com/gfx-rs/wgpu/pull/6353), [#6537](https://github.com/gfx-rs/wgpu/pull/6537).
-
-#### `wgpu::Instance::new` now takes `InstanceDescriptor` by reference
-
-Previously `wgpu::Instance::new` took `InstanceDescriptor` by value (which is overall fairly uncommon in wgpu).
-Furthermore, `InstanceDescriptor` is now cloneable.
-
-```diff
-- let instance = wgpu::Instance::new(instance_desc);
-+ let instance = wgpu::Instance::new(&instance_desc);
-```
-
-By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 
 #### New Features
 

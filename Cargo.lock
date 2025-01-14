@@ -4206,6 +4206,7 @@ version = "23.0.0"
 dependencies = [
  "bitflags 2.7.0",
  "js-sys",
+ "log",
  "serde",
  "serde_json",
  "web-sys",

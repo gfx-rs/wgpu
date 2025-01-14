@@ -41,6 +41,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
+log.workspace = true
 serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",
