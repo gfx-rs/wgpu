@@ -70,6 +70,25 @@ fn run_bench(ctx: &mut Criterion) {
             format!("{} Element Bind Group", count),
             &count,
             |b, &count| {
+                if !state
+                    .device_state
+                    .device
+                    .features()
+                    .contains(wgpu::Features::TEXTURE_BINDING_ARRAY)
+                {
+                    return;
+                }
+
+                if count
+                    > state
+                        .device_state
+                        .device
+                        .limits()
+                        .max_sampled_textures_per_shader_stage
+                {
+                    return;
+                }
+
                 let bind_group_layout = state.device_state.device.create_bind_group_layout(
                     &wgpu::BindGroupLayoutDescriptor {
                         label: None,
@@ -87,25 +106,6 @@ fn run_bench(ctx: &mut Criterion) {
                 );
 
                 b.iter_custom(|iters| {
-                    if !state
-                        .device_state
-                        .device
-                        .features()
-                        .contains(wgpu::Features::TEXTURE_BINDING_ARRAY)
-                    {
-                        return Duration::from_secs(1);
-                    }
-
-                    if count
-                        > state
-                            .device_state
-                            .device
-                            .limits()
-                            .max_sampled_textures_per_shader_stage
-                    {
-                        return Duration::from_secs(1);
-                    }
-
                     let texture_view_refs: Vec<_> =
                         state.texture_views.iter().take(count as usize).collect();
 
