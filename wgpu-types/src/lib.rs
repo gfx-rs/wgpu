@@ -374,6 +374,11 @@ macro_rules! bitflags_array {
                 $(self.$lower_inner_name.is_empty() &&)* true
             }
 
+            /// returns whether the struct is has all bits set
+            pub const fn is_all(self) -> bool {
+                $(self.$lower_inner_name.is_all() &&)* true
+            }
+
             bitflags_independent_two_arg! {
                 /// Bitwise or - self | other
                 union $($lower_inner_name)*
@@ -412,6 +417,11 @@ macro_rules! bitflags_array {
             /// Removes specified flag(s)
             pub fn remove(&mut self, other:Self) {
                 $(self.$lower_inner_name.remove(other.$lower_inner_name);)*
+            }
+
+            /// Toggles specified flag(s)
+            pub fn toggle(&mut self, other:Self) {
+                $(self.$lower_inner_name.toggle(other.$lower_inner_name);)*
             }
 
             /// Takes in `Bits` and returns Self or None if there are invalid bits
