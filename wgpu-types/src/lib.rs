@@ -250,9 +250,10 @@ macro_rules! bit_array_impl {
 }
 
 macro_rules! bitflags_independent_two_arg {
-    ($func_name:ident $($struct_names:ident)*) => (
-        pub const fn func_name(self, other:Self) -> Self {
-            Self { $($struct_names: self.$struct_names.func_name(other.$struct_names),)* }
+    ($(#[$meta:meta])* $func_name:ident $($struct_names:ident)*) => (
+        $(#[$meta])*
+        pub const fn $func_name(self, other:Self) -> Self {
+            Self { $($struct_names: self.$struct_names.$func_name(other.$struct_names),)* }
         }
     )
 }
@@ -368,27 +369,30 @@ macro_rules! bitflags_array {
                 $(self.$lower_inner_name.intersects(other.$lower_inner_name) ||)* false
             }
 
-            /// Whether any bit set in self matched any bit set in other
-            pub const fn contains_invalid_bits(self, other:Self) -> bool {
-                $(self.$lower_inner_name.contains_invalid_bits(other.$lower_inner_name) ||)* false
-            }
-
             /// returns whether the struct is empty
             pub const fn is_empty(self) -> bool {
                 $(self.$lower_inner_name.is_empty() &&)* true
             }
 
-            /// Bitwise or - self | other
-            bitflags_independent_two_arg! { union $($lower_inner_name)* }
+            bitflags_independent_two_arg! {
+                /// Bitwise or - self | other
+                union $($lower_inner_name)*
+            }
 
-            /// Bitwise and - self & other
-            bitflags_independent_two_arg! { intersection $($lower_inner_name)* }
+            bitflags_independent_two_arg! {
+                /// Bitwise and - self & other
+                intersection $($lower_inner_name)*
+            }
 
-            /// Bitwise and of the complement - self & !other
-            bitflags_independent_two_arg! { difference $($lower_inner_name)* }
+            bitflags_independent_two_arg! {
+                /// Bitwise and of the complement - self & !other
+                difference $($lower_inner_name)*
+            }
 
-            /// Bitwise xor - self ^ other
-            bitflags_independent_two_arg! { symmetric_difference $($lower_inner_name)* }
+            bitflags_independent_two_arg! {
+                /// Bitwise xor - self ^ other
+                symmetric_difference $($lower_inner_name)*
+            }
 
             /// Bitwise not - !self
             pub const fn complement(self) -> Self {
@@ -413,7 +417,11 @@ macro_rules! bitflags_array {
             /// Takes in `Bits` and returns Self or None if there are invalid bits
             pub const fn from_bits(bits:Bits) -> Option<Self> {
                 let [$($lower_inner_name,)*] = bits.0;
-                Self { $($lower_inner_name: $inner_name::from_bits($lower_inner_name)?,)* }
+                Some(Self { $($lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
+                    $lower_inner_name
+                } else {
+                    return None
+                },)* })
             }
 
             /// Takes in `Bits` and returns Self with only valid bits
