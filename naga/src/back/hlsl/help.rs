@@ -873,11 +873,9 @@ impl<W: Write> super::Writer<'_, W> {
                             self.write_committed_intersection_function(module)?;
                             self.written_committed_intersection = true;
                         }
-                    } else {
-                        if !self.written_candidate_intersection {
-                            self.write_candidate_intersection_function(module)?;
-                            self.written_candidate_intersection = true;
-                        }
+                    } else if !self.written_candidate_intersection {
+                        self.write_candidate_intersection_function(module)?;
+                        self.written_candidate_intersection = true;
                     }
                 }
                 _ => {}

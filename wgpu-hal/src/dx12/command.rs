@@ -5,7 +5,10 @@ use crate::{
     AccelerationStructureEntries,
 };
 use std::{mem, ops::Range};
-use windows::Win32::{Foundation, Graphics::{Direct3D12, Dxgi}};
+use windows::Win32::{
+    Foundation,
+    Graphics::{Direct3D12, Dxgi},
+};
 use windows_core::Interface;
 
 fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> Direct3D12::D3D12_BOX {
