@@ -105,6 +105,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
             written_committed_intersection: false,
+            written_candidate_intersection: false,
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
@@ -125,6 +126,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.named_expressions.clear();
         self.wrapped.clear();
         self.written_committed_intersection = false;
+        self.written_candidate_intersection = false;
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
     }

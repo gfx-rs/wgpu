@@ -333,6 +333,7 @@ pub struct Writer<'a, W> {
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,
     written_committed_intersection: bool,
+    written_candidate_intersection: bool,
     continue_ctx: back::continue_forward::ContinueCtx,
 
     /// A reference to some part of a global variable, lowered to a series of

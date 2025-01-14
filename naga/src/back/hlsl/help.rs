@@ -869,9 +869,15 @@ impl<W: Write> super::Writer<'_, W> {
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
                     if committed {
-                        self.write_committed_intersection_function(module)?;
+                        if !self.written_committed_intersection {
+                            self.write_committed_intersection_function(module)?;
+                            self.written_committed_intersection = true;
+                        }
                     } else {
-                        self.write_candidate_intersection_function(module)?;
+                        if !self.written_candidate_intersection {
+                            self.write_candidate_intersection_function(module)?;
+                            self.written_candidate_intersection = true;
+                        }
                     }
                 }
                 _ => {}
