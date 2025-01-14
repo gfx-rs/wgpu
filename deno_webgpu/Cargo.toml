@@ -36,7 +36,7 @@ features = [
 ]
 
 # We want the wgpu-core Metal backend on macOS and iOS.
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.wgpu-core]
+[target.'cfg(target_vendor = "apple")'.dependencies.wgpu-core]
 workspace = true
 features = ["metal"]
 

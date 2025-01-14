@@ -538,12 +538,19 @@ impl Adapter {
         allowed_usages.set(
             wgt::TextureUsages::STORAGE_BINDING,
             caps.intersects(
-                Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_READ_WRITE,
+                Tfc::STORAGE_WRITE_ONLY
+                    | Tfc::STORAGE_READ_ONLY
+                    | Tfc::STORAGE_READ_WRITE
+                    | Tfc::STORAGE_ATOMIC,
             ),
         );
         allowed_usages.set(
             wgt::TextureUsages::RENDER_ATTACHMENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
+        );
+        allowed_usages.set(
+            wgt::TextureUsages::STORAGE_ATOMIC,
+            caps.contains(Tfc::STORAGE_ATOMIC),
         );
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
@@ -558,6 +565,11 @@ impl Adapter {
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
             caps.contains(Tfc::STORAGE_READ_WRITE),
+        );
+
+        flags.set(
+            wgt::TextureFormatFeatureFlags::STORAGE_ATOMIC,
+            caps.contains(Tfc::STORAGE_ATOMIC),
         );
 
         flags.set(

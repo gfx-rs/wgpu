@@ -28,6 +28,8 @@ targets = [
 [lib]
 
 [features]
+default = ["std"]
+std = ["js-sys/std", "web-sys/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde"]
@@ -39,11 +41,14 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
-serde = { workspace = true, features = ["derive"], optional = true }
+serde = { workspace = true, default-features = false, features = [
+    "alloc",
+    "derive",
+], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys.workspace = true
-web-sys = { workspace = true, features = [
+js-sys = { workspace = true, default-features = false }
+web-sys = { workspace = true, default-features = false, features = [
     "ImageBitmap",
     "ImageData",
     "HtmlImageElement",
@@ -56,3 +61,8 @@ web-sys = { workspace = true, features = [
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+
+[lints.clippy]
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"

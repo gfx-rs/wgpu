@@ -33,8 +33,7 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 ///
 /// Each one contains:
 /// - A reference to a BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
-///   TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
-///   using [Blas::destroy]) the TlasInstance becomes invalid
+///   TlasInstance that references a BLAS keeps that BLAS from being dropped
 /// - A user accessible transformation matrix
 /// - A user accessible mask
 /// - A user accessible custom index
@@ -148,22 +147,25 @@ impl Blas {
     pub fn handle(&self) -> Option<u64> {
         self.handle
     }
-    /// Destroy the associated native resources as soon as possible.
-    pub fn destroy(&self) {
-        self.inner.destroy();
-    }
 }
 
 /// Context version of [BlasTriangleGeometry].
-#[allow(dead_code)]
 pub struct ContextBlasTriangleGeometry<'a> {
+    #[expect(dead_code)]
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
+    #[expect(dead_code)]
     pub(crate) vertex_buffer: &'a dispatch::DispatchBuffer,
+    #[expect(dead_code)]
     pub(crate) index_buffer: Option<&'a dispatch::DispatchBuffer>,
+    #[expect(dead_code)]
     pub(crate) transform_buffer: Option<&'a dispatch::DispatchBuffer>,
+    #[expect(dead_code)]
     pub(crate) first_vertex: u32,
+    #[expect(dead_code)]
     pub(crate) vertex_stride: wgt::BufferAddress,
+    #[expect(dead_code)]
     pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
+    #[expect(dead_code)]
     pub(crate) transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 
@@ -174,8 +176,9 @@ pub enum ContextBlasGeometries<'a> {
 }
 
 /// Context version see [BlasBuildEntry].
-#[allow(dead_code)]
 pub struct ContextBlasBuildEntry<'a> {
+    #[expect(dead_code)]
     pub(crate) blas: &'a dispatch::DispatchBlas,
+    #[expect(dead_code)]
     pub(crate) geometries: ContextBlasGeometries<'a>,
 }

@@ -52,6 +52,8 @@ bitflags::bitflags! {
         const TEXTURE_SHADOW_LOD = 1 << 23;
         /// Subgroup operations
         const SUBGROUP_OPERATIONS = 1 << 24;
+        /// Image atomics
+        const TEXTURE_ATOMICS = 1 << 25;
     }
 }
 
@@ -120,6 +122,7 @@ impl FeaturesManager {
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(DUAL_SOURCE_BLENDING, 330, 300 /* with extension */);
         check_feature!(SUBGROUP_OPERATIONS, 430, 310);
+        check_feature!(TEXTURE_ATOMICS, 420, 310);
         match version {
             Version::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
             _ => check_feature!(MULTI_VIEW, 140, 310),
@@ -276,6 +279,11 @@ impl FeaturesManager {
                 out,
                 "#extension GL_KHR_shader_subgroup_shuffle_relative : require"
             )?;
+        }
+
+        if self.0.contains(Features::TEXTURE_ATOMICS) {
+            // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_shader_image_atomic.txt
+            writeln!(out, "#extension GL_OES_shader_image_atomic : require")?;
         }
 
         Ok(())
@@ -543,6 +551,22 @@ impl<W> Writer<'_, W> {
                 }
                 _ => {}
             }
+            }
+        }
+
+        for blocks in module
+            .functions
+            .iter()
+            .map(|(_, f)| &f.body)
+            .chain(std::iter::once(&entry_point.function.body))
+        {
+            for (stmt, _) in blocks.span_iter() {
+                match *stmt {
+                    crate::Statement::ImageAtomic { .. } => {
+                        features.request(Features::TEXTURE_ATOMICS)
+                    }
+                    _ => {}
+                }
             }
         }
 

@@ -15,7 +15,7 @@ arbitrary = { version = "1.4.1", features = ["derive"] }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies.naga]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dependencies.naga]
 path = ".."
 version = "23.0.0"
 features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in"]

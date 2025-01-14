@@ -7,7 +7,7 @@ fn main() {
         webgl: { all(target_arch = "wasm32", not(target_os = "emscripten"), gles) },
         dx12: { all(target_os = "windows", feature = "dx12") },
         gles: { all(feature = "gles") },
-        metal: { all(any(target_os = "ios", target_os = "macos"), feature = "metal") },
+        metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { all(not(target_arch = "wasm32"), feature = "vulkan") }
     }
 }

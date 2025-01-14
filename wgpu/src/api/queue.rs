@@ -26,7 +26,14 @@ crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
-    #[cfg_attr(not(native), allow(dead_code))]
+    #[cfg_attr(
+        all(
+            target_arch = "wasm32",
+            not(target_os = "emscripten"),
+            not(feature = "webgl"),
+        ),
+        expect(dead_code)
+    )]
     pub(crate) index: u64,
 }
 #[cfg(send_sync)]

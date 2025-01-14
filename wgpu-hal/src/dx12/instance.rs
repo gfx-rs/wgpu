@@ -72,14 +72,13 @@ impl crate::Instance for super::Instance {
                 dxil_path,
                 dxc_path,
             } => {
-                let container =
-                    super::shader_compilation::get_dynamic_dxc_container(dxc_path, dxil_path)
-                        .map_err(|e| {
-                            crate::InstanceError::with_source(
-                                String::from("Failed to load dynamic DXC"),
-                                e,
-                            )
-                        })?;
+                let container = super::shader_compilation::get_dynamic_dxc_container(
+                    dxc_path.into(),
+                    dxil_path.into(),
+                )
+                .map_err(|e| {
+                    crate::InstanceError::with_source(String::from("Failed to load dynamic DXC"), e)
+                })?;
 
                 Some(Arc::new(container))
             }

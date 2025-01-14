@@ -2,6 +2,7 @@
 
 mod defined_non_null_js_value;
 mod ext_bindings;
+#[allow(clippy::allow_attributes)]
 mod webgpu_sys;
 
 use js_sys::Promise;
@@ -1563,6 +1564,40 @@ impl dispatch::InstanceInterface for ContextWebGpu {
         // Devices are automatically polled.
         true
     }
+
+    #[cfg(feature = "wgsl")]
+    fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures {
+        let mut wgsl_language_features = crate::WgslLanguageFeatures::empty();
+        if let Some(gpu) = &self.gpu {
+            gpu.wgsl_language_features()
+                .keys()
+                .into_iter()
+                .map(|wlf| wlf.expect("`WgslLanguageFeatures` elements should be valid"))
+                .map(|wlf| {
+                    wlf.as_string()
+                        .expect("`WgslLanguageFeatures` should be string set")
+                })
+                .filter_map(|wlf| match wlf.as_str() {
+                    "readonly_and_readwrite_storage_textures" => {
+                        Some(crate::WgslLanguageFeatures::ReadOnlyAndReadWriteStorageTextures)
+                    }
+                    "packed_4x8_integer_dot_product" => {
+                        Some(crate::WgslLanguageFeatures::Packed4x8IntegerDotProduct)
+                    }
+                    "unrestricted_pointer_parameters" => {
+                        Some(crate::WgslLanguageFeatures::UnrestrictedPointerParameters)
+                    }
+                    "pointer_composite_access" => {
+                        Some(crate::WgslLanguageFeatures::PointerCompositeAccess)
+                    }
+                    _ => None,
+                })
+                .for_each(|wlf| {
+                    wgsl_language_features |= wlf;
+                })
+        }
+        wgsl_language_features
+    }
 }
 
 impl Drop for ContextWebGpu {
@@ -1895,6 +1930,10 @@ impl dispatch::DeviceInterface for WebDevice {
                             }
                             wgt::StorageTextureAccess::ReadWrite => {
                                 webgpu_sys::GpuStorageTextureAccess::ReadWrite
+                            }
+                            wgt::StorageTextureAccess::Atomic => {
+                                // Validated out by `BindGroupLayoutEntryError::StorageTextureAtomic`
+                                unreachable!()
                             }
                         };
                         let storage_texture = webgpu_sys::GpuStorageTextureBindingLayout::new(
@@ -2705,22 +2744,14 @@ impl Drop for WebTexture {
     }
 }
 
-impl dispatch::BlasInterface for WebBlas {
-    fn destroy(&self) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-}
+impl dispatch::BlasInterface for WebBlas {}
 impl Drop for WebBlas {
     fn drop(&mut self) {
         // no-op
     }
 }
 
-impl dispatch::TlasInterface for WebTlas {
-    fn destroy(&self) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-}
+impl dispatch::TlasInterface for WebTlas {}
 impl Drop for WebTlas {
     fn drop(&mut self) {
         // no-op

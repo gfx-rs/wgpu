@@ -118,13 +118,17 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
     }
 }
 
-#[allow(dead_code)]
 struct Example {
     rt_target: wgpu::Texture,
+    #[expect(dead_code)]
     rt_view: wgpu::TextureView,
+    #[expect(dead_code)]
     sampler: wgpu::Sampler,
+    #[expect(dead_code)]
     uniform_buf: wgpu::Buffer,
+    #[expect(dead_code)]
     vertex_buf: wgpu::Buffer,
+    #[expect(dead_code)]
     index_buf: wgpu::Buffer,
     tlas_package: wgpu::TlasPackage,
     compute_pipeline: wgpu::ComputePipeline,

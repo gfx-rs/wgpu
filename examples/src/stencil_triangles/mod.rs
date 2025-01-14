@@ -1,5 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
