@@ -80,7 +80,7 @@ arrayvec = "0.7"
 bincode = "1"
 bit-vec = "0.8"
 bitflags = "2.7"
-bytemuck = { version = "1.21" }
+bytemuck = { version = "1.21", features = ["derive", "min_const_generics"] }
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -134,7 +134,13 @@ strum = { version = "0.26.0", features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
 thiserror = "2"
-wgpu = { version = "23.0.1", path = "./wgpu", default-features = false }
+wgpu = { version = "23.0.1", path = "./wgpu", default-features = false, features = [
+    "serde",
+    "wgsl",
+    "dx12",
+    "metal",
+    "static-dxc",
+] }
 wgpu-core = { version = "23.0.1", path = "./wgpu-core" }
 wgpu-macros = { version = "23.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "23.0.0", path = "./tests" }
