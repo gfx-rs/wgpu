@@ -524,6 +524,10 @@ bitflags_array! {
         /// - DX12
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/pipeline-statistics-query.md) for the web.
+        ///
+        /// [`RenderPass::begin_pipeline_statistics_query`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.begin_pipeline_statistics_query
+        /// [`RenderPass::end_pipeline_statistics_query`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.end_pipeline_statistics_query
+        /// [`CommandEncoder::resolve_query_set`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.resolve_query_set
         const PIPELINE_STATISTICS_QUERY = 1 << 4;
         /// Allows for timestamp queries directly on command encoders.
         ///
@@ -538,6 +542,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        ///
         /// [`CommandEncoder::write_timestamp`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.write_timestamp
         const TIMESTAMP_QUERY_INSIDE_ENCODERS = 1 << 5;
         /// Allows for timestamp queries directly on command encoders.
@@ -556,6 +561,7 @@ bitflags_array! {
         /// This is generally not available on tile-based rasterization GPUs.
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
+        ///
         /// [`RenderPass::write_timestamp`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.write_timestamp
         /// [`ComputePass::write_timestamp`]: https://docs.rs/wgpu/latest/wgpu/struct.ComputePass.html#method.write_timestamp
         const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 6;
@@ -826,6 +832,7 @@ bitflags_array! {
         /// Vulkan implementation.
         ///
         /// This is a native only feature.
+        ///
         /// [`wgpu::make_spirv_raw!`]: https://docs.rs/wgpu/latest/wgpu/macro.include_spirv_raw.html
         const SPIRV_SHADER_PASSTHROUGH = 1 << 24;
         /// Enables multiview render passes and `builtin(view_index)` in vertex shaders.
