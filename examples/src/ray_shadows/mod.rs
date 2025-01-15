@@ -258,7 +258,7 @@ impl crate::framework::Example for Example {
                         first_vertex: 0,
                         vertex_stride: mem::size_of::<Vertex>() as u64,
                         index_buffer: Some(&index_buf),
-                        index_buffer_offset: Some(0),
+                        first_index: Some(0),
                         transform_buffer: None,
                         transform_buffer_offset: None,
                     },

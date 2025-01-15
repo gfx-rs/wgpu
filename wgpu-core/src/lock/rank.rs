@@ -149,7 +149,6 @@ define_lock_ranks! {
     rank BLAS_STATE "Blas::being_built" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
-    rank TLAS_BIND_GROUPS "Tlas::bind_groups" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

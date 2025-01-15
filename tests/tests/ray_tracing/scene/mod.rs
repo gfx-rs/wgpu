@@ -85,7 +85,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
                 first_vertex: 0,
                 vertex_stride: mem::size_of::<mesh_gen::Vertex>() as u64,
                 index_buffer: use_index_buffer.then_some(&index_buffer),
-                index_buffer_offset: use_index_buffer.then_some(0),
+                first_index: use_index_buffer.then_some(0),
                 transform_buffer: None,
                 transform_buffer_offset: None,
             }]),

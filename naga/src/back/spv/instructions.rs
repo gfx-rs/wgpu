@@ -702,6 +702,41 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn image_texel_pointer(
+        result_type_id: Word,
+        id: Word,
+        image: Word,
+        coordinates: Word,
+        sample: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::ImageTexelPointer);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(image);
+        instruction.add_operand(coordinates);
+        instruction.add_operand(sample);
+        instruction
+    }
+
+    pub(super) fn image_atomic(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        pointer: Word,
+        scope_id: Word,
+        semantics_id: Word,
+        value: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(pointer);
+        instruction.add_operand(scope_id);
+        instruction.add_operand(semantics_id);
+        instruction.add_operand(value);
+        instruction
+    }
+
     pub(super) fn image_query(op: Op, result_type_id: Word, id: Word, image: Word) -> Self {
         let mut instruction = Self::new(op);
         instruction.set_type(result_type_id);

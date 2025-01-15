@@ -1,6 +1,7 @@
 use std::{
     error, fmt,
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
+    sync::Arc,
 };
 
 use parking_lot::Mutex;
@@ -167,10 +168,10 @@ use crate::*;
 /// [mac]: BufferDescriptor::mapped_at_creation
 /// [`MAP_READ`]: BufferUsages::MAP_READ
 /// [`MAP_WRITE`]: BufferUsages::MAP_WRITE
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Buffer {
     pub(crate) inner: dispatch::DispatchBuffer,
-    pub(crate) map_context: Mutex<MapContext>,
+    pub(crate) map_context: Arc<Mutex<MapContext>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) usage: BufferUsages,
     // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate

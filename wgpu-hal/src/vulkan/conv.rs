@@ -266,7 +266,8 @@ pub fn map_texture_usage(usage: crate::TextureUses) -> vk::ImageUsageFlags {
     if usage.intersects(
         crate::TextureUses::STORAGE_READ_ONLY
             | crate::TextureUses::STORAGE_WRITE_ONLY
-            | crate::TextureUses::STORAGE_READ_WRITE,
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC,
     ) {
         flags |= vk::ImageUsageFlags::STORAGE;
     }
@@ -309,15 +310,19 @@ pub fn map_texture_usage_to_barrier(
         access |= vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
             | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE;
     }
-    if usage
-        .intersects(crate::TextureUses::STORAGE_READ_ONLY | crate::TextureUses::STORAGE_READ_WRITE)
-    {
+    if usage.intersects(
+        crate::TextureUses::STORAGE_READ_ONLY
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC,
+    ) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_READ;
     }
-    if usage
-        .intersects(crate::TextureUses::STORAGE_WRITE_ONLY | crate::TextureUses::STORAGE_READ_WRITE)
-    {
+    if usage.intersects(
+        crate::TextureUses::STORAGE_WRITE_ONLY
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC,
+    ) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_WRITE;
     }
@@ -352,7 +357,8 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUses {
     if usage.contains(vk::ImageUsageFlags::STORAGE) {
         bits |= crate::TextureUses::STORAGE_READ_ONLY
             | crate::TextureUses::STORAGE_WRITE_ONLY
-            | crate::TextureUses::STORAGE_READ_WRITE;
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC;
     }
     bits
 }

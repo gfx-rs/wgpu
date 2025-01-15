@@ -1,6 +1,7 @@
+use alloc::{string::String, vec::Vec};
 #[cfg(feature = "counters")]
-use std::sync::atomic::{AtomicIsize, Ordering};
-use std::{fmt, ops::Range};
+use core::sync::atomic::{AtomicIsize, Ordering};
+use core::{fmt, ops::Range};
 
 /// An internal counter for debugging purposes
 ///
@@ -95,8 +96,8 @@ impl Default for InternalCounter {
     }
 }
 
-impl std::fmt::Debug for InternalCounter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for InternalCounter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.read().fmt(f)
     }
 }
@@ -125,6 +126,8 @@ pub struct HalCounters {
     pub buffer_memory: InternalCounter,
     /// Amount of allocated gpu memory attributed to textures, in bytes.
     pub texture_memory: InternalCounter,
+    /// Amount of allocated gpu memory attributed to acceleration structures, in bytes.
+    pub acceleration_structure_memory: InternalCounter,
     /// Number of gpu memory allocations.
     pub memory_allocations: InternalCounter,
 }
@@ -192,7 +195,7 @@ impl fmt::Debug for AllocationReport {
 impl fmt::Debug for AllocatorReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut allocations = self.allocations.clone();
-        allocations.sort_by_key(|alloc| std::cmp::Reverse(alloc.size));
+        allocations.sort_by_key(|alloc| core::cmp::Reverse(alloc.size));
 
         let max_num_allocations_to_print = f.precision().unwrap_or(usize::MAX);
         allocations.truncate(max_num_allocations_to_print);
@@ -200,7 +203,7 @@ impl fmt::Debug for AllocatorReport {
         f.debug_struct("AllocatorReport")
             .field(
                 "summary",
-                &std::format_args!(
+                &core::format_args!(
                     "{} / {}",
                     FmtBytes(self.total_allocated_bytes),
                     FmtBytes(self.total_reserved_bytes)

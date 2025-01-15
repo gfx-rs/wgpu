@@ -13,7 +13,7 @@ use crate::*;
 /// Does not have to be kept alive.
 ///
 /// Corresponds to [WebGPU `GPUAdapter`](https://gpuweb.github.io/gpuweb/#gpu-adapter).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Adapter {
     pub(crate) inner: dispatch::DispatchAdapter,
 }

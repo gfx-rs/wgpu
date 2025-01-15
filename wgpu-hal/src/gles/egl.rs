@@ -785,7 +785,7 @@ impl crate::Instance for Instance {
                     "libEGL.dll",
                 )
             }
-        } else if cfg!(any(target_os = "macos", target_os = "ios")) {
+        } else if cfg!(target_vendor = "apple") {
             unsafe {
                 khronos_egl::DynamicInstance::<khronos_egl::EGL1_4>::load_required_from_filename(
                     "libEGL.dylib",

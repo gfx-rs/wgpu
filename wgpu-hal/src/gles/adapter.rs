@@ -372,6 +372,8 @@ impl super::Adapter {
         } else {
             vertex_shader_storage_textures.min(fragment_shader_storage_textures)
         };
+        let indirect_execution =
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect");
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
@@ -383,10 +385,7 @@ impl super::Adapter {
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
             max_storage_block_size != 0,
         );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::INDIRECT_EXECUTION,
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect"),
-        );
+        downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, indirect_execution);
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, supported((3, 2), (3, 2)));
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLEND,
@@ -471,6 +470,8 @@ impl super::Adapter {
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
+        // We emulate MDI with a loop of draw calls.
+        features.set(wgt::Features::MULTI_DRAW_INDIRECT, indirect_execution);
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);
@@ -663,8 +664,9 @@ impl super::Adapter {
                 .min(crate::MAX_COLOR_ATTACHMENTS as i32) as u32
         };
 
-        // TODO: programmatically determine this.
-        let max_color_attachment_bytes_per_sample = 32;
+        // 16 bytes per sample is the maximum size of a color attachment.
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
@@ -1080,6 +1082,8 @@ impl crate::Adapter for super::Adapter {
 
         let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
+        let image_atomic = feature_fn(wgt::Features::TEXTURE_ATOMIC, Tfc::STORAGE_ATOMIC);
+
         match format {
             Tf::R8Unorm => filterable_renderable,
             Tf::R8Snorm => filterable,
@@ -1094,8 +1098,8 @@ impl crate::Adapter for super::Adapter {
             Tf::Rg8Snorm => filterable,
             Tf::Rg8Uint => renderable,
             Tf::Rg8Sint => renderable,
-            Tf::R32Uint => renderable | storage,
-            Tf::R32Sint => renderable | storage,
+            Tf::R32Uint => renderable | storage | image_atomic,
+            Tf::R32Sint => renderable | storage | image_atomic,
             Tf::R32Float => unfilterable | storage | float_renderable | texture_float_linear,
             Tf::Rg16Uint => renderable,
             Tf::Rg16Sint => renderable,

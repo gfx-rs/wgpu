@@ -45,7 +45,7 @@ serde_json.workspace = true
 serde.workspace = true
 strum = { workspace = true, features = ["derive"] }
 trybuild.workspace = true
-wgpu = { workspace = true, features = ["wgsl", "static-dxc"] }
+wgpu.workspace = true
 wgpu-macros.workspace = true
 wgt = { workspace = true, features = ["serde"] }
 

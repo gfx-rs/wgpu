@@ -1,9 +1,9 @@
 struct ExampleDesc {
     name: &'static str,
     function: fn(),
-    #[allow(dead_code)] // isn't used on native
+    #[cfg_attr(not(target_arch = "wasm32"), expect(dead_code))]
     webgl: bool,
-    #[allow(dead_code)] // isn't used on native
+    #[cfg_attr(not(target_arch = "wasm32"), expect(dead_code))]
     webgpu: bool,
 }
 

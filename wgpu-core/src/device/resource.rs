@@ -38,7 +38,7 @@ use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
 
-use crate::resource::{AccelerationStructure, DestroyedResourceError, Tlas};
+use crate::resource::{AccelerationStructure, Tlas};
 use std::{
     borrow::Cow,
     mem::{self, ManuallyDrop},
@@ -1790,6 +1790,14 @@ impl Device {
                         _ => (),
                     }
                     match access {
+                        wgt::StorageTextureAccess::Atomic
+                            if !self.features.contains(wgt::Features::TEXTURE_ATOMIC) =>
+                        {
+                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                                binding: entry.binding,
+                                error: BindGroupLayoutEntryError::StorageTextureAtomic,
+                            });
+                        }
                         wgt::StorageTextureAccess::ReadOnly
                         | wgt::StorageTextureAccess::ReadWrite
                             if !self.features.contains(
@@ -1818,6 +1826,10 @@ impl Device {
                             wgt::StorageTextureAccess::ReadWrite => {
                                 required_features |=
                                     wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+                                WritableStorage::Yes
+                            }
+                            wgt::StorageTextureAccess::Atomic => {
+                                required_features |= wgt::Features::TEXTURE_ATOMIC;
                                 WritableStorage::Yes
                             }
                         },
@@ -2174,9 +2186,7 @@ impl Device {
             }
         }
 
-        Ok(tlas
-            .raw(snatch_guard)
-            .ok_or(DestroyedResourceError(tlas.error_ident()))?)
+        Ok(tlas.try_raw(snatch_guard)?)
     }
 
     // This function expects the provided bind group layout to be resolved
@@ -2550,6 +2560,17 @@ impl Device {
 
                         hal::TextureUses::STORAGE_READ_WRITE
                     }
+                    wgt::StorageTextureAccess::Atomic => {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_ATOMIC)
+                        {
+                            return Err(Error::StorageAtomicNotSupported(view.desc.format));
+                        }
+
+                        hal::TextureUses::STORAGE_ATOMIC
+                    }
                 };
                 view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;
                 Ok(internal_use)
@@ -2901,18 +2922,8 @@ impl Device {
         let mut shader_expects_dual_source_blending = false;
         let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
-            let mut last_stride = 0;
-            for attribute in vb_state.attributes.iter() {
-                last_stride = last_stride.max(attribute.offset + attribute.format.size());
-            }
-            vertex_steps.push(pipeline::VertexStep {
-                stride: vb_state.array_stride,
-                last_stride,
-                mode: vb_state.step_mode,
-            });
-            if vb_state.attributes.is_empty() {
-                continue;
-            }
+            // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
+
             if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
                 return Err(pipeline::CreateRenderPipelineError::VertexStrideTooLarge {
                     index: i as u32,
@@ -2925,6 +2936,54 @@ impl Device {
                     index: i as u32,
                     stride: vb_state.array_stride,
                 });
+            }
+
+            let max_stride = if vb_state.array_stride == 0 {
+                self.limits.max_vertex_buffer_array_stride as u64
+            } else {
+                vb_state.array_stride
+            };
+            let mut last_stride = 0;
+            for attribute in vb_state.attributes.iter() {
+                let attribute_stride = attribute.offset + attribute.format.size();
+                if attribute_stride > max_stride {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::VertexAttributeStrideTooLarge {
+                            location: attribute.shader_location,
+                            given: attribute_stride as u32,
+                            limit: max_stride as u32,
+                        },
+                    );
+                }
+
+                let required_offset_alignment = attribute.format.size().min(4);
+                if attribute.offset % required_offset_alignment != 0 {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
+                            location: attribute.shader_location,
+                            offset: attribute.offset,
+                        },
+                    );
+                }
+
+                if attribute.shader_location >= self.limits.max_vertex_attributes {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
+                            given: attribute.shader_location,
+                            limit: self.limits.max_vertex_attributes,
+                        },
+                    );
+                }
+
+                last_stride = last_stride.max(attribute_stride);
+            }
+            vertex_steps.push(pipeline::VertexStep {
+                stride: vb_state.array_stride,
+                last_stride,
+                mode: vb_state.step_mode,
+            });
+            if vb_state.attributes.is_empty() {
+                continue;
             }
             vertex_buffers.push(hal::VertexBufferLayout {
                 array_stride: vb_state.array_stride,

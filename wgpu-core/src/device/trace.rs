@@ -132,13 +132,11 @@ pub enum Action<'a> {
         desc: crate::resource::BlasDescriptor<'a>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     },
-    FreeBlas(id::BlasId),
     DestroyBlas(id::BlasId),
     CreateTlas {
         id: id::TlasId,
         desc: crate::resource::TlasDescriptor<'a>,
     },
-    FreeTlas(id::TlasId),
     DestroyTlas(id::TlasId),
 }
 

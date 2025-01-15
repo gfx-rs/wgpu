@@ -36,6 +36,14 @@ const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+/// For some reason, Metal does not let you have `metal::texture<..>*` as a buffer argument.
+/// However, if you put that texture inside a struct, everything is totally fine. This
+/// baffles me to no end.
+///
+/// As such, we wrap all argument buffers in a struct that has a single generic `<T>` field.
+/// This allows `NagaArgumentBufferWrapper<metal::texture<..>>*` to work. The astute among
+/// you have noticed that this should be exactly the same to the compiler, and you're correct.
+pub(crate) const ARGUMENT_BUFFER_WRAPPER_STRUCT: &str = "NagaArgumentBufferWrapper";
 
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
@@ -275,24 +283,17 @@ impl Display for TypeContext<'_> {
             crate::TypeInner::RayQuery => {
                 write!(out, "{RAY_QUERY_TYPE}")
             }
-            crate::TypeInner::BindingArray { base, size } => {
+            crate::TypeInner::BindingArray { base, .. } => {
                 let base_tyname = Self {
                     handle: base,
                     first_time: false,
                     ..*self
                 };
 
-                if let Some(&super::ResolvedBinding::Resource(super::BindTarget {
-                    binding_array_size: Some(override_size),
-                    ..
-                })) = self.binding
-                {
-                    write!(out, "{NAMESPACE}::array<{base_tyname}, {override_size}>")
-                } else if let crate::ArraySize::Constant(size) = size {
-                    write!(out, "{NAMESPACE}::array<{base_tyname}, {size}>")
-                } else {
-                    unreachable!("metal requires all arrays be constant sized");
-                }
+                write!(
+                    out,
+                    "constant {ARGUMENT_BUFFER_WRAPPER_STRUCT}<{base_tyname}>*"
+                )
             }
         }
     }
@@ -343,7 +344,7 @@ impl TypedGlobalVariable<'_> {
         let (space, access, reference) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
                 let access = if var.space.needs_access_qualifier()
-                    && !self.usage.contains(valid::GlobalUse::WRITE)
+                    && !self.usage.intersects(valid::GlobalUse::WRITE)
                 {
                     "const"
                 } else {
@@ -1196,6 +1197,28 @@ impl<W: Write> Writer<W> {
             }
         }
         write!(self.out, ")")?;
+
+        Ok(())
+    }
+
+    fn put_image_atomic(
+        &mut self,
+        level: back::Level,
+        image: Handle<crate::Expression>,
+        address: &TexelAddress,
+        fun: crate::AtomicFunction,
+        value: Handle<crate::Expression>,
+        context: &StatementContext,
+    ) -> BackendResult {
+        write!(self.out, "{level}")?;
+        self.put_expression(image, &context.expression, false)?;
+        let op = fun.to_msl();
+        write!(self.out, ".atomic_{}(", op)?;
+        // coordinates in IR are int, but Metal expects uint
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;
+        write!(self.out, ", ")?;
+        self.put_expression(value, &context.expression, true)?;
+        writeln!(self.out, ");")?;
 
         Ok(())
     }
@@ -2552,6 +2575,8 @@ impl<W: Write> Writer<W> {
             } => true,
             _ => false,
         };
+        let accessing_wrapped_binding_array =
+            matches!(*base_ty, crate::TypeInner::BindingArray { .. });
 
         self.put_access_chain(base, policy, context)?;
         if accessing_wrapped_array {
@@ -2587,6 +2612,10 @@ impl<W: Write> Writer<W> {
         }
 
         write!(self.out, "]")?;
+
+        if accessing_wrapped_binding_array {
+            write!(self.out, ".{WRAPPED_ARRAY_FIELD}")?;
+        }
 
         Ok(())
     }
@@ -3241,6 +3270,21 @@ impl<W: Write> Writer<W> {
                     // Done
                     writeln!(self.out, ";")?;
                 }
+                crate::Statement::ImageAtomic {
+                    image,
+                    coordinate,
+                    array_index,
+                    fun,
+                    value,
+                } => {
+                    let address = TexelAddress {
+                        coordinate,
+                        array_index,
+                        sample: None,
+                        level: None,
+                    };
+                    self.put_image_atomic(level, image, &address, fun, value, context)?
+                }
                 crate::Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
@@ -3701,7 +3745,18 @@ impl<W: Write> Writer<W> {
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> BackendResult {
+        let mut generated_argument_buffer_wrapper = false;
         for (handle, ty) in module.types.iter() {
+            if let crate::TypeInner::BindingArray { .. } = ty.inner {
+                if !generated_argument_buffer_wrapper {
+                    writeln!(self.out, "template <typename T>")?;
+                    writeln!(self.out, "struct {ARGUMENT_BUFFER_WRAPPER_STRUCT} {{")?;
+                    writeln!(self.out, "{}T {WRAPPED_ARRAY_FIELD};", back::INDENT)?;
+                    writeln!(self.out, "}};")?;
+                    generated_argument_buffer_wrapper = true;
+                }
+            }
+
             if !ty.needs_alias() {
                 continue;
             }
@@ -3830,17 +3885,17 @@ impl<W: Write> Writer<W> {
         // Write functions to create special types.
         for (type_key, struct_ty) in module.special_types.predeclared_types.iter() {
             match type_key {
-                &crate::PredeclaredType::ModfResult { size, width }
-                | &crate::PredeclaredType::FrexpResult { size, width } => {
+                &crate::PredeclaredType::ModfResult { size, scalar }
+                | &crate::PredeclaredType::FrexpResult { size, scalar } => {
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
                         arg_type_name_owner = format!(
                             "{NAMESPACE}::{}{}",
-                            if width == 8 { "double" } else { "float" },
+                            if scalar.width == 8 { "double" } else { "float" },
                             size as u8
                         );
                         &arg_type_name_owner
-                    } else if width == 8 {
+                    } else if scalar.width == 8 {
                         "double"
                     } else {
                         "float"
@@ -5132,13 +5187,10 @@ template <typename A>
                             let target = options.get_resource_binding_target(ep, br);
                             let good = match target {
                                 Some(target) => {
-                                    let binding_ty = match module.types[var.ty].inner {
-                                        crate::TypeInner::BindingArray { base, .. } => {
-                                            &module.types[base].inner
-                                        }
-                                        ref ty => ty,
-                                    };
-                                    match *binding_ty {
+                                    // We intentionally don't dereference binding_arrays here,
+                                    // so that binding arrays fall to the buffer location.
+
+                                    match module.types[var.ty].inner {
                                         crate::TypeInner::Image { .. } => target.texture.is_some(),
                                         crate::TypeInner::Sampler { .. } => {
                                             target.sampler.is_some()

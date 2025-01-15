@@ -1,4 +1,5 @@
 #![allow(clippy::arc_with_non_send_sync)] // False positive on wasm
+#![warn(clippy::allow_attributes)]
 
 pub mod framework;
 pub mod utils;
