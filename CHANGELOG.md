@@ -90,7 +90,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 #### Environment Variable Handling Overhaul
 
 Previously how various bits of code handled reading settings from environment variables was inconsistent and unideomatic.
-We have unified it to `Type::from_env()` for all types.
+We have unified it to (`Type::from_env()` or `Type::from_env_or_default()`) and `Type::with_env` for all types.
 
 ```diff
 - wgpu::util::backend_bits_from_env()
@@ -106,7 +106,7 @@ We have unified it to `Type::from_env()` for all types.
 + wgpu::Gles3MinorVersion::from_env()
 
 - wgpu::util::instance_descriptor_from_env()
-+ wgpu::InstanceDescriptor::from_env()
++ wgpu::InstanceDescriptor::from_env_or_default()
 
 - wgpu::util::parse_backends_from_comma_list(&str)
 + wgpu::Backends::from_comma_list(&str)
