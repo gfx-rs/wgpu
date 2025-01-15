@@ -1465,7 +1465,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             global.device_create_tlas(self.id, &desc.map_label(|l| l.map(Borrowed)), None);
         if let Some(cause) = error {
             self.context
-                .handle_error(&self.error_sink, cause, desc.label, "Device::create_blas");
+                .handle_error(&self.error_sink, cause, desc.label, "Device::create_tlas");
         }
         CoreTlas {
             context: self.context.clone(),
@@ -2447,7 +2447,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             transform_buffer_offset: tg.transform_buffer_offset,
                             first_vertex: tg.first_vertex,
                             vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
+                            first_index: tg.first_index,
                         }
                     });
                     wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
@@ -2497,7 +2497,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             transform_buffer_offset: tg.transform_buffer_offset,
                             first_vertex: tg.first_vertex,
                             vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
+                            first_index: tg.first_index,
                         }
                     });
                     wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))

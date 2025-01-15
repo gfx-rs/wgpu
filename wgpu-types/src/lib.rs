@@ -4297,6 +4297,16 @@ pub enum IndexFormat {
     Uint32 = 1,
 }
 
+impl IndexFormat {
+    /// Returns the size in bytes of the index format
+    pub fn byte_size(&self) -> usize {
+        match self {
+            IndexFormat::Uint16 => 2,
+            IndexFormat::Uint32 => 4,
+        }
+    }
+}
+
 /// Operation to perform on the stencil value.
 ///
 /// Corresponds to [WebGPU `GPUStencilOperation`](

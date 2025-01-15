@@ -150,7 +150,7 @@ pub struct BlasTriangleGeometry<'a> {
     pub transform_buffer: Option<BufferId>,
     pub first_vertex: u32,
     pub vertex_stride: BufferAddress,
-    pub index_buffer_offset: Option<BufferAddress>,
+    pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 
@@ -221,7 +221,7 @@ pub struct TraceBlasTriangleGeometry {
     pub transform_buffer: Option<BufferId>,
     pub first_vertex: u32,
     pub vertex_stride: BufferAddress,
-    pub index_buffer_offset: Option<BufferAddress>,
+    pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 

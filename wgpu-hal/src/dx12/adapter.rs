@@ -244,7 +244,6 @@ impl super::Adapter {
                 _ => unreachable!(),
             }
         };
-
         let private_caps = super::PrivateCapabilities {
             instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
@@ -395,6 +394,27 @@ impl super::Adapter {
                 && hr.is_ok()
                 && features1.WaveOps.as_bool(),
         );
+        let mut features5 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS5::default();
+        let has_features5 = unsafe {
+            device.CheckFeatureSupport(
+                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS5,
+                <*mut _>::cast(&mut features5),
+                size_of_val(&features5) as u32,
+            )
+        }
+        .is_ok();
+
+        // Since all features for raytracing pipeline (geometry index) and ray queries both come
+        // from here, there is no point in adding an extra call here given that there will be no
+        // feature using EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE if all these are not met.
+        // Once ray tracing pipelines are supported they also will go here
+        features.set(
+            wgt::Features::EXPERIMENTAL_RAY_QUERY
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_5
+                && has_features5,
+        );
 
         let atomic_int64_on_typed_resource_supported = {
             let mut features9 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS9::default();
@@ -529,8 +549,9 @@ impl super::Adapter {
                     // Direct3D correctly bounds-checks all array accesses:
                     // https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.8.2%20Device%20Memory%20Reads
                     uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                    raw_tlas_instance_size: 0,
-                    ray_tracing_scratch_buffer_alignment: 0,
+                    raw_tlas_instance_size: size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
+                    ray_tracing_scratch_buffer_alignment:
+                        Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                 },
                 downlevel,
             },

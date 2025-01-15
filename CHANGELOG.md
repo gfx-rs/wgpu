@@ -177,6 +177,10 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Add build support for Apple Vision Pro. By @guusw in [#6611](https://github.com/gfx-rs/wgpu/pull/6611).
 - Add `raw_handle` method to access raw Metal textures in [#6894](https://github.com/gfx-rs/wgpu/pull/6894).
 
+#### D3D12
+
+- Support DXR (DirectX Ray-tracing) in wgpu-hal. By @Vecvec in [#6777](https://github.com/gfx-rs/wgpu/pull/6777)
+
 #### Changes
 
 ##### Naga
@@ -194,6 +198,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Add actual sample type to `CreateBindGroupError::InvalidTextureSampleType` error message. By @ErichDonGubler in [#6530](https://github.com/gfx-rs/wgpu/pull/6530).
 - Improve binding error to give a clearer message when there is a mismatch between resource binding as it is in the shader and as it is in the binding layout. By @eliemichel in [#6553](https://github.com/gfx-rs/wgpu/pull/6553).
 - `Surface::configure` and `Surface::get_current_texture` are no longer fatal. By @alokedesai in [#6253](https://github.com/gfx-rs/wgpu/pull/6253)
+- Rename `BlasTriangleGeometry::index_buffer_offset` to `BlasTriangleGeometry::first_index`. By @Vecvec in [#6873](https://github.com/gfx-rs/wgpu/pull/6873/files)
 
 ##### D3D12
 
@@ -234,6 +239,12 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
 - Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
+- Correctly validate handles in override-sized array types. By @jimblandy in [#6882](https://github.com/gfx-rs/wgpu/pull/6882).
+- Clean up validation of `Statement::ImageStore`. By @jimblandy in [#6729](https://github.com/gfx-rs/wgpu-pull/6729).
+- In compaction, avoid cloning the type arena. By @jimblandy in [#6790](https://github.com/gfx-rs/wgpu-pull/6790)
+- In validation, forbid cycles between global expressions and types. By @jimblandy in [#6800](https://github.com/gfx-rs/wgpu-pull/6800)
+- Allow abstract scalars in modf and frexp results. By @jimblandy in [#6821](https://github.com/gfx-rs/wgpu-pull/6821)
+- In the WGSL front end, apply automatic conversions to values being assigned. By @jimblandy in [#6822](https://github.com/gfx-rs/wgpu-pull/6822)
 
 #### Vulkan
 
