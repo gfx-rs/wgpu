@@ -7,8 +7,6 @@ use crate::{
     },
     *,
 };
-use std::ops::Range;
-use std::sync::Arc;
 
 /// Encodes a series of GPU operations.
 ///
@@ -358,7 +356,7 @@ impl CommandEncoder {
     pub fn compact_blas(&mut self, blas: &Blas) -> Blas {
         let (handle, blas) = self.inner.compact_blas(blas);
         Blas {
-            shared: Arc::new(BlasShared { inner: blas }),
+            inner: blas,
             handle,
         }
     }

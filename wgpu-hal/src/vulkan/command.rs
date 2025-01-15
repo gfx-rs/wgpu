@@ -3,7 +3,6 @@ use super::conv;
 use arrayvec::ArrayVec;
 use ash::vk;
 
-use crate::AccelerationStructureCopy;
 use std::{
     mem::{self, size_of},
     ops::Range,
@@ -1198,7 +1197,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         &mut self,
         src: &super::AccelerationStructure,
         dst: &super::AccelerationStructure,
-        copy: AccelerationStructureCopy,
+        copy: wgt::AccelerationStructureCopy,
     ) {
         let ray_tracing_functions = self
             .device
@@ -1207,7 +1206,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .as_ref()
             .expect("Feature `RAY_TRACING` not enabled");
 
-        let mode = match copy.copy_flags {
+        let mode = match copy {
             wgt::AccelerationStructureCopy::Clone => vk::CopyAccelerationStructureModeKHR::CLONE,
             wgt::AccelerationStructureCopy::Compact => {
                 vk::CopyAccelerationStructureModeKHR::COMPACT

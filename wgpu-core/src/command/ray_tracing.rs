@@ -118,24 +118,11 @@ impl Global {
                 .map_err(CompactBlasError::from)?
         };
 
-        let ty = match &src_blas.sizes {
-            BlasGeometrySizeDescriptors::Triangles { .. } => {
-                wgt::AccelerationStructureType::Triangles
-            }
-        };
-
         unsafe {
             encoder.copy_acceleration_structure_to_acceleration_structure(
-                src_blas
-                    .raw
-                    .get(&snatch_lock)
-                    .ok_or(CompactBlasError::InvalidBlas)?
-                    .as_ref(),
+                src_blas.try_raw(&snatch_lock)?,
                 acc_struct.as_ref(),
-                hal::AccelerationStructureCopy {
-                    copy_flags: wgt::AccelerationStructureCopy::Compact,
-                    type_flags: ty,
-                },
+                wgt::AccelerationStructureCopy::Compact,
             )
         }
         let handle =
@@ -146,6 +133,7 @@ impl Global {
             device: src_blas.device.clone(),
             size_info: src_blas.size_info,
             sizes: src_blas.sizes.clone(),
+            // recompaction is useless, so we can remove it to not require another size buffer allocation.
             flags: src_blas.flags & !AccelerationStructureFlags::ALLOW_COMPACTION,
             update_mode: src_blas.update_mode,
             // not built until after queue.submit
@@ -219,27 +207,19 @@ impl Global {
             let cmd_buf_data = &mut *cmd_buf_data_guard;
 
             let device = &cmd_buf.device;
-            let Some(queue) = device.get_queue() else {
-                break 'err CompactBlasError::DestroyedQueue;
+
+            let DevicePoll {
+                closures,
+                queue_empty: _,
+            } = match Self::poll_single_device(device, Maintain::Wait) {
+                Ok(poll) => poll,
+                Err(err) => break 'err err.into(),
             };
-            let lock = queue.lock_life();
-            let index = lock.get_blas_latest_submission_index(&src_blas);
-            drop(lock);
-            if let Some(index) = index {
-                let DevicePoll {
-                    closures,
-                    queue_empty: _,
-                } = match Self::poll_single_device(device, Maintain::WaitForSubmissionIndex(index))
-                {
-                    Ok(poll) => poll,
-                    Err(err) => break 'err err.into(),
-                };
-                closures.fire();
-            }
-            // preferably, this small gap between encoders landing and the queue lifetime trackers being
+            closures.fire();
+            // preferably, this small gap between encoders landing and the state being
             // relocked could be removed to prevent a queue.submit occurring here. This isn't
             // very likely and will generate an error anyway (but could be frustrating for a user).
-            if queue.lock_life().blas_being_written(src_blas.as_ref()) {
+            if *src_blas.state.lock() == BlasState::Building {
                 break 'err CompactBlasError::BlasBeingBuilt(src_blas.error_ident());
             }
 
@@ -263,11 +243,8 @@ impl Global {
                         });
                     }
 
-                    cmd_buf_data.trackers.blas_s.set_single(src_blas.clone());
-                    cmd_buf_data.trackers.blas_s.set_single(blas.clone());
-                    if let Some(queue) = device.get_queue() {
-                        queue.pending_writes.lock().insert_blas(&blas);
-                    }
+                    cmd_buf_data.trackers.blas_s.insert_single(src_blas.clone());
+                    cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
                     let build_command_index = NonZeroU64::new(
                         device
                             .last_acceleration_structure_build_command_index
@@ -978,7 +955,10 @@ impl Global {
 
 impl CommandBufferMutable {
     // makes sure a blas is build before it is used
-    pub(crate) fn validate_blas_actions(&self) -> Result<(), ValidateBlasActionsError> {
+    pub(crate) fn validate_blas_actions(
+        &self,
+        blases_building: &mut Vec<Arc<Blas>>,
+    ) -> Result<(), ValidateBlasActionsError> {
         profiling::scope!("CommandEncoder::[submission]::validate_blas_actions");
         let mut built = FastHashSet::default();
         for action in &self.blas_actions {
@@ -991,6 +971,8 @@ impl CommandBufferMutable {
                     }
                     built.insert(action.blas.tracker_index());
                     *action.blas.built_index.write() = Some(*id);
+                    *action.blas.state.lock() = BlasState::Building;
+                    blases_building.push(action.blas.clone());
                 }
                 crate::ray_tracing::BlasActionKind::Use => {
                     if !built.contains(&action.blas.tracker_index())
@@ -1465,10 +1447,7 @@ fn build_blas<'a>(
                     },
                 );
                 cmd_buf_raw.read_acceleration_structure_compact_size(
-                    blas.raw(snatch_guard)
-                        .ok_or(BuildAccelerationStructureError::InvalidBlas(
-                            blas.error_ident(),
-                        ))?,
+                    blas.try_raw(snatch_guard)?,
                     buf.as_ref(),
                 );
                 cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {

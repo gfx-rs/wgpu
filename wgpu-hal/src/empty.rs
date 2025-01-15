@@ -1,6 +1,5 @@
 #![allow(unused_variables)]
 
-use crate::AccelerationStructureCopy;
 use crate::TlasInstance;
 use std::ops::Range;
 
@@ -523,7 +522,7 @@ impl crate::CommandEncoder for Encoder {
         &mut self,
         src: &Resource,
         dst: &Resource,
-        copy: AccelerationStructureCopy,
+        copy: wgt::AccelerationStructureCopy,
     ) {
     }
 }

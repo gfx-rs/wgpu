@@ -9,6 +9,8 @@ use crate::{
 };
 use smallvec::SmallVec;
 
+use crate::ray_tracing::BlasState;
+use crate::resource::Blas;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -30,6 +32,9 @@ struct ActiveSubmission {
 
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer>>,
+
+    /// Blases that are being built.
+    blases_building: Vec<Arc<Blas>>,
 
     /// Command buffers used by this submission, and the encoder that owns them.
     ///
@@ -94,16 +99,6 @@ impl ActiveSubmission {
                 .pending_textures
                 .contains_key(&texture.tracker_index())
             {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    pub fn blas_being_written(&self, blas: &Blas) -> bool {
-        for encoder in &self.encoders {
-            if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
                 return true;
             }
         }
@@ -179,10 +174,16 @@ impl LifetimeTracker {
     }
 
     /// Start tracking resources associated with a new queue submission.
-    pub fn track_submission(&mut self, index: SubmissionIndex, encoders: Vec<EncoderInFlight>) {
+    pub fn track_submission(
+        &mut self,
+        index: SubmissionIndex,
+        encoders: Vec<EncoderInFlight>,
+        blases_building: Vec<Arc<Blas>>,
+    ) {
         self.active.push(ActiveSubmission {
             index,
             mapped: Vec::new(),
+            blases_building,
             encoders,
             work_done_closures: SmallVec::new(),
         });
@@ -236,14 +237,6 @@ impl LifetimeTracker {
         })
     }
 
-    /// Returns the submission index of the most recent submission that uses the
-    /// given blas.
-    pub fn blas_being_written(&self, blas: &Blas) -> bool {
-        self.active
-            .iter()
-            .any(|submission| submission.blas_being_written(blas))
-    }
-
     /// Sort out the consequences of completed submissions.
     ///
     /// Assume that all submissions up through `last_done` have completed.
@@ -281,6 +274,12 @@ impl LifetimeTracker {
                 // resources, so can be _very_ expensive.
                 profiling::scope!("drop command buffer trackers");
                 drop(encoder);
+            }
+            for blas in a.blases_building {
+                let mut state_lock = blas.state.lock();
+                if *state_lock == BlasState::Building {
+                    *state_lock = BlasState::None;
+                }
             }
             work_done_closures.extend(a.work_done_closures);
         }

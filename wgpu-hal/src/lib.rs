@@ -1251,7 +1251,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         &mut self,
         src: &<Self::A as Api>::AccelerationStructure,
         dst: &<Self::A as Api>::AccelerationStructure,
-        copy: AccelerationStructureCopy,
+        copy: wgt::AccelerationStructureCopy,
     );
     // pass common
 

@@ -7,6 +7,7 @@
 // - partial instance buffer uploads (api surface already designed with this in mind)
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
+use crate::resource::CreateBufferError;
 use crate::{
     command::CommandEncoderError,
     device::{DeviceError, MissingFeatures},
@@ -45,6 +46,8 @@ pub enum CreateTlasError {
 
 #[derive(Clone, Debug, Error)]
 pub enum CompactBlasError {
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     HalDevice(#[from] hal::DeviceError),
     #[error(transparent)]
@@ -296,9 +299,10 @@ pub struct TraceTlasPackage {
     pub lowest_unmodified: u32,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum BlasState {
     None,
     UsedForCompacting,
     Compacted,
+    Building,
 }

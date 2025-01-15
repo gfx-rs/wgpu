@@ -2545,7 +2545,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     fn compact_blas(&self, blas: &crate::Blas) -> (Option<u64>, dispatch::DispatchBlas) {
         let global = &self.context.0;
         let (id, handle, error) =
-            global.command_encoder_compact_blas(self.id, blas.shared.inner.as_core().id, None);
+            global.command_encoder_compact_blas(self.id, blas.inner.as_core().id, None);
         if let Some(cause) = error {
             self.context
                 .handle_error_nolabel(&self.error_sink, cause, "Device::create_blas");

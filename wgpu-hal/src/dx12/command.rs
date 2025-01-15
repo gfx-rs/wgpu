@@ -2,7 +2,6 @@ use super::conv;
 use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::borrow_interface_temporarily,
-    AccelerationStructureCopy,
     AccelerationStructureEntries,
 };
 use std::{mem, ops::Range};
@@ -363,7 +362,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     },
                 };
                 self.temp.barriers.push(raw);
-            } else if barrier.usage.from == crate::BufferUses::STORAGE_READ_WRITE {
+            } else if barrier.usage.from == crate::BufferUses::STORAGE_READ_WRITE || barrier.usage.from == crate::BufferUses::ACCELERATION_STRUCTURE_QUERY {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -663,10 +662,26 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     unsafe fn read_acceleration_structure_compact_size(
         &mut self,
-        _acceleration_structure: &super::AccelerationStructure,
-        _buf: &super::Buffer,
+        acceleration_structure: &super::AccelerationStructure,
+        buf: &super::Buffer,
     ) {
-        todo!()
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        unsafe {
+            list.EmitRaytracingAccelerationStructurePostbuildInfo(
+                &Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC {
+                    DestBuffer: buf.resource.GetGPUVirtualAddress(),
+                    InfoType: Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE,
+                },
+                &[
+                    acceleration_structure.resource.GetGPUVirtualAddress()
+                ],
+            )
+        }
     }
     unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {
         // nothing to do here
@@ -1471,10 +1486,22 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
         &mut self,
-        _src: &super::AccelerationStructure,
-        _dst: &super::AccelerationStructure,
-        _copy: AccelerationStructureCopy,
+        src: &super::AccelerationStructure,
+        dst: &super::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
     ) {
-        todo!()
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        unsafe {
+            list.CopyRaytracingAccelerationStructure(
+                dst.resource.GetGPUVirtualAddress(),
+                src.resource.GetGPUVirtualAddress(),
+                conv::map_acceleration_structure_copy_mode(copy),
+            )
+        }
     }
 }

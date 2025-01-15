@@ -557,6 +557,9 @@ pub fn map_buffer_usage(usage: crate::BufferUses) -> vk::BufferUsageFlags {
         flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
             | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
     }
+    if usage.intersects(crate::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
+        flags |= vk::BufferUsageFlags::TRANSFER_DST;
+    }
     flags
 }
 

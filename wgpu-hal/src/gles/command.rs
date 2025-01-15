@@ -1,5 +1,4 @@
 use super::{conv, Command as C};
-use crate::AccelerationStructureCopy;
 use arrayvec::ArrayVec;
 use std::{
     mem::{self, size_of, size_of_val},
@@ -1220,7 +1219,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         &mut self,
         _src: &super::AccelerationStructure,
         _dst: &super::AccelerationStructure,
-        _copy: AccelerationStructureCopy,
+        _copy: wgt::AccelerationStructureCopy,
     ) {
         unimplemented!()
     }

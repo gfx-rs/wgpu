@@ -1,5 +1,5 @@
 use super::{conv, AsNative, TimestampQuerySupport};
-use crate::{AccelerationStructureCopy, CommandEncoder as _};
+use crate::{AccelerationStructureCopy, Api, CommandEncoder as _, CommandEncoder};
 use std::{borrow::Cow, mem::size_of, ops::Range};
 
 // has to match `Temp::binding_sizes`
@@ -394,9 +394,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
         &mut self,
-        _src: &super::AccelerationStructure,
-        _dst: &super::AccelerationStructure,
-        _copy: AccelerationStructureCopy,
+        src: &<Self::A as Api>::AccelerationStructure,
+        dst: &<Self::A as Api>::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
     ) {
         unimplemented!()
     }

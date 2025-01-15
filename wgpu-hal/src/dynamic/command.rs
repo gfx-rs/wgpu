@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    AccelerationStructureBarrier, AccelerationStructureCopy, Api, Attachment, BufferBarrier,
+    AccelerationStructureBarrier, Api, Attachment, BufferBarrier,
     BufferBinding, BufferCopy, BufferTextureCopy, BuildAccelerationStructureDescriptor,
     ColorAttachment, CommandEncoder, ComputePassDescriptor, DepthStencilAttachment, DeviceError,
     Label, MemoryRange, PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier,
@@ -185,7 +185,7 @@ pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
         &mut self,
         src: &dyn DynAccelerationStructure,
         dst: &dyn DynAccelerationStructure,
-        copy: AccelerationStructureCopy,
+        copy: wgt::AccelerationStructureCopy,
     );
     unsafe fn read_acceleration_structure_compact_size(
         &mut self,
@@ -629,7 +629,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         &mut self,
         src: &dyn DynAccelerationStructure,
         dst: &dyn DynAccelerationStructure,
-        copy: AccelerationStructureCopy,
+        copy: wgt::AccelerationStructureCopy,
     ) {
         let src = src.expect_downcast_ref();
         let dst = dst.expect_downcast_ref();

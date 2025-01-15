@@ -1,3 +1,4 @@
+use crate::lock::Mutex;
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
@@ -17,8 +18,7 @@ use crate::{
     resource, LabelHelpers,
 };
 use hal::{AccelerationStructureTriangleIndices, BufferUses, MemoryFlags};
-use std::mem::{size_of, ManuallyDrop};
-use std::sync::Arc;
+use std::mem::size_of;
 use wgt::{AccelerationStructureFlags, BufferAddress, Features};
 
 impl Device {
@@ -110,7 +110,6 @@ impl Device {
                         label: None,
                         size: size_of::<BufferAddress>() as BufferAddress,
                         usage: BufferUses::MAP_READ
-                            | BufferUses::COPY_DST
                             | BufferUses::ACCELERATION_STRUCTURE_QUERY,
                         memory_flags: MemoryFlags::PREFER_COHERENT,
                     })

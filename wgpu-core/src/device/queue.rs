@@ -28,7 +28,7 @@ use crate::{
 use smallvec::SmallVec;
 
 use super::{life::LifetimeTracker, Device};
-use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
+use crate::resource::Blas;
 use crate::scratch::ScratchBuffer;
 use std::{
     iter,
@@ -1076,6 +1076,7 @@ impl Queue {
             // This avoids vulkan deadlocking from the same surface texture being submitted multiple times.
             let mut submit_surface_textures_owned = FastHashMap::default();
 
+            let mut blases_building = Vec::new();
             {
                 if !command_buffers.is_empty() {
                     profiling::scope!("prepare");
@@ -1122,6 +1123,7 @@ impl Queue {
                                     &snatch_guard,
                                     &mut submit_surface_textures_owned,
                                     &mut used_surface_textures,
+                                    &mut blases_building,
                                 );
                                 if let Err(err) = res {
                                     first_error.get_or_insert(err);
@@ -1295,7 +1297,7 @@ impl Queue {
 
             // this will register the new submission to the life time tracker
             self.lock_life()
-                .track_submission(submit_index, active_executions);
+                .track_submission(submit_index, active_executions, blases_building);
             drop(pending_writes);
 
             // This will schedule destruction of all resources that are no longer needed
@@ -1500,6 +1502,7 @@ fn validate_command_buffer(
     snatch_guard: &SnatchGuard,
     submit_surface_textures_owned: &mut FastHashMap<*const Texture, Arc<Texture>>,
     used_surface_textures: &mut track::TextureUsageScope,
+    blases_building: &mut Vec<Arc<Blas>>,
 ) -> Result<(), QueueSubmitError> {
     command_buffer.same_device_as(queue)?;
 
@@ -1539,7 +1542,7 @@ fn validate_command_buffer(
             }
         }
 
-        if let Err(e) = cmd_buf_data.validate_blas_actions() {
+        if let Err(e) = cmd_buf_data.validate_blas_actions(blases_building) {
             return Err(e.into());
         }
         if let Err(e) = cmd_buf_data.validate_tlas_actions(snatch_guard) {
