@@ -40,6 +40,8 @@ Bottom level categories:
 
 ## Unreleased
 
+## v24.0.0 (2025-01-15)
+
 ### Major changes
 
 #### Refactored Dispatch Between `wgpu-core` and `webgpu`

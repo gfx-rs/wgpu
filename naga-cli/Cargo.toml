@@ -1,6 +1,6 @@
 [package]
 name = "naga-cli"
-version = "23.0.0"
+version = "24.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "CLI for the naga shader translator and validator. Part of the wgpu project"
@@ -26,7 +26,7 @@ anyhow.workspace = true
 log.workspace = true
 
 [dependencies.naga]
-version = "23.0.0"
+version = "24.0.0"
 path = "../naga"
 features = [
     "compact",
