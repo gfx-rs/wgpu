@@ -266,6 +266,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Add support for OpAtomicCompareExchange in SPIR-V frontend. By @schell in [#6590](https://github.com/gfx-rs/wgpu/pull/6590).
 - Implement type inference for abstract arguments to user-defined functions. By @jamienicol in [#6577](https://github.com/gfx-rs/wgpu/pull/6577).
 - Allow for override-expressions in array sizes. By @KentSlaney in [#6654](https://github.com/gfx-rs/wgpu/pull/6654).
+- [`pointer_composite_access` WGSL language extension](https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access) is implemented. By @sagudev in [#6913](https://github.com/gfx-rs/wgpu/pull/6913)
 
 ##### General
 
