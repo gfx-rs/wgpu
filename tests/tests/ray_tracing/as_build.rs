@@ -334,7 +334,12 @@ static COMPACT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD"))
+            // waiting for https://gitlab.freedesktop.org/mesa/mesa/-/issues/12289
+            // to be fixed in a new version
+            .skip(FailureCase::adapter("llvmpipe")),
     )
     .run_sync(compact_blas);
 
@@ -403,7 +408,9 @@ static INVALID_COMPACT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(invalid_compact_blas);
 
