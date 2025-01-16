@@ -109,6 +109,9 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_shader_atomic_int64`, promoted to Vulkan 1.2.
     shader_atomic_int64: Option<vk::PhysicalDeviceShaderAtomicInt64Features<'static>>,
 
+    /// Features provided by `VK_EXT_shader_image_atomic_int64`
+    shader_image_atomic_int64: Option<vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT<'static>>,
+
     /// Features provided by `VK_EXT_shader_atomic_float`.
     shader_atomic_float: Option<vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT<'static>>,
 
@@ -158,6 +161,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_int64 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_image_atomic_int64 {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_atomic_float {
@@ -444,6 +450,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_image_atomic_int64: if enabled_extensions
+                .contains(&ext::shader_image_atomic_int64::NAME)
+            {
+                let needed = requested_features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC);
+                Some(
+                    vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT::default()
+                        .shader_image_int64_atomics(needed),
+                )
+            } else {
+                None
+            },
             shader_atomic_float: if enabled_extensions.contains(&ext::shader_atomic_float::NAME) {
                 let needed = requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC);
                 Some(
@@ -596,6 +613,16 @@ impl PhysicalDeviceFeatures {
                 F::SHADER_INT64_ATOMIC_ALL_OPS | F::SHADER_INT64_ATOMIC_MIN_MAX,
                 shader_atomic_int64.shader_buffer_int64_atomics != 0
                     && shader_atomic_int64.shader_shared_int64_atomics != 0,
+            );
+        }
+
+        if let Some(ref shader_image_atomic_int64) = self.shader_image_atomic_int64 {
+            features.set(
+                F::TEXTURE_INT64_ATOMIC,
+                shader_image_atomic_int64
+                    .shader_image_int64_atomics(true)
+                    .shader_image_int64_atomics
+                    != 0,
             );
         }
 
@@ -1019,6 +1046,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::shader_atomic_int64::NAME);
         }
 
+        // Require `VK_EXT_shader_image_atomic_int64` if the associated feature was requested
+        if requested_features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC) {
+            extensions.push(ext::shader_image_atomic_int64::NAME);
+        }
+
         // Require `VK_EXT_shader_atomic_float` if the associated feature was requested
         if requested_features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
             extensions.push(ext::shader_atomic_float::NAME);
@@ -1319,6 +1351,12 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.supports_extension(ext::shader_image_atomic_int64::NAME) {
+                let next = features
+                    .shader_image_atomic_int64
+                    .insert(vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
             if capabilities.supports_extension(ext::shader_atomic_float::NAME) {
                 let next = features
                     .shader_atomic_float
@@ -1815,9 +1853,14 @@ impl super::Adapter {
 
             if features.intersects(
                 wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
-                    | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
+                    | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX
+                    | wgt::Features::TEXTURE_INT64_ATOMIC,
             ) {
                 capabilities.push(spv::Capability::Int64Atomics);
+            }
+
+            if features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC) {
+                capabilities.push(spv::Capability::Int64ImageEXT);
             }
 
             if features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {

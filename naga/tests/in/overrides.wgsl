@@ -13,6 +13,8 @@
 
 override inferred_f32 = 2.718;
 
+override auto_conversion: u32 = 0;
+
 var<private> gain_x_10: f32 = gain * 10.;
 var<private> store_override: f32;
 

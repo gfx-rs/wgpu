@@ -1212,7 +1212,11 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         write!(self.out, "{level}")?;
         self.put_expression(image, &context.expression, false)?;
-        let op = fun.to_msl();
+        let op = if context.expression.resolve_type(value).scalar_width() == Some(8) {
+            fun.to_msl_64_bit()?
+        } else {
+            fun.to_msl()
+        };
         write!(self.out, ".atomic_{}(", op)?;
         // coordinates in IR are int, but Metal expects uint
         self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;

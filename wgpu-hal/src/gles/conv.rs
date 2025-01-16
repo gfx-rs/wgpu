@@ -50,6 +50,7 @@ impl super::AdapterShared {
                 glow::RGB,
                 glow::UNSIGNED_INT_10F_11F_11F_REV,
             ),
+            Tf::R64Uint => (glow::RG32UI, glow::RED_INTEGER, glow::UNSIGNED_INT),
             Tf::Rg32Uint => (glow::RG32UI, glow::RG_INTEGER, glow::UNSIGNED_INT),
             Tf::Rg32Sint => (glow::RG32I, glow::RG_INTEGER, glow::INT),
             Tf::Rg32Float => (glow::RG32F, glow::RG, glow::FLOAT),

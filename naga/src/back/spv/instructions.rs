@@ -1206,6 +1206,7 @@ impl From<crate::StorageFormat> for spirv::ImageFormat {
             Sf::Rgb10a2Uint => Self::Rgb10a2ui,
             Sf::Rgb10a2Unorm => Self::Rgb10A2,
             Sf::Rg11b10Ufloat => Self::R11fG11fB10f,
+            Sf::R64Uint => Self::R64ui,
             Sf::Rg32Uint => Self::Rg32ui,
             Sf::Rg32Sint => Self::Rg32i,
             Sf::Rg32Float => Self::Rg32f,

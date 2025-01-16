@@ -51,27 +51,27 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "23.0.1"
+version = "24.0.0"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "23.0.1"
+version = "24.0.0"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "23.0.0"
+version = "24.0.0"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "23.0.1"
+version = "24.0.0"
 
 [workspace.dependencies.naga]
 path = "./naga"
-version = "23.0.0"
+version = "24.0.0"
 
 [workspace.dependencies]
 anyhow = "1.0.95"
@@ -134,21 +134,21 @@ strum = { version = "0.26.0", features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
 thiserror = "2"
-wgpu = { version = "23.0.1", path = "./wgpu", default-features = false, features = [
+wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
     "dx12",
     "metal",
     "static-dxc",
 ] }
-wgpu-core = { version = "23.0.1", path = "./wgpu-core" }
-wgpu-macros = { version = "23.0.0", path = "./wgpu-macros" }
-wgpu-test = { version = "23.0.0", path = "./tests" }
-wgpu-types = { version = "23.0.0", path = "./wgpu-types" }
+wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
+wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
+wgpu-test = { version = "24.0.0", path = "./tests" }
+wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
-metal = { version = "0.30.0", git = "https://github.com/gfx-rs/metal-rs.git", rev = "ef768ff9d7" }
+metal = "0.31.0"
 block = "0.1"
 core-graphics-types = "0.1"
 objc = "0.2.5"
