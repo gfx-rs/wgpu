@@ -55,8 +55,13 @@
 //!
 //! [`lock::rank`]: crate::lock::rank
 
+use crate::alias::*;
+
 use super::rank::LockRank;
 use std::{cell::Cell, panic::Location};
+
+#[cfg(not(feature = "std"))]
+use parking_lot;
 
 /// A `Mutex` instrumented for deadlock prevention.
 ///
@@ -80,9 +85,13 @@ pub struct MutexGuard<'a, T> {
     saved: LockStateGuard,
 }
 
+#[cfg(feature = "std")]
 thread_local! {
     static LOCK_STATE: Cell<LockState> = const { Cell::new(LockState::INITIAL) };
 }
+
+#[cfg(not(feature = "std"))]
+static LOCK_STATE: parking_lot::Mutex<LockState> = parking_lot::Mutex::new(LockState::INITIAL);
 
 /// Per-thread state for the deadlock checker.
 #[derive(Debug, Copy, Clone)]
@@ -123,6 +132,9 @@ impl Drop for LockStateGuard {
     }
 }
 
+// XXX TBD I wonder if we should refactor the functions below to improve separation of std vs no-std code ???
+
+// XXX TODO UPDATE COMMENTS FOR std vs no-std
 /// Check and record the acquisition of a lock with `new_rank`.
 ///
 /// Check that acquiring a lock with `new_rank` is permitted at this point, and
@@ -130,7 +142,11 @@ impl Drop for LockStateGuard {
 ///
 /// Return the `LockState` that must be restored when this thread is released.
 fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> LockState {
+    #[cfg(feature = "std")]
     let state = LOCK_STATE.get();
+    #[cfg(not(feature = "std"))]
+    let mut state = LOCK_STATE.lock();
+
     // Initially, it's fine to acquire any lock. So we only
     // need to check when `last_acquired` is `Some`.
     if let Some((ref last_rank, ref last_location)) = state.last_acquired {
@@ -148,20 +164,40 @@ fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> LockStat
             last_rank.bit.member_name(),
         );
     }
-    LOCK_STATE.set(LockState {
+
+    let new_state = LockState {
         last_acquired: Some((new_rank, location)),
         depth: state.depth + 1,
-    });
-    state
+    };
+
+    #[cfg(feature = "std")]
+    LOCK_STATE.set(new_state);
+    #[cfg(not(feature = "std"))]
+    {
+        *state = new_state
+    }
+
+    #[cfg(feature = "std")]
+    return state;
+    #[cfg(not(feature = "std"))]
+    *state
 }
 
+// XXX TBD UPDATE COMMENTS FOR std vs no-std - ???
 /// Record the release of a lock whose saved state was `saved`.
 ///
 /// Check that locks are being acquired in stacking order, and update the
 /// per-thread state accordingly.
 fn release(saved: LockState) {
+    #[cfg(feature = "std")]
     let prior = LOCK_STATE.replace(saved);
 
+    #[cfg(not(feature = "std"))]
+    {
+        *(LOCK_STATE.lock()) = saved
+    }
+
+    #[cfg(feature = "std")]
     // Although Rust allows mutex guards to be dropped in any
     // order, this analysis requires that locks be acquired and
     // released in stack order: the next lock to be released must be

@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
+    alias::*,
     binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
     device::{

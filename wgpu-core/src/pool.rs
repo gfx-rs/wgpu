@@ -6,6 +6,7 @@ use std::{
 use hashbrown::{hash_map::Entry, HashMap};
 use once_cell::sync::OnceCell;
 
+use crate::alias::*;
 use crate::lock::{rank, Mutex};
 use crate::FastHashMap;
 

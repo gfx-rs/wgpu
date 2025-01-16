@@ -2,6 +2,8 @@
 //!
 //! Named hash_utils to prevent clashing with the std::hash module.
 
+use crate::alias::*;
+
 /// HashMap using a fast, non-cryptographic hash algorithm.
 pub type FastHashMap<K, V> =
     hashbrown::HashMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;

@@ -28,6 +28,7 @@
 //!
 //! [`lock/rank.rs`]: ../../../src/wgpu_core/lock/rank.rs.html
 
+use crate::alias::*;
 use crate::FastHashSet;
 
 use super::rank::{LockRank, LockRankSet};

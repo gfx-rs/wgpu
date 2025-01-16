@@ -102,6 +102,7 @@ mod stateless;
 mod texture;
 
 use crate::{
+    alias::*,
     binding_model, command,
     lock::{rank, Mutex},
     pipeline,

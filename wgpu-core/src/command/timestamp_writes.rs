@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::alias::*;
 use crate::id;
 
 /// Describes the writing of timestamp values in a render or compute pass.

@@ -1,4 +1,6 @@
 use super::{InitTracker, MemoryInitKind};
+// XXX TBD FMT ???
+use crate::alias::*;
 use crate::{resource::Texture, track::TextureSelector};
 use arrayvec::ArrayVec;
 use std::{ops::Range, sync::Arc};

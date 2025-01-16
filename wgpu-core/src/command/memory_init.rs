@@ -3,6 +3,7 @@ use std::{ops::Range, sync::Arc, vec::Drain};
 use hashbrown::hash_map::Entry;
 
 use crate::{
+    alias::*,
     device::Device,
     init_tracker::*,
     resource::{DestroyedResourceError, ParentDevice, Texture, Trackable},

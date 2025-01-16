@@ -40,6 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### no-std support in `wgpu-core`
+
+XXX TODO
+
+By XXX in XXX
+
 ### Changes
 
 #### Use `hashbrown` in `wgpu-core`

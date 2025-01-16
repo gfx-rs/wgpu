@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
+    alias::*,
     command::{CommandBuffer, CommandEncoderError},
     device::{DeviceError, MissingFeatures},
     global::Global,

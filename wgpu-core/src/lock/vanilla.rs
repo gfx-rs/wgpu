@@ -3,6 +3,8 @@
 //! These definitions are used when no particular lock instrumentation
 //! Cargo feature is selected.
 
+use crate::alias::*;
+
 /// A plain wrapper around [`parking_lot::Mutex`].
 ///
 /// This is just like [`parking_lot::Mutex`], except that our [`new`]

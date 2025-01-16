@@ -1,6 +1,7 @@
 use std::{mem::size_of, sync::Arc};
 
 use crate::{
+    alias::*,
     id::Id,
     identity::IdentityManager,
     lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -128,7 +129,7 @@ impl<T: StorageItem + Clone> Registry<T> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{id::Marker, resource::ResourceType, storage::StorageItem};
+    use crate::{alias::*, id::Marker, resource::ResourceType, storage::StorageItem};
 
     use super::Registry;
     struct TestData;

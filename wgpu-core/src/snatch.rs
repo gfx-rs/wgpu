@@ -1,11 +1,14 @@
 #![allow(unused)]
 
+use crate::alias::*;
 use crate::lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+#[cfg(feature = "std")]
+use std::backtrace::Backtrace;
+#[cfg(all(feature = "std", debug_assertions))]
+use std::thread;
 use std::{
-    backtrace::Backtrace,
     cell::{Cell, RefCell, UnsafeCell},
     panic::{self, Location},
-    thread,
 };
 
 use crate::lock::rank;
@@ -70,20 +73,25 @@ unsafe impl<T> Sync for Snatchable<T> {}
 struct LockTrace {
     purpose: &'static str,
     caller: &'static Location<'static>,
+    #[cfg(feature = "std")]
     backtrace: Backtrace,
 }
 
 impl std::fmt::Display for LockTrace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[cfg(feature = "std")]
+        let backtrace_info = &self.backtrace;
+        #[cfg(not(feature = "std"))]
+        let backtrace_info = "";
         write!(
             f,
             "a {} lock at {}\n{}",
-            self.purpose, self.caller, self.backtrace
+            self.purpose, self.caller, backtrace_info
         )
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(all(feature = "std", debug_assertions))]
 impl LockTrace {
     #[track_caller]
     fn enter(purpose: &'static str) {
@@ -111,12 +119,13 @@ impl LockTrace {
     }
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(all(feature = "std", debug_assertions)))]
 impl LockTrace {
     fn enter(purpose: &'static str) {}
     fn exit() {}
 }
 
+#[cfg(feature = "std")]
 thread_local! {
     static SNATCH_LOCK_TRACE: Cell<Option<LockTrace>> = const { Cell::new(None) };
 }

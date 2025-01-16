@@ -35,6 +35,13 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 [lib]
 
 [features]
+default = ["std"]
+
+## XXX TODO DOCUMENT THIS
+std = []
+
+# XXX TODO I think I got it right which features actually require std - I think we should find a way to check this in CI
+
 ## Internally count resources and events for debugging purposes. If the counters
 ## feature is disabled, the counting infrastructure is removed from the build and
 ## the exposed counters always return 0.
@@ -63,13 +70,13 @@ indirect-validation = ["naga/wgsl-in"]
 serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
 
 ## Enable API tracing.
-trace = ["dep:ron", "serde", "naga/serialize"]
+trace = ["std", "dep:ron", "serde", "naga/serialize"]
 
 ## Enable lock order observation.
-observe_locks = ["dep:ron", "serde/serde_derive"]
+observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 
 ## Enable API replaying
-replay = ["serde", "naga/deserialize"]
+replay = ["std", "serde", "naga/deserialize"]
 
 ## Enable creating instances using raw-window-handle
 raw-window-handle = ["dep:raw-window-handle"]

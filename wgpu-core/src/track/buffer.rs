@@ -4,6 +4,8 @@
 //! a 16 bit bitflag of buffer usages. Because there is only ever
 //! one subresource, they have no selector.
 
+use crate::alias::*;
+
 use std::sync::{Arc, Weak};
 
 use super::{PendingTransition, TrackerIndex};

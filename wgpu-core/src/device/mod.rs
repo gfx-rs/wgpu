@@ -1,4 +1,5 @@
 use crate::{
+    alias::*,
     binding_model,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},

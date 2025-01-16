@@ -1,3 +1,4 @@
+use crate::alias::*;
 use crate::binding_model::BindGroup;
 use crate::command::{
     validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,

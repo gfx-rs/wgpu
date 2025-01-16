@@ -1,4 +1,4 @@
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use crate::{alias::*, device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
 use std::fmt;

@@ -1,5 +1,6 @@
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
+    alias::*,
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},

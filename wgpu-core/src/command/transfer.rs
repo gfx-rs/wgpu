@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
+    alias::*,
     api_log,
     command::{clear_texture, CommandEncoderError},
     conv,

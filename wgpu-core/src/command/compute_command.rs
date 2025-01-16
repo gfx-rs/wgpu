@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    alias::*,
     binding_model::BindGroup,
     id,
     pipeline::ComputePipeline,

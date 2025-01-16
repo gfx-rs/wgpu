@@ -20,6 +20,7 @@
 
 use super::{range::RangedStates, PendingTransition, PendingTransitionList};
 use crate::{
+    alias::*,
     resource::{Texture, TextureInner, TextureView, Trackable},
     snatch::SnatchGuard,
     track::{

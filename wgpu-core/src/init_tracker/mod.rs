@@ -31,6 +31,8 @@ system there are two kind of writes:
 
  */
 
+use crate::alias::*;
+
 use smallvec::SmallVec;
 use std::{fmt, iter, ops::Range};
 

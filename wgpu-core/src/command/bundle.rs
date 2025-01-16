@@ -79,6 +79,7 @@ index format changes.
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
+    alias::*,
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
         BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
@@ -1573,7 +1574,7 @@ where
 
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
-    use crate::{id, RawString};
+    use crate::{alias::*, id, RawString};
     use std::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 

@@ -13,6 +13,8 @@ mod render_command;
 mod timestamp_writes;
 mod transfer;
 
+use crate::alias::*;
+
 use std::mem::{self, ManuallyDrop};
 use std::sync::Arc;
 

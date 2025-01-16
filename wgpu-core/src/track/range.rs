@@ -2,6 +2,8 @@
 //TODO: consider getting rid of it.
 use smallvec::SmallVec;
 
+use crate::alias::*;
+
 use std::{fmt::Debug, iter, ops::Range};
 
 /// Structure that keeps track of a I -> T mapping,

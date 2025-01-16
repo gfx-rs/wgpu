@@ -55,6 +55,8 @@
 // Therefore, this is only really a concern for users targeting WebGL
 // (the only reason to use wgpu-core on the web in the first place) that have atomics enabled.
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
+// XXX TODO ADD NICE SEPARATING COMMENT HERE
+#![no_std]
 
 pub mod binding_model;
 pub mod command;
@@ -95,7 +97,13 @@ pub use validation::{map_storage_format_from_naga, map_storage_format_to_naga};
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 pub use naga;
 
-use std::{borrow::Cow, os::raw::c_char};
+// XXX TBD PLACEMENT - ???
+use core::ffi::c_char;
+use std::borrow::Cow;
+
+// XXX TBD PLACEMENT - ???
+#[cfg(not(feature = "std"))]
+use once_cell::sync::OnceCell;
 
 pub(crate) use hash_utils::*;
 
@@ -210,6 +218,51 @@ pub(crate) fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
         }
     }
 }
+
+// XXX TBD CLEANUP NEEDED BELOW - ???
+// XXX TBD SHOULD THIS BE A SEPARATE MODULE - ???
+pub(crate) mod alias {
+    pub(crate) use std::prelude::v1::*;
+    pub(crate) mod std {
+        pub(crate) mod prelude {
+            pub(crate) mod v1 {
+                pub(crate) use super::super::{
+                    alloc::format, borrow::ToOwned, boxed::Box, string::String, string::ToString,
+                    vec, vec::Vec,
+                };
+                #[cfg(feature = "std")]
+                pub(crate) use super::super::thread_local;
+            }
+        }
+        pub(crate) use core::{
+            cell, cmp, convert, error, ffi, fmt, hash, iter, marker, mem, num, ops, panic, ptr,
+            slice, str, time,
+        };
+        extern crate alloc;
+        pub(crate) use alloc::{boxed, string, vec};
+        pub(crate) mod borrow {
+            pub(crate) use super::alloc::borrow::*;
+            // XXX
+            // pub(crate) use core::borrow::*;
+        }
+        pub(crate) mod sync {
+            pub(crate) use super::alloc::sync::*;
+            pub(crate) use core::sync::*;
+            // XXX TBD NAMING - ???
+            #[cfg(feature = "std")]
+            pub(crate) use super::std::sync::OnceLock;
+            // XXX TBD NAMING - ???
+            #[cfg(not(feature = "std"))]
+            pub(crate) use crate::OnceCell as OnceLock;
+        }
+        #[cfg(feature = "std")]
+        extern crate std;
+        #[cfg(feature = "std")]
+        pub(crate) use std::{backtrace, env, fs, io, path, process, thread, thread_local};
+    }
+}
+
+use alias::*;
 
 #[test]
 fn test_lcd() {

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    alias::*,
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
     pipeline::LateSizedBufferGroup,
@@ -16,6 +17,7 @@ mod compat {
     use wgt::{BindingType, ShaderStages};
 
     use crate::{
+        alias::*,
         binding_model::BindGroupLayout,
         error::MultiError,
         resource::{Labeled, ParentDevice, ResourceErrorIdent},

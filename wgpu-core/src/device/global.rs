@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
+    alias::*,
     api_log,
     binding_model::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,

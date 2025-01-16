@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use crate::{
+    alias::*,
     binding_model::{self},
     FastIndexMap,
 };

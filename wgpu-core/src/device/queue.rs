@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
+    alias::*,
     api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,

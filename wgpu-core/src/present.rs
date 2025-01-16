@@ -9,6 +9,8 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
+use crate::alias::*;
+
 use std::{mem::ManuallyDrop, sync::Arc};
 
 #[cfg(feature = "trace")]

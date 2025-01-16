@@ -1,4 +1,5 @@
 use crate::{
+    alias::*,
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
     },

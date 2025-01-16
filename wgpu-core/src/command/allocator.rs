@@ -1,3 +1,4 @@
+use crate::alias::*;
 use crate::lock::{rank, Mutex};
 
 /// A pool of free [`wgpu_hal::CommandEncoder`]s, owned by a `Device`.

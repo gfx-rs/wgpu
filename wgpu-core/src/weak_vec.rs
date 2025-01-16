@@ -1,5 +1,7 @@
 //! Module containing the [`WeakVec`] API.
 
+use crate::alias::*;
+
 use std::sync::Weak;
 
 /// An optimized container for `Weak` references of `T` that minimizes reallocations by

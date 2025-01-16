@@ -1,3 +1,5 @@
+use crate::alias::*;
+
 use std::mem::size_of;
 
 use thiserror::Error;
@@ -297,6 +299,8 @@ impl<'a> Writer<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::alias::*;
+
     use wgt::AdapterInfo;
 
     use crate::pipeline_cache::{PipelineCacheValidationError as E, HEADER_LENGTH};

@@ -1,4 +1,5 @@
 use crate::{
+    alias::*,
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
     },

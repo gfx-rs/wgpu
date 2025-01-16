@@ -8,6 +8,7 @@
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
 use crate::{
+    alias::*,
     command::CommandEncoderError,
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},

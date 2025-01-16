@@ -101,6 +101,7 @@ flagged as errors as well.
 */
 
 use crate::{
+    alias::*,
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::{queue::Queue, Device},

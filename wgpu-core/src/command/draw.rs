@@ -1,4 +1,5 @@
 use crate::{
+    alias::*,
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     resource::{
         DestroyedResourceError, MissingBufferUsageError, MissingTextureUsageError,
