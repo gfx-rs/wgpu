@@ -148,14 +148,14 @@ pub enum ResolveError {
         end_query: u64,
         query_set_size: u32,
     },
-    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overrunning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..{buffer_end_offset}")]
+    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overrunning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..(<start> + {bytes_used})")]
     BufferOverrun {
         start_query: u32,
         end_query: u32,
         stride: u32,
         buffer_size: BufferAddress,
         buffer_start_offset: BufferAddress,
-        buffer_end_offset: BufferAddress,
+        bytes_used: BufferAddress,
     },
 }
 
@@ -429,19 +429,17 @@ impl Global {
             .expect("`stride` * `query_count` overflowed `u32`, should be unreachable");
 
         let buffer_start_offset = destination_offset;
-        let buffer_end_offset = buffer_start_offset + bytes_used;
-
-        if buffer_end_offset > dst_buffer.size {
-            return Err(ResolveError::BufferOverrun {
+        let buffer_end_offset = buffer_start_offset
+            .checked_add(bytes_used)
+            .filter(|buffer_end_offset| *buffer_end_offset <= dst_buffer.size)
+            .ok_or(ResolveError::BufferOverrun {
                 start_query,
                 end_query,
                 stride,
                 buffer_size: dst_buffer.size,
                 buffer_start_offset,
-                buffer_end_offset,
-            }
-            .into());
-        }
+                bytes_used,
+            })?;
 
         // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
         cmd_buf_data.buffer_memory_init_actions.extend(
