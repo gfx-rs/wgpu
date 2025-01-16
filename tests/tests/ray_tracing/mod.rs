@@ -84,7 +84,7 @@ impl AsBuildContext {
                 first_vertex: 0,
                 vertex_stride: mem::size_of::<[f32; 3]>() as BufferAddress,
                 index_buffer: None,
-                index_buffer_offset: None,
+                first_index: None,
                 transform_buffer: None,
                 transform_buffer_offset: None,
             }]),
