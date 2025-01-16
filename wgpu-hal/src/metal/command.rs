@@ -1,5 +1,5 @@
 use super::{conv, AsNative, TimestampQuerySupport};
-use crate::{Api, CommandEncoder as _};
+use crate::CommandEncoder as _;
 use std::{borrow::Cow, mem::size_of, ops::Range};
 
 // has to match `Temp::binding_sizes`
