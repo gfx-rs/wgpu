@@ -9,7 +9,7 @@ use crate::*;
 /// using [`RenderPass::execute_bundles`].
 ///
 /// Corresponds to [WebGPU `GPURenderBundle`](https://gpuweb.github.io/gpuweb/#render-bundle).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RenderBundle {
     pub(crate) inner: dispatch::DispatchRenderBundle,
 }

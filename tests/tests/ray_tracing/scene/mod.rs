@@ -85,7 +85,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
                 first_vertex: 0,
                 vertex_stride: mem::size_of::<mesh_gen::Vertex>() as u64,
                 index_buffer: use_index_buffer.then_some(&index_buffer),
-                index_buffer_offset: use_index_buffer.then_some(0),
+                first_index: use_index_buffer.then_some(0),
                 transform_buffer: None,
                 transform_buffer_offset: None,
             }]),
@@ -105,7 +105,7 @@ static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConf
             .test_features_limits()
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::adapter("AMD")),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(|ctx| {
         acceleration_structure_build(&ctx, false);
@@ -118,7 +118,7 @@ static ACCELERATION_STRUCTURE_BUILD_WITH_INDEX: GpuTestConfiguration = GpuTestCo
             .test_features_limits()
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::adapter("AMD")),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(|ctx| {
         acceleration_structure_build(&ctx, true);

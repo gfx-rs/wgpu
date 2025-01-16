@@ -1,8 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{
-    mem::size_of,
-    num::{NonZeroU32, NonZeroU64},
-};
+use std::num::{NonZeroU32, NonZeroU64};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]

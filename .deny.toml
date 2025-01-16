@@ -6,12 +6,17 @@ skip-tree = [
     { name = "windows-sys", version = "0.45" },
     { name = "winit", version = "0.29" },
     { name = "rustc_version", version = "0.2.3" },
-    { name = "sourcemap", version = "7.1.1" },
     { name = "miniz_oxide", version = "0.7.4" },
+
+    # introduced by Deno, to be investigated
+    { name = "deno_core", version = "0.321.0" },
+    { name = "deno_permissions", version = "0.39.0" },
 ]
 skip = [
     # Strum uses an old version
     { name = "heck", version = "0.4.0" },
+    # Deno uses an old version
+    { name = "strum", version = "0.25.0" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true

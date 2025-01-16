@@ -6,7 +6,7 @@ use crate::{
 };
 use wgt::{BufferAddress, BufferSize, Color};
 
-use std::{num::NonZeroU32, sync::Arc};
+use std::sync::Arc;
 
 use super::{Rect, RenderBundle};
 
@@ -82,11 +82,10 @@ pub enum RenderCommand {
         base_vertex: i32,
         first_instance: u32,
     },
-    MultiDrawIndirect {
+    DrawIndirect {
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        /// Count of `None` represents a non-multi call.
-        count: Option<NonZeroU32>,
+        count: u32,
         indexed: bool,
     },
     MultiDrawIndirectCount {
@@ -311,16 +310,16 @@ impl RenderCommand {
                             first_instance,
                         },
 
-                        RenderCommand::MultiDrawIndirect {
+                        RenderCommand::DrawIndirect {
                             buffer_id,
                             offset,
                             count,
                             indexed,
-                        } => ArcRenderCommand::MultiDrawIndirect {
+                        } => ArcRenderCommand::DrawIndirect {
                             buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
                                 RenderPassError {
                                     scope: PassErrorScope::Draw {
-                                        kind: if count.is_some() {
+                                        kind: if count != 1 {
                                             DrawKind::MultiDrawIndirect
                                         } else {
                                             DrawKind::DrawIndirect
@@ -459,11 +458,10 @@ pub enum ArcRenderCommand {
         base_vertex: i32,
         first_instance: u32,
     },
-    MultiDrawIndirect {
+    DrawIndirect {
         buffer: Arc<Buffer>,
         offset: BufferAddress,
-        /// Count of `None` represents a non-multi call.
-        count: Option<NonZeroU32>,
+        count: u32,
         indexed: bool,
     },
     MultiDrawIndirectCount {

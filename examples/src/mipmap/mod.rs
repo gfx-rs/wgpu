@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{f32::consts, mem::size_of};
+use std::f32::consts;
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -127,6 +127,7 @@ impl Example {
                     label: Some("mip"),
                     format: None,
                     dimension: None,
+                    usage: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
                     mip_level_count: Some(1),

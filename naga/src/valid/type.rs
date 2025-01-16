@@ -370,35 +370,41 @@ impl super::Validator {
                     Alignment::from(rows) * Alignment::from_width(scalar.width),
                 )
             }
-            Ti::Atomic(crate::Scalar { kind, width }) => {
-                match kind {
-                    crate::ScalarKind::Bool
-                    | crate::ScalarKind::Float
-                    | crate::ScalarKind::AbstractInt
-                    | crate::ScalarKind::AbstractFloat => {
-                        return Err(TypeError::InvalidAtomicWidth(kind, width))
-                    }
-                    crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                        if width == 8 {
-                            if !self.capabilities.intersects(
+            Ti::Atomic(scalar) => {
+                match scalar {
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        width: _,
+                    } => {
+                        if scalar.width == 8
+                            && !self.capabilities.intersects(
                                 Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
                                     | Capabilities::SHADER_INT64_ATOMIC_MIN_MAX,
-                            ) {
-                                return Err(TypeError::MissingCapability(
-                                    Capabilities::SHADER_INT64_ATOMIC_ALL_OPS,
-                                ));
-                            }
-                        } else if width != 4 {
-                            return Err(TypeError::InvalidAtomicWidth(kind, width));
+                            )
+                        {
+                            return Err(TypeError::MissingCapability(
+                                Capabilities::SHADER_INT64_ATOMIC_ALL_OPS,
+                            ));
                         }
                     }
+                    crate::Scalar::F32 => {
+                        if !self
+                            .capabilities
+                            .contains(Capabilities::SHADER_FLOAT32_ATOMIC)
+                        {
+                            return Err(TypeError::MissingCapability(
+                                Capabilities::SHADER_FLOAT32_ATOMIC,
+                            ));
+                        }
+                    }
+                    _ => return Err(TypeError::InvalidAtomicWidth(scalar.kind, scalar.width)),
                 };
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::CREATION_RESOLVED,
-                    Alignment::from_width(width),
+                    Alignment::from_width(scalar.width),
                 )
             }
             Ti::Pointer { base, space } => {

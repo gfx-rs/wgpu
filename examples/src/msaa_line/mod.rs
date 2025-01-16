@@ -7,7 +7,7 @@
 //! *   Set the primitive_topology to PrimitiveTopology::LineList.
 //! *   Vertices and Indices describe the two points that make up a line.
 
-use std::{iter, mem::size_of};
+use std::iter;
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
@@ -214,7 +214,7 @@ impl crate::framework::Example for Example {
         }
     }
 
-    #[allow(clippy::single_match)]
+    #[expect(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
             WindowEvent::KeyboardInput {

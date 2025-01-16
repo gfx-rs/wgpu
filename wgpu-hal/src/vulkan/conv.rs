@@ -37,6 +37,7 @@ impl super::PrivateCapabilities {
             Tf::Rgb10a2Uint => F::A2B10G10R10_UINT_PACK32,
             Tf::Rgb10a2Unorm => F::A2B10G10R10_UNORM_PACK32,
             Tf::Rg11b10Ufloat => F::B10G11R11_UFLOAT_PACK32,
+            Tf::R64Uint => F::R64_UINT,
             Tf::Rg32Uint => F::R32G32_UINT,
             Tf::Rg32Sint => F::R32G32_SINT,
             Tf::Rg32Float => F::R32G32_SFLOAT,
@@ -266,7 +267,8 @@ pub fn map_texture_usage(usage: crate::TextureUses) -> vk::ImageUsageFlags {
     if usage.intersects(
         crate::TextureUses::STORAGE_READ_ONLY
             | crate::TextureUses::STORAGE_WRITE_ONLY
-            | crate::TextureUses::STORAGE_READ_WRITE,
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC,
     ) {
         flags |= vk::ImageUsageFlags::STORAGE;
     }
@@ -309,15 +311,19 @@ pub fn map_texture_usage_to_barrier(
         access |= vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
             | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE;
     }
-    if usage
-        .intersects(crate::TextureUses::STORAGE_READ_ONLY | crate::TextureUses::STORAGE_READ_WRITE)
-    {
+    if usage.intersects(
+        crate::TextureUses::STORAGE_READ_ONLY
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC,
+    ) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_READ;
     }
-    if usage
-        .intersects(crate::TextureUses::STORAGE_WRITE_ONLY | crate::TextureUses::STORAGE_READ_WRITE)
-    {
+    if usage.intersects(
+        crate::TextureUses::STORAGE_WRITE_ONLY
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC,
+    ) {
         stages |= shader_stages;
         access |= vk::AccessFlags::SHADER_WRITE;
     }
@@ -352,7 +358,8 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> crate::TextureUses {
     if usage.contains(vk::ImageUsageFlags::STORAGE) {
         bits |= crate::TextureUses::STORAGE_READ_ONLY
             | crate::TextureUses::STORAGE_WRITE_ONLY
-            | crate::TextureUses::STORAGE_READ_WRITE;
+            | crate::TextureUses::STORAGE_READ_WRITE
+            | crate::TextureUses::STORAGE_ATOMIC;
     }
     bits
 }

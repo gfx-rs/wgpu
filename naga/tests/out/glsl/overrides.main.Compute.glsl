@@ -12,6 +12,7 @@ const float width = 0.0;
 const float depth = 2.3;
 const float height = 4.6;
 const float inferred_f32_ = 2.718;
+const uint auto_conversion = 0u;
 
 float gain_x_10_ = 11.0;
 

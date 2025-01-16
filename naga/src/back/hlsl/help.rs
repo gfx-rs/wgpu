@@ -796,17 +796,17 @@ impl<W: Write> super::Writer<'_, W> {
     pub(super) fn write_special_functions(&mut self, module: &crate::Module) -> BackendResult {
         for (type_key, struct_ty) in module.special_types.predeclared_types.iter() {
             match type_key {
-                &crate::PredeclaredType::ModfResult { size, width }
-                | &crate::PredeclaredType::FrexpResult { size, width } => {
+                &crate::PredeclaredType::ModfResult { size, scalar }
+                | &crate::PredeclaredType::FrexpResult { size, scalar } => {
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
                         arg_type_name_owner = format!(
                             "{}{}",
-                            if width == 8 { "double" } else { "float" },
+                            if scalar.width == 8 { "double" } else { "float" },
                             size as u8
                         );
                         &arg_type_name_owner
-                    } else if width == 8 {
+                    } else if scalar.width == 8 {
                         "double"
                     } else {
                         "float"
@@ -841,6 +841,9 @@ impl<W: Write> super::Writer<'_, W> {
                 &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
             }
         }
+        if module.special_types.ray_desc.is_some() {
+            self.write_ray_desc_from_ray_desc_constructor_function(module)?;
+        }
 
         Ok(())
     }
@@ -852,16 +855,30 @@ impl<W: Write> super::Writer<'_, W> {
         expressions: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
         for (handle, _) in expressions.iter() {
-            if let crate::Expression::Compose { ty, .. } = expressions[handle] {
-                match module.types[ty].inner {
-                    crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
-                        let constructor = WrappedConstructor { ty };
-                        if self.wrapped.constructors.insert(constructor) {
-                            self.write_wrapped_constructor_function(module, constructor)?;
+            match expressions[handle] {
+                crate::Expression::Compose { ty, .. } => {
+                    match module.types[ty].inner {
+                        crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
+                            let constructor = WrappedConstructor { ty };
+                            if self.wrapped.constructors.insert(constructor) {
+                                self.write_wrapped_constructor_function(module, constructor)?;
+                            }
                         }
+                        _ => {}
+                    };
+                }
+                crate::Expression::RayQueryGetIntersection { committed, .. } => {
+                    if committed {
+                        if !self.written_committed_intersection {
+                            self.write_committed_intersection_function(module)?;
+                            self.written_committed_intersection = true;
+                        }
+                    } else if !self.written_candidate_intersection {
+                        self.write_candidate_intersection_function(module)?;
+                        self.written_candidate_intersection = true;
                     }
-                    _ => {}
-                };
+                }
+                _ => {}
             }
         }
         Ok(())

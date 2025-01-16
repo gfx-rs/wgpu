@@ -1,6 +1,5 @@
 /// This example shows how to describe the adapter in use.
 async fn run() {
-    #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
     let adapter = {
         let instance = wgpu::Instance::default();
         #[cfg(not(target_arch = "wasm32"))]

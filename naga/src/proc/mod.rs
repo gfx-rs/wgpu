@@ -49,6 +49,7 @@ impl From<super::StorageFormat> for super::Scalar {
             Sf::Rgb10a2Uint => Sk::Uint,
             Sf::Rgb10a2Unorm => Sk::Float,
             Sf::Rg11b10Ufloat => Sk::Float,
+            Sf::R64Uint => Sk::Uint,
             Sf::Rg32Uint => Sk::Uint,
             Sf::Rg32Sint => Sk::Sint,
             Sf::Rg32Float => Sk::Float,
@@ -65,7 +66,11 @@ impl From<super::StorageFormat> for super::Scalar {
             Sf::Rgba16Unorm => Sk::Float,
             Sf::Rgba16Snorm => Sk::Float,
         };
-        super::Scalar { kind, width: 4 }
+        let width = match format {
+            Sf::R64Uint => 8,
+            _ => 4,
+        };
+        super::Scalar { kind, width }
     }
 }
 

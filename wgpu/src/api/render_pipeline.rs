@@ -8,7 +8,7 @@ use crate::*;
 /// buffers and targets. It can be created with [`Device::create_render_pipeline`].
 ///
 /// Corresponds to [WebGPU `GPURenderPipeline`](https://gpuweb.github.io/gpuweb/#render-pipeline).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RenderPipeline {
     pub(crate) inner: dispatch::DispatchRenderPipeline,
 }
@@ -25,8 +25,8 @@ impl RenderPipeline {
     ///
     /// This method will raise a validation error if there is no bind group layout at `index`.
     pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
-        let inner = self.inner.get_bind_group_layout(index);
-        BindGroupLayout { inner }
+        let layout = self.inner.get_bind_group_layout(index);
+        BindGroupLayout { inner: layout }
     }
 }
 

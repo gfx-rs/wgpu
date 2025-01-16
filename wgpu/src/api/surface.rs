@@ -346,7 +346,7 @@ pub(crate) enum CreateSurfaceErrorKind {
     Hal(wgc::instance::CreateSurfaceError),
 
     /// Error from WebGPU surface creation.
-    #[allow(dead_code)] // may be unused depending on target and features
+    #[cfg_attr(not(webgpu), expect(dead_code))]
     Web(String),
 
     /// Error when trying to get a [`DisplayHandle`] or a [`WindowHandle`] from

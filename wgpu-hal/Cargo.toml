@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "23.0.1"
+version = "24.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Hardware abstraction layer for wgpu, the cross-platform, safe, pure-rust graphics API"
@@ -53,6 +53,7 @@ vulkan = [
     "dep:libloading",
     "dep:smallvec",
     "dep:android_system_properties",
+    "dep:ordered-float",
 ]
 gles = [
     "naga/glsl-out",
@@ -125,6 +126,7 @@ profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 thiserror.workspace = true
 once_cell.workspace = true
+ordered-float = { workspace = true, optional = true }
 
 # backends common
 arrayvec.workspace = true
@@ -138,7 +140,7 @@ glow = { workspace = true, optional = true }
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "23.0.0"
+version = "24.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
@@ -163,14 +165,19 @@ windows = { workspace = true, optional = true }
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
 gpu-allocator = { workspace = true, optional = true }
-mach-dxcompiler-rs = { workspace = true, optional = true }
 # For core macros. This crate is also reexported as windows::core.
 windows-core = { workspace = true, optional = true }
 
 # backend: Gles
 glutin_wgl_sys = { workspace = true, optional = true }
 
-[target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
+# This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
+#
+# ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
+[target.'cfg(all(windows, not(target_arch = "aarch64")))'.dependencies]
+mach-dxcompiler-rs = { workspace = true, optional = true }
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
 # backend: Metal
 block = { workspace = true, optional = true }
 
@@ -181,12 +188,13 @@ core-graphics-types.workspace = true
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = [
+    "default",
     "Window",
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys.workspace = true
+js-sys = { workspace = true, features = ["default"] }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
@@ -197,7 +205,7 @@ ndk-sys = { workspace = true, optional = true }
 
 [dependencies.naga]
 path = "../naga"
-version = "23.0.0"
+version = "24.0.0"
 
 [build-dependencies]
 cfg_aliases.workspace = true
@@ -205,7 +213,7 @@ cfg_aliases.workspace = true
 # DEV dependencies
 [dev-dependencies.naga]
 path = "../naga"
-version = "23.0.0"
+version = "24.0.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]
@@ -214,7 +222,7 @@ env_logger.workspace = true
 glam.workspace = true       # for ray-traced-triangle example
 winit.workspace = true      # for "halmark" example
 
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dev-dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = [
     "egl",
     "wgl",

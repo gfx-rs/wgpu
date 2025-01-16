@@ -10,7 +10,7 @@
 #![cfg_attr(
     all(
         not(all(feature = "vulkan", not(target_arch = "wasm32"))),
-        not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
+        not(all(feature = "metal", any(target_vendor = "apple"))),
         not(all(feature = "dx12", windows)),
         not(feature = "gles"),
     ),
@@ -89,6 +89,8 @@ mod weak_vec;
 // made private again.
 mod scratch;
 pub mod validation;
+
+pub use validation::{map_storage_format_from_naga, map_storage_format_to_naga};
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 pub use naga;

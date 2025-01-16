@@ -67,6 +67,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Int64,
     spirv::Capability::Int64Atomics,
     spirv::Capability::Float16,
+    spirv::Capability::AtomicFloat32AddEXT,
     spirv::Capability::Float64,
     spirv::Capability::Geometry,
     spirv::Capability::MultiView,
@@ -78,6 +79,7 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_KHR_storage_buffer_storage_class",
     "SPV_KHR_vulkan_memory_model",
     "SPV_KHR_multiview",
+    "SPV_EXT_shader_atomic_float_add",
 ];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
@@ -175,7 +177,7 @@ bitflags::bitflags! {
 
 impl DecorationFlags {
     fn to_storage_access(self) -> crate::StorageAccess {
-        let mut access = crate::StorageAccess::all();
+        let mut access = crate::StorageAccess::LOAD | crate::StorageAccess::STORE;
         if self.contains(DecorationFlags::NON_READABLE) {
             access &= !crate::StorageAccess::LOAD;
         }
@@ -4339,7 +4341,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | Op::AtomicUMax
                 | Op::AtomicAnd
                 | Op::AtomicOr
-                | Op::AtomicXor => self.parse_atomic_expr_with_value(
+                | Op::AtomicXor
+                | Op::AtomicFAddEXT => self.parse_atomic_expr_with_value(
                     inst,
                     &mut emitter,
                     ctx,
@@ -4348,7 +4351,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     body_idx,
                     match inst.op {
                         Op::AtomicExchange => crate::AtomicFunction::Exchange { compare: None },
-                        Op::AtomicIAdd => crate::AtomicFunction::Add,
+                        Op::AtomicIAdd | Op::AtomicFAddEXT => crate::AtomicFunction::Add,
                         Op::AtomicISub => crate::AtomicFunction::Subtract,
                         Op::AtomicSMin => crate::AtomicFunction::Min,
                         Op::AtomicUMin => crate::AtomicFunction::Min,
@@ -4356,7 +4359,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Op::AtomicUMax => crate::AtomicFunction::Max,
                         Op::AtomicAnd => crate::AtomicFunction::And,
                         Op::AtomicOr => crate::AtomicFunction::InclusiveOr,
-                        _ => crate::AtomicFunction::ExclusiveOr,
+                        Op::AtomicXor => crate::AtomicFunction::ExclusiveOr,
+                        _ => unreachable!(),
                     },
                 )?,
 
@@ -4486,6 +4490,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Store { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
+                | S::ImageAtomic { .. }
                 | S::RayQuery { .. }
                 | S::SubgroupBallot { .. }
                 | S::SubgroupCollectiveOperation { .. }

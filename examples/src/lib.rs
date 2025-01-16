@@ -1,4 +1,5 @@
 #![allow(clippy::arc_with_non_send_sync)] // False positive on wasm
+#![warn(clippy::allow_attributes)]
 
 pub mod framework;
 pub mod utils;
@@ -15,6 +16,7 @@ pub mod hello_windows;
 pub mod hello_workgroups;
 pub mod mipmap;
 pub mod msaa_line;
+pub mod multiple_render_targets;
 pub mod ray_cube_compute;
 pub mod ray_cube_fragment;
 pub mod ray_cube_normals;

@@ -179,7 +179,7 @@ pub(super) fn get_dynamic_dxc_container(
 
 /// Creates a [`DxcContainer`] that delegates to the statically-linked version of DXC.
 pub(super) fn get_static_dxc_container() -> Result<DxcContainer, crate::DeviceError> {
-    #[cfg(feature = "static-dxc")]
+    #[cfg(static_dxc)]
     {
         unsafe {
             let compiler = dxc_create_instance::<Dxc::IDxcCompiler3>(|clsid, iid, ppv| {
@@ -206,7 +206,7 @@ pub(super) fn get_static_dxc_container() -> Result<DxcContainer, crate::DeviceEr
             })
         }
     }
-    #[cfg(not(feature = "static-dxc"))]
+    #[cfg(not(static_dxc))]
     {
         panic!("Attempted to create a static DXC shader compiler, but the static-dxc feature was not enabled")
     }

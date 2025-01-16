@@ -43,9 +43,8 @@ naga = { workspace = true, features = [
     "wgsl-out",
 ] }
 nanorand.workspace = true
-once_cell.workspace = true
 pollster.workspace = true
 profiling.workspace = true
 rayon.workspace = true
 tracy-client = { workspace = true, optional = true }
-wgpu = { workspace = true, features = ["wgsl", "metal", "dx12"] }
+wgpu.workspace = true

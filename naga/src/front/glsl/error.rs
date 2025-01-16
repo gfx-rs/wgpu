@@ -75,7 +75,7 @@ pub enum ErrorKind {
     /// Whilst parsing an unexpected token was encountered.
     ///
     /// A list of expected tokens is also returned.
-    #[error("Expected {}, found {0:?}", join_with_comma(.1))]
+    #[error("Expected {expected_tokens}, found {found_token:?}", found_token = .0, expected_tokens = join_with_comma(.1))]
     InvalidToken(TokenValue, Vec<ExpectedToken>),
     /// A specific feature is not yet implemented.
     ///

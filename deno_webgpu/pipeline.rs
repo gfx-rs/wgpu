@@ -1,5 +1,6 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
+use super::wgpu_types;
 use deno_core::error::AnyError;
 use deno_core::op2;
 use deno_core::OpState;

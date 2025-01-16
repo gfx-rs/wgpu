@@ -73,14 +73,6 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
-    for e in module.entry_points.iter() {
-        if let Some(sizes) = e.workgroup_size_overrides {
-            for size in sizes.iter().filter_map(|x| *x) {
-                module_tracer.global_expressions_used.insert(size);
-            }
-        }
-    }
-
     // We assume that all functions are used.
     //
     // Observe which types, constant expressions, constants, and
@@ -106,6 +98,13 @@ pub fn compact(module: &mut crate::Module) {
         .iter()
         .map(|e| {
             log::trace!("tracing entry point {:?}", e.function.name);
+
+            if let Some(sizes) = e.workgroup_size_overrides {
+                for size in sizes.iter().filter_map(|x| *x) {
+                    module_tracer.global_expressions_used.insert(size);
+                }
+            }
+
             let mut used = module_tracer.as_function(&e.function);
             used.trace();
             FunctionMap::from(used)
@@ -213,30 +212,6 @@ pub fn compact(module: &mut crate::Module) {
         module_map.types.adjust(&mut global.ty);
         if let Some(ref mut init) = global.init {
             module_map.global_expressions.adjust(init);
-        }
-    }
-
-    for (handle, ty) in module.types.clone().iter() {
-        if let crate::TypeInner::Array {
-            base,
-            size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(mut size_expr)),
-            stride,
-        } = ty.inner
-        {
-            module_map.global_expressions.adjust(&mut size_expr);
-            module.types.replace(
-                handle,
-                crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::Array {
-                        base,
-                        size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(
-                            size_expr,
-                        )),
-                        stride,
-                    },
-                },
-            );
         }
     }
 

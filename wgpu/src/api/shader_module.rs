@@ -168,7 +168,7 @@ impl From<crate::naga::SourceLocation> for SourceLocation {
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
-#[cfg_attr(feature = "naga-ir", allow(clippy::large_enum_variant))]
+#[cfg_attr(feature = "naga-ir", expect(clippy::large_enum_variant))]
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {

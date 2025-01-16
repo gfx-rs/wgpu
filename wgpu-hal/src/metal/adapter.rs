@@ -109,6 +109,18 @@ impl crate::Adapter for super::Adapter {
             ],
         );
 
+        let image_atomic_if = if pc.msl_version >= MTLLanguageVersion::V3_1 {
+            Tfc::STORAGE_ATOMIC
+        } else {
+            Tfc::empty()
+        };
+
+        let image_64_atomic_if = if pc.int64_atomics {
+            Tfc::STORAGE_ATOMIC
+        } else {
+            Tfc::empty()
+        };
+
         // Metal defined pixel format capabilities
         let all_caps = Tfc::SAMPLED_LINEAR
             | Tfc::STORAGE_WRITE_ONLY
@@ -154,7 +166,11 @@ impl crate::Adapter for super::Adapter {
                 Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
             }
             Tf::R32Uint | Tf::R32Sint => {
-                read_write_tier1_if | Tfc::STORAGE_WRITE_ONLY | Tfc::COLOR_ATTACHMENT | msaa_count
+                read_write_tier1_if
+                    | Tfc::STORAGE_WRITE_ONLY
+                    | Tfc::COLOR_ATTACHMENT
+                    | msaa_count
+                    | image_atomic_if
             }
             Tf::R32Float => {
                 let flags = if pc.format_r32float_all {
@@ -189,6 +205,12 @@ impl crate::Adapter for super::Adapter {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE_WRITE_ONLY, pc.format_rg11b10_all);
                 flags
+            }
+            Tf::R64Uint => {
+                Tfc::COLOR_ATTACHMENT
+                    | Tfc::STORAGE_WRITE_ONLY
+                    | image_64_atomic_if
+                    | read_write_tier1_if
             }
             Tf::Rg32Uint | Tf::Rg32Sint => {
                 Tfc::COLOR_ATTACHMENT | Tfc::STORAGE_WRITE_ONLY | msaa_count
@@ -374,12 +396,6 @@ impl crate::Adapter for super::Adapter {
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
-];
-
-const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::macOS_GPUFamily1_v3,
 ];
 
@@ -610,7 +626,7 @@ impl super::PrivateCapabilities {
             },
             msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT),
+            argument_buffers: device.argument_buffers_support(),
             shared_textures: !os_is_mac,
             mutable_comparison_samplers: Self::supports_any(
                 device,
@@ -844,6 +860,10 @@ impl super::PrivateCapabilities {
                 && ((device.supports_family(MTLGPUFamily::Apple8)
                     && device.supports_family(MTLGPUFamily::Mac2))
                     || device.supports_family(MTLGPUFamily::Apple9)),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
+            float_atomics: family_check
+                && (device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
         }
     }
@@ -905,18 +925,12 @@ impl super::PrivateCapabilities {
         features.set(
             F::TEXTURE_BINDING_ARRAY
                 | F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            self.msl_version >= MTLLanguageVersion::V2_0 && self.supports_arrays_of_textures,
+                | F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | F::PARTIALLY_BOUND_BINDING_ARRAY,
+            self.msl_version >= MTLLanguageVersion::V3_0
+                && self.supports_arrays_of_textures
+                && self.argument_buffers as u64 >= metal::MTLArgumentBuffersTier::Tier2 as u64,
         );
-        //// XXX: this is technically not true, as read-only storage images can be used in arrays
-        //// on precisely the same conditions that sampled textures can. But texel fetch from a
-        //// sampled texture is a thing; should we bother introducing another feature flag?
-        if self.msl_version >= MTLLanguageVersion::V2_2
-            && self.supports_arrays_of_textures
-            && self.supports_arrays_of_textures_write
-        {
-            features.insert(F::STORAGE_RESOURCE_BINDING_ARRAY);
-        }
         features.set(
             F::SHADER_INT64,
             self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
@@ -924,6 +938,18 @@ impl super::PrivateCapabilities {
         features.set(
             F::SHADER_INT64_ATOMIC_MIN_MAX,
             self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
+        );
+        features.set(
+            F::TEXTURE_INT64_ATOMIC,
+            self.int64_atomics && self.msl_version >= MTLLanguageVersion::V3_1,
+        );
+        features.set(
+            F::TEXTURE_ATOMIC,
+            self.msl_version >= MTLLanguageVersion::V3_1,
+        );
+        features.set(
+            F::SHADER_FLOAT32_ATOMIC,
+            self.float_atomics && self.msl_version >= MTLLanguageVersion::V3_0,
         );
 
         features.set(
@@ -1060,6 +1086,8 @@ impl super::PrivateCapabilities {
             Tf::Rgb10a2Uint => RGB10A2Uint,
             Tf::Rgb10a2Unorm => RGB10A2Unorm,
             Tf::Rg11b10Ufloat => RG11B10Float,
+            // Ruint64 textures are emulated on metal
+            Tf::R64Uint => RG32Uint,
             Tf::Rg32Uint => RG32Uint,
             Tf::Rg32Sint => RG32Sint,
             Tf::Rg32Float => RG32Float,

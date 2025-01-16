@@ -28,6 +28,14 @@ constant uint bitflip_u_u = 0u;
 constant uint bitflip_uai = 0u;
 constant int least_i32_ = -2147483648;
 constant float least_f32_ = -340282350000000000000000000000000000000.0;
+constant int shl_iaiai = 4;
+constant int shl_iai_u = 4;
+constant uint shl_uaiai = 4u;
+constant uint shl_uai_u = 4u;
+constant int shr_iaiai = 0;
+constant int shr_iai_u = 0;
+constant uint shr_uaiai = 0u;
+constant uint shr_uai_u = 0u;
 constant int wgpu_4492_ = -2147483648;
 constant int wgpu_4492_2_ = -2147483648;
 

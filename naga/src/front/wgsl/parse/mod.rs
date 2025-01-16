@@ -2,7 +2,7 @@ use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
     ShouldConflictOnFullDuplicate, StandardFilterableTriggeringRule,
 };
-use crate::front::wgsl::error::{Error, ExpectedToken};
+use crate::front::wgsl::error::{DiagnosticAttributeNotSupportedPosition, Error, ExpectedToken};
 use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtension, EnableExtensions, UnimplementedEnableExtension,
 };
@@ -950,9 +950,6 @@ impl Parser {
                     match enclosing {
                         Some(Rule::GenericExpr) => |token| match token {
                             Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
-                            Token::LogicalOperation('>') => {
-                                Some(crate::BinaryOperator::GreaterEqual)
-                            }
                             _ => None,
                         },
                         _ => |token| match token {
@@ -1638,6 +1635,10 @@ impl Parser {
             Scalar {
                 kind: Float | Sint | Uint,
                 width: 4,
+            } => Ok(()),
+            Scalar {
+                kind: Uint,
+                width: 8,
             } => Ok(()),
             _ => Err(Error::BadTextureSampleType { span, scalar }),
         }
@@ -2471,17 +2472,16 @@ impl Parser {
             unresolved: &mut dependencies,
         };
         let mut diagnostic_filters = DiagnosticFilterMap::new();
-        let ensure_no_diag_attrs =
-            |on_what_plural, filters: DiagnosticFilterMap| -> Result<(), Error> {
-                if filters.is_empty() {
-                    Ok(())
-                } else {
-                    Err(Error::DiagnosticAttributeNotSupported {
-                        on_what_plural,
-                        spans: filters.spans().collect(),
-                    })
-                }
-            };
+        let ensure_no_diag_attrs = |on_what, filters: DiagnosticFilterMap| -> Result<(), Error> {
+            if filters.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::DiagnosticAttributeNotSupported {
+                    on_what,
+                    spans: filters.spans().collect(),
+                })
+            }
+        };
 
         self.push_rule_span(Rule::Attribute, lexer);
         while lexer.skip(Token::Attribute) {
@@ -2568,14 +2568,17 @@ impl Parser {
         let start = lexer.start_byte_offset();
         let kind = match lexer.next() {
             (Token::Separator(';'), _) => {
-                ensure_no_diag_attrs("semicolons", diagnostic_filters)?;
+                ensure_no_diag_attrs(
+                    DiagnosticAttributeNotSupportedPosition::SemicolonInModulePosition,
+                    diagnostic_filters,
+                )?;
                 None
             }
             (Token::Word(word), directive_span) if DirectiveKind::from_ident(word).is_some() => {
                 return Err(Error::DirectiveAfterFirstGlobalDecl { directive_span });
             }
             (Token::Word("struct"), _) => {
-                ensure_no_diag_attrs("`struct`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`struct`s".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2583,7 +2586,7 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Struct(ast::Struct { name, members }))
             }
             (Token::Word("alias"), _) => {
-                ensure_no_diag_attrs("`alias`es", diagnostic_filters)?;
+                ensure_no_diag_attrs("`alias`es".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2593,7 +2596,7 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Type(ast::TypeAlias { name, ty }))
             }
             (Token::Word("const"), _) => {
-                ensure_no_diag_attrs("`const`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`const`s".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2611,7 +2614,7 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Const(ast::Const { name, ty, init }))
             }
             (Token::Word("override"), _) => {
-                ensure_no_diag_attrs("`override`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`override`s".into(), diagnostic_filters)?;
 
                 let name = lexer.next_ident()?;
 
@@ -2637,7 +2640,7 @@ impl Parser {
                 }))
             }
             (Token::Word("var"), _) => {
-                ensure_no_diag_attrs("`var`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`var`s".into(), diagnostic_filters)?;
 
                 let mut var = self.variable_decl(lexer, &mut ctx)?;
                 var.binding = binding.take();
@@ -2668,7 +2671,7 @@ impl Parser {
                 }))
             }
             (Token::Word("const_assert"), _) => {
-                ensure_no_diag_attrs("`const_assert`s", diagnostic_filters)?;
+                ensure_no_diag_attrs("`const_assert`s".into(), diagnostic_filters)?;
 
                 // parentheses are optional
                 let paren = lexer.skip(Token::Paren('('));

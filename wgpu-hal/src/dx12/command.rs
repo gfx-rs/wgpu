@@ -1,12 +1,15 @@
-use std::{mem, ops::Range};
-
-use windows::Win32::{Foundation, Graphics::Direct3D12};
-
 use super::conv;
 use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::borrow_interface_temporarily,
+    AccelerationStructureEntries,
 };
+use std::{mem, ops::Range};
+use windows::Win32::{
+    Foundation,
+    Graphics::{Direct3D12, Dxgi},
+};
+use windows_core::Interface;
 
 fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> Direct3D12::D3D12_BOX {
     Direct3D12::D3D12_BOX {
@@ -777,8 +780,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         // )
                         // TODO: Replace with the above in the next breaking windows-rs release,
                         // when https://github.com/microsoft/win32metadata/pull/1971 is in.
-                        (windows_core::Interface::vtable(list).ClearDepthStencilView)(
-                            windows_core::Interface::as_raw(list),
+                        (Interface::vtable(list).ClearDepthStencilView)(
+                            Interface::as_raw(list),
                             ds_view,
                             flags,
                             ds.clear_value.0,
@@ -1259,7 +1262,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        descriptors: T,
     ) where
         super::Api: 'a,
         T: IntoIterator<
@@ -1272,13 +1275,189 @@ impl crate::CommandEncoder for super::CommandEncoder {
     {
         // Implement using `BuildRaytracingAccelerationStructure`:
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
-        todo!()
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        for descriptor in descriptors {
+            // TODO: This is the same as getting build sizes apart from requiring buffers, should this be de-duped?
+            let mut geometry_desc;
+            let ty;
+            let inputs0;
+            let num_desc;
+            match descriptor.entries {
+                AccelerationStructureEntries::Instances(instances) => {
+                    let desc_address = unsafe {
+                        instances
+                            .buffer
+                            .expect("needs buffer to build")
+                            .resource
+                            .GetGPUVirtualAddress()
+                    } + instances.offset as u64;
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        InstanceDescs: desc_address,
+                    };
+                    num_desc = instances.count;
+                }
+                AccelerationStructureEntries::Triangles(triangles) => {
+                    geometry_desc = Vec::with_capacity(triangles.len());
+                    for triangle in triangles {
+                        let transform_address =
+                            triangle.transform.as_ref().map_or(0, |transform| unsafe {
+                                transform.buffer.resource.GetGPUVirtualAddress()
+                                    + transform.offset as u64
+                            });
+                        let index_format = triangle
+                            .indices
+                            .as_ref()
+                            .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |indices| {
+                                auxil::dxgi::conv::map_index_format(indices.format)
+                            });
+                        let vertex_format =
+                            auxil::dxgi::conv::map_vertex_format(triangle.vertex_format);
+                        let index_count =
+                            triangle.indices.as_ref().map_or(0, |indices| indices.count);
+                        let index_address = triangle.indices.as_ref().map_or(0, |indices| unsafe {
+                            indices
+                                .buffer
+                                .expect("needs buffer to build")
+                                .resource
+                                .GetGPUVirtualAddress()
+                                + indices.offset as u64
+                        });
+                        let vertex_address = unsafe {
+                            triangle
+                                .vertex_buffer
+                                .expect("needs buffer to build")
+                                .resource
+                                .GetGPUVirtualAddress()
+                                + (triangle.first_vertex as u64 * triangle.vertex_stride)
+                        };
+
+                        let triangle_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC {
+                            Transform3x4: transform_address,
+                            IndexFormat: index_format,
+                            VertexFormat: vertex_format,
+                            IndexCount: index_count,
+                            VertexCount: triangle.vertex_count,
+                            IndexBuffer: index_address,
+                            VertexBuffer: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                                StartAddress: vertex_address,
+                                StrideInBytes: triangle.vertex_stride,
+                            },
+                        };
+
+                        geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
+                            Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+                            Flags: conv::map_acceleration_structure_geometry_flags(triangle.flags),
+                            Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
+                                Triangles: triangle_desc,
+                            },
+                        })
+                    }
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        pGeometryDescs: geometry_desc.as_ptr(),
+                    };
+                    num_desc = geometry_desc.len() as u32;
+                }
+                AccelerationStructureEntries::AABBs(aabbs) => {
+                    geometry_desc = Vec::with_capacity(aabbs.len());
+                    for aabb in aabbs {
+                        let aabb_address = unsafe {
+                            aabb.buffer
+                                .expect("needs buffer to build")
+                                .resource
+                                .GetGPUVirtualAddress()
+                                + (aabb.offset as u64 * aabb.stride)
+                        };
+
+                        let aabb_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_AABBS_DESC {
+                            AABBCount: aabb.count as u64,
+                            AABBs: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                                StartAddress: aabb_address,
+                                StrideInBytes: aabb.stride,
+                            },
+                        };
+
+                        geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
+                            Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS,
+                            Flags: conv::map_acceleration_structure_geometry_flags(aabb.flags),
+                            Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
+                                AABBs: aabb_desc,
+                            },
+                        })
+                    }
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        pGeometryDescs: geometry_desc.as_ptr(),
+                    };
+                    num_desc = geometry_desc.len() as u32;
+                }
+            };
+            let acceleration_structure_inputs =
+                Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS {
+                    Type: ty,
+                    Flags: conv::map_acceleration_structure_build_flags(
+                        descriptor.flags,
+                        Some(descriptor.mode),
+                    ),
+                    NumDescs: num_desc,
+                    DescsLayout: Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
+                    Anonymous: inputs0,
+                };
+
+            let dst_acceleration_structure_address = unsafe {
+                descriptor
+                    .destination_acceleration_structure
+                    .resource
+                    .GetGPUVirtualAddress()
+            };
+            let src_acceleration_structure_address = descriptor
+                .source_acceleration_structure
+                .as_ref()
+                .map_or(0, |source| unsafe {
+                    source.resource.GetGPUVirtualAddress()
+                });
+            let scratch_address = unsafe {
+                descriptor.scratch_buffer.resource.GetGPUVirtualAddress()
+                    + descriptor.scratch_buffer_offset
+            };
+
+            let desc = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC {
+                DestAccelerationStructureData: dst_acceleration_structure_address,
+                Inputs: acceleration_structure_inputs,
+                SourceAccelerationStructureData: src_acceleration_structure_address,
+                ScratchAccelerationStructureData: scratch_address,
+            };
+            unsafe { list.BuildRaytracingAccelerationStructure(&desc, None) };
+        }
     }
 
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
     ) {
-        todo!()
+        // TODO: This is not very optimal, we should be using [enhanced barriers](https://microsoft.github.io/DirectX-Specs/d3d/D3D12EnhancedBarriers.html) if possible
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        unsafe {
+            list.ResourceBarrier(&[Direct3D12::D3D12_RESOURCE_BARRIER {
+                Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
+                Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
+                    UAV: mem::ManuallyDrop::new(Direct3D12::D3D12_RESOURCE_UAV_BARRIER {
+                        pResource: Default::default(),
+                    }),
+                },
+            }])
+        }
     }
 }

@@ -3,7 +3,7 @@ use crate::{
     dispatch::{self, BufferMappedRangeInterface, InterfaceTypes},
     BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
-    ShaderSource, StoreOp, SurfaceTargetUnsafe, TextureDescriptor,
+    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -382,7 +382,7 @@ fn map_texture_copy_view(
 
 #[cfg_attr(
     any(not(target_arch = "wasm32"), target_os = "emscripten"),
-    allow(unused)
+    expect(unused)
 )]
 fn map_texture_tagged_copy_view(
     view: wgt::CopyExternalImageDestInfo<&api::Texture>,
@@ -397,35 +397,23 @@ fn map_texture_tagged_copy_view(
     }
 }
 
-fn map_store_op(op: StoreOp) -> wgc::command::StoreOp {
-    match op {
-        StoreOp::Store => wgc::command::StoreOp::Store,
-        StoreOp::Discard => wgc::command::StoreOp::Discard,
-    }
-}
-
-fn map_load_op<V>(op: LoadOp<V>) -> (wgc::command::LoadOp, Option<V>) {
-    match op {
-        LoadOp::Clear(v) => (wgc::command::LoadOp::Clear, Some(v)),
-        LoadOp::Load => (wgc::command::LoadOp::Load, None),
+fn map_load_op<V: Copy>(load: &LoadOp<V>) -> LoadOp<Option<V>> {
+    match load {
+        LoadOp::Clear(clear_value) => LoadOp::Clear(Some(*clear_value)),
+        LoadOp::Load => LoadOp::Load,
     }
 }
 
 fn map_pass_channel<V: Copy>(ops: Option<&Operations<V>>) -> wgc::command::PassChannel<Option<V>> {
     match ops {
-        Some(&Operations { load, store }) => {
-            let (load_op, clear_value) = map_load_op(load);
-            wgc::command::PassChannel {
-                load_op: Some(load_op),
-                store_op: Some(map_store_op(store)),
-                clear_value,
-                read_only: false,
-            }
-        }
+        Some(&Operations { load, store }) => wgc::command::PassChannel {
+            load_op: Some(map_load_op(&load)),
+            store_op: Some(store),
+            read_only: false,
+        },
         None => wgc::command::PassChannel {
             load_op: None,
             store_op: None,
-            clear_value: None,
             read_only: true,
         },
     }
@@ -779,7 +767,7 @@ impl InterfaceTypes for ContextWgpuCore {
 }
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
-    fn new(desc: wgt::InstanceDescriptor) -> Self
+    fn new(desc: &wgt::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {
@@ -822,12 +810,13 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             },
         }?;
 
-        Ok(dispatch::DispatchSurface::Core(CoreSurface {
+        Ok(CoreSurface {
             context: self.clone(),
             id,
             configured_device: Mutex::default(),
             error_sink: Mutex::default(),
-        }))
+        }
+        .into())
     }
 
     fn request_adapter(
@@ -861,6 +850,18 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             Ok(all_queue_empty) => all_queue_empty,
             Err(err) => self.handle_error_fatal(err, "Instance::poll_all_devices"),
         }
+    }
+
+    #[cfg(feature = "wgsl")]
+    fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures {
+        wgc::naga::front::wgsl::ImplementedLanguageExtension::all()
+            .iter()
+            .copied()
+            .fold(
+                crate::WgslLanguageFeatures::empty(),
+                #[expect(unreachable_code)]
+                |acc, wle| acc | match wle {},
+            )
     }
 }
 
@@ -962,7 +963,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             feature = "wgsl",
             feature = "naga-ir"
         )),
-        allow(unreachable_code, unused)
+        expect(unused)
     )]
     fn create_shader_module(
         &self,
@@ -1166,7 +1167,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     }
                     BindingResource::AccelerationStructure(acceleration_structure) => {
                         bm::BindingResource::AccelerationStructure(
-                            acceleration_structure.inner.as_core().id,
+                            acceleration_structure.shared.inner.as_core().id,
                         )
                     }
                 },
@@ -1464,7 +1465,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             global.device_create_tlas(self.id, &desc.map_label(|l| l.map(Borrowed)), None);
         if let Some(cause) = error {
             self.context
-                .handle_error(&self.error_sink, cause, desc.label, "Device::create_blas");
+                .handle_error(&self.error_sink, cause, desc.label, "Device::create_tlas");
         }
         CoreTlas {
             context: self.context.clone(),
@@ -1967,6 +1968,7 @@ impl dispatch::TextureInterface for CoreTexture {
             label: desc.label.map(Borrowed),
             format: desc.format,
             dimension: desc.dimension,
+            usage: desc.usage,
             range: wgt::ImageSubresourceRange {
                 aspect: desc.aspect,
                 base_mip_level: desc.base_mip_level,
@@ -2002,12 +2004,7 @@ impl Drop for CoreTexture {
     }
 }
 
-impl dispatch::BlasInterface for CoreBlas {
-    fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.blas_destroy(self.id);
-    }
-}
+impl dispatch::BlasInterface for CoreBlas {}
 
 impl Drop for CoreBlas {
     fn drop(&mut self) {
@@ -2015,12 +2012,7 @@ impl Drop for CoreBlas {
     }
 }
 
-impl dispatch::TlasInterface for CoreTlas {
-    fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.tlas_destroy(self.id);
-    }
-}
+impl dispatch::TlasInterface for CoreTlas {}
 
 impl Drop for CoreTlas {
     fn drop(&mut self) {
@@ -2245,16 +2237,13 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             .color_attachments
             .iter()
             .map(|ca| {
-                ca.as_ref().map(|at| {
-                    let (load_op, clear_value) = map_load_op(at.ops.load);
-                    wgc::command::RenderPassColorAttachment {
+                ca.as_ref()
+                    .map(|at| wgc::command::RenderPassColorAttachment {
                         view: at.view.inner.as_core().id,
                         resolve_target: at.resolve_target.map(|view| view.inner.as_core().id),
-                        load_op,
-                        store_op: map_store_op(at.ops.store),
-                        clear_value: clear_value.unwrap_or_default(),
-                    }
-                })
+                        load_op: at.ops.load,
+                        store_op: at.ops.store,
+                    })
             })
             .collect::<Vec<_>>();
 
@@ -2458,21 +2447,21 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             transform_buffer_offset: tg.transform_buffer_offset,
                             first_vertex: tg.first_vertex,
                             vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
+                            first_index: tg.first_index,
                         }
                     });
                     wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.shared.inner.as_core().id,
+                blas_id: e.blas.inner.as_core().id,
                 geometries,
             }
         });
 
         let tlas = tlas.into_iter().map(|e: &crate::TlasBuildEntry<'a>| {
             wgc::ray_tracing::TlasBuildEntry {
-                tlas_id: e.tlas.inner.as_core().id,
+                tlas_id: e.tlas.shared.inner.as_core().id,
                 instance_buffer_id: e.instance_buffer.inner.as_core().id,
                 instance_count: e.instance_count,
             }
@@ -2508,14 +2497,14 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                             transform_buffer_offset: tg.transform_buffer_offset,
                             first_vertex: tg.first_vertex,
                             vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
+                            first_index: tg.first_index,
                         }
                     });
                     wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
                 }
             };
             wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.shared.inner.as_core().id,
+                blas_id: e.blas.inner.as_core().id,
                 geometries,
             }
         });
@@ -2528,14 +2517,14 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                     instance
                         .as_ref()
                         .map(|instance| wgc::ray_tracing::TlasInstance {
-                            blas_id: instance.blas.inner.as_core().id,
+                            blas_id: instance.blas.as_core().id,
                             transform: &instance.transform,
                             custom_index: instance.custom_index,
                             mask: instance.mask,
                         })
                 });
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.tlas.inner.as_core().id,
+                tlas_id: e.tlas.shared.inner.as_core().id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }

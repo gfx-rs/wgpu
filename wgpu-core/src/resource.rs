@@ -570,10 +570,7 @@ impl Buffer {
                     };
                     Ok(())
                 }
-                Err(e) => {
-                    log::error!("Mapping failed: {e}");
-                    Err(e)
-                }
+                Err(e) => Err(e),
             }
         } else {
             *self.map_state.lock() = BufferMapState::Active {
@@ -1060,6 +1057,7 @@ impl Texture {
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
     }
+
     /// Checks that the given texture usage contains the required texture usage,
     /// returns an error otherwise.
     pub(crate) fn check_usage(
@@ -1380,7 +1378,7 @@ impl Global {
         if let Ok(mut cmd_buf_data_guard) = cmd_buf_data_guard {
             let cmd_buf_raw = cmd_buf_data_guard
                 .encoder
-                .open(&cmd_buf.device)
+                .open()
                 .ok()
                 .and_then(|encoder| encoder.as_any_mut().downcast_mut());
             let ret = hal_command_encoder_callback(cmd_buf_raw);
@@ -1498,8 +1496,8 @@ pub enum CreateTextureError {
     )]
     InvalidMipLevelCount { requested: u32, maximum: u32 },
     #[error(
-        "Texture usages {0:?} are not allowed on a texture of type {1:?}{}",
-        if *.2 { " due to downlevel restrictions" } else { "" }
+        "Texture usages {0:?} are not allowed on a texture of type {1:?}{downlevel_suffix}",
+        downlevel_suffix = if *.2 { " due to downlevel restrictions" } else { "" }
     )]
     InvalidFormatUsages(wgt::TextureUsages, wgt::TextureFormat, bool),
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
@@ -1552,6 +1550,9 @@ pub struct TextureViewDescriptor<'a> {
     /// - For 2D textures it must be one of `D2`, `D2Array`, `Cube`, or `CubeArray`.
     /// - For 3D textures it must be `D3`.
     pub dimension: Option<wgt::TextureViewDimension>,
+    /// The allowed usage(s) for the texture view. Must be a subset of the usage flags of the texture.
+    /// If not provided, defaults to the full set of usage flags of the texture.
+    pub usage: Option<wgt::TextureUsages>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
 }
@@ -1560,6 +1561,7 @@ pub struct TextureViewDescriptor<'a> {
 pub(crate) struct HalTextureViewDescriptor {
     pub texture_format: wgt::TextureFormat,
     pub format: wgt::TextureFormat,
+    pub usage: wgt::TextureUsages,
     pub dimension: wgt::TextureViewDimension,
     pub range: wgt::ImageSubresourceRange,
 }
@@ -1631,6 +1633,23 @@ impl TextureView {
             .map(|it| it.as_ref())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
+
+    /// Checks that the given texture usage contains the required texture usage,
+    /// returns an error otherwise.
+    pub(crate) fn check_usage(
+        &self,
+        expected: wgt::TextureUsages,
+    ) -> Result<(), MissingTextureUsageError> {
+        if self.desc.usage.contains(expected) {
+            Ok(())
+        } else {
+            Err(MissingTextureUsageError {
+                res: self.error_ident(),
+                actual: self.desc.usage,
+                expected,
+            })
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -1644,6 +1663,15 @@ pub enum CreateTextureViewError {
     InvalidTextureViewDimension {
         view: wgt::TextureViewDimension,
         texture: wgt::TextureDimension,
+    },
+    #[error("Texture view format `{0:?}` is not renderable")]
+    TextureViewFormatNotRenderable(wgt::TextureFormat),
+    #[error("Texture view format `{0:?}` is not storage bindable")]
+    TextureViewFormatNotStorage(wgt::TextureFormat),
+    #[error("Invalid texture view usage `{view:?}` with texture of usage `{texture:?}`")]
+    InvalidTextureViewUsage {
+        view: wgt::TextureUsages,
+        texture: wgt::TextureUsages,
     },
     #[error("Invalid texture view dimension `{0:?}` of a multisampled texture")]
     InvalidMultisampledTextureViewDimension(wgt::TextureViewDimension),
@@ -1680,6 +1708,8 @@ pub enum CreateTextureViewError {
     },
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -1859,7 +1889,10 @@ pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
 pub(crate) trait AccelerationStructure: Trackable {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure>;
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError>;
 }
 
 #[derive(Debug)]
@@ -1890,49 +1923,14 @@ impl Drop for Blas {
 }
 
 impl AccelerationStructure for Blas {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
-        Some(self.raw.get(guard)?.as_ref())
-    }
-}
-
-impl Blas {
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
-        let device = &self.device;
-
-        let temp = {
-            let mut snatch_guard = device.snatchable_lock.write();
-
-            let raw = match self.raw.snatch(&mut snatch_guard) {
-                Some(raw) => raw,
-                None => {
-                    return Err(DestroyError::AlreadyDestroyed);
-                }
-            };
-
-            drop(snatch_guard);
-
-            queue::TempResource::DestroyedAccelerationStructure(DestroyedAccelerationStructure {
-                raw: ManuallyDrop::new(raw),
-                device: Arc::clone(&self.device),
-                label: self.label().to_owned(),
-                bind_groups: WeakVec::new(),
-            })
-        };
-
-        if let Some(queue) = device.get_queue() {
-            let mut pending_writes = queue.pending_writes.lock();
-            if pending_writes.contains_blas(self) {
-                pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_blas_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
-                }
-            }
-        }
-
-        Ok(())
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError> {
+        self.raw
+            .get(guard)
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 }
 
@@ -1956,7 +1954,6 @@ pub struct Tlas {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
 
 impl Drop for Tlas {
@@ -1973,8 +1970,14 @@ impl Drop for Tlas {
 }
 
 impl AccelerationStructure for Tlas {
-    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynAccelerationStructure> {
-        Some(self.raw.get(guard)?.as_ref())
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError> {
+        self.raw
+            .get(guard)
+            .map(|raw| raw.as_ref())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 }
 
@@ -1983,76 +1986,3 @@ crate::impl_labeled!(Tlas);
 crate::impl_parent_device!(Tlas);
 crate::impl_storage_item!(Tlas);
 crate::impl_trackable!(Tlas);
-
-impl Tlas {
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
-        let device = &self.device;
-
-        let temp = {
-            let mut snatch_guard = device.snatchable_lock.write();
-
-            let raw = match self.raw.snatch(&mut snatch_guard) {
-                Some(raw) => raw,
-                None => {
-                    return Err(DestroyError::AlreadyDestroyed);
-                }
-            };
-
-            drop(snatch_guard);
-
-            queue::TempResource::DestroyedAccelerationStructure(DestroyedAccelerationStructure {
-                raw: ManuallyDrop::new(raw),
-                device: Arc::clone(&self.device),
-                label: self.label().to_owned(),
-                bind_groups: mem::take(&mut self.bind_groups.lock()),
-            })
-        };
-
-        if let Some(queue) = device.get_queue() {
-            let mut pending_writes = queue.pending_writes.lock();
-            if pending_writes.contains_tlas(self) {
-                pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_tlas_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub struct DestroyedAccelerationStructure {
-    raw: ManuallyDrop<Box<dyn hal::DynAccelerationStructure>>,
-    device: Arc<Device>,
-    label: String,
-    // only filled if the acceleration structure is a TLAS
-    bind_groups: WeakVec<BindGroup>,
-}
-
-impl DestroyedAccelerationStructure {
-    pub fn label(&self) -> &dyn Debug {
-        &self.label
-    }
-}
-
-impl Drop for DestroyedAccelerationStructure {
-    fn drop(&mut self) {
-        let mut deferred = self.device.deferred_destroy.lock();
-        deferred.push(DeferredDestroy::BindGroups(mem::take(
-            &mut self.bind_groups,
-        )));
-        drop(deferred);
-
-        resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
-        // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
-        let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        unsafe {
-            hal::DynDevice::destroy_acceleration_structure(self.device.raw(), raw);
-        }
-    }
-}

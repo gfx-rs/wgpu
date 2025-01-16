@@ -789,6 +789,18 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
         ),
         (
+            "atomicTexture",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "atomicOps-float32",
+            Targets::SPIRV | Targets::METAL | Targets::WGSL,
+        ),
+        (
+            "atomicTexture-int64",
+            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
             "atomicCompareExchange-int64",
             Targets::SPIRV | Targets::WGSL,
         ),
@@ -867,7 +879,7 @@ fn convert_wgsl() {
         ("sprite", Targets::SPIRV),
         ("force_point_size_vertex_shader_webgl", Targets::GLSL),
         ("invariant", Targets::GLSL),
-        ("ray-query", Targets::SPIRV | Targets::METAL),
+        ("ray-query", Targets::SPIRV | Targets::METAL | Targets::HLSL),
         ("hlsl-keyword", Targets::HLSL),
         (
             "constructors",
@@ -945,6 +957,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("diagnostic-filter", Targets::IR),
+        (
+            "6772-unpack-expr-accesses",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

@@ -54,8 +54,13 @@ pub enum ExpressionError {
         rhs_expr: Handle<crate::Expression>,
         rhs_type: crate::TypeInner,
     },
-    #[error("Selecting is not possible")]
-    InvalidSelectTypes,
+    #[error("Expected selection argument types to match, but reject value of type {reject:?} does not match accept value of value {accept:?}")]
+    SelectValuesTypeMismatch {
+        accept: crate::TypeInner,
+        reject: crate::TypeInner,
+    },
+    #[error("Expected selection condition to be a boolean value, got {actual:?}")]
+    SelectConditionNotABool { actual: crate::TypeInner },
     #[error("Relational argument {0:?} is not a boolean vector")]
     InvalidBooleanVector(Handle<crate::Expression>),
     #[error("Relational argument {0:?} is not a float")]
@@ -74,6 +79,10 @@ pub enum ExpressionError {
     ExpectedSamplerType(Handle<crate::Type>),
     #[error("Unable to operate on image class {0:?}")]
     InvalidImageClass(crate::ImageClass),
+    #[error("Image atomics are not supported for storage format {0:?}")]
+    InvalidImageFormat(crate::StorageFormat),
+    #[error("Image atomics require atomic storage access, {0:?} is insufficient")]
+    InvalidImageStorageAccess(crate::StorageAccess),
     #[error("Derivatives can only be taken from scalar and vector floats")]
     InvalidDerivative,
     #[error("Image array index parameter is misplaced")]
@@ -253,7 +262,7 @@ impl super::Validator {
                     | Ti::Array { .. }
                     | Ti::Pointer { .. }
                     | Ti::ValuePointer { size: Some(_), .. }
-                    | Ti::BindingArray { .. } => false,
+                    | Ti::BindingArray { .. } => {}
                     ref other => {
                         log::error!("Indexing of {:?}", other);
                         return Err(ExpressionError::InvalidBaseType(base));
@@ -901,7 +910,8 @@ impl super::Validator {
             } => {
                 let accept_inner = &resolver[accept];
                 let reject_inner = &resolver[reject];
-                let condition_good = match resolver[condition] {
+                let condition_ty = &resolver[condition];
+                let condition_good = match *condition_ty {
                     Ti::Scalar(Sc {
                         kind: Sk::Bool,
                         width: _,
@@ -928,8 +938,16 @@ impl super::Validator {
                     },
                     _ => false,
                 };
-                if !condition_good || accept_inner != reject_inner {
-                    return Err(ExpressionError::InvalidSelectTypes);
+                if accept_inner != reject_inner {
+                    return Err(ExpressionError::SelectValuesTypeMismatch {
+                        accept: accept_inner.clone(),
+                        reject: reject_inner.clone(),
+                    });
+                }
+                if !condition_good {
+                    return Err(ExpressionError::SelectConditionNotABool {
+                        actual: condition_ty.clone(),
+                    });
                 }
                 ShaderStages::all()
             }

@@ -4,7 +4,7 @@
 // See #6145 for more info.
 
 fn main() {
-    let instance = wgpu::Instance::new(Default::default());
+    let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).unwrap();
     let (device, queue) =
         pollster::block_on(adapter.request_device(&Default::default(), None)).unwrap();

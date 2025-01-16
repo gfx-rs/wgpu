@@ -38,7 +38,7 @@ use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
 };
 
-use crate::resource::{AccelerationStructure, DestroyedResourceError, Tlas};
+use crate::resource::{AccelerationStructure, Tlas};
 use std::{
     borrow::Cow,
     mem::{self, ManuallyDrop},
@@ -1086,6 +1086,39 @@ impl Device {
                         .saturating_sub(desc.range.base_array_layer),
                 });
 
+        let resolved_usage = {
+            let usage = desc.usage.unwrap_or(wgt::TextureUsages::empty());
+            if usage.is_empty() {
+                texture.desc.usage
+            } else if texture.desc.usage.contains(usage) {
+                usage
+            } else {
+                return Err(resource::CreateTextureViewError::InvalidTextureViewUsage {
+                    view: usage,
+                    texture: texture.desc.usage,
+                });
+            }
+        };
+
+        let allowed_format_usages = self
+            .describe_format_features(resolved_format)?
+            .allowed_usages;
+        if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+        {
+            return Err(
+                resource::CreateTextureViewError::TextureViewFormatNotRenderable(resolved_format),
+            );
+        }
+
+        if resolved_usage.contains(wgt::TextureUsages::STORAGE_BINDING)
+            && !allowed_format_usages.contains(wgt::TextureUsages::STORAGE_BINDING)
+        {
+            return Err(
+                resource::CreateTextureViewError::TextureViewFormatNotStorage(resolved_format),
+            );
+        }
+
         // validate TextureViewDescriptor
 
         let aspects = hal::FormatAspects::new(texture.desc.format, desc.range.aspect);
@@ -1207,12 +1240,8 @@ impl Device {
 
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
         let render_extent = 'error: {
-            if !texture
-                .desc
-                .usage
-                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-            {
-                break 'error Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
+            if !resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
             }
 
             if !(resolved_dimension == TextureViewDimension::D2
@@ -1309,6 +1338,7 @@ impl Device {
                 texture_format: texture.desc.format,
                 format: resolved_format,
                 dimension: resolved_dimension,
+                usage: resolved_usage,
                 range: resolved_range,
             },
             format_features: texture.format_features,
@@ -1760,6 +1790,14 @@ impl Device {
                         _ => (),
                     }
                     match access {
+                        wgt::StorageTextureAccess::Atomic
+                            if !self.features.contains(wgt::Features::TEXTURE_ATOMIC) =>
+                        {
+                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                                binding: entry.binding,
+                                error: BindGroupLayoutEntryError::StorageTextureAtomic,
+                            });
+                        }
                         wgt::StorageTextureAccess::ReadOnly
                         | wgt::StorageTextureAccess::ReadWrite
                             if !self.features.contains(
@@ -1788,6 +1826,10 @@ impl Device {
                             wgt::StorageTextureAccess::ReadWrite => {
                                 required_features |=
                                     wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+                                WritableStorage::Yes
+                            }
+                            wgt::StorageTextureAccess::Atomic => {
+                                required_features |= wgt::Features::TEXTURE_ATOMIC;
                                 WritableStorage::Yes
                             }
                         },
@@ -2090,7 +2132,7 @@ impl Device {
     {
         view.same_device(self)?;
 
-        let (pub_usage, internal_use) = self.texture_use_parameters(
+        let internal_use = self.texture_use_parameters(
             binding,
             decl,
             view,
@@ -2100,7 +2142,6 @@ impl Device {
         used.views.insert_single(view.clone(), internal_use);
 
         let texture = &view.parent;
-        texture.check_usage(pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
             texture: texture.clone(),
@@ -2145,9 +2186,7 @@ impl Device {
             }
         }
 
-        Ok(tlas
-            .raw(snatch_guard)
-            .ok_or(DestroyedResourceError(tlas.error_ident()))?)
+        Ok(tlas.try_raw(snatch_guard)?)
     }
 
     // This function expects the provided bind group layout to be resolved
@@ -2399,7 +2438,7 @@ impl Device {
         decl: &wgt::BindGroupLayoutEntry,
         view: &TextureView,
         expected: &'static str,
-    ) -> Result<(wgt::TextureUsages, hal::TextureUses), binding_model::CreateBindGroupError> {
+    ) -> Result<hal::TextureUses, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
         if view
             .desc
@@ -2458,10 +2497,8 @@ impl Device {
                         view_dimension: view.desc.dimension,
                     });
                 }
-                Ok((
-                    wgt::TextureUsages::TEXTURE_BINDING,
-                    hal::TextureUses::RESOURCE,
-                ))
+                view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
+                Ok(hal::TextureUses::RESOURCE)
             }
             wgt::BindingType::StorageTexture {
                 access,
@@ -2523,8 +2560,20 @@ impl Device {
 
                         hal::TextureUses::STORAGE_READ_WRITE
                     }
+                    wgt::StorageTextureAccess::Atomic => {
+                        if !view
+                            .format_features
+                            .flags
+                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_ATOMIC)
+                        {
+                            return Err(Error::StorageAtomicNotSupported(view.desc.format));
+                        }
+
+                        hal::TextureUses::STORAGE_ATOMIC
+                    }
                 };
-                Ok((wgt::TextureUsages::STORAGE_BINDING, internal_use))
+                view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;
+                Ok(internal_use)
             }
             _ => Err(Error::WrongBindingType {
                 binding,
@@ -2873,18 +2922,8 @@ impl Device {
         let mut shader_expects_dual_source_blending = false;
         let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
-            let mut last_stride = 0;
-            for attribute in vb_state.attributes.iter() {
-                last_stride = last_stride.max(attribute.offset + attribute.format.size());
-            }
-            vertex_steps.push(pipeline::VertexStep {
-                stride: vb_state.array_stride,
-                last_stride,
-                mode: vb_state.step_mode,
-            });
-            if vb_state.attributes.is_empty() {
-                continue;
-            }
+            // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
+
             if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
                 return Err(pipeline::CreateRenderPipelineError::VertexStrideTooLarge {
                     index: i as u32,
@@ -2897,6 +2936,54 @@ impl Device {
                     index: i as u32,
                     stride: vb_state.array_stride,
                 });
+            }
+
+            let max_stride = if vb_state.array_stride == 0 {
+                self.limits.max_vertex_buffer_array_stride as u64
+            } else {
+                vb_state.array_stride
+            };
+            let mut last_stride = 0;
+            for attribute in vb_state.attributes.iter() {
+                let attribute_stride = attribute.offset + attribute.format.size();
+                if attribute_stride > max_stride {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::VertexAttributeStrideTooLarge {
+                            location: attribute.shader_location,
+                            given: attribute_stride as u32,
+                            limit: max_stride as u32,
+                        },
+                    );
+                }
+
+                let required_offset_alignment = attribute.format.size().min(4);
+                if attribute.offset % required_offset_alignment != 0 {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
+                            location: attribute.shader_location,
+                            offset: attribute.offset,
+                        },
+                    );
+                }
+
+                if attribute.shader_location >= self.limits.max_vertex_attributes {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
+                            given: attribute.shader_location,
+                            limit: self.limits.max_vertex_attributes,
+                        },
+                    );
+                }
+
+                last_stride = last_stride.max(attribute_stride);
+            }
+            vertex_steps.push(pipeline::VertexStep {
+                stride: vb_state.array_stride,
+                last_stride,
+                mode: vb_state.step_mode,
+            });
+            if vb_state.attributes.is_empty() {
+                continue;
             }
             vertex_buffers.push(hal::VertexBufferLayout {
                 array_stride: vb_state.array_stride,

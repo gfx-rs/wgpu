@@ -9,7 +9,7 @@ use crate::*;
 /// It can be created with [`Device::create_sampler`].
 ///
 /// Corresponds to [WebGPU `GPUSampler`](https://gpuweb.github.io/gpuweb/#sampler-interface).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Sampler {
     pub(crate) inner: dispatch::DispatchSampler,
 }

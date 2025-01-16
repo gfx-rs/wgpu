@@ -63,7 +63,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, instance_desc: wgt::InstanceDescriptor) -> Self {
+    pub fn new(name: &str, instance_desc: &wgt::InstanceDescriptor) -> Self {
         fn init<A: HalApi>(
             _: A,
             instance_desc: &wgt::InstanceDescriptor,
@@ -73,8 +73,12 @@ impl Instance {
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
                     flags: instance_desc.flags,
-                    dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
-                    gles_minor_version: instance_desc.gles_minor_version,
+                    dx12_shader_compiler: instance_desc
+                        .backend_options
+                        .dx12
+                        .shader_compiler
+                        .clone(),
+                    gles_minor_version: instance_desc.backend_options.gl.gles_minor_version,
                 };
 
                 use hal::Instance as _;
@@ -99,13 +103,13 @@ impl Instance {
         let mut instance_per_backend = Vec::new();
 
         #[cfg(vulkan)]
-        init(hal::api::Vulkan, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Vulkan, instance_desc, &mut instance_per_backend);
         #[cfg(metal)]
-        init(hal::api::Metal, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Metal, instance_desc, &mut instance_per_backend);
         #[cfg(dx12)]
-        init(hal::api::Dx12, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Dx12, instance_desc, &mut instance_per_backend);
         #[cfg(gles)]
-        init(hal::api::Gles, &instance_desc, &mut instance_per_backend);
+        init(hal::api::Gles, instance_desc, &mut instance_per_backend);
 
         Self {
             name: name.to_string(),
@@ -538,12 +542,19 @@ impl Adapter {
         allowed_usages.set(
             wgt::TextureUsages::STORAGE_BINDING,
             caps.intersects(
-                Tfc::STORAGE_WRITE_ONLY | Tfc::STORAGE_READ_ONLY | Tfc::STORAGE_READ_WRITE,
+                Tfc::STORAGE_WRITE_ONLY
+                    | Tfc::STORAGE_READ_ONLY
+                    | Tfc::STORAGE_READ_WRITE
+                    | Tfc::STORAGE_ATOMIC,
             ),
         );
         allowed_usages.set(
             wgt::TextureUsages::RENDER_ATTACHMENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
+        );
+        allowed_usages.set(
+            wgt::TextureUsages::STORAGE_ATOMIC,
+            caps.contains(Tfc::STORAGE_ATOMIC),
         );
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
@@ -558,6 +569,11 @@ impl Adapter {
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
             caps.contains(Tfc::STORAGE_READ_WRITE),
+        );
+
+        flags.set(
+            wgt::TextureFormatFeatureFlags::STORAGE_ATOMIC,
+            caps.contains(Tfc::STORAGE_ATOMIC),
         );
 
         flags.set(
@@ -968,39 +984,4 @@ impl Global {
 
         Ok((device_id, queue_id))
     }
-}
-
-/// Generates a set of backends from a comma separated list of case-insensitive backend names.
-///
-/// Whitespace is stripped, so both 'gl, dx12' and 'gl,dx12' are valid.
-///
-/// Always returns WEBGPU on wasm over webgpu.
-///
-/// Names:
-/// - vulkan = "vulkan" or "vk"
-/// - dx12   = "dx12" or "d3d12"
-/// - metal  = "metal" or "mtl"
-/// - gles   = "opengl" or "gles" or "gl"
-/// - webgpu = "webgpu"
-pub fn parse_backends_from_comma_list(string: &str) -> Backends {
-    let mut backends = Backends::empty();
-    for backend in string.to_lowercase().split(',') {
-        backends |= match backend.trim() {
-            "vulkan" | "vk" => Backends::VULKAN,
-            "dx12" | "d3d12" => Backends::DX12,
-            "metal" | "mtl" => Backends::METAL,
-            "opengl" | "gles" | "gl" => Backends::GL,
-            "webgpu" => Backends::BROWSER_WEBGPU,
-            b => {
-                log::warn!("unknown backend string '{}'", b);
-                continue;
-            }
-        }
-    }
-
-    if backends.is_empty() {
-        log::warn!("no valid backend strings found!");
-    }
-
-    backends
 }

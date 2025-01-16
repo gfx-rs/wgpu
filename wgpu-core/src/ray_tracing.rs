@@ -9,9 +9,9 @@
 
 use crate::{
     command::CommandEncoderError,
-    device::DeviceError,
+    device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
-    resource::CreateBufferError,
+    resource::{DestroyedResourceError, InvalidResourceError, MissingBufferUsageError},
 };
 use std::num::NonZeroU64;
 use std::sync::Arc;
@@ -25,17 +25,13 @@ pub enum CreateBlasError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    CreateBufferError(#[from] CreateBufferError),
+    MissingFeatures(#[from] MissingFeatures),
     #[error(
         "Only one of 'index_count' and 'index_format' was provided (either provide both or none)"
     )]
     MissingIndexData,
     #[error("Provided format was not within allowed formats. Provided format: {0:?}. Allowed formats: {1:?}")]
     InvalidVertexFormat(VertexFormat, Vec<VertexFormat>),
-    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
-    MissingFeature,
-    #[error("To use flag ALLOW_RAY_HIT_VERTEX_RETURN device feature RAY_HIT_VERTEX_RETURN must be used too")]
-    MissingVertexReturnFeature,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -43,11 +39,7 @@ pub enum CreateTlasError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    CreateBufferError(#[from] CreateBufferError),
-    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
-    MissingFeature,
-    #[error("To use flag ALLOW_RAY_HIT_VERTEX_RETURN device feature RAY_HIT_VERTEX_RETURN must be used too")]
-    MissingVertexReturnFeature,
+    MissingFeatures(#[from] MissingFeatures),
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -59,14 +51,17 @@ pub enum BuildAccelerationStructureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
 
-    #[error("BufferId is invalid or destroyed")]
-    InvalidBufferId,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(ResourceErrorIdent),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
 
-    #[error("Buffer {0:?} is missing `BLAS_INPUT` usage flag")]
-    MissingBlasInputUsageFlag(ResourceErrorIdent),
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 
     #[error(
         "Buffer {0:?} size is insufficient for provided size information (size: {1}, required: {2}"
@@ -115,12 +110,6 @@ pub enum BuildAccelerationStructureError {
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 
-    #[error("BlasId is invalid")]
-    InvalidBlasId,
-
-    #[error("Blas {0:?} is destroyed")]
-    InvalidBlas(ResourceErrorIdent),
-
     #[error(
         "Tlas {0:?} an associated instances contains an invalid custom index (more than 24bits)"
     )]
@@ -130,27 +119,6 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
     TlasInstanceCountExceeded(ResourceErrorIdent, u32, u32),
-
-    #[error("BlasId is invalid or destroyed (for instance)")]
-    InvalidBlasIdForInstance,
-
-    #[error("Blas {0:?} is invalid or destroyed (for instance)")]
-    InvalidBlasForInstance(ResourceErrorIdent),
-
-    #[error("TlasId is invalid or destroyed")]
-    InvalidTlasId,
-
-    #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(ResourceErrorIdent),
-
-    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
-    MissingFeature,
-
-    #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
-    MissingTlasInputUsageFlag(ResourceErrorIdent),
-
-    #[error("Blas {0:?} was missing flag ALLOW_RAY_HIT_VERTEX_RETURN while tlas {1:?} had flag")]
-    MissingBlasVertexReturn(BlasId, TlasId),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -164,17 +132,20 @@ pub enum ValidateBlasActionsError {
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateTlasActionsError {
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+
     #[error("Tlas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 
     #[error("Blas {0:?} is used before it is built (in Tlas {1:?})")]
     UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
 
-    #[error("BlasId is destroyed (in Tlas {0:?})")]
-    InvalidBlas(ResourceErrorIdent),
-
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
+
+    #[error("Blas {0:?} was missing flag ALLOW_RAY_HIT_VERTEX_RETURN while tlas {1:?} had flag")]
+    MissingBlasVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Debug)]
@@ -185,7 +156,7 @@ pub struct BlasTriangleGeometry<'a> {
     pub transform_buffer: Option<BufferId>,
     pub first_vertex: u32,
     pub vertex_stride: BufferAddress,
-    pub index_buffer_offset: Option<BufferAddress>,
+    pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 
@@ -256,7 +227,7 @@ pub struct TraceBlasTriangleGeometry {
     pub transform_buffer: Option<BufferId>,
     pub first_vertex: u32,
     pub vertex_stride: BufferAddress,
-    pub index_buffer_offset: Option<BufferAddress>,
+    pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "23.0.1"
+version = "24.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Core implementation logic of wgpu, the cross-platform, safe, pure-rust graphics API"
@@ -127,23 +127,23 @@ profiling = { workspace = true, default-features = false }
 raw-window-handle = { workspace = true, optional = true }
 ron = { workspace = true, optional = true }
 rustc-hash.workspace = true
-serde = { workspace = true, features = ["derive"], optional = true }
+serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
 
 [dependencies.naga]
 path = "../naga"
-version = "23.0.0"
+version = "24.0.0"
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "23.0.0"
+version = "24.0.0"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "23.0.0"
+version = "24.0.0"
 default-features = false
 
 [build-dependencies]

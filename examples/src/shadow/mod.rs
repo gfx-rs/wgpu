@@ -1,4 +1,4 @@
-use std::{f32::consts, iter, mem::size_of, ops::Range, sync::Arc};
+use std::{f32::consts, iter, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{align_to, DeviceExt};
@@ -393,6 +393,7 @@ impl crate::framework::Example for Example {
                     label: Some("shadow"),
                     format: None,
                     dimension: Some(wgpu::TextureViewDimension::D2),
+                    usage: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
                     mip_level_count: None,

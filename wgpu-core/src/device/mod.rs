@@ -340,8 +340,7 @@ pub struct MissingFeatures(pub wgt::Features);
 
 #[derive(Clone, Debug, Error)]
 #[error(
-    "Downlevel flags {0:?} are required but not supported on the device.\n{}",
-    DOWNLEVEL_ERROR_MESSAGE
+    "Downlevel flags {0:?} are required but not supported on the device.\n{DOWNLEVEL_ERROR_MESSAGE}",
 )]
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 
@@ -425,6 +424,18 @@ pub fn create_validator(
     caps.set(
         Caps::SHADER_INT64_ATOMIC_ALL_OPS,
         features.contains(wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS),
+    );
+    caps.set(
+        Caps::TEXTURE_ATOMIC,
+        features.contains(wgt::Features::TEXTURE_ATOMIC),
+    );
+    caps.set(
+        Caps::TEXTURE_INT64_ATOMIC,
+        features.contains(wgt::Features::TEXTURE_INT64_ATOMIC),
+    );
+    caps.set(
+        Caps::SHADER_FLOAT32_ATOMIC,
+        features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC),
     );
     caps.set(
         Caps::MULTISAMPLED_SHADING,

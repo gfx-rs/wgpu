@@ -78,7 +78,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
                 first_vertex: 0,
                 vertex_stride: mem::size_of::<[f32; 3]>() as BufferAddress,
                 index_buffer: None,
-                index_buffer_offset: None,
+                first_index: None,
                 transform_buffer: None,
                 transform_buffer_offset: None,
             }]),
@@ -149,6 +149,6 @@ static ACCELERATION_STRUCTURE_USE_AFTER_FREE: GpuTestConfiguration = GpuTestConf
             .test_features_limits()
             .features(required_features())
             // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::adapter("AMD")),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
     .run_sync(acceleration_structure_use_after_free);

@@ -1,0 +1,49 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 31
+OpCapability Shader
+OpCapability Int64ImageEXT
+OpCapability Int64
+OpCapability Int64Atomics
+OpExtension "SPV_EXT_shader_image_int64"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %15 "cs_main" %12
+OpExecutionMode %15 LocalSize 2 1 1
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 0
+OpDecorate %12 BuiltIn LocalInvocationId
+%2 = OpTypeVoid
+%4 = OpTypeInt 64 0
+%3 = OpTypeImage %4 2D 0 0 0 2 R64ui
+%6 = OpTypeInt 32 0
+%5 = OpTypeVector %6 3
+%8 = OpTypeInt 32 1
+%7 = OpTypeVector %8 2
+%10 = OpTypePointer UniformConstant %3
+%9 = OpVariable  %10  UniformConstant
+%13 = OpTypePointer Input %5
+%12 = OpVariable  %13  Input
+%16 = OpTypeFunction %2
+%18 = OpConstant  %8  0
+%19 = OpConstantComposite  %7  %18 %18
+%20 = OpConstant  %4  1
+%22 = OpTypePointer Image %4
+%24 = OpConstant  %6  0
+%26 = OpConstant  %8  4
+%27 = OpConstant  %6  2
+%28 = OpConstant  %6  264
+%15 = OpFunction  %2  None %16
+%11 = OpLabel
+%14 = OpLoad  %5  %12
+%17 = OpLoad  %3  %9
+OpBranch %21
+%21 = OpLabel
+%23 = OpImageTexelPointer  %22  %9 %19 %24
+%25 = OpAtomicUMax  %4  %23 %26 %24 %20
+OpControlBarrier %27 %27 %28
+%29 = OpImageTexelPointer  %22  %9 %19 %24
+%30 = OpAtomicUMin  %4  %29 %26 %24 %20
+OpReturn
+OpFunctionEnd
