@@ -145,7 +145,7 @@ pub enum ResolveError {
     #[error("Resolving queries {start_query}..{end_query} would overrun the query set of size {query_set_size}")]
     QueryOverrun {
         start_query: u32,
-        end_query: u32,
+        end_query: u64,
         query_set_size: u32,
     },
     #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overrunning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..{buffer_end_offset}")]
@@ -404,8 +404,10 @@ impl Global {
             .check_usage(wgt::BufferUsages::QUERY_RESOLVE)
             .map_err(ResolveError::MissingBufferUsage)?;
 
-        let end_query = start_query + query_count;
-        if end_query > query_set.desc.count {
+        let end_query = u64::from(start_query)
+            .checked_add(u64::from(query_count))
+            .expect("`u64` overflow from adding two `u32`s, should be unreachable");
+        if end_query > u64::from(query_set.desc.count) {
             return Err(ResolveError::QueryOverrun {
                 start_query,
                 end_query,
@@ -413,6 +415,8 @@ impl Global {
             }
             .into());
         }
+        let end_query = u32::try_from(end_query)
+            .expect("`u32` overflow for `end_query`, which should be `u32`");
 
         let elements_per_query = match query_set.desc.ty {
             wgt::QueryType::Occlusion => 1,
