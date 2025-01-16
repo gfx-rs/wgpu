@@ -54,6 +54,10 @@ Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std supp
 
 By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
+### Bug Fixes
+
+* Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#????].
+
 ## v24.0.0 (2025-01-15)
 
 ### Major changes
