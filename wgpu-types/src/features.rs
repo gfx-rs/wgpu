@@ -173,9 +173,10 @@ macro_rules! bitflags_array {
              fn parse_hex(input: &str) -> Result<Self, ParseError> {
                  let mut offset = 0;
                  $(
-                 let cur_input = &input[offset..(offset + size_of::<$T>())];
+                 let cur_input = &input[offset..(offset + (size_of::<$T>() * 2))];
                  let $lower_inner_name = <$T>::from_str_radix(cur_input, 16).map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
-                 offset += size_of::<$T>();
+                 // Two hex chars is a byte.
+                 offset += (size_of::<$T>() * 2);
                  )*
                  Ok(Self([$($lower_inner_name,)*]))
              }
