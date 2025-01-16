@@ -1,4 +1,6 @@
-use std::{collections::hash_map::Entry, ops::Range, sync::Arc, vec::Drain};
+use std::{ops::Range, sync::Arc, vec::Drain};
+
+use hashbrown::hash_map::Entry;
 
 use crate::{
     device::Device,
