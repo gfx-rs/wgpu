@@ -538,8 +538,10 @@ impl super::Adapter {
                     //   for the descriptor table
                     // - If a bind group has samplers it will consume a `DWORD`
                     //   for the descriptor table
-                    // - Each dynamic buffer will consume `2 DWORDs` for the
+                    // - Each dynamic uniform buffer will consume `2 DWORDs` for the
                     //   root descriptor
+                    // - Each dynamic storage buffer will consume `1 DWORD` for a
+                    //   root constant representing the dynamic offset
                     // - The special constants buffer count as constants
                     //
                     // Since we can't know beforehand all root signatures that

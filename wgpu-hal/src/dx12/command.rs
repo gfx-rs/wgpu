@@ -171,7 +171,7 @@ impl super::CommandEncoder {
     // Note: we have to call this lazily before draw calls. Otherwise, D3D complains
     // about the root parameters being incompatible with root signature.
     fn update_root_elements(&mut self) {
-        use super::{BufferViewKind as Bvk, PassKind as Pk};
+        use super::PassKind as Pk;
 
         while self.pass.dirty_root_elements != 0 {
             let list = self.list.as_ref().unwrap();
@@ -217,28 +217,31 @@ impl super::CommandEncoder {
                     Pk::Compute => unsafe { list.SetComputeRootDescriptorTable(index, descriptor) },
                     Pk::Transfer => (),
                 },
-                super::RootElement::DynamicOffsetBuffer { kind, address } => {
+                super::RootElement::DynamicUniformBuffer { address } => {
                     let address = address.ptr;
-                    match (self.pass.kind, kind) {
-                        (Pk::Render, Bvk::Constant) => unsafe {
+                    match self.pass.kind {
+                        Pk::Render => unsafe {
                             list.SetGraphicsRootConstantBufferView(index, address)
                         },
-                        (Pk::Compute, Bvk::Constant) => unsafe {
+                        Pk::Compute => unsafe {
                             list.SetComputeRootConstantBufferView(index, address)
                         },
-                        (Pk::Render, Bvk::ShaderResource) => unsafe {
-                            list.SetGraphicsRootShaderResourceView(index, address)
-                        },
-                        (Pk::Compute, Bvk::ShaderResource) => unsafe {
-                            list.SetComputeRootShaderResourceView(index, address)
-                        },
-                        (Pk::Render, Bvk::UnorderedAccess) => unsafe {
-                            list.SetGraphicsRootUnorderedAccessView(index, address)
-                        },
-                        (Pk::Compute, Bvk::UnorderedAccess) => unsafe {
-                            list.SetComputeRootUnorderedAccessView(index, address)
-                        },
-                        (Pk::Transfer, _) => (),
+                        Pk::Transfer => (),
+                    }
+                }
+                super::RootElement::DynamicOffsetsBuffer { start, end } => {
+                    let values = &self.pass.dynamic_storage_buffer_offsets[start..end];
+
+                    for (offset, &value) in values.iter().enumerate() {
+                        match self.pass.kind {
+                            Pk::Render => unsafe {
+                                list.SetGraphicsRoot32BitConstant(index, value, offset as u32)
+                            },
+                            Pk::Compute => unsafe {
+                                list.SetComputeRoot32BitConstant(index, value, offset as u32)
+                            },
+                            Pk::Transfer => (),
+                        }
                     }
                 }
                 super::RootElement::SamplerHeap => match self.pass.kind {
@@ -925,20 +928,51 @@ impl crate::CommandEncoder for super::CommandEncoder {
             root_index += 1;
         }
 
-        // Bind root descriptors
-        for ((&kind, &gpu_base), &offset) in info
-            .dynamic_buffers
-            .iter()
-            .zip(group.dynamic_buffers.iter())
-            .zip(dynamic_offsets)
-        {
-            self.pass.root_elements[root_index] = super::RootElement::DynamicOffsetBuffer {
-                kind,
-                address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
-                    ptr: gpu_base.ptr + offset as u64,
-                },
+        let mut offsets_index = 0;
+        if let Some(dynamic_storage_buffer_offsets) = info.dynamic_storage_buffer_offsets.as_ref() {
+            let root_index = dynamic_storage_buffer_offsets.root_index;
+            let range = &dynamic_storage_buffer_offsets.range;
+
+            if range.end > self.pass.dynamic_storage_buffer_offsets.len() {
+                self.pass
+                    .dynamic_storage_buffer_offsets
+                    .resize(range.end, 0);
+            }
+
+            offsets_index += range.start;
+
+            self.pass.root_elements[root_index as usize] =
+                super::RootElement::DynamicOffsetsBuffer {
+                    start: range.start,
+                    end: range.end,
+                };
+
+            if self.pass.layout.signature == layout.shared.signature {
+                self.pass.dirty_root_elements |= 1 << root_index;
+            } else {
+                // D3D12 requires full reset on signature change
+                // but we don't reset it here since it will be reset below
             };
-            root_index += 1;
+        }
+
+        // Bind root descriptors for dynamic uniform buffers
+        // or set root constants for offsets of dynamic storage buffers
+        for (&dynamic_buffer, &offset) in group.dynamic_buffers.iter().zip(dynamic_offsets) {
+            match dynamic_buffer {
+                super::DynamicBuffer::Uniform(gpu_base) => {
+                    self.pass.root_elements[root_index] =
+                        super::RootElement::DynamicUniformBuffer {
+                            address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                                ptr: gpu_base.ptr + offset as u64,
+                            },
+                        };
+                    root_index += 1;
+                }
+                super::DynamicBuffer::Storage => {
+                    self.pass.dynamic_storage_buffer_offsets[offsets_index] = offset;
+                    offsets_index += 1;
+                }
+            }
         }
 
         if self.pass.layout.signature == layout.shared.signature {

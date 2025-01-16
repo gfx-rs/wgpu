@@ -21,7 +21,10 @@ use windows::{
 use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{self, dxgi::result::HResult},
-    dx12::{borrow_optional_interface_temporarily, shader_compilation, Event},
+    dx12::{
+        borrow_optional_interface_temporarily, shader_compilation, DynamicStorageBufferOffsets,
+        Event,
+    },
     AccelerationStructureEntries, TlasInstance,
 };
 
@@ -764,6 +767,7 @@ impl crate::Device for super::Device {
             let count = entry.count.map_or(1, NonZeroU32::get);
             match entry.ty {
                 wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Uniform,
                     has_dynamic_offset: true,
                     ..
                 } => {}
@@ -810,14 +814,17 @@ impl crate::Device for super::Device {
         //
         // Push Constants are implemented as root constants.
         //
-        // Each descriptor set layout will be one table entry of the root signature.
+        // Each bind group layout will be one table entry of the root signature.
         // We have the additional restriction that SRV/CBV/UAV and samplers need to be
         // separated, so each set layout will actually occupy up to 2 entries!
         // SRV/CBV/UAV tables are added to the signature first, then Sampler tables,
         // and finally dynamic uniform descriptors.
         //
-        // Buffers with dynamic offsets are implemented as root descriptors.
+        // Uniform buffers with dynamic offsets are implemented as root descriptors.
         // This is easier than trying to patch up the offset on the shader side.
+        //
+        // Storage buffers with dynamic offsets are part of a descriptor table and
+        // the dynamic offsets are passed via root constants.
         //
         // Root signature layout:
         // Root Constants: Parameter=0, Space=0
@@ -881,6 +888,9 @@ impl crate::Device for super::Device {
             bind_cbv.space += 1;
         }
 
+        let mut dynamic_storage_buffer_offsets_targets = std::collections::BTreeMap::new();
+        let mut total_dynamic_storage_buffers = 0;
+
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
         // which could cause invalid pointers.
@@ -892,6 +902,7 @@ impl crate::Device for super::Device {
             for entry in &bgl.entries {
                 match entry.ty {
                     wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
                         ..
                     } => {}
@@ -920,33 +931,48 @@ impl crate::Device for super::Device {
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
                 base_root_index: parameters.len() as u32,
-                dynamic_buffers: Vec::new(),
+                dynamic_storage_buffer_offsets: None,
             };
 
             let mut visibility_view_static = wgt::ShaderStages::empty();
-            let mut visibility_view_dynamic = wgt::ShaderStages::empty();
+            let mut visibility_view_dynamic_uniform = wgt::ShaderStages::empty();
+            let mut visibility_view_dynamic_storage = wgt::ShaderStages::empty();
             for entry in bgl.entries.iter() {
                 match entry.ty {
                     wgt::BindingType::Sampler { .. } => {
                         visibility_view_static |= wgt::ShaderStages::all()
                     }
                     wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
                         ..
-                    } => visibility_view_dynamic |= entry.visibility,
+                    } => visibility_view_dynamic_uniform |= entry.visibility,
+                    wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Storage { .. },
+                        has_dynamic_offset: true,
+                        ..
+                    } => visibility_view_dynamic_storage |= entry.visibility,
                     _ => visibility_view_static |= entry.visibility,
                 }
             }
 
+            let mut dynamic_storage_buffers = 0;
+
             // SRV/CBV/UAV descriptor tables
             let range_base = ranges.len();
             for entry in bgl.entries.iter() {
-                let range_ty = match entry.ty {
+                let (range_ty, has_dynamic_offset) = match entry.ty {
                     wgt::BindingType::Buffer {
+                        ty,
                         has_dynamic_offset: true,
                         ..
-                    } => continue,
-                    ref other => conv::map_binding_type(other),
+                    } => match ty {
+                        wgt::BufferBindingType::Uniform => continue,
+                        wgt::BufferBindingType::Storage { .. } => {
+                            (conv::map_binding_type(&entry.ty), true)
+                        }
+                    },
+                    ref other => (conv::map_binding_type(other), false),
                 };
                 let bt = match range_ty {
                     Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV => &mut bind_cbv,
@@ -956,13 +982,28 @@ impl crate::Device for super::Device {
                     _ => todo!(),
                 };
 
+                let binding_array_size = entry.count.map(NonZeroU32::get);
+
+                let dynamic_storage_buffer_offsets_index = if has_dynamic_offset {
+                    debug_assert!(
+                        binding_array_size.is_none(),
+                        "binding arrays and dynamic buffers are mutually exclusive"
+                    );
+                    let ret = Some(dynamic_storage_buffers);
+                    dynamic_storage_buffers += 1;
+                    ret
+                } else {
+                    None
+                };
+
                 binding_map.insert(
                     naga::ResourceBinding {
                         group: index as u32,
                         binding: entry.binding,
                     },
                     hlsl::BindTarget {
-                        binding_array_size: entry.count.map(NonZeroU32::get),
+                        binding_array_size,
+                        dynamic_storage_buffer_offsets_index,
                         ..*bt
                     },
                 );
@@ -990,6 +1031,8 @@ impl crate::Device for super::Device {
                             space: 255,
                             register: sampler_index_within_bind_group,
                             binding_array_size: None,
+                            dynamic_storage_buffer_offsets_index: None,
+                            restrict_indexing: false,
                         },
                     );
                     sampler_index_within_bind_group += 1;
@@ -1029,34 +1072,16 @@ impl crate::Device for super::Device {
                 info.tables |= super::TableTypes::SRV_CBV_UAV;
             }
 
-            // Root (dynamic) descriptor tables
-            let dynamic_buffers_visibility = conv::map_visibility(visibility_view_dynamic);
+            // Root descriptors for dynamic uniform buffers
+            let dynamic_buffers_visibility = conv::map_visibility(visibility_view_dynamic_uniform);
             for entry in bgl.entries.iter() {
-                let buffer_ty = match entry.ty {
+                match entry.ty {
                     wgt::BindingType::Buffer {
+                        ty: wgt::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        ty,
                         ..
-                    } => ty,
+                    } => {}
                     _ => continue,
-                };
-
-                let (kind, parameter_ty, bt) = match buffer_ty {
-                    wgt::BufferBindingType::Uniform => (
-                        super::BufferViewKind::Constant,
-                        Direct3D12::D3D12_ROOT_PARAMETER_TYPE_CBV,
-                        &mut bind_cbv,
-                    ),
-                    wgt::BufferBindingType::Storage { read_only: true } => (
-                        super::BufferViewKind::ShaderResource,
-                        Direct3D12::D3D12_ROOT_PARAMETER_TYPE_SRV,
-                        &mut bind_srv,
-                    ),
-                    wgt::BufferBindingType::Storage { read_only: false } => (
-                        super::BufferViewKind::UnorderedAccess,
-                        Direct3D12::D3D12_ROOT_PARAMETER_TYPE_UAV,
-                        &mut bind_uav,
-                    ),
                 };
 
                 binding_map.insert(
@@ -1066,23 +1091,56 @@ impl crate::Device for super::Device {
                     },
                     hlsl::BindTarget {
                         binding_array_size: entry.count.map(NonZeroU32::get),
-                        ..*bt
+                        restrict_indexing: true,
+                        ..bind_cbv
                     },
                 );
-                info.dynamic_buffers.push(kind);
 
                 parameters.push(Direct3D12::D3D12_ROOT_PARAMETER {
-                    ParameterType: parameter_ty,
+                    ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_CBV,
                     Anonymous: Direct3D12::D3D12_ROOT_PARAMETER_0 {
                         Descriptor: Direct3D12::D3D12_ROOT_DESCRIPTOR {
-                            ShaderRegister: bt.register,
-                            RegisterSpace: bt.space as u32,
+                            ShaderRegister: bind_cbv.register,
+                            RegisterSpace: bind_cbv.space as u32,
                         },
                     },
                     ShaderVisibility: dynamic_buffers_visibility,
                 });
 
-                bt.register += entry.count.map_or(1, NonZeroU32::get);
+                bind_cbv.register += entry.count.map_or(1, NonZeroU32::get);
+            }
+
+            // Root constants for (offsets of) dynamic storage buffers
+            if dynamic_storage_buffers > 0 {
+                let parameter_index = parameters.len();
+
+                parameters.push(Direct3D12::D3D12_ROOT_PARAMETER {
+                    ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+                    Anonymous: Direct3D12::D3D12_ROOT_PARAMETER_0 {
+                        Constants: Direct3D12::D3D12_ROOT_CONSTANTS {
+                            ShaderRegister: bind_cbv.register,
+                            RegisterSpace: bind_cbv.space as u32,
+                            Num32BitValues: dynamic_storage_buffers,
+                        },
+                    },
+                    ShaderVisibility: conv::map_visibility(visibility_view_dynamic_storage),
+                });
+
+                let binding = hlsl::OffsetsBindTarget {
+                    space: bind_cbv.space,
+                    register: bind_cbv.register,
+                    size: dynamic_storage_buffers,
+                };
+
+                bind_cbv.register += 1;
+
+                dynamic_storage_buffer_offsets_targets.insert(index as u32, binding);
+                info.dynamic_storage_buffer_offsets = Some(DynamicStorageBufferOffsets {
+                    root_index: parameter_index as u32,
+                    range: total_dynamic_storage_buffers as usize
+                        ..total_dynamic_storage_buffers as usize + dynamic_storage_buffers as usize,
+                });
+                total_dynamic_storage_buffers += dynamic_storage_buffers;
             }
 
             bind_group_infos.push(info);
@@ -1093,11 +1151,15 @@ impl crate::Device for super::Device {
                 space: 0,
                 register: 0,
                 binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
             },
             comparison_samplers: hlsl::BindTarget {
                 space: 0,
                 register: 2048,
                 binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
             },
         };
 
@@ -1290,6 +1352,7 @@ impl crate::Device for super::Device {
                 fake_missing_bindings: false,
                 special_constants_binding,
                 push_constants_target,
+                dynamic_storage_buffer_offsets_targets,
                 zero_initialize_workgroup_memory: true,
                 restrict_indexing: true,
                 sampler_heap_target,
@@ -1336,23 +1399,33 @@ impl crate::Device for super::Device {
         for (layout, entry) in layout_and_entry_iter {
             match layout.ty {
                 wgt::BindingType::Buffer {
-                    has_dynamic_offset: true,
+                    ty,
+                    has_dynamic_offset,
                     ..
                 } => {
                     let start = entry.resource_index as usize;
                     let end = start + entry.count as usize;
                     for data in &desc.buffers[start..end] {
-                        dynamic_buffers.push(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: data.resolve_address(),
-                        });
-                    }
-                }
-                wgt::BindingType::Buffer { ty, .. } => {
-                    let start = entry.resource_index as usize;
-                    let end = start + entry.count as usize;
-                    for data in &desc.buffers[start..end] {
                         let gpu_address = data.resolve_address();
-                        let size = data.resolve_size() as u32;
+                        let mut size = data.resolve_size() as u32;
+
+                        if has_dynamic_offset {
+                            match ty {
+                                wgt::BufferBindingType::Uniform => {
+                                    dynamic_buffers.push(super::DynamicBuffer::Uniform(
+                                        Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                                            ptr: data.resolve_address(),
+                                        },
+                                    ));
+                                    continue;
+                                }
+                                wgt::BufferBindingType::Storage { .. } => {
+                                    size = (data.buffer.size - data.offset) as u32;
+                                    dynamic_buffers.push(super::DynamicBuffer::Storage);
+                                }
+                            }
+                        }
+
                         let inner = cpu_views.as_mut().unwrap();
                         let cpu_index = inner.stage.len() as u32;
                         let handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);

@@ -907,3 +907,5 @@ pub const TYPES: &[&str] = &{
 
     res
 };
+
+pub const RESERVED_PREFIXES: &[&str] = &["__dynamic_buffer_offsets"];

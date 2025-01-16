@@ -131,7 +131,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             super::keywords::RESERVED,
             super::keywords::TYPES,
             super::keywords::RESERVED_CASE_INSENSITIVE,
-            &[],
+            super::keywords::RESERVED_PREFIXES,
             &mut self.names,
         );
         self.entry_point_io.clear();
@@ -251,6 +251,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ", space{}", bt.space)?;
             }
             writeln!(self.out, ");")?;
+
+            // Extra newline for readability
+            writeln!(self.out)?;
+        }
+
+        for (group, bt) in self.options.dynamic_storage_buffer_offsets_targets.iter() {
+            writeln!(self.out, "struct __dynamic_buffer_offsetsTy{} {{", group)?;
+            for i in 0..bt.size {
+                writeln!(self.out, "{}uint _{};", back::INDENT, i)?;
+            }
+            writeln!(self.out, "}};")?;
+            writeln!(
+                self.out,
+                "ConstantBuffer<__dynamic_buffer_offsetsTy{}> __dynamic_buffer_offsets{}: register(b{}, space{});",
+                group, group, bt.register, bt.space
+            )?;
 
             // Extra newline for readability
             writeln!(self.out)?;
@@ -2777,7 +2793,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 | crate::AddressSpace::PushConstant,
                             )
                             | None => true,
-                            Some(crate::AddressSpace::Uniform) => false, // TODO: needs checks for dynamic uniform buffers, see https://github.com/gfx-rs/wgpu/issues/4483
+                            Some(crate::AddressSpace::Uniform) => {
+                                // check if BindTarget.restrict_indexing is set, this is used for dynamic buffers
+                                let var_handle = self.fill_access_chain(module, base, func_ctx)?;
+                                let bind_target = self
+                                    .options
+                                    .resolve_resource_binding(
+                                        module.global_variables[var_handle]
+                                            .binding
+                                            .as_ref()
+                                            .unwrap(),
+                                    )
+                                    .unwrap();
+                                bind_target.restrict_indexing
+                            }
                             Some(
                                 crate::AddressSpace::Handle | crate::AddressSpace::Storage { .. },
                             ) => unreachable!(),

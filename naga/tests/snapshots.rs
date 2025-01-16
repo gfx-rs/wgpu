@@ -239,8 +239,13 @@ impl Input {
         let mut param_path = self.input_path();
         param_path.set_extension("param.ron");
         match fs::read_to_string(&param_path) {
-            Ok(string) => ron::de::from_str(&string)
-                .unwrap_or_else(|_| panic!("Couldn't parse param file: {}", param_path.display())),
+            Ok(string) => match ron::de::from_str(&string) {
+                Ok(params) => params,
+                Err(e) => panic!(
+                    "Couldn't parse param file: {} due to: {e}",
+                    param_path.display()
+                ),
+            },
             Err(_) => Parameters::default(),
         }
     }
@@ -834,6 +839,7 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
         ("policy-mix", Targets::SPIRV | Targets::METAL),
+        ("bounds-check-dynamic-buffer", Targets::HLSL),
         (
             "texture-arg",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
