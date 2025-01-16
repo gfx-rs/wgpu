@@ -2712,8 +2712,8 @@ impl Device {
             .map(|mut bgl_entry_map| {
                 bgl_entry_map.sort();
                 match unique_bind_group_layouts.entry(bgl_entry_map) {
-                    std::collections::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
-                    std::collections::hash_map::Entry::Vacant(e) => {
+                    hashbrown::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
+                    hashbrown::hash_map::Entry::Vacant(e) => {
                         match self.create_bind_group_layout(
                             &None,
                             e.key().clone(),
