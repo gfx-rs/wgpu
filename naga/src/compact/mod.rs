@@ -73,14 +73,6 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
-    for e in module.entry_points.iter() {
-        if let Some(sizes) = e.workgroup_size_overrides {
-            for size in sizes.iter().filter_map(|x| *x) {
-                module_tracer.global_expressions_used.insert(size);
-            }
-        }
-    }
-
     // We assume that all functions are used.
     //
     // Observe which types, constant expressions, constants, and
@@ -106,6 +98,13 @@ pub fn compact(module: &mut crate::Module) {
         .iter()
         .map(|e| {
             log::trace!("tracing entry point {:?}", e.function.name);
+
+            if let Some(sizes) = e.workgroup_size_overrides {
+                for size in sizes.iter().filter_map(|x| *x) {
+                    module_tracer.global_expressions_used.insert(size);
+                }
+            }
+
             let mut used = module_tracer.as_function(&e.function);
             used.trace();
             FunctionMap::from(used)

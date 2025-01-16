@@ -90,7 +90,7 @@ pub fn main() -> MainResult {
         GpuReport::from_json(config_text).context("Could not parse .gpuconfig JSON")?;
 
     // Filter out the adapters that are not part of WGPU_BACKEND.
-    let wgpu_backends = wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all());
+    let wgpu_backends = wgpu::Backends::from_env().unwrap_or_default();
     report
         .devices
         .retain(|report| wgpu_backends.contains(wgpu::Backends::from(report.info.backend)));

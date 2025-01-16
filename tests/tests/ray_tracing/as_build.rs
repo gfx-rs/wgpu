@@ -330,7 +330,7 @@ fn build_with_transform(ctx: TestingContext) {
                 first_vertex: 0,
                 vertex_stride: size_of::<[f32; 3]>() as BufferAddress,
                 index_buffer: None,
-                index_buffer_offset: None,
+                first_index: None,
                 transform_buffer: Some(&transform),
                 transform_buffer_offset: Some(0),
             }]),

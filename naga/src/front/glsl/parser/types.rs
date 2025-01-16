@@ -430,6 +430,7 @@ fn map_image_format(word: &str) -> Option<crate::StorageFormat> {
         "rgba32ui" => Sf::Rgba32Uint,
         "rgba16ui" => Sf::Rgba16Uint,
         "rgba8ui" => Sf::Rgba8Uint,
+        "r64ui" => Sf::R64Uint,
         "rg32ui" => Sf::Rg32Uint,
         "rg16ui" => Sf::Rg16Uint,
         "rg8ui" => Sf::Rg8Uint,

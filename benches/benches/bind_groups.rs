@@ -62,52 +62,52 @@ impl BindGroupState {
 fn run_bench(ctx: &mut Criterion) {
     let state = LazyLock::new(BindGroupState::new);
 
-    if !state
-        .device_state
-        .device
-        .features()
-        .contains(wgpu::Features::TEXTURE_BINDING_ARRAY)
-    {
-        return;
-    }
-
     let mut group = ctx.benchmark_group("Bind Group Creation");
 
     for count in [5, 50, 500, 5_000, 50_000] {
-        if count
-            > state
-                .device_state
-                .device
-                .limits()
-                .max_sampled_textures_per_shader_stage
-        {
-            continue;
-        }
-
-        let bind_group_layout =
-            state
-                .device_state
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: Some(NonZeroU32::new(count).unwrap()),
-                    }],
-                });
-
         group.throughput(Throughput::Elements(count as u64));
         group.bench_with_input(
             format!("{} Element Bind Group", count),
             &count,
             |b, &count| {
                 b.iter_custom(|iters| {
+                    if !state
+                        .device_state
+                        .device
+                        .features()
+                        .contains(wgpu::Features::TEXTURE_BINDING_ARRAY)
+                    {
+                        return Duration::ZERO;
+                    }
+
+                    if count
+                        > state
+                            .device_state
+                            .device
+                            .limits()
+                            .max_sampled_textures_per_shader_stage
+                    {
+                        return Duration::ZERO;
+                    }
+
+                    let bind_group_layout = state.device_state.device.create_bind_group_layout(
+                        &wgpu::BindGroupLayoutDescriptor {
+                            label: None,
+                            entries: &[wgpu::BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Texture {
+                                    sample_type: wgpu::TextureSampleType::Float {
+                                        filterable: true,
+                                    },
+                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                                count: Some(NonZeroU32::new(count).unwrap()),
+                            }],
+                        },
+                    );
+
                     let texture_view_refs: Vec<_> =
                         state.texture_views.iter().take(count as usize).collect();
 

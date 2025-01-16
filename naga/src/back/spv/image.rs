@@ -1253,6 +1253,10 @@ impl BlockContext<'_> {
             class: spirv::StorageClass::Image,
         }));
         let signed = scalar.kind == crate::ScalarKind::Sint;
+        if scalar.width == 8 {
+            self.writer
+                .require_any("64 bit image atomics", &[spirv::Capability::Int64Atomics])?;
+        }
         let pointer_id = self.gen_id();
         let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
         let sample_id = self.writer.get_constant_scalar(crate::Literal::U32(0));

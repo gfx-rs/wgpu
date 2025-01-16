@@ -40,6 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### Vulkan
+
+- Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
+
+## v24.0.0 (2025-01-15)
+
 ### Major changes
 
 #### Refactored Dispatch Between `wgpu-core` and `webgpu`
@@ -74,6 +82,74 @@ let desc: ShaderModuleDescriptor = include_wgsl!(...)
 ```
 
 By @cwfitzgerald and @rudderbucky in [#6662](https://github.com/gfx-rs/wgpu/pull/6662).
+
+#### `wgpu::Instance::new` now takes `InstanceDescriptor` by reference
+
+Previously `wgpu::Instance::new` took `InstanceDescriptor` by value (which is overall fairly uncommon in wgpu).
+Furthermore, `InstanceDescriptor` is now cloneable.
+
+```diff
+- let instance = wgpu::Instance::new(instance_desc);
++ let instance = wgpu::Instance::new(&instance_desc);
+```
+
+By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
+
+#### Environment Variable Handling Overhaul
+
+Previously how various bits of code handled reading settings from environment variables was inconsistent and unideomatic.
+We have unified it to (`Type::from_env()` or `Type::from_env_or_default()`) and `Type::with_env` for all types.
+
+```diff
+- wgpu::util::backend_bits_from_env()
++ wgpu::Backends::from_env()
+
+- wgpu::util::power_preference_from_env()
++ wgpu::PowerPreference::from_env()
+
+- wgpu::util::dx12_shader_compiler_from_env()
++ wgpu::Dx12Compiler::from_env()
+
+- wgpu::util::gles_minor_version_from_env()
++ wgpu::Gles3MinorVersion::from_env()
+
+- wgpu::util::instance_descriptor_from_env()
++ wgpu::InstanceDescriptor::from_env_or_default()
+
+- wgpu::util::parse_backends_from_comma_list(&str)
++ wgpu::Backends::from_comma_list(&str)
+```
+
+By @cwfitzgerald in [#6895](https://github.com/gfx-rs/wgpu/pull/6895)
+
+#### Backend-specific instance options are now in separate structs
+
+In order to better facilitate growing more interesting backend options, we have put them into individual structs. This allows users to more easily understand what options can be defaulted and which they care about. All of these new structs implement `from_env()` and delegate to their respective `from_env()` methods.
+
+```diff
+- let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+-     backends: wgpu::Backends::all(),
+-     flags: wgpu::InstanceFlags::default(),
+-     dx12_shader_compiler: wgpu::Dx12Compiler::Dxc,
+-     gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+- });
++ let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
++     backends: wgpu::Backends::all(),
++     flags: wgpu::InstanceFlags::default(),
++     backend_options: wgpu::BackendOptions {
++         dx12: wgpu::Dx12BackendOptions {
++             shader_compiler: wgpu::Dx12ShaderCompiler::Dxc,
++         },
++         gl: wgpu::GlBackendOptions {
++             gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
++         },
++     },
++ });
+```
+
+If you do not need any of these options, or only need one backend's info use the `default()` impl to fill out the remaining feelds.
+
+By @cwfitzgerald in [#6895](https://github.com/gfx-rs/wgpu/pull/6895)
 
 #### The `diagnostic(…);` directive is now supported in WGSL
 
@@ -125,18 +201,6 @@ There are some limitations to keep in mind with this new functionality:
 
 By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148](https://github.com/gfx-rs/wgpu/pull/6148), [#6533](https://github.com/gfx-rs/wgpu/pull/6533), [#6353](https://github.com/gfx-rs/wgpu/pull/6353), [#6537](https://github.com/gfx-rs/wgpu/pull/6537).
 
-#### `wgpu::Instance::new` now takes `InstanceDescriptor` by reference
-
-Previously `wgpu::Instance::new` took `InstanceDescriptor` by value (which is overall fairly uncommon in wgpu).
-Furthermore, `InstanceDescriptor` is now cloneable.
-
-```diff
-- let instance = wgpu::Instance::new(instance_desc);
-+ let instance = wgpu::Instance::new(&instance_desc);
-```
-
-By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
-
 #### New Features
 
 ##### Naga
@@ -165,6 +229,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Add build support for Apple Vision Pro. By @guusw in [#6611](https://github.com/gfx-rs/wgpu/pull/6611).
 - Add `wgsl_language_features` for obtaining available WGSL language feature by @sagudev in [#6814](https://github.com/gfx-rs/wgpu/pull/6814)
 - Image atomic support in shaders. By @atlv24 in [#6706](https://github.com/gfx-rs/wgpu/pull/6706)
+- 64 bit image atomic support in shaders. By @atlv24 in [#5537](https://github.com/gfx-rs/wgpu/pull/5537)
 - Add `no_std` support to `wgpu-types`. By @bushrat011899 in [#6892](https://github.com/gfx-rs/wgpu/pull/6892).
 
 ##### Vulkan
@@ -177,6 +242,10 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Add build support for Apple Vision Pro. By @guusw in [#6611](https://github.com/gfx-rs/wgpu/pull/6611).
 - Add `raw_handle` method to access raw Metal textures in [#6894](https://github.com/gfx-rs/wgpu/pull/6894).
 
+#### D3D12
+
+- Support DXR (DirectX Ray-tracing) in wgpu-hal. By @Vecvec in [#6777](https://github.com/gfx-rs/wgpu/pull/6777)
+
 #### Changes
 
 ##### Naga
@@ -186,6 +255,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Add a note to help with a common syntax error case for global diagnostic filter directives. By @e-hat in [#6718](https://github.com/gfx-rs/wgpu/pull/6718)
 - Change arithmetic operations between two i32 variables to wrap on overflow to match WGSL spec. By @matthew-wong1 in [#6835](https://github.com/gfx-rs/wgpu/pull/6835).
 - Add directives to suggestions in error message for parsing global items. By @e-hat in [#6723](https://github.com/gfx-rs/wgpu/pull/6723).
+- Automatic conversion for `override` initializers. By @sagudev in [6920](https://github.com/gfx-rs/wgpu/pull/6920)
 
 ##### General
 
@@ -194,6 +264,7 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 - Add actual sample type to `CreateBindGroupError::InvalidTextureSampleType` error message. By @ErichDonGubler in [#6530](https://github.com/gfx-rs/wgpu/pull/6530).
 - Improve binding error to give a clearer message when there is a mismatch between resource binding as it is in the shader and as it is in the binding layout. By @eliemichel in [#6553](https://github.com/gfx-rs/wgpu/pull/6553).
 - `Surface::configure` and `Surface::get_current_texture` are no longer fatal. By @alokedesai in [#6253](https://github.com/gfx-rs/wgpu/pull/6253)
+- Rename `BlasTriangleGeometry::index_buffer_offset` to `BlasTriangleGeometry::first_index`. By @Vecvec in [#6873](https://github.com/gfx-rs/wgpu/pull/6873/files)
 
 ##### D3D12
 
@@ -234,10 +305,16 @@ By @wumpf in [#6849](https://github.com/gfx-rs/wgpu/pull/6849).
 
 - Fix crash when a texture argument is missing. By @aedm in [#6486](https://github.com/gfx-rs/wgpu/pull/6486)
 - Emit an error in constant evaluation, rather than crash, in certain cases where `vecN` constructors have less than N arguments. By @ErichDonGubler in [#6508](https://github.com/gfx-rs/wgpu/pull/6508).
- 
+- Fix an error in template list matching `>=` in `a<b>=c`. By @KentSlaney in [#6898](https://github.com/gfx-rs/wgpu/pull/6898).
+- Correctly validate handles in override-sized array types. By @jimblandy in [#6882](https://github.com/gfx-rs/wgpu/pull/6882).
+- Clean up validation of `Statement::ImageStore`. By @jimblandy in [#6729](https://github.com/gfx-rs/wgpu-pull/6729).
+- In compaction, avoid cloning the type arena. By @jimblandy in [#6790](https://github.com/gfx-rs/wgpu-pull/6790)
+- In validation, forbid cycles between global expressions and types. By @jimblandy in [#6800](https://github.com/gfx-rs/wgpu-pull/6800)
+- Allow abstract scalars in modf and frexp results. By @jimblandy in [#6821](https://github.com/gfx-rs/wgpu-pull/6821)
+- In the WGSL front end, apply automatic conversions to values being assigned. By @jimblandy in [#6822](https://github.com/gfx-rs/wgpu-pull/6822)
+
 #### Vulkan
 
-- Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 - Allocate descriptors for acceleration structures. By @Vecvec in [#6861](https://github.com/gfx-rs/wgpu/pull/6861).
 - `max_color_attachment_bytes_per_sample` is now correctly set to 128. By @cwfitzgerald in [#6866](https://github.com/gfx-rs/wgpu/pull/6866)
 
@@ -460,6 +537,7 @@ By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
 - When mapping buffers for reading, mark buffers as initialized only when they have `MAP_WRITE` usage. By @teoxoy in [#6178](https://github.com/gfx-rs/wgpu/pull/6178).
 - Add a separate pipeline constants error. By @teoxoy in [#6094](https://github.com/gfx-rs/wgpu/pull/6094).
 - Ensure safety of indirect dispatch by injecting a compute shader that validates the content of the indirect buffer. By @teoxoy in [#5714](https://github.com/gfx-rs/wgpu/pull/5714).
+- Add conversions between `TextureFormat` and ` StorageFormat`. By @caelunshun in [#6185](https://github.com/gfx-rs/wgpu/pull/6185)
 
 #### GLES / OpenGL
 

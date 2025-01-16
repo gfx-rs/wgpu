@@ -457,7 +457,7 @@ fn run_bench(ctx: &mut Criterion) {
 
                         // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
                         if state.device_state.adapter_info.name.contains("Paravirtual") {
-                            return Duration::from_secs_f32(1.0);
+                            return Duration::from_secs(1);
                         }
 
                         let mut duration = Duration::ZERO;

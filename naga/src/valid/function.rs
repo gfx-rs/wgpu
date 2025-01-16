@@ -1282,6 +1282,34 @@ impl super::Validator {
                                         .with_span_handle(image, context.expressions));
                                     }
                                     match format {
+                                        crate::StorageFormat::R64Uint => {
+                                            if !self.capabilities.intersects(
+                                                super::Capabilities::TEXTURE_INT64_ATOMIC,
+                                            ) {
+                                                return Err(FunctionError::MissingCapability(
+                                                    super::Capabilities::TEXTURE_INT64_ATOMIC,
+                                                )
+                                                .with_span_static(
+                                                    span,
+                                                    "missing capability for this operation",
+                                                ));
+                                            }
+                                            match fun {
+                                                crate::AtomicFunction::Min
+                                                | crate::AtomicFunction::Max => {}
+                                                _ => {
+                                                    return Err(
+                                                        FunctionError::InvalidImageAtomicFunction(
+                                                            fun,
+                                                        )
+                                                        .with_span_handle(
+                                                            image,
+                                                            context.expressions,
+                                                        ),
+                                                    );
+                                                }
+                                            }
+                                        }
                                         crate::StorageFormat::R32Sint
                                         | crate::StorageFormat::R32Uint => {
                                             if !self

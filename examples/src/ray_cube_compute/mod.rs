@@ -141,7 +141,6 @@ struct Example {
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
             | wgpu::Features::VERTEX_WRITABLE_STORAGE
             | wgpu::Features::EXPERIMENTAL_RAY_QUERY
             | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
@@ -378,7 +377,7 @@ impl crate::framework::Example for Example {
                         first_vertex: 0,
                         vertex_stride: mem::size_of::<Vertex>() as u64,
                         index_buffer: Some(&index_buf),
-                        index_buffer_offset: Some(0),
+                        first_index: Some(0),
                         transform_buffer: None,
                         transform_buffer_offset: None,
                     },

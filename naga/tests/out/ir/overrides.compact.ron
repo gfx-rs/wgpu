@@ -14,6 +14,13 @@
                 width: 4,
             )),
         ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -64,6 +71,12 @@
             ty: 1,
             init: Some(6),
         ),
+        (
+            name: Some("auto_conversion"),
+            id: None,
+            ty: 2,
+            init: Some(7),
+        ),
     ],
     global_variables: [
         (
@@ -71,7 +84,7 @@
             space: Private,
             binding: None,
             ty: 1,
-            init: Some(9),
+            init: Some(10),
         ),
         (
             name: Some("store_override"),
@@ -93,12 +106,13 @@
             right: 3,
         ),
         Literal(F32(2.718)),
+        Literal(U32(0)),
         Override(2),
         Literal(F32(10.0)),
         Binary(
             op: Multiply,
-            left: 7,
-            right: 8,
+            left: 8,
+            right: 9,
         ),
     ],
     functions: [],

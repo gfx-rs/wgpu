@@ -284,7 +284,7 @@ impl<A: hal::Api> Example<A> {
         dbg!(&surface_caps.formats);
         let surface_format = if surface_caps
             .formats
-            .contains(&wgt::TextureFormat::Rgba8Snorm)
+            .contains(&wgt::TextureFormat::Rgba8Unorm)
         {
             wgt::TextureFormat::Rgba8Unorm
         } else {
@@ -473,7 +473,8 @@ impl<A: hal::Api> Example<A> {
             vertex_buffer: Some(&vertices_buffer),
             first_vertex: 0,
             vertex_format: wgt::VertexFormat::Float32x3,
-            vertex_count: vertices.len() as u32,
+            // each vertex is 3 floats, and floats are stored raw in the array
+            vertex_count: vertices.len() as u32 / 3,
             vertex_stride: 3 * 4,
             indices: indices_buffer.as_ref().map(|(buf, len)| {
                 hal::AccelerationStructureTriangleIndices {

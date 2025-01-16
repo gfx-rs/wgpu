@@ -4944,6 +4944,7 @@ fn glsl_storage_format(format: crate::StorageFormat) -> Result<&'static str, Err
         Sf::Rgb10a2Uint => "rgb10_a2ui",
         Sf::Rgb10a2Unorm => "rgb10_a2",
         Sf::Rg11b10Ufloat => "r11f_g11f_b10f",
+        Sf::R64Uint => "r64ui",
         Sf::Rg32Uint => "rg32ui",
         Sf::Rg32Sint => "rg32i",
         Sf::Rg32Float => "rg32f",

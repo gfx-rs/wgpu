@@ -1,0 +1,24 @@
+(
+	god_mode: true,
+	spv: (
+		version: (1, 0),
+		capabilities: [ Int64, Int64ImageEXT, Int64Atomics ],
+	),
+	hlsl: (
+		shader_model: V6_6,
+		binding_map: {},
+		fake_missing_bindings: true,
+		special_constants_binding: Some((space: 1, register: 0)),
+		push_constants_target: Some((space: 0, register: 0)),
+		zero_initialize_workgroup_memory: true,
+		restrict_indexing: true
+	),
+	msl: (
+		lang_version: (3, 1),
+		per_entry_point_map: {},
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: true,
+		zero_initialize_workgroup_memory: true,
+	),
+)
