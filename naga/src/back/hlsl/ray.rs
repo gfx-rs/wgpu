@@ -27,7 +27,7 @@ impl<W: Write> super::Writer<'_, W> {
     ) -> BackendResult {
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         write!(self.out, " GetCommittedIntersection(")?;
-        self.write_value_type(module, &TypeInner::RayQuery)?;
+        self.write_value_type(module, &TypeInner::RayQuery { vertex_return: false })?;
         writeln!(self.out, " rq) {{")?;
         write!(self.out, "    ")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
@@ -93,7 +93,7 @@ impl<W: Write> super::Writer<'_, W> {
     ) -> BackendResult {
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         write!(self.out, " GetCandidateIntersection(")?;
-        self.write_value_type(module, &TypeInner::RayQuery)?;
+        self.write_value_type(module, &TypeInner::RayQuery { vertex_return: false })?;
         writeln!(self.out, " rq) {{")?;
         write!(self.out, "    ")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
