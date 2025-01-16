@@ -1222,10 +1222,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Array { base, size, .. } | TypeInner::BindingArray { base, size } => {
                 self.write_array_size(module, base, size)?;
             }
-            TypeInner::AccelerationStructure => {
+            TypeInner::AccelerationStructure { .. } => {
                 write!(self.out, "RaytracingAccelerationStructure")?;
             }
-            TypeInner::RayQuery => {
+            TypeInner::RayQuery { .. } => {
                 // these are constant flags, there are dynamic flags also but constant flags are not supported by naga
                 write!(self.out, "RayQuery<RAY_FLAG_NONE>")?;
             }
@@ -1388,7 +1388,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             match module.types[local.ty].inner {
                 // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#tracerayinline-example-1 it seems that ray queries shouldn't be zeroed
-                TypeInner::RayQuery => {}
+                TypeInner::RayQuery { .. } => {}
                 _ => {
                     write!(self.out, " = ")?;
                     // Write the local initializer if needed
