@@ -1,5 +1,6 @@
-use std::{collections::HashMap, io};
+use std::io;
 
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use wgpu::{
     AdapterInfo, DownlevelCapabilities, Features, Limits, TextureFormat, TextureFormatFeatures,
