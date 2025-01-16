@@ -50,17 +50,17 @@ By XXX in XXX
 
 ### Changes
 
-#### Use `hashbrown` in `wgpu-core`
-
-Using in `hashbrown` in `wgpu-core` should improve performance and simplify no-std support.
-
-By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
-
 #### Refactored internal trace path parameter
 
 Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
 
 By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
+
+#### Start using `hashbrown`
+
+Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std support. (This may help improve performance as well.)
+
+By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
 ## v24.0.0 (2025-01-15)
 
@@ -71,6 +71,17 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 The crate `wgpu` has two different "backends", one which targets webgpu in the browser, one which targets `wgpu_core` on native platforms and webgl. This was previously very difficult to traverse and add new features to. The entire system was refactored to make it simpler. Additionally the new system has zero overhead if there is only one "backend" in use. You can see the new system in action by using go-to-definition on any wgpu functions in your IDE.
 
 By @cwfitzgerald in [#6619](https://github.com/gfx-rs/wgpu/pull/6619).
+
+#### Most objects in `wgpu` are now `Clone`
+
+All types in the `wgpu` API are now `Clone`.
+This is implemented with internal reference counting, so cloning for instance a `Buffer` does copies only the "handle" of the GPU buffer, not the underlying resource.
+
+Previously, libraries using `wgpu` objects like `Device`, `Buffer` or `Texture` etc. often had to manually wrap them in a `Arc` to allow passing between libraries.
+This caused a lot of friction since if one library wanted to use a `Buffer` by value, calling code had to give up ownership of the resource which may interfere with other subsystems.
+Note that this also mimics how the WebGPU javascript API works where objects can be cloned and moved around freely.
+
+By @cwfitzgerald in [#6665](https://github.com/gfx-rs/wgpu/pull/6665).
 
 #### Render and Compute Passes Now Properly Enforce Their Lifetime
 
