@@ -424,7 +424,9 @@ impl Global {
             wgt::QueryType::Timestamp => 1,
         };
         let stride = elements_per_query * wgt::QUERY_SIZE;
-        let bytes_used = (stride * query_count) as BufferAddress;
+        let bytes_used: BufferAddress = u64::from(stride)
+            .checked_mul(u64::from(query_count))
+            .expect("`stride` * `query_count` overflowed `u32`, should be unreachable");
 
         let buffer_start_offset = destination_offset;
         let buffer_end_offset = buffer_start_offset + bytes_used;
