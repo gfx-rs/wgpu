@@ -8,8 +8,9 @@ use alloc::vec::Vec;
 use bitflags::parser::{ParseError, ParseHex, WriteHex};
 use bitflags::Flags;
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 use core::mem::size_of;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 macro_rules! bitflags_array_impl {
     ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
