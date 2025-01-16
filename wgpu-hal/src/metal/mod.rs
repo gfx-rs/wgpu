@@ -26,7 +26,6 @@ mod surface;
 mod time;
 
 use std::{
-    collections::HashMap,
     fmt, iter, ops,
     ptr::NonNull,
     sync::{atomic, Arc},
@@ -35,6 +34,7 @@ use std::{
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
+use hashbrown::HashMap;
 use metal::foreign_types::ForeignTypeRef as _;
 use parking_lot::{Mutex, RwLock};
 

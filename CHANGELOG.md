@@ -48,6 +48,12 @@ Refactored some functions to handle the internal trace path as a string to avoid
 
 By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
+#### Start using `hashbrown`
+
+Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std support. (This may help improve performance as well.)
+
+By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
+
 ## v24.0.0 (2025-01-15)
 
 ### Major changes

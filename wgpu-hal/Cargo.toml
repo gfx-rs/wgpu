@@ -121,6 +121,7 @@ required-features = ["gles"]
 
 [dependencies]
 bitflags.workspace = true
+hashbrown.workspace = true
 parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true

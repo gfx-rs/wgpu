@@ -119,6 +119,7 @@ bit-vec.workspace = true
 bitflags.workspace = true
 bytemuck = { workspace = true, optional = true }
 document-features.workspace = true
+hashbrown.workspace = true
 indexmap.workspace = true
 log.workspace = true
 once_cell.workspace = true

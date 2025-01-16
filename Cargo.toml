@@ -94,6 +94,10 @@ flume = "0.11"
 futures-lite = "2"
 getrandom = "0.2"
 glam = "0.29"
+hashbrown = { version = "0.15.2", default-features = false, features = [
+    "default-hasher",
+    "inline-more",
+] }
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
 indexmap = "2"
