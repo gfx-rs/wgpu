@@ -190,7 +190,7 @@ macro_rules! bitflags_array {
         }
 
         impl Flags for $name {
-            const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
+            const FLAGS: &'static [bitflags::Flag<Self>] = $name::FLAGS;
 
             type Bits = Bits;
 
@@ -205,6 +205,8 @@ macro_rules! bitflags_array {
         }
 
         impl $name {
+            const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
+
             /// Constant function for `bits()`
             pub const fn bits(&self) -> Bits {
                 Bits([$(self.$lower_inner_name.bits(),)*])
@@ -316,6 +318,16 @@ macro_rules! bitflags_array {
                     }
                 })*)*
                 None
+            }
+
+            /// Returns an iterator over the set flags.
+            pub const fn iter(&self) -> bitflags::iter::Iter<$name> {
+                bitflags::iter::Iter::__private_const_new($name::FLAGS, *self, *self)
+            }
+
+            /// Returns an iterator over the set flags and their names.
+            pub const fn iter_names(&self) -> bitflags::iter::IterNames<$name> {
+                bitflags::iter::IterNames::__private_const_new($name::FLAGS, *self, *self)
             }
 
             $(
