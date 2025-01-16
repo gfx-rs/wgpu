@@ -47,6 +47,8 @@ impl<T> WeakVec<T> {
 }
 
 pub(crate) struct WeakVecIter<T> {
+    // XXX TODO CLEANUP WARNING(S) & REMOVE ALLOW(S)
+    #[allow(unused_qualifications)]
     inner: std::vec::IntoIter<Weak<T>>,
 }
 

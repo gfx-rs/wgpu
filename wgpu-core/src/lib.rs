@@ -221,6 +221,8 @@ pub(crate) fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
 
 // XXX TBD CLEANUP NEEDED BELOW - ???
 // XXX TBD SHOULD THIS BE A SEPARATE MODULE - ???
+// XXX TODO CLEANUP WARNING(S) & REMOVE ALLOW(S)
+#[allow(unused_imports)]
 pub(crate) mod alias {
     pub(crate) use std::prelude::v1::*;
     pub(crate) mod std {
