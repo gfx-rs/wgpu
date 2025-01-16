@@ -457,6 +457,7 @@ bitflags_array! {
         /// [`RenderPass::begin_pipeline_statistics_query`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.begin_pipeline_statistics_query
         /// [`RenderPass::end_pipeline_statistics_query`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.end_pipeline_statistics_query
         /// [`CommandEncoder::resolve_query_set`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.resolve_query_set
+        /// [`PipelineStatisticsTypes`]: super::PipelineStatisticsTypes
         const PIPELINE_STATISTICS_QUERY = 1 << 4;
         /// Allows for timestamp queries directly on command encoders.
         ///
@@ -681,6 +682,7 @@ bitflags_array! {
         /// [`RenderPass`]: ../wgpu/struct.RenderPass.html
         /// [`PipelineLayoutDescriptor`]: ../wgpu/struct.PipelineLayoutDescriptor.html
         /// [`RenderPass::set_push_constants`]: ../wgpu/struct.RenderPass.html#method.set_push_constants
+        /// [`Limits::max_push_constant_size`]: super::Limits
         const PUSH_CONSTANTS = 1 << 16;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].
@@ -692,6 +694,9 @@ bitflags_array! {
         /// - OpenGL
         ///
         /// This is a native only feature.
+        ///
+        /// [`AddressMode::ClampToBorder`]: super::AddressMode::ClampToBorder
+        /// [`SamplerBorderColor::Zero`]: super::SamplerBorderColor::Zero
         const ADDRESS_MODE_CLAMP_TO_ZERO = 1 << 17;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// other than [`SamplerBorderColor::Zero`].
@@ -703,6 +708,9 @@ bitflags_array! {
         /// - OpenGL
         ///
         /// This is a native only feature.
+        ///
+        /// [`AddressMode::ClampToBorder`]: super::AddressMode::ClampToBorder
+        /// [`SamplerBorderColor::Zero`]: super::SamplerBorderColor::Zero
         const ADDRESS_MODE_CLAMP_TO_BORDER = 1 << 18;
         /// Allows the user to set [`PolygonMode::Line`] in [`PrimitiveState::polygon_mode`]
         ///
@@ -714,6 +722,9 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
+        ///
+        /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState
+        /// [`PolygonMode::Line`]: super::PolygonMode::Line
         const POLYGON_MODE_LINE = 1 << 19;
         /// Allows the user to set [`PolygonMode::Point`] in [`PrimitiveState::polygon_mode`]
         ///
@@ -723,6 +734,9 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        ///
+        /// [`PrimitiveState::polygon_mode`]: super::PrimitiveState
+        /// [`PolygonMode::Point`]: super::PolygonMode::Point
         const POLYGON_MODE_POINT = 1 << 20;
         /// Allows the user to set a overestimation-conservative-rasterization in [`PrimitiveState::conservative`]
         ///
@@ -733,6 +747,8 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        ///
+        /// [`PrimitiveState::conservative`]: super::PrimitiveState::conservative
         const CONSERVATIVE_RASTERIZATION = 1 << 21;
         /// Enables bindings of writable storage buffers and textures visible to vertex shaders.
         ///
@@ -796,6 +812,8 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
+        ///
+        /// [`TextureFormat::NV12`]: super::TextureFormat::NV12
         const TEXTURE_FORMAT_NV12 = 1 << 28;
         /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
         /// major bugs in them and are expected to be subject to breaking changes, suggestions
@@ -1004,6 +1022,8 @@ bitflags_array! {
         /// - OpenGL
         ///
         /// This is a web and native feature.
+        ///
+        /// [`TextureFormat::Depth32FloatStencil8`]: super::TextureFormat::Depth32FloatStencil8
         const DEPTH32FLOAT_STENCIL8 = 1 << 1;
 
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
@@ -1137,6 +1157,8 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a web and native feature.
+        ///
+        /// [`TextureFormat::Rg11b10Ufloat`]: super::TextureFormat::Rg11b10Ufloat
         const RG11B10UFLOAT_RENDERABLE = 1 << 9;
 
         /// Allows the [`TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8Unorm`]
@@ -1147,6 +1169,9 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a web and native feature.
+        ///
+        /// [`TextureFormat::Bgra8Unorm`]: super::TextureFormat::Bgra8Unorm
+        /// [`TextureUsages::STORAGE_BINDING`]: super::TextureUsages::STORAGE_BINDING
         const BGRA8UNORM_STORAGE = 1 << 10;
 
 
