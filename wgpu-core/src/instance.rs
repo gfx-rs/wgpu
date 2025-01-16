@@ -1,5 +1,7 @@
+use std::borrow::Cow;
 use std::sync::Arc;
-use std::{borrow::Cow, collections::HashMap};
+
+use hashbrown::HashMap;
 
 use crate::{
     api_log, api_log_debug,

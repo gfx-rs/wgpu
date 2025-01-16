@@ -42,6 +42,12 @@ Bottom level categories:
 
 ### Changes
 
+#### Use `hashbrown` in `wgpu-core`
+
+Using in `hashbrown` in `wgpu-core` should improve performance and simplify no-std support.
+
+By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
+
 #### Refactored internal trace path parameter
 
 Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.

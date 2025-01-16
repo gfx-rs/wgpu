@@ -1,6 +1,7 @@
 use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 use arrayvec::ArrayVec;
-use std::{collections::hash_map::Entry, fmt};
+use hashbrown::hash_map::Entry;
+use std::fmt;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
