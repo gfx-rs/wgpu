@@ -2,12 +2,13 @@ use super::{conv, RawTlasInstance};
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
+use hashbrown::hash_map::Entry;
 use parking_lot::Mutex;
 
 use crate::TlasInstance;
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry, BTreeMap},
+    collections::BTreeMap,
     ffi::{CStr, CString},
     mem::{self, size_of, MaybeUninit},
     num::NonZeroU32,
