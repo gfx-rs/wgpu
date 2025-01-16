@@ -42,9 +42,9 @@ Bottom level categories:
 
 ### Changes
 
-#### Use `hashbrown` in `wgpu-core` & `wgpu-hal`
+#### Start using `hashbrown`
 
-Using in `hashbrown` should improve performance and simplify no-std support.
+Using `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` should help improve performance and simplify no-std support.
 
 By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
