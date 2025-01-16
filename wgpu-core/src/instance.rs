@@ -622,11 +622,17 @@ impl Adapter {
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
-        trace_path: Option<&std::path::Path>,
+        trace_dir_name: Option<&str>,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        let device = Device::new(hal_device.device, self, desc, trace_path, instance_flags)?;
+        let device = Device::new(
+            hal_device.device,
+            self,
+            desc,
+            trace_dir_name,
+            instance_flags,
+        )?;
         let device = Arc::new(device);
 
         let queue = Queue::new(device.clone(), hal_device.queue)?;
@@ -641,7 +647,7 @@ impl Adapter {
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
-        trace_path: Option<&std::path::Path>,
+        trace_dir_name: Option<&str>,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
@@ -688,7 +694,7 @@ impl Adapter {
         }
         .map_err(DeviceError::from_hal)?;
 
-        self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
+        self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_dir_name)
     }
 }
 
@@ -929,7 +935,7 @@ impl Global {
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
-        trace_path: Option<&std::path::Path>,
+        trace_dir_name: Option<&str>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
@@ -941,7 +947,7 @@ impl Global {
 
         let adapter = self.hub.adapters.get(adapter_id);
         let (device, queue) =
-            adapter.create_device_and_queue(desc, self.instance.flags, trace_path)?;
+            adapter.create_device_and_queue(desc, self.instance.flags, trace_dir_name)?;
 
         let device_id = device_fid.assign(device);
         resource_log!("Created Device {:?}", device_id);
@@ -961,7 +967,7 @@ impl Global {
         adapter_id: AdapterId,
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
-        trace_path: Option<&std::path::Path>,
+        trace_dir_name: Option<&str>,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
     ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
@@ -975,7 +981,7 @@ impl Global {
             hal_device,
             desc,
             self.instance.flags,
-            trace_path,
+            trace_dir_name,
         )?;
 
         let device_id = devices_fid.assign(device);
