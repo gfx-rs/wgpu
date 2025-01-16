@@ -781,7 +781,9 @@ impl crate::Device for super::Device {
                     num_texture_views += count
                 }
                 wgt::BindingType::Sampler { .. } => num_samplers += count,
-                wgt::BindingType::AccelerationStructure { .. } => num_acceleration_structures += count,
+                wgt::BindingType::AccelerationStructure { .. } => {
+                    num_acceleration_structures += count
+                }
             }
         }
 
