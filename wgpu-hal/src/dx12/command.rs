@@ -362,7 +362,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     },
                 };
                 self.temp.barriers.push(raw);
-            } else if barrier.usage.from == crate::BufferUses::STORAGE_READ_WRITE || barrier.usage.from == crate::BufferUses::ACCELERATION_STRUCTURE_QUERY {
+            } else if barrier.usage.from == crate::BufferUses::STORAGE_READ_WRITE
+                || barrier.usage.from == crate::BufferUses::ACCELERATION_STRUCTURE_QUERY
+            {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,

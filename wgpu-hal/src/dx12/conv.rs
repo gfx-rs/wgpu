@@ -4,7 +4,9 @@ pub fn map_buffer_usage_to_resource_flags(
     usage: crate::BufferUses,
 ) -> Direct3D12::D3D12_RESOURCE_FLAGS {
     let mut flags = Direct3D12::D3D12_RESOURCE_FLAG_NONE;
-    if usage.contains(crate::BufferUses::STORAGE_READ_WRITE) || usage.contains(crate::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
+    if usage.contains(crate::BufferUses::STORAGE_READ_WRITE)
+        || usage.contains(crate::BufferUses::ACCELERATION_STRUCTURE_QUERY)
+    {
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
     flags
@@ -402,9 +404,15 @@ pub(crate) fn map_acceleration_structure_geometry_flags(
     d3d_flags
 }
 
-pub(crate) fn map_acceleration_structure_copy_mode(mode:wgt::AccelerationStructureCopy) -> Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE {
+pub(crate) fn map_acceleration_structure_copy_mode(
+    mode: wgt::AccelerationStructureCopy,
+) -> Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE {
     match mode {
-        wgt::AccelerationStructureCopy::Clone => Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE,
-        wgt::AccelerationStructureCopy::Compact => Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT,
+        wgt::AccelerationStructureCopy::Clone => {
+            Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE
+        }
+        wgt::AccelerationStructureCopy::Compact => {
+            Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT
+        }
     }
 }

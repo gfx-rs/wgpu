@@ -1,11 +1,10 @@
 use std::ops::Range;
 
 use crate::{
-    AccelerationStructureBarrier, Api, Attachment, BufferBarrier,
-    BufferBinding, BufferCopy, BufferTextureCopy, BuildAccelerationStructureDescriptor,
-    ColorAttachment, CommandEncoder, ComputePassDescriptor, DepthStencilAttachment, DeviceError,
-    Label, MemoryRange, PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier,
-    TextureCopy, TextureUses,
+    AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy,
+    BufferTextureCopy, BuildAccelerationStructureDescriptor, ColorAttachment, CommandEncoder,
+    ComputePassDescriptor, DepthStencilAttachment, DeviceError, Label, MemoryRange,
+    PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
 };
 
 use super::{

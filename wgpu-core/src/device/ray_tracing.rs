@@ -109,8 +109,7 @@ impl Device {
                     .create_buffer(&hal::BufferDescriptor {
                         label: None,
                         size: size_of::<BufferAddress>() as BufferAddress,
-                        usage: BufferUses::MAP_READ
-                            | BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                        usage: BufferUses::MAP_READ | BufferUses::ACCELERATION_STRUCTURE_QUERY,
                         memory_flags: MemoryFlags::PREFER_COHERENT,
                     })
                     .map_err(DeviceError::from_hal)
