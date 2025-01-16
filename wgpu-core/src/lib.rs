@@ -251,10 +251,10 @@ pub(crate) mod alias {
             pub(crate) use super::std::sync::*;
             pub(crate) use core::sync::*;
             // XXX TBD ??? - UPDATE FOR std vs test ???
-            // XXX TODO ENSURE BUILD WITH THE FOLLOWING ALIAS IS TESTED IN CI:
             // XXX TBD NAMING - ???
-            #[cfg(not(any(feature = "std", test)))]
-            pub(crate) use crate::OnceCell as OnceLock;
+            // XXX TODO UNCOMMENT - XXX TBD THIS SHOULD TRIGGER CI BUILD FAILURE
+            // #[cfg(not(any(feature = "std", test)))]
+            // pub(crate) use crate::OnceCell as OnceLock;
         }
         // XXX TBD ??? - UPDATE FOR std vs test ???
         // #[cfg(feature = "std")]
