@@ -2,9 +2,8 @@
 //!
 //! Nearly identical to the DX12 sampler cache, without descriptor heap management.
 
-use std::collections::{hash_map::Entry, HashMap};
-
 use ash::vk;
+use hashbrown::{hash_map::Entry, HashMap};
 use ordered_float::OrderedFloat;
 
 /// If the allowed sampler count is above this value, the sampler cache is disabled.

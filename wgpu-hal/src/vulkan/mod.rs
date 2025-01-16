@@ -33,7 +33,6 @@ mod sampler;
 
 use std::{
     borrow::Borrow,
-    collections::HashSet,
     ffi::{CStr, CString},
     fmt, mem,
     num::NonZeroU32,
@@ -42,11 +41,16 @@ use std::{
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
+use hashbrown::{HashMap, HashSet};
 use parking_lot::{Mutex, RwLock};
+use rustc_hash::FxHasher;
 use wgt::InternalCounter;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
+
+// NOTE: This type alias is similar to rustc_hash::FxHashMap but works with hashbrown.
+type FxHashMap<T, U> = HashMap<T, U, core::hash::BuildHasherDefault<FxHasher>>;
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -641,8 +645,8 @@ struct DeviceShared {
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     features: wgt::Features,
-    render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    render_passes: Mutex<FxHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<FxHashMap<FramebufferKey, vk::Framebuffer>>,
     sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }

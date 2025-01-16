@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     ffi::{c_void, CStr, CString},
     mem::{self, size_of, size_of_val, ManuallyDrop},
     os::raw::c_int,
@@ -17,6 +16,7 @@ use glutin_wgl_sys::wgl_extra::{
     Wgl, CONTEXT_CORE_PROFILE_BIT_ARB, CONTEXT_DEBUG_BIT_ARB, CONTEXT_FLAGS_ARB,
     CONTEXT_PROFILE_MASK_ARB,
 };
+use hashbrown::HashSet;
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};

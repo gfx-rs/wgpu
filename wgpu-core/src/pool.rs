@@ -1,9 +1,9 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
     hash::Hash,
     sync::{Arc, Weak},
 };
 
+use hashbrown::{hash_map::Entry, HashMap};
 use once_cell::sync::OnceCell;
 
 use crate::lock::{rank, Mutex};

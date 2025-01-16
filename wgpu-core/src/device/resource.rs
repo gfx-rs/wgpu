@@ -193,11 +193,11 @@ impl Device {
         raw_device: Box<dyn hal::DynDevice>,
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
-        trace_path: Option<&std::path::Path>,
+        trace_dir_name: Option<&str>,
         instance_flags: wgt::InstanceFlags,
     ) -> Result<Self, DeviceError> {
         #[cfg(not(feature = "trace"))]
-        if let Some(_) = trace_path {
+        if let Some(_) = trace_dir_name {
             log::error!("Feature 'trace' is not enabled");
         }
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
@@ -256,7 +256,7 @@ impl Device {
             #[cfg(feature = "trace")]
             trace: Mutex::new(
                 rank::DEVICE_TRACE,
-                trace_path.and_then(|path| match trace::Trace::new(path) {
+                trace_dir_name.and_then(|dir_path_name| match trace::Trace::new(dir_path_name) {
                     Ok(mut trace) => {
                         trace.add(trace::Action::Init {
                             desc: desc.clone(),
@@ -265,7 +265,7 @@ impl Device {
                         Some(trace)
                     }
                     Err(e) => {
-                        log::error!("Unable to start a trace in '{path:?}': {e}");
+                        log::error!("Unable to start a trace in '{dir_path_name:?}': {e}");
                         None
                     }
                 }),
@@ -2712,8 +2712,8 @@ impl Device {
             .map(|mut bgl_entry_map| {
                 bgl_entry_map.sort();
                 match unique_bind_group_layouts.entry(bgl_entry_map) {
-                    std::collections::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
-                    std::collections::hash_map::Entry::Vacant(e) => {
+                    hashbrown::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
+                    hashbrown::hash_map::Entry::Vacant(e) => {
                         match self.create_bind_group_layout(
                             &None,
                             e.key().clone(),
