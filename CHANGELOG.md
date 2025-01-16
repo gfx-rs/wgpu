@@ -40,6 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### Refactored internal trace path parameter
+
+Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
+
+By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
+
 ## v24.0.0 (2025-01-15)
 
 ### Major changes
