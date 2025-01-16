@@ -230,8 +230,10 @@ pub(crate) mod alias {
                     alloc::format, borrow::ToOwned, boxed::Box, string::String, string::ToString,
                     vec, vec::Vec,
                 };
-                #[cfg(feature = "std")]
-                pub(crate) use super::super::thread_local;
+                // XXX TBD ??? - UPDATE FOR std vs test ???
+                // #[cfg(feature = "std")]
+                #[cfg(any(feature = "std", test))]
+                pub(crate) use super::super::{eprintln, thread_local};
             }
         }
         pub(crate) use core::{
@@ -242,23 +244,26 @@ pub(crate) mod alias {
         pub(crate) use alloc::{boxed, string, vec};
         pub(crate) mod borrow {
             pub(crate) use super::alloc::borrow::*;
-            // XXX
-            // pub(crate) use core::borrow::*;
         }
         pub(crate) mod sync {
             pub(crate) use super::alloc::sync::*;
             pub(crate) use core::sync::*;
+            #[cfg(any(feature = "std", test))]
+            pub(crate) use super::std::sync::*;
+            // XXX TBD ??? - UPDATE FOR std vs test ???
+            // XXX TODO ENSURE BUILD WITH THE FOLLOWING ALIAS IS TESTED IN CI:
             // XXX TBD NAMING - ???
-            #[cfg(feature = "std")]
-            pub(crate) use super::std::sync::OnceLock;
-            // XXX TBD NAMING - ???
-            #[cfg(not(feature = "std"))]
+            #[cfg(not(any(feature = "std", test)))]
             pub(crate) use crate::OnceCell as OnceLock;
         }
-        #[cfg(feature = "std")]
+        // XXX TBD ??? - UPDATE FOR std vs test ???
+        // #[cfg(feature = "std")]
+        #[cfg(any(feature = "std", test))]
         extern crate std;
-        #[cfg(feature = "std")]
-        pub(crate) use std::{backtrace, env, fs, io, path, process, thread, thread_local};
+        // XXX TBD ??? - UPDATE FOR std vs test ???
+        // #[cfg(feature = "std")]
+        #[cfg(any(feature = "std", test))]
+        pub(crate) use std::{backtrace, env, eprintln, fs, io, path, process, thread, thread_local};
     }
 }
 

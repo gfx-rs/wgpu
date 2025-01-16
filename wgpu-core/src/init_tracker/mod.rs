@@ -282,6 +282,7 @@ impl InitTracker<u32> {
 
 #[cfg(test)]
 mod test {
+    use crate::alias::*;
     use std::ops::Range;
 
     type Tracker = super::InitTracker<u32>;

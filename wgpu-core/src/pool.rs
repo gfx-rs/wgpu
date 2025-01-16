@@ -108,6 +108,7 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
 
 #[cfg(test)]
 mod tests {
+    use crate::alias::*;
     use std::sync::{
         atomic::{AtomicU32, Ordering},
         Barrier,
