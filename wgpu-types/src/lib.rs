@@ -31,8 +31,8 @@ use {
 pub mod assertions;
 mod counters;
 mod env;
-pub mod instance;
 mod features;
+pub mod instance;
 pub mod math;
 
 pub use counters::*;

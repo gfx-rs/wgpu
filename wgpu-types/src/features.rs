@@ -1,14 +1,15 @@
 //TODO: make robust resource access configurable
 
 use crate::VertexFormat;
-use alloc::vec::Vec;
-use bitflags::Flags;
-#[cfg(feature = "serde")]
-use bitflags::parser::{ParseError, ParseHex, WriteHex};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use alloc::fmt;
+use alloc::vec::Vec;
+#[cfg(feature = "serde")]
+use bitflags::parser::{ParseError, ParseHex, WriteHex};
+use bitflags::Flags;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+use core::mem::size_of;
 
 macro_rules! bitflags_array_impl {
     ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
