@@ -64,6 +64,17 @@ The crate `wgpu` has two different "backends", one which targets webgpu in the b
 
 By @cwfitzgerald in [#6619](https://github.com/gfx-rs/wgpu/pull/6619).
 
+#### Most objects in `wgpu` are now `Clone`
+
+All types in the `wgpu` API are now `Clone`.
+This is implemented with internal reference counting, so cloning for instance a `Buffer` does copies only the "handle" of the GPU buffer, not the underlying resource.
+
+Previously, libraries using `wgpu` objects like `Device`, `Buffer` or `Texture` etc. often had to manually wrap them in a `Arc` to allow passing between libraries.
+This caused a lot of friction since if one library wanted to use a `Buffer` by value, calling code had to give up ownership of the resource which may interfere with other subsystems.
+Note that this also mimics how the WebGPU javascript API works where objects can be cloned and moved around freely.
+
+By @cwfitzgerald in [#6665](https://github.com/gfx-rs/wgpu/pull/6665).
+
 #### Render and Compute Passes Now Properly Enforce Their Lifetime
 
 A regression introduced in 23.0.0 caused lifetimes of render and compute passes to be incorrectly enforced. While this is not
