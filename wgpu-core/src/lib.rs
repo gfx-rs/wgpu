@@ -247,9 +247,9 @@ pub(crate) mod alias {
         }
         pub(crate) mod sync {
             pub(crate) use super::alloc::sync::*;
-            pub(crate) use core::sync::*;
             #[cfg(any(feature = "std", test))]
             pub(crate) use super::std::sync::*;
+            pub(crate) use core::sync::*;
             // XXX TBD ??? - UPDATE FOR std vs test ???
             // XXX TODO ENSURE BUILD WITH THE FOLLOWING ALIAS IS TESTED IN CI:
             // XXX TBD NAMING - ???
@@ -263,7 +263,9 @@ pub(crate) mod alias {
         // XXX TBD ??? - UPDATE FOR std vs test ???
         // #[cfg(feature = "std")]
         #[cfg(any(feature = "std", test))]
-        pub(crate) use std::{backtrace, env, eprintln, fs, io, path, process, thread, thread_local};
+        pub(crate) use std::{
+            backtrace, env, eprintln, fs, io, path, process, thread, thread_local,
+        };
     }
 }
 
