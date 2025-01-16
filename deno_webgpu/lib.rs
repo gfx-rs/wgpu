@@ -381,7 +381,7 @@ pub fn op_webgpu_request_adapter(
 
     let backends = std::env::var("DENO_WEBGPU_BACKEND").map_or_else(
         |_| wgpu_types::Backends::all(),
-        |s| wgpu_core::instance::parse_backends_from_comma_list(&s),
+        |s| wgpu_types::Backends::from_comma_list(&s),
     );
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
         instance
@@ -391,8 +391,14 @@ pub fn op_webgpu_request_adapter(
             &wgpu_types::InstanceDescriptor {
                 backends,
                 flags: wgpu_types::InstanceFlags::from_build_config(),
-                dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
-                gles_minor_version: wgpu_types::Gles3MinorVersion::default(),
+                backend_options: wgpu_types::BackendOptions {
+                    dx12: wgpu_types::Dx12BackendOptions {
+                        shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+                    },
+                    gl: wgpu_types::GlBackendOptions {
+                        gles_minor_version: wgpu_types::Gles3MinorVersion::default(),
+                    },
+                },
             },
         )));
         state.borrow::<Instance>()

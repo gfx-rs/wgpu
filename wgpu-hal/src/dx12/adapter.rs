@@ -389,6 +389,13 @@ impl super::Adapter {
         );
 
         features.set(
+            wgt::Features::TEXTURE_INT64_ATOMIC,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_6
+                && hr.is_ok()
+                && features1.Int64ShaderOps.as_bool(),
+        );
+
+        features.set(
             wgt::Features::SUBGROUP,
             shader_model >= naga::back::hlsl::ShaderModel::V6_0
                 && hr.is_ok()

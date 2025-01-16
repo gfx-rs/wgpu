@@ -6,17 +6,45 @@ use wgpu_test::{
 };
 
 #[gpu_test]
-static IMAGE_32_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
+static IMAGE_64_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .limits(wgt::Limits {
+            .limits(wgpu::Limits {
                 max_storage_textures_per_shader_stage: 1,
                 max_compute_invocations_per_workgroup: 64,
                 max_compute_workgroup_size_x: 4,
                 max_compute_workgroup_size_y: 4,
                 max_compute_workgroup_size_z: 4,
-                max_compute_workgroups_per_dimension: wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
-                ..wgt::Limits::downlevel_webgl2_defaults()
+                max_compute_workgroups_per_dimension: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT,
+                ..wgpu::Limits::downlevel_webgl2_defaults()
+            })
+            .features(
+                wgpu::Features::TEXTURE_ATOMIC
+                    | wgpu::Features::TEXTURE_INT64_ATOMIC
+                    | wgpu::Features::SHADER_INT64,
+            ),
+    )
+    .run_async(|ctx| async move {
+        test_format(
+            ctx,
+            wgpu::TextureFormat::R64Uint,
+            wgpu::include_wgsl!("image_64_atomics.wgsl"),
+        )
+        .await;
+    });
+
+#[gpu_test]
+static IMAGE_32_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits {
+                max_storage_textures_per_shader_stage: 1,
+                max_compute_invocations_per_workgroup: 64,
+                max_compute_workgroup_size_x: 4,
+                max_compute_workgroup_size_y: 4,
+                max_compute_workgroup_size_z: 4,
+                max_compute_workgroups_per_dimension: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT,
+                ..wgpu::Limits::downlevel_webgl2_defaults()
             })
             .features(wgpu::Features::TEXTURE_ATOMIC),
     )
@@ -36,8 +64,8 @@ async fn test_format(
 ) {
     let pixel_bytes = format.target_pixel_byte_cost().unwrap();
     let size = wgpu::Extent3d {
-        width: wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
-        height: wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
+        width: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT,
+        height: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT,
         depth_or_array_layers: 1,
     };
     let bind_group_layout_entry = wgpu::BindGroupLayoutEntry {

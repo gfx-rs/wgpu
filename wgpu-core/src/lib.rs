@@ -90,6 +90,8 @@ mod weak_vec;
 mod scratch;
 pub mod validation;
 
+pub use validation::{map_storage_format_from_naga, map_storage_format_to_naga};
+
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 pub use naga;
 

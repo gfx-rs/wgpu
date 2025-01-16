@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "23.0.1"
+version = "24.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Hardware abstraction layer for wgpu, the cross-platform, safe, pure-rust graphics API"
@@ -140,7 +140,7 @@ glow = { workspace = true, optional = true }
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "23.0.0"
+version = "24.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
@@ -205,7 +205,7 @@ ndk-sys = { workspace = true, optional = true }
 
 [dependencies.naga]
 path = "../naga"
-version = "23.0.0"
+version = "24.0.0"
 
 [build-dependencies]
 cfg_aliases.workspace = true
@@ -213,7 +213,7 @@ cfg_aliases.workspace = true
 # DEV dependencies
 [dev-dependencies.naga]
 path = "../naga"
-version = "23.0.0"
+version = "24.0.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]

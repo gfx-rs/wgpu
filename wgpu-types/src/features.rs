@@ -975,6 +975,17 @@ bitflags_array! {
         ///
         /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
         const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 44;
+
+        /// Enables R64Uint image atomic min and max.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_EXT_shader_image_atomic_int64)
+        /// - DX12 (with SM 6.6+)
+        /// - Metal (with MSL 3.1+)
+        ///
+        /// This is a native only feature.
+        const TEXTURE_INT64_ATOMIC = 1 << 45;
+
     }
 
     /// Features that are not guaranteed to be supported.

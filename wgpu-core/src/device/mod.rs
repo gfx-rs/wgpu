@@ -430,6 +430,10 @@ pub fn create_validator(
         features.contains(wgt::Features::TEXTURE_ATOMIC),
     );
     caps.set(
+        Caps::TEXTURE_INT64_ATOMIC,
+        features.contains(wgt::Features::TEXTURE_INT64_ATOMIC),
+    );
+    caps.set(
         Caps::SHADER_FLOAT32_ATOMIC,
         features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC),
     );

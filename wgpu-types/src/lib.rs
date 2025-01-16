@@ -30,10 +30,13 @@ use {
 
 pub mod assertions;
 mod counters;
+mod env;
+pub mod instance;
 mod features;
 pub mod math;
 
 pub use counters::*;
+pub use instance::*;
 
 pub use features::*;
 
@@ -126,6 +129,19 @@ pub enum PowerPreference {
     HighPerformance = 2,
 }
 
+impl PowerPreference {
+    /// Get a power preference from the environment variable `WGPU_POWER_PREF`.
+    pub fn from_env() -> Option<Self> {
+        let env = crate::env::var("WGPU_POWER_PREF")?;
+        match env.to_lowercase().as_str() {
+            "low" => Some(Self::LowPower),
+            "high" => Some(Self::HighPerformance),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// Represents the backends that wgpu will use.
     #[repr(transparent)]
@@ -176,6 +192,60 @@ impl Default for Backends {
 impl From<Backend> for Backends {
     fn from(backend: Backend) -> Self {
         Self::from_bits(1 << backend as u32).unwrap()
+    }
+}
+
+impl Backends {
+    /// Gets a set of backends from the environment variable `WGPU_BACKEND`.
+    ///
+    /// See [`Self::from_comma_list()`] for the format of the string.
+    pub fn from_env() -> Option<Self> {
+        let env = crate::env::var("WGPU_BACKEND")?;
+        Some(Self::from_comma_list(&env))
+    }
+
+    /// Takes the given options, modifies them based on the `WGPU_BACKEND` environment variable, and returns the result.
+    pub fn with_env(&self) -> Self {
+        if let Some(env) = Self::from_env() {
+            env
+        } else {
+            *self
+        }
+    }
+
+    /// Generates a set of backends from a comma separated list of case-insensitive backend names.
+    ///
+    /// Whitespace is stripped, so both 'gl, dx12' and 'gl,dx12' are valid.
+    ///
+    /// Always returns WEBGPU on wasm over webgpu.
+    ///
+    /// Names:
+    /// - vulkan = "vulkan" or "vk"
+    /// - dx12   = "dx12" or "d3d12"
+    /// - metal  = "metal" or "mtl"
+    /// - gles   = "opengl" or "gles" or "gl"
+    /// - webgpu = "webgpu"
+    pub fn from_comma_list(string: &str) -> Self {
+        let mut backends = Self::empty();
+        for backend in string.to_lowercase().split(',') {
+            backends |= match backend.trim() {
+                "vulkan" | "vk" => Self::VULKAN,
+                "dx12" | "d3d12" => Self::DX12,
+                "metal" | "mtl" => Self::METAL,
+                "opengl" | "gles" | "gl" => Self::GL,
+                "webgpu" => Self::BROWSER_WEBGPU,
+                b => {
+                    log::warn!("unknown backend string '{}'", b);
+                    continue;
+                }
+            }
+        }
+
+        if backends.is_empty() {
+            log::warn!("no valid backend strings found!");
+        }
+
+        backends
     }
 }
 
@@ -1820,6 +1890,10 @@ pub enum TextureFormat {
     Rg11b10Ufloat,
 
     // Normal 64 bit formats
+    /// Red channel only. 64 bit integer per channel. Unsigned in shader.
+    ///
+    /// [`Features::TEXTURE_INT64_ATOMIC`] must be enabled to use this texture format.
+    R64Uint,
     /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
     Rg32Uint,
     /// Red and green channels. 32 bit integer per channel. Signed in shader.
@@ -2106,6 +2180,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "rgb10a2uint" => TextureFormat::Rgb10a2Uint,
                     "rgb10a2unorm" => TextureFormat::Rgb10a2Unorm,
                     "rg11b10ufloat" => TextureFormat::Rg11b10Ufloat,
+                    "r64uint" => TextureFormat::R64Uint,
                     "rg32uint" => TextureFormat::Rg32Uint,
                     "rg32sint" => TextureFormat::Rg32Sint,
                     "rg32float" => TextureFormat::Rg32Float,
@@ -2234,6 +2309,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Rgb10a2Uint => "rgb10a2uint",
             TextureFormat::Rgb10a2Unorm => "rgb10a2unorm",
             TextureFormat::Rg11b10Ufloat => "rg11b10ufloat",
+            TextureFormat::R64Uint => "r64uint",
             TextureFormat::Rg32Uint => "rg32uint",
             TextureFormat::Rg32Sint => "rg32sint",
             TextureFormat::Rg32Float => "rg32float",
@@ -2476,6 +2552,7 @@ impl TextureFormat {
             | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Ufloat
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -2599,6 +2676,8 @@ impl TextureFormat {
             | Self::Depth24PlusStencil8
             | Self::Depth32Float => Features::empty(),
 
+            Self::R64Uint => Features::TEXTURE_INT64_ATOMIC,
+
             Self::Depth32FloatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
 
             Self::NV12 => Features::TEXTURE_FORMAT_NV12,
@@ -2664,11 +2743,12 @@ impl TextureFormat {
         let storage = basic | TextureUsages::STORAGE_BINDING;
         let binding = TextureUsages::TEXTURE_BINDING;
         let all_flags = attachment | storage | binding;
-        let atomic = if device_features.contains(Features::TEXTURE_ATOMIC) {
-            all_flags | TextureUsages::STORAGE_ATOMIC
+        let atomic_64 = if device_features.contains(Features::TEXTURE_ATOMIC) {
+            storage | binding | TextureUsages::STORAGE_ATOMIC
         } else {
-            all_flags
+            storage | binding
         };
+        let atomic = attachment | atomic_64;
         let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
             attachment
         } else {
@@ -2715,6 +2795,7 @@ impl TextureFormat {
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
+            Self::R64Uint =>              (     s_ro_wo,  atomic_64),
             Self::Rg32Uint =>             (     s_ro_wo,  all_flags),
             Self::Rg32Sint =>             (     s_ro_wo,  all_flags),
             Self::Rg32Float =>            (     s_ro_wo,  all_flags),
@@ -2840,6 +2921,7 @@ impl TextureFormat {
             | Self::Rg16Uint
             | Self::Rgba16Uint
             | Self::R32Uint
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rgba32Uint
             | Self::Rgb10a2Uint => Some(uint),
@@ -2970,7 +3052,7 @@ impl TextureFormat {
             | Self::Rgba16Uint
             | Self::Rgba16Sint
             | Self::Rgba16Float => Some(8),
-            Self::Rg32Uint | Self::Rg32Sint | Self::Rg32Float => Some(8),
+            Self::R64Uint | Self::Rg32Uint | Self::Rg32Sint | Self::Rg32Float => Some(8),
 
             Self::Rgba32Uint | Self::Rgba32Sint | Self::Rgba32Float => Some(16),
 
@@ -3064,6 +3146,7 @@ impl TextureFormat {
             | Self::Rgba16Unorm
             | Self::Rgba16Snorm
             | Self::Rgba16Float
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -3145,6 +3228,7 @@ impl TextureFormat {
             Self::R32Uint
             | Self::R32Sint
             | Self::R32Float
+            | Self::R64Uint
             | Self::Rg32Uint
             | Self::Rg32Sint
             | Self::Rg32Float
@@ -3213,7 +3297,8 @@ impl TextureFormat {
             | Self::R16Float
             | Self::R32Uint
             | Self::R32Sint
-            | Self::R32Float => 1,
+            | Self::R32Float
+            | Self::R64Uint => 1,
 
             Self::Rg8Unorm
             | Self::Rg8Snorm
@@ -3466,6 +3551,10 @@ fn texture_format_serialize() {
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rg11b10Ufloat).unwrap(),
         "\"rg11b10ufloat\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::R64Uint).unwrap(),
+        "\"r64uint\"".to_string()
     );
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rg32Uint).unwrap(),
@@ -3762,6 +3851,10 @@ fn texture_format_deserialize() {
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rg11b10ufloat\"").unwrap(),
         TextureFormat::Rg11b10Ufloat
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"r64uint\"").unwrap(),
+        TextureFormat::R64Uint
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rg32uint\"").unwrap(),
@@ -6945,84 +7038,6 @@ impl ShaderRuntimeChecks {
 impl Default for ShaderRuntimeChecks {
     fn default() -> Self {
         Self::checked()
-    }
-}
-
-/// Selects which DX12 shader compiler to use.
-///
-/// If the `Dxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
-/// then this will fall back to the Fxc compiler at runtime and log an error.
-///
-/// `wgpu::utils::init::dx12_shader_compiler_from_env` can be used to set the compiler
-/// from the `WGPU_DX12_SHADER_COMPILER` environment variable, but this should only be used for testing.
-#[derive(Clone, Debug, Default)]
-pub enum Dx12Compiler {
-    /// The Fxc compiler (default) is old, slow and unmaintained.
-    ///
-    /// However, it doesn't require any additional .dlls to be shipped with the application.
-    #[default]
-    Fxc,
-    /// The Dxc compiler is new, fast and maintained.
-    ///
-    /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
-    /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
-    ///
-    /// Minimum supported version: [v1.5.2010](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.5.2010)
-    ///
-    /// It also requires WDDM 2.1 (Windows 10 version 1607).
-    DynamicDxc {
-        /// Path to `dxcompiler.dll`.
-        dxc_path: String,
-        /// Path to `dxil.dll`.
-        dxil_path: String,
-    },
-    /// The statically-linked variant of Dxc.
-    ///
-    /// The `static-dxc` feature is required for this setting to be used successfully on DX12.
-    /// Not available on `windows-aarch64-pc-*` targets.
-    StaticDxc,
-}
-
-/// Selects which OpenGL ES 3 minor version to request.
-///
-/// When using ANGLE as an OpenGL ES/EGL implementation, explicitly requesting `Version1` can provide a non-conformant ES 3.1 on APIs like D3D11.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
-pub enum Gles3MinorVersion {
-    /// No explicit minor version is requested, the driver automatically picks the highest available.
-    #[default]
-    Automatic,
-
-    /// Request an ES 3.0 context.
-    Version0,
-
-    /// Request an ES 3.1 context.
-    Version1,
-
-    /// Request an ES 3.2 context.
-    Version2,
-}
-
-/// Options for creating an instance.
-#[derive(Clone, Debug)]
-pub struct InstanceDescriptor {
-    /// Which `Backends` to enable.
-    pub backends: Backends,
-    /// Flags to tune the behavior of the instance.
-    pub flags: InstanceFlags,
-    /// Which DX12 shader compiler to use.
-    pub dx12_shader_compiler: Dx12Compiler,
-    /// Which OpenGL ES 3 minor version to request. Will be ignored if OpenGL is available.
-    pub gles_minor_version: Gles3MinorVersion,
-}
-
-impl Default for InstanceDescriptor {
-    fn default() -> Self {
-        Self {
-            backends: Backends::all(),
-            flags: InstanceFlags::default(),
-            dx12_shader_compiler: Dx12Compiler::default(),
-            gles_minor_version: Gles3MinorVersion::default(),
-        }
     }
 }
 

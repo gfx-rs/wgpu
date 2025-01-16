@@ -2,6 +2,7 @@
     type_flags: [
         ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
     ],
     functions: [],
     entry_points: [
@@ -187,6 +188,10 @@
         Handle(1),
         Value(Scalar((
             kind: Float,
+            width: 4,
+        ))),
+        Value(Scalar((
+            kind: Uint,
             width: 4,
         ))),
         Handle(1),
