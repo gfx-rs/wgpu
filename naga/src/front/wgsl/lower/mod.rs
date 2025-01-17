@@ -1069,7 +1069,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
                     let explicit_ty =
-                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx))
+                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
                     let (ty, initializer) =
@@ -1101,9 +1101,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ast::GlobalDeclKind::Const(ref c) => {
                     let mut ectx = ctx.as_const();
 
-                    let explicit_ty =
-                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global()))
-                            .transpose()?;
+                    let explicit_ty = c
+                        .ty
+                        .map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global().as_const()))
+                        .transpose()?;
 
                     let (ty, init) =
                         self.type_and_init(c.name, Some(c.init), explicit_ty, &mut ectx)?;
@@ -1123,7 +1124,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
                     let explicit_ty =
-                        o.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx))
+                        o.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
                     let mut ectx = ctx.as_override();
@@ -1165,7 +1166,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let ty = self.resolve_named_ast_type(
                         alias.ty,
                         Some(alias.name.name.to_string()),
-                        &mut ctx,
+                        &mut ctx.as_const(),
                     )?;
                     ctx.globals
                         .insert(alias.name.name, LoweredGlobalDecl::Type(ty));
@@ -1263,7 +1264,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .iter()
             .enumerate()
             .map(|(i, arg)| -> Result<_, Error<'_>> {
-                let ty = self.resolve_ast_type(arg.ty, ctx)?;
+                let ty = self.resolve_ast_type(arg.ty, &mut ctx.as_const())?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
                 local_table.insert(arg.handle, Declared::Runtime(Typed::Plain(expr)));
@@ -1282,7 +1283,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .result
             .as_ref()
             .map(|res| -> Result<_, Error<'_>> {
-                let ty = self.resolve_ast_type(res.ty, ctx)?;
+                let ty = self.resolve_ast_type(res.ty, &mut ctx.as_const())?;
                 Ok(crate::FunctionResult {
                     ty,
                     binding: self.binding(&res.binding, ty, ctx)?,
@@ -1440,9 +1441,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // optimization.
                     ctx.local_expression_kind_tracker.force_non_const(value);
 
-                    let explicit_ty =
-                        l.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx.as_global()))
-                            .transpose()?;
+                    let explicit_ty = l
+                        .ty
+                        .map(|ty| self.resolve_ast_type(ty, &mut ctx.as_const(block, &mut emitter)))
+                        .transpose()?;
 
                     if let Some(ty) = explicit_ty {
                         let mut ctx = ctx.as_expression(block, &mut emitter);
@@ -1469,12 +1471,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
-                    let explicit_ty =
-                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_global()))
-                            .transpose()?;
-
                     let mut emitter = Emitter::default();
                     emitter.start(&ctx.function.expressions);
+
+                    let explicit_ty =
+                        v.ty.map(|ast| {
+                            self.resolve_ast_type(ast, &mut ctx.as_const(block, &mut emitter))
+                        })
+                        .transpose()?;
+
                     let mut ectx = ctx.as_expression(block, &mut emitter);
                     let (ty, initializer) =
                         self.type_and_init(v.name, v.init, explicit_ty, &mut ectx)?;
@@ -1532,12 +1537,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let ectx = &mut ctx.as_const(block, &mut emitter);
 
-                    let explicit_ty =
-                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global()))
-                            .transpose()?;
+                    let explicit_ty = c
+                        .ty
+                        .map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global().as_const()))
+                        .transpose()?;
 
-                    let (_ty, init) =
-                        self.type_and_init(c.name, Some(c.init), explicit_ty, ectx)?;
+                    let (_ty, init) = self.type_and_init(
+                        c.name,
+                        Some(c.init),
+                        explicit_ty,
+                        &mut ectx.as_global().as_const(),
+                    )?;
                     let init = init.expect("Local const must have init");
 
                     block.extend(emitter.finish(&ctx.function.expressions));
@@ -2069,7 +2079,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Expression::Bitcast { expr, to, ty_span } => {
                 let expr = self.expression(expr, ctx)?;
-                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_global())?;
+                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_const())?;
 
                 let element_scalar = match ctx.module.types[to_resolved].inner {
                     crate::TypeInner::Scalar(scalar) => scalar,
@@ -3051,7 +3061,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut members = Vec::with_capacity(s.members.len());
 
         for member in s.members.iter() {
-            let ty = self.resolve_ast_type(member.ty, ctx)?;
+            let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
 
             ctx.layouter.update(ctx.module.to_ctx()).unwrap();
 
@@ -3138,7 +3148,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn array_size(
         &mut self,
         size: ast::ArraySize<'source>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<crate::ArraySize, Error<'source>> {
         Ok(match size {
             ast::ArraySize::Constant(expr) => {
@@ -3167,7 +3177,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 crate::proc::ConstantEvaluatorError::OverrideExpr => {
                                     crate::ArraySize::Pending(self.array_size_override(
                                         expr,
-                                        &mut ctx.as_override(),
+                                        &mut ctx.as_global().as_override(),
                                         span,
                                     )?)
                                 }
@@ -3219,7 +3229,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         handle: Handle<ast::Type<'source>>,
         name: Option<String>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
             ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
@@ -3257,7 +3267,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::TypeInner::Pointer { base, space }
             }
             ast::Type::Array { base, size } => {
-                let base = self.resolve_ast_type(base, ctx)?;
+                let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
                 let size = self.array_size(size, ctx)?;
 
                 ctx.layouter.update(ctx.module.to_ctx()).unwrap();
@@ -3297,14 +3307,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
         };
 
-        Ok(ctx.ensure_type_exists(name, inner))
+        Ok(ctx.as_global().ensure_type_exists(name, inner))
     }
 
     /// Return a Naga `Handle<Type>` representing the front-end type `handle`.
     fn resolve_ast_type(
         &mut self,
         handle: Handle<ast::Type<'source>>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         self.resolve_named_ast_type(handle, None, ctx)
     }
