@@ -64,8 +64,8 @@ RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq) {
     ret.kind = rq.CommittedStatus();
     if( rq.CommittedStatus() == COMMITTED_NOTHING) {} else {
         ret.t = rq.CommittedRayT();
-        ret.instance_custom_index = rq.CommittedInstanceID();
-        ret.instance_id = rq.CommittedInstanceIndex();
+        ret.instance_custom_data = rq.CommittedInstanceID();
+        ret.instance_index = rq.CommittedInstanceIndex();
         ret.sbt_record_offset = rq.CommittedInstanceContributionToHitGroupIndex();
         ret.geometry_index = rq.CommittedGeometryIndex();
         ret.primitive_index = rq.CommittedPrimitiveIndex();
@@ -128,8 +128,8 @@ RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
     } else {
         ret.kind = 3;
     }
-    ret.instance_custom_index = rq.CandidateInstanceID();
-    ret.instance_id = rq.CandidateInstanceIndex();
+    ret.instance_custom_data = rq.CandidateInstanceID();
+    ret.instance_index = rq.CandidateInstanceIndex();
     ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();
     ret.geometry_index = rq.CandidateGeometryIndex();
     ret.primitive_index = rq.CandidatePrimitiveIndex();
