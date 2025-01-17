@@ -108,7 +108,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
             label: None,
             layout: None,
             module: &shader,
-            entry_point: Some("comp_main"),
+            entry_point: Some("basic_usage"),
             compilation_options: Default::default(),
             cache: None,
         });
