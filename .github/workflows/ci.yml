@@ -291,9 +291,9 @@ jobs:
           # Check wgpu-types with all features except "std".
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
 
-          # XXX TODO ENABLE
+          # XXX TODO ENABLE:
           # check wgpu-core with all no-std features (all features possible for no-std)
-          # XXX TODO IMPORVE COMMA-SEPARATED no-std feature list here
+          # XXX TODO IMPROVE COMMA-SEPARATED no-std feature list here
           # cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features --features counters,api_log_info,resource_log_info,renderdoc,strict_asserts,indirect-validation,serde,raw-window-handle,wgsl,glsl,fragile-send-sync-non-atomic-wasm,metal,vulkan,gles,dx12
 
       # Building for native platforms with standard tests.
