@@ -60,9 +60,6 @@ use crate::alias::*;
 use super::rank::LockRank;
 use std::{cell::Cell, panic::Location};
 
-#[cfg(not(feature = "std"))]
-use parking_lot;
-
 /// A `Mutex` instrumented for deadlock prevention.
 ///
 /// This is just a wrapper around a [`parking_lot::Mutex`], along with
