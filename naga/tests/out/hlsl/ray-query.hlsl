@@ -1,8 +1,8 @@
 struct RayIntersection {
     uint kind;
     float t;
-    uint instance_custom_index;
-    uint instance_id;
+    uint instance_custom_data;
+    uint instance_index;
     uint sbt_record_offset;
     uint geometry_index;
     uint primitive_index;
