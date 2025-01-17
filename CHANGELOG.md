@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### Vulkan
+
+- Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
+
 ### Changes
 
 #### Refactored internal trace path parameter
