@@ -32,6 +32,9 @@ pub(crate) use handlevec::HandleVec;
 pub use range::{BadRangeError, Range};
 pub use unique_arena::UniqueArena;
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::Span;
 
 use handle::Index;

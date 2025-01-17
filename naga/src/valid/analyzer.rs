@@ -6,12 +6,17 @@
 //! - expression reference counts
 
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
+
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::diagnostic_filter::{DiagnosticFilterNode, StandardFilterableTriggeringRule};
 use crate::span::{AddSpan as _, WithSpan};
 use crate::{
     arena::{Arena, Handle},
     proc::{ResolveContext, TypeResolution},
 };
+
 use std::ops;
 
 pub type NonUniformResult = Option<Handle<crate::Expression>>;

@@ -1,4 +1,9 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
+
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
+// XXX TODO COMBINE with arena::Handle import below:
 use crate::arena::UniqueArena;
 
 use crate::{

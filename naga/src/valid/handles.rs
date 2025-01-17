@@ -1,5 +1,8 @@
 //! Implementation of `Validator::validate_module_handles`.
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::{
     arena::{BadHandle, BadRangeError},
     diagnostic_filter::DiagnosticFilterNode,

@@ -25,7 +25,14 @@ path = "tests/root.rs"
 all-features = true
 
 [features]
-default = []
+default = ["std"]
+
+# XXX TBD ADD DESCRIPTION HERE (???)
+std = []
+
+# XXX TODO ALL FEATURES BELOW REQUIRE std feature to build - NEED TO SPECIFY THIS
+# XXX TODO DETERMINE which features may or may not be able to work with no-std
+
 dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
@@ -72,6 +79,7 @@ termcolor = { version = "1.4.1" }
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
 codespan-reporting = { version = "0.11.0" }
+hashbrown = { workspace = true, features = ["serde"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
 log = "0.4"

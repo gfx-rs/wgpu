@@ -1,5 +1,8 @@
 //! The [`HandleVec`] type and associated definitions.
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use super::handle::Handle;
 
 use std::marker::PhantomData;

@@ -1,5 +1,8 @@
 //! [`DiagnosticFilter`]s and supporting functionality.
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 #[cfg(feature = "wgsl-in")]
 use crate::Span;
 use crate::{Arena, Handle};

@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::arena::{Arena, UniqueArena};
 use crate::arena::{Handle, HandleSet};
 
@@ -7,6 +10,8 @@ use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
     ExpressionError, FunctionInfo, ModuleInfo,
 };
+
+// XXX TODO MOVE THESE CLOSER TO OTHER use::crate::... imports
 use crate::span::WithSpan;
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
 

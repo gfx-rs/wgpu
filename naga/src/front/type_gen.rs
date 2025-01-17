@@ -2,6 +2,9 @@
 Type generators.
 */
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::{arena::Handle, span::Span};
 
 impl crate::Module {

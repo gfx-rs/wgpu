@@ -14,6 +14,9 @@ pub mod spv;
 #[cfg(feature = "wgsl-in")]
 pub mod wgsl;
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
     proc::{ResolveContext, ResolveError, TypeResolution},

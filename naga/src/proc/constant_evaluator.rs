@@ -1,3 +1,8 @@
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
+// XXX TBD MOVE IMPORTS ???
+
 use std::iter;
 
 use arrayvec::ArrayVec;
@@ -2467,6 +2472,9 @@ impl TryFromAbstract<f64> for u64 {
 #[cfg(test)]
 mod tests {
     use std::vec;
+
+    #[cfg(not(feature = "std"))]
+    use crate::aliases::*;
 
     use crate::{
         Arena, Constant, Expression, Literal, ScalarKind, Type, TypeInner, UnaryOperator,

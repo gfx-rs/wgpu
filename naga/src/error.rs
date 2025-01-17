@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use std::{error::Error, fmt};
 
 #[derive(Clone, Debug)]

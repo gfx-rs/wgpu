@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::arena::{Arena, Handle, UniqueArena};
 
 use thiserror::Error;

@@ -16,6 +16,9 @@
 //! [`NonZeroU32`]: std::num::NonZeroU32
 #![allow(dead_code)]
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use std::num::NonZeroU32;
 
 /// An unsigned 32-bit value known not to be [`u32::MAX`].

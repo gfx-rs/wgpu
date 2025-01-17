@@ -1,4 +1,8 @@
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::{Span, Statement};
+
 use std::ops::{Deref, DerefMut, RangeBounds};
 
 /// A code block is a vector of statements, with maybe a vector of spans.

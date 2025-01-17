@@ -2,6 +2,9 @@
 
 use std::fmt::{self, Display, Formatter};
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::diagnostic_filter::{
     FilterableTriggeringRule, Severity, StandardFilterableTriggeringRule,
 };

@@ -5,6 +5,9 @@
 //! [`Arena`]: super::Arena
 //! [`UniqueArena`]: super::UniqueArena
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use std::{cmp::Ordering, fmt, hash, marker::PhantomData};
 
 /// An unique index in the arena array that a handle points to.

@@ -1,5 +1,8 @@
 //! The [`HandleSet`] type and associated definitions.
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::arena::{Arena, Handle, UniqueArena};
 
 /// A set of `Handle<T>` values.

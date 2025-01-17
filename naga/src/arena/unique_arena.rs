@@ -1,5 +1,8 @@
 //! The [`UniqueArena`] type and supporting definitions.
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::{FastIndexSet, Span};
 
 use super::handle::{BadHandle, Handle, Index};

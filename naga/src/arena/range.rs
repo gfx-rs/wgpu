@@ -5,6 +5,9 @@
 //!
 //! [`Arena`]: super::Arena
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use super::{
     handle::{Handle, Index},
     Arena,

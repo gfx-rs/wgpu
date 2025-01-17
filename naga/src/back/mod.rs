@@ -3,6 +3,9 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
 */
 #![allow(dead_code)] // can be dead if none of the enabled backends need it
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::proc::ExpressionKindTracker;
 
 #[cfg(dot_out)]

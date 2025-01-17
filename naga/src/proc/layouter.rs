@@ -1,4 +1,8 @@
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::arena::{Handle, HandleVec};
+
 use std::{fmt::Display, num::NonZeroU32, ops};
 
 /// A newtype struct where its only valid values are powers of 2

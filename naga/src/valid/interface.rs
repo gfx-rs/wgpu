@@ -2,9 +2,14 @@ use super::{
     analyzer::{FunctionInfo, GlobalUse},
     Capabilities, Disalignment, FunctionError, ModuleInfo,
 };
+
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::arena::{Handle, UniqueArena};
 
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
+
 use bit_set::BitSet;
 
 const MAX_WORKGROUP_SIZE: u32 = 0x4000;

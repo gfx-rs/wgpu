@@ -1,4 +1,8 @@
 use super::Capabilities;
+
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::{arena::Handle, proc::Alignment};
 
 bitflags::bitflags! {

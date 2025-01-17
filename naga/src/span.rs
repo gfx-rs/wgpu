@@ -1,3 +1,5 @@
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
 use crate::{Arena, Handle, UniqueArena};
 use std::{error::Error, fmt, ops::Range};
 

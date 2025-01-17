@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### no-std support in naga
+
+XXX TODO
+
 ### Bug Fixes
 
 #### Vulkan

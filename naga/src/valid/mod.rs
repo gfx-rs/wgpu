@@ -10,18 +10,24 @@ mod handles;
 mod interface;
 mod r#type;
 
+#[cfg(not(feature = "std"))]
+use crate::aliases::*;
+
 use crate::{
     arena::{Handle, HandleSet},
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
+
 use bit_set::BitSet;
 use std::ops;
 
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.
 
+// XXX TODO MOVE THIS CRATE IMPORT
 use crate::span::{AddSpan as _, WithSpan};
+
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
