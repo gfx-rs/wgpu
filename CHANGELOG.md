@@ -60,6 +60,9 @@ Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std supp
 
 By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
+- Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
+  [#6780](https://github.com/gfx-rs/wgpu/pull/6780)
+
 ## v24.0.0 (2025-01-15)
 
 ### Major changes
