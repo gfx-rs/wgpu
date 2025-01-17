@@ -32,7 +32,7 @@ pub fn op_webgpu_compute_pass_set_pipeline(
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_set_pipeline(
             &mut compute_pass_resource.0.borrow_mut(),
             compute_pipeline_resource.1,
@@ -55,7 +55,7 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups(
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_dispatch_workgroups(&mut compute_pass_resource.0.borrow_mut(), x, y, z)?;
 
     Ok(WebGpuResult::empty())
@@ -77,7 +77,7 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups_indirect(
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_dispatch_workgroups_indirect(
             &mut compute_pass_resource.0.borrow_mut(),
             buffer_resource.1,
@@ -91,6 +91,7 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups_indirect(
 #[serde]
 pub fn op_webgpu_compute_pass_end(
     state: &mut OpState,
+    #[smi] _command_encoder_rid: ResourceId,
     #[smi] compute_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pass_resource = state
@@ -98,7 +99,7 @@ pub fn op_webgpu_compute_pass_end(
         .take::<WebGpuComputePass>(compute_pass_rid)?;
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_end(&mut compute_pass_resource.0.borrow_mut())?;
 
     Ok(WebGpuResult::empty())
@@ -132,7 +133,7 @@ pub fn op_webgpu_compute_pass_set_bind_group(
     let dynamic_offsets_data: &[u32] = &dynamic_offsets_data[start..start + len];
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_set_bind_group(
             &mut compute_pass_resource.0.borrow_mut(),
             index,
@@ -155,7 +156,7 @@ pub fn op_webgpu_compute_pass_push_debug_group(
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_push_debug_group(
             &mut compute_pass_resource.0.borrow_mut(),
             group_label,
@@ -176,7 +177,7 @@ pub fn op_webgpu_compute_pass_pop_debug_group(
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_pop_debug_group(&mut compute_pass_resource.0.borrow_mut())?;
 
     Ok(WebGpuResult::empty())
@@ -194,7 +195,7 @@ pub fn op_webgpu_compute_pass_insert_debug_marker(
         .get::<WebGpuComputePass>(compute_pass_rid)?;
 
     state
-        .borrow::<wgpu_core::global::Global>()
+        .borrow::<super::Instance>()
         .compute_pass_insert_debug_marker(
             &mut compute_pass_resource.0.borrow_mut(),
             marker_label,

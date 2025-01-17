@@ -13,7 +13,8 @@ license.workspace = true
 anyhow.workspace = true
 bitflags.workspace = true
 env_logger.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
 pico-args.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["default"] }
 serde_json.workspace = true
-wgpu = { workspace = true, features = ["serde", "static-dxc"] }
+wgpu.workspace = true

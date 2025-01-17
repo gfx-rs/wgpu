@@ -268,7 +268,7 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let instance = wgpu::Instance::new(wgpu::util::instance_descriptor_from_env());
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
         surface.pre_adapter(&instance, window);
 
         let adapter = get_adapter_with_capabilities_or_from_env(
@@ -362,8 +362,7 @@ async fn start<E: Example>(title: &str) {
     }
 
     log::info!("Entering event loop...");
-    // On native this is a result, but on wasm it's a unit type.
-    #[allow(clippy::let_unit_value)]
+    #[cfg_attr(target_arch = "wasm32", expect(clippy::let_unit_value))]
     let _ = (event_loop_function)(
         window_loop.event_loop,
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {

@@ -16,7 +16,12 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
-#![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
+#![warn(
+    clippy::allow_attributes,
+    missing_docs,
+    rust_2018_idioms,
+    unsafe_op_in_unsafe_fn
+)]
 #![allow(clippy::arc_with_non_send_sync)]
 
 //
@@ -46,32 +51,32 @@ pub mod util;
 
 pub use api::*;
 pub use wgt::{
-    AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
-    BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
-    BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
-    CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CoreCounters, DepthBiasState,
-    DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
-    Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
-    Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
-    InstanceFlags, InternalCounters, Limits, MaintainResult, MemoryHints, MultisampleState,
-    Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
-    PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
-    ShaderLocation, ShaderModel, ShaderRuntimeChecks, ShaderStages, StencilFaceState,
-    StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities, SurfaceStatus,
-    TexelCopyBufferLayout, TextureAspect, TextureDimension, TextureFormat,
+    AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, BackendOptions, Backends,
+    BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState,
+    BufferAddress, BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState,
+    ColorWrites, CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CoreCounters,
+    DepthBiasState, DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities,
+    DownlevelFlags, Dx12BackendOptions, Dx12Compiler, DynamicOffset, Extent3d, Face, Features,
+    FilterMode, FrontFace, GlBackendOptions, Gles3MinorVersion, HalCounters, ImageSubresourceRange,
+    IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters, Limits, MaintainResult,
+    MemoryHints, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode,
+    PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState,
+    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType,
+    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks, ShaderStages,
+    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
+    SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension, TextureFormat,
     TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
     TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend,
     WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
     MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES,
     QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub use wgt::{ImageCopyBuffer, ImageCopyTexture, ImageCopyTextureTagged, ImageDataLayout};
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(any(webgpu, webgl))]
-#[allow(deprecated)]
+#[expect(deprecated)]
 pub use wgt::ImageCopyExternalImage;
 #[cfg(any(webgpu, webgl))]
 pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};

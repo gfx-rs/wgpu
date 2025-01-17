@@ -22,7 +22,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
         1.0,
     );
 
-    let inv_model_view = transpose(mat3x3<f32>(r_data.view.x.xyz, r_data.view.y.xyz, r_data.view.z.xyz));
+    let inv_model_view = transpose(mat3x3<f32>(r_data.view[0].xyz, r_data.view[1].xyz, r_data.view[2].xyz));
     let unprojected = r_data.proj_inv * pos;
     return VertexOutput(pos, inv_model_view * unprojected.xyz);
 }

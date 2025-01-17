@@ -1,0 +1,40 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 30
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %4 "main"
+OpExecutionMode %4 LocalSize 1 1 1
+%2 = OpTypeVoid
+%5 = OpTypeFunction %2
+%6 = OpTypeInt 32 1
+%7 = OpConstant  %6  2
+%8 = OpTypeInt 32 0
+%9 = OpConstant  %8  12
+%11 = OpTypeVector %6 4
+%13 = OpConstant  %8  8
+%19 = OpConstant  %8  0
+%20 = OpConstant  %8  16
+%21 = OpConstant  %8  24
+%23 = OpTypeVector %8 4
+%4 = OpFunction  %2  None %5
+%3 = OpLabel
+OpBranch %10
+%10 = OpLabel
+%14 = OpBitcast  %6  %9
+%15 = OpBitFieldSExtract  %6  %14 %19 %13
+%16 = OpBitFieldSExtract  %6  %14 %13 %13
+%17 = OpBitFieldSExtract  %6  %14 %20 %13
+%18 = OpBitFieldSExtract  %6  %14 %21 %13
+%12 = OpCompositeConstruct  %11  %15 %16 %17 %18
+%22 = OpCompositeExtract  %6  %12 2
+%25 = OpBitFieldUExtract  %8  %9 %19 %13
+%26 = OpBitFieldUExtract  %8  %9 %13 %13
+%27 = OpBitFieldUExtract  %8  %9 %20 %13
+%28 = OpBitFieldUExtract  %8  %9 %21 %13
+%24 = OpCompositeConstruct  %23  %25 %26 %27 %28
+%29 = OpCompositeExtract  %8  %24 1
+OpReturn
+OpFunctionEnd

@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use crate::{
     api::{
@@ -35,6 +35,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CommandEncoder => .inner);
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 
+use parking_lot::Mutex;
 pub use wgt::TexelCopyBufferInfo as TexelCopyBufferInfoBase;
 /// View of a buffer which can be used to copy to/from a texture.
 ///
@@ -59,7 +60,7 @@ impl CommandEncoder {
         let buffer = self.inner.finish();
 
         CommandBuffer {
-            inner: Some(buffer),
+            inner: Arc::new(Mutex::new(Some(buffer))),
         }
     }
 

@@ -132,13 +132,11 @@ pub enum Action<'a> {
         desc: crate::resource::BlasDescriptor<'a>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     },
-    FreeBlas(id::BlasId),
     DestroyBlas(id::BlasId),
     CreateTlas {
         id: id::TlasId,
         desc: crate::resource::TlasDescriptor<'a>,
     },
-    FreeTlas(id::TlasId),
     DestroyTlas(id::TlasId),
 }
 
@@ -222,7 +220,8 @@ pub struct Trace {
 
 #[cfg(feature = "trace")]
 impl Trace {
-    pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
+    pub fn new(dir_path_name: &str) -> Result<Self, std::io::Error> {
+        let path = std::path::Path::new(dir_path_name);
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;

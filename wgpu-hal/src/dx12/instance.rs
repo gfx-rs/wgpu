@@ -12,14 +12,6 @@ use windows::{
 use super::SurfaceTarget;
 use crate::{auxil, dx12::D3D12Lib};
 
-impl Drop for super::Instance {
-    fn drop(&mut self) {
-        if self.flags.contains(wgt::InstanceFlags::VALIDATION) {
-            auxil::dxgi::exception::unregister_exception_handler();
-        }
-    }
-}
-
 impl crate::Instance for super::Instance {
     type A = super::Api;
 
@@ -80,14 +72,13 @@ impl crate::Instance for super::Instance {
                 dxil_path,
                 dxc_path,
             } => {
-                let container =
-                    super::shader_compilation::get_dynamic_dxc_container(dxc_path, dxil_path)
-                        .map_err(|e| {
-                            crate::InstanceError::with_source(
-                                String::from("Failed to load dynamic DXC"),
-                                e,
-                            )
-                        })?;
+                let container = super::shader_compilation::get_dynamic_dxc_container(
+                    dxc_path.into(),
+                    dxil_path.into(),
+                )
+                .map_err(|e| {
+                    crate::InstanceError::with_source(String::from("Failed to load dynamic DXC"), e)
+                })?;
 
                 Some(Arc::new(container))
             }

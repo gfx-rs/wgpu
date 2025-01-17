@@ -29,10 +29,10 @@ mod command;
 mod conv;
 mod device;
 mod instance;
+mod sampler;
 
 use std::{
     borrow::Borrow,
-    collections::HashSet,
     ffi::{CStr, CString},
     fmt, mem,
     num::NonZeroU32,
@@ -41,11 +41,16 @@ use std::{
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
+use hashbrown::{HashMap, HashSet};
 use parking_lot::{Mutex, RwLock};
+use rustc_hash::FxHasher;
 use wgt::InternalCounter;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
+
+// NOTE: This type alias is similar to rustc_hash::FxHashMap but works with hashbrown.
+type FxHashMap<T, U> = HashMap<T, U, core::hash::BuildHasherDefault<FxHasher>>;
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -532,8 +537,7 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
-    #[cfg(windows)]
-    external_memory_win32: bool,
+    maximum_samplers: u32,
 }
 
 bitflags::bitflags!(
@@ -641,8 +645,9 @@ struct DeviceShared {
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     features: wgt::Features,
-    render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    render_passes: Mutex<FxHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
 
@@ -830,6 +835,7 @@ impl TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
+    create_info: vk::SamplerCreateInfo<'static>,
 }
 
 impl crate::DynSampler for Sampler {}

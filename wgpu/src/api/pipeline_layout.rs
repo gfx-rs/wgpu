@@ -6,7 +6,7 @@ use crate::*;
 /// It can be created with [`Device::create_pipeline_layout`].
 ///
 /// Corresponds to [WebGPU `GPUPipelineLayout`](https://gpuweb.github.io/gpuweb/#gpupipelinelayout).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipelineLayout {
     pub(crate) inner: dispatch::DispatchPipelineLayout,
 }

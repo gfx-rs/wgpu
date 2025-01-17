@@ -950,9 +950,6 @@ impl Parser {
                     match enclosing {
                         Some(Rule::GenericExpr) => |token| match token {
                             Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
-                            Token::LogicalOperation('>') => {
-                                Some(crate::BinaryOperator::GreaterEqual)
-                            }
                             _ => None,
                         },
                         _ => |token| match token {
@@ -1632,6 +1629,10 @@ impl Parser {
             Scalar {
                 kind: Float | Sint | Uint,
                 width: 4,
+            } => Ok(()),
+            Scalar {
+                kind: Uint,
+                width: 8,
             } => Ok(()),
             _ => Err(Error::BadTextureSampleType { span, scalar }),
         }

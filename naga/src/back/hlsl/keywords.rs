@@ -814,6 +814,7 @@ pub const RESERVED: &[&str] = &[
     "TextureBuffer",
     "ConstantBuffer",
     "RayQuery",
+    "RayDesc",
     // Naga utilities
     super::writer::MODF_FUNCTION,
     super::writer::FREXP_FUNCTION,

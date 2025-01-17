@@ -20,6 +20,10 @@ pub use crate::front::wgsl::error::ParseError;
 use crate::front::wgsl::lower::Lowerer;
 use crate::Scalar;
 
+pub use crate::front::wgsl::parse::directive::language_extension::{
+    ImplementedLanguageExtension, LanguageExtension, UnimplementedLanguageExtension,
+};
+
 pub struct Frontend {
     parser: Parser,
 }

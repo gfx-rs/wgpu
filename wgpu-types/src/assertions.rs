@@ -11,7 +11,7 @@
 //! `wgpu-core`'s `"strict_asserts"` feature enables that validation
 //! in both debug and release builds.
 
-/// This is equivalent to [`std::assert`] if the `strict_asserts` feature is activated, otherwise equal to [`std::debug_assert`].
+/// This is equivalent to [`core::assert`] if the `strict_asserts` feature is activated, otherwise equal to [`core::debug_assert`].
 #[cfg(feature = "strict_asserts")]
 #[macro_export]
 macro_rules! strict_assert {
@@ -20,7 +20,7 @@ macro_rules! strict_assert {
     }
 }
 
-/// This is equivalent to [`std::assert_eq`] if the `strict_asserts` feature is activated, otherwise equal to [`std::debug_assert_eq`].
+/// This is equivalent to [`core::assert_eq`] if the `strict_asserts` feature is activated, otherwise equal to [`core::debug_assert_eq`].
 #[cfg(feature = "strict_asserts")]
 #[macro_export]
 macro_rules! strict_assert_eq {
@@ -29,7 +29,7 @@ macro_rules! strict_assert_eq {
     }
 }
 
-/// This is equivalent to [`std::assert_ne`] if the `strict_asserts` feature is activated, otherwise equal to [`std::debug_assert_ne`].
+/// This is equivalent to [`core::assert_ne`] if the `strict_asserts` feature is activated, otherwise equal to [`core::debug_assert_ne`].
 #[cfg(feature = "strict_asserts")]
 #[macro_export]
 macro_rules! strict_assert_ne {
@@ -38,7 +38,7 @@ macro_rules! strict_assert_ne {
     }
 }
 
-/// This is equivalent to [`std::assert`] if the `strict_asserts` feature is activated, otherwise equal to [`std::debug_assert`]
+/// This is equivalent to [`core::assert`] if the `strict_asserts` feature is activated, otherwise equal to [`core::debug_assert`]
 #[cfg(not(feature = "strict_asserts"))]
 #[macro_export]
 macro_rules! strict_assert {
@@ -47,7 +47,7 @@ macro_rules! strict_assert {
     };
 }
 
-/// This is equivalent to [`std::assert_eq`] if the `strict_asserts` feature is activated, otherwise equal to [`std::debug_assert_eq`]
+/// This is equivalent to [`core::assert_eq`] if the `strict_asserts` feature is activated, otherwise equal to [`core::debug_assert_eq`]
 #[cfg(not(feature = "strict_asserts"))]
 #[macro_export]
 macro_rules! strict_assert_eq {
@@ -56,7 +56,7 @@ macro_rules! strict_assert_eq {
     };
 }
 
-/// This is equivalent to [`std::assert_ne`] if the `strict_asserts` feature is activated, otherwise equal to [`std::debug_assert_ne`]
+/// This is equivalent to [`core::assert_ne`] if the `strict_asserts` feature is activated, otherwise equal to [`core::debug_assert_ne`]
 #[cfg(not(feature = "strict_asserts"))]
 #[macro_export]
 macro_rules! strict_assert_ne {

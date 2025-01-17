@@ -11,7 +11,7 @@ on:
 env:
   # We need to use nightly for various features
   # when building docs.rs style docs.
-  NIGHTLY_VERSION: nightly-2023-12-17
+  NIGHTLY_VERSION: nightly-2025-01-09
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always

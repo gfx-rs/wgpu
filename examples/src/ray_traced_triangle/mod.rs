@@ -216,9 +216,9 @@ impl crate::framework::Example for Example {
                     vertex_buffer: &vertex_buffer,
                     first_vertex: 0,
                     vertex_stride: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    // in this case since one triangle gets no compression from an index buffer `index_buffer` and `index_buffer_offset` could be `None`.
+                    // in this case since one triangle gets no compression from an index buffer `index_buffer` and `first_index` could be `None`.
                     index_buffer: Some(&index_buffer),
-                    index_buffer_offset: Some(0),
+                    first_index: Some(0),
                     transform_buffer: None,
                     transform_buffer_offset: None,
                 }]),

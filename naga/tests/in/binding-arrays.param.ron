@@ -19,11 +19,11 @@
 		restrict_indexing: true
 	),
 	msl: (
-		lang_version: (2, 0),
+		lang_version: (3, 0),
 		per_entry_point_map: {
 			"main": (
 				resources: {
-					(group: 0, binding: 0): (texture: Some(0), binding_array_size: Some(10), mutable: false),
+					(group: 0, binding: 0): (buffer: Some(0), binding_array_size: Some(10), mutable: false),
 				},
 				sizes_buffer: None,
 			)

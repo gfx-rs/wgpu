@@ -131,6 +131,8 @@ bitflags::bitflags! {
         const WRITE = 0x2;
         /// The information about the data is queried.
         const QUERY = 0x4;
+        /// Atomic operations will be performed on the variable.
+        const ATOMIC = 0x8;
     }
 }
 
@@ -1059,6 +1061,21 @@ impl FunctionInfo {
                     if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
                         let _ = self.add_ref(cmp);
                     }
+                    FunctionUniformity::new()
+                }
+                S::ImageAtomic {
+                    image,
+                    coordinate,
+                    array_index,
+                    fun: _,
+                    value,
+                } => {
+                    let _ = self.add_ref_impl(image, GlobalUse::ATOMIC);
+                    let _ = self.add_ref(coordinate);
+                    if let Some(expr) = array_index {
+                        let _ = self.add_ref(expr);
+                    }
+                    let _ = self.add_ref(value);
                     FunctionUniformity::new()
                 }
                 S::RayQuery { query, ref fun } => {

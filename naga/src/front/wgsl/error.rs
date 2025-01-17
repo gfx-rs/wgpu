@@ -359,22 +359,22 @@ impl<'a> Error<'a> {
             Error::Unexpected(unexpected_span, expected) => {
                 let expected_str = match expected {
                     ExpectedToken::Token(token) => match token {
-                        Token::Separator(c) => format!("'{c}'"),
-                        Token::Paren(c) => format!("'{c}'"),
+                        Token::Separator(c) => format!("`{c}`"),
+                        Token::Paren(c) => format!("`{c}`"),
                         Token::Attribute => "@".to_string(),
                         Token::Number(_) => "number".to_string(),
                         Token::Word(s) => s.to_string(),
-                        Token::Operation(c) => format!("operation ('{c}')"),
-                        Token::LogicalOperation(c) => format!("logical operation ('{c}')"),
-                        Token::ShiftOperation(c) => format!("bitshift ('{c}{c}')"),
+                        Token::Operation(c) => format!("operation (`{c}`)"),
+                        Token::LogicalOperation(c) => format!("logical operation (`{c}`)"),
+                        Token::ShiftOperation(c) => format!("bitshift (`{c}{c}`)"),
                         Token::AssignmentOperation(c) if c == '<' || c == '>' => {
-                            format!("bitshift ('{c}{c}=')")
+                            format!("bitshift (`{c}{c}=`)")
                         }
-                        Token::AssignmentOperation(c) => format!("operation ('{c}=')"),
+                        Token::AssignmentOperation(c) => format!("operation (`{c}=`)"),
                         Token::IncrementOperation => "increment operation".to_string(),
                         Token::DecrementOperation => "decrement operation".to_string(),
                         Token::Arrow => "->".to_string(),
-                        Token::Unknown(c) => format!("unknown ('{c}')"),
+                        Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
                         Token::End => "end".to_string(),
                     },
@@ -382,15 +382,15 @@ impl<'a> Error<'a> {
                     ExpectedToken::PrimaryExpression => "expression".to_string(),
                     ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                     ExpectedToken::SwitchItem => concat!(
-                        "switch item ('case' or 'default') or a closing curly bracket ",
-                        "to signify the end of the switch statement ('}')"
+                        "switch item (`case` or `default`) or a closing curly bracket ",
+                        "to signify the end of the switch statement (`}`)"
                     )
                     .to_string(),
                     ExpectedToken::WorkgroupSizeSeparator => {
-                        "workgroup size separator (',') or a closing parenthesis".to_string()
+                        "workgroup size separator (`,`) or a closing parenthesis".to_string()
                     }
                     ExpectedToken::GlobalItem => concat!(
-                        "global item ('struct', 'const', 'var', 'alias', ';', 'fn') ",
+                        "global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) ",
                         "or the end of the file"
                     )
                     .to_string(),
@@ -398,18 +398,18 @@ impl<'a> Error<'a> {
                     ExpectedToken::Variable => "variable access".to_string(),
                     ExpectedToken::Function => "function name".to_string(),
                     ExpectedToken::AfterIdentListArg => {
-                        "next argument, trailing comma, or end of list (',' or ';')".to_string()
+                        "next argument, trailing comma, or end of list (`,` or `;`)".to_string()
                     }
                     ExpectedToken::AfterIdentListComma => {
-                        "next argument or end of list (';')".to_string()
+                        "next argument or end of list (`;`)".to_string()
                     }
                     ExpectedToken::DiagnosticAttribute => {
-                        "the 'diagnostic' attribute identifier".to_string()
+                        "the `diagnostic` attribute identifier".to_string()
                     }
                 };
                 ParseError {
                     message: format!(
-                        "expected {}, found '{}'",
+                        "expected {}, found {:?}",
                         expected_str, &source[unexpected_span],
                     ),
                     labels: vec![(unexpected_span, format!("expected {expected_str}").into())],
@@ -445,12 +445,12 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::UnknownIdent(ident_span, ident) => ParseError {
-                message: format!("no definition in scope for identifier: '{ident}'"),
+                message: format!("no definition in scope for identifier: `{ident}`"),
                 labels: vec![(ident_span, "unknown identifier".into())],
                 notes: vec![],
             },
             Error::UnknownScalarType(bad_span) => ParseError {
-                message: format!("unknown scalar type: '{}'", &source[bad_span]),
+                message: format!("unknown scalar type: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown scalar type".into())],
                 notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
             },
@@ -473,7 +473,7 @@ impl<'a> Error<'a> {
             },
             Error::BadTexture(bad_span) => ParseError {
                 message: format!(
-                    "expected an image, but found '{}' which is not an image",
+                    "expected an image, but found `{}` which is not an image",
                     &source[bad_span]
                 ),
                 labels: vec![(bad_span, "not an image".into())],
@@ -498,7 +498,7 @@ impl<'a> Error<'a> {
             },
             Error::InvalidForInitializer(bad_span) => ParseError {
                 message: format!(
-                    "for(;;) initializer is not an assignment or a function call: '{}'",
+                    "for(;;) initializer is not an assignment or a function call: `{}`",
                     &source[bad_span]
                 ),
                 labels: vec![(bad_span, "not an assignment or function call".into())],
@@ -511,7 +511,7 @@ impl<'a> Error<'a> {
             },
             Error::InvalidGatherComponent(bad_span) => ParseError {
                 message: format!(
-                    "textureGather component '{}' doesn't exist, must be 0, 1, 2, or 3",
+                    "textureGather component `{}` doesn't exist, must be 0, 1, 2, or 3",
                     &source[bad_span]
                 ),
                 labels: vec![(bad_span, "invalid component".into())],
@@ -523,58 +523,58 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::InvalidIdentifierUnderscore(bad_span) => ParseError {
-                message: "Identifier can't be '_'".to_string(),
+                message: "Identifier can't be `_`".to_string(),
                 labels: vec![(bad_span, "invalid identifier".into())],
                 notes: vec![
-                    "Use phony assignment instead ('_ =' notice the absence of 'let' or 'var')"
+                    "Use phony assignment instead (`_ =` notice the absence of `let` or `var`)"
                         .to_string(),
                 ],
             },
             Error::ReservedIdentifierPrefix(bad_span) => ParseError {
                 message: format!(
-                    "Identifier starts with a reserved prefix: '{}'",
+                    "Identifier starts with a reserved prefix: `{}`",
                     &source[bad_span]
                 ),
                 labels: vec![(bad_span, "invalid identifier".into())],
                 notes: vec![],
             },
             Error::UnknownAddressSpace(bad_span) => ParseError {
-                message: format!("unknown address space: '{}'", &source[bad_span]),
+                message: format!("unknown address space: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown address space".into())],
                 notes: vec![],
             },
             Error::RepeatedAttribute(bad_span) => ParseError {
-                message: format!("repeated attribute: '{}'", &source[bad_span]),
+                message: format!("repeated attribute: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "repeated attribute".into())],
                 notes: vec![],
             },
             Error::UnknownAttribute(bad_span) => ParseError {
-                message: format!("unknown attribute: '{}'", &source[bad_span]),
+                message: format!("unknown attribute: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown attribute".into())],
                 notes: vec![],
             },
             Error::UnknownBuiltin(bad_span) => ParseError {
-                message: format!("unknown builtin: '{}'", &source[bad_span]),
+                message: format!("unknown builtin: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown builtin".into())],
                 notes: vec![],
             },
             Error::UnknownAccess(bad_span) => ParseError {
-                message: format!("unknown access: '{}'", &source[bad_span]),
+                message: format!("unknown access: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown access".into())],
                 notes: vec![],
             },
             Error::UnknownStorageFormat(bad_span) => ParseError {
-                message: format!("unknown storage format: '{}'", &source[bad_span]),
+                message: format!("unknown storage format: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown storage format".into())],
                 notes: vec![],
             },
             Error::UnknownConservativeDepth(bad_span) => ParseError {
-                message: format!("unknown conservative depth: '{}'", &source[bad_span]),
+                message: format!("unknown conservative depth: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown conservative depth".into())],
                 notes: vec![],
             },
             Error::UnknownType(bad_span) => ParseError {
-                message: format!("unknown type: '{}'", &source[bad_span]),
+                message: format!("unknown type: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown type".into())],
                 notes: vec![],
             },
@@ -702,7 +702,7 @@ impl<'a> Error<'a> {
                     InvalidAssignmentType::ImmutableBinding(binding_span) => (
                         Some((binding_span, "this is an immutable binding".into())),
                         vec![format!(
-                            "consider declaring '{}' with `var` instead of `let`",
+                            "consider declaring `{}` with `var` instead of `let`",
                             &source[binding_span]
                         )],
                     ),
@@ -782,11 +782,11 @@ impl<'a> Error<'a> {
                     .into(),
                 )],
                 notes: vec![if uint {
-                    format!("suffix the integer with a `u`: '{}u'", &source[span])
+                    format!("suffix the integer with a `u`: `{}u`", &source[span])
                 } else {
                     let span = span.to_range().unwrap();
                     format!(
-                        "remove the `u` suffix: '{}'",
+                        "remove the `u` suffix: `{}`",
                         &source[span.start..span.end - 1]
                     )
                 }],
@@ -833,10 +833,10 @@ impl<'a> Error<'a> {
             Error::ExpectedConstExprConcreteIntegerScalar(span) => ParseError {
                 message: concat!(
                     "must be a const-expression that ",
-                    "resolves to a concrete integer scalar (u32 or i32)"
+                    "resolves to a concrete integer scalar (`u32` or `i32`)"
                 )
                 .to_string(),
-                labels: vec![(span, "must resolve to u32 or i32".into())],
+                labels: vec![(span, "must resolve to `u32` or `i32`".into())],
                 notes: vec![],
             },
             Error::ExpectedNonNegative(span) => ParseError {
@@ -858,7 +858,7 @@ impl<'a> Error<'a> {
                 message: "workgroup size is missing on compute shader entry point".to_string(),
                 labels: vec![(
                     span,
-                    "must be paired with a @workgroup_size attribute".into(),
+                    "must be paired with a `@workgroup_size` attribute".into(),
                 )],
                 notes: vec![],
             },
@@ -947,13 +947,13 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::NotBool(span) => ParseError {
-                message: "must be a const-expression that resolves to a bool".to_string(),
-                labels: vec![(span, "must resolve to bool".into())],
+                message: "must be a const-expression that resolves to a `bool`".to_string(),
+                labels: vec![(span, "must resolve to `bool`".into())],
                 notes: vec![],
             },
             Error::ConstAssertFailed(span) => ParseError {
-                message: "const_assert failure".to_string(),
-                labels: vec![(span, "evaluates to false".into())],
+                message: "`const_assert` failure".to_string(),
+                labels: vec![(span, "evaluates to `false`".into())],
                 notes: vec![],
             },
             Error::DirectiveAfterFirstGlobalDecl { directive_span } => ParseError {

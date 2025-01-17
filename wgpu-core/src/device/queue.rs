@@ -27,7 +27,6 @@ use crate::{
 
 use smallvec::SmallVec;
 
-use crate::resource::{Blas, DestroyedAccelerationStructure, Tlas};
 use crate::scratch::ScratchBuffer;
 use std::{
     iter,
@@ -257,7 +256,6 @@ pub enum TempResource {
     ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
-    DestroyedAccelerationStructure(DestroyedAccelerationStructure),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -268,15 +266,12 @@ pub enum TempResource {
 pub(crate) struct EncoderInFlight {
     inner: crate::command::CommandEncoder,
     pub(crate) trackers: Tracker,
+    pub(crate) temp_resources: Vec<TempResource>,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
     pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     /// These are the textures that have been tracked by `PendingWrites`.
     pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
-    /// These are the BLASes that have been tracked by `PendingWrites`.
-    pub(crate) pending_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
-    /// These are the TLASes that have been tracked by `PendingWrites`.
-    pub(crate) pending_tlas_s: FastHashMap<TrackerIndex, Arc<Tlas>>,
 }
 
 /// A private command encoder for writes made directly on the device
@@ -314,8 +309,6 @@ pub(crate) struct PendingWrites {
     temp_resources: Vec<TempResource>,
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
-    dst_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
-    dst_tlas_s: FastHashMap<TrackerIndex, Arc<Tlas>>,
 }
 
 impl PendingWrites {
@@ -326,8 +319,6 @@ impl PendingWrites {
             temp_resources: Vec::new(),
             dst_buffers: FastHashMap::default(),
             dst_textures: FastHashMap::default(),
-            dst_blas_s: FastHashMap::default(),
-            dst_tlas_s: FastHashMap::default(),
         }
     }
 
@@ -349,22 +340,6 @@ impl PendingWrites {
         self.dst_textures.contains_key(&texture.tracker_index())
     }
 
-    pub fn insert_blas(&mut self, blas: &Arc<Blas>) {
-        self.dst_blas_s.insert(blas.tracker_index(), blas.clone());
-    }
-
-    pub fn insert_tlas(&mut self, tlas: &Arc<Tlas>) {
-        self.dst_tlas_s.insert(tlas.tracker_index(), tlas.clone());
-    }
-
-    pub fn contains_blas(&mut self, blas: &Arc<Blas>) -> bool {
-        self.dst_blas_s.contains_key(&blas.tracker_index())
-    }
-
-    pub fn contains_tlas(&mut self, tlas: &Arc<Tlas>) -> bool {
-        self.dst_tlas_s.contains_key(&tlas.tracker_index())
-    }
-
     pub fn consume_temp(&mut self, resource: TempResource) {
         self.temp_resources.push(resource);
     }
@@ -383,8 +358,6 @@ impl PendingWrites {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
-            let pending_blas_s = mem::take(&mut self.dst_blas_s);
-            let pending_tlas_s = mem::take(&mut self.dst_tlas_s);
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
@@ -403,10 +376,9 @@ impl PendingWrites {
                     hal_label: None,
                 },
                 trackers: Tracker::new(),
+                temp_resources: mem::take(&mut self.temp_resources),
                 pending_buffers,
                 pending_textures,
-                pending_blas_s,
-                pending_tlas_s,
             };
             Ok(Some(encoder))
         } else {
@@ -1223,10 +1195,9 @@ impl Queue {
                         active_executions.push(EncoderInFlight {
                             inner: baked.encoder,
                             trackers: baked.trackers,
+                            temp_resources: baked.temp_resources,
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),
-                            pending_blas_s: FastHashMap::default(),
-                            pending_tlas_s: FastHashMap::default(),
                         });
                     }
 
@@ -1323,11 +1294,8 @@ impl Queue {
             profiling::scope!("cleanup");
 
             // this will register the new submission to the life time tracker
-            self.lock_life().track_submission(
-                submit_index,
-                pending_writes.temp_resources.drain(..),
-                active_executions,
-            );
+            self.lock_life()
+                .track_submission(submit_index, active_executions);
             drop(pending_writes);
 
             // This will schedule destruction of all resources that are no longer needed

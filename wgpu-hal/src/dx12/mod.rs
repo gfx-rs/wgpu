@@ -605,6 +605,13 @@ pub struct Device {
 impl Drop for Device {
     fn drop(&mut self) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
+        if self
+            .private_caps
+            .instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION)
+        {
+            auxil::dxgi::exception::unregister_exception_handler();
+        }
     }
 }
 
@@ -1024,7 +1031,10 @@ pub struct PipelineCache;
 impl crate::DynPipelineCache for PipelineCache {}
 
 #[derive(Debug)]
-pub struct AccelerationStructure {}
+pub struct AccelerationStructure {
+    resource: Direct3D12::ID3D12Resource,
+    allocation: Option<suballocation::AllocationWrapper>,
+}
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 

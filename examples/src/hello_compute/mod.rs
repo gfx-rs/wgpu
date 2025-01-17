@@ -1,10 +1,9 @@
-use std::{mem::size_of_val, str::FromStr};
+use std::str::FromStr;
 use wgpu::util::DeviceExt;
 
 // Indicates a u32 overflow in an intermediate Collatz value
 const OVERFLOW: u32 = 0xffffffff;
 
-#[cfg_attr(test, allow(dead_code))]
 async fn run() {
     let numbers = if std::env::args().len() <= 2 {
         let default = vec![1, 2, 3, 4];
@@ -32,7 +31,6 @@ async fn run() {
     log::info!("Steps: [{}]", disp_steps.join(", "));
 }
 
-#[cfg_attr(test, allow(dead_code))]
 async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
     // Instantiates instance of WebGPU
     let instance = wgpu::Instance::default();

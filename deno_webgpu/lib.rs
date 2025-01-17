@@ -381,18 +381,24 @@ pub fn op_webgpu_request_adapter(
 
     let backends = std::env::var("DENO_WEBGPU_BACKEND").map_or_else(
         |_| wgpu_types::Backends::all(),
-        |s| wgpu_core::instance::parse_backends_from_comma_list(&s),
+        |s| wgpu_types::Backends::from_comma_list(&s),
     );
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
         instance
     } else {
         state.put(std::sync::Arc::new(wgpu_core::global::Global::new(
             "webgpu",
-            wgpu_types::InstanceDescriptor {
+            &wgpu_types::InstanceDescriptor {
                 backends,
                 flags: wgpu_types::InstanceFlags::from_build_config(),
-                dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
-                gles_minor_version: wgpu_types::Gles3MinorVersion::default(),
+                backend_options: wgpu_types::BackendOptions {
+                    dx12: wgpu_types::Dx12BackendOptions {
+                        shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+                    },
+                    gl: wgpu_types::GlBackendOptions {
+                        gles_minor_version: wgpu_types::Gles3MinorVersion::default(),
+                    },
+                },
             },
         )));
         state.borrow::<Instance>()
@@ -656,13 +662,12 @@ pub fn op_webgpu_request_device(
         memory_hints: wgpu_types::MemoryHints::default(),
     };
 
+    let webgpu_trace = std::env::var("DENO_WEBGPU_TRACE").unwrap();
+
     let res = instance.adapter_request_device(
         adapter,
         &descriptor,
-        std::env::var("DENO_WEBGPU_TRACE")
-            .ok()
-            .as_ref()
-            .map(std::path::Path::new),
+        Some(webgpu_trace.as_str()),
         None,
         None,
     );

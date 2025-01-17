@@ -105,6 +105,7 @@ pub(super) fn map_image_format(word: spirv::Word) -> Result<crate::StorageFormat
         Some(spirv::ImageFormat::Rgb10a2ui) => Ok(crate::StorageFormat::Rgb10a2Uint),
         Some(spirv::ImageFormat::Rgb10A2) => Ok(crate::StorageFormat::Rgb10a2Unorm),
         Some(spirv::ImageFormat::R11fG11fB10f) => Ok(crate::StorageFormat::Rg11b10Ufloat),
+        Some(spirv::ImageFormat::R64ui) => Ok(crate::StorageFormat::R64Uint),
         Some(spirv::ImageFormat::Rg32ui) => Ok(crate::StorageFormat::Rg32Uint),
         Some(spirv::ImageFormat::Rg32i) => Ok(crate::StorageFormat::Rg32Sint),
         Some(spirv::ImageFormat::Rg32f) => Ok(crate::StorageFormat::Rg32Float),
@@ -174,7 +175,7 @@ pub(super) fn map_storage_class(word: spirv::Word) -> Result<super::ExtendedClas
         Some(Sc::UniformConstant) => Ec::Global(crate::AddressSpace::Handle),
         Some(Sc::StorageBuffer) => Ec::Global(crate::AddressSpace::Storage {
             //Note: this is restricted by decorations later
-            access: crate::StorageAccess::all(),
+            access: crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
         }),
         // we expect the `Storage` case to be filtered out before calling this function.
         Some(Sc::Uniform) => Ec::Global(crate::AddressSpace::Uniform),

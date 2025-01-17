@@ -10,7 +10,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     size.width = size.width.max(1);
     size.height = size.height.max(1);
 
-    let instance = wgpu::Instance::new(wgpu::util::instance_descriptor_from_env());
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
 
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance
@@ -147,7 +147,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
 pub fn main() {
     let event_loop = EventLoop::new().unwrap();
-    #[allow(unused_mut)]
+    #[cfg_attr(
+        not(target_arch = "wasm32"),
+        expect(unused_mut, reason = "`wasm32` re-assigns to specify canvas")
+    )]
     let mut builder = winit::window::WindowBuilder::new();
     #[cfg(target_arch = "wasm32")]
     {

@@ -201,10 +201,23 @@ fn is_word_part(c: char) -> bool {
 
 #[derive(Clone)]
 pub(in crate::front::wgsl) struct Lexer<'a> {
+    /// The remaining unconsumed input.
     input: &'a str,
+
+    /// The full original source code.
+    ///
+    /// We compare `input` against this to compute the lexer's current offset in
+    /// the source.
     pub(in crate::front::wgsl) source: &'a str,
-    // The byte offset of the end of the last non-trivia token.
+
+    /// The byte offset of the end of the most recently returned non-trivia
+    /// token.
+    ///
+    /// This is consulted by the `span_from` function, for finding the
+    /// end of the span for larger structures like expressions or
+    /// statements.
     last_end_offset: usize,
+
     #[allow(dead_code)]
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
@@ -430,6 +443,9 @@ impl<'a> Lexer<'a> {
             "read" => Ok(crate::StorageAccess::LOAD),
             "write" => Ok(crate::StorageAccess::STORE),
             "read_write" => Ok(crate::StorageAccess::LOAD | crate::StorageAccess::STORE),
+            "atomic" => Ok(crate::StorageAccess::ATOMIC
+                | crate::StorageAccess::LOAD
+                | crate::StorageAccess::STORE),
             _ => Err(Error::UnknownAccess(span)),
         }
     }

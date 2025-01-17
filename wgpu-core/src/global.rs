@@ -31,7 +31,7 @@ pub struct Global {
 }
 
 impl Global {
-    pub fn new(name: &str, instance_desc: wgt::InstanceDescriptor) -> Self {
+    pub fn new(name: &str, instance_desc: &wgt::InstanceDescriptor) -> Self {
         profiling::scope!("Global::new");
         Self {
             instance: Instance::new(name, instance_desc),

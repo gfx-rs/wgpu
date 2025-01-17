@@ -240,8 +240,8 @@ impl<A: hal::Api> Example<A> {
             name: "example",
             flags: wgt::InstanceFlags::default(),
             dx12_shader_compiler: wgt::Dx12Compiler::DynamicDxc {
-                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
-                dxil_path: std::path::PathBuf::from("dxil.dll"),
+                dxc_path: "dxcompiler.dll".to_string(),
+                dxil_path: "dxil.dll".to_string(),
             },
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
@@ -284,7 +284,7 @@ impl<A: hal::Api> Example<A> {
         dbg!(&surface_caps.formats);
         let surface_format = if surface_caps
             .formats
-            .contains(&wgt::TextureFormat::Rgba8Snorm)
+            .contains(&wgt::TextureFormat::Rgba8Unorm)
         {
             wgt::TextureFormat::Rgba8Unorm
         } else {
@@ -473,7 +473,8 @@ impl<A: hal::Api> Example<A> {
             vertex_buffer: Some(&vertices_buffer),
             first_vertex: 0,
             vertex_format: wgt::VertexFormat::Float32x3,
-            vertex_count: vertices.len() as u32,
+            // each vertex is 3 floats, and floats are stored raw in the array
+            vertex_count: vertices.len() as u32 / 3,
             vertex_stride: 3 * 4,
             indices: indices_buffer.as_ref().map(|(buf, len)| {
                 hal::AccelerationStructureTriangleIndices {
@@ -1107,7 +1108,7 @@ impl<A: hal::Api> Example<A> {
 
 cfg_if::cfg_if! {
     // Apple + Metal
-    if #[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))] {
+    if #[cfg(all(target_vendor = "apple", feature = "metal"))] {
         type Api = hal::api::Metal;
     }
     // Wasm + Vulkan

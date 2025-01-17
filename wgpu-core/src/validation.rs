@@ -1,6 +1,7 @@
 use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 use arrayvec::ArrayVec;
-use std::{collections::hash_map::Entry, fmt};
+use hashbrown::hash_map::Entry;
+use std::fmt;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -278,7 +279,7 @@ pub enum StageError {
     InvalidResource(#[from] InvalidResourceError),
 }
 
-fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
+pub fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
     use naga::StorageFormat as Sf;
     use wgt::TextureFormat as Tf;
 
@@ -312,6 +313,7 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
         Tf::Rgb10a2Unorm => Sf::Rgb10a2Unorm,
         Tf::Rg11b10Ufloat => Sf::Rg11b10Ufloat,
 
+        Tf::R64Uint => Sf::R64Uint,
         Tf::Rg32Uint => Sf::Rg32Uint,
         Tf::Rg32Sint => Sf::Rg32Sint,
         Tf::Rg32Float => Sf::Rg32Float,
@@ -334,7 +336,7 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
     })
 }
 
-fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureFormat {
+pub fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureFormat {
     use naga::StorageFormat as Sf;
     use wgt::TextureFormat as Tf;
 
@@ -368,6 +370,7 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
         Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
         Sf::Rg11b10Ufloat => Tf::Rg11b10Ufloat,
 
+        Sf::R64Uint => Tf::R64Uint,
         Sf::Rg32Uint => Tf::Rg32Uint,
         Sf::Rg32Sint => Tf::Rg32Sint,
         Sf::Rg32Float => Tf::Rg32Float,
@@ -519,7 +522,14 @@ impl Resource {
                         let naga_access = match access {
                             wgt::StorageTextureAccess::ReadOnly => naga::StorageAccess::LOAD,
                             wgt::StorageTextureAccess::WriteOnly => naga::StorageAccess::STORE,
-                            wgt::StorageTextureAccess::ReadWrite => naga::StorageAccess::all(),
+                            wgt::StorageTextureAccess::ReadWrite => {
+                                naga::StorageAccess::LOAD | naga::StorageAccess::STORE
+                            }
+                            wgt::StorageTextureAccess::Atomic => {
+                                naga::StorageAccess::ATOMIC
+                                    | naga::StorageAccess::LOAD
+                                    | naga::StorageAccess::STORE
+                            }
                         };
                         naga::ImageClass::Storage {
                             format: naga_format,
@@ -610,11 +620,15 @@ impl Resource {
                     },
                     naga::ImageClass::Storage { format, access } => BindingType::StorageTexture {
                         access: {
-                            const LOAD_STORE: naga::StorageAccess = naga::StorageAccess::all();
+                            const LOAD_STORE: naga::StorageAccess =
+                                naga::StorageAccess::LOAD.union(naga::StorageAccess::STORE);
                             match access {
                                 naga::StorageAccess::LOAD => wgt::StorageTextureAccess::ReadOnly,
                                 naga::StorageAccess::STORE => wgt::StorageTextureAccess::WriteOnly,
                                 LOAD_STORE => wgt::StorageTextureAccess::ReadWrite,
+                                _ if access.contains(naga::StorageAccess::ATOMIC) => {
+                                    wgt::StorageTextureAccess::Atomic
+                                }
                                 _ => unreachable!(),
                             }
                         },
@@ -701,6 +715,7 @@ impl NumericType {
             Tf::Rg8Unorm | Tf::Rg8Snorm | Tf::Rg16Float | Tf::Rg32Float => {
                 (NumericDimension::Vector(Vs::Bi), Scalar::F32)
             }
+            Tf::R64Uint => (NumericDimension::Scalar, Scalar::U64),
             Tf::Rg8Uint | Tf::Rg16Uint | Tf::Rg32Uint => {
                 (NumericDimension::Vector(Vs::Bi), Scalar::U32)
             }
@@ -1295,7 +1310,7 @@ pub fn validate_color_attachment_bytes_per_sample(
     attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
     limit: u32,
 ) -> Result<(), u32> {
-    let mut total_bytes_per_sample = 0;
+    let mut total_bytes_per_sample: u32 = 0;
     for format in attachment_formats {
         let Some(format) = format else {
             continue;
@@ -1304,10 +1319,7 @@ pub fn validate_color_attachment_bytes_per_sample(
         let byte_cost = format.target_pixel_byte_cost().unwrap();
         let alignment = format.target_component_alignment().unwrap();
 
-        let rem = total_bytes_per_sample % alignment;
-        if rem != 0 {
-            total_bytes_per_sample += alignment - rem;
-        }
+        total_bytes_per_sample = total_bytes_per_sample.next_multiple_of(alignment);
         total_bytes_per_sample += byte_cost;
     }
 

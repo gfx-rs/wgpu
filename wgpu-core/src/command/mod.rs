@@ -28,6 +28,7 @@ pub use timestamp_writes::PassTimestampWrites;
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
+use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
@@ -432,6 +433,7 @@ impl Drop for CommandEncoder {
 pub(crate) struct BakedCommands {
     pub(crate) encoder: CommandEncoder,
     pub(crate) trackers: Tracker,
+    pub(crate) temp_resources: Vec<TempResource>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
 }
@@ -460,6 +462,7 @@ pub struct CommandBufferMutable {
 
     blas_actions: Vec<BlasAction>,
     tlas_actions: Vec<TlasAction>,
+    temp_resources: Vec<TempResource>,
 
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
@@ -479,6 +482,7 @@ impl CommandBufferMutable {
         BakedCommands {
             encoder: self.encoder,
             trackers: self.trackers,
+            temp_resources: self.temp_resources,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
         }
@@ -545,6 +549,7 @@ impl CommandBuffer {
                     pending_query_resets: QueryResetMap::new(),
                     blas_actions: Default::default(),
                     tlas_actions: Default::default(),
+                    temp_resources: Default::default(),
                     #[cfg(feature = "trace")]
                     commands: if device.trace.lock().is_some() {
                         Some(Vec::new())

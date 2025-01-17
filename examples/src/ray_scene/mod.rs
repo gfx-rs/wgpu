@@ -264,7 +264,7 @@ fn upload_scene_components(
                     first_vertex: vertex_range.start as u32,
                     vertex_stride: mem::size_of::<Vertex>() as u64,
                     index_buffer: Some(&indices),
-                    index_buffer_offset: Some(scene.geometries[i].0.start as u64 * 4),
+                    first_index: Some(scene.geometries[i].0.start as u32),
                     transform_buffer: None,
                     transform_buffer_offset: None,
                 })
