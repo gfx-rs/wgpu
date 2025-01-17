@@ -254,9 +254,8 @@ pub(crate) mod alias {
             pub(crate) use core::sync::*;
             // XXX TBD ??? - UPDATE FOR std vs test ???
             // XXX TBD NAMING - ???
-            // XXX TODO UNCOMMENT - XXX XXX THIS COMMENTED-OUT IMPORT SHOULD TRIGGER CI BUILD FAILURE
-            // #[cfg(not(any(feature = "std", test)))]
-            // pub(crate) use crate::OnceCell as OnceLock;
+            #[cfg(not(any(feature = "std", test)))]
+            pub(crate) use crate::OnceCell as OnceLock;
         }
         // XXX TBD ??? - UPDATE FOR std vs test ???
         // #[cfg(feature = "std")]
@@ -269,15 +268,18 @@ pub(crate) mod alias {
             backtrace, env, eprintln, fs, io, path, process, thread, thread_local,
         };
         // XXX TBD MOVE THIS - ???
-        // XXX TODO ADD NOTE - IMPORTING error from std, if possible, to avoid MSRV issue
+        // XXX TODO ADD NOTE - IMPORTING error from std, if possible, to AVOID IMPACT on CORE MSRV
+        // XXX TBD CONSIDER UPDATING CORE MSRV - expected to impact Firefox - found these references:
+        // - https://github.com/gfx-rs/wgpu/pull/6003
+        // - https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
+        // - https://firefox-source-docs.mozilla.org/writing-rust-code/update-policy.html
         // XXX TBD ??? - UPDATE FOR std vs test ???
         // #[cfg(feature = "std")]
         #[cfg(any(feature = "std", test))]
         pub(crate) use std::error;
-        // XXX TODO UNCOMMENT - XXX XXX THIS COMMENTED-OUT IMPORT SHOULD TRIGGER CI BUILD FAILURE
-        // XXX TBD THIS IMPORT (IF UNCOMMENTED) IS EXPECTED TO BREAK MSRV - XXX TODO CI SHOULD DETECT THIS
-        // #[cfg(not(any(feature = "std", test)))]
-        // pub(crate) use core::error;
+        // XXX TODO ADD NOTE - EXPECTED TO IMPACT CORE MSRV for no-std
+        #[cfg(not(any(feature = "std", test)))]
+        pub(crate) use core::error;
     }
 }
 
