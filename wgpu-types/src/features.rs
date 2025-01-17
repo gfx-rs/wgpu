@@ -174,6 +174,7 @@ macro_rules! bitflags_array {
              fn parse_hex(input: &str) -> Result<Self, ParseError> {
                  let mut offset = 0;
                  $(
+                 // A byte is two hex places u8 (1 byte) = 0x00 (2 hex places).
                  let cur_input = &input[offset..(offset + (size_of::<$T>() * 2))];
                  let $lower_inner_name = <$T>::from_str_radix(cur_input, 16).map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
                  // Two hex chars is a byte.
@@ -212,12 +213,12 @@ macro_rules! bitflags_array {
                 Bits([$(self.$lower_inner_name.bits(),)*])
             }
 
-            /// No bits set
+            /// Returns self with no flags set.
             pub const fn empty() -> Self {
                 Self { $($lower_inner_name: $inner_name::empty(),)* }
             }
 
-            /// All bits set
+            /// Returns self with all flags set.
             pub const fn all() -> Self {
                 Self { $($lower_inner_name: $inner_name::all(),)* }
             }
@@ -228,67 +229,67 @@ macro_rules! bitflags_array {
                 $(self.$lower_inner_name.contains(other.$lower_inner_name) &&)* true
             }
 
-            /// Whether any bit set in self matched any bit set in other
+            /// Returns whether any bit set in `self` matched any bit set in `other`.
             pub const fn intersects(self, other:Self) -> bool {
                 $(self.$lower_inner_name.intersects(other.$lower_inner_name) ||)* false
             }
 
-            /// returns whether the struct is empty
+            /// Returns whether the struct is empty.
             pub const fn is_empty(self) -> bool {
                 $(self.$lower_inner_name.is_empty() &&)* true
             }
 
-            /// returns whether the struct is has all bits set
+            /// Returns whether the struct is has all flags set.
             pub const fn is_all(self) -> bool {
                 $(self.$lower_inner_name.is_all() &&)* true
             }
 
             bitflags_independent_two_arg! {
-                /// Bitwise or - self | other
+                /// Bitwise or - `self | other`
                 union $($lower_inner_name)*
             }
 
             bitflags_independent_two_arg! {
-                /// Bitwise and - self & other
+                /// Bitwise and - `self & other`
                 intersection $($lower_inner_name)*
             }
 
             bitflags_independent_two_arg! {
-                /// Bitwise and of the complement - self & !other
+                /// Bitwise and of the complement - `self & !other`
                 difference $($lower_inner_name)*
             }
 
             bitflags_independent_two_arg! {
-                /// Bitwise xor - self ^ other
+                /// Bitwise xor - `self ^ other`
                 symmetric_difference $($lower_inner_name)*
             }
 
-            /// Bitwise not - !self
+            /// Bitwise not - `!self`
             pub const fn complement(self) -> Self {
                 Self { $($lower_inner_name: self.$lower_inner_name.complement(),)* }
             }
 
-            /// Calls [Self::insert] if set is true and [Self::remove] otherwise
+            /// Calls [Self::insert] if `set` is true and otherwise calls [Self::remove].
             pub fn set(&mut self, other:Self, set: bool) {
                 $(self.$lower_inner_name.set(other.$lower_inner_name, set);)*
             }
 
-            /// Inserts specified flag(s)
+            /// Inserts specified flag(s) into self
             pub fn insert(&mut self, other:Self) {
                 $(self.$lower_inner_name.insert(other.$lower_inner_name);)*
             }
 
-            /// Removes specified flag(s)
+            /// Removes specified flag(s) from self
             pub fn remove(&mut self, other:Self) {
                 $(self.$lower_inner_name.remove(other.$lower_inner_name);)*
             }
 
-            /// Toggles specified flag(s)
+            /// Toggles specified flag(s) in self
             pub fn toggle(&mut self, other:Self) {
                 $(self.$lower_inner_name.toggle(other.$lower_inner_name);)*
             }
 
-            /// Takes in `Bits` and returns Self or None if there are invalid bits
+            /// Takes in [`Bits`] and returns Self or None if there are invalid bits
             pub const fn from_bits(bits:Bits) -> Option<Self> {
                 let [$($lower_inner_name,)*] = bits.0;
                 Some(Self { $($lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
@@ -298,13 +299,13 @@ macro_rules! bitflags_array {
                 },)* })
             }
 
-            /// Takes in `Bits` and returns Self with only valid bits
+            /// Takes in [`Bits`] and returns Self with only valid bits
             pub const fn from_bits_truncate(bits:Bits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_truncate($lower_inner_name),)* }
             }
 
-            /// Takes in `Bits` and returns Self with only all bits
+            /// Takes in [`Bits`] and returns Self with only all bits
             pub const fn from_bits_retain(bits:Bits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
