@@ -239,11 +239,7 @@ impl<A: hal::Api> Example<A> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgt::InstanceFlags::default(),
-            dx12_shader_compiler: wgt::Dx12Compiler::DynamicDxc {
-                dxc_path: "dxcompiler.dll".to_string(),
-                dxil_path: "dxil.dll".to_string(),
-            },
-            gles_minor_version: wgt::Gles3MinorVersion::default(),
+            backend_options: wgt::BackendOptions::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {
