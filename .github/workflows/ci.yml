@@ -313,6 +313,10 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
+          # XXX EXTRA SUB-STEP - (SHOULD) DETECT MISSING IMPORT for no-std
+          # check wgpu-core with no features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features
+
       - name: check private item docs
         if: matrix.kind == 'native'
         shell: bash
