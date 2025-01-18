@@ -138,12 +138,15 @@ fn main() {
                     println!("Hooking up to wgpu-hal");
                     exposed.get_or_insert_with(|| {
                         unsafe {
-                            <hal::api::Gles as hal::Api>::Adapter::new_external(|name| {
-                                // XXX: On WGL this should only be called after the context was made current
-                                gl_config
-                                    .display()
-                                    .get_proc_address(&CString::new(name).expect(name))
-                            })
+                            <hal::api::Gles as hal::Api>::Adapter::new_external(
+                                |name| {
+                                    // XXX: On WGL this should only be called after the context was made current
+                                    gl_config
+                                        .display()
+                                        .get_proc_address(&CString::new(name).expect(name))
+                                },
+                                wgt::GlBackendOptions::default(),
+                            )
                         }
                         .expect("GL adapter can't be initialized")
                     });
