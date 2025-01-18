@@ -468,29 +468,28 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             .map_err(|e| Error::ConstantEvaluatorError(e.into(), span))
     }
 
-    fn const_access(&self, handle: Handle<crate::Expression>) -> Option<u32> {
+    fn const_eval_expr_to_u32(
+        &self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<u32, crate::proc::U32EvalError> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
                 if !ctx.local_expression_kind_tracker.is_const(handle) {
-                    return None;
+                    return Err(crate::proc::U32EvalError::NonConst);
                 }
 
                 self.module
                     .to_ctx()
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
-                    .ok()
             }
             ExpressionContextType::Constant(Some(ref ctx)) => {
                 assert!(ctx.local_expression_kind_tracker.is_const(handle));
                 self.module
                     .to_ctx()
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
-                    .ok()
             }
-            ExpressionContextType::Constant(None) => {
-                self.module.to_ctx().eval_expr_to_u32(handle).ok()
-            }
-            ExpressionContextType::Override => None,
+            ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_u32(handle),
+            ExpressionContextType::Override => Err(crate::proc::U32EvalError::NonConst),
         }
     }
 
@@ -2002,7 +2001,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 }
 
-                lowered_base.map(|base| match ctx.const_access(index) {
+                lowered_base.map(|base| match ctx.const_eval_expr_to_u32(index).ok() {
                     Some(index) => crate::Expression::AccessIndex { base, index },
                     None => crate::Expression::Access { base, index },
                 })
@@ -3156,17 +3155,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let const_expr = self.expression(expr, &mut ctx.as_const());
                 match const_expr {
                     Ok(value) => {
-                        let len =
-                            ctx.module.to_ctx().eval_expr_to_u32(value).map_err(
-                                |err| match err {
-                                    crate::proc::U32EvalError::NonConst => {
-                                        Error::ExpectedConstExprConcreteIntegerScalar(span)
-                                    }
-                                    crate::proc::U32EvalError::Negative => {
-                                        Error::ExpectedPositiveArrayLength(span)
-                                    }
-                                },
-                            )?;
+                        let len = ctx.const_eval_expr_to_u32(value).map_err(|err| match err {
+                            crate::proc::U32EvalError::NonConst => {
+                                Error::ExpectedConstExprConcreteIntegerScalar(span)
+                            }
+                            crate::proc::U32EvalError::Negative => {
+                                Error::ExpectedPositiveArrayLength(span)
+                            }
+                        })?;
                         let size =
                             NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
                         crate::ArraySize::Constant(size)
