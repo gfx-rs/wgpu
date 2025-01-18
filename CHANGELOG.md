@@ -63,6 +63,7 @@ By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 ### Bug Fixes
 
 * Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#????].
+* Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
 
 ## v24.0.0 (2025-01-15)
 
