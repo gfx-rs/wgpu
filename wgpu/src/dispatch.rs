@@ -636,6 +636,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value.as_ref(),
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value.as_ref(),
+                    #[cfg(not(any(wgpu_core, webgpu)))]
+                    _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
             }
         }
@@ -765,6 +767,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
+                    #[cfg(not(any(wgpu_core, webgpu)))]
+                    _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
             }
         }
@@ -777,6 +781,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
+                    #[cfg(not(any(wgpu_core, webgpu)))]
+                    _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
             }
         }
