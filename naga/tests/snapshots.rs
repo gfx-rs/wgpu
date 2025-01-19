@@ -30,6 +30,7 @@ bitflags::bitflags! {
     }
 }
 
+// XXX TBD add cfg condition - ???
 #[derive(serde::Deserialize)]
 struct SpvOutVersion(u8, u8);
 impl Default for SpvOutVersion {
@@ -38,8 +39,9 @@ impl Default for SpvOutVersion {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
-#[serde(default)]
+#[derive(Default)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 struct SpirvOutParameters {
     version: SpvOutVersion,
     capabilities: naga::FastHashSet<spirv::Capability>,
@@ -52,14 +54,17 @@ struct SpirvOutParameters {
     binding_map: naga::back::spv::BindingMap,
 }
 
-#[derive(Default, serde::Deserialize)]
-#[serde(default)]
+#[derive(Default)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
 struct WgslOutParameters {
     explicit_types: bool,
 }
 
-#[derive(Default, serde::Deserialize)]
-#[serde(default)]
+#[derive(Default)]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
+// #[serde(default)]
 struct Parameters {
     // -- GOD MODE --
     god_mode: bool,
@@ -235,6 +240,7 @@ impl Input {
     }
 
     /// Return this input's parameter file, parsed.
+    #[cfg(feature = "deserialize")]
     fn read_parameters(&self) -> Parameters {
         let mut param_path = self.input_path();
         param_path.set_extension("param.ron");
@@ -261,6 +267,7 @@ type FragmentEntryPoint<'a> = naga::back::hlsl::FragmentEntryPoint<'a>;
 type FragmentEntryPoint<'a> = ();
 
 #[allow(unused_variables)]
+#[cfg(feature = "deserialize")]
 fn check_targets(
     input: &Input,
     module: &mut naga::Module,
