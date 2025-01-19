@@ -16,6 +16,8 @@ use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span};
 
 pub mod ast;
 pub mod conv;
+// XXX TBD ENABLE OR ENABLE PARTIALLY for no-std ???
+#[cfg(feature = "std")]
 pub mod directive;
 pub mod lexer;
 pub mod number;
