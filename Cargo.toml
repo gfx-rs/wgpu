@@ -76,8 +76,9 @@ version = "24.0.0"
 [workspace.dependencies]
 anyhow = "1.0.95"
 argh = "0.1.13"
-arrayvec = "0.7"
+arrayvec = { version = "0.7", default-features = false }
 bincode = "1"
+bit-set = { version = "0.8", default-features = false }
 bit-vec = "0.8"
 bitflags = "2.7"
 bytemuck = { version = "1.21", features = ["derive", "min_const_generics"] }
@@ -100,7 +101,7 @@ hashbrown = { version = "0.15.2", default-features = false, features = [
 ] }
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
-indexmap = "2"
+indexmap = { version = "2", default-features = false }
 itertools = { version = "0.13.0" }
 ktx2 = "0.3"
 libc = "0.2"
@@ -129,15 +130,16 @@ rayon = "1"
 renderdoc-sys = "1.1.0"
 ron = "0.8"
 # rustc-hash 2.0 is a completely different hasher with different performance characteristics
+# XXX TODO NEED UPDATE FROM OTHER PR WITH UPDATED COMMENT: https://github.com/gfx-rs/wgpu/pull/6938
+rustc-hash = { version = "1", default-features = false }
 serde_json = "1.0.134"
-rustc-hash = "1"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
-strum = { version = "0.26.0", features = ["derive"] }
+strum = { version = "0.26", default-features = false, features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
-thiserror = "2"
+thiserror = { version = "2", default-features = false }
 wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
@@ -164,7 +166,6 @@ gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
 # DX dependencies
-bit-set = "0.8"
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false }

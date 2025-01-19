@@ -28,7 +28,7 @@ all-features = true
 default = ["std"]
 
 # XXX TBD ADD DESCRIPTION HERE (???)
-std = []
+std = ["dep:codespan-reporting", "dep:termcolor"]
 
 # XXX TODO ALL FEATURES BELOW REQUIRE std feature to build - NEED TO SPECIFY THIS
 # XXX TODO DETERMINE which features may or may not be able to work with no-std
@@ -48,8 +48,13 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
-serialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
-deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
+serialize = ["dep:serde", "bitflags/serde", "hashbrown/serde", "indexmap/serde"]
+deserialize = [
+    "dep:serde",
+    "bitflags/serde",
+    "hashbrown/serde",
+    "indexmap/serde",
+]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
@@ -74,15 +79,18 @@ arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-termcolor = { version = "1.4.1" }
-# remove termcolor dep when updating to the next version of codespan-reporting
+# remove termcolor from here when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
-codespan-reporting = { version = "0.11.0" }
-hashbrown = { workspace = true, features = ["serde"] }
+termcolor = { version = "1.4.1", optional = true }
+codespan-reporting = { version = "0.11.0", optional = true }
+hashbrown.workspace = true
 rustc-hash.workspace = true
 indexmap.workspace = true
 log = "0.4"
+num-traits = { version = "0.2.19", default-features = false, features = [
+    "libm",
+] }
 strum.workspace = true
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true

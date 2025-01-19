@@ -241,6 +241,7 @@ impl<E> WithSpan<E> {
         Some(self.spans[0].0.location(source))
     }
 
+    #[cfg(feature = "std")]
     pub(crate) fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
     where
         E: Error,
@@ -268,6 +269,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "std")]
     pub fn emit_to_stderr(&self, source: &str)
     where
         E: Error,
@@ -276,6 +278,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "std")]
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
     where
         E: Error,
@@ -290,7 +293,9 @@ impl<E> WithSpan<E> {
             .expect("cannot write error");
     }
 
+    // XXX TBD FIX FOR no-std - ???
     /// Emits a summary of the error to a string.
+    #[cfg(feature = "std")]
     pub fn emit_to_string(&self, source: &str) -> String
     where
         E: Error,
@@ -299,6 +304,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
+    #[cfg(feature = "std")]
     pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
     where
         E: Error,
