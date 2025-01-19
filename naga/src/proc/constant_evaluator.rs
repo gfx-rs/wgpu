@@ -1192,19 +1192,29 @@ impl<'a> ConstantEvaluator<'a> {
                 // <https://github.com/rust-lang/rust/issues/96710>.
                 //
                 // [polyfill source]: https://github.com/imeka/ndarray-ndimage/blob/8b14b4d6ecfbc96a8a052f802e342a7049c68d8f/src/lib.rs#L98
-                // XXX TODO NEED copysign for f64 & no-std
                 fn round_ties_even(x: f64) -> f64 {
                     let i = x as i64;
                     let f = (x - i as f64).abs();
                     if f == 0.5 {
                         if i & 1 == 1 {
                             // -1.5, 1.5, 3.5, ...
-                            (x.abs() + 0.5).copysign(x)
+                            with_sign(x.abs() + 0.5, x.is_sign_negative())
                         } else {
-                            (x.abs() - 0.5).copysign(x)
+                            with_sign(x.abs() - 0.5, x.is_sign_positive())
                         }
                     } else {
                         x.round()
+                    }
+                }
+                // Additional helper shamelessly adapted, based on:
+                // - https://github.com/rust-num/num-traits/blob/num-traits-0.2.19/src/float.rs#L1905
+                // (with compatible licensing as well)
+                #[inline]
+                fn with_sign(magnitude :f64, with_negative_sign: bool) -> f64 {
+                    if with_negative_sign {
+                        -magnitude.abs()
+                    } else {
+                        magnitude.abs()
                     }
                 }
                 component_wise_float(self, span, [arg], |e| match e {
