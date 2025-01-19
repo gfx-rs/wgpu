@@ -68,8 +68,10 @@ pub enum CreateBindGroupLayoutError {
     },
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
-    #[error("Bind groups may not contain both a binding array and a dynamically offset array")]
+    #[error("Bind groups may not contain both a binding array and a dynamically offset buffer")]
     ContainsBothBindingArrayAndDynamicOffsetArray,
+    #[error("Bind groups may not contain both a binding array and a uniform buffer")]
+    ContainsBothBindingArrayAndUniformBuffer,
     #[error("Binding index {binding} is greater than the maximum number {maximum}")]
     InvalidBindingIndex { binding: u32, maximum: u32 },
     #[error("Invalid visibility {0:?}")]
@@ -423,8 +425,12 @@ impl BindingTypeMaxCountValidator {
     pub(crate) fn validate_binding_arrays(&self) -> Result<(), CreateBindGroupLayoutError> {
         let has_dynamic_offset_array =
             self.dynamic_uniform_buffers > 0 || self.dynamic_storage_buffers > 0;
+        let has_uniform_buffer = self.uniform_buffers.max().1 > 0;
         if self.has_bindless_array && has_dynamic_offset_array {
             return Err(CreateBindGroupLayoutError::ContainsBothBindingArrayAndDynamicOffsetArray);
+        }
+        if self.has_bindless_array && has_uniform_buffer {
+            return Err(CreateBindGroupLayoutError::ContainsBothBindingArrayAndUniformBuffer);
         }
         Ok(())
     }
