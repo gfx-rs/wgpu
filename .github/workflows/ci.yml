@@ -161,7 +161,9 @@ jobs:
             target: wasm32-unknown-emscripten
             tier: 2
             kind: wgpu-only
-          
+
+          # XXX TODO REMOVE TRAILING SPACE IN SEPARATE PR
+
           # TODO: Uncomment once web-sys updates past 0.3.76
           # See https://github.com/rustwasm/wasm-bindgen/pull/4378 for details
           # - name: WebAssembly Core 1.0
@@ -169,7 +171,9 @@ jobs:
           #   target: wasm32v1-none
           #   tier: 2
           #   kind: no_std
-          
+
+          # XXX TODO REMOVE TRAILING SPACE IN SEPARATE PR
+
           # Bare-metal x86-64
           # TODO: Remove once web-sys updates past 0.3.76
           # Included while wasm32v1-none is failing to ensure `no_std` does not regress
@@ -178,6 +182,13 @@ jobs:
             target: x86_64-unknown-none
             tier: 2
             kind: no_std
+
+          # XXX TODO MOVE INTO SEPARATE CI JOB:
+          - name: no-std feature test
+            os: ubuntu-22.04
+            target: x86_64-unknown-none
+            tier: 2
+            kind: no-std-test
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -276,7 +287,9 @@ jobs:
           # Check with all features.
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
-        
+
+      # XXX TODO REMOVE TRAILING SPACE IN SEPARATE PR
+
       # Building for no_std platforms where every feature is enabled except "std".
       - name: check no_std
         if: matrix.kind == 'no_std'
@@ -308,6 +321,20 @@ jobs:
 
           # build docs
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
+
+      # XXX TODO MOVE INTO SEPARATE CI JOB:
+      - name: no-std feature test
+        if: matrix.kind == 'no-std-test'
+        shell: bash
+        run: |
+          set -e
+
+          # no-std test with no features - naga
+          cargo test --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
+
+          # XXX TODO FIX & TEST MULTIPLE naga features for no-std
+          # no-std test with multiple features - naga
+          # cargo test [...]
 
       - name: check private item docs
         if: matrix.kind == 'native'
