@@ -264,7 +264,6 @@ pub(crate) mod aliases {
             pub(crate) mod v1 {
                 pub(crate) use crate::aliases::std::{
                     // XXX XXX TBD COMBINE LINES ???
-                    borrow::ToOwned,
                     boxed::Box,
                     format,
                     string::String,
