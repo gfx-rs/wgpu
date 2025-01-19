@@ -21,6 +21,9 @@ members = [
     "wgpu-macros",
     "wgpu-types",
     "wgpu",
+    "wgpu-core-conditional/arch-wasm32",
+    "wgpu-core-conditional/native-non-apple",
+    "wgpu-core-conditional/vendor-apple",
 ]
 exclude = []
 default-members = [
@@ -40,6 +43,9 @@ default-members = [
     "wgpu-macros",
     "wgpu-types",
     "wgpu",
+    "wgpu-core-conditional/arch-wasm32",
+    "wgpu-core-conditional/native-non-apple",
+    "wgpu-core-conditional/vendor-apple",
 ]
 
 [workspace.lints.clippy]
@@ -66,6 +72,9 @@ wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features
     "static-dxc",
 ] }
 wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
+wgpu-core-if-arch-wasm32 = { version = "24.0.0", path = "./wgpu-core-conditional/arch-wasm32" }
+wgpu-core-if-native-non-apple = { version = "24.0.0", path = "./wgpu-core-conditional/native-non-apple" }
+wgpu-core-if-vendor-apple = { version = "24.0.0", path = "./wgpu-core-conditional/vendor-apple" }
 wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "24.0.0", path = "./tests" }

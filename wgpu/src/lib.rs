@@ -28,7 +28,7 @@
 #[cfg(wgpu_core)]
 pub extern crate wgpu_core as wgc;
 #[cfg(wgpu_core)]
-pub extern crate wgpu_hal as hal;
+pub use wgpu_core::hal;
 pub extern crate wgpu_types as wgt;
 
 //

@@ -28,33 +28,40 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["wgsl", "dx12", "metal", "webgpu"]
+default = ["wgsl", "dx12", "metal", "vulkan", "gles", "webgpu"]
 
 #! ### Backends
 # --------------------------------------------------------------------
-#! ⚠️ WIP: Not all backends can be manually configured today.
-#! On Windows, Linux & Android the Vulkan & GLES backends are always enabled.
-#! See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more details.
 
 ## Enables the DX12 backend on Windows.
-dx12 = ["wgpu-core?/dx12"]
+# Dx12 doesn't do anything on non-windows wgpu-core & wgpu-hal, so we don't need a proxy crate here.
+dx12 = ["wgpu-core/dx12"]
 
 ## Enables the Metal backend on macOS & iOS.
-metal = ["wgpu-core?/metal"]
+# Metal doesn't do anything on non-Apple wgpu-core & wgpu-hal, but we already have a proxy crate for Apple platforms anyways.
+metal = ["wgpu-core-if-vendor-apple/metal"]
+
+## Enables the Vulkan backend on Windows, Linux, and Android.
+##
+## For enabling Vulkan on macOS & iOS, use the `vulkan-portability` feature.
+vulkan = ["wgpu-core-if-native-non-apple/vulkan"]
+
+## Enables the Vulkan backend on macOS & iOS.
+vulkan-portability = ["wgpu-core-if-vendor-apple/vulkan"]
+
+## Enables the OpenGL/GLES backend on Windows, Linux, and Android.
+##
+## For enabling WebGL use the `webgl` feature, for enabling OpenGL via ANGLE on macOS use the `angle` feature.
+gles = ["wgpu-core-if-native-non-apple/gles"]
+
+## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
+angle = ["wgpu-core-if-vendor-apple/gles"]
+
+## Enables GLES backend (WebGL) on Wasm
+webgl = ["wgpu-core-if-arch-wasm32/gles"]
 
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 webgpu = ["naga?/wgsl-out"]
-
-## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
-angle = ["wgpu-core?/gles"]
-
-## Enables the Vulkan backend on macOS & iOS.
-vulkan-portability = ["wgpu-core?/vulkan"]
-
-## Enables the GLES backend on Wasm
-##
-## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-webgl = ["dep:wgpu-hal", "wgpu-core/gles"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
@@ -134,8 +141,11 @@ static-dxc = ["wgpu-hal/static-dxc"]
 
 [dependencies]
 naga = { workspace = true, optional = true }
-wgpu-core = { workspace = true, optional = true }
+wgpu-core = { workspace = true, optional = true, features = [
+    "raw-window-handle",
+] }
 wgpu-types = { workspace = true, features = ["serde"] }
+wgpu-hal = { workspace = true, optional = true, features = ["renderdoc"] }
 
 arrayvec.workspace = true
 bitflags.workspace = true
@@ -148,40 +158,16 @@ serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
 
+wgpu-core-if-arch-wasm32 = { workspace = true, optional = true }
+wgpu-core-if-native-non-apple = { workspace = true, optional = true }
+wgpu-core-if-vendor-apple = { workspace = true, optional = true }
+
+
 ########################################
 # Target Specific Feature Dependencies #
 ########################################
-
-# Windows
-[target.'cfg(windows)'.dependencies]
-wgpu-core = { workspace = true, features = [
-    "raw-window-handle",
-    "vulkan",
-    "gles",
-] }
-wgpu-hal = { workspace = true, features = ["renderdoc"] }
-
-# Apple Platforms
-[target.'cfg(target_vendor = "apple")'.dependencies]
-wgpu-core = { workspace = true, features = ["raw-window-handle"] }
-wgpu-hal = { workspace = true, features = [] }
-
-# Linux + Android
-[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
-wgpu-core = { workspace = true, features = [
-    "raw-window-handle",
-    "vulkan",
-    "gles",
-] }
-wgpu-hal = { workspace = true, features = ["renderdoc"] }
-
 # Webassembly
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-wgpu-core = { workspace = true, optional = true, features = [
-    "raw-window-handle",
-] }
-wgpu-hal = { workspace = true, optional = true }
-
 js-sys = { workspace = true, features = ["default"] }
 parking_lot.workspace = true
 wasm-bindgen-futures.workspace = true

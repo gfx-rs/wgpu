@@ -61,7 +61,7 @@ impl ContextWgpuCore {
 
     pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
-        hal_adapter: hal::ExposedAdapter<A>,
+        hal_adapter: crate::hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
         unsafe { self.0.create_adapter_from_hal(hal_adapter.into(), None) }
     }
@@ -95,7 +95,7 @@ impl ContextWgpuCore {
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         adapter: &CoreAdapter,
-        hal_device: hal::OpenDevice<A>,
+        hal_device: crate::hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {

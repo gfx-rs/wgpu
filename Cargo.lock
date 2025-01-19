@@ -4027,6 +4027,9 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core",
+ "wgpu-core-if-arch-wasm32",
+ "wgpu-core-if-native-non-apple",
+ "wgpu-core-if-vendor-apple",
  "wgpu-hal",
  "wgpu-types",
 ]
@@ -4072,6 +4075,27 @@ dependencies = [
  "thiserror 2.0.11",
  "wgpu-hal",
  "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-core-if-arch-wasm32"
+version = "24.0.0"
+dependencies = [
+ "wgpu-core",
+]
+
+[[package]]
+name = "wgpu-core-if-native-non-apple"
+version = "24.0.0"
+dependencies = [
+ "wgpu-core",
+]
+
+[[package]]
+name = "wgpu-core-if-vendor-apple"
+version = "24.0.0"
+dependencies = [
+ "wgpu-core",
 ]
 
 [[package]]

@@ -1,0 +1,22 @@
+[package]
+name = "wgpu-core-if-vendor-apple"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Workaround crate for enabling features in wgpu-core when targeting macOS/iOS"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[lib]
+
+[features]
+gles = ["wgpu-core/gles"]
+metal = ["wgpu-core/metal"]
+vulkan = ["wgpu-core/vulkan"]
+
+raw-window-handle = ["wgpu-core/raw-window-handle"]
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu-core.workspace = true
