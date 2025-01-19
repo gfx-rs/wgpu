@@ -329,7 +329,7 @@ jobs:
         run: |
           set -e
 
-          # no-std test with no features - naga
+          # no-std feature test with no features - naga
           cargo test --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
 
           # XXX TODO FIX & TEST MULTIPLE naga features for no-std
