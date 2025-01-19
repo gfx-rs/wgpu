@@ -23,6 +23,7 @@
     unsafe_op_in_unsafe_fn
 )]
 #![allow(clippy::arc_with_non_send_sync)]
+#![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
 //
 //
