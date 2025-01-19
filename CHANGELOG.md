@@ -40,30 +40,39 @@ Bottom level categories:
 
 ## Unreleased
 
-### Bug Fixes
-
-#### Vulkan
-
-- Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
-
 ### Changes
 
-#### Refactored internal trace path parameter
+#### General
+
+##### Refactored internal trace path parameter
 
 Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
 
 By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
-#### Start using `hashbrown`
+##### Start using `hashbrown`
 
 Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std support. (This may help improve performance as well.)
 
 By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
+#### Vulkan
+
+##### HAL queue callback support
+
+- Add a way to notify with `Queue::submit()` to Vulkan's `vk::Semaphore` allocated outside of wgpu. By @sotaroikeda in [#6813](https://github.com/gfx-rs/wgpu/pull/6813).
+
 ### Bug Fixes
 
-* Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#????].
-* Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
+#### General
+
+- Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#6933](https://github.com/gfx-rs/wgpu/pull/6933).
+- Add Flush to GL Queue::submit. By @cwfitzgerald in [#6941](https://github.com/gfx-rs/wgpu/pull/6941).
+- Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
+
+#### Vulkan
+
+- Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 
 ## v24.0.0 (2025-01-15)
 
