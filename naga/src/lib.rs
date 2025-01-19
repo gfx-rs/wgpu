@@ -344,12 +344,13 @@ pub const ABSTRACT_WIDTH: Bytes = 8;
 
 // XXX TODO NEED UPDATES FROM OTHER PR: https://github.com/gfx-rs/wgpu/pull/6938
 /// Hash map that is faster but not resilient to DoS attacks.
-// pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
-pub type FastHashMap<K,T> = std::collections::HashMap<K,T,std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+pub type FastHashMap<K, T> =
+    std::collections::HashMap<K, T, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
 // XXX TODO NEED UPDATES FROM OTHER PR: https://github.com/gfx-rs/wgpu/pull/6938
 /// Hash set that is faster but not resilient to DoS attacks.
-// pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
-pub type FastHashSet<K> = std::collections::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+pub type FastHashSet<K> =
+    std::collections::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
 /// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).
