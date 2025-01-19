@@ -16,7 +16,8 @@ type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::ShaderModule>,
 );
-type NameBindingMap = rustc_hash::FxHashMap<String, (super::BindingRegister, u8)>;
+// XXX TODO NEED UPDATE FROM OTHER PR: https://github.com/gfx-rs/wgpu/pull/6938
+type NameBindingMap = naga::FastHashMap<String, (super::BindingRegister, u8)>;
 
 struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
