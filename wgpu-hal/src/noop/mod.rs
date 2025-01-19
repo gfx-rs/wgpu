@@ -147,6 +147,8 @@ const CAPABILITIES: crate::Capabilities = {
             max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
             max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
             max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
             max_uniform_buffer_binding_size: ALLOC_MAX_U32,
             max_storage_buffer_binding_size: ALLOC_MAX_U32,
             max_vertex_buffers: ALLOC_MAX_U32,

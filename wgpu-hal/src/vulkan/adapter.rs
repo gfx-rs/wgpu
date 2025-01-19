@@ -9,13 +9,13 @@ fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
     vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
 }
 
-//TODO: const fn?
-fn indexing_features() -> wgt::Features {
-    wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-        | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-        | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS
-        | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY
-}
+const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
+    .union(wgt::Features::BUFFER_BINDING_ARRAY)
+    .union(wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY)
+    .union(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING)
+    .union(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
+    .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
+    .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
 
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
@@ -209,21 +209,12 @@ impl PhysicalDeviceFeatures {
         downlevel_flags: wgt::DownlevelFlags,
         private_caps: &super::PrivateCapabilities,
     ) -> Self {
-        let needs_sampled_image_non_uniform = requested_features.contains(
+        let needs_bindless = requested_features.intersects(
             wgt::Features::TEXTURE_BINDING_ARRAY
-                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        );
-        let needs_storage_buffer_non_uniform = requested_features.contains(
-            wgt::Features::BUFFER_BINDING_ARRAY
+                | wgt::Features::BUFFER_BINDING_ARRAY
                 | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
+                | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        );
-        let needs_uniform_buffer_non_uniform =
-            requested_features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS);
-        let needs_storage_image_non_uniform = requested_features.contains(
-            wgt::Features::TEXTURE_BINDING_ARRAY
-                | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
         );
         let needs_partially_bound =
             requested_features.intersects(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
@@ -302,21 +293,15 @@ impl PhysicalDeviceFeatures {
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
                 .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING)),
-            descriptor_indexing: if requested_features.intersects(indexing_features()) {
+            descriptor_indexing: if requested_features.intersects(INDEXING_FEATURES) {
                 Some(
                     vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::default()
-                        .shader_sampled_image_array_non_uniform_indexing(
-                            needs_sampled_image_non_uniform,
-                        )
-                        .shader_storage_image_array_non_uniform_indexing(
-                            needs_storage_image_non_uniform,
-                        )
-                        .shader_uniform_buffer_array_non_uniform_indexing(
-                            needs_uniform_buffer_non_uniform,
-                        )
-                        .shader_storage_buffer_array_non_uniform_indexing(
-                            needs_storage_buffer_non_uniform,
-                        )
+                        .shader_sampled_image_array_non_uniform_indexing(needs_bindless)
+                        .shader_storage_image_array_non_uniform_indexing(needs_bindless)
+                        .shader_storage_buffer_array_non_uniform_indexing(needs_bindless)
+                        .descriptor_binding_sampled_image_update_after_bind(needs_bindless)
+                        .descriptor_binding_storage_image_update_after_bind(needs_bindless)
+                        .descriptor_binding_storage_buffer_update_after_bind(needs_bindless)
                         .descriptor_binding_partially_bound(needs_partially_bound),
                 )
             } else {
@@ -949,7 +934,7 @@ impl PhysicalDeviceProperties {
             }
 
             // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
-            if requested_features.intersects(indexing_features()) {
+            if requested_features.intersects(INDEXING_FEATURES) {
                 extensions.push(ext::descriptor_indexing::NAME);
             }
 
@@ -1070,6 +1055,24 @@ impl PhysicalDeviceProperties {
                 u64::MAX
             };
 
+        let mut max_binding_array_elements = 0;
+        let mut max_sampler_binding_array_elements = 0;
+        if let Some(ref descriptor_indexing) = self.descriptor_indexing {
+            max_binding_array_elements = descriptor_indexing
+                .max_descriptor_set_update_after_bind_sampled_images
+                .min(descriptor_indexing.max_descriptor_set_update_after_bind_storage_images)
+                .min(descriptor_indexing.max_descriptor_set_update_after_bind_storage_buffers)
+                .min(descriptor_indexing.max_per_stage_descriptor_update_after_bind_sampled_images)
+                .min(descriptor_indexing.max_per_stage_descriptor_update_after_bind_storage_images)
+                .min(
+                    descriptor_indexing.max_per_stage_descriptor_update_after_bind_storage_buffers,
+                );
+
+            max_sampler_binding_array_elements = descriptor_indexing
+                .max_descriptor_set_update_after_bind_samplers
+                .min(descriptor_indexing.max_per_stage_descriptor_update_after_bind_samplers);
+        }
+
         // TODO: programmatically determine this, if possible. It's unclear whether we can
         // as of https://github.com/gpuweb/gpuweb/issues/2965#issuecomment-1361315447.
         //
@@ -1098,6 +1101,8 @@ impl PhysicalDeviceProperties {
             max_storage_buffers_per_shader_stage: limits.max_per_stage_descriptor_storage_buffers,
             max_storage_textures_per_shader_stage: limits.max_per_stage_descriptor_storage_images,
             max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
+            max_binding_array_elements_per_shader_stage: max_binding_array_elements,
+            max_binding_array_sampler_elements_per_shader_stage: max_sampler_binding_array_elements,
             max_uniform_buffer_binding_size: limits
                 .max_uniform_buffer_range
                 .min(crate::auxil::MAX_I32_BINDING_SIZE),

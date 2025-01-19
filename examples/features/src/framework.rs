@@ -512,7 +512,11 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let features = E::required_features() | params.optional_features;
 
-                params.base_test_parameters.clone().features(features)
+                params
+                    .base_test_parameters
+                    .clone()
+                    .features(features)
+                    .limits(E::required_limits())
             })
             .run_async(move |ctx| async move {
                 let format = if E::SRGB {
