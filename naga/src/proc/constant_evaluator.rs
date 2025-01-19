@@ -1210,7 +1210,7 @@ impl<'a> ConstantEvaluator<'a> {
                 // - https://github.com/rust-num/num-traits/blob/num-traits-0.2.19/src/float.rs#L1905
                 // (with compatible licensing as well)
                 #[inline]
-                fn with_sign(magnitude :f64, with_negative_sign: bool) -> f64 {
+                fn with_sign(magnitude: f64, with_negative_sign: bool) -> f64 {
                     if with_negative_sign {
                         -magnitude.abs()
                     } else {
