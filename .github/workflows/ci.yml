@@ -284,9 +284,10 @@ jobs:
         run: |
           set -e
 
-          # XXX TODO REPEAT THIS SUB-STEP for naga
-          # check with no features
+          # check with no features - wgpu-types
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          # check with no features - naga
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
 
           # XXX TODO SIMILAR SUB-STEP for naga with all features possible with no-std (once this is supported)
           # Check with all features except "std".
