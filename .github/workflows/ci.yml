@@ -184,11 +184,11 @@ jobs:
             kind: no_std
 
           # XXX TODO MOVE INTO SEPARATE CI JOB:
-          - name: no-std feature test
+          - name: no-std feature test - Linux x86_64
             os: ubuntu-22.04
-            target: x86_64-unknown-none
-            tier: 2
-            kind: no-std-test
+            target: x86_64-unknown-linux-gnu
+            tier: 1
+            kind: no-std-feature-test
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -322,9 +322,9 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
-      # XXX TODO MOVE INTO SEPARATE CI JOB:
+      # XXX TODO MOVE INTO SEPARATE CI JOB - MAY SHOW UP AS A "Clippy" job in GitHub CI
       - name: no-std feature test
-        if: matrix.kind == 'no-std-test'
+        if: matrix.kind == 'no-std-feature-test'
         shell: bash
         run: |
           set -e
