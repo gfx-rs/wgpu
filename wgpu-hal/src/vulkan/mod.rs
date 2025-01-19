@@ -42,16 +42,12 @@ use std::{
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 use parking_lot::{Mutex, RwLock};
-use rustc_hash::FxHasher;
 use wgt::InternalCounter;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
-
-// NOTE: This type alias is similar to rustc_hash::FxHashMap but works with hashbrown.
-type FxHashMap<T, U> = HashMap<T, U, core::hash::BuildHasherDefault<FxHasher>>;
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -646,8 +642,9 @@ struct DeviceShared {
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     features: wgt::Features,
-    render_passes: Mutex<FxHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    // XXX TODO NEED UPDATE FROM OTHER PR: https://github.com/gfx-rs/wgpu/pull/6938
+    render_passes: Mutex<naga::FastHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<naga::FastHashMap<FramebufferKey, vk::Framebuffer>>,
     sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
