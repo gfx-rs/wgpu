@@ -28,7 +28,15 @@ all-features = true
 default = ["std"]
 
 # XXX TBD ADD DESCRIPTION HERE (???)
-std = ["dep:codespan-reporting", "dep:termcolor"]
+std = [
+    "dep:codespan-reporting",
+    # XXX TBD does strum need to be gated on std ???
+    "dep:strum",
+    "dep:termcolor",
+    "indexmap/std",
+    # XXX TBD IS / WHY IS THIS NEEDED ???
+    "strum/std",
+]
 
 # XXX TODO ALL FEATURES BELOW REQUIRE std feature to build - NEED TO SPECIFY THIS
 # XXX TODO DETERMINE which features may or may not be able to work with no-std
@@ -91,7 +99,7 @@ log = "0.4"
 num-traits = { version = "0.2.19", default-features = false, features = [
     "libm",
 ] }
-strum.workspace = true
+strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
 serde = { version = "1.0.217", features = [
