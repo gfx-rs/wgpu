@@ -435,7 +435,6 @@ jobs:
 
     name: Test WebAssembly
     runs-on: ubuntu-latest
-    needs: [check]
 
     steps:
       - name: checkout repo
@@ -479,7 +478,6 @@ jobs:
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [check]
 
     steps:
       - name: checkout repo
