@@ -1860,6 +1860,11 @@ impl crate::Queue for super::Queue {
             .map_err(|_| crate::DeviceError::OutOfMemory)?;
         signal_fence.pending.push((signal_value, sync));
 
+        // This is extremely important. If we don't flush, the above fences may never
+        // be signaled, particularly in headless contexts. Headed contexts will
+        // often flush every so often, but headless contexts may not.
+        unsafe { gl.flush() };
+
         Ok(())
     }
 

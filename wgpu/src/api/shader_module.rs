@@ -10,7 +10,7 @@ use crate::*;
 /// of a pipeline.
 ///
 /// Corresponds to [WebGPU `GPUShaderModule`](https://gpuweb.github.io/gpuweb/#shader-module).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShaderModule {
     pub(crate) inner: dispatch::DispatchShaderModule,
 }

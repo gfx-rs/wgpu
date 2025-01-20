@@ -254,6 +254,9 @@ jobs:
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl,spirv
 
+          # check with no features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features
+
           # all features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --all-features
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --all-features

@@ -36,6 +36,7 @@ use std::{
     ffi::{CStr, CString},
     fmt, mem,
     num::NonZeroU32,
+    ops::DerefMut,
     sync::Arc,
 };
 
@@ -765,6 +766,7 @@ pub struct Queue {
     device: Arc<DeviceShared>,
     family_index: u32,
     relay_semaphores: Mutex<RelaySemaphores>,
+    signal_semaphores: Mutex<(Vec<vk::Semaphore>, Vec<u64>)>,
 }
 
 impl Drop for Queue {
@@ -1216,6 +1218,15 @@ impl crate::Queue for Queue {
             signal_values.push(!0);
         }
 
+        let mut guards = self.signal_semaphores.lock();
+        let (ref mut pending_signal_semaphores, ref mut pending_signal_semaphore_values) =
+            guards.deref_mut();
+        assert!(pending_signal_semaphores.len() == pending_signal_semaphore_values.len());
+        if !pending_signal_semaphores.is_empty() {
+            signal_semaphores.append(pending_signal_semaphores);
+            signal_values.append(pending_signal_semaphore_values);
+        }
+
         // In order for submissions to be strictly ordered, we encode a dependency between each submission
         // using a pair of semaphores. This adds a wait if it is needed, and signals the next semaphore.
         let semaphore_state = self.relay_semaphores.lock().advance(&self.device)?;
@@ -1341,6 +1352,19 @@ impl crate::Queue for Queue {
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         self.device.timestamp_period
+    }
+}
+
+impl Queue {
+    pub fn raw_device(&self) -> &ash::Device {
+        &self.device.raw
+    }
+
+    pub fn add_signal_semaphore(&self, semaphore: vk::Semaphore, semaphore_value: Option<u64>) {
+        let mut guards = self.signal_semaphores.lock();
+        let (ref mut semaphores, ref mut semaphore_values) = guards.deref_mut();
+        semaphores.push(semaphore);
+        semaphore_values.push(semaphore_value.unwrap_or(!0));
     }
 }
 
