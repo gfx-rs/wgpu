@@ -42,7 +42,7 @@ std = [
 # XXX TODO DETERMINE which features may or may not be able to work with no-std
 
 dot-out = []
-glsl-in = ["dep:pp-rs"]
+glsl-in = ["std", "dep:pp-rs"]
 glsl-out = []
 
 ## Enables outputting to the Metal Shading Language (MSL).
