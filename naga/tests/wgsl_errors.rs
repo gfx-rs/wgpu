@@ -2004,6 +2004,94 @@ fn function_returns_void() {
 }
 
 #[test]
+fn function_must_use_unused() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+
+fn useless() -> i32 {
+  use_me(1);
+  return 0;
+}
+"#,
+        r#"error: unused return value from function annotated with @must_use
+  ┌─ wgsl:8:3
+  │
+8 │   use_me(1);
+  │   ^^^^^^
+  │
+  = note: function 'use_me' is declared with `@must_use` attribute
+  = note: use a phony assignment or declare a value using the function call as the initializer
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_returns_void() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) {
+  let x = a;
+}
+"#,
+        r#"error: function annotated with @must_use but does not return any value
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+3 │ fn use_me(a: i32) {
+  │    ^^^^^^^^^^^^^
+  │
+  = note: declare a return type or remove the attribute
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_repeated() {
+    check(
+        r#"
+@must_use
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+"#,
+        r#"error: repeated attribute: `must_use`
+  ┌─ wgsl:3:2
+  │
+3 │ @must_use
+  │  ^^^^^^^^ repeated attribute
+
+"#,
+    );
+}
+
+#[test]
+fn struct_member_must_use() {
+    check(
+        r#"
+struct S {
+  @must_use a: i32,
+}
+"#,
+        r#"error: unknown attribute: `must_use`
+  ┌─ wgsl:3:4
+  │
+3 │   @must_use a: i32,
+  │    ^^^^^^^^ unknown attribute
+
+"#,
+    )
+}
+
+#[test]
 fn function_param_redefinition_as_param() {
     check(
         "

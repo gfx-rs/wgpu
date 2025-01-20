@@ -68,6 +68,10 @@ pub enum CreateBindGroupLayoutError {
     },
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
+    #[error("Bind groups may not contain both a binding array and a dynamically offset buffer")]
+    ContainsBothBindingArrayAndDynamicOffsetArray,
+    #[error("Bind groups may not contain both a binding array and a uniform buffer")]
+    ContainsBothBindingArrayAndUniformBuffer,
     #[error("Binding index {binding} is greater than the maximum number {maximum}")]
     InvalidBindingIndex { binding: u32, maximum: u32 },
     #[error("Invalid visibility {0:?}")]
@@ -319,6 +323,7 @@ pub(crate) struct BindingTypeMaxCountValidator {
     storage_textures: PerStageBindingTypeCounter,
     uniform_buffers: PerStageBindingTypeCounter,
     acceleration_structures: PerStageBindingTypeCounter,
+    has_bindless_array: bool,
 }
 
 impl BindingTypeMaxCountValidator {
@@ -357,6 +362,9 @@ impl BindingTypeMaxCountValidator {
             wgt::BindingType::AccelerationStructure => {
                 self.acceleration_structures.add(binding.visibility, count);
             }
+        }
+        if binding.count.is_some() {
+            self.has_bindless_array = true;
         }
     }
 
@@ -407,6 +415,23 @@ impl BindingTypeMaxCountValidator {
             limits.max_uniform_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::UniformBuffers,
         )?;
+        Ok(())
+    }
+
+    /// Validate that the bind group layout does not contain both a binding array and a dynamic offset array.
+    ///
+    /// This allows us to use `UPDATE_AFTER_BIND` on vulkan for bindless arrays. Vulkan does not allow
+    /// `UPDATE_AFTER_BIND` on dynamic offset arrays. See <https://github.com/gfx-rs/wgpu/issues/6737>
+    pub(crate) fn validate_binding_arrays(&self) -> Result<(), CreateBindGroupLayoutError> {
+        let has_dynamic_offset_array =
+            self.dynamic_uniform_buffers > 0 || self.dynamic_storage_buffers > 0;
+        let has_uniform_buffer = self.uniform_buffers.max().1 > 0;
+        if self.has_bindless_array && has_dynamic_offset_array {
+            return Err(CreateBindGroupLayoutError::ContainsBothBindingArrayAndDynamicOffsetArray);
+        }
+        if self.has_bindless_array && has_uniform_buffer {
+            return Err(CreateBindGroupLayoutError::ContainsBothBindingArrayAndUniformBuffer);
+        }
         Ok(())
     }
 }

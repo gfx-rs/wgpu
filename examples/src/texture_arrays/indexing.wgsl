@@ -35,7 +35,7 @@ struct Uniforms {
     index: u32,
 }
 
-@group(0) @binding(3)
+@group(1) @binding(0)
 var<uniform> uniforms: Uniforms;
 
 @fragment

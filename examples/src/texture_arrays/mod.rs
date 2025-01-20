@@ -64,6 +64,7 @@ fn create_texture_data(color: Color) -> [u8; 4] {
 struct Example {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
+    uniform_bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     index_format: wgpu::IndexFormat,
@@ -261,8 +262,14 @@ impl crate::framework::Example for Example {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: NonZeroU32::new(2),
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
+            ],
+        });
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("uniform bind group layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -270,9 +277,8 @@ impl crate::framework::Example for Example {
                         min_binding_size: Some(NonZeroU64::new(4).unwrap()),
                     },
                     count: None,
-                },
-            ],
-        });
+                }],
+            });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             entries: &[
@@ -294,22 +300,27 @@ impl crate::framework::Example for Example {
                     binding: 2,
                     resource: wgpu::BindingResource::SamplerArray(&[&sampler, &sampler]),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &texture_index_buffer,
-                        offset: 0,
-                        size: Some(NonZeroU64::new(4).unwrap()),
-                    }),
-                },
             ],
             layout: &bind_group_layout,
             label: Some("bind group"),
         });
 
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &texture_index_buffer,
+                    offset: 0,
+                    size: Some(NonZeroU64::new(4).unwrap()),
+                }),
+            }],
+            layout: &uniform_bind_group_layout,
+            label: Some("uniform bind group"),
+        });
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout, &uniform_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -347,6 +358,7 @@ impl crate::framework::Example for Example {
         Self {
             pipeline,
             bind_group,
+            uniform_bind_group,
             vertex_buffer,
             index_buffer,
             index_format,
@@ -388,12 +400,14 @@ impl crate::framework::Example for Example {
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..), self.index_format);
         if self.uniform_workaround {
-            rpass.set_bind_group(0, &self.bind_group, &[0]);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(1, &self.uniform_bind_group, &[0]);
             rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_bind_group(0, &self.bind_group, &[256]);
+            rpass.set_bind_group(1, &self.uniform_bind_group, &[256]);
             rpass.draw_indexed(6..12, 0, 0..1);
         } else {
-            rpass.set_bind_group(0, &self.bind_group, &[0]);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(1, &self.uniform_bind_group, &[0]);
             rpass.draw_indexed(0..12, 0, 0..1);
         }
 

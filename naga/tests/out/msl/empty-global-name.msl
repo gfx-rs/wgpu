@@ -12,7 +12,7 @@ void function(
     device type_1& unnamed
 ) {
     int _e3 = unnamed.member;
-    unnamed.member = _e3 + 1;
+    unnamed.member = as_type<int>(as_type<uint>(_e3) + as_type<uint>(1));
     return;
 }
 

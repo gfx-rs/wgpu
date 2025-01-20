@@ -385,7 +385,7 @@ fn map_texture_copy_view(
     expect(unused)
 )]
 fn map_texture_tagged_copy_view(
-    view: wgt::CopyExternalImageDestInfo<&api::Texture>,
+    view: crate::CopyExternalImageDestInfo<&api::Texture>,
 ) -> wgc::command::CopyExternalImageDestInfo {
     wgc::command::CopyExternalImageDestInfo {
         texture: view.texture.inner.as_core().id,
@@ -1771,8 +1771,8 @@ impl dispatch::QueueInterface for CoreQueue {
     #[cfg(any(webgpu, webgl))]
     fn copy_external_image_to_texture(
         &self,
-        source: &wgt::CopyExternalImageSourceInfo,
-        dest: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
+        source: &crate::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
         size: crate::Extent3d,
     ) {
         match self.context.0.queue_copy_external_image_to_texture(

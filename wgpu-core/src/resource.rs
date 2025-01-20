@@ -8,7 +8,10 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, BufferId, CommandEncoderId, DeviceId, SurfaceId, TextureId, TextureViewId},
+    id::{
+        AdapterId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
+        TextureViewId,
+    },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{rank, Mutex, RwLock},
     resource_log,
@@ -1387,6 +1390,21 @@ impl Global {
         } else {
             hal_command_encoder_callback(None)
         }
+    }
+
+    /// # Safety
+    ///
+    /// - The raw queue handle must not be manually destroyed
+    pub unsafe fn queue_as_hal<A: HalApi, F, R>(&self, id: QueueId, hal_queue_callback: F) -> R
+    where
+        F: FnOnce(Option<&A::Queue>) -> R,
+    {
+        profiling::scope!("Queue::as_hal");
+
+        let queue = self.hub.queues.get(id);
+        let hal_queue = queue.raw().as_any().downcast_ref();
+
+        hal_queue_callback(hal_queue)
     }
 }
 
