@@ -211,12 +211,7 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
-        let mut command_buffers = command_buffers.into_iter().map(|comb| {
-            comb.inner
-                .lock()
-                .take()
-                .expect("Command buffer already submitted")
-        });
+        let mut command_buffers = command_buffers.into_iter().map(|comb| comb.buffer);
 
         let index = self.inner.submit(&mut command_buffers);
 

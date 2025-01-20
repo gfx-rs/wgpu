@@ -1,7 +1,3 @@
-use std::sync::Arc;
-
-use parking_lot::Mutex;
-
 use crate::*;
 
 /// Handle to a command buffer on the GPU.
@@ -11,11 +7,9 @@ use crate::*;
 /// a [`CommandEncoder`] and then calling [`CommandEncoder::finish`].
 ///
 /// Corresponds to [WebGPU `GPUCommandBuffer`](https://gpuweb.github.io/gpuweb/#command-buffer).
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CommandBuffer {
-    pub(crate) inner: Arc<Mutex<Option<dispatch::DispatchCommandBuffer>>>,
+    pub(crate) buffer: dispatch::DispatchCommandBuffer,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
-
-crate::cmp::impl_eq_ord_hash_arc_address!(CommandBuffer => .inner);
