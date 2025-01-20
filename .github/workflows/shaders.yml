@@ -3,11 +3,11 @@ name: Shaders
 on:
   push:
     branches-ignore: [
-      # We don't need to run on dependabot PRs.
-      "dependabot/**",
-      # This is the branch the merge queue creates.
-      "gh-readonly-queue/**"
-    ]
+        # We don't need to run on dependabot PRs.
+        "dependabot/**",
+        # This is the branch the merge queue creates.
+        "gh-readonly-queue/**",
+      ]
     tags: [v0.*]
   pull_request:
   merge_group:
@@ -16,9 +16,7 @@ env:
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
   #
   # We don't include the 4th version number, as it's not used in any URL.
-  #
-  # Held back from 1.3.290 by https://github.com/gfx-rs/wgpu/issues/6307
-  VULKAN_SDK_VERSION: "1.3.283"
+  VULKAN_SDK_VERSION: "1.4.304"
 
   # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
   #
@@ -89,7 +87,7 @@ jobs:
 
   naga-validate-linux:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -102,7 +100,7 @@ jobs:
 
           # vulkan sdk
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
 
           sudo apt-get update
           sudo apt install -y vulkan-sdk
