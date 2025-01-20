@@ -7113,17 +7113,24 @@ impl BindingType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupLayoutEntry {
     /// Binding index. Must match shader index and be unique inside a BindGroupLayout. A binding
-    /// of index 1, would be described as `layout(set = 0, binding = 1) uniform` in shaders.
+    /// of index 1, would be described as `@group(0) @binding(1)` in shaders.
     pub binding: u32,
     /// Which shader stages can see this binding.
     pub visibility: ShaderStages,
     /// The type of the binding
     pub ty: BindingType,
-    /// If this value is Some, indicates this entry is an array. Array size must be 1 or greater.
+    /// If the binding is an array of multiple resources. Corresponds to `binding_array<T>` in the shader.
     ///
-    /// If this value is Some and `ty` is `BindingType::Texture`, [`Features::TEXTURE_BINDING_ARRAY`] must be supported.
+    /// When this is `Some` the following validation applies:
+    /// - Size must be of value 1 or greater.
+    /// - When `ty == BindingType::Texture`, [`Features::TEXTURE_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::Sampler`, [`Features::TEXTURE_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::Buffer`, [`Features::BUFFER_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::Buffer` and `ty.ty == BufferBindingType::Storage`, [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] must be supported.
+    /// - When `ty == BindingType::StorageTexture`, [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] must be supported.
+    /// - When any binding in the group is an array, no `BindingType::Buffer` in the group may have `has_dynamic_offset == true`
+    /// - When any binding in the group is an array, no `BindingType::Buffer` in the group may have `ty.ty == BufferBindingType::Uniform`.
     ///
-    /// If this value is Some and `ty` is any other variant, bind group creation will fail.
     #[cfg_attr(feature = "serde", serde(default))]
     pub count: Option<NonZeroU32>,
 }

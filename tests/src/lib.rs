@@ -42,8 +42,8 @@ pub fn fail<T>(
         assert!(
             lowered_actual.contains(&lowered_expected),
             concat!(
-                "expected validation error case-insensitively containing {:?}, ",
-                "but it was not present in actual error message:\n{:?}"
+                "expected validation error case-insensitively containing {}, ",
+                "but it was not present in actual error message:\n{}"
             ),
             expected_msg_substring,
             validation_error

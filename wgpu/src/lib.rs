@@ -55,17 +55,18 @@ pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, BackendOptions, Backends,
     BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState,
     BufferAddress, BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState,
-    ColorWrites, CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CoreCounters,
-    DepthBiasState, DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities,
-    DownlevelFlags, Dx12BackendOptions, Dx12Compiler, DynamicOffset, Extent3d, Face, Features,
-    FilterMode, FrontFace, GlBackendOptions, Gles3MinorVersion, HalCounters, ImageSubresourceRange,
-    IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters, Limits, MaintainResult,
-    MemoryHints, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode,
-    PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType,
-    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks, ShaderStages,
-    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
-    SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension, TextureFormat,
+    ColorWrites, CommandBufferDescriptor, CompareFunction, CompositeAlphaMode,
+    CopyExternalImageDestInfo, CoreCounters, DepthBiasState, DepthStencilState, DeviceLostReason,
+    DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12BackendOptions, Dx12Compiler,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, GlBackendOptions,
+    Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
+    InstanceFlags, InternalCounters, Limits, MaintainResult, MemoryHints, MultisampleState,
+    Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
+    PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
+    ShaderLocation, ShaderModel, ShaderRuntimeChecks, ShaderStages, StencilFaceState,
+    StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities, SurfaceStatus,
+    TexelCopyBufferLayout, TextureAspect, TextureDimension, TextureFormat,
     TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureUsages,
     TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend,
     WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
@@ -81,7 +82,6 @@ pub use wgt::{ImageCopyBuffer, ImageCopyTexture, ImageCopyTextureTagged, ImageDa
 pub use wgt::ImageCopyExternalImage;
 #[cfg(any(webgpu, webgl))]
 pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};
-
 //
 //
 // Re-exports of dependencies

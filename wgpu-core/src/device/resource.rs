@@ -1908,6 +1908,9 @@ impl Device {
             .validate(&self.limits)
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
+        // Validate that binding arrays don't conflict with dynamic offsets.
+        count_validator.validate_binding_arrays()?;
+
         let bgl = BindGroupLayout {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),

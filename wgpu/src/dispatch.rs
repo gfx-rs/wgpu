@@ -227,8 +227,8 @@ pub trait QueueInterface: CommonTraits {
     #[cfg(any(webgpu, webgl))]
     fn copy_external_image_to_texture(
         &self,
-        source: &wgt::CopyExternalImageSourceInfo,
-        dest: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
+        source: &crate::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
         size: crate::Extent3d,
     );
 
