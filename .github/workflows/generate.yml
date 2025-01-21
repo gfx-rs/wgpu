@@ -40,6 +40,11 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cargo-generate-${{ matrix.name }}
+
       - name: "Install cargo-generate"
         uses: taiki-e/install-action@v2
         with:

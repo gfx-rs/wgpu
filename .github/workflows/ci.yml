@@ -36,10 +36,6 @@ env:
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
   CI_BINARY_BUILD: "build19"
 
-  # We sometimes need nightly to use special things in CI.
-  #
-  # In order to prevent CI regressions, we pin the nightly version.
-  NIGHTLY_VERSION: "nightly-2024-10-17"
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.83"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
@@ -399,8 +395,8 @@ jobs:
 
       - name: Install Nightly Toolchain
         run: |
-          rustup toolchain install ${{ env.NIGHTLY_VERSION }} --no-self-update --profile=minimal --component clippy
-          cargo +${{ env.NIGHTLY_VERSION }} -V
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          cargo +${{ env.REPO_MSRV }} -V
 
       - name: Install cargo-hack
         uses: taiki-e/install-action@v2
@@ -420,7 +416,9 @@ jobs:
         run: |
           set -e
 
-          cargo +${{ env.NIGHTLY_VERSION }} hack generate-lockfile --remove-dev-deps -Z minimal-versions -p naga -p naga-cli
+          cargo +${{ env.REPO_MSRV }} hack generate-lockfile --remove-dev-deps -Z minimal-versions -p naga -p naga-cli
+        env:
+          RUSTC_BOOTSTRAP: 1
 
       - name: Clippy
         shell: bash
