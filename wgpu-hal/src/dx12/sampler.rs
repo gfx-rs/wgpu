@@ -95,7 +95,7 @@ pub(crate) struct SamplerHeap {
     heap_gpu_start_handle: D3D12_GPU_DESCRIPTOR_HANDLE,
 
     /// This is the device-specific size of sampler descriptors.
-    heap_stride: u32,
+    descriptor_stride: u32,
 }
 
 impl SamplerHeap {
@@ -124,7 +124,7 @@ impl SamplerHeap {
         let heap_cpu_start_handle = unsafe { heap.GetCPUDescriptorHandleForHeapStart() };
         let heap_gpu_start_handle = unsafe { heap.GetGPUDescriptorHandleForHeapStart() };
 
-        let heap_stride =
+        let descriptor_stride =
             unsafe { device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) };
 
         Ok(Self {
@@ -136,7 +136,7 @@ impl SamplerHeap {
             heap,
             heap_cpu_start_handle,
             heap_gpu_start_handle,
-            heap_stride,
+            descriptor_stride,
         })
     }
 
@@ -190,7 +190,7 @@ impl SamplerHeap {
                 // Compute the CPU side handle for the new sampler.
                 let handle = D3D12_CPU_DESCRIPTOR_HANDLE {
                     ptr: self.heap_cpu_start_handle.ptr
-                        + self.heap_stride as usize * index.0 as usize,
+                        + self.descriptor_stride as usize * index.0 as usize,
                 };
 
                 unsafe {

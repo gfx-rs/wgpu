@@ -124,6 +124,9 @@ use crate::{back, proc};
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
     pub space: u8,
+    /// For regular bindings this is the register number.
+    ///
+    /// For sampler bindings, this is the index to use into the bind group's sampler index buffer.
     pub register: u32,
     /// If the binding is an unsized binding array, this overrides the size.
     pub binding_array_size: Option<u32>,

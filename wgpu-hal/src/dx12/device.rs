@@ -844,7 +844,6 @@ impl crate::Device for super::Device {
         let mut bind_cbv = hlsl::BindTarget::default();
         let mut bind_srv = hlsl::BindTarget::default();
         let mut bind_uav = hlsl::BindTarget::default();
-        let mut bind_sampler = hlsl::BindTarget::default();
         let mut parameters = Vec::new();
         let mut push_constants_target = None;
         let mut root_constant_info = None;
@@ -1089,33 +1088,49 @@ impl crate::Device for super::Device {
             bind_group_infos.push(info);
         }
 
-        let mut sampler_heap_target = hlsl::SamplerHeapBindTargets::default();
+        let sampler_heap_target = hlsl::SamplerHeapBindTargets {
+            standard_samplers: hlsl::BindTarget {
+                space: 0,
+                register: 0,
+                binding_array_size: None,
+            },
+            comparison_samplers: hlsl::BindTarget {
+                space: 0,
+                register: 2048,
+                binding_array_size: None,
+            },
+        };
+
         let mut sampler_heap_root_index = None;
         if sampler_in_any_bind_group {
-            // TODO: Explain about the aliasing of the sampler heap
-
             // Sampler descriptor tables
+            //
+            // We bind two sampler ranges pointing to the same descriptor heap, using two different register ranges.
+            //
+            // We bind them as normal samplers in registers 0-2047 and comparison samplers in registers 2048-4095.
+            // Tier 2 hardware guarantees that the type of sampler only needs to match if the sampler is actually
+            // accessed in the shader. As such, we can bind the same array of samplers to both registers.
+            //
+            // We do this because HLSL does not allow you to alias registers at all.
             let range_base = ranges.len();
+            // Standard samplers, registers 0-2047
             ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
                 RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
                 NumDescriptors: 2048,
-                BaseShaderRegister: bind_sampler.register,
-                RegisterSpace: bind_sampler.space as u32,
+                BaseShaderRegister: 0,
+                RegisterSpace: 0,
                 OffsetInDescriptorsFromTableStart: 0,
             });
-            sampler_heap_target.standard_samplers = bind_sampler;
-            bind_sampler.register += 2048;
-
+            // Comparison samplers, registers 2048-4095
             ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
                 RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
                 NumDescriptors: 2048,
-                BaseShaderRegister: bind_sampler.register,
-                RegisterSpace: bind_sampler.space as u32,
+                BaseShaderRegister: 2048,
+                RegisterSpace: 0,
                 OffsetInDescriptorsFromTableStart: 0,
             });
-            sampler_heap_target.comparison_samplers = bind_sampler;
 
-            let range = dbg!(&ranges[range_base..]);
+            let range = &ranges[range_base..];
             sampler_heap_root_index = Some(parameters.len() as super::RootIndex);
             parameters.push(Direct3D12::D3D12_ROOT_PARAMETER {
                 ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
@@ -1423,7 +1438,6 @@ impl crate::Device for super::Device {
                     let start = entry.resource_index as usize;
                     let end = start + entry.count as usize;
                     for &data in &desc.samplers[start..end] {
-                        // TODO: Provide a proper index for this
                         sampler_indexes.push(data.index);
                     }
                 }

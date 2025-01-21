@@ -154,6 +154,11 @@ impl super::Adapter {
         }
         .unwrap();
 
+        if options.ResourceHeapTier == Direct3D12::D3D12_RESOURCE_HEAP_TIER_1 {
+            // We require Tier 2 for the ability to make samplers bindless in all cases.
+            return None;
+        }
+
         let _depth_bounds_test_supported = {
             let mut features2 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS2::default();
             unsafe {
