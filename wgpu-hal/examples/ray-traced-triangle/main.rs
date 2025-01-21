@@ -13,6 +13,7 @@ use std::{
     ptr,
     time::Instant,
 };
+use wgt::Dx12BackendOptions;
 use winit::window::WindowButtons;
 
 const DESIRED_MAX_LATENCY: u32 = 2;
@@ -239,7 +240,12 @@ impl<A: hal::Api> Example<A> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgt::InstanceFlags::default(),
-            backend_options: wgt::BackendOptions::default(),
+            backend_options: wgt::BackendOptions {
+                dx12: Dx12BackendOptions {
+                    shader_compiler: wgt::Dx12Compiler::default_dynamic_dxc(),
+                },
+                ..Default::default()
+            },
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {

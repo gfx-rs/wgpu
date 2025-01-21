@@ -51,11 +51,11 @@ impl Fence {
     }
 
     pub fn satisfied(&self, value: crate::FenceValue) -> bool {
-        self.last_completed.load(Ordering::Relaxed) >= value
+        self.last_completed.load(Ordering::Acquire) >= value
     }
 
     pub fn get_latest(&self, gl: &glow::Context) -> crate::FenceValue {
-        let mut max_value = self.last_completed.load(Ordering::Relaxed);
+        let mut max_value = self.last_completed.load(Ordering::Acquire);
 
         if self.fence_mode.is_auto_finish() {
             return max_value;
@@ -76,7 +76,7 @@ impl Fence {
         }
 
         // Track the latest value, to save ourselves some querying later
-        self.last_completed.fetch_max(max_value, Ordering::Relaxed);
+        self.last_completed.fetch_max(max_value, Ordering::AcqRel);
 
         max_value
     }
@@ -103,7 +103,7 @@ impl Fence {
         wait_value: crate::FenceValue,
         timeout_ns: u64,
     ) -> Result<bool, crate::DeviceError> {
-        let last_completed = self.last_completed.load(Ordering::Relaxed);
+        let last_completed = self.last_completed.load(Ordering::Acquire);
 
         if self.fence_mode.is_auto_finish() {
             return Ok(last_completed >= wait_value);
@@ -147,7 +147,7 @@ impl Fence {
         };
 
         if signalled {
-            self.last_completed.fetch_max(wait_value, Ordering::Relaxed);
+            self.last_completed.fetch_max(wait_value, Ordering::AcqRel);
         }
 
         Ok(signalled)

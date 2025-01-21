@@ -216,7 +216,7 @@ impl BackendOptions {
 pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
-    /// TODO DOCS
+    /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
     pub short_circuit_fences: GlFenceBehavior,
 }
 
@@ -309,6 +309,14 @@ pub enum Dx12Compiler {
 }
 
 impl Dx12Compiler {
+    /// Helper function to construct a `DynamicDxc` variant with default paths.
+    pub fn default_dynamic_dxc() -> Self {
+        Self::DynamicDxc {
+            dxc_path: String::from("dxcompiler.dll"),
+            dxil_path: String::from("dxil.dll"),
+        }
+    }
+
     /// Choose which DX12 shader compiler to use from the environment variable `WGPU_DX12_COMPILER`.
     ///
     /// Valid values, case insensitive:
@@ -321,10 +329,7 @@ impl Dx12Compiler {
             .as_deref()?
             .to_lowercase();
         match value.as_str() {
-            "dxc" | "dynamicdxc" => Some(Self::DynamicDxc {
-                dxc_path: String::from("dxcompiler.dll"),
-                dxil_path: String::from("dxil.dll"),
-            }),
+            "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
             "staticdxc" => Some(Self::StaticDxc),
             "fxc" => Some(Self::Fxc),
             _ => None,
@@ -411,6 +416,9 @@ pub enum GlFenceBehavior {
     ///
     /// Previously all `poll(Wait)` acted like the OpenGL fences were signalled even if they weren't.
     /// See <https://github.com/gfx-rs/wgpu/issues/4589> for more information.
+    ///
+    /// When this is set `Queue::on_completed_work_done` will always return the next time the device
+    /// is maintained, not when the work is actually done on the GPU.
     AutoFinish,
 }
 
