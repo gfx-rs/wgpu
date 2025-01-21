@@ -33,6 +33,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
+use bitflags::Flags;
 use smallvec::SmallVec;
 use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
@@ -495,9 +496,7 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)?;
         }
 
-        if desc.usage.is_empty()
-            || desc.usage | wgt::BufferUsages::all() != wgt::BufferUsages::all()
-        {
+        if desc.usage.is_empty() || desc.usage.contains_unknown_bits() {
             return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
         }
 
@@ -731,9 +730,7 @@ impl Device {
 
         self.check_is_valid()?;
 
-        if desc.usage.is_empty()
-            || desc.usage | wgt::TextureUsages::all() != wgt::TextureUsages::all()
-        {
+        if desc.usage.is_empty() || desc.usage.contains_unknown_bits() {
             return Err(CreateTextureError::InvalidUsage(desc.usage));
         }
 
@@ -1848,7 +1845,7 @@ impl Device {
                     })?;
             }
 
-            if entry.visibility | wgt::ShaderStages::all() != wgt::ShaderStages::all() {
+            if entry.visibility.contains_unknown_bits() {
                 return Err(
                     binding_model::CreateBindGroupLayoutError::InvalidVisibility(entry.visibility),
                 );
@@ -3077,7 +3074,7 @@ impl Device {
             if let Some(cs) = cs.as_ref() {
                 target_specified = true;
                 let error = 'error: {
-                    if cs.write_mask | wgt::ColorWrites::all() != wgt::ColorWrites::all() {
+                    if cs.write_mask.contains_unknown_bits() {
                         break 'error Some(pipeline::ColorStateError::InvalidWriteMask(
                             cs.write_mask,
                         ));
