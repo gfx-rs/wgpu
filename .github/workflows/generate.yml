@@ -40,6 +40,16 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
+      - name: disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:

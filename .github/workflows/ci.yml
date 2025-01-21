@@ -63,7 +63,7 @@ env:
 # - web: build for the Web
 # - em: build for the Emscripten
 
-# For build time and size optimization we disable debug
+# For build time and size optimization we disable debug symbols
 # entirely on clippy jobs and reduce it to line-numbers
 # only for ones where we run tests.
 #
@@ -207,13 +207,15 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy,rust-src
           echo "RUSTC_BOOTSTRAP=1" >> "$GITHUB_ENV"
 
-      - name: disable debug
+      - name: disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """
-          [profile.dev]
-          debug = false" >> .cargo/config.toml
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
 
       - name: caching
         uses: Swatinem/rust-cache@v2
@@ -355,13 +357,15 @@ jobs:
           rustup override set ${{ env.CORE_MSRV }}
           cargo -V
 
-      - name: disable debug
+      - name: disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """
-          [profile.dev]
-          debug = false" >> .cargo/config.toml
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
 
       - name: caching
         uses: Swatinem/rust-cache@v2
@@ -403,7 +407,7 @@ jobs:
         with:
           tool: cargo-hack
 
-      - name: disable debug
+      - name: disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
@@ -490,6 +494,16 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-llvm-cov
+
+      - name: debug symbols to line-tables-only
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
 
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
@@ -588,14 +602,6 @@ jobs:
           echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
           echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
 
-      - name: disable debug
-        shell: bash
-        run: |
-          mkdir -p .cargo
-          echo """
-          [profile.dev]
-          debug = 1" >> .cargo/config.toml
-
       - name: run wgpu-info
         shell: bash
         run: |
@@ -658,14 +664,6 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: disable debug
-        shell: bash
-        run: |
-          mkdir -p .cargo
-          echo """
-          [profile.dev]
-          debug = 1" >> .cargo/config.toml
-
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
@@ -727,13 +725,15 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: disable debug
+      - name: disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """
-          [profile.dev]
-          debug = 1" >> .cargo/config.toml
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
 
       - name: caching
         uses: Swatinem/rust-cache@v2
