@@ -1336,25 +1336,37 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.update_expressions_to_bake(module, func, info);
 
-        // Write modifier
-        if let Some(crate::FunctionResult {
-            binding:
-                Some(
-                    ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position {
-                        invariant: true,
-                    }),
-                ),
-            ..
-        }) = func.result
-        {
-            self.write_modifier(binding)?;
-        }
-
-        // Write return type
         if let Some(ref result) = func.result {
+            // Write typedef if return type is an array
+            let array_return_type = match module.types[result.ty].inner {
+                TypeInner::Array { base, size, .. } => {
+                    let array_return_type = self.namer.call(&format!("ret_{name}"));
+                    write!(self.out, "typedef ")?;
+                    self.write_type(module, result.ty)?;
+                    write!(self.out, " {}", array_return_type)?;
+                    self.write_array_size(module, base, size)?;
+                    writeln!(self.out, ";")?;
+                    Some(array_return_type)
+                }
+                _ => None,
+            };
+
+            // Write modifier
+            if let Some(
+                ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }),
+            ) = result.binding
+            {
+                self.write_modifier(binding)?;
+            }
+
+            // Write return type
             match func_ctx.ty {
                 back::FunctionType::Function(_) => {
-                    self.write_type(module, result.ty)?;
+                    if let Some(array_return_type) = array_return_type {
+                        write!(self.out, "{array_return_type}")?;
+                    } else {
+                        self.write_type(module, result.ty)?;
+                    }
                 }
                 back::FunctionType::EntryPoint(index) => {
                     if let Some(ref ep_output) = self.entry_point_io[index as usize].output {
@@ -2212,13 +2224,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "const ")?;
                     let name = Baked(expr).to_string();
                     let expr_ty = &func_ctx.info[expr].ty;
-                    match *expr_ty {
-                        proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    let ty_inner = match *expr_ty {
+                        proc::TypeResolution::Handle(handle) => {
+                            self.write_type(module, handle)?;
+                            &module.types[handle].inner
+                        }
                         proc::TypeResolution::Value(ref value) => {
-                            self.write_value_type(module, value)?
+                            self.write_value_type(module, value)?;
+                            value
                         }
                     };
-                    write!(self.out, " {name} = ")?;
+                    write!(self.out, " {name}")?;
+                    if let TypeInner::Array { base, size, .. } = *ty_inner {
+                        self.write_array_size(module, base, size)?;
+                    }
+                    write!(self.out, " = ")?;
                     self.named_expressions.insert(expr, name);
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
