@@ -1,0 +1,11 @@
+[package]
+name = "wgpu-example-01-hello-compute"
+edition = "2021"
+rust-version = "1.83"
+publish = false
+
+[dependencies]
+bytemuck = "1"
+env_logger = "0.11.6"
+pollster = "0.4"
+wgpu = "24.0.0"

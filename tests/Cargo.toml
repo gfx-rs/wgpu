@@ -27,6 +27,7 @@ webgl = ["wgpu/webgl"]
 [dependencies]
 anyhow.workspace = true
 arrayvec.workspace = true
+approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true

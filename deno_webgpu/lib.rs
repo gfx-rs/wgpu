@@ -395,9 +395,7 @@ pub fn op_webgpu_request_adapter(
                     dx12: wgpu_types::Dx12BackendOptions {
                         shader_compiler: wgpu_types::Dx12Compiler::Fxc,
                     },
-                    gl: wgpu_types::GlBackendOptions {
-                        gles_minor_version: wgpu_types::Gles3MinorVersion::default(),
-                    },
+                    gl: wgpu_types::GlBackendOptions::default(),
                 },
             },
         )));

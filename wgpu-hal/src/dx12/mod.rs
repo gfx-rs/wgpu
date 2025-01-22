@@ -13,13 +13,52 @@ and destination states match, and they are for storage sync.
 
 For now, all resources are created with "committed" memory.
 
+## Sampler Descriptor Management
+
+At most one descriptor heap of each type can be bound at once. This
+means that the descriptors from all bind groups need to be present
+in the same heap, and they need to be contiguous within that heap.
+This is not a problem for the SRV/CBV/UAV heap as it can be sized into
+the millions of entries. However the sampler heap is limited to 2048 entries.
+
+In order to work around this limitation, we refer to samplers indirectly by index.
+The entire sampler heap is bound at once and a buffer containing all sampler indexes
+for that bind group is bound. The shader then uses the index to look up the sampler
+in the heap. To help visualize this, the generated HLSL looks like this:
+
+```wgsl
+@group(0) @binding(2) var myLinearSampler: sampler;
+@group(1) @binding(1) var myAnisoSampler: sampler;
+@group(1) @binding(4) var myCompSampler: sampler;
+```
+
+```cpp
+// These bindings alias the same descriptors. Depending on the type, the shader will use the correct one.
+SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s2048, space1);
+
+StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t0, space0);
+StructuredBuffer<uint> nagaGroup1SamplerIndexArray : register(t1, space0);
+
+// Indexes into group 0 index array
+static const SamplerState myLinearSampler = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
+
+// Indexes into group 1 index array
+static const SamplerState myAnisoSampler = nagaSamplerHeap[nagaGroup1SamplerIndexArray[0]];
+static const SamplerComparisonState myCompSampler = nagaComparisonSamplerHeap[nagaGroup1SamplerIndexArray[1]];
+```
+
+Without this transform we would need separate set of sampler descriptors for each unique combination of samplers
+in a bind group. This results in a lot of duplication and makes it easy to hit the 2048 limit. With the transform
+the limit is merely 2048 unique samplers in existence, which is much more reasonable.
+
 ## Resource binding
 
 See ['Device::create_pipeline_layout`] documentation for the structure
 of the root signature corresponding to WebGPU pipeline layout.
 
 Binding groups is mostly straightforward, with one big caveat:
-all bindings have to be reset whenever the pipeline layout changes.
+all bindings have to be reset whenever the root signature changes.
 This is the rule of D3D12, and we can do nothing to help it.
 
 We detect this change at both [`crate::CommandEncoder::set_bind_group`]
@@ -39,6 +78,7 @@ mod conv;
 mod descriptor;
 mod device;
 mod instance;
+mod sampler;
 mod shader_compilation;
 mod suballocation;
 mod types;
@@ -518,6 +558,7 @@ struct PrivateCapabilities {
     casting_fully_typed_format_supported: bool,
     suballocation_supported: bool,
     shader_model: naga::back::hlsl::ShaderModel,
+    max_sampler_descriptor_heap_size: u32,
 }
 
 #[derive(Default)]
@@ -575,7 +616,7 @@ struct DeviceShared {
     zero_buffer: Direct3D12::ID3D12Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
-    heap_samplers: descriptor::GeneralHeap,
+    sampler_heap: sampler::SamplerHeap,
 }
 
 unsafe impl Send for DeviceShared {}
@@ -591,7 +632,6 @@ pub struct Device {
     rtv_pool: Mutex<descriptor::CpuPool>,
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
-    sampler_pool: Mutex<descriptor::CpuPool>,
     // library
     library: Arc<D3D12Lib>,
     #[cfg(feature = "renderdoc")]
@@ -645,7 +685,7 @@ struct PassResolve {
     format: Dxgi::Common::DXGI_FORMAT,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum RootElement {
     Empty,
     Constant,
@@ -664,6 +704,8 @@ enum RootElement {
         kind: BufferViewKind,
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,
     },
+    /// Descriptor table referring to the entire sampler heap.
+    SamplerHeap,
 }
 
 #[derive(Clone, Copy)]
@@ -700,6 +742,7 @@ impl PassState {
                 total_root_elements: 0,
                 special_constants: None,
                 root_constant_info: None,
+                sampler_heap_root_index: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
             constant_data: [0; MAX_ROOT_ELEMENTS],
@@ -853,7 +896,8 @@ unsafe impl Sync for TextureView {}
 
 #[derive(Debug)]
 pub struct Sampler {
-    handle: descriptor::Handle,
+    index: sampler::SamplerIndex,
+    desc: Direct3D12::D3D12_SAMPLER_DESC,
 }
 
 impl crate::DynSampler for Sampler {}
@@ -893,7 +937,6 @@ pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,
     cpu_heap_views: Option<descriptor::CpuHeap>,
-    cpu_heap_samplers: Option<descriptor::CpuHeap>,
     copy_counts: Vec<u32>, // all 1's
 }
 
@@ -907,9 +950,15 @@ enum BufferViewKind {
 }
 
 #[derive(Debug)]
+struct SamplerIndexBuffer {
+    buffer: Direct3D12::ID3D12Resource,
+    allocation: Option<suballocation::AllocationWrapper>,
+}
+
+#[derive(Debug)]
 pub struct BindGroup {
     handle_views: Option<descriptor::DualHandle>,
-    handle_samplers: Option<descriptor::DualHandle>,
+    sampler_index_buffer: Option<SamplerIndexBuffer>,
     dynamic_buffers: Vec<Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE>,
 }
 
@@ -945,6 +994,7 @@ struct PipelineLayoutShared {
     total_root_elements: RootIndex,
     special_constants: Option<PipelineLayoutSpecialConstants>,
     root_constant_info: Option<RootConstantInfo>,
+    sampler_heap_root_index: Option<RootIndex>,
 }
 
 unsafe impl Send for PipelineLayoutShared {}

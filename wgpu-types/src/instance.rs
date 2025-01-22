@@ -216,6 +216,8 @@ impl BackendOptions {
 pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
+    /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
+    pub short_circuit_fences: GlFenceBehavior,
 }
 
 impl GlBackendOptions {
@@ -225,7 +227,10 @@ impl GlBackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
-        Self { gles_minor_version }
+        Self {
+            gles_minor_version,
+            short_circuit_fences: GlFenceBehavior::Normal,
+        }
     }
 
     /// Takes the given options, modifies them based on the environment variables, and returns the result.
@@ -234,7 +239,11 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        Self { gles_minor_version }
+        let short_circuit_fences = self.short_circuit_fences.with_env();
+        Self {
+            gles_minor_version,
+            short_circuit_fences,
+        }
     }
 }
 
@@ -300,6 +309,14 @@ pub enum Dx12Compiler {
 }
 
 impl Dx12Compiler {
+    /// Helper function to construct a `DynamicDxc` variant with default paths.
+    pub fn default_dynamic_dxc() -> Self {
+        Self::DynamicDxc {
+            dxc_path: String::from("dxcompiler.dll"),
+            dxil_path: String::from("dxil.dll"),
+        }
+    }
+
     /// Choose which DX12 shader compiler to use from the environment variable `WGPU_DX12_COMPILER`.
     ///
     /// Valid values, case insensitive:
@@ -312,10 +329,7 @@ impl Dx12Compiler {
             .as_deref()?
             .to_lowercase();
         match value.as_str() {
-            "dxc" | "dynamicdxc" => Some(Self::DynamicDxc {
-                dxc_path: String::from("dxcompiler.dll"),
-                dxil_path: String::from("dxil.dll"),
-            }),
+            "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
             "staticdxc" => Some(Self::StaticDxc),
             "fxc" => Some(Self::Fxc),
             _ => None,
@@ -381,6 +395,68 @@ impl Gles3MinorVersion {
     pub fn with_env(self) -> Self {
         if let Some(compiler) = Self::from_env() {
             compiler
+        } else {
+            self
+        }
+    }
+}
+
+/// Dictate the behavior of fences in OpenGL.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GlFenceBehavior {
+    /// Fences in OpenGL behave normally. If you don't know what to pick, this is what you want.
+    #[default]
+    Normal,
+    /// Fences in OpenGL are short-circuited to always return `true` immediately.
+    ///
+    /// This solves a very specific issue that arose due to a bug in wgpu-core that made
+    /// many WebGL programs work when they "shouldn't" have. If you have code that is trying
+    /// to call `device.poll(wgpu::Maintain::Wait)` on WebGL, you need to enable this option
+    /// for the "Wait" to behave how you would expect.
+    ///
+    /// Previously all `poll(Wait)` acted like the OpenGL fences were signalled even if they weren't.
+    /// See <https://github.com/gfx-rs/wgpu/issues/4589> for more information.
+    ///
+    /// When this is set `Queue::on_completed_work_done` will always return the next time the device
+    /// is maintained, not when the work is actually done on the GPU.
+    AutoFinish,
+}
+
+impl GlFenceBehavior {
+    /// Returns true if the fence behavior is `AutoFinish`.
+    pub fn is_auto_finish(&self) -> bool {
+        matches!(self, Self::AutoFinish)
+    }
+
+    /// Returns true if the fence behavior is `Normal`.
+    pub fn is_normal(&self) -> bool {
+        matches!(self, Self::Normal)
+    }
+
+    /// Choose which minor OpenGL ES version to use from the environment variable `WGPU_GL_FENCE_BEHAVIOR`.
+    ///
+    /// Possible values are `Normal` or `AutoFinish`. Case insensitive.
+    ///
+    /// Use with `unwrap_or_default()` to get the default value if the environment variable is not set.
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_GL_FENCE_BEHAVIOR")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "normal" => Some(Self::Normal),
+            "autofinish" => Some(Self::AutoFinish),
+            _ => None,
+        }
+    }
+
+    /// Takes the given compiler, modifies it based on the `WGPU_GL_FENCE_BEHAVIOR` environment variable, and returns the result.
+    ///
+    /// See `from_env` for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(fence) = Self::from_env() {
+            fence
         } else {
             self
         }

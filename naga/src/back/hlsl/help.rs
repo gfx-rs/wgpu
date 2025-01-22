@@ -1190,6 +1190,83 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Writes out the sampler heap declarations if they haven't been written yet.
+    pub(super) fn write_sampler_heaps(&mut self) -> BackendResult {
+        if self.wrapped.sampler_heaps {
+            return Ok(());
+        }
+
+        writeln!(
+            self.out,
+            "SamplerState {}[2048]: register(s{}, space{});",
+            super::writer::SAMPLER_HEAP_VAR,
+            self.options.sampler_heap_target.standard_samplers.register,
+            self.options.sampler_heap_target.standard_samplers.space
+        )?;
+        writeln!(
+            self.out,
+            "SamplerComparisonState {}[2048]: register(s{}, space{});",
+            super::writer::COMPARISON_SAMPLER_HEAP_VAR,
+            self.options
+                .sampler_heap_target
+                .comparison_samplers
+                .register,
+            self.options.sampler_heap_target.comparison_samplers.space
+        )?;
+
+        self.wrapped.sampler_heaps = true;
+
+        Ok(())
+    }
+
+    /// Writes out the sampler index buffer declaration if it hasn't been written yet.
+    pub(super) fn write_wrapped_sampler_buffer(
+        &mut self,
+        key: super::SamplerIndexBufferKey,
+    ) -> BackendResult {
+        // The astute will notice that we do a double hash lookup, but we do this to avoid
+        // holding a mutable reference to `self` while trying to call `write_sampler_heaps`.
+        //
+        // We only pay this double lookup cost when we actually need to write out the sampler
+        // buffer, which should be not be common.
+
+        if self.wrapped.sampler_index_buffers.contains_key(&key) {
+            return Ok(());
+        };
+
+        self.write_sampler_heaps()?;
+
+        // Because the group number can be arbitrary, we use the namer to generate a unique name
+        // instead of adding it to the reserved name list.
+        let sampler_array_name = self
+            .namer
+            .call(&format!("nagaGroup{}SamplerIndexArray", key.group));
+
+        let bind_target = match self.options.sampler_buffer_binding_map.get(&key) {
+            Some(&bind_target) => bind_target,
+            None if self.options.fake_missing_bindings => super::BindTarget {
+                space: u8::MAX,
+                register: key.group,
+                binding_array_size: None,
+            },
+            None => {
+                unreachable!("Sampler buffer of group {key:?} not bound to a register");
+            }
+        };
+
+        writeln!(
+            self.out,
+            "StructuredBuffer<uint> {sampler_array_name} : register(t{}, space{});",
+            bind_target.register, bind_target.space
+        )?;
+
+        self.wrapped
+            .sampler_index_buffers
+            .insert(key, sampler_array_name);
+
+        Ok(())
+    }
+
     pub(super) fn write_texture_coordinates(
         &mut self,
         kind: &str,

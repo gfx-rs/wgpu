@@ -832,7 +832,7 @@ dispatch_types! {
         {mut type DispatchCommandEncoder = InterfaceTypes::CommandEncoder: CommandEncoderInterface};
         {mut type DispatchComputePass = InterfaceTypes::ComputePass: ComputePassInterface};
         {mut type DispatchRenderPass = InterfaceTypes::RenderPass: RenderPassInterface};
-        {ref type DispatchCommandBuffer = InterfaceTypes::CommandBuffer: CommandBufferInterface};
+        {mut type DispatchCommandBuffer = InterfaceTypes::CommandBuffer: CommandBufferInterface};
         {mut type DispatchRenderBundleEncoder = InterfaceTypes::RenderBundleEncoder: RenderBundleEncoderInterface};
         {ref type DispatchRenderBundle = InterfaceTypes::RenderBundle: RenderBundleInterface};
         {ref type DispatchSurface = InterfaceTypes::Surface: SurfaceInterface};

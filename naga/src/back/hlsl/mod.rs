@@ -92,6 +92,15 @@ float3x2 GetMatmOnBaz(Baz obj) {
 We also emit an analogous `Set` function, as well as functions for
 accessing individual columns by dynamic index.
 
+## Sampler Handling
+
+Due to limitations in how sampler heaps work in D3D12, we need to access samplers
+through a layer of indirection. Instead of directly binding samplers, we bind the entire
+sampler heap as both a standard and a comparison sampler heap. We then use a sampler
+index buffer for each bind group. This buffer is accessed in the shader to get the actual
+sampler index within the heap. See the wgpu_hal dx12 backend documentation for more
+information.
+
 [hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl
 [ilov]: https://gpuweb.github.io/gpuweb/wgsl/#internal-value-layout
 [16bb]: https://github.com/microsoft/DirectXShaderCompiler/wiki/Buffer-Packing#constant-buffer-packing
@@ -110,11 +119,14 @@ use thiserror::Error;
 
 use crate::{back, proc};
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
     pub space: u8,
+    /// For regular bindings this is the register number.
+    ///
+    /// For sampler bindings, this is the index to use into the bind group's sampler index buffer.
     pub register: u32,
     /// If the binding is an unsized binding array, this overrides the size.
     pub binding_array_size: Option<u32>,
@@ -179,6 +191,43 @@ impl crate::ImageDimension {
     }
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct SamplerIndexBufferKey {
+    pub group: u32,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
+pub struct SamplerHeapBindTargets {
+    pub standard_samplers: BindTarget,
+    pub comparison_samplers: BindTarget,
+}
+
+impl Default for SamplerHeapBindTargets {
+    fn default() -> Self {
+        Self {
+            standard_samplers: BindTarget {
+                space: 0,
+                register: 0,
+                binding_array_size: None,
+            },
+            comparison_samplers: BindTarget {
+                space: 1,
+                register: 0,
+                binding_array_size: None,
+            },
+        }
+    }
+}
+
+// We use a BTreeMap here so that we can hash it.
+pub type SamplerIndexBufferBindingMap =
+    std::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
+
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
 
@@ -207,6 +256,10 @@ pub struct Options {
     pub special_constants_binding: Option<BindTarget>,
     /// Bind target of the push constant buffer
     pub push_constants_target: Option<BindTarget>,
+    /// Bind target of the sampler heap and comparison sampler heap.
+    pub sampler_heap_target: SamplerHeapBindTargets,
+    /// Mapping of each bind group's sampler index buffer to a bind target.
+    pub sampler_buffer_binding_map: SamplerIndexBufferBindingMap,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
     /// Should we restrict indexing of vectors, matrices and arrays?
@@ -220,6 +273,8 @@ impl Default for Options {
             binding_map: BindingMap::default(),
             fake_missing_bindings: true,
             special_constants_binding: None,
+            sampler_heap_target: SamplerHeapBindTargets::default(),
+            sampler_buffer_binding_map: std::collections::BTreeMap::default(),
             push_constants_target: None,
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
@@ -233,13 +288,13 @@ impl Options {
         res_binding: &crate::ResourceBinding,
     ) -> Result<BindTarget, EntryPointError> {
         match self.binding_map.get(res_binding) {
-            Some(target) => Ok(target.clone()),
+            Some(target) => Ok(*target),
             None if self.fake_missing_bindings => Ok(BindTarget {
                 space: res_binding.group as u8,
                 register: res_binding.binding,
                 binding_array_size: None,
             }),
-            None => Err(EntryPointError::MissingBinding(res_binding.clone())),
+            None => Err(EntryPointError::MissingBinding(*res_binding)),
         }
     }
 }
@@ -279,6 +334,10 @@ struct Wrapped {
     struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
     mat_cx2s: crate::FastHashSet<help::WrappedMatCx2>,
     math: crate::FastHashSet<help::WrappedMath>,
+    /// If true, the sampler heaps have been written out.
+    sampler_heaps: bool,
+    // Mapping from SamplerIndexBufferKey to the name the namer returned.
+    sampler_index_buffers: crate::FastHashMap<SamplerIndexBufferKey, String>,
 }
 
 impl Wrapped {

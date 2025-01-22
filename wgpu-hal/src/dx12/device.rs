@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     ffi,
     mem::{self, size_of, size_of_val},
     num::NonZeroU32,
@@ -100,7 +101,6 @@ impl super::Device {
 
         // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         let capacity_views = limits.max_non_sampler_bindings as u64;
-        let capacity_samplers = 2_048;
 
         let shared = super::DeviceShared {
             zero_buffer,
@@ -141,11 +141,7 @@ impl super::Device {
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                 capacity_views,
             )?,
-            heap_samplers: descriptor::GeneralHeap::new(
-                &raw,
-                Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                capacity_samplers,
-            )?,
+            sampler_heap: super::sampler::SamplerHeap::new(&raw, &private_caps)?,
         };
 
         let mut rtv_pool =
@@ -187,10 +183,6 @@ impl super::Device {
             srv_uav_pool: Mutex::new(descriptor::CpuPool::new(
                 raw.clone(),
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            )),
-            sampler_pool: Mutex::new(descriptor::CpuPool::new(
-                raw,
-                Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             )),
             library: Arc::clone(library),
             #[cfg(feature = "renderdoc")]
@@ -678,8 +670,6 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
-        let handle = self.sampler_pool.lock().alloc_handle()?;
-
         let reduction = match desc.compare {
             Some(_) => Direct3D12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
             None => Direct3D12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
@@ -697,34 +687,39 @@ impl crate::Device for super::Device {
 
         let border_color = conv::map_border_color(desc.border_color);
 
-        unsafe {
-            self.raw.CreateSampler(
-                &Direct3D12::D3D12_SAMPLER_DESC {
-                    Filter: filter,
-                    AddressU: conv::map_address_mode(desc.address_modes[0]),
-                    AddressV: conv::map_address_mode(desc.address_modes[1]),
-                    AddressW: conv::map_address_mode(desc.address_modes[2]),
-                    MipLODBias: 0f32,
-                    MaxAnisotropy: desc.anisotropy_clamp as u32,
+        let raw_desc = Direct3D12::D3D12_SAMPLER_DESC {
+            Filter: filter,
+            AddressU: conv::map_address_mode(desc.address_modes[0]),
+            AddressV: conv::map_address_mode(desc.address_modes[1]),
+            AddressW: conv::map_address_mode(desc.address_modes[2]),
+            MipLODBias: 0f32,
+            MaxAnisotropy: desc.anisotropy_clamp as u32,
 
-                    ComparisonFunc: conv::map_comparison(
-                        desc.compare.unwrap_or(wgt::CompareFunction::Always),
-                    ),
-                    BorderColor: border_color,
-                    MinLOD: desc.lod_clamp.start,
-                    MaxLOD: desc.lod_clamp.end,
-                },
-                handle.raw,
-            )
+            ComparisonFunc: conv::map_comparison(
+                desc.compare.unwrap_or(wgt::CompareFunction::Always),
+            ),
+            BorderColor: border_color,
+            MinLOD: desc.lod_clamp.start,
+            MaxLOD: desc.lod_clamp.end,
         };
+
+        let index = self
+            .shared
+            .sampler_heap
+            .create_sampler(&self.raw, raw_desc)?;
 
         self.counters.samplers.add(1);
 
-        Ok(super::Sampler { handle })
+        Ok(super::Sampler {
+            index,
+            desc: raw_desc,
+        })
     }
 
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
-        self.sampler_pool.lock().free_handle(sampler.handle);
+        self.shared
+            .sampler_heap
+            .destroy_sampler(sampler.desc, sampler.index);
         self.counters.samplers.sub(1);
     }
 
@@ -763,12 +758,8 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Result<super::BindGroupLayout, crate::DeviceError> {
-        let (
-            mut num_buffer_views,
-            mut num_samplers,
-            mut num_texture_views,
-            mut num_acceleration_structures,
-        ) = (0, 0, 0, 0);
+        let mut num_views = 0;
+        let mut has_sampler_in_group = false;
         for entry in desc.entries.iter() {
             let count = entry.count.map_or(1, NonZeroU32::get);
             match entry.ty {
@@ -776,18 +767,20 @@ impl crate::Device for super::Device {
                     has_dynamic_offset: true,
                     ..
                 } => {}
-                wgt::BindingType::Buffer { .. } => num_buffer_views += count,
-                wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
-                    num_texture_views += count
-                }
-                wgt::BindingType::Sampler { .. } => num_samplers += count,
-                wgt::BindingType::AccelerationStructure => num_acceleration_structures += count,
+                wgt::BindingType::Buffer { .. }
+                | wgt::BindingType::Texture { .. }
+                | wgt::BindingType::StorageTexture { .. }
+                | wgt::BindingType::AccelerationStructure => num_views += count,
+                wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
             }
+        }
+
+        if has_sampler_in_group {
+            num_views += 1;
         }
 
         self.counters.bind_group_layouts.add(1);
 
-        let num_views = num_buffer_views + num_texture_views + num_acceleration_structures;
         Ok(super::BindGroupLayout {
             entries: desc.entries.to_vec(),
             cpu_heap_views: if num_views != 0 {
@@ -800,17 +793,7 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            cpu_heap_samplers: if num_samplers != 0 {
-                let heap = descriptor::CpuHeap::new(
-                    &self.raw,
-                    Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                    num_samplers,
-                )?;
-                Some(heap)
-            } else {
-                None
-            },
-            copy_counts: vec![1; num_views.max(num_samplers) as usize],
+            copy_counts: vec![1; num_views as usize],
         })
     }
 
@@ -841,12 +824,15 @@ impl crate::Device for super::Device {
         //     ...
         // (bind group [0]) - Space=0
         //   View descriptor table, if any
-        //   Sampler descriptor table, if any
+        //   Sampler buffer descriptor table, if any
         //   Root descriptors (for dynamic offset buffers)
         // (bind group [1]) - Space=0
         // ...
         // (bind group [2]) - Space=0
         // Special constant buffer: Space=0
+        // Sampler descriptor tables: Space=0
+        //   SamplerState Array: Space=0, Register=0-2047
+        //   SamplerComparisonState Array: Space=0, Register=2048-4095
 
         //TODO: put lower bind group indices further down the root signature. See:
         // https://microsoft.github.io/DirectX-Specs/d3d/ResourceBinding.html#binding-model
@@ -854,12 +840,10 @@ impl crate::Device for super::Device {
         // on Vulkan-like layout compatibility rules.
 
         let mut binding_map = hlsl::BindingMap::default();
-        let (mut bind_cbv, mut bind_srv, mut bind_uav, mut bind_sampler) = (
-            hlsl::BindTarget::default(),
-            hlsl::BindTarget::default(),
-            hlsl::BindTarget::default(),
-            hlsl::BindTarget::default(),
-        );
+        let mut sampler_buffer_binding_map = hlsl::SamplerIndexBufferBindingMap::default();
+        let mut bind_cbv = hlsl::BindTarget::default();
+        let mut bind_srv = hlsl::BindTarget::default();
+        let mut bind_uav = hlsl::BindTarget::default();
         let mut parameters = Vec::new();
         let mut push_constants_target = None;
         let mut root_constant_info = None;
@@ -886,7 +870,7 @@ impl crate::Device for super::Device {
                 },
                 ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY_ALL,
             });
-            let binding = bind_cbv.clone();
+            let binding = bind_cbv;
             bind_cbv.register += 1;
             root_constant_info = Some(super::RootConstantInfo {
                 root_index: parameter_index as u32,
@@ -900,19 +884,34 @@ impl crate::Device for super::Device {
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
         // which could cause invalid pointers.
-        let total_non_dynamic_entries = desc
-            .bind_group_layouts
-            .iter()
-            .flat_map(|bgl| {
-                bgl.entries.iter().map(|entry| match entry.ty {
+        let mut total_non_dynamic_entries = 0_usize;
+        let mut sampler_in_any_bind_group = false;
+        for bgl in desc.bind_group_layouts {
+            let mut sampler_in_bind_group = false;
+
+            for entry in &bgl.entries {
+                match entry.ty {
                     wgt::BindingType::Buffer {
                         has_dynamic_offset: true,
                         ..
-                    } => 0,
-                    _ => 1,
-                })
-            })
-            .sum();
+                    } => {}
+                    wgt::BindingType::Sampler(_) => sampler_in_bind_group = true,
+                    _ => total_non_dynamic_entries += 1,
+                }
+            }
+
+            if sampler_in_bind_group {
+                // One for the sampler buffer
+                total_non_dynamic_entries += 1;
+                sampler_in_any_bind_group = true;
+            }
+        }
+
+        if sampler_in_any_bind_group {
+            // Two for the sampler arrays themselves
+            total_non_dynamic_entries += 2;
+        }
+
         let mut ranges = Vec::with_capacity(total_non_dynamic_entries);
 
         let mut bind_group_infos =
@@ -926,10 +925,11 @@ impl crate::Device for super::Device {
 
             let mut visibility_view_static = wgt::ShaderStages::empty();
             let mut visibility_view_dynamic = wgt::ShaderStages::empty();
-            let mut visibility_sampler = wgt::ShaderStages::empty();
             for entry in bgl.entries.iter() {
                 match entry.ty {
-                    wgt::BindingType::Sampler { .. } => visibility_sampler |= entry.visibility,
+                    wgt::BindingType::Sampler { .. } => {
+                        visibility_view_static |= wgt::ShaderStages::all()
+                    }
                     wgt::BindingType::Buffer {
                         has_dynamic_offset: true,
                         ..
@@ -939,7 +939,7 @@ impl crate::Device for super::Device {
             }
 
             // SRV/CBV/UAV descriptor tables
-            let mut range_base = ranges.len();
+            let range_base = ranges.len();
             for entry in bgl.entries.iter() {
                 let range_ty = match entry.ty {
                     wgt::BindingType::Buffer {
@@ -963,7 +963,7 @@ impl crate::Device for super::Device {
                     },
                     hlsl::BindTarget {
                         binding_array_size: entry.count.map(NonZeroU32::get),
-                        ..bt.clone()
+                        ..*bt
                     },
                 );
                 ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
@@ -976,6 +976,44 @@ impl crate::Device for super::Device {
                 });
                 bt.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
             }
+
+            let mut sampler_index_within_bind_group = 0;
+            for entry in bgl.entries.iter() {
+                if let wgt::BindingType::Sampler(_) = entry.ty {
+                    binding_map.insert(
+                        naga::ResourceBinding {
+                            group: index as u32,
+                            binding: entry.binding,
+                        },
+                        hlsl::BindTarget {
+                            // Naga does not use the space field for samplers
+                            space: 255,
+                            register: sampler_index_within_bind_group,
+                            binding_array_size: None,
+                        },
+                    );
+                    sampler_index_within_bind_group += 1;
+                }
+            }
+
+            if sampler_index_within_bind_group != 0 {
+                sampler_buffer_binding_map.insert(
+                    hlsl::SamplerIndexBufferKey {
+                        group: index as u32,
+                    },
+                    bind_srv,
+                );
+                ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                    RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                    NumDescriptors: 1,
+                    BaseShaderRegister: bind_srv.register,
+                    RegisterSpace: bind_srv.space as u32,
+                    OffsetInDescriptorsFromTableStart:
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                });
+                bind_srv.register += 1;
+            }
+
             if ranges.len() > range_base {
                 let range = &ranges[range_base..];
                 parameters.push(Direct3D12::D3D12_ROOT_PARAMETER {
@@ -989,50 +1027,6 @@ impl crate::Device for super::Device {
                     ShaderVisibility: conv::map_visibility(visibility_view_static),
                 });
                 info.tables |= super::TableTypes::SRV_CBV_UAV;
-            }
-
-            // Sampler descriptor tables
-            range_base = ranges.len();
-            for entry in bgl.entries.iter() {
-                let range_ty = match entry.ty {
-                    wgt::BindingType::Sampler { .. } => {
-                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER
-                    }
-                    _ => continue,
-                };
-                binding_map.insert(
-                    naga::ResourceBinding {
-                        group: index as u32,
-                        binding: entry.binding,
-                    },
-                    hlsl::BindTarget {
-                        binding_array_size: entry.count.map(NonZeroU32::get),
-                        ..bind_sampler.clone()
-                    },
-                );
-                ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
-                    RangeType: range_ty,
-                    NumDescriptors: entry.count.map_or(1, |count| count.get()),
-                    BaseShaderRegister: bind_sampler.register,
-                    RegisterSpace: bind_sampler.space as u32,
-                    OffsetInDescriptorsFromTableStart:
-                        Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-                });
-                bind_sampler.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
-            }
-            if ranges.len() > range_base {
-                let range = &ranges[range_base..];
-                parameters.push(Direct3D12::D3D12_ROOT_PARAMETER {
-                    ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-                    Anonymous: Direct3D12::D3D12_ROOT_PARAMETER_0 {
-                        DescriptorTable: Direct3D12::D3D12_ROOT_DESCRIPTOR_TABLE {
-                            NumDescriptorRanges: range.len() as u32,
-                            pDescriptorRanges: range.as_ptr(),
-                        },
-                    },
-                    ShaderVisibility: conv::map_visibility(visibility_sampler),
-                });
-                info.tables |= super::TableTypes::SAMPLERS;
             }
 
             // Root (dynamic) descriptor tables
@@ -1072,7 +1066,7 @@ impl crate::Device for super::Device {
                     },
                     hlsl::BindTarget {
                         binding_array_size: entry.count.map(NonZeroU32::get),
-                        ..bt.clone()
+                        ..*bt
                     },
                 );
                 info.dynamic_buffers.push(kind);
@@ -1094,6 +1088,62 @@ impl crate::Device for super::Device {
             bind_group_infos.push(info);
         }
 
+        let sampler_heap_target = hlsl::SamplerHeapBindTargets {
+            standard_samplers: hlsl::BindTarget {
+                space: 0,
+                register: 0,
+                binding_array_size: None,
+            },
+            comparison_samplers: hlsl::BindTarget {
+                space: 0,
+                register: 2048,
+                binding_array_size: None,
+            },
+        };
+
+        let mut sampler_heap_root_index = None;
+        if sampler_in_any_bind_group {
+            // Sampler descriptor tables
+            //
+            // We bind two sampler ranges pointing to the same descriptor heap, using two different register ranges.
+            //
+            // We bind them as normal samplers in registers 0-2047 and comparison samplers in registers 2048-4095.
+            // Tier 2 hardware guarantees that the type of sampler only needs to match if the sampler is actually
+            // accessed in the shader. As such, we can bind the same array of samplers to both registers.
+            //
+            // We do this because HLSL does not allow you to alias registers at all.
+            let range_base = ranges.len();
+            // Standard samplers, registers 0-2047
+            ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+                NumDescriptors: 2048,
+                BaseShaderRegister: 0,
+                RegisterSpace: 0,
+                OffsetInDescriptorsFromTableStart: 0,
+            });
+            // Comparison samplers, registers 2048-4095
+            ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+                NumDescriptors: 2048,
+                BaseShaderRegister: 2048,
+                RegisterSpace: 0,
+                OffsetInDescriptorsFromTableStart: 0,
+            });
+
+            let range = &ranges[range_base..];
+            sampler_heap_root_index = Some(parameters.len() as super::RootIndex);
+            parameters.push(Direct3D12::D3D12_ROOT_PARAMETER {
+                ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+                Anonymous: Direct3D12::D3D12_ROOT_PARAMETER_0 {
+                    DescriptorTable: Direct3D12::D3D12_ROOT_DESCRIPTOR_TABLE {
+                        NumDescriptorRanges: range.len() as u32,
+                        pDescriptorRanges: range.as_ptr(),
+                    },
+                },
+                ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY_ALL,
+            });
+        }
+
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
 
@@ -1113,7 +1163,7 @@ impl crate::Device for super::Device {
                 },
                 ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY_ALL, // really needed for VS and CS only,
             });
-            let binding = bind_cbv.clone();
+            let binding = bind_cbv;
             bind_cbv.register += 1;
             (Some(parameter_index as u32), Some(binding))
         } else {
@@ -1231,6 +1281,7 @@ impl crate::Device for super::Device {
                 total_root_elements: parameters.len() as super::RootIndex,
                 special_constants,
                 root_constant_info,
+                sampler_heap_root_index,
             },
             bind_group_infos,
             naga_options: hlsl::Options {
@@ -1241,6 +1292,8 @@ impl crate::Device for super::Device {
                 push_constants_target,
                 zero_initialize_workgroup_memory: true,
                 restrict_indexing: true,
+                sampler_heap_target,
+                sampler_buffer_binding_map,
             },
         })
     }
@@ -1267,14 +1320,6 @@ impl crate::Device for super::Device {
         if let Some(ref mut inner) = cpu_views {
             inner.stage.clear();
         }
-        let mut cpu_samplers = desc
-            .layout
-            .cpu_heap_samplers
-            .as_ref()
-            .map(|cpu_heap| cpu_heap.inner.lock());
-        if let Some(ref mut inner) = cpu_samplers {
-            inner.stage.clear();
-        }
         let mut dynamic_buffers = Vec::new();
 
         let layout_and_entry_iter = desc.entries.iter().map(|entry| {
@@ -1286,6 +1331,8 @@ impl crate::Device for super::Device {
                 .expect("internal error: no layout entry found with binding slot");
             (layout, entry)
         });
+        let mut sampler_indexes: Vec<super::sampler::SamplerIndex> = Vec::new();
+
         for (layout, entry) in layout_and_entry_iter {
             match layout.ty {
                 wgt::BindingType::Buffer {
@@ -1390,8 +1437,8 @@ impl crate::Device for super::Device {
                 wgt::BindingType::Sampler { .. } => {
                     let start = entry.resource_index as usize;
                     let end = start + entry.count as usize;
-                    for data in &desc.samplers[start..end] {
-                        cpu_samplers.as_mut().unwrap().stage.push(data.handle.raw);
+                    for &data in &desc.samplers[start..end] {
+                        sampler_indexes.push(data.index);
                     }
                 }
                 wgt::BindingType::AccelerationStructure => {
@@ -1424,6 +1471,92 @@ impl crate::Device for super::Device {
             }
         }
 
+        let sampler_index_buffer = if !sampler_indexes.is_empty() {
+            let buffer_size = (sampler_indexes.len() * size_of::<u32>()) as u64;
+
+            let label = if let Some(label) = desc.label {
+                Cow::Owned(format!("{} (Internal Sampler Index Buffer)", label))
+            } else {
+                Cow::Borrowed("Internal Sampler Index Buffer")
+            };
+
+            let buffer_desc = crate::BufferDescriptor {
+                label: None,
+                size: buffer_size,
+                usage: crate::BufferUses::STORAGE_READ_ONLY | crate::BufferUses::MAP_WRITE,
+                // D3D12 backend doesn't care about the memory flags
+                memory_flags: crate::MemoryFlags::empty(),
+            };
+
+            let raw_buffer_desc = Direct3D12::D3D12_RESOURCE_DESC {
+                Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
+                Alignment: 0,
+                Width: buffer_size,
+                Height: 1,
+                DepthOrArraySize: 1,
+                MipLevels: 1,
+                Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+                SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+                Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
+            };
+
+            let (buffer, allocation) =
+                super::suballocation::create_buffer_resource(self, &buffer_desc, raw_buffer_desc)?;
+
+            unsafe { buffer.SetName(&windows::core::HSTRING::from(&*label)) }
+                .into_device_result("SetName")?;
+
+            let mut mapping = ptr::null_mut::<ffi::c_void>();
+            unsafe { buffer.Map(0, None, Some(&mut mapping)) }.into_device_result("Map")?;
+
+            assert!(!mapping.is_null());
+            assert_eq!(mapping as usize % 4, 0);
+
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    sampler_indexes.as_ptr(),
+                    mapping.cast(),
+                    sampler_indexes.len(),
+                )
+            };
+
+            // The unmapping is not needed, as all memory is coherent in d3d12, but lets be nice to our address space.
+            unsafe { buffer.Unmap(0, None) };
+
+            let srv_desc = Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+                ViewDimension: Direct3D12::D3D12_SRV_DIMENSION_BUFFER,
+                Anonymous: Direct3D12::D3D12_SHADER_RESOURCE_VIEW_DESC_0 {
+                    Buffer: Direct3D12::D3D12_BUFFER_SRV {
+                        FirstElement: 0,
+                        NumElements: sampler_indexes.len() as u32,
+                        StructureByteStride: 4,
+                        Flags: Direct3D12::D3D12_BUFFER_SRV_FLAG_NONE,
+                    },
+                },
+                Shader4ComponentMapping: Direct3D12::D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            };
+
+            let inner = cpu_views.as_mut().unwrap();
+            let cpu_index = inner.stage.len() as u32;
+            let srv = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
+
+            unsafe {
+                self.raw
+                    .CreateShaderResourceView(&buffer, Some(&srv_desc), srv)
+            };
+
+            cpu_views.as_mut().unwrap().stage.push(srv);
+
+            Some(super::SamplerIndexBuffer { buffer, allocation })
+        } else {
+            None
+        };
+
         let handle_views = match cpu_views {
             Some(inner) => {
                 let dual = unsafe {
@@ -1438,26 +1571,12 @@ impl crate::Device for super::Device {
             }
             None => None,
         };
-        let handle_samplers = match cpu_samplers {
-            Some(inner) => {
-                let dual = unsafe {
-                    descriptor::upload(
-                        &self.raw,
-                        &inner,
-                        &self.shared.heap_samplers,
-                        &desc.layout.copy_counts,
-                    )
-                }?;
-                Some(dual)
-            }
-            None => None,
-        };
 
         self.counters.bind_groups.add(1);
 
         Ok(super::BindGroup {
             handle_views,
-            handle_samplers,
+            sampler_index_buffer,
             dynamic_buffers,
         })
     }
@@ -1466,8 +1585,14 @@ impl crate::Device for super::Device {
         if let Some(dual) = group.handle_views {
             self.shared.heap_views.free_slice(dual);
         }
-        if let Some(dual) = group.handle_samplers {
-            self.shared.heap_samplers.free_slice(dual);
+
+        if let Some(sampler_buffer) = group.sampler_index_buffer {
+            // Make sure the buffer is dropped before the allocation
+            drop(sampler_buffer.buffer);
+
+            if let Some(allocation) = sampler_buffer.allocation {
+                super::suballocation::free_buffer_allocation(self, allocation, &self.mem_allocator);
+            }
         }
 
         self.counters.bind_groups.sub(1);

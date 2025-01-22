@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{AtomicFenceValue, TlasInstance};
+use crate::TlasInstance;
 use arrayvec::ArrayVec;
 use std::sync::atomic::Ordering;
 
@@ -1523,17 +1523,12 @@ impl crate::Device for super::Device {
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         self.counters.fences.add(1);
-        Ok(super::Fence {
-            last_completed: AtomicFenceValue::new(0),
-            pending: Vec::new(),
-        })
+        Ok(super::Fence::new(&self.shared.options))
     }
 
     unsafe fn destroy_fence(&self, fence: super::Fence) {
         let gl = &self.shared.context.lock();
-        for (_, sync) in fence.pending {
-            unsafe { gl.delete_sync(sync) };
-        }
+        fence.destroy(gl);
         self.counters.fences.sub(1);
     }
 
@@ -1550,44 +1545,21 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if fence.last_completed.load(Ordering::Relaxed) < wait_value {
-            let gl = &self.shared.context.lock();
-            // MAX_CLIENT_WAIT_TIMEOUT_WEBGL is:
-            // - 1s in Gecko https://searchfox.org/mozilla-central/rev/754074e05178e017ef6c3d8e30428ffa8f1b794d/dom/canvas/WebGLTypes.h#1386
-            // - 0 in WebKit https://github.com/WebKit/WebKit/blob/4ef90d4672ca50267c0971b85db403d9684508ea/Source/WebCore/html/canvas/WebGL2RenderingContext.cpp#L110
-            // - 0 in Chromium https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/modules/webgl/webgl2_rendering_context_base.cc;l=112;drc=a3cb0ac4c71ec04abfeaed199e5d63230eca2551
-            let timeout_ns = if cfg!(any(webgl, Emscripten)) {
-                0
-            } else {
-                (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
-            };
-            if let Some(&(_, sync)) = fence
-                .pending
-                .iter()
-                .find(|&&(value, _)| value >= wait_value)
-            {
-                let signalled = match unsafe {
-                    gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
-                } {
-                    // for some reason firefox returns WAIT_FAILED, to investigate
-                    #[cfg(any(webgl, Emscripten))]
-                    glow::WAIT_FAILED => {
-                        log::warn!("wait failed!");
-                        false
-                    }
-                    glow::TIMEOUT_EXPIRED => false,
-                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => true,
-                    _ => return Err(crate::DeviceError::Lost),
-                };
-                if signalled {
-                    fence
-                        .last_completed
-                        .fetch_max(wait_value, Ordering::Relaxed);
-                }
-                return Ok(signalled);
-            }
+        if fence.satisfied(wait_value) {
+            return Ok(true);
         }
-        Ok(true)
+
+        let gl = &self.shared.context.lock();
+        // MAX_CLIENT_WAIT_TIMEOUT_WEBGL is:
+        // - 1s in Gecko https://searchfox.org/mozilla-central/rev/754074e05178e017ef6c3d8e30428ffa8f1b794d/dom/canvas/WebGLTypes.h#1386
+        // - 0 in WebKit https://github.com/WebKit/WebKit/blob/4ef90d4672ca50267c0971b85db403d9684508ea/Source/WebCore/html/canvas/WebGL2RenderingContext.cpp#L110
+        // - 0 in Chromium https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/modules/webgl/webgl2_rendering_context_base.cc;l=112;drc=a3cb0ac4c71ec04abfeaed199e5d63230eca2551
+        let timeout_ns = if cfg!(any(webgl, Emscripten)) {
+            0
+        } else {
+            (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
+        };
+        fence.wait(gl, wait_value, timeout_ns)
     }
 
     unsafe fn start_capture(&self) -> bool {

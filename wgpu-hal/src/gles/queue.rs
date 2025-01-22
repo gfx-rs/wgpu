@@ -1856,9 +1856,7 @@ impl crate::Queue for super::Queue {
         }
 
         signal_fence.maintain(gl);
-        let sync = unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0) }
-            .map_err(|_| crate::DeviceError::OutOfMemory)?;
-        signal_fence.pending.push((signal_value, sync));
+        signal_fence.signal(gl, signal_value)?;
 
         // This is extremely important. If we don't flush, the above fences may never
         // be signaled, particularly in headless contexts. Headed contexts will

@@ -154,6 +154,11 @@ impl super::Adapter {
         }
         .unwrap();
 
+        if options.ResourceHeapTier == Direct3D12::D3D12_RESOURCE_HEAP_TIER_1 {
+            // We require Tier 2 for the ability to make samplers bindless in all cases.
+            return None;
+        }
+
         let _depth_bounds_test_supported = {
             let mut features2 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS2::default();
             unsafe {
@@ -193,6 +198,23 @@ impl super::Adapter {
                 )
             }
             .is_ok()
+        };
+
+        let mut max_sampler_descriptor_heap_size =
+            Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE;
+        {
+            let mut features19 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS19::default();
+            let res = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS19,
+                    <*mut _>::cast(&mut features19),
+                    size_of_val(&features19) as u32,
+                )
+            };
+
+            if res.is_ok() {
+                max_sampler_descriptor_heap_size = features19.MaxSamplerDescriptorHeapSize;
+            }
         };
 
         let shader_model = if dxc_container.is_none() {
@@ -260,6 +282,7 @@ impl super::Adapter {
             // See https://github.com/gfx-rs/wgpu/issues/3552
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
             shader_model,
+            max_sampler_descriptor_heap_size,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit

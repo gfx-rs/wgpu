@@ -44,6 +44,7 @@ mod ray_tracing;
 mod render_pass_ownership;
 mod resource_descriptor_accessor;
 mod resource_error;
+mod samplers;
 mod scissor_tests;
 mod shader;
 mod shader_primitive_index;

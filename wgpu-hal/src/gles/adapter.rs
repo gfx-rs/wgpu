@@ -192,6 +192,7 @@ impl super::Adapter {
 
     pub(super) unsafe fn expose(
         context: super::AdapterContext,
+        backend_options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let gl = context.lock();
         let extensions = gl.supported_extensions();
@@ -824,6 +825,7 @@ impl super::Adapter {
                     private_caps,
                     workarounds,
                     features,
+                    options: backend_options,
                     shading_language_version,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),

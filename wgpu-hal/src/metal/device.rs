@@ -244,7 +244,7 @@ impl super::Device {
                 }
                 naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                     let br = match var.binding {
-                        Some(ref br) => br.clone(),
+                        Some(br) => br,
                         None => continue,
                     };
                     let storage_access_store = match var.space {

@@ -77,6 +77,7 @@ dx12 = [
     "dep:libloading",
     "dep:range-alloc",
     "dep:windows-core",
+    "dep:ordered-float",
     "gpu-allocator/d3d12",
     "naga/hlsl-out-if-target-windows",
     "windows/Win32_Graphics_Direct3D_Fxc",
