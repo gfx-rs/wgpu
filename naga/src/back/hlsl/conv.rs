@@ -120,21 +120,21 @@ impl crate::TypeInner {
 impl crate::StorageFormat {
     pub(super) const fn to_hlsl_str(self) -> &'static str {
         match self {
-            Self::R16Float | Self::R32Float => "float",
-            Self::R8Unorm | Self::R16Unorm => "unorm float",
-            Self::R8Snorm | Self::R16Snorm => "snorm float",
-            Self::R8Uint | Self::R16Uint | Self::R32Uint => "uint",
-            Self::R8Sint | Self::R16Sint | Self::R32Sint => "int",
+            Self::R16Float | Self::R32Float => "float4",
+            Self::R8Unorm | Self::R16Unorm => "unorm float4",
+            Self::R8Snorm | Self::R16Snorm => "snorm float4",
+            Self::R8Uint | Self::R16Uint | Self::R32Uint => "uint4",
+            Self::R8Sint | Self::R16Sint | Self::R32Sint => "int4",
             Self::R64Uint => "uint64_t",
 
-            Self::Rg16Float | Self::Rg32Float => "float2",
-            Self::Rg8Unorm | Self::Rg16Unorm => "unorm float2",
-            Self::Rg8Snorm | Self::Rg16Snorm => "snorm float2",
+            Self::Rg16Float | Self::Rg32Float => "float4",
+            Self::Rg8Unorm | Self::Rg16Unorm => "unorm float4",
+            Self::Rg8Snorm | Self::Rg16Snorm => "snorm float4",
 
-            Self::Rg8Sint | Self::Rg16Sint | Self::Rg32Uint => "int2",
-            Self::Rg8Uint | Self::Rg16Uint | Self::Rg32Sint => "uint2",
+            Self::Rg8Sint | Self::Rg16Sint | Self::Rg32Uint => "int4",
+            Self::Rg8Uint | Self::Rg16Uint | Self::Rg32Sint => "uint4",
 
-            Self::Rg11b10Ufloat => "float3",
+            Self::Rg11b10Ufloat => "float4",
 
             Self::Rgba16Float | Self::Rgba32Float => "float4",
             Self::Rgba8Unorm | Self::Bgra8Unorm | Self::Rgba16Unorm | Self::Rgb10a2Unorm => {
