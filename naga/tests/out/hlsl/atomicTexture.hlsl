@@ -5,8 +5,8 @@ struct NagaConstants {
 };
 ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
-RWTexture2D<uint4> image_u : register(u0);
-RWTexture2D<int4> image_s : register(u1);
+RWTexture2D<uint> image_u : register(u0);
+RWTexture2D<int> image_s : register(u1);
 
 [numthreads(2, 1, 1)]
 void cs_main(uint3 id : SV_GroupThreadID)

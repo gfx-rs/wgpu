@@ -1,7 +1,7 @@
-RWTexture2D<float4> s_r_r : register(u0);
+RWTexture2D<float> s_r_r : register(u0);
 RWTexture2D<float4> s_rg_r : register(u1);
 RWTexture2D<float4> s_rgba_r : register(u2);
-RWTexture2D<float4> s_r_w : register(u0, space1);
+RWTexture2D<float> s_r_w : register(u0, space1);
 RWTexture2D<float4> s_rg_w : register(u1, space1);
 RWTexture2D<float4> s_rgba_w : register(u2, space1);
 
