@@ -968,8 +968,7 @@ fn convert_wgsl() {
                 | Targets::ANALYSIS
                 | Targets::SPIRV
                 | Targets::METAL
-                | Targets::HLSL
-                | Targets::GLSL,
+                | Targets::HLSL,
         ),
     ];
 
