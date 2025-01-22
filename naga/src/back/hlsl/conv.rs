@@ -120,11 +120,11 @@ impl crate::TypeInner {
 impl crate::StorageFormat {
     pub(super) const fn to_hlsl_str(self) -> &'static str {
         match self {
-            Self::R16Float | Self::R32Float => "float4",
-            Self::R8Unorm | Self::R16Unorm => "unorm float4",
-            Self::R8Snorm | Self::R16Snorm => "snorm float4",
-            Self::R8Uint | Self::R16Uint | Self::R32Uint => "uint4",
-            Self::R8Sint | Self::R16Sint | Self::R32Sint => "int4",
+            Self::R16Float | Self::R32Float => "float",
+            Self::R8Unorm | Self::R16Unorm => "unorm float",
+            Self::R8Snorm | Self::R16Snorm => "snorm float",
+            Self::R8Uint | Self::R16Uint | Self::R32Uint => "uint",
+            Self::R8Sint | Self::R16Sint | Self::R32Sint => "int",
             Self::R64Uint => "uint64_t",
 
             Self::Rg16Float | Self::Rg32Float => "float4",
