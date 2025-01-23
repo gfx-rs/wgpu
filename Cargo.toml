@@ -97,7 +97,7 @@ hashbrown = { version = "0.15.2", default-features = false, features = [
     "inline-more",
 ] }
 heck = "0.5.0"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.24", default-features = false, features = ["png"] }
 indexmap = "2"
 itertools = { version = "0.13.0" }
 ktx2 = "0.3"
@@ -106,7 +106,8 @@ libloading = "0.8"
 libtest-mimic = "0.8.1"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
-noise = "0.9"
+# https://github.com/Razaekel/noise-rs/issues/335 (Updated dependencies)
+noise = { version = "0.8", git = "https://github.com/Razaekel/noise-rs.git", rev = "c6942d4fb70af26db4441edcf41f90fa115333f2" }
 nv-flip = "0.1"
 obj = "0.10"
 once_cell = "1.20.2"
@@ -133,7 +134,7 @@ smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.26.0", features = ["derive"] }
 trybuild = "1"
-tracy-client = "0.18"
+tracy-client = "0.17"
 thiserror = "2"
 winit = { version = "0.29", features = ["android-native-activity"] }
 
@@ -174,7 +175,7 @@ wasm-bindgen = "0.2.97"
 wasm-bindgen-futures = "0.4.45"
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.74", default-features = false }
-web-time = "1"
+web-time = "0.2.4"
 
 # deno dependencies
 deno_console = "0.179.0"
