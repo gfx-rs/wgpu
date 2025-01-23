@@ -45,7 +45,7 @@ wgpu-core = { workspace = true, features = ["metal"] }
 [target.'cfg(windows)'.dependencies]
 wgpu-core = { workspace = true, features = ["dx12"] }
 
-# Windows and Unit (not Emscripten)
+# Windows and Unix (not Emscripten)
 #
 # We want the Vulkan backend.
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"))))'.dependencies]

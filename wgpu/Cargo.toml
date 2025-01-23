@@ -148,9 +148,6 @@ serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
 
-[target.'cfg(any(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-js-sys = { workspace = true, features = ["default"] }
-
 ########################################
 # Target Specific Feature Dependencies #
 ########################################
