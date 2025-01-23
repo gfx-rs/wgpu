@@ -69,6 +69,13 @@ struct type_28 {
 struct S {
     int m;
 };
+struct Inner {
+    int delicious;
+};
+struct Outer {
+    Inner om_nom_nom;
+    uint thing;
+};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
@@ -213,6 +220,32 @@ int member_ptr(
     S s = S {42};
     int _e4 = s.m;
     return _e4;
+}
+
+int let_members_of_members(
+) {
+    Inner inner_1 = Outer {}.om_nom_nom;
+    int delishus_1 = Outer {}.om_nom_nom.delicious;
+    if (Outer {}.thing != static_cast<uint>(delishus_1)) {
+    }
+    return Outer {}.om_nom_nom.delicious;
+}
+
+int var_members_of_members(
+) {
+    Outer thing = Outer {};
+    Inner inner = {};
+    int delishus = {};
+    Inner _e3 = thing.om_nom_nom;
+    inner = _e3;
+    int _e6 = inner.delicious;
+    delishus = _e6;
+    uint _e9 = thing.thing;
+    int _e10 = delishus;
+    if (_e9 != static_cast<uint>(_e10)) {
+    }
+    int _e15 = thing.om_nom_nom.delicious;
+    return _e15;
 }
 
 struct foo_vertInput {

@@ -33,6 +33,15 @@ struct S {
     m: i32,
 }
 
+struct Inner {
+    delicious: i32,
+}
+
+struct Outer {
+    om_nom_nom: Inner,
+    thing: u32,
+}
+
 var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0i);
 @group(0) @binding(0) 
 var<storage, read_write> bar: Bar;
@@ -167,6 +176,31 @@ fn member_ptr() -> i32 {
 
     let _e4 = s.m;
     return _e4;
+}
+
+fn let_members_of_members() -> i32 {
+    const inner_1 = Outer().om_nom_nom;
+    const delishus_1 = inner_1.delicious;
+    if (Outer().thing != u32(delishus_1)) {
+    }
+    return Outer().om_nom_nom.delicious;
+}
+
+fn var_members_of_members() -> i32 {
+    var thing: Outer = Outer();
+    var inner: Inner;
+    var delishus: i32;
+
+    let _e3 = thing.om_nom_nom;
+    inner = _e3;
+    let _e6 = inner.delicious;
+    delishus = _e6;
+    let _e9 = thing.thing;
+    let _e10 = delishus;
+    if (_e9 != u32(_e10)) {
+    }
+    let _e15 = thing.om_nom_nom.delicious;
+    return _e15;
 }
 
 @vertex 

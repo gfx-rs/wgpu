@@ -25,6 +25,13 @@ struct AssignToMember {
 struct S {
     int m;
 };
+struct Inner {
+    int delicious;
+};
+struct Outer {
+    Inner om_nom_nom;
+    uint thing;
+};
 
 float read_from_private(inout float foo_1) {
     float _e1 = foo_1;
@@ -76,6 +83,30 @@ int member_ptr() {
     S s = S(42);
     int _e4 = s.m;
     return _e4;
+}
+
+int let_members_of_members() {
+    Inner inner_1 = Outer(Inner(0), 0u).om_nom_nom;
+    int delishus_1 = inner_1.delicious;
+    if ((Outer(Inner(0), 0u).thing != uint(delishus_1))) {
+    }
+    return Outer(Inner(0), 0u).om_nom_nom.delicious;
+}
+
+int var_members_of_members() {
+    Outer thing = Outer(Inner(0), 0u);
+    Inner inner = Inner(0);
+    int delishus = 0;
+    Inner _e3 = thing.om_nom_nom;
+    inner = _e3;
+    int _e6 = inner.delicious;
+    delishus = _e6;
+    uint _e9 = thing.thing;
+    int _e10 = delishus;
+    if ((_e9 != uint(_e10))) {
+    }
+    int _e15 = thing.om_nom_nom.delicious;
+    return _e15;
 }
 
 void main() {

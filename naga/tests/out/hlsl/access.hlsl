@@ -76,6 +76,15 @@ struct S {
     int m;
 };
 
+struct Inner {
+    int delicious;
+};
+
+struct Outer {
+    Inner om_nom_nom;
+    uint thing;
+};
+
 GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     GlobalConst ret = (GlobalConst)0;
     ret.a = arg0;
@@ -289,6 +298,37 @@ int member_ptr()
 
     int _e4 = s.m;
     return _e4;
+}
+
+Outer ZeroValueOuter() {
+    return (Outer)0;
+}
+
+int let_members_of_members()
+{
+    Inner inner_1 = ZeroValueOuter().om_nom_nom;
+    int delishus_1 = inner_1.delicious;
+    if ((ZeroValueOuter().thing != uint(delishus_1))) {
+    }
+    return ZeroValueOuter().om_nom_nom.delicious;
+}
+
+int var_members_of_members()
+{
+    Outer thing = ZeroValueOuter();
+    Inner inner = (Inner)0;
+    int delishus = (int)0;
+
+    Inner _e3 = thing.om_nom_nom;
+    inner = _e3;
+    int _e6 = inner.delicious;
+    delishus = _e6;
+    uint _e9 = thing.thing;
+    int _e10 = delishus;
+    if ((_e9 != uint(_e10))) {
+    }
+    int _e15 = thing.om_nom_nom.delicious;
+    return _e15;
 }
 
 typedef int ret_Constructarray5_int_[5];
