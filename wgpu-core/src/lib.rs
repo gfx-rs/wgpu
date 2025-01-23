@@ -56,6 +56,9 @@
 // (the only reason to use wgpu-core on the web in the first place) that have atomics enabled.
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 
+extern crate wgpu_hal as hal;
+extern crate wgpu_types as wgt;
+
 pub mod binding_model;
 pub mod command;
 mod conv;

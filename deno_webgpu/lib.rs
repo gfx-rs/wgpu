@@ -12,8 +12,6 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
-pub use wgpu_core;
-pub use wgt as wgpu_types;
 
 use error::WebGpuResult;
 

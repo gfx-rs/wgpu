@@ -145,7 +145,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 // The layer the external image's data should end up in.
                 let mut dest_data_layer = 0;
                 // Color space the destination is in.
-                let mut dest_color_space = wgt::PredefinedColorSpace::Srgb;
+                let mut dest_color_space = wgpu::PredefinedColorSpace::Srgb;
                 // If the destination image is premultiplied.
                 let mut dest_premultiplied = false;
                 // Size of the external copy
@@ -164,7 +164,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 match case {
                     TestCase::Normal => {}
                     TestCase::FlipY => {
-                        valid = !matches!(source, wgt::ExternalImageSource::ImageBitmap(_));
+                        valid = !matches!(source, wgpu::ExternalImageSource::ImageBitmap(_));
                         src_flip_y = true;
                         for x in 0..3 {
                             let top = raw_image[(x, 0)];
@@ -174,7 +174,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                         }
                     }
                     TestCase::Premultiplied => {
-                        valid = !matches!(source, wgt::ExternalImageSource::ImageBitmap(_));
+                        valid = !matches!(source, wgpu::ExternalImageSource::ImageBitmap(_));
                         dest_premultiplied = true;
                         for pixel in raw_image.pixels_mut() {
                             let mut float_pix = pixel.0.map(|v| v as f32 / 255.0);
@@ -188,8 +188,8 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                         valid = ctx
                             .adapter_downlevel_capabilities
                             .flags
-                            .contains(wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES);
-                        dest_color_space = wgt::PredefinedColorSpace::DisplayP3;
+                            .contains(wgpu::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES);
+                        dest_color_space = wgpu::PredefinedColorSpace::DisplayP3;
 
                         // As we don't test, we don't bother converting the color spaces
                         // in the image as that's relatively annoying.
@@ -198,7 +198,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                         valid = ctx
                             .adapter_downlevel_capabilities
                             .flags
-                            .contains(wgt::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES);
+                            .contains(wgpu::DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES);
                         src_origin.x = 1;
                         dest_origin.x = 1;
                         copy_size.width = 2;

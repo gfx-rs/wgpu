@@ -25,6 +25,12 @@
 #![allow(clippy::arc_with_non_send_sync)]
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
+#[cfg(wgpu_core)]
+pub extern crate wgpu_core as wgc;
+#[cfg(wgpu_core)]
+pub extern crate wgpu_hal as hal;
+pub extern crate wgpu_types as wgt;
+
 //
 //
 // Modules
@@ -57,8 +63,8 @@ pub use wgt::{
     BufferAddress, BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState,
     ColorWrites, CommandBufferDescriptor, CompareFunction, CompositeAlphaMode,
     CopyExternalImageDestInfo, CoreCounters, DepthBiasState, DepthStencilState, DeviceLostReason,
-    DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12BackendOptions, Dx12Compiler,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, GlBackendOptions,
+    DeviceType, DownlevelCapabilities, DownlevelFlags, DownlevelLimits, Dx12BackendOptions,
+    Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, GlBackendOptions,
     Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
     InstanceFlags, InternalCounters, Limits, MaintainResult, MemoryHints, MultisampleState,
     Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
@@ -82,22 +88,6 @@ pub use wgt::{ImageCopyBuffer, ImageCopyTexture, ImageCopyTextureTagged, ImageDa
 pub use wgt::ImageCopyExternalImage;
 #[cfg(any(webgpu, webgl))]
 pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};
-//
-//
-// Re-exports of dependencies
-//
-//
-
-/// Re-export of our `wgpu-core` dependency.
-///
-#[cfg(wgpu_core)]
-pub use ::wgc as core;
-
-/// Re-export of our `wgpu-hal` dependency.
-///
-///
-#[cfg(wgpu_core)]
-pub use ::hal;
 
 /// Re-export of our `naga` dependency.
 ///

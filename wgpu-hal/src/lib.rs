@@ -234,6 +234,8 @@
     unused_qualifications
 )]
 
+extern crate wgpu_types as wgt;
+
 /// DirectX12 API internals.
 #[cfg(dx12)]
 pub mod dx12;

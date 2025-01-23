@@ -56,26 +56,21 @@ repository = "https://github.com/gfx-rs/wgpu"
 version = "24.0.0"
 authors = ["gfx-rs developers"]
 
-[workspace.dependencies.wgc]
-package = "wgpu-core"
-path = "./wgpu-core"
-version = "24.0.0"
-
-[workspace.dependencies.wgt]
-package = "wgpu-types"
-path = "./wgpu-types"
-version = "24.0.0"
-
-[workspace.dependencies.hal]
-package = "wgpu-hal"
-path = "./wgpu-hal"
-version = "24.0.0"
-
-[workspace.dependencies.naga]
-path = "./naga"
-version = "24.0.0"
-
 [workspace.dependencies]
+naga = { version = "24.0.0", path = "./naga" }
+wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
+    "serde",
+    "wgsl",
+    "dx12",
+    "metal",
+    "static-dxc",
+] }
+wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
+wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
+wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
+wgpu-test = { version = "24.0.0", path = "./tests" }
+wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
+
 anyhow = "1.0.95"
 argh = "0.1.13"
 arrayvec = "0.7"
@@ -102,7 +97,7 @@ hashbrown = { version = "0.15.2", default-features = false, features = [
     "inline-more",
 ] }
 heck = "0.5.0"
-image = { version = "0.24", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = "2"
 itertools = { version = "0.13.0" }
 ktx2 = "0.3"
@@ -111,8 +106,7 @@ libloading = "0.8"
 libtest-mimic = "0.8.1"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
-# https://github.com/Razaekel/noise-rs/issues/335 (Updated dependencies)
-noise = { version = "0.8", git = "https://github.com/Razaekel/noise-rs.git", rev = "c6942d4fb70af26db4441edcf41f90fa115333f2" }
+noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
 once_cell = "1.20.2"
@@ -139,19 +133,8 @@ smallvec = "1"
 static_assertions = "1.1.0"
 strum = { version = "0.26.0", features = ["derive"] }
 trybuild = "1"
-tracy-client = "0.17"
+tracy-client = "0.18"
 thiserror = "2"
-wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
-    "serde",
-    "wgsl",
-    "dx12",
-    "metal",
-    "static-dxc",
-] }
-wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
-wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
-wgpu-test = { version = "24.0.0", path = "./tests" }
-wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
@@ -166,7 +149,7 @@ ash = "0.38.0"
 gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
-# DX dependencies
+# DX12 dependencies
 bit-set = "0.8"
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
@@ -180,7 +163,7 @@ glutin = { version = "0.31", default-features = false }
 glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"
 
-# DX and GLES dependencies
+# DX12 and GLES dependencies
 windows = { version = "0.58", default-features = false }
 
 # wasm32 dependencies
@@ -191,7 +174,7 @@ wasm-bindgen = "0.2.97"
 wasm-bindgen-futures = "0.4.45"
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.74", default-features = false }
-web-time = "0.2.4"
+web-time = "1"
 
 # deno dependencies
 deno_console = "0.179.0"
@@ -206,21 +189,8 @@ termcolor = "1.4.1"
 # android dependencies
 ndk-sys = "0.5.0"
 
-[patch."https://github.com/gfx-rs/naga"]
-
-[patch."https://github.com/zakarumych/gpu-descriptor"]
-#gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }
-
-[patch."https://github.com/zakarumych/gpu-alloc"]
-#gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
-
-[patch.crates-io]
-#glow = { path = "../glow" }
-#web-sys = { path = "../wasm-bindgen/crates/web-sys" }
-#js-sys = { path = "../wasm-bindgen/crates/js-sys" }
-#wasm-bindgen = { path = "../wasm-bindgen" }
-
 # These overrides allow our examples to explicitly depend on release crates 
+[patch.crates-io]
 wgpu = { path = "./wgpu" }
 
 [profile.release]

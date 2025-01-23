@@ -219,8 +219,7 @@ pub trait TextureFormatExt {
     /// use wgpu::util::TextureFormatExt;
     /// assert_eq!(wgpu::TextureFormat::from_storage_format(wgpu::naga::StorageFormat::Bgra8Unorm), wgpu::TextureFormat::Bgra8Unorm);
     /// ```
-    #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-    #[cfg(any(wgpu_core, naga))]
+    #[cfg(wgpu_core)]
     fn from_storage_format(storage_format: crate::naga::StorageFormat) -> Self;
 
     /// Finds the [`StorageFormat`](wgc::naga::StorageFormat) corresponding to the given [`TextureFormat`](wgt::TextureFormat).
@@ -233,20 +232,17 @@ pub trait TextureFormatExt {
     /// use wgpu::util::TextureFormatExt;
     /// assert_eq!(wgpu::TextureFormat::Bgra8Unorm.to_storage_format(), Some(wgpu::naga::StorageFormat::Bgra8Unorm));
     /// ```
-    #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-    #[cfg(any(wgpu_core, naga))]
+    #[cfg(wgpu_core)]
     fn to_storage_format(&self) -> Option<crate::naga::StorageFormat>;
 }
 
 impl TextureFormatExt for wgt::TextureFormat {
-    #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-    #[cfg(any(wgpu_core, naga))]
+    #[cfg(wgpu_core)]
     fn from_storage_format(storage_format: crate::naga::StorageFormat) -> Self {
         wgc::map_storage_format_from_naga(storage_format)
     }
 
-    #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-    #[cfg(any(wgpu_core, naga))]
+    #[cfg(wgpu_core)]
     fn to_storage_format(&self) -> Option<crate::naga::StorageFormat> {
         wgc::map_storage_format_to_naga(*self)
     }

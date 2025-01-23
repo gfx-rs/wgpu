@@ -1,13 +1,13 @@
 use crate::ray_tracing::AsBuildContext;
+use wgpu::BufferUsages;
 use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::BufferUsages;
 
-const STRUCT_SIZE: wgt::BufferAddress = 176;
+const STRUCT_SIZE: wgpu::BufferAddress = 176;
 
 #[gpu_test]
 static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::new()

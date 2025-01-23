@@ -21,7 +21,7 @@ enum TestCase {
 struct Test<'a> {
     case: TestCase,
     entry_point: &'a str,
-    attributes: &'a [wgt::VertexAttribute],
+    attributes: &'a [wgpu::VertexAttribute],
     input: &'a [u8],
     checksums: &'a [f32],
 }

@@ -55,7 +55,7 @@ env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
-  CACHE_SUFFIX: c # cache busting
+  CACHE_SUFFIX: d # cache busting
   WGPU_TESTING: true
 
 # We distinguish the following kinds of builds:

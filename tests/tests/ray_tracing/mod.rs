@@ -5,11 +5,11 @@ use wgpu::{
     BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, CreateBlasDescriptor,
     CreateTlasDescriptor, TlasInstance, TlasPackage,
 };
-use wgpu_test::TestingContext;
-use wgt::{
+use wgpu::{
     AccelerationStructureFlags, AccelerationStructureGeometryFlags,
     AccelerationStructureUpdateMode, BufferAddress, BufferUsages, VertexFormat,
 };
+use wgpu_test::TestingContext;
 
 mod as_build;
 mod as_create;
