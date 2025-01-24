@@ -2631,7 +2631,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
-                crate::Literal::I32(value) => write!(self.out, "{value}")?,
+                // HLSL has no suffix for explicit i32 literals, but not using any suffix
+                // makes the type ambiguous which prevents overload resolution from
+                // working. So we explicitly use the int() constructor syntax.
+                crate::Literal::I32(value) => write!(self.out, "int({value})")?,
                 crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
                 crate::Literal::I64(value) => write!(self.out, "{value}L")?,
                 crate::Literal::Bool(value) => write!(self.out, "{value}")?,

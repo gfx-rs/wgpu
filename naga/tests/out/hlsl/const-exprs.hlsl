@@ -1,45 +1,45 @@
 static const uint TWO = 2u;
-static const int THREE = 3;
-static const int FOUR = 4;
-static const int FOUR_ALIAS = 4;
-static const int TEST_CONSTANT_ADDITION = 8;
-static const int TEST_CONSTANT_ALIAS_ADDITION = 8;
+static const int THREE = int(3);
+static const int FOUR = int(4);
+static const int FOUR_ALIAS = int(4);
+static const int TEST_CONSTANT_ADDITION = int(8);
+static const int TEST_CONSTANT_ALIAS_ADDITION = int(8);
 static const float PI = 3.141;
 static const float phi_sun = 6.282;
 static const float4 DIV = float4(0.44444445, 0.0, 0.0, 0.0);
-static const int TEXTURE_KIND_REGULAR = 0;
-static const int TEXTURE_KIND_WARP = 1;
-static const int TEXTURE_KIND_SKY = 2;
+static const int TEXTURE_KIND_REGULAR = int(0);
+static const int TEXTURE_KIND_WARP = int(1);
+static const int TEXTURE_KIND_SKY = int(2);
 static const float2 add_vec = float2(4.0, 5.0);
 static const bool2 compare_vec = bool2(true, false);
 
 void swizzle_of_compose()
 {
-    int4 out_ = int4(4, 3, 2, 1);
+    int4 out_ = int4(int(4), int(3), int(2), int(1));
 
     return;
 }
 
 void index_of_compose()
 {
-    int out_1 = 2;
+    int out_1 = int(2);
 
     return;
 }
 
 void compose_three_deep()
 {
-    int out_2 = 6;
+    int out_2 = int(6);
 
     return;
 }
 
 void non_constant_initializers()
 {
-    int w = 30;
+    int w = int(30);
     int x = (int)0;
     int y = (int)0;
-    int z = 70;
+    int z = int(70);
     int4 out_3 = (int4)0;
 
     int _e2 = w;
@@ -56,14 +56,14 @@ void non_constant_initializers()
 
 void splat_of_constant()
 {
-    int4 out_4 = int4(-4, -4, -4, -4);
+    int4 out_4 = int4(int(-4), int(-4), int(-4), int(-4));
 
     return;
 }
 
 void compose_of_constant()
 {
-    int4 out_5 = int4(-4, -4, -4, -4);
+    int4 out_5 = int4(int(-4), int(-4), int(-4), int(-4));
 
     return;
 }
@@ -95,9 +95,9 @@ uint map_texture_kind(int texture_kind)
 
 void compose_vector_zero_val_binop()
 {
-    int3 a = int3(1, 1, 1);
-    int3 b = int3(0, 1, 2);
-    int3 c = int3(1, 0, 2);
+    int3 a = int3(int(1), int(1), int(1));
+    int3 b = int3(int(0), int(1), int(2));
+    int3 c = int3(int(1), int(0), int(2));
 
     return;
 }

@@ -1,25 +1,25 @@
 static const float4 v_f32_one = float4(1.0, 1.0, 1.0, 1.0);
 static const float4 v_f32_zero = float4(0.0, 0.0, 0.0, 0.0);
 static const float4 v_f32_half = float4(0.5, 0.5, 0.5, 0.5);
-static const int4 v_i32_one = int4(1, 1, 1, 1);
+static const int4 v_i32_one = int4(int(1), int(1), int(1), int(1));
 
 float4 builtins()
 {
-    int s1_ = (true ? 1 : 0);
+    int s1_ = (true ? int(1) : int(0));
     float4 s2_ = (true ? v_f32_one : v_f32_zero);
     float4 s3_ = (bool4(false, false, false, false) ? v_f32_zero : v_f32_one);
     float4 m1_ = lerp(v_f32_zero, v_f32_one, v_f32_half);
     float4 m2_ = lerp(v_f32_zero, v_f32_one, 0.1);
-    float b1_ = asfloat(1);
+    float b1_ = asfloat(int(1));
     float4 b2_ = asfloat(v_i32_one);
-    int4 v_i32_zero = int4(0, 0, 0, 0);
+    int4 v_i32_zero = int4(int(0), int(0), int(0), int(0));
     return (((((float4(((s1_).xxxx + v_i32_zero)) + s2_) + m1_) + m2_) + (b1_).xxxx) + b2_);
 }
 
 float4 splat(float m, int n)
 {
     float2 a_2 = ((((2.0).xx + (m).xx) - (4.0).xx) / (8.0).xx);
-    int4 b = ((n).xxxx % (2).xxxx);
+    int4 b = ((n).xxxx % (int(2)).xxxx);
     return (a_2.xyxy + float4(b));
 }
 
@@ -71,65 +71,65 @@ float3x4 ZeroValuefloat3x4() {
 void arithmetic()
 {
     float neg0_1 = -(1.0);
-    int2 neg1_1 = -((1).xx);
+    int2 neg1_1 = -((int(1)).xx);
     float2 neg2_ = -((1.0).xx);
-    int add0_ = (2 + 1);
+    int add0_ = (int(2) + int(1));
     uint add1_ = (2u + 1u);
     float add2_ = (2.0 + 1.0);
-    int2 add3_ = ((2).xx + (1).xx);
+    int2 add3_ = ((int(2)).xx + (int(1)).xx);
     uint3 add4_ = ((2u).xxx + (1u).xxx);
     float4 add5_ = ((2.0).xxxx + (1.0).xxxx);
-    int sub0_ = (2 - 1);
+    int sub0_ = (int(2) - int(1));
     uint sub1_ = (2u - 1u);
     float sub2_ = (2.0 - 1.0);
-    int2 sub3_ = ((2).xx - (1).xx);
+    int2 sub3_ = ((int(2)).xx - (int(1)).xx);
     uint3 sub4_ = ((2u).xxx - (1u).xxx);
     float4 sub5_ = ((2.0).xxxx - (1.0).xxxx);
-    int mul0_ = (2 * 1);
+    int mul0_ = (int(2) * int(1));
     uint mul1_ = (2u * 1u);
     float mul2_ = (2.0 * 1.0);
-    int2 mul3_ = ((2).xx * (1).xx);
+    int2 mul3_ = ((int(2)).xx * (int(1)).xx);
     uint3 mul4_ = ((2u).xxx * (1u).xxx);
     float4 mul5_ = ((2.0).xxxx * (1.0).xxxx);
-    int div0_ = (2 / 1);
+    int div0_ = (int(2) / int(1));
     uint div1_ = (2u / 1u);
     float div2_ = (2.0 / 1.0);
-    int2 div3_ = ((2).xx / (1).xx);
+    int2 div3_ = ((int(2)).xx / (int(1)).xx);
     uint3 div4_ = ((2u).xxx / (1u).xxx);
     float4 div5_ = ((2.0).xxxx / (1.0).xxxx);
-    int rem0_ = (2 % 1);
+    int rem0_ = (int(2) % int(1));
     uint rem1_ = (2u % 1u);
     float rem2_ = fmod(2.0, 1.0);
-    int2 rem3_ = ((2).xx % (1).xx);
+    int2 rem3_ = ((int(2)).xx % (int(1)).xx);
     uint3 rem4_ = ((2u).xxx % (1u).xxx);
     float4 rem5_ = fmod((2.0).xxxx, (1.0).xxxx);
     {
-        int2 add0_1 = ((2).xx + (1).xx);
-        int2 add1_1 = ((2).xx + (1).xx);
+        int2 add0_1 = ((int(2)).xx + (int(1)).xx);
+        int2 add1_1 = ((int(2)).xx + (int(1)).xx);
         uint2 add2_1 = ((2u).xx + (1u).xx);
         uint2 add3_1 = ((2u).xx + (1u).xx);
         float2 add4_1 = ((2.0).xx + (1.0).xx);
         float2 add5_1 = ((2.0).xx + (1.0).xx);
-        int2 sub0_1 = ((2).xx - (1).xx);
-        int2 sub1_1 = ((2).xx - (1).xx);
+        int2 sub0_1 = ((int(2)).xx - (int(1)).xx);
+        int2 sub1_1 = ((int(2)).xx - (int(1)).xx);
         uint2 sub2_1 = ((2u).xx - (1u).xx);
         uint2 sub3_1 = ((2u).xx - (1u).xx);
         float2 sub4_1 = ((2.0).xx - (1.0).xx);
         float2 sub5_1 = ((2.0).xx - (1.0).xx);
-        int2 mul0_1 = ((2).xx * 1);
-        int2 mul1_1 = (2 * (1).xx);
+        int2 mul0_1 = ((int(2)).xx * int(1));
+        int2 mul1_1 = (int(2) * (int(1)).xx);
         uint2 mul2_1 = ((2u).xx * 1u);
         uint2 mul3_1 = (2u * (1u).xx);
         float2 mul4_1 = ((2.0).xx * 1.0);
         float2 mul5_1 = (2.0 * (1.0).xx);
-        int2 div0_1 = ((2).xx / (1).xx);
-        int2 div1_1 = ((2).xx / (1).xx);
+        int2 div0_1 = ((int(2)).xx / (int(1)).xx);
+        int2 div1_1 = ((int(2)).xx / (int(1)).xx);
         uint2 div2_1 = ((2u).xx / (1u).xx);
         uint2 div3_1 = ((2u).xx / (1u).xx);
         float2 div4_1 = ((2.0).xx / (1.0).xx);
         float2 div5_1 = ((2.0).xx / (1.0).xx);
-        int2 rem0_1 = ((2).xx % (1).xx);
-        int2 rem1_1 = ((2).xx % (1).xx);
+        int2 rem0_1 = ((int(2)).xx % (int(1)).xx);
+        int2 rem1_1 = ((int(2)).xx % (int(1)).xx);
         uint2 rem2_1 = ((2u).xx % (1u).xx);
         uint2 rem3_1 = ((2u).xx % (1u).xx);
         float2 rem4_1 = fmod((2.0).xx, (1.0).xx);
@@ -147,69 +147,69 @@ void arithmetic()
 
 void bit()
 {
-    int flip0_ = ~(1);
+    int flip0_ = ~(int(1));
     uint flip1_ = ~(1u);
-    int2 flip2_ = ~((1).xx);
+    int2 flip2_ = ~((int(1)).xx);
     uint3 flip3_ = ~((1u).xxx);
-    int or0_ = (2 | 1);
+    int or0_ = (int(2) | int(1));
     uint or1_ = (2u | 1u);
-    int2 or2_ = ((2).xx | (1).xx);
+    int2 or2_ = ((int(2)).xx | (int(1)).xx);
     uint3 or3_ = ((2u).xxx | (1u).xxx);
-    int and0_ = (2 & 1);
+    int and0_ = (int(2) & int(1));
     uint and1_ = (2u & 1u);
-    int2 and2_ = ((2).xx & (1).xx);
+    int2 and2_ = ((int(2)).xx & (int(1)).xx);
     uint3 and3_ = ((2u).xxx & (1u).xxx);
-    int xor0_ = (2 ^ 1);
+    int xor0_ = (int(2) ^ int(1));
     uint xor1_ = (2u ^ 1u);
-    int2 xor2_ = ((2).xx ^ (1).xx);
+    int2 xor2_ = ((int(2)).xx ^ (int(1)).xx);
     uint3 xor3_ = ((2u).xxx ^ (1u).xxx);
-    int shl0_ = (2 << 1u);
+    int shl0_ = (int(2) << 1u);
     uint shl1_ = (2u << 1u);
-    int2 shl2_ = ((2).xx << (1u).xx);
+    int2 shl2_ = ((int(2)).xx << (1u).xx);
     uint3 shl3_ = ((2u).xxx << (1u).xxx);
-    int shr0_ = (2 >> 1u);
+    int shr0_ = (int(2) >> 1u);
     uint shr1_ = (2u >> 1u);
-    int2 shr2_ = ((2).xx >> (1u).xx);
+    int2 shr2_ = ((int(2)).xx >> (1u).xx);
     uint3 shr3_ = ((2u).xxx >> (1u).xxx);
     return;
 }
 
 void comparison()
 {
-    bool eq0_ = (2 == 1);
+    bool eq0_ = (int(2) == int(1));
     bool eq1_ = (2u == 1u);
     bool eq2_ = (2.0 == 1.0);
-    bool2 eq3_ = ((2).xx == (1).xx);
+    bool2 eq3_ = ((int(2)).xx == (int(1)).xx);
     bool3 eq4_ = ((2u).xxx == (1u).xxx);
     bool4 eq5_ = ((2.0).xxxx == (1.0).xxxx);
-    bool neq0_ = (2 != 1);
+    bool neq0_ = (int(2) != int(1));
     bool neq1_ = (2u != 1u);
     bool neq2_ = (2.0 != 1.0);
-    bool2 neq3_ = ((2).xx != (1).xx);
+    bool2 neq3_ = ((int(2)).xx != (int(1)).xx);
     bool3 neq4_ = ((2u).xxx != (1u).xxx);
     bool4 neq5_ = ((2.0).xxxx != (1.0).xxxx);
-    bool lt0_ = (2 < 1);
+    bool lt0_ = (int(2) < int(1));
     bool lt1_ = (2u < 1u);
     bool lt2_ = (2.0 < 1.0);
-    bool2 lt3_ = ((2).xx < (1).xx);
+    bool2 lt3_ = ((int(2)).xx < (int(1)).xx);
     bool3 lt4_ = ((2u).xxx < (1u).xxx);
     bool4 lt5_ = ((2.0).xxxx < (1.0).xxxx);
-    bool lte0_ = (2 <= 1);
+    bool lte0_ = (int(2) <= int(1));
     bool lte1_ = (2u <= 1u);
     bool lte2_ = (2.0 <= 1.0);
-    bool2 lte3_ = ((2).xx <= (1).xx);
+    bool2 lte3_ = ((int(2)).xx <= (int(1)).xx);
     bool3 lte4_ = ((2u).xxx <= (1u).xxx);
     bool4 lte5_ = ((2.0).xxxx <= (1.0).xxxx);
-    bool gt0_ = (2 > 1);
+    bool gt0_ = (int(2) > int(1));
     bool gt1_ = (2u > 1u);
     bool gt2_ = (2.0 > 1.0);
-    bool2 gt3_ = ((2).xx > (1).xx);
+    bool2 gt3_ = ((int(2)).xx > (int(1)).xx);
     bool3 gt4_ = ((2u).xxx > (1u).xxx);
     bool4 gt5_ = ((2.0).xxxx > (1.0).xxxx);
-    bool gte0_ = (2 >= 1);
+    bool gte0_ = (int(2) >= int(1));
     bool gte1_ = (2u >= 1u);
     bool gte2_ = (2.0 >= 1.0);
-    bool2 gte3_ = ((2).xx >= (1).xx);
+    bool2 gte3_ = ((int(2)).xx >= (int(1)).xx);
     bool3 gte4_ = ((2u).xxx >= (1u).xxx);
     bool4 gte5_ = ((2.0).xxxx >= (1.0).xxxx);
     return;
@@ -224,11 +224,11 @@ void assignment()
     int a_1 = (int)0;
     int3 vec0_ = ZeroValueint3();
 
-    a_1 = 1;
+    a_1 = int(1);
     int _e5 = a_1;
-    a_1 = (_e5 + 1);
+    a_1 = (_e5 + int(1));
     int _e7 = a_1;
-    a_1 = (_e7 - 1);
+    a_1 = (_e7 - int(1));
     int _e9 = a_1;
     int _e10 = a_1;
     a_1 = (_e10 * _e9);
@@ -236,38 +236,38 @@ void assignment()
     int _e13 = a_1;
     a_1 = (_e13 / _e12);
     int _e15 = a_1;
-    a_1 = (_e15 % 1);
+    a_1 = (_e15 % int(1));
     int _e17 = a_1;
-    a_1 = (_e17 & 0);
+    a_1 = (_e17 & int(0));
     int _e19 = a_1;
-    a_1 = (_e19 | 0);
+    a_1 = (_e19 | int(0));
     int _e21 = a_1;
-    a_1 = (_e21 ^ 0);
+    a_1 = (_e21 ^ int(0));
     int _e23 = a_1;
     a_1 = (_e23 << 2u);
     int _e25 = a_1;
     a_1 = (_e25 >> 1u);
     int _e28 = a_1;
-    a_1 = (_e28 + 1);
+    a_1 = (_e28 + int(1));
     int _e31 = a_1;
-    a_1 = (_e31 - 1);
-    int _e37 = vec0_[1];
-    vec0_[1] = (_e37 + 1);
-    int _e41 = vec0_[1];
-    vec0_[1] = (_e41 - 1);
+    a_1 = (_e31 - int(1));
+    int _e37 = vec0_[int(1)];
+    vec0_[int(1)] = (_e37 + int(1));
+    int _e41 = vec0_[int(1)];
+    vec0_[int(1)] = (_e41 - int(1));
     return;
 }
 
 void negation_avoids_prefix_decrement()
 {
-    int i0_ = -(1);
-    int i1_ = -(-(1));
-    int i2_ = -(-(1));
-    int i3_ = -(-(1));
-    int i4_ = -(-(-(1)));
-    int i5_ = -(-(-(-(1))));
-    int i6_ = -(-(-(-(-(1)))));
-    int i7_ = -(-(-(-(-(1)))));
+    int i0_ = -(int(1));
+    int i1_ = -(-(int(1)));
+    int i2_ = -(-(int(1)));
+    int i3_ = -(-(int(1)));
+    int i4_ = -(-(-(int(1))));
+    int i5_ = -(-(-(-(int(1)))));
+    int i6_ = -(-(-(-(-(int(1))))));
+    int i7_ = -(-(-(-(-(int(1))))));
     float f0_ = -(1.0);
     float f1_ = -(-(1.0));
     float f2_ = -(-(1.0));

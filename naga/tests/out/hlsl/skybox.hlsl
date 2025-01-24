@@ -44,8 +44,8 @@ VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
     int tmp1_ = (int)0;
     int tmp2_ = (int)0;
 
-    tmp1_ = (int((_NagaConstants.first_vertex + vertex_index)) / 2);
-    tmp2_ = (int((_NagaConstants.first_vertex + vertex_index)) & 1);
+    tmp1_ = (int((_NagaConstants.first_vertex + vertex_index)) / int(2));
+    tmp2_ = (int((_NagaConstants.first_vertex + vertex_index)) & int(1));
     int _e9 = tmp1_;
     int _e15 = tmp2_;
     float4 pos = float4(((float(_e9) * 4.0) - 1.0), ((float(_e15) * 4.0) - 1.0), 0.0, 1.0);

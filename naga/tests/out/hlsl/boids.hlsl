@@ -27,8 +27,8 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     float2 cMass = float2(0.0, 0.0);
     float2 cVel = float2(0.0, 0.0);
     float2 colVel = float2(0.0, 0.0);
-    int cMassCount = 0;
-    int cVelCount = 0;
+    int cMassCount = int(0);
+    int cVelCount = int(0);
     float2 pos = (float2)0;
     float2 vel = (float2)0;
     uint i = 0u;
@@ -73,7 +73,7 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
             float2 _e61 = pos;
             cMass = (_e60 + _e61);
             int _e63 = cMassCount;
-            cMassCount = (_e63 + 1);
+            cMassCount = (_e63 + int(1));
         }
         float2 _e66 = pos;
         float2 _e67 = vPos;
@@ -92,18 +92,18 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
             float2 _e86 = vel;
             cVel = (_e85 + _e86);
             int _e88 = cVelCount;
-            cVelCount = (_e88 + 1);
+            cVelCount = (_e88 + int(1));
         }
     }
     int _e94 = cMassCount;
-    if ((_e94 > 0)) {
+    if ((_e94 > int(0))) {
         float2 _e97 = cMass;
         int _e98 = cMassCount;
         float2 _e102 = vPos;
         cMass = ((_e97 / (float(_e98)).xx) - _e102);
     }
     int _e104 = cVelCount;
-    if ((_e104 > 0)) {
+    if ((_e104 > int(0))) {
         float2 _e107 = cVel;
         int _e108 = cVelCount;
         cVel = (_e107 / (float(_e108)).xx);
