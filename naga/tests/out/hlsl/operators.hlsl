@@ -13,7 +13,7 @@ float4 builtins()
     float b1_ = asfloat(int(1));
     float4 b2_ = asfloat(v_i32_one);
     int4 v_i32_zero = int4(int(0), int(0), int(0), int(0));
-    return (((((float4(((s1_).xxxx + v_i32_zero)) + s2_) + m1_) + m2_) + (b1_).xxxx) + b2_);
+    return (((((float4(asint(asuint((s1_).xxxx) + asuint(v_i32_zero))) + s2_) + m1_) + m2_) + (b1_).xxxx) + b2_);
 }
 
 float4 splat(float m, int n)
@@ -73,22 +73,22 @@ void arithmetic()
     float neg0_1 = -(1.0);
     int2 neg1_1 = -((int(1)).xx);
     float2 neg2_ = -((1.0).xx);
-    int add0_ = (int(2) + int(1));
+    int add0_ = asint(asuint(int(2)) + asuint(int(1)));
     uint add1_ = (2u + 1u);
     float add2_ = (2.0 + 1.0);
-    int2 add3_ = ((int(2)).xx + (int(1)).xx);
+    int2 add3_ = asint(asuint((int(2)).xx) + asuint((int(1)).xx));
     uint3 add4_ = ((2u).xxx + (1u).xxx);
     float4 add5_ = ((2.0).xxxx + (1.0).xxxx);
-    int sub0_ = (int(2) - int(1));
+    int sub0_ = asint(asuint(int(2)) - asuint(int(1)));
     uint sub1_ = (2u - 1u);
     float sub2_ = (2.0 - 1.0);
-    int2 sub3_ = ((int(2)).xx - (int(1)).xx);
+    int2 sub3_ = asint(asuint((int(2)).xx) - asuint((int(1)).xx));
     uint3 sub4_ = ((2u).xxx - (1u).xxx);
     float4 sub5_ = ((2.0).xxxx - (1.0).xxxx);
-    int mul0_ = (int(2) * int(1));
+    int mul0_ = asint(asuint(int(2)) * asuint(int(1)));
     uint mul1_ = (2u * 1u);
     float mul2_ = (2.0 * 1.0);
-    int2 mul3_ = ((int(2)).xx * (int(1)).xx);
+    int2 mul3_ = asint(asuint((int(2)).xx) * asuint((int(1)).xx));
     uint3 mul4_ = ((2u).xxx * (1u).xxx);
     float4 mul5_ = ((2.0).xxxx * (1.0).xxxx);
     int div0_ = (int(2) / int(1));
@@ -104,20 +104,20 @@ void arithmetic()
     uint3 rem4_ = ((2u).xxx % (1u).xxx);
     float4 rem5_ = fmod((2.0).xxxx, (1.0).xxxx);
     {
-        int2 add0_1 = ((int(2)).xx + (int(1)).xx);
-        int2 add1_1 = ((int(2)).xx + (int(1)).xx);
+        int2 add0_1 = asint(asuint((int(2)).xx) + asuint((int(1)).xx));
+        int2 add1_1 = asint(asuint((int(2)).xx) + asuint((int(1)).xx));
         uint2 add2_1 = ((2u).xx + (1u).xx);
         uint2 add3_1 = ((2u).xx + (1u).xx);
         float2 add4_1 = ((2.0).xx + (1.0).xx);
         float2 add5_1 = ((2.0).xx + (1.0).xx);
-        int2 sub0_1 = ((int(2)).xx - (int(1)).xx);
-        int2 sub1_1 = ((int(2)).xx - (int(1)).xx);
+        int2 sub0_1 = asint(asuint((int(2)).xx) - asuint((int(1)).xx));
+        int2 sub1_1 = asint(asuint((int(2)).xx) - asuint((int(1)).xx));
         uint2 sub2_1 = ((2u).xx - (1u).xx);
         uint2 sub3_1 = ((2u).xx - (1u).xx);
         float2 sub4_1 = ((2.0).xx - (1.0).xx);
         float2 sub5_1 = ((2.0).xx - (1.0).xx);
-        int2 mul0_1 = ((int(2)).xx * int(1));
-        int2 mul1_1 = (int(2) * (int(1)).xx);
+        int2 mul0_1 = asint(asuint((int(2)).xx) * asuint(int(1)));
+        int2 mul1_1 = asint(asuint(int(2)) * asuint((int(1)).xx));
         uint2 mul2_1 = ((2u).xx * 1u);
         uint2 mul3_1 = (2u * (1u).xx);
         float2 mul4_1 = ((2.0).xx * 1.0);
@@ -226,12 +226,12 @@ void assignment()
 
     a_1 = int(1);
     int _e5 = a_1;
-    a_1 = (_e5 + int(1));
+    a_1 = asint(asuint(_e5) + asuint(int(1)));
     int _e7 = a_1;
-    a_1 = (_e7 - int(1));
+    a_1 = asint(asuint(_e7) - asuint(int(1)));
     int _e9 = a_1;
     int _e10 = a_1;
-    a_1 = (_e10 * _e9);
+    a_1 = asint(asuint(_e10) * asuint(_e9));
     int _e12 = a_1;
     int _e13 = a_1;
     a_1 = (_e13 / _e12);
@@ -248,13 +248,13 @@ void assignment()
     int _e25 = a_1;
     a_1 = (_e25 >> 1u);
     int _e28 = a_1;
-    a_1 = (_e28 + int(1));
+    a_1 = asint(asuint(_e28) + asuint(int(1)));
     int _e31 = a_1;
-    a_1 = (_e31 - int(1));
+    a_1 = asint(asuint(_e31) - asuint(int(1)));
     int _e37 = vec0_[int(1)];
-    vec0_[int(1)] = (_e37 + int(1));
+    vec0_[int(1)] = asint(asuint(_e37) + asuint(int(1)));
     int _e41 = vec0_[int(1)];
-    vec0_[int(1)] = (_e41 - int(1));
+    vec0_[int(1)] = asint(asuint(_e41) - asuint(int(1)));
     return;
 }
 

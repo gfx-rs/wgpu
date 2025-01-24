@@ -2757,6 +2757,32 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 )?;
             }
             Expression::Override(_) => return Err(Error::Override),
+            // Avoid undefined behaviour for addition, subtraction, and
+            // multiplication of signed integers by casting operands to
+            // unsigned, performing the operation, then casting the result back
+            // to signed. This relies on the asint/asuint functions which only
+            // work for 32-bit types.
+            Expression::Binary {
+                op:
+                    op @ crate::BinaryOperator::Add
+                    | op @ crate::BinaryOperator::Subtract
+                    | op @ crate::BinaryOperator::Multiply,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar(),
+                Some(Scalar {
+                    kind: ScalarKind::Sint,
+                    width: 4
+                })
+            ) =>
+            {
+                write!(self.out, "asint(asuint(",)?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ") {} asuint(", back::binary_operation_str(op))?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, "))")?;
+            }
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
             Expression::Binary {

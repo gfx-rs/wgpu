@@ -139,7 +139,7 @@ void test_matrix_within_struct_accesses()
     Baz t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
 
     int _e3 = idx;
-    idx = (_e3 - int(1));
+    idx = asint(asuint(_e3) - asuint(int(1)));
     float3x2 l0_ = GetMatmOnBaz(baz);
     float2 l1_ = GetMatmOnBaz(baz)[0];
     int _e14 = idx;
@@ -153,7 +153,7 @@ void test_matrix_within_struct_accesses()
     int _e38 = idx;
     float l6_ = GetMatmOnBaz(baz)[_e36][_e38];
     int _e51 = idx;
-    idx = (_e51 + int(1));
+    idx = asint(asuint(_e51) + asuint(int(1)));
     SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
     t.m_0 = (9.0).xx;
     int _e66 = idx;
@@ -186,7 +186,7 @@ void test_matrix_within_array_within_struct_accesses()
     MatCx2InArray t_1 = ConstructMatCx2InArray(ZeroValuearray2_float4x2_());
 
     int _e3 = idx_1;
-    idx_1 = (_e3 - int(1));
+    idx_1 = asint(asuint(_e3) - asuint(int(1)));
     float4x2 l0_1[2] = ((float4x2[2])nested_mat_cx2_.am);
     float4x2 l1_1 = ((float4x2)nested_mat_cx2_.am[0]);
     float2 l2_1 = nested_mat_cx2_.am[0]._0;
@@ -201,7 +201,7 @@ void test_matrix_within_array_within_struct_accesses()
     int _e48 = idx_1;
     float l7_ = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _e46)[_e48];
     int _e55 = idx_1;
-    idx_1 = (_e55 + int(1));
+    idx_1 = asint(asuint(_e55) + asuint(int(1)));
     t_1.am = (__mat4x2[2])ZeroValuearray2_float4x2_();
     t_1.am[0] = (__mat4x2)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
     t_1.am[0]._0 = (9.0).xx;

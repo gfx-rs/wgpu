@@ -73,7 +73,7 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
             float2 _e61 = pos;
             cMass = (_e60 + _e61);
             int _e63 = cMassCount;
-            cMassCount = (_e63 + int(1));
+            cMassCount = asint(asuint(_e63) + asuint(int(1)));
         }
         float2 _e66 = pos;
         float2 _e67 = vPos;
@@ -92,7 +92,7 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
             float2 _e86 = vel;
             cVel = (_e85 + _e86);
             int _e88 = cVelCount;
-            cVelCount = (_e88 + int(1));
+            cVelCount = asint(asuint(_e88) + asuint(int(1)));
         }
     }
     int _e94 = cMassCount;
