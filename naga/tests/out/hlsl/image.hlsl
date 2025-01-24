@@ -24,6 +24,11 @@ Texture2D<float> image_2d_depth : register(t2, space1);
 Texture2DArray<float> image_2d_array_depth : register(t3, space1);
 TextureCube<float> image_cube_depth : register(t4, space1);
 
+int2 naga_mod(int2 lhs, int2 rhs) {
+    int2 divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    return lhs - (lhs / divisor) * divisor;
+}
+
 uint2 NagaRWDimensions2D(RWTexture2D<uint4> tex)
 {
     uint4 ret;
@@ -35,7 +40,7 @@ uint2 NagaRWDimensions2D(RWTexture2D<uint4> tex)
 void main(uint3 local_id : SV_GroupThreadID)
 {
     uint2 dim = NagaRWDimensions2D(image_storage_src);
-    int2 itc = (int2((dim * local_id.xy)) % int2(int(10), int(20)));
+    int2 itc = naga_mod(int2((dim * local_id.xy)), int2(int(10), int(20)));
     uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
     uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
     uint4 value4_ = image_storage_src.Load(itc);
@@ -57,7 +62,7 @@ void main(uint3 local_id : SV_GroupThreadID)
 void depth_load(uint3 local_id_1 : SV_GroupThreadID)
 {
     uint2 dim_1 = NagaRWDimensions2D(image_storage_src);
-    int2 itc_1 = (int2((dim_1 * local_id_1.xy)) % int2(int(10), int(20)));
+    int2 itc_1 = naga_mod(int2((dim_1 * local_id_1.xy)), int2(int(10), int(20)));
     float val = image_depth_multisampled_src.Load(itc_1, int(local_id_1.z)).x;
     image_dst[itc_1.x] = (uint(val)).xxxx;
     return;

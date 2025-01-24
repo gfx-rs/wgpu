@@ -16,10 +16,15 @@ float4 builtins()
     return (((((float4(asint(asuint((s1_).xxxx) + asuint(v_i32_zero))) + s2_) + m1_) + m2_) + (b1_).xxxx) + b2_);
 }
 
+int4 naga_mod(int4 lhs, int4 rhs) {
+    int4 divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    return lhs - (lhs / divisor) * divisor;
+}
+
 float4 splat(float m, int n)
 {
     float2 a_2 = ((((2.0).xx + (m).xx) - (4.0).xx) / (8.0).xx);
-    int4 b = ((n).xxxx % (int(2)).xxxx);
+    int4 b = naga_mod((n).xxxx, (int(2)).xxxx);
     return (a_2.xyxy + float4(b));
 }
 
@@ -56,6 +61,52 @@ void logical()
     return;
 }
 
+int2 naga_neg(int2 val) {
+    return asint(-asuint(val));
+}
+
+int naga_div(int lhs, int rhs) {
+    return lhs / (((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs);
+}
+
+uint naga_div(uint lhs, uint rhs) {
+    return lhs / (rhs == 0u ? 1u : rhs);
+}
+
+int2 naga_div(int2 lhs, int2 rhs) {
+    return lhs / (((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs);
+}
+
+uint3 naga_div(uint3 lhs, uint3 rhs) {
+    return lhs / (rhs == 0u ? 1u : rhs);
+}
+
+int naga_mod(int lhs, int rhs) {
+    int divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    return lhs - (lhs / divisor) * divisor;
+}
+
+uint naga_mod(uint lhs, uint rhs) {
+    return lhs % (rhs == 0u ? 1u : rhs);
+}
+
+int2 naga_mod(int2 lhs, int2 rhs) {
+    int2 divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    return lhs - (lhs / divisor) * divisor;
+}
+
+uint3 naga_mod(uint3 lhs, uint3 rhs) {
+    return lhs % (rhs == 0u ? 1u : rhs);
+}
+
+uint2 naga_div(uint2 lhs, uint2 rhs) {
+    return lhs / (rhs == 0u ? 1u : rhs);
+}
+
+uint2 naga_mod(uint2 lhs, uint2 rhs) {
+    return lhs % (rhs == 0u ? 1u : rhs);
+}
+
 float3x3 ZeroValuefloat3x3() {
     return (float3x3)0;
 }
@@ -71,7 +122,7 @@ float3x4 ZeroValuefloat3x4() {
 void arithmetic()
 {
     float neg0_1 = -(1.0);
-    int2 neg1_1 = -((int(1)).xx);
+    int2 neg1_1 = naga_neg((int(1)).xx);
     float2 neg2_ = -((1.0).xx);
     int add0_ = asint(asuint(int(2)) + asuint(int(1)));
     uint add1_ = (2u + 1u);
@@ -91,17 +142,17 @@ void arithmetic()
     int2 mul3_ = asint(asuint((int(2)).xx) * asuint((int(1)).xx));
     uint3 mul4_ = ((2u).xxx * (1u).xxx);
     float4 mul5_ = ((2.0).xxxx * (1.0).xxxx);
-    int div0_ = (int(2) / int(1));
-    uint div1_ = (2u / 1u);
+    int div0_ = naga_div(int(2), int(1));
+    uint div1_ = naga_div(2u, 1u);
     float div2_ = (2.0 / 1.0);
-    int2 div3_ = ((int(2)).xx / (int(1)).xx);
-    uint3 div4_ = ((2u).xxx / (1u).xxx);
+    int2 div3_ = naga_div((int(2)).xx, (int(1)).xx);
+    uint3 div4_ = naga_div((2u).xxx, (1u).xxx);
     float4 div5_ = ((2.0).xxxx / (1.0).xxxx);
-    int rem0_ = (int(2) % int(1));
-    uint rem1_ = (2u % 1u);
+    int rem0_ = naga_mod(int(2), int(1));
+    uint rem1_ = naga_mod(2u, 1u);
     float rem2_ = fmod(2.0, 1.0);
-    int2 rem3_ = ((int(2)).xx % (int(1)).xx);
-    uint3 rem4_ = ((2u).xxx % (1u).xxx);
+    int2 rem3_ = naga_mod((int(2)).xx, (int(1)).xx);
+    uint3 rem4_ = naga_mod((2u).xxx, (1u).xxx);
     float4 rem5_ = fmod((2.0).xxxx, (1.0).xxxx);
     {
         int2 add0_1 = asint(asuint((int(2)).xx) + asuint((int(1)).xx));
@@ -122,16 +173,16 @@ void arithmetic()
         uint2 mul3_1 = (2u * (1u).xx);
         float2 mul4_1 = ((2.0).xx * 1.0);
         float2 mul5_1 = (2.0 * (1.0).xx);
-        int2 div0_1 = ((int(2)).xx / (int(1)).xx);
-        int2 div1_1 = ((int(2)).xx / (int(1)).xx);
-        uint2 div2_1 = ((2u).xx / (1u).xx);
-        uint2 div3_1 = ((2u).xx / (1u).xx);
+        int2 div0_1 = naga_div((int(2)).xx, (int(1)).xx);
+        int2 div1_1 = naga_div((int(2)).xx, (int(1)).xx);
+        uint2 div2_1 = naga_div((2u).xx, (1u).xx);
+        uint2 div3_1 = naga_div((2u).xx, (1u).xx);
         float2 div4_1 = ((2.0).xx / (1.0).xx);
         float2 div5_1 = ((2.0).xx / (1.0).xx);
-        int2 rem0_1 = ((int(2)).xx % (int(1)).xx);
-        int2 rem1_1 = ((int(2)).xx % (int(1)).xx);
-        uint2 rem2_1 = ((2u).xx % (1u).xx);
-        uint2 rem3_1 = ((2u).xx % (1u).xx);
+        int2 rem0_1 = naga_mod((int(2)).xx, (int(1)).xx);
+        int2 rem1_1 = naga_mod((int(2)).xx, (int(1)).xx);
+        uint2 rem2_1 = naga_mod((2u).xx, (1u).xx);
+        uint2 rem3_1 = naga_mod((2u).xx, (1u).xx);
         float2 rem4_1 = fmod((2.0).xx, (1.0).xx);
         float2 rem5_1 = fmod((2.0).xx, (1.0).xx);
     }
@@ -234,9 +285,9 @@ void assignment()
     a_1 = asint(asuint(_e10) * asuint(_e9));
     int _e12 = a_1;
     int _e13 = a_1;
-    a_1 = (_e13 / _e12);
+    a_1 = naga_div(_e13, _e12);
     int _e15 = a_1;
-    a_1 = (_e15 % int(1));
+    a_1 = naga_mod(_e15, int(1));
     int _e17 = a_1;
     a_1 = (_e17 & int(0));
     int _e19 = a_1;
@@ -258,16 +309,20 @@ void assignment()
     return;
 }
 
+int naga_neg(int val) {
+    return asint(-asuint(val));
+}
+
 void negation_avoids_prefix_decrement()
 {
-    int i0_ = -(int(1));
-    int i1_ = -(-(int(1)));
-    int i2_ = -(-(int(1)));
-    int i3_ = -(-(int(1)));
-    int i4_ = -(-(-(int(1))));
-    int i5_ = -(-(-(-(int(1)))));
-    int i6_ = -(-(-(-(-(int(1))))));
-    int i7_ = -(-(-(-(-(int(1))))));
+    int i0_ = naga_neg(int(1));
+    int i1_ = naga_neg(naga_neg(int(1)));
+    int i2_ = naga_neg(naga_neg(int(1)));
+    int i3_ = naga_neg(naga_neg(int(1)));
+    int i4_ = naga_neg(naga_neg(naga_neg(int(1))));
+    int i5_ = naga_neg(naga_neg(naga_neg(naga_neg(int(1)))));
+    int i6_ = naga_neg(naga_neg(naga_neg(naga_neg(naga_neg(int(1))))));
+    int i7_ = naga_neg(naga_neg(naga_neg(naga_neg(naga_neg(int(1))))));
     float f0_ = -(1.0);
     float f1_ = -(-(1.0));
     float f2_ = -(-(1.0));

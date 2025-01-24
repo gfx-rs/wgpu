@@ -365,6 +365,8 @@ struct Wrapped {
     struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
     mat_cx2s: crate::FastHashSet<help::WrappedMatCx2>,
     math: crate::FastHashSet<help::WrappedMath>,
+    unary_op: crate::FastHashSet<help::WrappedUnaryOp>,
+    binary_op: crate::FastHashSet<help::WrappedBinaryOp>,
     /// If true, the sampler heaps have been written out.
     sampler_heaps: bool,
     // Mapping from SamplerIndexBufferKey to the name the namer returned.
@@ -379,6 +381,8 @@ impl Wrapped {
         self.struct_matrix_access.clear();
         self.mat_cx2s.clear();
         self.math.clear();
+        self.unary_op.clear();
+        self.binary_op.clear();
     }
 }
 

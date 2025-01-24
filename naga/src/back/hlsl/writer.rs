@@ -27,6 +27,10 @@ pub(crate) const EXTRACT_BITS_FUNCTION: &str = "naga_extractBits";
 pub(crate) const INSERT_BITS_FUNCTION: &str = "naga_insertBits";
 pub(crate) const SAMPLER_HEAP_VAR: &str = "nagaSamplerHeap";
 pub(crate) const COMPARISON_SAMPLER_HEAP_VAR: &str = "nagaComparisonSamplerHeap";
+pub(crate) const ABS_FUNCTION: &str = "naga_abs";
+pub(crate) const DIV_FUNCTION: &str = "naga_div";
+pub(crate) const MOD_FUNCTION: &str = "naga_mod";
+pub(crate) const NEG_FUNCTION: &str = "naga_neg";
 
 struct EpStructMember {
     name: String,
@@ -2800,19 +2804,39 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
             }
 
-            // TODO: handle undefined behavior of BinaryOperator::Modulo
-            //
-            // sint:
-            // if right == 0 return 0
-            // if left == min(type_of(left)) && right == -1 return 0
-            // if sign(left) != sign(right) return result as defined by WGSL
-            //
-            // uint:
-            // if right == 0 return 0
-            //
-            // float:
-            // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
+            Expression::Binary {
+                op: crate::BinaryOperator::Divide,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar_kind(),
+                Some(ScalarKind::Sint | ScalarKind::Uint)
+            ) =>
+            {
+                write!(self.out, "{DIV_FUNCTION}(")?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ")")?;
+            }
 
+            Expression::Binary {
+                op: crate::BinaryOperator::Modulo,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar_kind(),
+                Some(ScalarKind::Sint | ScalarKind::Uint)
+            ) =>
+            {
+                write!(self.out, "{MOD_FUNCTION}(")?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ")")?;
+            }
+
+            // TODO: if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
             // While HLSL supports float operands with the % operator it is only
             // defined in cases where both sides are either positive or negative.
             Expression::Binary {
@@ -3312,7 +3336,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::Unary { op, expr } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
                 let op_str = match op {
-                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Negate => {
+                        match func_ctx.resolve_type(expr, &module.types).scalar() {
+                            Some(Scalar {
+                                kind: ScalarKind::Sint,
+                                width: 4,
+                            }) => NEG_FUNCTION,
+                            _ => "-",
+                        }
+                    }
                     crate::UnaryOperator::LogicalNot => "!",
                     crate::UnaryOperator::BitwiseNot => "~",
                 };
@@ -3411,7 +3443,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 let fun = match fun {
                     // comparison
-                    Mf::Abs => Function::Regular("abs"),
+                    Mf::Abs => match func_ctx.resolve_type(arg, &module.types).scalar() {
+                        Some(Scalar {
+                            kind: ScalarKind::Sint,
+                            width: 4,
+                        }) => Function::Regular(ABS_FUNCTION),
+                        _ => Function::Regular("abs"),
+                    },
                     Mf::Min => Function::Regular("min"),
                     Mf::Max => Function::Regular("max"),
                     Mf::Clamp => Function::Regular("clamp"),

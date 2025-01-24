@@ -28,7 +28,10 @@ int dim_1d = NagaDimensions1D(image_1d);
 
 use super::{
     super::FunctionCtx,
-    writer::{EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION},
+    writer::{
+        ABS_FUNCTION, DIV_FUNCTION, EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION, MOD_FUNCTION,
+        NEG_FUNCTION,
+    },
     BackendResult,
 };
 use crate::{arena::Handle, proc::NameKey, ScalarKind};
@@ -73,6 +76,23 @@ pub(super) struct WrappedMath {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedZeroValue {
     pub(super) ty: Handle<crate::Type>,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedUnaryOp {
+    pub(super) op: crate::UnaryOperator,
+    // This can only represent scalar or vector types. If we ever need to wrap
+    // unary ops with other types, we'll need a better representation.
+    pub(super) ty: (Option<crate::VectorSize>, crate::Scalar),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedBinaryOp {
+    pub(super) op: crate::BinaryOperator,
+    // This can only represent scalar or vector types. If we ever need to wrap
+    // binary ops with other types, we'll need a better representation.
+    pub(super) left_ty: (Option<crate::VectorSize>, crate::Scalar),
+    pub(super) right_ty: (Option<crate::VectorSize>, crate::Scalar),
 }
 
 /// HLSL backend requires its own `ImageQuery` enum.
@@ -1105,6 +1125,202 @@ impl<W: Write> super::Writer<'_, W> {
                         // End of function body
                         writeln!(self.out, "}}")?;
                     }
+                    crate::MathFunction::Abs
+                        if matches!(
+                            func_ctx.resolve_type(arg, &module.types).scalar(),
+                            Some(crate::Scalar {
+                                kind: ScalarKind::Sint,
+                                width: 4,
+                            })
+                        ) =>
+                    {
+                        let arg_ty = func_ctx.resolve_type(arg, &module.types);
+                        let scalar = arg_ty.scalar().unwrap();
+                        let components = arg_ty.components();
+
+                        let wrapped = WrappedMath {
+                            fun,
+                            scalar,
+                            components,
+                        };
+
+                        if !self.wrapped.math.insert(wrapped) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, arg_ty)?;
+                        write!(self.out, " {ABS_FUNCTION}(")?;
+                        self.write_value_type(module, arg_ty)?;
+                        writeln!(self.out, " val) {{")?;
+
+                        let level = crate::back::Level(1);
+                        writeln!(
+                            self.out,
+                            "{level}return val >= 0 ? val : asint(-asuint(val));"
+                        )?;
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_unary_ops(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        for (_, expression) in func_ctx.expressions.iter() {
+            if let crate::Expression::Unary { op, expr } = *expression {
+                let expr_ty = func_ctx.resolve_type(expr, &module.types);
+                let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar() else {
+                    continue;
+                };
+                let wrapped = WrappedUnaryOp {
+                    op,
+                    ty: (vector_size, scalar),
+                };
+
+                match (op, scalar) {
+                    (
+                        crate::UnaryOperator::Negate,
+                        crate::Scalar {
+                            kind: ScalarKind::Sint,
+                            width: 4,
+                        },
+                    ) => {
+                        if !self.wrapped.unary_op.insert(wrapped) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, expr_ty)?;
+                        write!(self.out, " {NEG_FUNCTION}(")?;
+                        self.write_value_type(module, expr_ty)?;
+                        writeln!(self.out, " val) {{")?;
+
+                        let level = crate::back::Level(1);
+                        writeln!(self.out, "{level}return asint(-asuint(val));",)?;
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_binary_ops(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        for (expr_handle, expression) in func_ctx.expressions.iter() {
+            if let crate::Expression::Binary { op, left, right } = *expression {
+                let expr_ty = func_ctx.resolve_type(expr_handle, &module.types);
+                let left_ty = func_ctx.resolve_type(left, &module.types);
+                let right_ty = func_ctx.resolve_type(right, &module.types);
+
+                match (op, expr_ty.scalar()) {
+                    (
+                        crate::BinaryOperator::Divide,
+                        Some(
+                            scalar @ crate::Scalar {
+                                kind: ScalarKind::Sint | ScalarKind::Uint,
+                                ..
+                            },
+                        ),
+                    ) => {
+                        let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let wrapped = WrappedBinaryOp {
+                            op,
+                            left_ty: left_wrapped_ty,
+                            right_ty: right_wrapped_ty,
+                        };
+                        if !self.wrapped.binary_op.insert(wrapped) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, expr_ty)?;
+                        write!(self.out, " {DIV_FUNCTION}(")?;
+                        self.write_value_type(module, left_ty)?;
+                        write!(self.out, " lhs, ")?;
+                        self.write_value_type(module, right_ty)?;
+                        writeln!(self.out, " rhs) {{")?;
+                        let level = crate::back::Level(1);
+                        match scalar.kind {
+                            ScalarKind::Sint => {
+                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                writeln!(self.out, "{level}return lhs / (((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs);")?
+                            }
+                            ScalarKind::Uint => {
+                                writeln!(self.out, "{level}return lhs / (rhs == 0u ? 1u : rhs);")?
+                            }
+                            _ => unreachable!(),
+                        }
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
+                    (
+                        crate::BinaryOperator::Modulo,
+                        Some(
+                            scalar @ crate::Scalar {
+                                kind: ScalarKind::Sint | ScalarKind::Uint,
+                                ..
+                            },
+                        ),
+                    ) => {
+                        let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let wrapped = WrappedBinaryOp {
+                            op,
+                            left_ty: left_wrapped_ty,
+                            right_ty: right_wrapped_ty,
+                        };
+                        if !self.wrapped.binary_op.insert(wrapped) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, expr_ty)?;
+                        write!(self.out, " {MOD_FUNCTION}(")?;
+                        self.write_value_type(module, left_ty)?;
+                        write!(self.out, " lhs, ")?;
+                        self.write_value_type(module, right_ty)?;
+                        writeln!(self.out, " rhs) {{")?;
+                        let level = crate::back::Level(1);
+                        match scalar.kind {
+                            ScalarKind::Sint => {
+                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                write!(self.out, "{level}")?;
+                                self.write_value_type(module, right_ty)?;
+                                writeln!(self.out, " divisor = ((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs;")?;
+                                writeln!(
+                                    self.out,
+                                    "{level}return lhs - (lhs / divisor) * divisor;"
+                                )?
+                            }
+                            ScalarKind::Uint => {
+                                writeln!(self.out, "{level}return lhs % (rhs == 0u ? 1u : rhs);")?
+                            }
+                            _ => unreachable!(),
+                        }
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
                     _ => {}
                 }
             }
@@ -1120,6 +1336,8 @@ impl<W: Write> super::Writer<'_, W> {
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
         self.write_wrapped_math_functions(module, func_ctx)?;
+        self.write_wrapped_unary_ops(module, func_ctx)?;
+        self.write_wrapped_binary_ops(module, func_ctx)?;
         self.write_wrapped_expression_functions(module, func_ctx.expressions, Some(func_ctx))?;
         self.write_wrapped_zero_value_functions(module, func_ctx.expressions)?;
 
