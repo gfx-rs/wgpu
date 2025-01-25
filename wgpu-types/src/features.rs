@@ -63,6 +63,8 @@ macro_rules! bitflags_independent_two_arg {
     )
 }
 
+/// Macro for creating sets of bitflags, we need this because there
+/// are almost more flags than bits left and the number of flags is increasing.
 macro_rules! bitflags_array {
     (
     $(#[$outer:meta])* pub struct $name:ident: [$T:ty; $Len:expr];
@@ -170,11 +172,11 @@ macro_rules! bitflags_array {
 
         #[cfg(feature = "serde")]
         impl ParseHex for Bits {
-            #[allow(unused_assignments)]
+             #[allow(unused_assignments)]
              fn parse_hex(input: &str) -> Result<Self, ParseError> {
                  let mut offset = 0;
                  $(
-                 // A byte is two hex places u8 (1 byte) = 0x00 (2 hex places).
+                 // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
                  let cur_input = &input[offset..(offset + (size_of::<$T>() * 2))];
                  let $lower_inner_name = <$T>::from_str_radix(cur_input, 16).map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
                  // Two hex chars is a byte.
@@ -208,7 +210,7 @@ macro_rules! bitflags_array {
         impl $name {
             const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
 
-            /// Constant function for `bits()`
+            /// Gets the set flags as a container holding an array of bits.
             pub const fn bits(&self) -> Bits {
                 Bits([$(self.$lower_inner_name.bits(),)*])
             }
@@ -234,12 +236,12 @@ macro_rules! bitflags_array {
                 $(self.$lower_inner_name.intersects(other.$lower_inner_name) ||)* false
             }
 
-            /// Returns whether the struct is empty.
+            /// Returns whether there is no flag set.
             pub const fn is_empty(self) -> bool {
                 $(self.$lower_inner_name.is_empty() &&)* true
             }
 
-            /// Returns whether the struct is has all flags set.
+            /// Returns whether the struct has all flags set.
             pub const fn is_all(self) -> bool {
                 $(self.$lower_inner_name.is_all() &&)* true
             }
@@ -255,7 +257,7 @@ macro_rules! bitflags_array {
             }
 
             bitflags_independent_two_arg! {
-                /// Bitwise and of the complement - `self & !other`
+                /// Bitwise and of the complement of other - `self & !other`
                 difference $($lower_inner_name)*
             }
 
@@ -289,9 +291,11 @@ macro_rules! bitflags_array {
                 $(self.$lower_inner_name.toggle(other.$lower_inner_name);)*
             }
 
-            /// Takes in [`Bits`] and returns Self or None if there are invalid bits
+            /// Takes in [`Bits`] and returns None if there are invalid bits or otherwise Self with
+            /// those bits set
             pub const fn from_bits(bits:Bits) -> Option<Self> {
                 let [$($lower_inner_name,)*] = bits.0;
+                // The ? operator does not work in a const context.
                 Some(Self { $($lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
                     $lower_inner_name
                 } else {
@@ -299,19 +303,21 @@ macro_rules! bitflags_array {
                 },)* })
             }
 
-            /// Takes in [`Bits`] and returns Self with only valid bits
+            /// Takes in [`Bits`] and returns Self with only valid bits (all other bits removed)
             pub const fn from_bits_truncate(bits:Bits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_truncate($lower_inner_name),)* }
             }
 
-            /// Takes in [`Bits`] and returns Self with only all bits
+            /// Takes in [`Bits`] and returns Self with all bits that were set without removing
+            /// invalid bits
             pub const fn from_bits_retain(bits:Bits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
 
-            /// Takes in a name and returns Self if it matches
+            /// Takes in a name and returns Self if it matches or none if the name does not match
+            /// the name of any of the flags. Name is capitalisation dependent.
             pub fn from_name(name: &str) -> Option<Self> {
                 $($({
                     if name == stringify!($Flag) {
@@ -334,6 +340,7 @@ macro_rules! bitflags_array {
             $(
             $(
             $(#[$inner $($args)*])*
+            // We need this for structs with only a member.
             #[allow(clippy::needless_update)]
             pub const $Flag: Self = Self {
                 $lower_inner_name: $inner_name::from_bits_truncate($value),
