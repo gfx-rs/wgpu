@@ -1,8 +1,8 @@
 //! Tests for buffer usages validation.
 
+use wgpu::BufferAddress;
 use wgpu::{BufferUsages as Bu, MapMode as Ma};
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;
 

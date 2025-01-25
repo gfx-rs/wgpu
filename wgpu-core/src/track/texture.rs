@@ -27,26 +27,18 @@ use crate::{
         ResourceUsageCompatibilityError, ResourceUses,
     },
 };
-use hal::{TextureBarrier, TextureUses};
+use hal::TextureBarrier;
 
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
 
-use wgt::{strict_assert, strict_assert_eq};
+use wgt::{strict_assert, strict_assert_eq, TextureSelector, TextureUses};
 
 use std::{
     iter,
-    ops::Range,
     sync::{Arc, Weak},
     vec::Drain,
 };
-
-/// Specifies a particular set of subresources in a texture.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TextureSelector {
-    pub mips: Range<u32>,
-    pub layers: Range<u32>,
-}
 
 impl ResourceUses for TextureUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;

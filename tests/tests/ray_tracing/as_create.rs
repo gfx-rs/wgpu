@@ -3,9 +3,9 @@ use wgpu::{
     AccelerationStructureUpdateMode, BlasGeometrySizeDescriptors,
     BlasTriangleGeometrySizeDescriptor, CreateBlasDescriptor,
 };
+use wgpu::{IndexFormat, VertexFormat};
 use wgpu_macros::gpu_test;
 use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::{IndexFormat, VertexFormat};
 
 #[gpu_test]
 static BLAS_INVALID_VERTEX_FORMAT: GpuTestConfiguration = GpuTestConfiguration::new()

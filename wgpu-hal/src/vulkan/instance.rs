@@ -63,6 +63,14 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
+    // Silence Vulkan Validation error "VUID-vkCmdCopyImageToBuffer-pRegions-00184".
+    // While we aren't sure yet, we suspect this is probably a VVL issue.
+    // https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/9276
+    const VUID_VKCMDCOPYIMAGETOBUFFER_PREGIONS_00184: i32 = 0x45ef177c;
+    if cd.message_id_number == VUID_VKCMDCOPYIMAGETOBUFFER_PREGIONS_00184 {
+        return vk::FALSE;
+    }
+
     let level = match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Debug,
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,

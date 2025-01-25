@@ -1,6 +1,6 @@
 //! Tests for buffer copy validation.
 
-use wgt::BufferAddress;
+use wgpu::BufferAddress;
 
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
 

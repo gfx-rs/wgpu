@@ -19,7 +19,7 @@ metal::float4 builtins(
     float b1_ = as_type<float>(1);
     metal::float4 b2_ = as_type<metal::float4>(v_i32_one);
     metal::int4 v_i32_zero = metal::int4(0, 0, 0, 0);
-    return ((((static_cast<metal::float4>(metal::int4(s1_) + v_i32_zero) + s2_) + m1_) + m2_) + metal::float4(b1_)) + b2_;
+    return ((((static_cast<metal::float4>(as_type<metal::int4>(as_type<metal::uint4>(metal::int4(s1_)) + as_type<metal::uint4>(v_i32_zero))) + s2_) + m1_) + m2_) + metal::float4(b1_)) + b2_;
 }
 
 metal::float4 splat(
@@ -68,22 +68,22 @@ void arithmetic(
     float neg0_1 = -(1.0);
     metal::int2 neg1_1 = -(metal::int2(1));
     metal::float2 neg2_ = -(metal::float2(1.0));
-    int add0_ = 2 + 1;
+    int add0_ = as_type<int>(as_type<uint>(2) + as_type<uint>(1));
     uint add1_ = 2u + 1u;
     float add2_ = 2.0 + 1.0;
-    metal::int2 add3_ = metal::int2(2) + metal::int2(1);
+    metal::int2 add3_ = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) + as_type<metal::uint2>(metal::int2(1)));
     metal::uint3 add4_ = metal::uint3(2u) + metal::uint3(1u);
     metal::float4 add5_ = metal::float4(2.0) + metal::float4(1.0);
-    int sub0_ = 2 - 1;
+    int sub0_ = as_type<int>(as_type<uint>(2) - as_type<uint>(1));
     uint sub1_ = 2u - 1u;
     float sub2_ = 2.0 - 1.0;
-    metal::int2 sub3_ = metal::int2(2) - metal::int2(1);
+    metal::int2 sub3_ = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) - as_type<metal::uint2>(metal::int2(1)));
     metal::uint3 sub4_ = metal::uint3(2u) - metal::uint3(1u);
     metal::float4 sub5_ = metal::float4(2.0) - metal::float4(1.0);
-    int mul0_ = 2 * 1;
+    int mul0_ = as_type<int>(as_type<uint>(2) * as_type<uint>(1));
     uint mul1_ = 2u * 1u;
     float mul2_ = 2.0 * 1.0;
-    metal::int2 mul3_ = metal::int2(2) * metal::int2(1);
+    metal::int2 mul3_ = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) * as_type<metal::uint2>(metal::int2(1)));
     metal::uint3 mul4_ = metal::uint3(2u) * metal::uint3(1u);
     metal::float4 mul5_ = metal::float4(2.0) * metal::float4(1.0);
     int div0_ = 2 / 1;
@@ -99,20 +99,20 @@ void arithmetic(
     metal::uint3 rem4_ = metal::uint3(2u) % metal::uint3(1u);
     metal::float4 rem5_ = metal::fmod(metal::float4(2.0), metal::float4(1.0));
     {
-        metal::int2 add0_1 = metal::int2(2) + metal::int2(1);
-        metal::int2 add1_1 = metal::int2(2) + metal::int2(1);
+        metal::int2 add0_1 = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) + as_type<metal::uint2>(metal::int2(1)));
+        metal::int2 add1_1 = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) + as_type<metal::uint2>(metal::int2(1)));
         metal::uint2 add2_1 = metal::uint2(2u) + metal::uint2(1u);
         metal::uint2 add3_1 = metal::uint2(2u) + metal::uint2(1u);
         metal::float2 add4_1 = metal::float2(2.0) + metal::float2(1.0);
         metal::float2 add5_1 = metal::float2(2.0) + metal::float2(1.0);
-        metal::int2 sub0_1 = metal::int2(2) - metal::int2(1);
-        metal::int2 sub1_1 = metal::int2(2) - metal::int2(1);
+        metal::int2 sub0_1 = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) - as_type<metal::uint2>(metal::int2(1)));
+        metal::int2 sub1_1 = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) - as_type<metal::uint2>(metal::int2(1)));
         metal::uint2 sub2_1 = metal::uint2(2u) - metal::uint2(1u);
         metal::uint2 sub3_1 = metal::uint2(2u) - metal::uint2(1u);
         metal::float2 sub4_1 = metal::float2(2.0) - metal::float2(1.0);
         metal::float2 sub5_1 = metal::float2(2.0) - metal::float2(1.0);
-        metal::int2 mul0_1 = metal::int2(2) * 1;
-        metal::int2 mul1_1 = 2 * metal::int2(1);
+        metal::int2 mul0_1 = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) * as_type<uint>(1));
+        metal::int2 mul1_1 = as_type<metal::int2>(as_type<uint>(2) * as_type<metal::uint2>(metal::int2(1)));
         metal::uint2 mul2_1 = metal::uint2(2u) * 1u;
         metal::uint2 mul3_1 = 2u * metal::uint2(1u);
         metal::float2 mul4_1 = metal::float2(2.0) * 1.0;
@@ -213,12 +213,12 @@ void assignment(
     metal::int3 vec0_ = metal::int3 {};
     a_1 = 1;
     int _e5 = a_1;
-    a_1 = _e5 + 1;
+    a_1 = as_type<int>(as_type<uint>(_e5) + as_type<uint>(1));
     int _e7 = a_1;
-    a_1 = _e7 - 1;
+    a_1 = as_type<int>(as_type<uint>(_e7) - as_type<uint>(1));
     int _e9 = a_1;
     int _e10 = a_1;
-    a_1 = _e10 * _e9;
+    a_1 = as_type<int>(as_type<uint>(_e10) * as_type<uint>(_e9));
     int _e12 = a_1;
     int _e13 = a_1;
     a_1 = _e13 / _e12;
@@ -235,13 +235,13 @@ void assignment(
     int _e25 = a_1;
     a_1 = _e25 >> 1u;
     int _e28 = a_1;
-    a_1 = _e28 + 1;
+    a_1 = as_type<int>(as_type<uint>(_e28) + as_type<uint>(1));
     int _e31 = a_1;
-    a_1 = _e31 - 1;
+    a_1 = as_type<int>(as_type<uint>(_e31) - as_type<uint>(1));
     int _e37 = vec0_[1];
-    vec0_[1] = _e37 + 1;
+    vec0_[1] = as_type<int>(as_type<uint>(_e37) + as_type<uint>(1));
     int _e41 = vec0_[1];
-    vec0_[1] = _e41 - 1;
+    vec0_[1] = as_type<int>(as_type<uint>(_e41) - as_type<uint>(1));
     return;
 }
 

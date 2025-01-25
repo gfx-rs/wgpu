@@ -12,7 +12,6 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
-  RUSTFLAGS:
 
 jobs:
   publish:
@@ -36,6 +35,21 @@ jobs:
 
       - name: Install wasm-bindgen
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
+
+      - name: debug symbols to line-tables-only
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: publish-build
 
       - name: Build examples
         run: cargo xtask run-wasm --no-serve

@@ -1982,6 +1982,7 @@ impl super::Adapter {
             device: Arc::clone(&shared),
             family_index,
             relay_semaphores: Mutex::new(relay_semaphores),
+            signal_semaphores: Mutex::new((Vec::new(), Vec::new())),
         };
 
         let mem_allocator = {

@@ -18,17 +18,7 @@ doc = false
 test = false
 
 [dependencies]
-bincode.workspace = true
-codespan-reporting.workspace = true
-env_logger.workspace = true
-argh.workspace = true
-anyhow.workspace = true
-log.workspace = true
-
-[dependencies.naga]
-version = "24.0.0"
-path = "../naga"
-features = [
+naga = { workspace = true, features = [
     "compact",
     "wgsl-in",
     "wgsl-out",
@@ -41,4 +31,11 @@ features = [
     "dot-out",
     "serialize",
     "deserialize",
-]
+] }
+
+bincode.workspace = true
+codespan-reporting.workspace = true
+env_logger.workspace = true
+argh.workspace = true
+anyhow.workspace = true
+log.workspace = true

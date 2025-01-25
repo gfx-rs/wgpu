@@ -17,7 +17,7 @@ use crate::{
     ray_tracing::{CreateBlasError, CreateTlasError},
     resource, LabelHelpers,
 };
-use hal::{AccelerationStructureTriangleIndices, BufferUses, MemoryFlags};
+use hal::{AccelerationStructureTriangleIndices, MemoryFlags};
 use std::mem::size_of;
 use wgt::{AccelerationStructureFlags, BufferAddress, Features};
 
@@ -109,7 +109,7 @@ impl Device {
                     .create_buffer(&hal::BufferDescriptor {
                         label: None,
                         size: size_of::<BufferAddress>() as BufferAddress,
-                        usage: BufferUses::MAP_READ | BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                        usage: wgt::BufferUses::MAP_READ | wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY,
                         memory_flags: MemoryFlags::PREFER_COHERENT,
                     })
                     .map_err(DeviceError::from_hal)
@@ -175,7 +175,8 @@ impl Device {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),
                 size: instance_buffer_size as u64,
-                usage: BufferUses::COPY_DST | BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                usage: wgt::BufferUses::COPY_DST
+                    | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 memory_flags: MemoryFlags::PREFER_COHERENT,
             })
         }

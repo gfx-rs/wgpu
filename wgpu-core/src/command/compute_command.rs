@@ -228,7 +228,7 @@ pub enum ArcComputeCommand {
     },
 
     PushDebugGroup {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },
@@ -236,7 +236,7 @@ pub enum ArcComputeCommand {
     PopDebugGroup,
 
     InsertDebugMarker {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },

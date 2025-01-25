@@ -2,11 +2,10 @@
 
 To improve translator performance and reduce memory usage, most structures are
 stored in an [`Arena`]. An `Arena<T>` stores a series of `T` values, indexed by
-[`Handle<T>`](Handle) values, which are just wrappers around integer indexes.
+[`Handle<T>`] values, which are just wrappers around integer indexes.
 For example, a `Function`'s expressions are stored in an `Arena<Expression>`,
 and compound expressions refer to their sub-expressions via `Handle<Expression>`
-values. (When examining the serialized form of a `Module`, note that the first
-element of an `Arena` has an index of 1, not 0.)
+values.
 
 A [`UniqueArena`] is just like an `Arena`, except that it stores only a single
 instance of each value. The value type must implement `Eq` and `Hash`. Like an
