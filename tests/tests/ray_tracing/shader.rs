@@ -1,10 +1,10 @@
 use crate::ray_tracing::AsBuildContext;
+use wgpu::AccelerationStructureFlags;
 use wgpu::BufferUsages;
 use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
 };
-use wgpu::wgt::AccelerationStructureFlags;
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
