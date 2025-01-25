@@ -213,7 +213,6 @@ pub(crate) enum Error<'a> {
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
     InvalidRayQueryPointer(Span),
-    Pointer(&'static str, Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
     InvalidAssignment {
@@ -262,6 +261,8 @@ pub(crate) enum Error<'a> {
         found: u32,
     },
     FunctionReturnsVoid(Span),
+    FunctionMustUseUnused(Span),
+    FunctionMustUseReturnsVoid(Span, Span),
     InvalidWorkGroupUniformLoad(Span),
     Internal(&'static str),
     ExpectedConstExprConcreteIntegerScalar(Span),
@@ -717,11 +718,6 @@ impl<'a> Error<'a> {
                     notes,
                 }
             }
-            Error::Pointer(what, span) => ParseError {
-                message: format!("{what} must not be a pointer"),
-                labels: vec![(span, "expression is a pointer".into())],
-                notes: vec![],
-            },
             Error::ReservedKeyword(name_span) => ParseError {
                 message: format!("name `{}` is a reserved keyword", &source[name_span]),
                 labels: vec![(
@@ -818,6 +814,27 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "".into())],
                 notes: vec![
                     "perhaps you meant to call the function in a separate statement?".into(),
+                ],
+            },
+            Error::FunctionMustUseUnused(call) => ParseError {
+                message: "unused return value from function annotated with @must_use".into(),
+                labels: vec![(call, "".into())],
+                notes: vec![
+                    format!(
+                        "function '{}' is declared with `@must_use` attribute",
+                        &source[call],
+                    ),
+                    "use a phony assignment or declare a value using the function call as the initializer".into(),
+                ],
+            },
+            Error::FunctionMustUseReturnsVoid(attr, signature) => ParseError {
+                message: "function annotated with @must_use but does not return any value".into(),
+                labels: vec![
+                    (attr, "".into()),
+                    (signature, "".into()),
+                ],
+                notes: vec![
+                    "declare a return type or remove the attribute".into(),
                 ],
             },
             Error::InvalidWorkGroupUniformLoad(span) => ParseError {

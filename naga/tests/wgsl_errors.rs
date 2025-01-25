@@ -581,44 +581,6 @@ fn local_var_missing_type() {
 }
 
 #[test]
-fn postfix_pointers() {
-    check(
-        r#"
-            fn main() {
-                var v: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-                let pv = &v;
-                let a = *pv[3]; // Problematic line
-            }
-        "#,
-        r#"error: the value indexed by a `[]` subscripting expression must not be a pointer
-  ┌─ wgsl:5:26
-  │
-5 │                 let a = *pv[3]; // Problematic line
-  │                          ^^ expression is a pointer
-
-"#,
-    );
-
-    check(
-        r#"
-            struct S { m: i32 };
-            fn main() {
-                var s: S = S(42);
-                let ps = &s;
-                let a = *ps.m; // Problematic line
-            }
-        "#,
-        r#"error: the value accessed by a `.member` expression must not be a pointer
-  ┌─ wgsl:6:26
-  │
-6 │                 let a = *ps.m; // Problematic line
-  │                          ^^ expression is a pointer
-
-"#,
-    );
-}
-
-#[test]
 fn reserved_keyword() {
     // global var
     check(
@@ -2000,6 +1962,94 @@ fn function_returns_void() {
   = note: perhaps you meant to call the function in a separate statement?
 
 "###,
+    )
+}
+
+#[test]
+fn function_must_use_unused() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+
+fn useless() -> i32 {
+  use_me(1);
+  return 0;
+}
+"#,
+        r#"error: unused return value from function annotated with @must_use
+  ┌─ wgsl:8:3
+  │
+8 │   use_me(1);
+  │   ^^^^^^
+  │
+  = note: function 'use_me' is declared with `@must_use` attribute
+  = note: use a phony assignment or declare a value using the function call as the initializer
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_returns_void() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) {
+  let x = a;
+}
+"#,
+        r#"error: function annotated with @must_use but does not return any value
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+3 │ fn use_me(a: i32) {
+  │    ^^^^^^^^^^^^^
+  │
+  = note: declare a return type or remove the attribute
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_repeated() {
+    check(
+        r#"
+@must_use
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+"#,
+        r#"error: repeated attribute: `must_use`
+  ┌─ wgsl:3:2
+  │
+3 │ @must_use
+  │  ^^^^^^^^ repeated attribute
+
+"#,
+    );
+}
+
+#[test]
+fn struct_member_must_use() {
+    check(
+        r#"
+struct S {
+  @must_use a: i32,
+}
+"#,
+        r#"error: unknown attribute: `must_use`
+  ┌─ wgsl:3:4
+  │
+3 │   @must_use a: i32,
+  │    ^^^^^^^^ unknown attribute
+
+"#,
     )
 }
 

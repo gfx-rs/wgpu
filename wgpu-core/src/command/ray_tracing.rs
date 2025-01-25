@@ -17,10 +17,9 @@ use crate::{
     FastHashSet,
 };
 
-use wgt::{math::align_to, BufferUsages, Features};
+use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
 use super::CommandBufferMutable;
-use hal::BufferUses;
 use std::{
     cmp::max,
     num::NonZeroU64,

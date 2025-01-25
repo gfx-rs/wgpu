@@ -658,7 +658,7 @@ fn map_texture_copy_view(
 }
 
 fn map_tagged_texture_copy_view(
-    view: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
+    view: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
 ) -> webgpu_sys::GpuCopyExternalImageDestInfo {
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuCopyExternalImageDestInfo::new(&texture.inner);
@@ -2554,8 +2554,8 @@ impl dispatch::QueueInterface for WebQueue {
 
     fn copy_external_image_to_texture(
         &self,
-        source: &wgt::CopyExternalImageSourceInfo,
-        dest: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
+        source: &crate::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
         size: crate::Extent3d,
     ) {
         self.inner
@@ -3102,6 +3102,18 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         _tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
     ) {
         unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn transition_resources<'a>(
+        &mut self,
+        _buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        _texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTexture>,
+        >,
+    ) {
+        // no-op
     }
 }
 impl Drop for WebCommandEncoder {

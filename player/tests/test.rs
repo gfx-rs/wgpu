@@ -10,6 +10,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
+extern crate wgpu_core as wgc;
+extern crate wgpu_types as wgt;
+
 use player::GlobalPlay;
 use std::{
     fs::{read_to_string, File},

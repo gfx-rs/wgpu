@@ -84,7 +84,7 @@ kernel void main_(
             metal::float2 _e61 = pos;
             cMass = _e60 + _e61;
             int _e63 = cMassCount;
-            cMassCount = _e63 + 1;
+            cMassCount = as_type<int>(as_type<uint>(_e63) + as_type<uint>(1));
         }
         metal::float2 _e66 = pos;
         metal::float2 _e67 = vPos;
@@ -103,7 +103,7 @@ kernel void main_(
             metal::float2 _e86 = vel;
             cVel = _e85 + _e86;
             int _e88 = cVelCount;
-            cVelCount = _e88 + 1;
+            cVelCount = as_type<int>(as_type<uint>(_e88) + as_type<uint>(1));
         }
 #define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
         LOOP_IS_BOUNDED

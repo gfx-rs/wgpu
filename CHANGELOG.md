@@ -40,21 +40,25 @@ Bottom level categories:
 
 ## Unreleased
 
-### Bug Fixes
+### New Features
 
-#### Vulkan
+#### Naga
 
-- Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
+- Support @must_use attribute on function declarations. By @turbocrime in [#6801](https://github.com/gfx-rs/wgpu/pull/6801).
 
 ### Changes
 
-#### Refactored internal trace path parameter
+#### General
+
+- If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
+
+##### Refactored internal trace path parameter
 
 Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
 
 By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
-#### Start using `hashbrown`
+##### Start using `hashbrown`
 
 Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std support. (This may help improve performance as well.)
 
@@ -62,6 +66,29 @@ By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
 - Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
   [#6780](https://github.com/gfx-rs/wgpu/pull/6780)
+
+#### Vulkan
+
+##### HAL queue callback support
+
+- Add a way to notify with `Queue::submit()` to Vulkan's `vk::Semaphore` allocated outside of wgpu. By @sotaroikeda in [#6813](https://github.com/gfx-rs/wgpu/pull/6813).
+
+### Bug Fixes
+
+#### General
+
+- Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#6933](https://github.com/gfx-rs/wgpu/pull/6933).
+- Add Flush to GL Queue::submit. By @cwfitzgerald in [#6941](https://github.com/gfx-rs/wgpu/pull/6941).
+- Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
+- Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
+
+#### Vulkan
+
+- Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
+
+### Documentation
+
+- Improved documentation around pipeline caches. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978).
 
 ## v24.0.0 (2025-01-15)
 
@@ -246,6 +273,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Add support for OpAtomicCompareExchange in SPIR-V frontend. By @schell in [#6590](https://github.com/gfx-rs/wgpu/pull/6590).
 - Implement type inference for abstract arguments to user-defined functions. By @jamienicol in [#6577](https://github.com/gfx-rs/wgpu/pull/6577).
 - Allow for override-expressions in array sizes. By @KentSlaney in [#6654](https://github.com/gfx-rs/wgpu/pull/6654).
+- [`pointer_composite_access` WGSL language extension](https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access) is implemented. By @sagudev in [#6913](https://github.com/gfx-rs/wgpu/pull/6913)
 
 ##### General
 
@@ -259,6 +287,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Image atomic support in shaders. By @atlv24 in [#6706](https://github.com/gfx-rs/wgpu/pull/6706)
 - 64 bit image atomic support in shaders. By @atlv24 in [#5537](https://github.com/gfx-rs/wgpu/pull/5537)
 - Add `no_std` support to `wgpu-types`. By @bushrat011899 in [#6892](https://github.com/gfx-rs/wgpu/pull/6892).
+- Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [6678](https://github.com/gfx-rs/wgpu/pull/6678).
 
 ##### Vulkan
 
@@ -340,6 +369,7 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - In validation, forbid cycles between global expressions and types. By @jimblandy in [#6800](https://github.com/gfx-rs/wgpu-pull/6800)
 - Allow abstract scalars in modf and frexp results. By @jimblandy in [#6821](https://github.com/gfx-rs/wgpu-pull/6821)
 - In the WGSL front end, apply automatic conversions to values being assigned. By @jimblandy in [#6822](https://github.com/gfx-rs/wgpu-pull/6822)
+- Fix a leak by ensuring that types that depend on expressions are correctly compacted. By @KentSlaney in [#6934](https://github.com/gfx-rs/wgpu/pull/6934).
 
 #### Vulkan
 

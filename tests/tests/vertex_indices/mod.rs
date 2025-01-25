@@ -8,8 +8,8 @@ use std::{num::NonZeroU64, ops::Range};
 use itertools::Itertools;
 use strum::IntoEnumIterator;
 use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
+use wgpu::RenderBundleDescriptor;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::RenderBundleDescriptor;
 
 /// Generic struct representing a draw call
 struct Draw {

@@ -16,16 +16,7 @@ path = "lib.rs"
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-deno_core.workspace = true
-serde = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["full"] }
-wgt = { workspace = true, package = "wgpu-types", features = ["serde"] }
-raw-window-handle = { workspace = true }
-thiserror.workspace = true
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgpu-core]
-workspace = true
-features = [
+wgpu-core = { workspace = true, features = [
     "raw-window-handle",
     "trace",
     "replay",
@@ -33,19 +24,29 @@ features = [
     "strict_asserts",
     "wgsl",
     "gles",
-]
+] }
+wgpu-types = { workspace = true, features = ["serde"] }
 
-# We want the wgpu-core Metal backend on macOS and iOS.
-[target.'cfg(target_vendor = "apple")'.dependencies.wgpu-core]
-workspace = true
-features = ["metal"]
+deno_core.workspace = true
+raw-window-handle = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
 
-# We want the wgpu-core Direct3D backend on Windows.
-[target.'cfg(windows)'.dependencies.wgpu-core]
-workspace = true
-features = ["dx12"]
+# Apple Platforms
+#
+# We want the Metal backend.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu-core = { workspace = true, features = ["metal"] }
 
-# We want the wgpu-core Vulkan backend on Unix (but not Emscripten) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"))))'.dependencies.wgpu-core]
-workspace = true
-features = ["vulkan"]
+# Windows
+#
+# We want the DX12 backend.
+[target.'cfg(windows)'.dependencies]
+wgpu-core = { workspace = true, features = ["dx12"] }
+
+# Windows and Unix (not Emscripten)
+#
+# We want the Vulkan backend.
+[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"))))'.dependencies]
+wgpu-core = { workspace = true, features = ["vulkan"] }

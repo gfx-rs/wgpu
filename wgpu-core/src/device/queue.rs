@@ -73,8 +73,8 @@ impl Queue {
                 .transition_buffers(&[hal::BufferBarrier {
                     buffer: zero_buffer,
                     usage: hal::StateTransition {
-                        from: hal::BufferUses::empty(),
-                        to: hal::BufferUses::COPY_DST,
+                        from: wgt::BufferUses::empty(),
+                        to: wgt::BufferUses::COPY_DST,
                     },
                 }]);
             pending_writes
@@ -85,8 +85,8 @@ impl Queue {
                 .transition_buffers(&[hal::BufferBarrier {
                     buffer: zero_buffer,
                     usage: hal::StateTransition {
-                        from: hal::BufferUses::COPY_DST,
-                        to: hal::BufferUses::COPY_SRC,
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::COPY_SRC,
                     },
                 }]);
         }
@@ -588,7 +588,7 @@ impl Queue {
             let mut trackers = self.device.trackers.lock();
             trackers
                 .buffers
-                .set_single(&buffer, hal::BufferUses::COPY_DST)
+                .set_single(&buffer, wgt::BufferUses::COPY_DST)
         };
 
         let snatch_guard = self.device.snatchable_lock.read();
@@ -606,8 +606,8 @@ impl Queue {
         let barriers = iter::once(hal::BufferBarrier {
             buffer: staging_buffer.raw(),
             usage: hal::StateTransition {
-                from: hal::BufferUses::MAP_WRITE,
-                to: hal::BufferUses::COPY_SRC,
+                from: wgt::BufferUses::MAP_WRITE,
+                to: wgt::BufferUses::COPY_SRC,
             },
         })
         .chain(transition.map(|pending| pending.into_hal(&buffer, &snatch_guard)))
@@ -828,8 +828,8 @@ impl Queue {
             let buffer_barrier = hal::BufferBarrier {
                 buffer: staging_buffer.raw(),
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::MAP_WRITE,
-                    to: hal::BufferUses::COPY_SRC,
+                    from: wgt::BufferUses::MAP_WRITE,
+                    to: wgt::BufferUses::COPY_SRC,
                 },
             };
 
@@ -837,7 +837,7 @@ impl Queue {
             let transition =
                 trackers
                     .textures
-                    .set_single(&dst, selector, hal::TextureUses::COPY_DST);
+                    .set_single(&dst, selector, wgt::TextureUses::COPY_DST);
             let texture_barriers = transition
                 .map(|pending| pending.into_hal(dst_raw))
                 .collect::<Vec<_>>();
@@ -1014,7 +1014,7 @@ impl Queue {
         let mut trackers = self.device.trackers.lock();
         let transitions = trackers
             .textures
-            .set_single(&dst, selector, hal::TextureUses::COPY_DST);
+            .set_single(&dst, selector, wgt::TextureUses::COPY_DST);
 
         // `copy_external_image_to_texture` is exclusive to the WebGL backend.
         // Don't go through the `DynCommandEncoder` abstraction and directly to the WebGL backend.
@@ -1221,7 +1221,7 @@ impl Queue {
 
                             unsafe {
                                 used_surface_textures
-                                    .merge_single(texture, None, hal::TextureUses::PRESENT)
+                                    .merge_single(texture, None, wgt::TextureUses::PRESENT)
                                     .unwrap()
                             };
                         }
@@ -1532,7 +1532,7 @@ fn validate_command_buffer(
                 if should_extend {
                     unsafe {
                         used_surface_textures
-                            .merge_single(texture, None, hal::TextureUses::PRESENT)
+                            .merge_single(texture, None, wgt::TextureUses::PRESENT)
                             .unwrap();
                     };
                 }

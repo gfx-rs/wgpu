@@ -22,8 +22,6 @@ pub enum CallError {
     ResultAlreadyInScope(Handle<crate::Expression>),
     #[error("Result expression {0:?} is populated by multiple `Call` statements")]
     ResultAlreadyPopulated(Handle<crate::Expression>),
-    #[error("Result value is invalid")]
-    ResultValue(#[source] ExpressionError),
     #[error("Requires {required} arguments, but {seen} are provided")]
     ArgumentCount { required: usize, seen: usize },
     #[error("Argument {index} value {seen_expression:?} doesn't match the type {required:?}")]

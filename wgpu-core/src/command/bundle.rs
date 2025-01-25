@@ -683,7 +683,7 @@ fn set_index_buffer(
     state
         .trackers
         .buffers
-        .merge_single(&buffer, hal::BufferUses::INDEX)?;
+        .merge_single(&buffer, wgt::BufferUses::INDEX)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDEX)?;
@@ -725,7 +725,7 @@ fn set_vertex_buffer(
     state
         .trackers
         .buffers
-        .merge_single(&buffer, hal::BufferUses::VERTEX)?;
+        .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::VERTEX)?;
@@ -864,7 +864,7 @@ fn multi_draw_indirect(
     state
         .trackers
         .buffers
-        .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
+        .merge_single(&buffer, wgt::BufferUses::INDIRECT)?;
 
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;

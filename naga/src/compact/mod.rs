@@ -63,16 +63,6 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
-    for (_, ty) in module.types.iter() {
-        if let crate::TypeInner::Array {
-            size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(size_expr)),
-            ..
-        } = ty.inner
-        {
-            module_tracer.global_expressions_used.insert(size_expr);
-        }
-    }
-
     // We assume that all functions are used.
     //
     // Observe which types, constant expressions, constants, and
@@ -111,12 +101,6 @@ pub fn compact(module: &mut crate::Module) {
         })
         .collect();
 
-    // Given that the above steps have marked all the constant
-    // expressions used directly by globals, constants, functions, and
-    // entry points, walk the constant expression arena to find all
-    // constant expressions used, directly or indirectly.
-    module_tracer.as_const_expression().trace_expressions();
-
     // Constants' initializers are taken care of already, because
     // expression tracing sees through constants. But we still need to
     // note type usage.
@@ -134,8 +118,7 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
-    // Propagate usage through types.
-    module_tracer.as_type().trace_types();
+    module_tracer.type_expression_tandem();
 
     // Now that we know what is used and what is never touched,
     // produce maps from the `Handle`s that appear in `module` now to
@@ -271,10 +254,77 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
+    /// Traverse types and global expressions in tandem to determine which are used.
+    ///
+    /// Assuming that all types and global expressions used by other parts of
+    /// the module have been added to [`types_used`] and
+    /// [`global_expressions_used`], expand those sets to include all types and
+    /// global expressions reachable from those.
+    ///
+    /// [`types_used`]: ModuleTracer::types_used
+    /// [`global_expressions_used`]: ModuleTracer::global_expressions_used
+    fn type_expression_tandem(&mut self) {
+        // For each type T, compute the latest global expression E that T and
+        // its predecessors refer to. Given the ordering rules on types and
+        // global expressions in valid modules, we can do this with a single
+        // forward scan of the type arena. The rules further imply that T can
+        // only be referred to by expressions after E.
+        let mut max_dep = Vec::with_capacity(self.module.types.len());
+        let mut previous = None;
+        for (_handle, ty) in self.module.types.iter() {
+            previous = std::cmp::max(
+                previous,
+                match ty.inner {
+                    crate::TypeInner::Array {
+                        base: _,
+                        size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(expr)),
+                        stride: _,
+                    }
+                    | crate::TypeInner::BindingArray {
+                        base: _,
+                        size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(expr)),
+                    } => Some(expr),
+                    _ => None,
+                },
+            );
+            max_dep.push(previous);
+        }
+
+        // Visit types and global expressions from youngest to oldest.
+        //
+        // The outer loop visits types. Before visiting each type, the inner
+        // loop ensures that all global expressions that could possibly refer to
+        // it have been visited. And since the inner loop stop at the latest
+        // expression that the type could possibly refer to, we know that we
+        // have previously visited any types that might refer to each expression
+        // we visit.
+        //
+        // This lets us assume that any type or expression that is *not* marked
+        // as used by the time we visit it is genuinely unused, and can be
+        // ignored.
+        let mut exprs = self.module.global_expressions.iter().rev().peekable();
+        for ((ty_handle, ty), dep) in self.module.types.iter().rev().zip(max_dep.iter().rev()) {
+            while let Some((expr_handle, expr)) = exprs.next_if(|&(h, _)| Some(h) > *dep) {
+                if self.global_expressions_used.contains(expr_handle) {
+                    self.as_const_expression().trace_expression(expr);
+                }
+            }
+            if self.types_used.contains(ty_handle) {
+                self.as_type().trace_type(ty);
+            }
+        }
+        // Visit any remaining expressions.
+        for (expr_handle, expr) in exprs {
+            if self.global_expressions_used.contains(expr_handle) {
+                self.as_const_expression().trace_expression(expr);
+            }
+        }
+    }
+
     fn as_type(&mut self) -> types::TypeTracer {
         types::TypeTracer {
-            types: &self.module.types,
             types_used: &mut self.types_used,
+            expressions_used: &mut self.global_expressions_used,
         }
     }
 
@@ -351,4 +401,115 @@ impl From<FunctionTracer<'_>> for FunctionMap {
             expressions: HandleMap::from_set(used.expressions_used),
         }
     }
+}
+
+#[test]
+fn type_expression_interdependence() {
+    let mut module: crate::Module = Default::default();
+    let u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar {
+                kind: crate::ScalarKind::Uint,
+                width: 4,
+            }),
+        },
+        crate::Span::default(),
+    );
+    let expr = module.global_expressions.append(
+        crate::Expression::Literal(crate::Literal::U32(0)),
+        crate::Span::default(),
+    );
+    let type_needs_expression = |module: &mut crate::Module, handle| {
+        module.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Array {
+                    base: u32,
+                    size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(handle)),
+                    stride: 4,
+                },
+            },
+            crate::Span::default(),
+        )
+    };
+    let expression_needs_type = |module: &mut crate::Module, handle| {
+        module
+            .global_expressions
+            .append(crate::Expression::ZeroValue(handle), crate::Span::default())
+    };
+    let expression_needs_expression = |module: &mut crate::Module, handle| {
+        module.global_expressions.append(
+            crate::Expression::Load { pointer: handle },
+            crate::Span::default(),
+        )
+    };
+    let type_needs_type = |module: &mut crate::Module, handle| {
+        module.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Array {
+                    base: handle,
+                    size: crate::ArraySize::Dynamic,
+                    stride: 0,
+                },
+            },
+            crate::Span::default(),
+        )
+    };
+    let mut type_name_counter = 0;
+    let mut type_needed = |module: &mut crate::Module, handle| {
+        let name = Some(format!("type{}", type_name_counter));
+        type_name_counter += 1;
+        module.types.insert(
+            crate::Type {
+                name,
+                inner: crate::TypeInner::Array {
+                    base: handle,
+                    size: crate::ArraySize::Dynamic,
+                    stride: 0,
+                },
+            },
+            crate::Span::default(),
+        )
+    };
+    let mut override_name_counter = 0;
+    let mut expression_needed = |module: &mut crate::Module, handle| {
+        let name = Some(format!("override{}", override_name_counter));
+        override_name_counter += 1;
+        module.overrides.append(
+            crate::Override {
+                name,
+                id: None,
+                ty: u32,
+                init: Some(handle),
+            },
+            crate::Span::default(),
+        )
+    };
+    let cmp_modules = |mod0: &crate::Module, mod1: &crate::Module| {
+        (mod0.types.iter().collect::<Vec<_>>() == mod1.types.iter().collect::<Vec<_>>())
+            && (mod0.global_expressions.iter().collect::<Vec<_>>()
+                == mod1.global_expressions.iter().collect::<Vec<_>>())
+    };
+    // borrow checker breaks without the tmp variables as of Rust 1.83.0
+    let expr_end = type_needs_expression(&mut module, expr);
+    let ty_trace = type_needs_type(&mut module, expr_end);
+    let expr_init = expression_needs_type(&mut module, ty_trace);
+    expression_needed(&mut module, expr_init);
+    let ty_end = expression_needs_type(&mut module, u32);
+    let expr_trace = expression_needs_expression(&mut module, ty_end);
+    let ty_init = type_needs_expression(&mut module, expr_trace);
+    type_needed(&mut module, ty_init);
+    let untouched = module.clone();
+    compact(&mut module);
+    assert!(cmp_modules(&module, &untouched));
+    let unused_expr = module.global_expressions.append(
+        crate::Expression::Literal(crate::Literal::U32(1)),
+        crate::Span::default(),
+    );
+    type_needs_expression(&mut module, unused_expr);
+    assert!(!cmp_modules(&module, &untouched));
+    compact(&mut module);
+    assert!(cmp_modules(&module, &untouched));
 }

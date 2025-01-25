@@ -284,6 +284,11 @@ impl CpuHeap {
     }
 
     pub(super) fn at(&self, index: u32) -> Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE {
+        debug_assert!(
+            index < self.total,
+            "Index ({index}) out of bounds {total}",
+            total = self.total
+        );
         Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE {
             ptr: self.start.ptr + (self.handle_size * index) as usize,
         }

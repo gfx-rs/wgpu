@@ -1040,17 +1040,17 @@ impl crate::Device for super::Device {
 
         let mut alloc_usage = if desc
             .usage
-            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE)
+            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE)
         {
             let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
             //TODO: find a way to use `crate::MemoryFlags::PREFER_COHERENT`
             flags.set(
                 gpu_alloc::UsageFlags::DOWNLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_READ),
+                desc.usage.contains(wgt::BufferUses::MAP_READ),
             );
             flags.set(
                 gpu_alloc::UsageFlags::UPLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_WRITE),
+                desc.usage.contains(wgt::BufferUses::MAP_WRITE),
             );
             flags
         } else {
