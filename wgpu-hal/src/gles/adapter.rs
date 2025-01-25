@@ -1213,7 +1213,7 @@ impl crate::Adapter for super::Adapter {
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 maximum_frame_latency: 2..=2, //TODO, unused currently
                 current_extent: None,
-                usage: crate::TextureUses::COLOR_TARGET,
+                usage: wgt::TextureUses::COLOR_TARGET,
             })
         } else {
             None

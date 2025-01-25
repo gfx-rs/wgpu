@@ -23,10 +23,7 @@ use crate::{
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
-    track::{
-        BindGroupStates, DeviceTracker, TextureSelector, TrackerIndexAllocators, UsageScope,
-        UsageScopePool,
-    },
+    track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers,
@@ -36,7 +33,8 @@ use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
 use wgt::{
-    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension,
+    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureSelector,
+    TextureViewDimension,
 };
 
 use crate::resource::{AccelerationStructure, Tlas};
@@ -210,7 +208,7 @@ impl Device {
             raw_device.create_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
                 size: ZERO_BUFFER_SIZE,
-                usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
+                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST,
                 memory_flags: hal::MemoryFlags::empty(),
             })
         }
@@ -520,7 +518,7 @@ impl Device {
             self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
             // We are going to be reading from it, internally;
             // when validating the content of the buffer
-            usage |= hal::BufferUses::STORAGE_READ_ONLY | hal::BufferUses::STORAGE_READ_WRITE;
+            usage |= wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::STORAGE_READ_WRITE;
         }
 
         if desc.mapped_at_creation {
@@ -529,12 +527,12 @@ impl Device {
             }
             if !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                 // we are going to be copying into it, internally
-                usage |= hal::BufferUses::COPY_DST;
+                usage |= wgt::BufferUses::COPY_DST;
             }
         } else {
             // We are required to zero out (initialize) all memory. This is done
             // on demand using clear_buffer which requires write transfer usage!
-            usage |= hal::BufferUses::COPY_DST;
+            usage |= wgt::BufferUses::COPY_DST;
         }
 
         let actual_size = if desc.size == 0 {
@@ -586,7 +584,7 @@ impl Device {
         let buffer = Arc::new(buffer);
 
         let buffer_use = if !desc.mapped_at_creation {
-            hal::BufferUses::empty()
+            wgt::BufferUses::empty()
         } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
             // buffer is mappable, so we are just doing that at start
             let map_size = buffer.size;
@@ -604,7 +602,7 @@ impl Device {
                 range: 0..map_size,
                 host: HostMap::Write,
             };
-            hal::BufferUses::MAP_WRITE
+            wgt::BufferUses::MAP_WRITE
         } else {
             let mut staging_buffer =
                 StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
@@ -615,7 +613,7 @@ impl Device {
             buffer.initialization_status.write().drain(0..aligned_size);
 
             *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
-            hal::BufferUses::COPY_DST
+            wgt::BufferUses::COPY_DST
         };
 
         self.trackers
@@ -652,7 +650,7 @@ impl Device {
         self.trackers
             .lock()
             .textures
-            .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
 
         Ok(texture)
     }
@@ -696,7 +694,7 @@ impl Device {
         self.trackers
             .lock()
             .buffers
-            .insert_single(&buffer, hal::BufferUses::empty());
+            .insert_single(&buffer, wgt::BufferUses::empty());
 
         (Fallible::Valid(buffer), None)
     }
@@ -943,12 +941,12 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
 
         let clear_mode = if hal_usage
-            .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
+            .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
-                (false, hal::TextureUses::DEPTH_STENCIL_WRITE)
+                (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
             } else {
-                (true, hal::TextureUses::COLOR_TARGET)
+                (true, wgt::TextureUses::COLOR_TARGET)
             };
             let dimension = match desc.dimension {
                 wgt::TextureDimension::D1 => TextureViewDimension::D1,
@@ -1022,7 +1020,7 @@ impl Device {
         self.trackers
             .lock()
             .textures
-            .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
 
         Ok(texture)
     }
@@ -1275,23 +1273,23 @@ impl Device {
 
         // filter the usages based on the other criteria
         let usage = {
-            let mask_copy = !(hal::TextureUses::COPY_SRC | hal::TextureUses::COPY_DST);
+            let mask_copy = !(wgt::TextureUses::COPY_SRC | wgt::TextureUses::COPY_DST);
             let mask_dimension = match resolved_dimension {
                 TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
-                    hal::TextureUses::RESOURCE
+                    wgt::TextureUses::RESOURCE
                 }
                 TextureViewDimension::D3 => {
-                    hal::TextureUses::RESOURCE
-                        | hal::TextureUses::STORAGE_READ_ONLY
-                        | hal::TextureUses::STORAGE_WRITE_ONLY
-                        | hal::TextureUses::STORAGE_READ_WRITE
+                    wgt::TextureUses::RESOURCE
+                        | wgt::TextureUses::STORAGE_READ_ONLY
+                        | wgt::TextureUses::STORAGE_WRITE_ONLY
+                        | wgt::TextureUses::STORAGE_READ_WRITE
                 }
-                _ => hal::TextureUses::all(),
+                _ => wgt::TextureUses::all(),
             };
             let mask_mip_level = if resolved_mip_level_count == 1 {
-                hal::TextureUses::all()
+                wgt::TextureUses::all()
             } else {
-                hal::TextureUses::RESOURCE
+                wgt::TextureUses::RESOURCE
             };
             texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
@@ -1955,15 +1953,15 @@ impl Device {
         let (pub_usage, internal_use, range_limit) = match binding_ty {
             wgt::BufferBindingType::Uniform => (
                 wgt::BufferUsages::UNIFORM,
-                hal::BufferUses::UNIFORM,
+                wgt::BufferUses::UNIFORM,
                 self.limits.max_uniform_buffer_binding_size,
             ),
             wgt::BufferBindingType::Storage { read_only } => (
                 wgt::BufferUsages::STORAGE,
                 if read_only {
-                    hal::BufferUses::STORAGE_READ_ONLY
+                    wgt::BufferUses::STORAGE_READ_ONLY
                 } else {
-                    hal::BufferUses::STORAGE_READ_WRITE
+                    wgt::BufferUses::STORAGE_READ_WRITE
                 },
                 self.limits.max_storage_buffer_binding_size,
             ),
@@ -2438,7 +2436,7 @@ impl Device {
         decl: &wgt::BindGroupLayoutEntry,
         view: &TextureView,
         expected: &'static str,
-    ) -> Result<hal::TextureUses, binding_model::CreateBindGroupError> {
+    ) -> Result<wgt::TextureUses, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
         if view
             .desc
@@ -2498,7 +2496,7 @@ impl Device {
                     });
                 }
                 view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
-                Ok(hal::TextureUses::RESOURCE)
+                Ok(wgt::TextureUses::RESOURCE)
             }
             wgt::BindingType::StorageTexture {
                 access,
@@ -2537,7 +2535,7 @@ impl Device {
                         {
                             return Err(Error::StorageWriteNotSupported(view.desc.format));
                         }
-                        hal::TextureUses::STORAGE_WRITE_ONLY
+                        wgt::TextureUses::STORAGE_WRITE_ONLY
                     }
                     wgt::StorageTextureAccess::ReadOnly => {
                         if !view
@@ -2547,7 +2545,7 @@ impl Device {
                         {
                             return Err(Error::StorageReadNotSupported(view.desc.format));
                         }
-                        hal::TextureUses::STORAGE_READ_ONLY
+                        wgt::TextureUses::STORAGE_READ_ONLY
                     }
                     wgt::StorageTextureAccess::ReadWrite => {
                         if !view
@@ -2558,7 +2556,7 @@ impl Device {
                             return Err(Error::StorageReadWriteNotSupported(view.desc.format));
                         }
 
-                        hal::TextureUses::STORAGE_READ_WRITE
+                        wgt::TextureUses::STORAGE_READ_WRITE
                     }
                     wgt::StorageTextureAccess::Atomic => {
                         if !view
@@ -2569,7 +2567,7 @@ impl Device {
                             return Err(Error::StorageAtomicNotSupported(view.desc.format));
                         }
 
-                        hal::TextureUses::STORAGE_ATOMIC
+                        wgt::TextureUses::STORAGE_ATOMIC
                     }
                 };
                 view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;

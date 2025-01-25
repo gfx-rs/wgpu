@@ -396,7 +396,7 @@ impl Global {
         let dst_pending = cmd_buf_data
             .trackers
             .buffers
-            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
+            .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
 
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 

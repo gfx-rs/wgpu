@@ -505,7 +505,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let target = if desc.usage.contains(crate::BufferUses::INDEX) {
+        let target = if desc.usage.contains(wgt::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
             glow::ARRAY_BUFFER
@@ -520,7 +520,7 @@ impl crate::Device for super::Device {
                 .private_caps
                 .contains(PrivateCapabilities::BUFFER_ALLOCATION);
 
-        if emulate_map && desc.usage.intersects(crate::BufferUses::MAP_WRITE) {
+        if emulate_map && desc.usage.intersects(wgt::BufferUses::MAP_WRITE) {
             return Ok(super::Buffer {
                 raw: None,
                 target,
@@ -533,7 +533,7 @@ impl crate::Device for super::Device {
 
         let gl = &self.shared.context.lock();
 
-        let target = if desc.usage.contains(crate::BufferUses::INDEX) {
+        let target = if desc.usage.contains(wgt::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
             glow::ARRAY_BUFFER
@@ -541,16 +541,16 @@ impl crate::Device for super::Device {
 
         let is_host_visible = desc
             .usage
-            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE);
+            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE);
         let is_coherent = desc
             .memory_flags
             .contains(crate::MemoryFlags::PREFER_COHERENT);
 
         let mut map_flags = 0;
-        if desc.usage.contains(crate::BufferUses::MAP_READ) {
+        if desc.usage.contains(wgt::BufferUses::MAP_READ) {
             map_flags |= glow::MAP_READ_BIT;
         }
-        if desc.usage.contains(crate::BufferUses::MAP_WRITE) {
+        if desc.usage.contains(wgt::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_WRITE_BIT;
         }
 
@@ -573,14 +573,14 @@ impl crate::Device for super::Device {
                 }
             }
             // TODO: may also be required for other calls involving `buffer_sub_data_u8_slice` (e.g. copy buffer to buffer and clear buffer)
-            if desc.usage.intersects(crate::BufferUses::QUERY_RESOLVE) {
+            if desc.usage.intersects(wgt::BufferUses::QUERY_RESOLVE) {
                 map_flags |= glow::DYNAMIC_STORAGE_BIT;
             }
             unsafe { gl.buffer_storage(target, raw_size, None, map_flags) };
         } else {
             assert!(!is_coherent);
             let usage = if is_host_visible {
-                if desc.usage.contains(crate::BufferUses::MAP_READ) {
+                if desc.usage.contains(wgt::BufferUses::MAP_READ) {
                     glow::STREAM_READ
                 } else {
                     glow::DYNAMIC_DRAW
@@ -596,7 +596,7 @@ impl crate::Device for super::Device {
 
         unsafe { gl.bind_buffer(target, None) };
 
-        if !is_coherent && desc.usage.contains(crate::BufferUses::MAP_WRITE) {
+        if !is_coherent && desc.usage.contains(wgt::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
         }
         //TODO: do we need `glow::MAP_UNSYNCHRONIZED_BIT`?
@@ -613,7 +613,7 @@ impl crate::Device for super::Device {
             }
         }
 
-        let data = if emulate_map && desc.usage.contains(crate::BufferUses::MAP_READ) {
+        let data = if emulate_map && desc.usage.contains(wgt::BufferUses::MAP_READ) {
             Some(Arc::new(Mutex::new(vec![0; desc.size as usize])))
         } else {
             None
@@ -727,9 +727,9 @@ impl crate::Device for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let gl = &self.shared.context.lock();
 
-        let render_usage = crate::TextureUses::COLOR_TARGET
-            | crate::TextureUses::DEPTH_STENCIL_WRITE
-            | crate::TextureUses::DEPTH_STENCIL_READ;
+        let render_usage = wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
         let inner = if render_usage.contains(desc.usage)

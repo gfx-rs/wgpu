@@ -53,8 +53,8 @@ pub(crate) fn create_buffer_resource(
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
-    let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
-    let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+    let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+    let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
     // Workaround for Intel Xe drivers
     if !device.private_caps.suballocation_supported {
@@ -289,8 +289,8 @@ pub(crate) fn create_committed_buffer_resource(
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<Direct3D12::ID3D12Resource, crate::DeviceError> {
-    let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
-    let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+    let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+    let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
     let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
         Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,

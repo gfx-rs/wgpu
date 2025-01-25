@@ -2176,18 +2176,29 @@ pub struct Function {
     pub local_variables: Arena<LocalVariable>,
     /// Expressions used inside this function.
     ///
-    /// If an [`Expression`] is in this arena, then its subexpressions are in this
-    /// arena too. In other words, every `Handle<Expression>` in this arena
-    /// refers to an [`Expression`] in this arena too. The only way this arena
-    /// can refer to [`Module::global_expressions`] is indirectly, via
-    /// [`Constant`] and [`Override`] expressions, which hold handles for their
-    /// respective types.
+    /// Unless explicitly stated otherwise, if an [`Expression`] is in this
+    /// arena, then its subexpressions are in this arena too. In other words,
+    /// every `Handle<Expression>` in this arena refers to an [`Expression`] in
+    /// this arena too.
+    ///
+    /// The main ways this arena refers to [`Module::global_expressions`] are:
+    ///
+    /// - [`Constant`], [`Override`], and [`GlobalVariable`] expressions hold
+    ///   handles for their respective types, whose initializer expressions are
+    ///   in [`Module::global_expressions`].
+    ///
+    /// - Various expressions hold [`Type`] handles, and [`Type`]s may refer to
+    ///   global expressions, for things like array lengths.
+    ///
+    /// - [`Expression::ImageSample::offset`] refers to an expression in
+    ///   [`Module::global_expressions`].
     ///
     /// An [`Expression`] must occur before all other [`Expression`]s that use
     /// its value.
     ///
     /// [`Constant`]: Expression::Constant
     /// [`Override`]: Expression::Override
+    /// [`GlobalVariable`]: Expression::GlobalVariable
     pub expressions: Arena<Expression>,
     /// Map of expressions that have associated variable names
     pub named_expressions: NamedExpressions,
@@ -2377,12 +2388,37 @@ pub enum RayQueryIntersection {
 /// Alternatively, you can load an existing shader using one of the [available front ends][front].
 ///
 /// When finished, you can export modules using one of the [available backends][back].
+///
+/// ## Module arenas
+///
+/// Most module contents are stored in [`Arena`]s. In a valid module, arena
+/// elements only refer to prior arena elements. That is, whenever an element in
+/// some `Arena<T>` contains a `Handle<T>` referring to another element the same
+/// arena, the handle's referent always precedes the element containing the
+/// handle.
+///
+/// The elements of [`Module::types`] may refer to [`Expression`]s in
+/// [`Module::global_expressions`], and those expressions may in turn refer back
+/// to [`Type`]s in [`Module::types`]. In a valid module, there exists an order
+/// in which all types and global expressions can be visited such that:
+///
+/// - types and expressions are visited in the order in which they appear in
+///   their arenas, and
+///
+/// - every element refers only to previously visited elements.
+///
+/// This implies that the graph of types and global expressions is acyclic.
+/// (However, it is a stronger condition: there are cycle-free arrangements of
+/// types and expressions for which an order like the one described above does
+/// not exist. Modules arranged in such a way are not valid.)
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Module {
     /// Arena for the types defined in this module.
+    ///
+    /// See the [`Module`] docs for more details about this field.
     pub types: UniqueArena<Type>,
     /// Dictionary of special type handles.
     pub special_types: SpecialTypes,
@@ -2398,8 +2434,7 @@ pub struct Module {
     /// arena too. In other words, every `Handle<Expression>` in this arena
     /// refers to an [`Expression`] in this arena too.
     ///
-    /// Each `Expression` must occur in the arena before any
-    /// `Expression` that uses its value.
+    /// See the [`Module`] docs for more details about this field.
     ///
     /// [Constant expressions]: index.html#constant-expressions
     /// [override expressions]: index.html#override-expressions

@@ -130,6 +130,23 @@ pub struct BindTarget {
     pub register: u32,
     /// If the binding is an unsized binding array, this overrides the size.
     pub binding_array_size: Option<u32>,
+    /// This is the index in the buffer at [`Options::dynamic_storage_buffer_offsets_targets`].
+    pub dynamic_storage_buffer_offsets_index: Option<u32>,
+    /// This is a hint that we need to restrict indexing of vectors, matrices and arrays.
+    ///
+    /// If [`Options::restrict_indexing`] is also `true`, we will restrict indexing.
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    pub restrict_indexing: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+/// BindTarget for dynamic storage buffer offsets
+pub struct OffsetsBindTarget {
+    pub space: u8,
+    pub register: u32,
+    pub size: u32,
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
@@ -214,11 +231,15 @@ impl Default for SamplerHeapBindTargets {
                 space: 0,
                 register: 0,
                 binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
             },
             comparison_samplers: BindTarget {
                 space: 1,
                 register: 0,
                 binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
             },
         }
     }
@@ -260,6 +281,8 @@ pub struct Options {
     pub sampler_heap_target: SamplerHeapBindTargets,
     /// Mapping of each bind group's sampler index buffer to a bind target.
     pub sampler_buffer_binding_map: SamplerIndexBufferBindingMap,
+    /// Bind target for dynamic storage buffer offsets
+    pub dynamic_storage_buffer_offsets_targets: std::collections::BTreeMap<u32, OffsetsBindTarget>,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
     /// Should we restrict indexing of vectors, matrices and arrays?
@@ -276,6 +299,7 @@ impl Default for Options {
             sampler_heap_target: SamplerHeapBindTargets::default(),
             sampler_buffer_binding_map: std::collections::BTreeMap::default(),
             push_constants_target: None,
+            dynamic_storage_buffer_offsets_targets: std::collections::BTreeMap::new(),
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
         }
@@ -293,6 +317,8 @@ impl Options {
                 space: res_binding.group as u8,
                 register: res_binding.binding,
                 binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
             }),
             None => Err(EntryPointError::MissingBinding(*res_binding)),
         }

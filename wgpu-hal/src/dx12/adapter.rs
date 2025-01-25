@@ -538,8 +538,10 @@ impl super::Adapter {
                     //   for the descriptor table
                     // - If a bind group has samplers it will consume a `DWORD`
                     //   for the descriptor table
-                    // - Each dynamic buffer will consume `2 DWORDs` for the
+                    // - Each dynamic uniform buffer will consume `2 DWORDs` for the
                     //   root descriptor
+                    // - Each dynamic storage buffer will consume `1 DWORD` for a
+                    //   root constant representing the dynamic offset
                     // - The special constants buffer count as constants
                     //
                     // Since we can't know beforehand all root signatures that
@@ -848,9 +850,9 @@ impl crate::Adapter for super::Adapter {
             // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
             maximum_frame_latency: 1..=16,
             current_extent,
-            usage: crate::TextureUses::COLOR_TARGET
-                | crate::TextureUses::COPY_SRC
-                | crate::TextureUses::COPY_DST,
+            usage: wgt::TextureUses::COLOR_TARGET
+                | wgt::TextureUses::COPY_SRC
+                | wgt::TextureUses::COPY_DST,
             present_modes,
             composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
         })

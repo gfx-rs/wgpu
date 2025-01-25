@@ -15,8 +15,8 @@ use crate::{
         ResourceUsageCompatibilityError, ResourceUses,
     },
 };
-use hal::{BufferBarrier, BufferUses};
-use wgt::{strict_assert, strict_assert_eq};
+use hal::BufferBarrier;
+use wgt::{strict_assert, strict_assert_eq, BufferUses};
 
 impl ResourceUses for BufferUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;

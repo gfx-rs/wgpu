@@ -922,8 +922,8 @@ enum Command {
     // It is also more efficient to emit a single command instead of two for
     // this.
     ClearDepthAndStencil(f32, u32),
-    BufferBarrier(glow::Buffer, crate::BufferUses),
-    TextureBarrier(crate::TextureUses),
+    BufferBarrier(glow::Buffer, wgt::BufferUses),
+    TextureBarrier(wgt::TextureUses),
     SetViewport {
         rect: crate::Rect<i32>,
         depth: Range<f32>,

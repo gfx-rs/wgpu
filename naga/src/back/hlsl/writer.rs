@@ -131,7 +131,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             super::keywords::RESERVED,
             super::keywords::TYPES,
             super::keywords::RESERVED_CASE_INSENSITIVE,
-            &[],
+            super::keywords::RESERVED_PREFIXES,
             &mut self.names,
         );
         self.entry_point_io.clear();
@@ -251,6 +251,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ", space{}", bt.space)?;
             }
             writeln!(self.out, ");")?;
+
+            // Extra newline for readability
+            writeln!(self.out)?;
+        }
+
+        for (group, bt) in self.options.dynamic_storage_buffer_offsets_targets.iter() {
+            writeln!(self.out, "struct __dynamic_buffer_offsetsTy{} {{", group)?;
+            for i in 0..bt.size {
+                writeln!(self.out, "{}uint _{};", back::INDENT, i)?;
+            }
+            writeln!(self.out, "}};")?;
+            writeln!(
+                self.out,
+                "ConstantBuffer<__dynamic_buffer_offsetsTy{}> __dynamic_buffer_offsets{}: register(b{}, space{});",
+                group, group, bt.register, bt.space
+            )?;
 
             // Extra newline for readability
             writeln!(self.out)?;
@@ -1336,25 +1352,37 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.update_expressions_to_bake(module, func, info);
 
-        // Write modifier
-        if let Some(crate::FunctionResult {
-            binding:
-                Some(
-                    ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position {
-                        invariant: true,
-                    }),
-                ),
-            ..
-        }) = func.result
-        {
-            self.write_modifier(binding)?;
-        }
-
-        // Write return type
         if let Some(ref result) = func.result {
+            // Write typedef if return type is an array
+            let array_return_type = match module.types[result.ty].inner {
+                TypeInner::Array { base, size, .. } => {
+                    let array_return_type = self.namer.call(&format!("ret_{name}"));
+                    write!(self.out, "typedef ")?;
+                    self.write_type(module, result.ty)?;
+                    write!(self.out, " {}", array_return_type)?;
+                    self.write_array_size(module, base, size)?;
+                    writeln!(self.out, ";")?;
+                    Some(array_return_type)
+                }
+                _ => None,
+            };
+
+            // Write modifier
+            if let Some(
+                ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }),
+            ) = result.binding
+            {
+                self.write_modifier(binding)?;
+            }
+
+            // Write return type
             match func_ctx.ty {
                 back::FunctionType::Function(_) => {
-                    self.write_type(module, result.ty)?;
+                    if let Some(array_return_type) = array_return_type {
+                        write!(self.out, "{array_return_type}")?;
+                    } else {
+                        self.write_type(module, result.ty)?;
+                    }
                 }
                 back::FunctionType::EntryPoint(index) => {
                     if let Some(ref ep_output) = self.entry_point_io[index as usize].output {
@@ -2212,13 +2240,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "const ")?;
                     let name = Baked(expr).to_string();
                     let expr_ty = &func_ctx.info[expr].ty;
-                    match *expr_ty {
-                        proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    let ty_inner = match *expr_ty {
+                        proc::TypeResolution::Handle(handle) => {
+                            self.write_type(module, handle)?;
+                            &module.types[handle].inner
+                        }
                         proc::TypeResolution::Value(ref value) => {
-                            self.write_value_type(module, value)?
+                            self.write_value_type(module, value)?;
+                            value
                         }
                     };
-                    write!(self.out, " {name} = ")?;
+                    write!(self.out, " {name}")?;
+                    if let TypeInner::Array { base, size, .. } = *ty_inner {
+                        self.write_array_size(module, base, size)?;
+                    }
+                    write!(self.out, " = ")?;
                     self.named_expressions.insert(expr, name);
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
@@ -2777,7 +2813,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 | crate::AddressSpace::PushConstant,
                             )
                             | None => true,
-                            Some(crate::AddressSpace::Uniform) => false, // TODO: needs checks for dynamic uniform buffers, see https://github.com/gfx-rs/wgpu/issues/4483
+                            Some(crate::AddressSpace::Uniform) => {
+                                // check if BindTarget.restrict_indexing is set, this is used for dynamic buffers
+                                let var_handle = self.fill_access_chain(module, base, func_ctx)?;
+                                let bind_target = self
+                                    .options
+                                    .resolve_resource_binding(
+                                        module.global_variables[var_handle]
+                                            .binding
+                                            .as_ref()
+                                            .unwrap(),
+                                    )
+                                    .unwrap();
+                                bind_target.restrict_indexing
+                            }
                             Some(
                                 crate::AddressSpace::Handle | crate::AddressSpace::Storage { .. },
                             ) => unreachable!(),

@@ -34,6 +34,9 @@ targets = [
 # Cargo machete can't check build.rs dependencies. See https://github.com/bnjbvr/cargo-machete/issues/100
 ignored = ["cfg_aliases"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
 [lib]
 
 [features]
@@ -96,7 +99,9 @@ dx12 = [
 ## Enables statically linking DXC.
 static-dxc = ["dep:mach-dxcompiler-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
-fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
+fragile-send-sync-non-atomic-wasm = [
+    "wgpu-types/fragile-send-sync-non-atomic-wasm",
+]
 # Panic when running into an out-of-memory error (for debugging purposes).
 #
 # Only affects the d3d12 and vulkan backends.
@@ -110,9 +115,6 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
-
 [[example]]
 name = "halmark"
 
@@ -120,74 +122,100 @@ name = "halmark"
 name = "raw-gles"
 required-features = ["gles"]
 
+#####################
+### Platform: All ###
+#####################
+
 [dependencies]
+naga.workspace = true
+wgpu-types.workspace = true
+
+arrayvec.workspace = true
 bitflags.workspace = true
 hashbrown.workspace = true
+log.workspace = true
+once_cell.workspace = true
+ordered-float = { workspace = true, optional = true }
 parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
-thiserror.workspace = true
-once_cell.workspace = true
-ordered-float = { workspace = true, optional = true }
-
-# backends common
-arrayvec.workspace = true
 rustc-hash.workspace = true
-log.workspace = true
+thiserror.workspace = true
 
-# backend: Gles
+# Backend: GLES
 bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
 
-[dependencies.wgt]
-package = "wgpu-types"
-path = "../wgpu-types"
-version = "24.0.0"
+########################
+### Platform: Native ###
+########################
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# backend: Vulkan
+# Backend: Vulkan
 ash = { workspace = true, optional = true }
 gpu-alloc = { workspace = true, optional = true }
 gpu-descriptor = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true, features = ["union"] }
-
+# Backend: GLES
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
 libloading = { workspace = true, optional = true }
 renderdoc-sys = { workspace = true, optional = true }
 
-[target.'cfg(target_os = "emscripten")'.dependencies]
-khronos-egl = { workspace = true, features = ["static", "no-pkg-config"] }
-#Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
-libloading = { workspace = true, optional = true }
+##########################
+### Platform: All Unix ###
+##########################
+
+[target.'cfg(unix)'.dependencies]
+# Backend: Vulkan
+libc.workspace = true
+
+#########################
+### Platform: Windows ###
+#########################
 
 [target.'cfg(windows)'.dependencies]
-# backend: Dx12 and Gles
+# Backend: Dx12 and GLES
 windows = { workspace = true, optional = true }
-# backend: Dx12
+windows-core = { workspace = true, optional = true }
+# Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
 gpu-allocator = { workspace = true, optional = true }
-# For core macros. This crate is also reexported as windows::core.
-windows-core = { workspace = true, optional = true }
-
-# backend: Gles
+# backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }
 
+### Platform: x86/x86_64 Windows ###
 # This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
 #
 # ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
 [target.'cfg(all(windows, not(target_arch = "aarch64")))'.dependencies]
 mach-dxcompiler-rs = { workspace = true, optional = true }
 
-[target.'cfg(target_vendor = "apple")'.dependencies]
-# backend: Metal
-block = { workspace = true, optional = true }
+#######################
+### Platform: Apple ###
+#######################
 
+[target.'cfg(target_vendor = "apple")'.dependencies]
+# Backend: Metal
+block = { workspace = true, optional = true }
+core-graphics-types.workspace = true
 metal.workspace = true
 objc.workspace = true
-core-graphics-types.workspace = true
+
+#########################
+### Platform: Android ###
+#########################
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_system_properties = { workspace = true, optional = true }
+ndk-sys = { workspace = true, optional = true }
+
+#############################
+### Platform: Webassembly ###
+#############################
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+# Backend: GLES
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = [
     "default",
@@ -198,44 +226,29 @@ web-sys = { workspace = true, features = [
 ] }
 js-sys = { workspace = true, features = ["default"] }
 
-[target.'cfg(unix)'.dependencies]
-libc.workspace = true
+############################
+### Platform: Emscripten ###
+############################
 
-[target.'cfg(target_os = "android")'.dependencies]
-android_system_properties = { workspace = true, optional = true }
-ndk-sys = { workspace = true, optional = true }
-
-[dependencies.naga]
-path = "../naga"
-version = "24.0.0"
+[target.'cfg(target_os = "emscripten")'.dependencies]
+# Backend: GLES
+khronos-egl = { workspace = true, features = ["static", "no-pkg-config"] }
+# Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
+libloading = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
 
-# DEV dependencies
-[dev-dependencies.naga]
-path = "../naga"
-version = "24.0.0"
-features = ["wgsl-in"]
-
 [dev-dependencies]
 cfg-if.workspace = true
 env_logger.workspace = true
-glam.workspace = true       # for ray-traced-triangle example
-winit.workspace = true      # for "halmark" example
+glam.workspace = true                               # for ray-traced-triangle example
+naga = { workspace = true, features = ["wgsl-in"] }
+winit.workspace = true                              # for "halmark" example
 
+### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
-glutin-winit = { workspace = true, features = [
-    "egl",
-    "wgl",
-    "wayland",
-    "x11",
-] } # for "raw-gles" example
-glutin = { workspace = true, features = [
-    "egl",
-    "wgl",
-    "wayland",
-    "x11",
-] } # for "raw-gles" example
-rwh_05 = { version = "0.5", package = "raw-window-handle" } # temporary compatibility for glutin-winit in "raw-gles" example
-winit = { workspace = true, features = ["rwh_05"] } # for "raw-gles" example
+glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
+glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
+rwh_05 = { version = "0.5", package = "raw-window-handle" }                      # temporary compatibility for glutin-winit
+winit = { workspace = true, features = ["rwh_05"] }

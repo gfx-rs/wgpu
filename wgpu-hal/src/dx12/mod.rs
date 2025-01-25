@@ -699,13 +699,20 @@ enum RootElement {
     },
     /// Descriptor table.
     Table(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
-    /// Descriptor for a buffer that has dynamic offset.
-    DynamicOffsetBuffer {
-        kind: BufferViewKind,
+    /// Descriptor for an uniform buffer that has dynamic offset.
+    DynamicUniformBuffer {
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,
     },
     /// Descriptor table referring to the entire sampler heap.
     SamplerHeap,
+    /// Root constants for dynamic offsets.
+    ///
+    /// start..end is the range of values in [`PassState::dynamic_storage_buffer_offsets`]
+    /// that will be used to update the root constants.
+    DynamicOffsetsBuffer {
+        start: usize,
+        end: usize,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -721,6 +728,7 @@ struct PassState {
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
     constant_data: [u32; MAX_ROOT_ELEMENTS],
+    dynamic_storage_buffer_offsets: Vec<u32>,
     dirty_root_elements: u64,
     vertex_buffers: [Direct3D12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
@@ -746,6 +754,7 @@ impl PassState {
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
             constant_data: [0; MAX_ROOT_ELEMENTS],
+            dynamic_storage_buffer_offsets: Vec::new(),
             dirty_root_elements: 0,
             vertex_buffers: [Default::default(); crate::MAX_VERTEX_BUFFERS],
             dirty_vertex_buffers: 0,
@@ -943,10 +952,9 @@ pub struct BindGroupLayout {
 impl crate::DynBindGroupLayout for BindGroupLayout {}
 
 #[derive(Debug, Clone, Copy)]
-enum BufferViewKind {
-    Constant,
-    ShaderResource,
-    UnorderedAccess,
+enum DynamicBuffer {
+    Uniform(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
+    Storage,
 }
 
 #[derive(Debug)]
@@ -959,7 +967,7 @@ struct SamplerIndexBuffer {
 pub struct BindGroup {
     handle_views: Option<descriptor::DualHandle>,
     sampler_index_buffer: Option<SamplerIndexBuffer>,
-    dynamic_buffers: Vec<Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE>,
+    dynamic_buffers: Vec<DynamicBuffer>,
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -979,13 +987,19 @@ type RootIndex = u32;
 struct BindGroupInfo {
     base_root_index: RootIndex,
     tables: TableTypes,
-    dynamic_buffers: Vec<BufferViewKind>,
+    dynamic_storage_buffer_offsets: Option<DynamicStorageBufferOffsets>,
 }
 
 #[derive(Debug, Clone)]
 struct RootConstantInfo {
     root_index: RootIndex,
     range: std::ops::Range<u32>,
+}
+
+#[derive(Debug, Clone)]
+struct DynamicStorageBufferOffsets {
+    root_index: RootIndex,
+    range: std::ops::Range<usize>,
 }
 
 #[derive(Debug, Clone)]

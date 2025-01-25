@@ -4226,7 +4226,6 @@ dependencies = [
  "web-sys",
  "wgpu",
  "wgpu-macros",
- "wgpu-types",
 ]
 
 [[package]]

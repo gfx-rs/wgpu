@@ -226,7 +226,7 @@ impl IndirectValidation {
         let dst_buffer_desc = hal::BufferDescriptor {
             label: None,
             size: DST_BUFFER_SIZE.get(),
-            usage: hal::BufferUses::INDIRECT | hal::BufferUses::STORAGE_READ_WRITE,
+            usage: wgt::BufferUses::INDIRECT | wgt::BufferUses::STORAGE_READ_WRITE,
             memory_flags: hal::MemoryFlags::empty(),
         };
         let dst_buffer =

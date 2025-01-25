@@ -54,6 +54,7 @@ mod texture_blit;
 mod texture_bounds;
 mod texture_view_creation;
 mod transfer;
+mod transition_resources;
 mod vertex_formats;
 mod vertex_indices;
 mod write_texture;

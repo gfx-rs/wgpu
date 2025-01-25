@@ -1248,6 +1248,8 @@ impl<W: Write> super::Writer<'_, W> {
                 space: u8::MAX,
                 register: key.group,
                 binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
             },
             None => {
                 unreachable!("Sampler buffer of group {key:?} not bound to a register");

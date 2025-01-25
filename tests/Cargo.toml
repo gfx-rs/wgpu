@@ -25,6 +25,9 @@ harness = true
 webgl = ["wgpu/webgl"]
 
 [dependencies]
+wgpu.workspace = true
+wgpu-macros.workspace = true
+
 anyhow.workspace = true
 arrayvec.workspace = true
 approx.workspace = true
@@ -46,20 +49,20 @@ serde_json.workspace = true
 serde.workspace = true
 strum = { workspace = true, features = ["derive"] }
 trybuild.workspace = true
-wgpu.workspace = true
-wgpu-macros.workspace = true
-wgt = { workspace = true, features = ["serde"] }
 
+# Non-Webassembly
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true
 nv-flip.workspace = true
 parking_lot = { workspace = true, features = ["deadlock_detection"] }
 
+# Webassembly
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_log.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true }
 
+# Webassembly Dev Dependencies
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true
 js-sys.workspace = true
