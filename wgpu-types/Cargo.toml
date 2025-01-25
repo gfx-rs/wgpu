@@ -40,12 +40,12 @@ default = ["std"]
 std = ["js-sys/std", "web-sys/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "bitflags/serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 
 [dependencies]
-bitflags = { workspace = true, features = ["serde"] }
+bitflags.workspace = true
 log.workspace = true
 serde = { workspace = true, default-features = false, features = [
     "alloc",

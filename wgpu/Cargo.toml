@@ -91,7 +91,7 @@ naga-ir = ["dep:naga"]
 strict_asserts = ["wgpu-core?/strict_asserts", "wgpu-types/strict_asserts"]
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-core/serde"]
+serde = ["dep:serde", "wgpu-core?/serde", "wgpu-types/serde"]
 
 # Uncomment once we get to https://github.com/gfx-rs/wgpu/issues/5974
 # ## Allow writing of trace capture files. See [`Adapter::request_device`].
@@ -144,7 +144,7 @@ naga = { workspace = true, optional = true }
 wgpu-core = { workspace = true, optional = true, features = [
     "raw-window-handle",
 ] }
-wgpu-types = { workspace = true, features = ["serde"] }
+wgpu-types = { workspace = true }
 wgpu-hal = { workspace = true, optional = true, features = ["renderdoc"] }
 
 arrayvec.workspace = true
