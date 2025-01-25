@@ -145,17 +145,17 @@ pub enum ResolveError {
     #[error("Resolving queries {start_query}..{end_query} would overrun the query set of size {query_set_size}")]
     QueryOverrun {
         start_query: u32,
-        end_query: u32,
+        end_query: u64,
         query_set_size: u32,
     },
-    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overrunning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..{buffer_end_offset}")]
+    #[error("Resolving queries {start_query}..{end_query} ({stride} byte queries) will end up overrunning the bounds of the destination buffer of size {buffer_size} using offsets {buffer_start_offset}..(<start> + {bytes_used})")]
     BufferOverrun {
         start_query: u32,
         end_query: u32,
         stride: u32,
         buffer_size: BufferAddress,
         buffer_start_offset: BufferAddress,
-        buffer_end_offset: BufferAddress,
+        bytes_used: BufferAddress,
     },
 }
 
@@ -396,7 +396,7 @@ impl Global {
         let dst_pending = cmd_buf_data
             .trackers
             .buffers
-            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
+            .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
 
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
@@ -404,8 +404,10 @@ impl Global {
             .check_usage(wgt::BufferUsages::QUERY_RESOLVE)
             .map_err(ResolveError::MissingBufferUsage)?;
 
-        let end_query = start_query + query_count;
-        if end_query > query_set.desc.count {
+        let end_query = u64::from(start_query)
+            .checked_add(u64::from(query_count))
+            .expect("`u64` overflow from adding two `u32`s, should be unreachable");
+        if end_query > u64::from(query_set.desc.count) {
             return Err(ResolveError::QueryOverrun {
                 start_query,
                 end_query,
@@ -413,6 +415,8 @@ impl Global {
             }
             .into());
         }
+        let end_query = u32::try_from(end_query)
+            .expect("`u32` overflow for `end_query`, which should be `u32`");
 
         let elements_per_query = match query_set.desc.ty {
             wgt::QueryType::Occlusion => 1,
@@ -420,22 +424,22 @@ impl Global {
             wgt::QueryType::Timestamp => 1,
         };
         let stride = elements_per_query * wgt::QUERY_SIZE;
-        let bytes_used = (stride * query_count) as BufferAddress;
+        let bytes_used: BufferAddress = u64::from(stride)
+            .checked_mul(u64::from(query_count))
+            .expect("`stride` * `query_count` overflowed `u32`, should be unreachable");
 
         let buffer_start_offset = destination_offset;
-        let buffer_end_offset = buffer_start_offset + bytes_used;
-
-        if buffer_end_offset > dst_buffer.size {
-            return Err(ResolveError::BufferOverrun {
+        let buffer_end_offset = buffer_start_offset
+            .checked_add(bytes_used)
+            .filter(|buffer_end_offset| *buffer_end_offset <= dst_buffer.size)
+            .ok_or(ResolveError::BufferOverrun {
                 start_query,
                 end_query,
                 stride,
                 buffer_size: dst_buffer.size,
                 buffer_start_offset,
-                buffer_end_offset,
-            }
-            .into());
-        }
+                bytes_used,
+            })?;
 
         // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
         cmd_buf_data.buffer_memory_init_actions.extend(

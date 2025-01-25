@@ -3,6 +3,9 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(clippy::allow_attributes, unsafe_op_in_unsafe_fn)]
 
+extern crate wgpu_core as wgc;
+extern crate wgpu_types as wgt;
+
 use wgc::device::trace;
 
 use std::{borrow::Cow, fs, path::Path};

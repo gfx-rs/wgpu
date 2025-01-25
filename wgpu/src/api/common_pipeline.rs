@@ -40,7 +40,7 @@ impl Default for PipelineCompilationOptions<'_> {
 /// Describes a pipeline cache, which allows reusing compilation work
 /// between program runs.
 ///
-/// For use with [`Device::create_pipeline_cache`]
+/// For use with [`Device::create_pipeline_cache`].
 ///
 /// This type is unique to the Rust API of `wgpu`.
 #[derive(Clone, Debug)]

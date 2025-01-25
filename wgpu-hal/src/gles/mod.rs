@@ -95,9 +95,12 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod fence;
 mod queue;
 
 use crate::{CopyExtent, TextureDescriptor};
+
+pub use fence::Fence;
 
 #[cfg(not(any(windows, webgl)))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
@@ -120,7 +123,7 @@ use glow::HasContext;
 
 use naga::FastHashMap;
 use parking_lot::Mutex;
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8};
 use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -272,6 +275,7 @@ struct AdapterShared {
     private_caps: PrivateCapabilities,
     features: wgt::Features,
     workarounds: Workarounds,
+    options: wgt::GlBackendOptions,
     shading_language_version: naga::back::glsl::Version,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
@@ -733,67 +737,6 @@ pub struct QuerySet {
 impl crate::DynQuerySet for QuerySet {}
 
 #[derive(Debug)]
-pub struct Fence {
-    last_completed: crate::AtomicFenceValue,
-    pending: Vec<(crate::FenceValue, glow::Fence)>,
-}
-
-impl crate::DynFence for Fence {}
-
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-unsafe impl Send for Fence {}
-#[cfg(any(
-    not(target_arch = "wasm32"),
-    all(
-        feature = "fragile-send-sync-non-atomic-wasm",
-        not(target_feature = "atomics")
-    )
-))]
-unsafe impl Sync for Fence {}
-
-impl Fence {
-    fn get_latest(&self, gl: &glow::Context) -> crate::FenceValue {
-        let mut max_value = self.last_completed.load(Ordering::Relaxed);
-        for &(value, sync) in self.pending.iter() {
-            if value <= max_value {
-                // We already know this was good, no need to check again
-                continue;
-            }
-            let status = unsafe { gl.get_sync_status(sync) };
-            if status == glow::SIGNALED {
-                max_value = value;
-            } else {
-                // Anything after the first unsignalled is guaranteed to also be unsignalled
-                break;
-            }
-        }
-
-        // Track the latest value, to save ourselves some querying later
-        self.last_completed.fetch_max(max_value, Ordering::Relaxed);
-
-        max_value
-    }
-
-    fn maintain(&mut self, gl: &glow::Context) {
-        let latest = self.get_latest(gl);
-        for &(value, sync) in self.pending.iter() {
-            if value <= latest {
-                unsafe {
-                    gl.delete_sync(sync);
-                }
-            }
-        }
-        self.pending.retain(|&(value, _)| value > latest);
-    }
-}
-
-#[derive(Debug)]
 pub struct AccelerationStructure;
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
@@ -979,8 +922,8 @@ enum Command {
     // It is also more efficient to emit a single command instead of two for
     // this.
     ClearDepthAndStencil(f32, u32),
-    BufferBarrier(glow::Buffer, crate::BufferUses),
-    TextureBarrier(crate::TextureUses),
+    BufferBarrier(glow::Buffer, wgt::BufferUses),
+    TextureBarrier(wgt::TextureUses),
     SetViewport {
         rect: crate::Rect<i32>,
         depth: Range<f32>,

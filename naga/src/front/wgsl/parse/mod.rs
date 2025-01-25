@@ -2332,6 +2332,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
+        must_use: Option<Span>,
         out: &mut ast::TranslationUnit<'a>,
         dependencies: &mut FastIndexSet<ast::Dependency<'a>>,
     ) -> Result<ast::Function<'a>, Error<'a>> {
@@ -2383,7 +2384,17 @@ impl Parser {
         let result = if lexer.skip(Token::Arrow) {
             let binding = self.varying_binding(lexer, &mut ctx)?;
             let ty = self.type_decl(lexer, &mut ctx)?;
-            Some(ast::FunctionResult { ty, binding })
+            let must_use = must_use.is_some();
+            Some(ast::FunctionResult {
+                ty,
+                binding,
+                must_use,
+            })
+        } else if let Some(must_use) = must_use {
+            return Err(Error::FunctionMustUseReturnsVoid(
+                must_use,
+                self.peek_rule_span(lexer),
+            ));
         } else {
             None
         };
@@ -2456,6 +2467,8 @@ impl Parser {
         let (mut bind_index, mut bind_group) =
             (ParsedAttribute::default(), ParsedAttribute::default());
         let mut id = ParsedAttribute::default();
+
+        let mut must_use: ParsedAttribute<Span> = ParsedAttribute::default();
 
         let mut dependencies = FastIndexSet::default();
         let mut ctx = ExpressionContext {
@@ -2540,6 +2553,9 @@ impl Parser {
                         None
                     };
                     early_depth_test.set(crate::EarlyDepthTest { conservative }, name_span)?;
+                }
+                "must_use" => {
+                    must_use.set(name_span, name_span)?;
                 }
                 _ => return Err(Error::UnknownAttribute(name_span)),
             }
@@ -2646,8 +2662,14 @@ impl Parser {
                     diagnostic_filters,
                     out.diagnostic_filter_leaf,
                 );
-                let function =
-                    self.function_decl(lexer, diagnostic_filter_leaf, out, &mut dependencies)?;
+
+                let function = self.function_decl(
+                    lexer,
+                    diagnostic_filter_leaf,
+                    must_use.value,
+                    out,
+                    &mut dependencies,
+                )?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage == ShaderStage::Compute && workgroup_size.value.is_none() {

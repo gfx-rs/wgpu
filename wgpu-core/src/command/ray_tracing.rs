@@ -19,7 +19,7 @@ use crate::{
 
 use wgt::{
     math::align_to, AccelerationStructureFlags, BlasGeometrySizeDescriptors, BufferAddress,
-    BufferUsages, Features, Maintain,
+    BufferUsages, Features, Maintain, BufferUses,
 };
 
 use super::CommandBufferMutable;
@@ -30,7 +30,6 @@ use crate::lock::{rank, Mutex, RwLock};
 use crate::ray_tracing::{BlasState, CompactBlasError};
 use crate::resource::{Fallible, TrackingData};
 use crate::snatch::Snatchable;
-use hal::BufferUses;
 use std::mem::size_of;
 use std::ops::Add;
 use std::{

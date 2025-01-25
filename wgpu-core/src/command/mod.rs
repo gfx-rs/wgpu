@@ -12,6 +12,7 @@ mod render;
 mod render_command;
 mod timestamp_writes;
 mod transfer;
+mod transition_resources;
 
 use std::mem::{self, ManuallyDrop};
 use std::sync::Arc;

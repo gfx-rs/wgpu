@@ -73,12 +73,12 @@ void runtime_values(
     float _e27 = f;
     plus_f_f_f = _e26 + _e27;
     int _e31 = i;
-    plus_iai_i = 1 + _e31;
+    plus_iai_i = as_type<int>(as_type<uint>(1) + as_type<uint>(_e31));
     int _e35 = i;
-    plus_i_iai = _e35 + 2;
+    plus_i_iai = as_type<int>(as_type<uint>(_e35) + as_type<uint>(2));
     int _e39 = i;
     int _e40 = i;
-    plus_i_i_i = _e39 + _e40;
+    plus_i_i_i = as_type<int>(as_type<uint>(_e39) + as_type<uint>(_e40));
     uint _e44 = u;
     plus_uai_u = 1u + _e44;
     uint _e48 = u;
@@ -97,5 +97,5 @@ void wgpu_4445_(
 void wgpu_4435_(
     threadgroup type_3& a
 ) {
-    uint y = a.inner[1 - 1];
+    uint y = a.inner[as_type<int>(as_type<uint>(1) - as_type<uint>(1))];
 }

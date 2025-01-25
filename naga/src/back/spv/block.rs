@@ -1736,7 +1736,20 @@ impl BlockContext<'_> {
             }
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
             crate::Expression::RayQueryGetIntersection { query, committed } => {
-                self.write_ray_query_get_intersection(query, block, committed)
+                let query_id = self.cached[query];
+                let func_id = self
+                    .writer
+                    .write_ray_query_get_intersection_function(committed, self.ir_module);
+                let ray_intersection = self.ir_module.special_types.ray_intersection.unwrap();
+                let intersection_type_id = self.get_type_id(LookupType::Handle(ray_intersection));
+                let id = self.gen_id();
+                block.body.push(Instruction::function_call(
+                    intersection_type_id,
+                    id,
+                    func_id,
+                    &[query_id],
+                ));
+                id
             }
         };
 
