@@ -19,7 +19,7 @@ use crate::{
 
 use wgt::{
     math::align_to, AccelerationStructureFlags, BlasGeometrySizeDescriptors, BufferAddress,
-    BufferUsages, Features, Maintain, BufferUses,
+    BufferUsages, BufferUses, Features, Maintain,
 };
 
 use super::CommandBufferMutable;

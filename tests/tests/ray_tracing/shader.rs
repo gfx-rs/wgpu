@@ -4,6 +4,7 @@ use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
 };
+use wgpu::wgt::AccelerationStructureFlags;
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
@@ -28,7 +29,7 @@ fn access_all_struct_members(ctx: TestingContext) {
     // Create a clean `AsBuildContext`
     //
 
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::empty());
 
     let mut encoder_build = ctx
         .device
