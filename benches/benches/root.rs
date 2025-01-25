@@ -3,6 +3,7 @@ use pollster::block_on;
 
 mod bind_groups;
 mod computepass;
+mod loop_workaround;
 mod renderpass;
 mod resource_creation;
 mod shader;
@@ -62,6 +63,7 @@ criterion_main!(
     bind_groups::bind_groups,
     renderpass::renderpass,
     computepass::computepass,
+    loop_workaround::loop_workaround,
     resource_creation::resource_creation,
     shader::shader
 );

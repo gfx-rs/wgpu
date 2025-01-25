@@ -792,7 +792,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
             if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
                 unsafe {
-                    self.write_timestamp(timestamp_writes.query_set, index);
+                    self.device.raw.cmd_write_timestamp(
+                        self.active,
+                        vk::PipelineStageFlags::TOP_OF_PIPE,
+                        timestamp_writes.query_set.raw,
+                        index,
+                    )
                 }
             }
             self.end_of_pass_timer_query = timestamp_writes
@@ -1111,7 +1116,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
             if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
                 unsafe {
-                    self.write_timestamp(timestamp_writes.query_set, index);
+                    self.device.raw.cmd_write_timestamp(
+                        self.active,
+                        vk::PipelineStageFlags::TOP_OF_PIPE,
+                        timestamp_writes.query_set.raw,
+                        index,
+                    )
                 }
             }
             self.end_of_pass_timer_query = timestamp_writes
