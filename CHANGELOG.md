@@ -51,6 +51,7 @@ Bottom level categories:
 #### General
 
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
+- Split up features internally and recombine them into a large struct. By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905).
 
 ##### Refactored internal trace path parameter
 
