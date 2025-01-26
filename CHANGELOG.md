@@ -83,6 +83,10 @@ By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 
+#### Dx12
+
+- Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993)
+
 ### Documentation
 
 - Improved documentation around pipeline caches. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978).
