@@ -87,6 +87,8 @@ By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
 - Improved documentation around pipeline caches. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978).
 
+- Added a hello window example. By @laycookie in [#6988](https://github.com/gfx-rs/wgpu/pull/6988).
+
 ## v24.0.0 (2025-01-15)
 
 ### Major changes
