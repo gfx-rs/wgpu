@@ -5,17 +5,17 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
-struct State<'a> {
-    surface: wgpu::Surface<'a>,
+struct State {
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     adapter: wgpu::Adapter,
     queue: wgpu::Queue,
     size: winit::dpi::PhysicalSize<u32>,
 }
 
-impl<'a> State<'a> {
+impl State {
     // Creating some of the wgpu types requires async code
-    async fn new(window: Arc<Window>) -> State<'a> {
+    async fn new(window: Arc<Window>) -> State {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -119,12 +119,12 @@ impl<'a> State<'a> {
 }
 
 #[derive(Default)]
-struct App<'a> {
+struct App {
     window: Option<Arc<Window>>,
-    state: Option<State<'a>>,
+    state: Option<State>,
 }
 
-impl<'a> ApplicationHandler for App<'a> {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // Create window object
         let window = Arc::new(
