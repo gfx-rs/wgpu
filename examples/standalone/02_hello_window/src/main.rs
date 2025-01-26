@@ -35,8 +35,6 @@ impl State {
 
         let surface = instance.create_surface(window.clone()).unwrap();
         let cap = surface.get_capabilities(&adapter);
-        // If we don't add srgb suffix here in most cases the image
-        // rendered will not be "gamma correct".
         let surface_format = cap.formats[0];
 
         let state = State {
@@ -62,6 +60,8 @@ impl State {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: self.surface_format,
+            // Without add_srgb_suffix() the image we will be working with
+            // might not be "gamma correct".
             view_formats: vec![self.surface_format.add_srgb_suffix()],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             width: self.size.width,
@@ -91,7 +91,7 @@ impl State {
 
         // Renders a GREEN screen
         let mut encoder = self.device.create_command_encoder(&Default::default());
-		// Create the renderpass which will clear the screen.
+        // Create the renderpass which will clear the screen.
         let renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -106,9 +106,9 @@ impl State {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
-        
+
         // If you wanted to call any drawing commands, they would go here.
-        
+
         // End the renderpass.
         drop(renderpass);
 
