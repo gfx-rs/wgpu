@@ -34,7 +34,7 @@ impl LanguageExtension {
                 Self::Unimplemented(UnimplementedLanguageExtension::UnrestrictedPointerParameters)
             }
             Self::POINTER_COMPOSITE_ACCESS => {
-                Self::Unimplemented(UnimplementedLanguageExtension::PointerCompositeAccess)
+                Self::Implemented(ImplementedLanguageExtension::PointerCompositeAccess)
             }
             _ => return None,
         })
@@ -54,9 +54,6 @@ impl LanguageExtension {
                 UnimplementedLanguageExtension::UnrestrictedPointerParameters => {
                     Self::UNRESTRICTED_POINTER_PARAMETERS
                 }
-                UnimplementedLanguageExtension::PointerCompositeAccess => {
-                    Self::POINTER_COMPOSITE_ACCESS
-                }
             },
         }
     }
@@ -64,7 +61,9 @@ impl LanguageExtension {
 
 /// A variant of [`LanguageExtension::Implemented`].
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, VariantArray)]
-pub enum ImplementedLanguageExtension {}
+pub enum ImplementedLanguageExtension {
+    PointerCompositeAccess,
+}
 
 impl ImplementedLanguageExtension {
     /// Returns slice of all variants of [`ImplementedLanguageExtension`].
@@ -74,7 +73,11 @@ impl ImplementedLanguageExtension {
 
     /// Maps this [`ImplementedLanguageExtension`] into the sentinel word associated with it in WGSL.
     pub const fn to_ident(self) -> &'static str {
-        match self {}
+        match self {
+            ImplementedLanguageExtension::PointerCompositeAccess => {
+                LanguageExtension::POINTER_COMPOSITE_ACCESS
+            }
+        }
     }
 }
 
@@ -84,7 +87,6 @@ pub enum UnimplementedLanguageExtension {
     ReadOnlyAndReadWriteStorageTextures,
     Packed4x8IntegerDotProduct,
     UnrestrictedPointerParameters,
-    PointerCompositeAccess,
 }
 
 impl UnimplementedLanguageExtension {
@@ -93,7 +95,6 @@ impl UnimplementedLanguageExtension {
             Self::ReadOnlyAndReadWriteStorageTextures => 6204,
             Self::Packed4x8IntegerDotProduct => 6445,
             Self::UnrestrictedPointerParameters => 5158,
-            Self::PointerCompositeAccess => 6192,
         }
     }
 }

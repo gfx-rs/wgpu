@@ -239,8 +239,13 @@ impl Input {
         let mut param_path = self.input_path();
         param_path.set_extension("param.ron");
         match fs::read_to_string(&param_path) {
-            Ok(string) => ron::de::from_str(&string)
-                .unwrap_or_else(|_| panic!("Couldn't parse param file: {}", param_path.display())),
+            Ok(string) => match ron::de::from_str(&string) {
+                Ok(params) => params,
+                Err(e) => panic!(
+                    "Couldn't parse param file: {} due to: {e}",
+                    param_path.display()
+                ),
+            },
             Err(_) => Parameters::default(),
         }
     }
@@ -676,14 +681,13 @@ fn convert_wgsl() {
     let _ = env_logger::try_init();
 
     let inputs = [
-        // TODO: merge array-in-ctor and array-in-function-return-type tests after fix HLSL issue https://github.com/gfx-rs/naga/issues/1930
         (
             "array-in-ctor",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "array-in-function-return-type",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         (
             "empty",
@@ -834,6 +838,7 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL,
         ),
         ("policy-mix", Targets::SPIRV | Targets::METAL),
+        ("bounds-check-dynamic-buffer", Targets::HLSL),
         (
             "texture-arg",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,

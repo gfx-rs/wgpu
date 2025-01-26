@@ -618,7 +618,7 @@ struct FramebufferAttachment {
     /// Can be NULL if the framebuffer is image-less
     raw: vk::ImageView,
     raw_image_flags: vk::ImageCreateFlags,
-    view_usage: crate::TextureUses,
+    view_usage: wgt::TextureUses,
     view_format: wgt::TextureFormat,
     raw_view_formats: Vec<vk::Format>,
 }
@@ -798,7 +798,7 @@ pub struct Texture {
     drop_guard: Option<crate::DropGuard>,
     external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: crate::TextureUses,
+    usage: wgt::TextureUses,
     format: wgt::TextureFormat,
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,

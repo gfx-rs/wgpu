@@ -38,7 +38,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 ## Internally count resources and events for debugging purposes. If the counters
 ## feature is disabled, the counting infrastructure is removed from the build and
 ## the exposed counters always return 0.
-counters = ["wgt/counters"]
+counters = ["wgpu-types/counters"]
 
 ## Log all API entry points at info instead of trace level.
 ## Also, promotes certain debug log calls to info.
@@ -49,18 +49,18 @@ resource_log_info = []
 
 ## Support the Renderdoc graphics debugger:
 ## <https://renderdoc.org/>
-renderdoc = ["hal/renderdoc"]
+renderdoc = ["wgpu-hal/renderdoc"]
 
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
-strict_asserts = ["wgt/strict_asserts"]
+strict_asserts = ["wgpu-types/strict_asserts"]
 
 ## Validates indirect draw/dispatch calls. This will also enable naga's
 ## WGSL frontend since we use a WGSL compute shader to do the validation.
 indirect-validation = ["naga/wgsl-in"]
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgt/serde", "arrayvec/serde"]
+serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde"]
 
 ## Enable API tracing.
 trace = ["dep:ron", "serde", "naga/serialize"]
@@ -92,28 +92,32 @@ spirv = ["naga/spv-in", "dep:bytemuck"]
 ## but on a wasm binary compiled without atomics we know we are definitely
 ## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
-    "hal/fragile-send-sync-non-atomic-wasm",
-    "wgt/fragile-send-sync-non-atomic-wasm",
+    "wgpu-hal/fragile-send-sync-non-atomic-wasm",
+    "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 
 #! ### Backends, passed through to wgpu-hal
 # --------------------------------------------------------------------
 
 ## Enable the `metal` backend.
-metal = ["hal/metal"]
+metal = ["wgpu-hal/metal"]
 
 ## Enable the `vulkan` backend.
-vulkan = ["hal/vulkan"]
+vulkan = ["wgpu-hal/vulkan"]
 
 ## Enable the `GLES` backend.
 ##
 ## This is used for all of GLES, OpenGL, and WebGL.
-gles = ["hal/gles"]
+gles = ["wgpu-hal/gles"]
 
 ## Enable the `dx12` backend.
-dx12 = ["hal/dx12"]
+dx12 = ["wgpu-hal/dx12"]
 
 [dependencies]
+naga.workspace = true
+wgpu-hal.workspace = true
+wgpu-types.workspace = true
+
 arrayvec.workspace = true
 bit-vec.workspace = true
 bitflags.workspace = true
@@ -131,21 +135,6 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
-
-[dependencies.naga]
-path = "../naga"
-version = "24.0.0"
-
-[dependencies.wgt]
-package = "wgpu-types"
-path = "../wgpu-types"
-version = "24.0.0"
-
-[dependencies.hal]
-package = "wgpu-hal"
-path = "../wgpu-hal"
-version = "24.0.0"
-default-features = false
 
 [build-dependencies]
 cfg_aliases.workspace = true

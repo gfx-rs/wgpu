@@ -213,7 +213,6 @@ pub(crate) enum Error<'a> {
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
     InvalidRayQueryPointer(Span),
-    Pointer(&'static str, Span),
     NotPointer(Span),
     NotReference(&'static str, Span),
     InvalidAssignment {
@@ -719,11 +718,6 @@ impl<'a> Error<'a> {
                     notes,
                 }
             }
-            Error::Pointer(what, span) => ParseError {
-                message: format!("{what} must not be a pointer"),
-                labels: vec![(span, "expression is a pointer".into())],
-                notes: vec![],
-            },
             Error::ReservedKeyword(name_span) => ParseError {
                 message: format!("name `{}` is a reserved keyword", &source[name_span]),
                 labels: vec![(

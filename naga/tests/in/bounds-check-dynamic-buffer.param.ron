@@ -1,0 +1,17 @@
+(
+    hlsl: (
+        binding_map: {
+            (group: 0, binding: 0): (space: 0, register: 0),
+            (group: 0, binding: 1): (space: 0, register: 1),
+            (group: 0, binding: 2): (space: 0, register: 0, restrict_indexing: true),
+            (group: 0, binding: 3): (space: 0, register: 2, dynamic_storage_buffer_offsets_index: Some(0)),
+            (group: 0, binding: 4): (space: 0, register: 3, dynamic_storage_buffer_offsets_index: Some(1)),
+            (group: 1, binding: 0): (space: 0, register: 4, dynamic_storage_buffer_offsets_index: Some(0)),
+        },
+        dynamic_storage_buffer_offsets_targets: {
+            0: (space: 0, register: 1, size: 2),
+            1: (space: 0, register: 2, size: 1),
+        },
+        restrict_indexing: true
+    ),
+)

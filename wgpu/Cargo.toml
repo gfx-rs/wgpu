@@ -25,7 +25,6 @@ targets = [
 # Cargo machete can't check build.rs dependencies. See https://github.com/bnjbvr/cargo-machete/issues/100
 ignored = ["cfg_aliases"]
 
-
 [lib]
 
 [features]
@@ -38,24 +37,24 @@ default = ["wgsl", "dx12", "metal", "webgpu"]
 #! See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more details.
 
 ## Enables the DX12 backend on Windows.
-dx12 = ["wgc?/dx12"]
+dx12 = ["wgpu-core?/dx12"]
 
 ## Enables the Metal backend on macOS & iOS.
-metal = ["wgc?/metal"]
+metal = ["wgpu-core?/metal"]
 
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 webgpu = ["naga?/wgsl-out"]
 
 ## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
-angle = ["wgc?/gles"]
+angle = ["wgpu-core?/gles"]
 
 ## Enables the Vulkan backend on macOS & iOS.
-vulkan-portability = ["wgc?/vulkan"]
+vulkan-portability = ["wgpu-core?/vulkan"]
 
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-webgl = ["dep:hal", "wgc/gles"]
+webgl = ["dep:wgpu-hal", "wgpu-core/gles"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
@@ -65,13 +64,13 @@ webgl = ["dep:hal", "wgc/gles"]
 # --------------------------------------------------------------------
 
 ## Enable accepting SPIR-V shaders as input.
-spirv = ["naga/spv-in", "wgc/spirv"]
+spirv = ["naga/spv-in", "wgpu-core?/spirv"]
 
 ## Enable accepting GLSL shaders as input.
-glsl = ["naga/glsl-in", "wgc/glsl"]
+glsl = ["naga/glsl-in", "wgpu-core?/glsl"]
 
 ## Enable accepting WGSL shaders as input.
-wgsl = ["wgc?/wgsl"]
+wgsl = ["wgpu-core?/wgsl"]
 
 ## Enable accepting naga IR shaders as input.
 naga-ir = ["dep:naga"]
@@ -82,18 +81,18 @@ naga-ir = ["dep:naga"]
 
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
-strict_asserts = ["wgc?/strict_asserts", "wgt/strict_asserts"]
+strict_asserts = ["wgpu-core?/strict_asserts", "wgpu-types/strict_asserts"]
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgc/serde"]
+serde = ["dep:serde", "wgpu-core/serde"]
 
 # Uncomment once we get to https://github.com/gfx-rs/wgpu/issues/5974
 # ## Allow writing of trace capture files. See [`Adapter::request_device`].
-# trace = ["serde", "wgc/trace"]
+# trace = ["serde", "wgpu-core/trace"]
 
 ## Allow deserializing of trace capture files that were written with the `trace` feature.
 ## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
-replay = ["serde", "wgc/replay"]
+replay = ["serde", "wgpu-core/replay"]
 
 #! ### Other
 # --------------------------------------------------------------------
@@ -101,7 +100,7 @@ replay = ["serde", "wgc/replay"]
 ## Internally count resources and events for debugging purposes. If the counters
 ## feature is disabled, the counting infrastructure is removed from the build and
 ## the exposed counters always return 0.
-counters = ["wgc/counters"]
+counters = ["wgpu-core/counters"]
 
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
@@ -112,9 +111,9 @@ counters = ["wgc/counters"]
 ## but on a wasm binary compiled without atomics we know we are definitely
 ## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
-    "hal/fragile-send-sync-non-atomic-wasm",
-    "wgc/fragile-send-sync-non-atomic-wasm",
-    "wgt/fragile-send-sync-non-atomic-wasm",
+    "wgpu-hal/fragile-send-sync-non-atomic-wasm",
+    "wgpu-core/fragile-send-sync-non-atomic-wasm",
+    "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 
 
@@ -127,65 +126,17 @@ fragile-send-sync-non-atomic-wasm = [
 ## must be shipped alongside `dxcompiler.dll` and `dxil.dll` (which can be downloaded from Microsoft's GitHub).
 ## This feature statically links a version of DXC so that no external binaries are required
 ## to compile DX12 shaders.
-static-dxc = ["hal/static-dxc"]
+static-dxc = ["wgpu-hal/static-dxc"]
 
-# wgpu-core is always available as an optional dependency, "wgc".
-# Whenever wgpu-core is selected, we want raw window handle support.
-[dependencies.wgc]
-optional = true
-workspace = true
-features = ["raw-window-handle"]
-
-# wgpu-core is required whenever not targeting web APIs directly.
-# Whenever wgpu-core is selected, we want raw window handle support.
-[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.wgc]
-workspace = true
-features = ["raw-window-handle"]
-
-# If we are not targeting WebGL, enable indirect-validation.
-# WebGL doesn't support indirect execution so this is not needed.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
-workspace = true
-features = ["indirect-validation"]
-
-# Enable `wgc` by default on macOS and iOS to allow the `metal` crate feature to
-# enable the Metal backend while being no-op on other targets.
-[target.'cfg(target_vendor = "apple")'.dependencies.wgc]
-workspace = true
-
-# We want the wgpu-core Direct3D backend and OpenGL (via WGL) on Windows.
-[target.'cfg(windows)'.dependencies.wgc]
-workspace = true
-features = ["gles"]
-
-# We want the wgpu-core Vulkan backend on Unix (but not emscripten, macOS, iOS) and Windows.
-[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_vendor = "apple"))))'.dependencies.wgc]
-workspace = true
-features = ["vulkan"]
-
-# We want the wgpu-core GLES backend on Unix (but not macOS, iOS).
-[target.'cfg(all(unix, not(target_vendor = "apple")))'.dependencies.wgc]
-workspace = true
-features = ["gles"]
-
-[dependencies.wgt]
-workspace = true
-
-# We need wgpu-hal unless we're targeting the web APIs.
-[target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies]
-hal = { workspace = true }
-
-[target.'cfg(all(not(target_arch = "wasm32"), unix, not(target_vendor = "apple")))'.dependencies]
-hal = { workspace = true, features = ["renderdoc"] }
-
-[target.'cfg(windows)'.dependencies]
-hal = { workspace = true, features = ["renderdoc"] }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.hal]
-workspace = true
-optional = true
+#########################
+# Standard Dependencies #
+#########################
 
 [dependencies]
+naga = { workspace = true, optional = true }
+wgpu-core = { workspace = true, optional = true }
+wgpu-types = { workspace = true, features = ["serde"] }
+
 arrayvec.workspace = true
 bitflags.workspace = true
 document-features.workspace = true
@@ -197,19 +148,44 @@ serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
 
-[dependencies.naga]
-workspace = true
-optional = true
+########################################
+# Target Specific Feature Dependencies #
+########################################
 
-[build-dependencies]
-cfg_aliases.workspace = true
+# Windows
+[target.'cfg(windows)'.dependencies]
+wgpu-core = { workspace = true, features = [
+    "raw-window-handle",
+    "vulkan",
+    "gles",
+] }
+wgpu-hal = { workspace = true, features = ["renderdoc"] }
 
-# used to test all the example shaders
-[dev-dependencies.naga]
-workspace = true
-features = ["wgsl-in"]
+# Apple Platforms
+[target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu-core = { workspace = true, features = ["raw-window-handle"] }
+wgpu-hal = { workspace = true, features = [] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Linux + Android
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+wgpu-core = { workspace = true, features = [
+    "raw-window-handle",
+    "vulkan",
+    "gles",
+] }
+wgpu-hal = { workspace = true, features = ["renderdoc"] }
+
+# Webassembly
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+wgpu-core = { workspace = true, optional = true, features = [
+    "raw-window-handle",
+] }
+wgpu-hal = { workspace = true, optional = true }
+
+js-sys = { workspace = true, features = ["default"] }
+parking_lot.workspace = true
+wasm-bindgen-futures.workspace = true
+wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = [
     "default",
     "Document",
@@ -227,7 +203,11 @@ web-sys = { workspace = true, features = [
     "Event",
     "EventTarget",
 ] }
-wasm-bindgen.workspace = true
-js-sys = { workspace = true, features = ["default"] }
-wasm-bindgen-futures.workspace = true
-parking_lot.workspace = true
+
+# Emscripten
+[target.'cfg(target_os = "emscripten")'.dependencies]
+wgpu-core = { workspace = true, features = ["raw-window-handle", "gles"] }
+wgpu-hal = { workspace = true }
+
+[build-dependencies]
+cfg_aliases.workspace = true

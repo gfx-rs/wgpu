@@ -35,7 +35,7 @@ use core::fmt;
 ///
 /// [skip]: super::TestParameters::skip
 /// [expect_fail]: super::TestParameters::expect_fail
-/// [`AdapterInfo`]: wgt::AdapterInfo
+/// [`AdapterInfo`]: wgpu::AdapterInfo
 #[derive(Default, Clone)]
 pub struct FailureCase {
     /// Backends expected to fail, or `None` for any backend.
@@ -50,7 +50,7 @@ pub struct FailureCase {
     /// usually the PCI device id. Otherwise, this `FailureCase`
     /// applies regardless of vendor.
     ///
-    /// [`AdapterInfo::device`]: wgt::AdapterInfo::device
+    /// [`AdapterInfo::device`]: wgpu::AdapterInfo::device
     pub vendor: Option<u32>,
 
     /// Name of adapter expected to fail, or `None` for any adapter name.
@@ -59,7 +59,7 @@ pub struct FailureCase {
     /// [`AdapterInfo::name`], then this `FailureCase` applies. If
     /// this is `None`, the adapter name isn't considered.
     ///
-    /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
+    /// [`AdapterInfo::name`]: wgpu::AdapterInfo::name
     pub adapter: Option<&'static str>,
 
     /// Name of driver expected to fail, or `None` for any driver name.
@@ -68,7 +68,7 @@ pub struct FailureCase {
     /// [`AdapterInfo::driver`], then this `FailureCase` applies. If
     /// this is `None`, the driver name isn't considered.
     ///
-    /// [`AdapterInfo::driver`]: wgt::AdapterInfo::driver
+    /// [`AdapterInfo::driver`]: wgpu::AdapterInfo::driver
     pub driver: Option<&'static str>,
 
     /// Reason why the test is expected to fail.
@@ -115,7 +115,7 @@ impl FailureCase {
     /// of the adapter's [`AdapterInfo::name`]. The comparison is
     /// case-insensitive.
     ///
-    /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
+    /// [`AdapterInfo::name`]: wgpu::AdapterInfo::name
     pub fn adapter(adapter: &'static str) -> Self {
         FailureCase {
             adapter: Some(adapter),
@@ -130,7 +130,7 @@ impl FailureCase {
     /// the adapter's [`AdapterInfo::name`]. The string comparison is
     /// case-insensitive.
     ///
-    /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
+    /// [`AdapterInfo::name`]: wgpu::AdapterInfo::name
     pub fn backend_adapter(backends: wgpu::Backends, adapter: &'static str) -> Self {
         FailureCase {
             backends: Some(backends),
@@ -207,7 +207,7 @@ impl FailureCase {
     /// matching.
     pub(crate) fn applies_to_adapter(
         &self,
-        info: &wgt::AdapterInfo,
+        info: &wgpu::AdapterInfo,
     ) -> Option<FailureApplicationReasons> {
         let mut reasons = FailureApplicationReasons::empty();
 

@@ -17,7 +17,7 @@ fn doubleMe(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Because we're using a workgroup size of 64, if the input size isn't a multiple of 64,
     // we will have some "extra" invocations. This is fine, but we should tell them to stop
     // to avoid out-of-bounds accesses.
-    let array_length = arrayLength(input);
+    let array_length = arrayLength(&input);
     if (global_id.x >= array_length) {
         return;
     }

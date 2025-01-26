@@ -198,3 +198,47 @@ fn assign_to_ptr_components() {
    assign_to_arg_ptr_array_element(&a1);
    fetch_arg_ptr_array_element(&a1);
 }
+
+fn index_ptr(value: bool) -> bool {
+    var a = array<bool, 1>(value);
+    let p = &a;
+    return p[0];
+}
+
+struct S { m: i32 };
+
+fn member_ptr() -> i32 {
+    var s: S = S(42);
+    let p = &s;
+    return p.m;
+}
+
+struct Inner { delicious: i32 }
+
+struct Outer { om_nom_nom: Inner, thing: u32 }
+
+fn let_members_of_members() -> i32 {
+    let thing = Outer();
+
+    let inner = thing.om_nom_nom;
+    let delishus = inner.delicious;
+
+    if (thing.thing != u32(delishus)) {
+        // LOL
+    }
+
+    return thing.om_nom_nom.delicious;
+}
+
+fn var_members_of_members() -> i32 {
+    var thing = Outer();
+
+    var inner = thing.om_nom_nom;
+    var delishus = inner.delicious;
+
+    if (thing.thing != u32(delishus)) {
+        // LOL
+    }
+
+    return thing.om_nom_nom.delicious;
+}
