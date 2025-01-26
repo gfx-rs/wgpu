@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
-use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowId};
+use winit::{
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Window, WindowId},
+};
 
 struct State {
     window: Arc<Window>,
@@ -11,7 +13,7 @@ struct State {
     queue: wgpu::Queue,
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
-    format: wgpu::TextureFormat,
+    surface_format: wgpu::TextureFormat,
 }
 
 impl State {
@@ -35,7 +37,7 @@ impl State {
         let cap = surface.get_capabilities(&adapter);
         // If we don't add srgb suffix here in most cases the image
         // rendered will not be "gamma correct".
-        let format = cap.formats[0].add_srgb_suffix();
+        let surface_format = cap.formats[0];
 
         let state = State {
             window,
@@ -43,7 +45,7 @@ impl State {
             queue,
             size,
             surface,
-            format,
+            surface_format,
         };
 
         // Configure surface for the first time
@@ -59,8 +61,8 @@ impl State {
     fn configure_surface(&self) {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.format,
-            view_formats: vec![],
+            format: self.surface_format,
+            view_formats: vec![self.surface_format.add_srgb_suffix()],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             width: self.size.width,
             height: self.size.height,
@@ -126,27 +128,28 @@ impl ApplicationHandler for App {
                 .unwrap(),
         );
 
-        let mut state = pollster::block_on(async { State::new(window.clone()).await });
-        state.render();
-
+        let state = pollster::block_on(async { State::new(window.clone()).await });
         self.state = Some(state);
+
+        window.request_redraw();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        let state = self.state.as_mut().unwrap();
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.state.as_mut().unwrap().render();
-                // Emmits a new redraw requested event.
-                self.state.as_ref().unwrap().get_window().request_redraw();
+                state.render();
+                // Emits a new redraw requested event.
+                state.get_window().request_redraw();
             }
             WindowEvent::Resized(size) => {
                 // Reconfigures the size of the surface. We do not re-render
                 // here as this event is always folloed up by redraw request.
-                self.state.as_mut().unwrap().resize(size);
+                state.resize(size);
             }
             _ => (),
         }
@@ -154,20 +157,25 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
+    // wgpu uses `log` for all of our logging, so we initialize a logger with the `env_logger` crate.
+    //
+    // To change the log level, set the `RUST_LOG` environment variable. See the `env_logger`
+    // documentation for more information.
     env_logger::init();
 
     let event_loop = EventLoop::new().unwrap();
 
     // When the current loop iteration finishes, immediately begin a new
     // iteration regardless of whether or not new events are available to
-    // process. Preffered for render intesive tasks like games.
+    // process. Preferred for applications that want to render as fast as
+    // possible, like games.
     event_loop.set_control_flow(ControlFlow::Poll);
 
     // When the current loop iteration finishes, suspend the thread until
     // another event arrives. Helps keeping CPU utilization low if nothing
-    // is happening, which is preffered if the application might be idealing on
+    // is happening, which is preferred if the application might be idling in
     // the background.
-    event_loop.set_control_flow(ControlFlow::Wait);
+    // event_loop.set_control_flow(ControlFlow::Wait);
 
     let mut app = App::default();
     event_loop.run_app(&mut app).unwrap();
