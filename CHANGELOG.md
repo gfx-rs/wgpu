@@ -78,6 +78,7 @@ By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - Add Flush to GL Queue::submit. By @cwfitzgerald in [#6941](https://github.com/gfx-rs/wgpu/pull/6941).
 - Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
 - Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
+- Fix drop order in `Surface`. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
 
 #### Vulkan
 
