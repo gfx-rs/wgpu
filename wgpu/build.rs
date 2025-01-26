@@ -23,7 +23,7 @@ fn main() {
             )
         },
 
-        wgpu_core: { any(dx12, webgl, metal, vulkan) },
+        wgpu_core: { any(webgl, dx12, metal, vulkan, gles) },
 
         // This alias is _only_ if _we_ need naga in the wrapper. wgpu-core provides
         // its own re-export of naga, which can be used in other situations
