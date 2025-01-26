@@ -1,4 +1,4 @@
 //! No code. See README.md for details.
 
-#[cfg(windows)]
+#[cfg(target_arch = "wasm32")]
 pub use wgpu_core::*;

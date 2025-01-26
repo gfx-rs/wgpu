@@ -1,9 +1,9 @@
 [package]
-name = "wgpu-core-if-native-non-apple"
+name = "wgpu-core-if-target-unix-non-apple"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Workaround crate for enabling in wgpu-core when targeting native unix platforms excluding macOS/iOS/tvOS/VisionOS"
+description = "Workaround crate for enabling in wgpu-core when targeting native non-apple native unix platforms"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
@@ -16,5 +16,5 @@ gles = ["wgpu-core/gles"]
 renderdoc = ["wgpu-core/renderdoc"]
 vulkan = ["wgpu-core/vulkan"]
 
-[target.'cfg(any(windows, all(unix, not(target_arch = "wasm32"), not(target_vendor = "apple"))))'.dependencies]
+[target.'cfg(all(unix, not(target_os = "emscripten"), not(target_vendor = "apple")))'.dependencies]
 wgpu-core.workspace = true

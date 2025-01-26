@@ -46,7 +46,10 @@ metal = ["wgpu-core-if-target-apple/metal"]
 ## Enables the Vulkan backend on Windows, Linux, and Android.
 ##
 ## For enabling Vulkan on macOS & iOS, use the `vulkan-portability` feature.
-vulkan = ["wgpu-core-if-native-non-apple/vulkan"]
+vulkan = [
+    "wgpu-core-if-target-unix-non-apple/vulkan",
+    "wgpu-core-if-target-windows/vulkan",
+]
 
 ## Enables the Vulkan backend on macOS & iOS.
 vulkan-portability = ["wgpu-core-if-target-apple/vulkan"]
@@ -54,13 +57,16 @@ vulkan-portability = ["wgpu-core-if-target-apple/vulkan"]
 ## Enables the OpenGL/GLES backend on Windows, Linux, and Android.
 ##
 ## For enabling WebGL use the `webgl` feature, for enabling OpenGL via ANGLE on macOS use the `angle` feature.
-gles = ["wgpu-core-if-native-non-apple/gles"]
+gles = [
+    "wgpu-core-if-target-unix-non-apple/gles",
+    "wgpu-core-if-target-windows/gles",
+]
 
 ## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
 angle = ["wgpu-core-if-target-apple/gles"]
 
 ## Enables GLES backend (WebGL) on Wasm
-webgl = ["wgpu-core-if-arch-wasm32/gles"]
+webgl = ["wgpu-core-if-arch-wasm/gles"]
 
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 webgpu = ["naga?/wgsl-out"]
@@ -101,7 +107,7 @@ serde = ["dep:serde", "wgpu-core?/serde", "wgpu-types/serde"]
 
 ## Allow deserializing of trace capture files that were written with the `trace` feature.
 ## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
-replay = ["serde", "wgpu-core/replay"]
+replay = ["serde", "wgpu-core?/replay"]
 
 #! ### Other
 # --------------------------------------------------------------------
@@ -109,7 +115,7 @@ replay = ["serde", "wgpu-core/replay"]
 ## Internally count resources and events for debugging purposes. If the counters
 ## feature is disabled, the counting infrastructure is removed from the build and
 ## the exposed counters always return 0.
-counters = ["wgpu-core/counters"]
+counters = ["wgpu-core?/counters"]
 
 ## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
 ##
@@ -120,8 +126,8 @@ counters = ["wgpu-core/counters"]
 ## but on a wasm binary compiled without atomics we know we are definitely
 ## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
-    "wgpu-hal/fragile-send-sync-non-atomic-wasm",
-    "wgpu-core/fragile-send-sync-non-atomic-wasm",
+    "wgpu-hal?/fragile-send-sync-non-atomic-wasm",
+    "wgpu-core?/fragile-send-sync-non-atomic-wasm",
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 
@@ -160,8 +166,8 @@ serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
 
-wgpu-core-if-arch-wasm32 = { workspace = true, optional = true }
-wgpu-core-if-native-non-apple = { workspace = true, optional = true }
+wgpu-core-if-arch-wasm = { workspace = true, optional = true }
+wgpu-core-if-target-unix-non-apple = { workspace = true, optional = true }
 wgpu-core-if-target-apple = { workspace = true, optional = true }
 wgpu-core-if-target-windows = { workspace = true, optional = true }
 

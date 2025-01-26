@@ -25,10 +25,18 @@
 #![allow(clippy::arc_with_non_send_sync)]
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
+#[cfg(all(wgpu_core, not(native)))]
+pub extern crate wgpu_core_if_arch_wasm as wgc;
+#[cfg(all(wgpu_core, target_vendor = "apple"))]
+pub extern crate wgpu_core_if_target_apple as wgc;
+#[cfg(all(wgpu_core, windows))]
+pub extern crate wgpu_core_if_target_windows as wgc;
+#[cfg(all(wgpu_core, unix_non_apple))]
+pub extern crate wgpu_core_if_unix_non_apple as wgc;
+
 #[cfg(wgpu_core)]
-pub extern crate wgpu_core as wgc;
-#[cfg(wgpu_core)]
-pub use wgpu_core::hal;
+pub use wgc::hal;
+
 pub extern crate wgpu_types as wgt;
 
 //
@@ -91,16 +99,16 @@ pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};
 
 /// Re-export of our `naga` dependency.
 ///
-#[cfg(wgpu_core)]
-#[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
-// We re-export wgpu-core's re-export of naga, as we may not have direct access to it.
-pub use ::wgc::naga;
-/// Re-export of our `naga` dependency.
-///
 #[cfg(all(not(wgpu_core), naga))]
 #[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
 // If that's not available, we re-export our own.
 pub use naga;
+/// Re-export of our `naga` dependency.
+///
+#[cfg(wgpu_core)]
+#[cfg_attr(docsrs, doc(cfg(any(wgpu_core, naga))))]
+// We re-export wgpu-core's re-export of naga, as we may not have direct access to it.
+pub use wgc::naga;
 
 /// Re-export of our `raw-window-handle` dependency.
 ///

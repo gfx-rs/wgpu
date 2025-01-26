@@ -4027,9 +4027,10 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core",
- "wgpu-core-if-arch-wasm32",
- "wgpu-core-if-native-non-apple",
+ "wgpu-core-if-arch-wasm",
  "wgpu-core-if-target-apple",
+ "wgpu-core-if-target-unix-non-apple",
+ "wgpu-core-if-target-windows",
  "wgpu-hal",
  "wgpu-types",
 ]
@@ -4078,14 +4079,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-core-if-arch-wasm32"
-version = "24.0.0"
-dependencies = [
- "wgpu-core",
-]
-
-[[package]]
-name = "wgpu-core-if-native-non-apple"
+name = "wgpu-core-if-arch-wasm"
 version = "24.0.0"
 dependencies = [
  "wgpu-core",
@@ -4093,6 +4087,20 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-if-target-apple"
+version = "24.0.0"
+dependencies = [
+ "wgpu-core",
+]
+
+[[package]]
+name = "wgpu-core-if-target-unix-non-apple"
+version = "24.0.0"
+dependencies = [
+ "wgpu-core",
+]
+
+[[package]]
+name = "wgpu-core-if-target-windows"
 version = "24.0.0"
 dependencies = [
  "wgpu-core",

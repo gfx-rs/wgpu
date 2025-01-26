@@ -1,6 +1,8 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
         native: { not(target_arch = "wasm32") },
+
+        unix_non_apple: { all(native, not(target_vendor = "apple"), unix) },
         Emscripten: { all(target_arch = "wasm32", target_os = "emscripten") },
         send_sync: { any(
             not(target_arch = "wasm32"),
@@ -13,13 +15,12 @@ fn main() {
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: {
             any(all(feature = "vulkan-portability", target_vendor = "apple"),
-                all(feature = "vulkan", native, not(target_vendor = "apple"))
+                all(feature = "vulkan", unix_non_apple)
             )},
         gles: {
             any(
-                webgl,
                 all(feature = "angle", target_vendor = "apple"),
-                all(feature = "gles", native, not(target_vendor = "apple"))
+                all(feature = "gles", unix_non_apple)
             )
         },
 

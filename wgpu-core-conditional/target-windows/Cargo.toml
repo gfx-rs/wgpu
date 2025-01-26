@@ -13,6 +13,8 @@ license.workspace = true
 
 [features]
 dx12 = ["wgpu-core/dx12"]
+gles = ["wgpu-core/gles"]
+vulkan = ["wgpu-core/vulkan"]
 
 [target.'cfg(windows)'.dependencies]
 wgpu-core.workspace = true
