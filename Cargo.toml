@@ -67,9 +67,13 @@ naga = { version = "24.0.0", path = "./naga" }
 wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
+    "static-dxc",
+
+    # Enabled all native non-indirect (not going through additional layers like Angle) backends for testing.
     "dx12",
     "metal",
-    "static-dxc",
+    "vulkan",
+    "gles",
 ] }
 wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
 wgpu-core-if-arch-wasm32 = { version = "24.0.0", path = "./wgpu-core-conditional/arch-wasm32" }
