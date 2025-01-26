@@ -1,9 +1,9 @@
 [package]
-name = "wgpu-core-if-arch-wasm32"
+name = "wgpu-core-if-target-windows"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Workaround crate for enabling in wgpu-core when targeting wasm32"
+description = "Workaround crate for enabling wgpu-core when targeting windows"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
@@ -12,7 +12,7 @@ license.workspace = true
 [lib]
 
 [features]
-gles = ["wgpu-core/gles"]
+dx12 = ["wgpu-core/dx12"]
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(windows)'.dependencies]
 wgpu-core.workspace = true

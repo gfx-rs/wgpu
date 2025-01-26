@@ -34,12 +34,14 @@ default = ["wgsl", "dx12", "metal", "vulkan", "gles", "webgpu"]
 # --------------------------------------------------------------------
 
 ## Enables the DX12 backend on Windows.
-# Dx12 doesn't do anything on non-windows wgpu-core & wgpu-hal, so we don't need a proxy crate here.
-dx12 = ["wgpu-core/dx12"]
+# Note that while wgpu-hal ignores dx12 for non-windows targets, we still need to use a proxy crate,
+# since for non-windows targets we don't want to include wgpu-core in the first place via this feature.
+dx12 = ["wgpu-core-if-target-windows/dx12"]
 
 ## Enables the Metal backend on macOS & iOS.
-# Metal doesn't do anything on non-Apple wgpu-core & wgpu-hal, but we already have a proxy crate for Apple platforms anyways.
-metal = ["wgpu-core-if-vendor-apple/metal"]
+# Note that while wgpu-hal ignores metal for non-apple targets, we still need to use a proxy crate,
+# since for non-apple targets we don't want to include wgpu-core in the first place via this feature.
+metal = ["wgpu-core-if-target-apple/metal"]
 
 ## Enables the Vulkan backend on Windows, Linux, and Android.
 ##
@@ -47,7 +49,7 @@ metal = ["wgpu-core-if-vendor-apple/metal"]
 vulkan = ["wgpu-core-if-native-non-apple/vulkan"]
 
 ## Enables the Vulkan backend on macOS & iOS.
-vulkan-portability = ["wgpu-core-if-vendor-apple/vulkan"]
+vulkan-portability = ["wgpu-core-if-target-apple/vulkan"]
 
 ## Enables the OpenGL/GLES backend on Windows, Linux, and Android.
 ##
@@ -55,7 +57,7 @@ vulkan-portability = ["wgpu-core-if-vendor-apple/vulkan"]
 gles = ["wgpu-core-if-native-non-apple/gles"]
 
 ## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
-angle = ["wgpu-core-if-vendor-apple/gles"]
+angle = ["wgpu-core-if-target-apple/gles"]
 
 ## Enables GLES backend (WebGL) on Wasm
 webgl = ["wgpu-core-if-arch-wasm32/gles"]
@@ -160,7 +162,8 @@ static_assertions.workspace = true
 
 wgpu-core-if-arch-wasm32 = { workspace = true, optional = true }
 wgpu-core-if-native-non-apple = { workspace = true, optional = true }
-wgpu-core-if-vendor-apple = { workspace = true, optional = true }
+wgpu-core-if-target-apple = { workspace = true, optional = true }
+wgpu-core-if-target-windows = { workspace = true, optional = true }
 
 
 ########################################

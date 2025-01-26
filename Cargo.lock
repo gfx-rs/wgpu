@@ -4029,7 +4029,7 @@ dependencies = [
  "wgpu-core",
  "wgpu-core-if-arch-wasm32",
  "wgpu-core-if-native-non-apple",
- "wgpu-core-if-vendor-apple",
+ "wgpu-core-if-target-apple",
  "wgpu-hal",
  "wgpu-types",
 ]
@@ -4092,7 +4092,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-core-if-vendor-apple"
+name = "wgpu-core-if-target-apple"
 version = "24.0.0"
 dependencies = [
  "wgpu-core",

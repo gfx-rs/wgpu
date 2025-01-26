@@ -1,9 +1,9 @@
 [package]
-name = "wgpu-core-if-vendor-apple"
+name = "wgpu-core-if-target-apple"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Workaround crate for enabling features in wgpu-core when targeting macOS/iOS"
+description = "Workaround crate for enabling wgpu-core when targeting macOS/iOS/tvOS/VisionOS"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true

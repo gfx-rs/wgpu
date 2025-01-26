@@ -3,7 +3,7 @@ name = "wgpu-core-if-native-non-apple"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Workaround crate for enabling features in wgpu-core when targeting macOS/iOS"
+description = "Workaround crate for enabling in wgpu-core when targeting native unix platforms excluding macOS/iOS/tvOS/VisionOS"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
@@ -15,8 +15,6 @@ license.workspace = true
 gles = ["wgpu-core/gles"]
 renderdoc = ["wgpu-core/renderdoc"]
 vulkan = ["wgpu-core/vulkan"]
-
-raw-window-handle = ["wgpu-core/raw-window-handle"]
 
 [target.'cfg(any(windows, all(unix, not(target_arch = "wasm32"), not(target_vendor = "apple"))))'.dependencies]
 wgpu-core.workspace = true
