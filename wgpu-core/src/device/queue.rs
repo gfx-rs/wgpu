@@ -697,6 +697,8 @@ impl Queue {
                 .map_err(TransferError::from)?;
         }
 
+        let snatch_guard = self.device.snatchable_lock.read();
+
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
@@ -732,7 +734,7 @@ impl Queue {
                         &mut trackers.textures,
                         &self.device.alignments,
                         self.device.zero_buffer.as_ref(),
-                        &self.device.snatchable_lock.read(),
+                        &snatch_guard,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -741,8 +743,6 @@ impl Queue {
                     .drain(init_layer_range);
             }
         }
-
-        let snatch_guard = self.device.snatchable_lock.read();
 
         let dst_raw = dst.try_raw(&snatch_guard)?;
 
