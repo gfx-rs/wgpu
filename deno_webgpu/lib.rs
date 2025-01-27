@@ -6,11 +6,11 @@ use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
+use hashbrown::HashSet;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 use error::WebGpuResult;

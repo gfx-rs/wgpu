@@ -5,10 +5,10 @@ use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
+use hashbrown::HashMap;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use super::error::WebGpuError;

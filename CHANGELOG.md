@@ -50,19 +50,15 @@ Bottom level categories:
 
 #### General
 
+- Use `hashbrown` to simplify no-std support. By Brody in [#6938](https://github.com/gfx-rs/wgpu/pull/6938) & [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
+
 
 ##### Refactored internal trace path parameter
 
 Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
 
 By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
-
-##### Start using `hashbrown`
-
-Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std support. (This may help improve performance as well.)
-
-By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
 #### Vulkan
 
@@ -80,14 +76,19 @@ By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
 - Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
 - Fix drop order in `Surface`. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
+- Fix a possible deadlock within `Queue::write_texture`. By @metamuffin in [#7004](https://github.com/gfx-rs/wgpu/pull/7004)
 
 #### Vulkan
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 
+#### WebGPU
+
+- Improve efficiency of dropping read-only buffer mappings. By @kpreid in [#7007](https://github.com/gfx-rs/wgpu/pull/7007).
+
 ### Documentation
 
-- Improved documentation around pipeline caches. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978).
+- Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
 
 - Added a hello window example. By @laycookie in [#6992](https://github.com/gfx-rs/wgpu/pull/6992).
 
