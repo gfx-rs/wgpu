@@ -39,7 +39,7 @@ pub struct Surface<'window> {
     /// This is useful for platforms where the surface is created from a window and the surface
     /// would become invalid when the window is dropped.
     ///
-    /// This field must be dropped *after* all other fields to ensure proper cleanup.
+    /// SAFETY: This field must be dropped *after* all other fields to ensure proper cleanup.
     pub(crate) _handle_source: Option<Box<dyn WindowHandle + 'window>>,
 }
 
