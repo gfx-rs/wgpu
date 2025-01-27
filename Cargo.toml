@@ -175,7 +175,7 @@ wasm-bindgen = "0.2.97"
 wasm-bindgen-futures = "0.4.45"
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.74", default-features = false }
-web-time = "0.2.4"
+web-time = "1.1.0"
 
 # deno dependencies
 deno_console = "0.179.0"

@@ -4497,7 +4497,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
- "web-time 0.2.4",
+ "web-time 1.1.0",
  "wgpu",
  "wgpu-test",
  "winit 0.29.15",
