@@ -32,7 +32,7 @@ jobs:
     name: "${{ matrix.name }}"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Install Repo MSRV toolchain
         run: |
