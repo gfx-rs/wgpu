@@ -42,9 +42,9 @@ default-members = [
     "wgpu",
 ]
 
-[workspace.lints.clippy]
-manual_c_str_literals = "allow"
-ref_as_ptr = "warn"
+[workspace.lints.rust]
+manual_c_str_literals = "forbid"
+ref_as_ptr = "forbid"
 
 [workspace.package]
 edition = "2021"
