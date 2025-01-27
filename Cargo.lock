@@ -1059,6 +1059,7 @@ name = "deno_webgpu"
 version = "0.146.0"
 dependencies = [
  "deno_core",
+ "hashbrown",
  "raw-window-handle 0.6.2",
  "serde",
  "thiserror 2.0.11",
@@ -2248,6 +2249,7 @@ dependencies = [
  "codespan-reporting",
  "diff",
  "env_logger",
+ "hashbrown",
  "hexf-parse",
  "hlsl-snapshots",
  "indexmap",
@@ -4392,6 +4394,7 @@ dependencies = [
  "bitflags 2.8.0",
  "cfg_aliases 0.2.1",
  "document-features",
+ "hashbrown",
  "js-sys",
  "log",
  "naga",

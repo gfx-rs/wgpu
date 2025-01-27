@@ -5,10 +5,10 @@ mod ext_bindings;
 #[allow(clippy::allow_attributes)]
 mod webgpu_sys;
 
+use hashbrown::HashMap;
 use js_sys::Promise;
 use std::{
     cell::RefCell,
-    collections::HashMap,
     fmt,
     future::Future,
     ops::Range,

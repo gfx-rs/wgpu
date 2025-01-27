@@ -28,6 +28,7 @@ wgpu-core = { workspace = true, features = [
 wgpu-types = { workspace = true, features = ["serde"] }
 
 deno_core.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
 raw-window-handle = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
