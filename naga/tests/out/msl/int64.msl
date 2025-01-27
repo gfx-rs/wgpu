@@ -34,6 +34,10 @@ struct StorageCompatible {
 };
 constant ulong constant_variable = 20uL;
 
+long naga_abs(long val) {
+    return metal::select(as_type<long>(-as_type<ulong>(val)), val, val >= 0);
+}
+
 long int64_function(
     long x,
     constant UniformCompatible& input_uniform,
@@ -91,7 +95,7 @@ long int64_function(
     output_arrays.val_i64_array_2_ = _e116;
     long _e117 = val;
     long _e119 = val;
-    val = as_type<long>(as_type<ulong>(_e119) + as_type<ulong>(metal::abs(_e117)));
+    val = as_type<long>(as_type<ulong>(_e119) + as_type<ulong>(naga_abs(_e117)));
     long _e121 = val;
     long _e122 = val;
     long _e123 = val;

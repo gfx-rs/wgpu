@@ -293,13 +293,23 @@ fn main(@builtin(workgroup_id) id: vec3<u32>) {
 }
 
 fn negation_avoids_prefix_decrement() {
-    let x = 1;
-    let p0 = -x;
-    let p1 = - -x;
-    let p2 = -(-x);
-    let p3 = -(- x);
-    let p4 = - - -x;
-    let p5 = - - - - x;
-    let p6 = - - -(- -x);
-    let p7 = (- - - - -x);
+    let i = 1;
+    let i0 = -i;
+    let i1 = - -i;
+    let i2 = -(-i);
+    let i3 = -(- i);
+    let i4 = - - -i;
+    let i5 = - - - - i;
+    let i6 = - - -(- -i);
+    let i7 = (- - - - -i);
+
+    let f = 1.0;
+    let f0 = -f;
+    let f1 = - -f;
+    let f2 = -(-f);
+    let f3 = -(- f);
+    let f4 = - - -f;
+    let f5 = - - - - f;
+    let f6 = - - -(- -f);
+    let f7 = (- - - - -f);
 }

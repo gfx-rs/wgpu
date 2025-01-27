@@ -341,5 +341,9 @@ pub const RESERVED: &[&str] = &[
     "DefaultConstructible",
     super::writer::FREXP_FUNCTION,
     super::writer::MODF_FUNCTION,
+    super::writer::ABS_FUNCTION,
+    super::writer::DIV_FUNCTION,
+    super::writer::MOD_FUNCTION,
+    super::writer::NEG_FUNCTION,
     super::writer::ARGUMENT_BUFFER_WRAPPER_STRUCT,
 ];

@@ -1,13 +1,13 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 389
+; Bound: 413
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %374 "main" %371
-OpExecutionMode %374 LocalSize 1 1 1
-OpDecorate %371 BuiltIn WorkgroupId
+OpEntryPoint GLCompute %398 "main" %395
+OpExecutionMode %398 LocalSize 1 1 1
+OpDecorate %395 BuiltIn WorkgroupId
 %2 = OpTypeVoid
 %3 = OpTypeFloat 32
 %4 = OpTypeVector %3 4
@@ -84,9 +84,9 @@ OpDecorate %371 BuiltIn WorkgroupId
 %304 = OpConstantNull  %5
 %306 = OpTypePointer Function %14
 %334 = OpTypePointer Function %5
-%372 = OpTypePointer Input %15
-%371 = OpVariable  %372  Input
-%375 = OpConstantComposite  %10  %17 %17 %17
+%396 = OpTypePointer Input %15
+%395 = OpVariable  %396  Input
+%399 = OpConstantComposite  %10  %17 %17 %17
 %26 = OpFunction  %4  None %27
 %25 = OpLabel
 OpBranch %34
@@ -427,24 +427,48 @@ OpBranch %345
 %367 = OpSNegate  %5  %366
 %368 = OpSNegate  %5  %367
 %369 = OpSNegate  %5  %368
+%370 = OpFNegate  %3  %17
+%371 = OpFNegate  %3  %17
+%372 = OpFNegate  %3  %371
+%373 = OpFNegate  %3  %17
+%374 = OpFNegate  %3  %373
+%375 = OpFNegate  %3  %17
+%376 = OpFNegate  %3  %375
+%377 = OpFNegate  %3  %17
+%378 = OpFNegate  %3  %377
+%379 = OpFNegate  %3  %378
+%380 = OpFNegate  %3  %17
+%381 = OpFNegate  %3  %380
+%382 = OpFNegate  %3  %381
+%383 = OpFNegate  %3  %382
+%384 = OpFNegate  %3  %17
+%385 = OpFNegate  %3  %384
+%386 = OpFNegate  %3  %385
+%387 = OpFNegate  %3  %386
+%388 = OpFNegate  %3  %387
+%389 = OpFNegate  %3  %17
+%390 = OpFNegate  %3  %389
+%391 = OpFNegate  %3  %390
+%392 = OpFNegate  %3  %391
+%393 = OpFNegate  %3  %392
 OpReturn
 OpFunctionEnd
-%374 = OpFunction  %2  None %104
-%370 = OpLabel
-%373 = OpLoad  %15  %371
-OpBranch %376
-%376 = OpLabel
-%377 = OpFunctionCall  %4  %26
-%378 = OpCompositeExtract  %16  %373 0
-%379 = OpConvertUToF  %3  %378
-%380 = OpCompositeExtract  %16  %373 1
-%381 = OpBitcast  %5  %380
-%382 = OpFunctionCall  %4  %56 %379 %381
-%383 = OpFunctionCall  %10  %94 %375
-%384 = OpFunctionCall  %2  %103
-%385 = OpFunctionCall  %2  %121
-%386 = OpFunctionCall  %2  %234
-%387 = OpFunctionCall  %2  %261
-%388 = OpFunctionCall  %2  %300
+%398 = OpFunction  %2  None %104
+%394 = OpLabel
+%397 = OpLoad  %15  %395
+OpBranch %400
+%400 = OpLabel
+%401 = OpFunctionCall  %4  %26
+%402 = OpCompositeExtract  %16  %397 0
+%403 = OpConvertUToF  %3  %402
+%404 = OpCompositeExtract  %16  %397 1
+%405 = OpBitcast  %5  %404
+%406 = OpFunctionCall  %4  %56 %403 %405
+%407 = OpFunctionCall  %10  %94 %399
+%408 = OpFunctionCall  %2  %103
+%409 = OpFunctionCall  %2  %121
+%410 = OpFunctionCall  %2  %234
+%411 = OpFunctionCall  %2  %261
+%412 = OpFunctionCall  %2  %300
 OpReturn
 OpFunctionEnd
