@@ -1368,7 +1368,11 @@ pub struct WebQueueWriteBuffer {
 #[derive(Debug)]
 pub struct WebBufferMappedRange {
     actual_mapping: js_sys::Uint8Array,
+    /// Copy of the mapped data that lives in the Rust/Wasm heap instead of JS,
+    /// so Rust code can borrow it.
     temporary_mapping: Vec<u8>,
+    /// Whether `temporary_mapping` has possibly been written to and needs to be written back to JS.
+    temporary_mapping_modified: bool,
     /// Unique identifier for this BufferMappedRange.
     ident: crate::cmp::Identifier,
 }
@@ -2672,6 +2676,7 @@ impl dispatch::BufferInterface for WebBuffer {
         WebBufferMappedRange {
             actual_mapping,
             temporary_mapping,
+            temporary_mapping_modified: false,
             ident: crate::cmp::Identifier::create(),
         }
         .into()
@@ -3780,11 +3785,18 @@ impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
 
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
+        self.temporary_mapping_modified = true;
         &mut self.temporary_mapping
     }
 }
 impl Drop for WebBufferMappedRange {
     fn drop(&mut self) {
+        if !self.temporary_mapping_modified {
+            // For efficiency, skip the copy if it is not needed.
+            // This is also how we skip copying back on *read-only* mappings.
+            return;
+        }
+
         // Copy from the temporary mapping back into the array buffer that was
         // originally provided by the browser
         let temporary_mapping_slice = self.temporary_mapping.as_slice();
