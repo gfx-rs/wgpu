@@ -697,6 +697,8 @@ impl Queue {
                 .map_err(TransferError::from)?;
         }
 
+        let snatch_guard = self.device.snatchable_lock.read();
+
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
@@ -721,7 +723,6 @@ impl Queue {
                     .drain(init_layer_range)
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
-                    let snatch_guard = self.device.snatchable_lock.read();
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
                         &dst,
@@ -742,8 +743,6 @@ impl Queue {
                     .drain(init_layer_range);
             }
         }
-
-        let snatch_guard = self.device.snatchable_lock.read();
 
         let dst_raw = dst.try_raw(&snatch_guard)?;
 
