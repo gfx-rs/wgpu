@@ -721,6 +721,7 @@ impl Queue {
                     .drain(init_layer_range)
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
+                    let snatch_guard = self.device.snatchable_lock.read();
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
                         &dst,
@@ -732,7 +733,7 @@ impl Queue {
                         &mut trackers.textures,
                         &self.device.alignments,
                         self.device.zero_buffer.as_ref(),
-                        &self.device.snatchable_lock.read(),
+                        &snatch_guard,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
