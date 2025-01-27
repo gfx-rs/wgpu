@@ -132,7 +132,7 @@ impl ApplicationHandler for App {
                 .unwrap(),
         );
 
-        let state = pollster::block_on(async { State::new(window.clone()).await });
+        let state = pollster::block_on(State::new(window.clone()));
         self.state = Some(state);
 
         window.request_redraw();
