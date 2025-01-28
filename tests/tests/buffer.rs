@@ -14,7 +14,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
         b0.slice(0..0)
             .map_async(wgpu::MapMode::Read, Result::unwrap);
 
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollType::wait())
             .await
             .panic_on_timeout();
 
@@ -50,7 +50,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
             b0.slice(0..0)
                 .map_async(wgpu::MapMode::Write, Result::unwrap);
 
-            ctx.async_poll(wgpu::Maintain::wait())
+            ctx.async_poll(wgpu::PollType::wait())
                 .await
                 .panic_on_timeout();
 
@@ -81,7 +81,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
 
     b1.unmap();
 
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollType::wait())
         .await
         .panic_on_timeout();
 }
@@ -122,7 +122,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
             result.unwrap();
         });
 
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollType::wait())
         .await
         .panic_on_timeout();
 
@@ -148,7 +148,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
         .slice(..)
         .map_async(wgpu::MapMode::Read, Result::unwrap);
 
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollType::wait())
         .await
         .panic_on_timeout();
 

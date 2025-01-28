@@ -39,11 +39,11 @@ pub struct SubmissionIndex {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
-pub use wgt::Maintain as MaintainBase;
+pub use wgt::PollType as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
-pub type Maintain = wgt::Maintain<SubmissionIndex>;
+pub type PollType = wgt::PollType<SubmissionIndex>;
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(Maintain: Send, Sync);
+static_assertions::assert_impl_all!(PollType: Send, Sync);
 
 /// A write-only view into a staging buffer.
 ///

@@ -184,7 +184,7 @@ async fn reinterpret(
 
     let slice = read_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollType::wait())
         .await
         .panic_on_timeout();
 

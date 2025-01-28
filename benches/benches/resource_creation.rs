@@ -53,7 +53,7 @@ fn run_bench(ctx: &mut Criterion) {
                         drop(buffers);
 
                         state.queue.submit([]);
-                        state.device.poll(wgpu::Maintain::Wait);
+                        state.device.poll(wgpu::PollType::Wait);
                     }
 
                     duration

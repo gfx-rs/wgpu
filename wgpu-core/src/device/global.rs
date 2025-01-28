@@ -1869,7 +1869,7 @@ impl Global {
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
-                match device.maintain(fence, wgt::Maintain::Wait, snatch_guard) {
+                match device.maintain(fence, wgt::PollType::Wait, snatch_guard) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -1931,38 +1931,32 @@ impl Global {
     pub fn device_poll(
         &self,
         device_id: DeviceId,
-        maintain: wgt::Maintain<crate::SubmissionIndex>,
-    ) -> Result<bool, WaitIdleError> {
+        maintain: wgt::PollType<crate::SubmissionIndex>,
+    ) -> Result<wgt::PollStatus, WaitIdleError> {
         api_log!("Device::poll {maintain:?}");
 
         let device = self.hub.devices.get(device_id);
 
-        let DevicePoll {
-            closures,
-            queue_empty,
-        } = Self::poll_single_device(&device, maintain)?;
+        let DevicePoll { closures, status } = Self::poll_single_device(&device, maintain)?;
 
         closures.fire();
 
-        Ok(queue_empty)
+        Ok(status)
     }
 
     fn poll_single_device(
         device: &crate::device::Device,
-        maintain: wgt::Maintain<crate::SubmissionIndex>,
+        maintain: wgt::PollType<crate::SubmissionIndex>,
     ) -> Result<DevicePoll, WaitIdleError> {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
-        let (closures, queue_empty) = device.maintain(fence, maintain, snatch_guard)?;
+        let (closures, status) = device.maintain(fence, maintain, snatch_guard)?;
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
-        Ok(DevicePoll {
-            closures,
-            queue_empty,
-        })
+        Ok(DevicePoll { closures, status })
     }
 
     /// Poll all devices belonging to the specified backend.
@@ -1974,7 +1968,7 @@ impl Global {
     fn poll_all_devices_of_api(
         &self,
         force_wait: bool,
-        closures: &mut UserClosures,
+        closure_list: &mut UserClosures,
     ) -> Result<bool, WaitIdleError> {
         profiling::scope!("poll_device");
 
@@ -1985,19 +1979,16 @@ impl Global {
 
             for (_id, device) in device_guard.iter() {
                 let maintain = if force_wait {
-                    wgt::Maintain::Wait
+                    wgt::PollType::Wait
                 } else {
-                    wgt::Maintain::Poll
+                    wgt::PollType::Poll
                 };
 
-                let DevicePoll {
-                    closures: cbs,
-                    queue_empty,
-                } = Self::poll_single_device(device, maintain)?;
+                let DevicePoll { closures, status } = Self::poll_single_device(device, maintain)?;
 
-                all_queue_empty &= queue_empty;
+                all_queue_empty &= status.is_queue_empty();
 
-                closures.extend(cbs);
+                closure_list.extend(closures);
             }
         }
 
@@ -2268,5 +2259,5 @@ impl Global {
 
 struct DevicePoll {
     closures: UserClosures,
-    queue_empty: bool,
+    status: wgt::PollStatus,
 }

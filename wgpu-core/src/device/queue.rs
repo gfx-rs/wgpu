@@ -1304,13 +1304,14 @@ impl Queue {
             let (closures, _) =
                 match self
                     .device
-                    .maintain(fence_guard, wgt::Maintain::Poll, snatch_guard)
+                    .maintain(fence_guard, wgt::PollType::Poll, snatch_guard)
                 {
                     Ok(closures) => closures,
                     Err(WaitIdleError::Device(err)) => {
                         break 'error Err(QueueSubmitError::Queue(err))
                     }
                     Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
+                    Err(WaitIdleError::Timeout) => unreachable!("Cannot get Timeout from Poll"),
                 };
 
             Ok(closures)

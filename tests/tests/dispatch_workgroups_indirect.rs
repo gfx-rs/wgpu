@@ -300,7 +300,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| {});
 
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollType::wait())
             .await
             .panic_on_timeout();
 

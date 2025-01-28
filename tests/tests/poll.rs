@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BufferBindingType, BufferDescriptor, BufferUsages, CommandBuffer,
-    CommandEncoderDescriptor, ComputePassDescriptor, Maintain, ShaderStages,
+    CommandEncoderDescriptor, ComputePassDescriptor, PollType, ShaderStages,
 };
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
@@ -57,7 +57,7 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_async(|ctx| 
     let cmd_buf = generate_dummy_work(&ctx);
 
     ctx.queue.submit(Some(cmd_buf));
-    ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+    ctx.async_poll(PollType::wait()).await.panic_on_timeout();
 });
 
 #[gpu_test]
@@ -66,8 +66,8 @@ static DOUBLE_WAIT: GpuTestConfiguration =
         let cmd_buf = generate_dummy_work(&ctx);
 
         ctx.queue.submit(Some(cmd_buf));
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollType::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollType::wait()).await.panic_on_timeout();
     });
 
 #[gpu_test]
@@ -76,7 +76,7 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration =
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.async_poll(Maintain::wait_for(index))
+        ctx.async_poll(PollType::wait_for(index))
             .await
             .panic_on_timeout();
     });
@@ -87,10 +87,10 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.async_poll(Maintain::wait_for(index.clone()))
+        ctx.async_poll(PollType::wait_for(index.clone()))
             .await
             .panic_on_timeout();
-        ctx.async_poll(Maintain::wait_for(index))
+        ctx.async_poll(PollType::wait_for(index))
             .await
             .panic_on_timeout();
     });
@@ -103,10 +103,10 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
 
         let index1 = ctx.queue.submit(Some(cmd_buf1));
         let index2 = ctx.queue.submit(Some(cmd_buf2));
-        ctx.async_poll(Maintain::wait_for(index2))
+        ctx.async_poll(PollType::wait_for(index2))
             .await
             .panic_on_timeout();
-        ctx.async_poll(Maintain::wait_for(index1))
+        ctx.async_poll(PollType::wait_for(index1))
             .await
             .panic_on_timeout();
     });
@@ -142,5 +142,5 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
     // Specifically, the failed submission should not cause a new fence value to
     // be allocated that will not be signalled until further work is
     // successfully submitted, causing a greater fence value to be signalled.
-    device2.poll(wgpu::Maintain::Wait);
+    device2.poll(wgpu::PollType::Wait);
 }

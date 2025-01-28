@@ -47,6 +47,7 @@ counters = []
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
 log.workspace = true
+thiserror.workspace = true
 serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",

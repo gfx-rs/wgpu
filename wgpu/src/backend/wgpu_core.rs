@@ -1616,14 +1616,17 @@ impl dispatch::DeviceInterface for CoreDevice {
         self.context.0.device_stop_capture(self.id);
     }
 
-    fn poll(&self, maintain: crate::Maintain) -> crate::MaintainResult {
+    fn poll(&self, maintain: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {
         let maintain_inner = maintain.map_index(|i| i.index);
         match self.context.0.device_poll(self.id, maintain_inner) {
-            Ok(done) => match done {
-                true => wgt::MaintainResult::SubmissionQueueEmpty,
-                false => wgt::MaintainResult::Ok,
-            },
-            Err(err) => self.context.handle_error_fatal(err, "Device::poll"),
+            Ok(status) => Ok(status),
+            Err(err) => {
+                if let Some(poll_error) = err.to_poll_error() {
+                    return Err(poll_error);
+                }
+
+                self.context.handle_error_fatal(err, "Device::poll")
+            }
         }
     }
 

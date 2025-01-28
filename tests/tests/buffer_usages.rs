@@ -139,7 +139,7 @@ async fn map_test(
         buffer.destroy();
     }
 
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollType::wait())
         .await
         .panic_on_timeout();
 

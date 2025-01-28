@@ -41,7 +41,7 @@ static RESTRICT_WORKGROUP_PRIVATE_FUNCTION_LET: GpuTestConfiguration = GpuTestCo
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| {});
 
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollType::wait())
             .await
             .panic_on_timeout();
 
@@ -444,7 +444,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         .slice(..)
         .map_async(wgpu::MapMode::Read, |_| {});
 
-    ctx.async_poll(wgpu::Maintain::wait())
+    ctx.async_poll(wgpu::PollType::wait())
         .await
         .panic_on_timeout();
 

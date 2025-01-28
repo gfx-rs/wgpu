@@ -135,7 +135,7 @@ impl Test<'_> {
 
         println!("\t\t\tWaiting...");
         global
-            .device_poll(device_id, wgt::Maintain::wait())
+            .device_poll(device_id, wgt::PollType::wait())
             .unwrap();
 
         for expect in self.expectations {

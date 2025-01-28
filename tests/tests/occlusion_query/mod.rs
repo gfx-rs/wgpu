@@ -115,7 +115,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         mapping_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        ctx.async_poll(wgpu::Maintain::wait())
+        ctx.async_poll(wgpu::PollType::wait())
             .await
             .panic_on_timeout();
         let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();

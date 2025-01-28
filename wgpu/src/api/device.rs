@@ -42,7 +42,7 @@ impl Device {
     /// other threads could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
+    pub fn poll(&self, maintain: PollType) -> Result<crate::PollStatus, crate::PollError> {
         self.inner.poll(maintain)
     }
 

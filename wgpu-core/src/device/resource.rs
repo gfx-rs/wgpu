@@ -386,14 +386,14 @@ impl Device {
     pub(crate) fn maintain<'this>(
         &'this self,
         fence: crate::lock::RwLockReadGuard<ManuallyDrop<Box<dyn hal::DynFence>>>,
-        maintain: wgt::Maintain<crate::SubmissionIndex>,
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
-    ) -> Result<(UserClosures, bool), WaitIdleError> {
+    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         profiling::scope!("Device::maintain");
 
-        // Determine which submission index `maintain` represents.
-        let submission_index = match maintain {
-            wgt::Maintain::WaitForSubmissionIndex(submission_index) => {
+        // Determine which submission index we should wait for, if a wait is requested.
+        let wait_submission_index = match poll_type {
+            wgt::PollType::WaitForSubmissionIndex(submission_index) => {
                 let last_successful_submission_index = self
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
@@ -405,31 +405,56 @@ impl Device {
                     ));
                 }
 
-                submission_index
+                Some(submission_index)
             }
-            wgt::Maintain::Wait => self
-                .last_successful_submission_index
-                .load(Ordering::Acquire),
-            wgt::Maintain::Poll => unsafe { self.raw().get_fence_value(fence.as_ref()) }
-                .map_err(|e| self.handle_hal_error(e))?,
+            wgt::PollType::Wait => Some(
+                self.last_successful_submission_index
+                    .load(Ordering::Acquire),
+            ),
+            wgt::PollType::Poll => None,
         };
 
-        // If necessary, wait for that submission to complete.
-        if maintain.is_wait() {
-            log::trace!("Device::maintain: waiting for submission index {submission_index}");
-            unsafe {
+        // Wait for the submission index if requested. If this is a poll, treat as a success.
+        let mut wait_succeeded = true;
+        if let Some(target_submission_index) = wait_submission_index {
+            log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
+            wait_succeeded = unsafe {
                 self.raw()
-                    .wait(fence.as_ref(), submission_index, CLEANUP_WAIT_MS)
+                    .wait(fence.as_ref(), target_submission_index, CLEANUP_WAIT_MS)
             }
             .map_err(|e| self.handle_hal_error(e))?;
         }
 
+        // Get the currently finished submission index. This may be higher than the requested
+        // wait, or it may be less than the requested wait if the wait failed.
+        let current_finished_submission = unsafe { self.raw().get_fence_value(fence.as_ref()) }
+            .map_err(|e| self.handle_hal_error(e))?;
+
         let (submission_closures, mapping_closures, queue_empty) =
             if let Some(queue) = self.get_queue() {
-                queue.maintain(submission_index, &snatch_guard)
+                queue.maintain(current_finished_submission, &snatch_guard)
             } else {
                 (SmallVec::new(), Vec::new(), true)
             };
+
+        let status = if queue_empty {
+            if let Some(wait_submission_index) = wait_submission_index {
+                assert!(
+                    current_finished_submission >= wait_submission_index,
+                    "If the queue is empty, the current submission index ({}) should be at least the wait submission index ({})",
+                    current_finished_submission,
+                    wait_submission_index
+                );
+            }
+
+            wgt::PollStatus::QueueEmpty
+        } else if let Some(wait_submission_index) = wait_submission_index {
+            if current_finished_submission >= wait_submission_index {
+                wgt::PollStatus::WaitSucceeded
+            } else {
+                wgt::PollStatus::
+            }
+        };
 
         // Detect if we have been destroyed and now need to lose the device.
         // If we are invalid (set at start of destroy) and our queue is empty,
