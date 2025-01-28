@@ -250,9 +250,6 @@
                         continuing: [],
                         break_if: None,
                     ),
-                    Return(
-                        value: None,
-                    ),
                 ],
                 diagnostic_filter_leaf: None,
             ),

@@ -166,7 +166,6 @@ void test_matrix_within_struct_accesses()
     int _e85 = idx;
     int _e87 = idx;
     SetMatScalarmOnBaz(t, 40.0, _e85, _e87);
-    return;
 }
 
 MatCx2InArray ConstructMatCx2InArray(float4x2 arg0[2]) {
@@ -215,7 +214,6 @@ void test_matrix_within_array_within_struct_accesses()
     int _e100 = idx_1;
     int _e102 = idx_1;
     __set_el_of_mat4x2(t_1.am[0], _e100, _e102, 40.0);
-    return;
 }
 
 float read_from_private(inout float foo_1)
@@ -232,7 +230,6 @@ float test_arr_as_arg(float a[5][10])
 void assign_through_ptr_fn(inout uint p)
 {
     p = 42u;
-    return;
 }
 
 typedef float4 ret_Constructarray2_float4_[2];
@@ -244,7 +241,6 @@ ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
 void assign_array_through_ptr_fn(inout float4 foo_2[2])
 {
     foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
-    return;
 }
 
 uint fetch_arg_ptr_member(inout AssignToMember p_1)
@@ -256,7 +252,6 @@ uint fetch_arg_ptr_member(inout AssignToMember p_1)
 void assign_to_arg_ptr_member(inout AssignToMember p_2)
 {
     p_2.x = 10u;
-    return;
 }
 
 uint fetch_arg_ptr_array_element(inout uint p_3[4])
@@ -268,7 +263,6 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4])
 void assign_to_arg_ptr_array_element(inout uint p_4[4])
 {
     p_4[1] = 10u;
-    return;
 }
 
 typedef bool ret_Constructarray1_bool_[1];
@@ -409,7 +403,6 @@ void assign_through_ptr()
 
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
-    return;
 }
 
 [numthreads(1, 1, 1)]
@@ -422,5 +415,4 @@ void assign_to_ptr_components()
     const uint _e1 = fetch_arg_ptr_member(s1_);
     assign_to_arg_ptr_array_element(a1_);
     const uint _e3 = fetch_arg_ptr_array_element(a1_);
-    return;
 }

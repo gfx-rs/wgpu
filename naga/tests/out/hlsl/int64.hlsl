@@ -230,5 +230,4 @@ void main()
     const uint64_t _e3 = uint64_function(67uL);
     const int64_t _e5 = int64_function(60L);
     output.Store(224, (_e3 + _e5));
-    return;
 }

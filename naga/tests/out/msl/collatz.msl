@@ -54,5 +54,4 @@ kernel void main_(
     uint _e9 = v_indices.data[global_id.x];
     uint _e10 = collatz_iterations(_e9);
     v_indices.data[global_id.x] = _e10;
-    return;
 }

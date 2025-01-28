@@ -35,7 +35,6 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front_facing: bool, @builti
 @compute @workgroup_size(1, 1, 1) 
 fn compute(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>, @builtin(local_invocation_index) local_index: u32, @builtin(workgroup_id) wg_id: vec3<u32>, @builtin(num_workgroups) num_wgs: vec3<u32>) {
     output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x);
-    return;
 }
 
 @vertex 

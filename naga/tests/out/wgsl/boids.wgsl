@@ -144,5 +144,4 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     particlesDst.particles[index].pos = _e174;
     let _e179 = vVel;
     particlesDst.particles[index].vel = _e179;
-    return;
 }

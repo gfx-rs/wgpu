@@ -1031,7 +1031,9 @@ impl Frontend {
         result: Option<FunctionResult>,
         meta: Span,
     ) {
-        ensure_block_returns(&mut ctx.body);
+        if result.is_some() {
+            ensure_block_returns(&mut ctx.body);
+        }
 
         let void = result.is_none();
 

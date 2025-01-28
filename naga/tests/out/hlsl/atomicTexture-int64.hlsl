@@ -13,5 +13,4 @@ void cs_main(uint3 id : SV_GroupThreadID)
     InterlockedMax(image[int2(0, 0)],1uL);
     GroupMemoryBarrierWithGroupSync();
     InterlockedMin(image[int2(0, 0)],1uL);
-    return;
 }

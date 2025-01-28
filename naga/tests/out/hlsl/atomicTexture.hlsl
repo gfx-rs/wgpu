@@ -23,5 +23,4 @@ void cs_main(uint3 id : SV_GroupThreadID)
     InterlockedAnd(image_s[int2(0, 0)],1);
     InterlockedOr(image_s[int2(0, 0)],1);
     InterlockedXor(image_s[int2(0, 0)],1);
-    return;
 }

@@ -251,7 +251,6 @@ void assignment()
     vec0_[1] = (_e37 + 1);
     int _e41 = vec0_[1];
     vec0_[1] = (_e41 - 1);
-    return;
 }
 
 void negation_avoids_prefix_decrement()
@@ -277,5 +276,4 @@ void main(uint3 id : SV_GroupID)
     bit();
     comparison();
     assignment();
-    return;
 }

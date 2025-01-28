@@ -28,7 +28,6 @@ fn ftest(a: vec4<f32>, b: vec4<f32>) {
     let _e24 = a_1;
     let _e25 = b_1;
     h = (_e24 != _e25);
-    return;
 }
 
 fn dtest(a_2: vec4<f64>, b_2: vec4<f64>) {
@@ -61,7 +60,6 @@ fn dtest(a_2: vec4<f64>, b_2: vec4<f64>) {
     let _e24 = a_3;
     let _e25 = b_3;
     h_1 = (_e24 != _e25);
-    return;
 }
 
 fn itest(a_4: vec4<i32>, b_4: vec4<i32>) {
@@ -94,7 +92,6 @@ fn itest(a_4: vec4<i32>, b_4: vec4<i32>) {
     let _e24 = a_5;
     let _e25 = b_5;
     h_2 = (_e24 != _e25);
-    return;
 }
 
 fn utest(a_6: vec4<u32>, b_6: vec4<u32>) {
@@ -127,7 +124,6 @@ fn utest(a_6: vec4<u32>, b_6: vec4<u32>) {
     let _e24 = a_7;
     let _e25 = b_7;
     h_3 = (_e24 != _e25);
-    return;
 }
 
 fn btest(a_8: vec4<bool>, b_8: vec4<bool>) {
@@ -153,11 +149,9 @@ fn btest(a_8: vec4<bool>, b_8: vec4<bool>) {
     f_4 = all(_e15);
     let _e18 = a_9;
     g_4 = !(_e18);
-    return;
 }
 
 fn main_1() {
-    return;
 }
 
 @fragment 

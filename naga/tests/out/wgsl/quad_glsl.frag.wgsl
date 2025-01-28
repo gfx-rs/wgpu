@@ -7,7 +7,6 @@ var<private> o_color: vec4<f32>;
 
 fn main_1() {
     o_color = vec4<f32>(1f, 1f, 1f, 1f);
-    return;
 }
 
 @fragment 

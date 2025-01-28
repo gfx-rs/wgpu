@@ -48,7 +48,6 @@ void non_constant_initializers()
     int _e10 = y;
     int _e11 = z;
     out_3 = int4(_e8, _e9, _e10, _e11);
-    return;
 }
 
 void splat_of_constant()
@@ -97,5 +96,4 @@ void main()
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
-    return;
 }

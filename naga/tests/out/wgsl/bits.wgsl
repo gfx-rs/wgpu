@@ -123,5 +123,4 @@ fn main() {
     u3_ = reverseBits(_e168);
     let _e170 = u4_;
     u4_ = reverseBits(_e170);
-    return;
 }

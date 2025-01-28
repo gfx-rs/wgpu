@@ -33,6 +33,5 @@ void main() {
     uvec4 value7u = texelFetch(_group_0_binding_7_cs, int(uint(local_id.x)), int(local_id.z));
     imageStore(_group_0_binding_2_cs, itc.x, ((((value1_ + value2_) + value4_) + value5_) + value6_));
     imageStore(_group_0_binding_2_cs, int(uint(itc.x)), ((((value1u + value2u) + value4u) + value5u) + value6u));
-    return;
 }
 

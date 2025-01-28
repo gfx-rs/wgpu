@@ -20,5 +20,4 @@ fn test_integer_dot_product() -> i32 {
 fn main() {
     let _e0 = test_fma();
     let _e1 = test_integer_dot_product();
-    return;
 }

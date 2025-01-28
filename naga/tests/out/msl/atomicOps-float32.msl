@@ -39,5 +39,4 @@ kernel void cs_main(
     float _e47 = metal::atomic_exchange_explicit(&storage_atomic_arr.inner[1], 1.5, metal::memory_order_relaxed);
     float _e51 = metal::atomic_exchange_explicit(&storage_struct.atomic_scalar, 1.5, metal::memory_order_relaxed);
     float _e56 = metal::atomic_exchange_explicit(&storage_struct.atomic_arr.inner[1], 1.5, metal::memory_order_relaxed);
-    return;
 }

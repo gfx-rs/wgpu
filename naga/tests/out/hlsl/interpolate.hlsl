@@ -68,5 +68,4 @@ VertexOutput_vert_main vert_main()
 void frag_main(FragmentInput_frag_main fragmentinput_frag_main)
 {
     FragmentInput val = { fragmentinput_frag_main.position_1, fragmentinput_frag_main._flat_1, fragmentinput_frag_main.flat_first_1, fragmentinput_frag_main.flat_either_1, fragmentinput_frag_main._linear_1, fragmentinput_frag_main.linear_centroid_1, fragmentinput_frag_main.linear_sample_1, fragmentinput_frag_main.linear_center_1, fragmentinput_frag_main.perspective_1, fragmentinput_frag_main.perspective_centroid_1, fragmentinput_frag_main.perspective_sample_1, fragmentinput_frag_main.perspective_center_1 };
-    return;
 }

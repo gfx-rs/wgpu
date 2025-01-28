@@ -146,9 +146,6 @@
                     arguments: [],
                     result: Some(0),
                 ),
-                Return(
-                    value: None,
-                ),
             ],
             diagnostic_filter_leaf: None,
         ),
@@ -167,11 +164,7 @@
                 local_variables: [],
                 expressions: [],
                 named_expressions: {},
-                body: [
-                    Return(
-                        value: None,
-                    ),
-                ],
+                body: [],
                 diagnostic_filter_leaf: None,
             ),
         ),

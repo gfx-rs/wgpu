@@ -31,5 +31,4 @@ void cs_main(uint3 id : SV_GroupThreadID)
     storage_atomic_arr.InterlockedMin64(8, (1uL + _e24));
     storage_struct.InterlockedMin64(0, 1uL);
     storage_struct.InterlockedMin64(8+8, uint64_t(id.x));
-    return;
 }

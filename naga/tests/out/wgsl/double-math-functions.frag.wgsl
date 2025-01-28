@@ -90,7 +90,6 @@ fn main_1() {
     smoothStepScalar = f64(smoothstep(0f, 1f, 0.5f));
     smoothStepVector = smoothstep(vec4(0.0lf), vec4(1.0lf), vec4(0.5lf));
     smoothStepMixed = smoothstep(vec4(0.0lf), vec4(1.0lf), vec4(0.5lf));
-    return;
 }
 
 @fragment 

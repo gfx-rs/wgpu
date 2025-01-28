@@ -23,7 +23,6 @@ var<uniform> global_nested_arrays_of_matrices_2x4_: array<array<mat2x4<f32>, 2>,
 var<uniform> global_nested_arrays_of_matrices_4x2_: array<array<mat4x2<f32>, 2>, 2>;
 
 fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {
-    return;
 }
 
 fn test_msl_packed_vec3_() {
@@ -67,5 +66,4 @@ fn main() {
     alignment.v1_ = 4f;
     wg[1] = f32(arrayLength((&dummy)));
     atomicStore((&at_1), 2u);
-    return;
 }

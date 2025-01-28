@@ -1307,7 +1307,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             global_expression_kind_tracker: ctx.global_expression_kind_tracker,
         };
         let mut body = self.block(&f.body, false, &mut stmt_ctx)?;
-        ensure_block_returns(&mut body);
+        if function.result.is_some() {
+            ensure_block_returns(&mut body);
+        }
 
         function.body = body;
         function.named_expressions = named_expressions

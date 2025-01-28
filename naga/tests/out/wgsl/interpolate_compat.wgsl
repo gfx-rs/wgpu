@@ -33,5 +33,4 @@ fn vert_main() -> FragmentInput {
 
 @fragment 
 fn frag_main(val: FragmentInput) {
-    return;
 }

@@ -44,12 +44,10 @@ float test_arr_as_arg(float a[5][10]) {
 
 void assign_through_ptr_fn(inout uint p) {
     p = 42u;
-    return;
 }
 
 void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
     foo_2 = vec4[2](vec4(1.0), vec4(2.0));
-    return;
 }
 
 uint fetch_arg_ptr_member(inout AssignToMember p_1) {
@@ -59,7 +57,6 @@ uint fetch_arg_ptr_member(inout AssignToMember p_1) {
 
 void assign_to_arg_ptr_member(inout AssignToMember p_2) {
     p_2.x = 10u;
-    return;
 }
 
 uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
@@ -69,7 +66,6 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
 
 void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
     p_4[1] = 10u;
-    return;
 }
 
 bool index_ptr(bool value) {
@@ -116,6 +112,5 @@ void main() {
     uint _e1 = fetch_arg_ptr_member(s1_);
     assign_to_arg_ptr_array_element(a1_);
     uint _e3 = fetch_arg_ptr_array_element(a1_);
-    return;
 }
 

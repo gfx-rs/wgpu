@@ -4,7 +4,6 @@ fn breakIfEmpty() {
             break if true;
         }
     }
-    return;
 }
 
 fn breakIfEmptyBody(a: bool) {
@@ -20,7 +19,6 @@ fn breakIfEmptyBody(a: bool) {
             break if (a == _e5);
         }
     }
-    return;
 }
 
 fn breakIf(a_1: bool) {
@@ -36,7 +34,6 @@ fn breakIf(a_1: bool) {
             break if (a_1 == _e5);
         }
     }
-    return;
 }
 
 fn breakIfSeparateVariable() {
@@ -50,10 +47,8 @@ fn breakIfSeparateVariable() {
             break if (_e5 == 5u);
         }
     }
-    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
-    return;
 }

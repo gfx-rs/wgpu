@@ -242,7 +242,6 @@ void assignment(
     vec0_[1] = as_type<int>(as_type<uint>(_e37) + as_type<uint>(1));
     int _e41 = vec0_[1];
     vec0_[1] = as_type<int>(as_type<uint>(_e41) - as_type<uint>(1));
-    return;
 }
 
 void negation_avoids_prefix_decrement(
@@ -270,5 +269,4 @@ kernel void main_(
     bit();
     comparison();
     assignment();
-    return;
 }

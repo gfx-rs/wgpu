@@ -982,9 +982,6 @@
                     pointer: 88,
                     value: 89,
                 ),
-                Return(
-                    value: None,
-                ),
             ],
             diagnostic_filter_leaf: None,
         ),
@@ -1587,9 +1584,6 @@
                     pointer: 103,
                     value: 104,
                 ),
-                Return(
-                    value: None,
-                ),
             ],
             diagnostic_filter_leaf: None,
         ),
@@ -1693,9 +1687,6 @@
                     pointer: 0,
                     value: 1,
                 ),
-                Return(
-                    value: None,
-                ),
             ],
             diagnostic_filter_leaf: None,
         ),
@@ -1753,9 +1744,6 @@
                 Store(
                     pointer: 0,
                     value: 5,
-                ),
-                Return(
-                    value: None,
                 ),
             ],
             diagnostic_filter_leaf: None,
@@ -1829,9 +1817,6 @@
                     pointer: 1,
                     value: 2,
                 ),
-                Return(
-                    value: None,
-                ),
             ],
             diagnostic_filter_leaf: None,
         ),
@@ -1903,9 +1888,6 @@
                 Store(
                     pointer: 1,
                     value: 2,
-                ),
-                Return(
-                    value: None,
                 ),
             ],
             diagnostic_filter_leaf: None,
@@ -2779,9 +2761,6 @@
                         ],
                         result: None,
                     ),
-                    Return(
-                        value: None,
-                    ),
                 ],
                 diagnostic_filter_leaf: None,
             ),
@@ -2843,9 +2822,6 @@
                             2,
                         ],
                         result: Some(3),
-                    ),
-                    Return(
-                        value: None,
                     ),
                 ],
                 diagnostic_filter_leaf: None,

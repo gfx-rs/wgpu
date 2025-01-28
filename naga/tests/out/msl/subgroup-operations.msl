@@ -40,5 +40,4 @@ kernel void main_(
     uint unnamed_18 = metal::simd_shuffle_down(subgroup_invocation_id, 1u);
     uint unnamed_19 = metal::simd_shuffle_up(subgroup_invocation_id, 1u);
     uint unnamed_20 = metal::simd_shuffle_xor(subgroup_invocation_id, sizes.subgroup_size - 1u);
-    return;
 }

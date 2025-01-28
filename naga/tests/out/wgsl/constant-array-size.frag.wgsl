@@ -32,7 +32,6 @@ fn function() -> vec4<f32> {
 }
 
 fn main_1() {
-    return;
 }
 
 @fragment 

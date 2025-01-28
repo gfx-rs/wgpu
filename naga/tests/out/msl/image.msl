@@ -32,7 +32,6 @@ kernel void main_(
     metal::uint4 value7u = image_1d_src.read(uint(static_cast<uint>(local_id.x)));
     image_dst.write((((value1_ + value2_) + value4_) + value5_) + value6_, uint(itc.x));
     image_dst.write((((value1u + value2u) + value4u) + value5u) + value6u, uint(static_cast<uint>(itc.x)));
-    return;
 }
 
 

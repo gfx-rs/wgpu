@@ -325,9 +325,6 @@
                         pointer: 4,
                         value: 10,
                     ),
-                    Return(
-                        value: None,
-                    ),
                 ],
                 diagnostic_filter_leaf: None,
             ),

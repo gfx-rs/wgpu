@@ -129,6 +129,5 @@ void main() {
     u3_ = bitfieldReverse(_e168);
     uvec4 _e170 = u4_;
     u4_ = bitfieldReverse(_e170);
-    return;
 }
 

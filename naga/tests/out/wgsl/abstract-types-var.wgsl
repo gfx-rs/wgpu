@@ -111,7 +111,6 @@ fn all_constant_arguments() {
     iafpaiaf = array<f32, 2>(1f, 2f);
     iafpafai = array<f32, 2>(1f, 2f);
     iafpafaf = array<f32, 2>(1f, 2f);
-    return;
 }
 
 fn mixed_constant_and_runtime_arguments() {
@@ -219,6 +218,5 @@ fn mixed_constant_and_runtime_arguments() {
     xaip_iai = array<i32, 2>(_e169, 2i);
     let _e172 = i;
     xaipai_i = array<i32, 2>(1i, _e172);
-    return;
 }
 

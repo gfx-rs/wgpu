@@ -150,6 +150,5 @@ void main() {
     _group_0_binding_2_cs.particles[index].pos = _e174;
     vec2 _e179 = vVel;
     _group_0_binding_2_cs.particles[index].vel = _e179;
-    return;
 }
 

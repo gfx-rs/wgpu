@@ -34,7 +34,6 @@ fn main_1() {
     o_color.z = _e7.z;
     let _e17 = TevPerCompGT(3f, 5f);
     o_color.w = _e17;
-    return;
 }
 
 @fragment 

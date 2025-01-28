@@ -28,5 +28,4 @@ fn main() {
     f3_ = bitcast<vec3<f32>>(_e41);
     let _e43 = i4_;
     f4_ = bitcast<vec4<f32>>(_e43);
-    return;
 }

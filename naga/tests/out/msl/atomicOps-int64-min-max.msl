@@ -34,5 +34,4 @@ kernel void cs_main(
     metal::atomic_min_explicit(&storage_atomic_arr.inner[1], 1uL + _e24, metal::memory_order_relaxed);
     metal::atomic_min_explicit(&storage_struct.atomic_scalar, 1uL, metal::memory_order_relaxed);
     metal::atomic_min_explicit(&storage_struct.atomic_arr.inner[1], static_cast<ulong>(id.x), metal::memory_order_relaxed);
-    return;
 }

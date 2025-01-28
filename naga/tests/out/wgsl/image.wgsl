@@ -61,7 +61,6 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let value7u = textureLoad(image_1d_src, u32(local_id.x), i32(local_id.z));
     textureStore(image_dst, itc.x, ((((value1_ + value2_) + value4_) + value5_) + value6_));
     textureStore(image_dst, u32(itc.x), ((((value1u + value2u) + value4u) + value5u) + value6u));
-    return;
 }
 
 @compute @workgroup_size(16, 1, 1) 

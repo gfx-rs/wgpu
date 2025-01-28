@@ -79,11 +79,9 @@ fn runtime_values() {
     let _e52 = u;
     let _e53 = u;
     plus_u_u_u = (_e52 + _e53);
-    return;
 }
 
 fn wgpu_4445_() {
-    return;
 }
 
 fn wgpu_4435_() {

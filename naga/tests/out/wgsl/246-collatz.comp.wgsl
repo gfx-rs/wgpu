@@ -48,7 +48,6 @@ fn main_1() {
     let _e10 = global.indices[_e8];
     let _e11 = collatz_iterations(_e10);
     global.indices[_e6] = _e11;
-    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 

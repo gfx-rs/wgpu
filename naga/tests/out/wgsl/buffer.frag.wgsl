@@ -20,7 +20,6 @@ fn main_1() {
     testBuffer.data[1i] = 2u;
     let _e19 = testBufferReadOnly.data[0];
     b = _e19;
-    return;
 }
 
 @fragment 

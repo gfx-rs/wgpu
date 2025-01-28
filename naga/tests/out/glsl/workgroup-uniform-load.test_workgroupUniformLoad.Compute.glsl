@@ -25,9 +25,6 @@ void main() {
     if ((_e4 > 10)) {
         memoryBarrierShared();
         barrier();
-        return;
-    } else {
-        return;
     }
 }
 

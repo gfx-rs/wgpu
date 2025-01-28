@@ -43,7 +43,6 @@ void loop_switch_continue(
 #define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
         LOOP_IS_BOUNDED
     }
-    return;
 }
 
 void loop_switch_continue_nesting(
@@ -103,7 +102,6 @@ void loop_switch_continue_nesting(
         }
         LOOP_IS_BOUNDED
     }
-    return;
 }
 
 void loop_switch_omit_continue_variable_checks(
@@ -156,7 +154,6 @@ void loop_switch_omit_continue_variable_checks(
         }
         LOOP_IS_BOUNDED
     }
-    return;
 }
 
 struct main_Input {
@@ -214,18 +211,18 @@ kernel void main_(
         }
         case 2: {
             pos = 1;
-            return;
+            break;
         }
         case 3: {
             pos = 2;
-            return;
+            break;
         }
         case 4: {
-            return;
+            break;
         }
         default: {
             pos = 3;
-            return;
+            break;
         }
     }
 }

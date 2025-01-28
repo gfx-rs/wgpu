@@ -122,5 +122,4 @@ kernel void cs_main(
     int _e295 = metal::atomic_exchange_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
     uint _e299 = metal::atomic_exchange_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
     int _e304 = metal::atomic_exchange_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
-    return;
 }

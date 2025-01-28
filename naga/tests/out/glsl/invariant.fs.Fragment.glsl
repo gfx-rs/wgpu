@@ -6,6 +6,5 @@ precision highp int;
 
 void main() {
     vec4 position = gl_FragCoord;
-    return;
 }
 

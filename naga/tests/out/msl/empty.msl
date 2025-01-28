@@ -7,5 +7,4 @@ using metal::uint;
 
 kernel void main_(
 ) {
-    return;
 }

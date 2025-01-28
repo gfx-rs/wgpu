@@ -25,6 +25,5 @@ smooth in float _vs2fs_location11;
 
 void main() {
     FragmentInput val = FragmentInput(gl_FragCoord, _vs2fs_location0, _vs2fs_location2, _vs2fs_location3, _vs2fs_location4, _vs2fs_location6, _vs2fs_location7, _vs2fs_location8, _vs2fs_location9, _vs2fs_location10, _vs2fs_location11);
-    return;
 }
 

@@ -22,6 +22,5 @@ void main() {
     imageAtomicAnd(_group_0_binding_1_cs, ivec2(0, 0), 1);
     imageAtomicOr(_group_0_binding_1_cs, ivec2(0, 0), 1);
     imageAtomicXor(_group_0_binding_1_cs, ivec2(0, 0), 1);
-    return;
 }
 

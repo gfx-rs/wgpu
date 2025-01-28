@@ -35,7 +35,6 @@ void loop_switch_continue(int x) {
             }
         }
     }
-    return;
 }
 
 void loop_switch_continue_nesting(int x_1, int y, int z) {
@@ -93,7 +92,6 @@ void loop_switch_continue_nesting(int x_1, int y, int z) {
             continue;
         }
     }
-    return;
 }
 
 void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w) {
@@ -139,7 +137,6 @@ void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w)
             }
         }
     }
-    return;
 }
 
 void main() {
@@ -193,18 +190,18 @@ void main() {
         }
         case 2: {
             pos = 1;
-            return;
+            break;
         }
         case 3: {
             pos = 2;
-            return;
+            break;
         }
         case 4: {
-            return;
+            break;
         }
         default: {
             pos = 3;
-            return;
+            break;
         }
     }
 }

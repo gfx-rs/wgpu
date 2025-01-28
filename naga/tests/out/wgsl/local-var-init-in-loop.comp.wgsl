@@ -19,7 +19,6 @@ fn main_1() {
             i = (_e10 + 1i);
         }
     }
-    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 

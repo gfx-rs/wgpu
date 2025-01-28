@@ -36,7 +36,6 @@ fn testBinOpVecFloat(a: vec4<f32>, b: f32) {
     v = (_e12 + vec4(2f));
     let _e16 = a_1;
     v = (_e16 - vec4(2f));
-    return;
 }
 
 fn testBinOpFloatVec(a_2: vec4<f32>, b_2: f32) {
@@ -58,7 +57,6 @@ fn testBinOpFloatVec(a_2: vec4<f32>, b_2: f32) {
     let _e16 = a_3;
     let _e17 = b_3;
     v_1 = (_e16 - vec4(_e17));
-    return;
 }
 
 fn testBinOpIVecInt(a_4: vec4<i32>, b_4: i32) {
@@ -95,7 +93,6 @@ fn testBinOpIVecInt(a_4: vec4<i32>, b_4: i32) {
     let _e37 = a_5;
     let _e38 = b_5;
     v_2 = (_e37 << vec4(u32(_e38)));
-    return;
 }
 
 fn testBinOpIntIVec(a_6: i32, b_6: vec4<i32>) {
@@ -123,7 +120,6 @@ fn testBinOpIntIVec(a_6: i32, b_6: vec4<i32>) {
     let _e24 = a_7;
     let _e25 = b_7;
     v_3 = (vec4(_e24) ^ _e25);
-    return;
 }
 
 fn testBinOpUVecUint(a_8: vec4<u32>, b_8: u32) {
@@ -160,7 +156,6 @@ fn testBinOpUVecUint(a_8: vec4<u32>, b_8: u32) {
     let _e36 = a_9;
     let _e37 = b_9;
     v_4 = (_e36 << vec4(_e37));
-    return;
 }
 
 fn testBinOpUintUVec(a_10: u32, b_10: vec4<u32>) {
@@ -188,7 +183,6 @@ fn testBinOpUintUVec(a_10: u32, b_10: vec4<u32>) {
     let _e24 = a_11;
     let _e25 = b_11;
     v_5 = (vec4(_e24) ^ _e25);
-    return;
 }
 
 fn testBinOpMatMat(a_12: mat3x3<f32>, b_12: mat3x3<f32>) {
@@ -217,7 +211,6 @@ fn testBinOpMatMat(a_12: mat3x3<f32>, b_12: mat3x3<f32>) {
     let _e43 = a_13;
     let _e44 = b_13;
     c = (any((_e43[2] != _e44[2])) || (any((_e43[1] != _e44[1])) || any((_e43[0] != _e44[0]))));
-    return;
 }
 
 fn testBinOpMatFloat(a_14: f32, b_14: mat3x3<f32>) {
@@ -257,7 +250,6 @@ fn testBinOpMatFloat(a_14: f32, b_14: mat3x3<f32>) {
     let _e62 = a_15;
     let _e63 = vec3(_e62);
     v_7 = mat3x3<f32>((_e61[0] - _e63), (_e61[1] - _e63), (_e61[2] - _e63));
-    return;
 }
 
 fn testUnaryOpMat(a_16: mat3x3<f32>) {
@@ -276,7 +268,6 @@ fn testUnaryOpMat(a_16: mat3x3<f32>) {
     const _e12 = vec3(1f);
     a_17 = (_e10 - mat3x3<f32>(_e12, _e12, _e12));
     v_8 = _e10;
-    return;
 }
 
 fn testStructConstructor() {
@@ -295,7 +286,6 @@ fn testArrayConstructor() {
 }
 
 fn testFreestandingConstructor() {
-    return;
 }
 
 fn testNonImplicitCastVectorCast() {
@@ -304,11 +294,9 @@ fn testNonImplicitCastVectorCast() {
 
     let _e3 = a_18;
     b_16 = vec4(i32(_e3));
-    return;
 }
 
 fn privatePointer(a_19: ptr<function, f32>) {
-    return;
 }
 
 fn ternary(a_20: bool) {
@@ -361,7 +349,6 @@ fn ternary(a_20: bool) {
     }
     let _e31 = local_4;
     nested = _e31;
-    return;
 }
 
 fn testMatrixMultiplication(a_22: mat4x3<f32>, b_18: mat4x4<f32>) {
@@ -374,14 +361,12 @@ fn testMatrixMultiplication(a_22: mat4x3<f32>, b_18: mat4x4<f32>) {
     let _e5 = a_23;
     let _e6 = b_19;
     c_2 = (_e5 * _e6);
-    return;
 }
 
 fn testLength() {
     var len: i32;
 
     len = i32(arrayLength((&global_1.a)));
-    return;
 }
 
 fn testConstantLength(a_24: array<f32, 4>) {
@@ -400,7 +385,6 @@ fn indexConstantNonConstantIndex(i: i32) {
     let _e6 = i_1;
     let _e11 = local_5.array_[_e6];
     a_26 = _e11;
-    return;
 }
 
 fn testSwizzleWrites(a_27: vec3<f32>) {
@@ -419,7 +403,6 @@ fn testSwizzleWrites(a_27: vec3<f32>) {
     let _e28 = (_e24.zy + vec2(1f));
     a_28.z = _e28.x;
     a_28.y = _e28.y;
-    return;
 }
 
 fn main_1() {
@@ -435,7 +418,6 @@ fn main_1() {
     o_color.y = 1f;
     o_color.z = 1f;
     o_color.w = 1f;
-    return;
 }
 
 @fragment 

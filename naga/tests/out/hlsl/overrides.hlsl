@@ -21,5 +21,4 @@ void main()
     float _e9 = gain_x_10_;
     gain_x_100_ = (_e9 * 10.0);
     store_override = gain;
-    return;
 }

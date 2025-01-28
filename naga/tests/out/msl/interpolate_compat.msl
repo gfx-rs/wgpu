@@ -70,5 +70,4 @@ fragment void frag_main(
 , metal::float4 position [[position]]
 ) {
     const FragmentInput val = { position, varyings_1._flat, varyings_1.flat_either, varyings_1._linear, {}, varyings_1.linear_centroid, {}, varyings_1.linear_sample, varyings_1.linear_center, varyings_1.perspective, varyings_1.perspective_centroid, varyings_1.perspective_sample, varyings_1.perspective_center };
-    return;
 }

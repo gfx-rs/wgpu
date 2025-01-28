@@ -186,5 +186,4 @@ fn main() {
     let _e3 = uint64_function(67lu);
     let _e5 = int64_function(60li);
     output.final_value = (_e3 + bitcast<u64>(_e5));
-    return;
 }

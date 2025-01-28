@@ -261,15 +261,15 @@ OpStore %108 %16
 OpBranch %128
 %130 = OpLabel
 OpStore %108 %74
-OpReturn
+OpBranch %128
 %131 = OpLabel
 OpStore %108 %75
-OpReturn
+OpBranch %128
 %132 = OpLabel
-OpReturn
+OpBranch %128
 %133 = OpLabel
 OpStore %108 %105
-OpReturn
+OpBranch %128
 %128 = OpLabel
 OpReturn
 OpFunctionEnd

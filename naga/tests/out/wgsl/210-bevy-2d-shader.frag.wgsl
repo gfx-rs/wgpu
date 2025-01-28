@@ -18,7 +18,6 @@ fn main_1() {
     color = _e4;
     let _e6 = color;
     o_Target = _e6;
-    return;
 }
 
 @fragment 

@@ -13,7 +13,6 @@ fn main_1() {
             i = (_e6 + 1i);
         }
     }
-    return;
 }
 
 @fragment 

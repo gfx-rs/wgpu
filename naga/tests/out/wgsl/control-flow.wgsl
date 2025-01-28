@@ -27,7 +27,6 @@ fn loop_switch_continue(x: i32) {
             }
         }
     }
-    return;
 }
 
 fn loop_switch_continue_nesting(x_1: i32, y: i32, z: i32) {
@@ -74,7 +73,6 @@ fn loop_switch_continue_nesting(x_1: i32, y: i32, z: i32) {
             }
         }
     }
-    return;
 }
 
 fn loop_switch_omit_continue_variable_checks(x_2: i32, y_1: i32, z_1: i32, w: i32) {
@@ -113,7 +111,6 @@ fn loop_switch_omit_continue_variable_checks(x_2: i32, y_1: i32, z_1: i32, w: i3
             }
         }
     }
-    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 
@@ -160,18 +157,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
         case 2: {
             pos = 1i;
-            return;
         }
         case 3: {
             pos = 2i;
-            return;
         }
         case 4: {
-            return;
         }
         default: {
             pos = 3i;
-            return;
         }
     }
 }

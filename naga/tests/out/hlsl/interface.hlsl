@@ -82,7 +82,6 @@ void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThr
     }
     GroupMemoryBarrierWithGroupSync();
     output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + uint3(_NagaConstants.first_vertex, _NagaConstants.first_instance, _NagaConstants.other).x);
-    return;
 }
 
 precise float4 vertex_two_structs(Input1_ in1_, Input2_ in2_) : SV_Position

@@ -226,7 +226,6 @@ fn assignment() {
     vec0_[1i] = (_e37 + 1i);
     let _e41 = vec0_[1i];
     vec0_[1i] = (_e41 - 1i);
-    return;
 }
 
 fn negation_avoids_prefix_decrement() {
@@ -250,5 +249,4 @@ fn main(@builtin(workgroup_id) id: vec3<u32>) {
     bit();
     comparison();
     assignment();
-    return;
 }

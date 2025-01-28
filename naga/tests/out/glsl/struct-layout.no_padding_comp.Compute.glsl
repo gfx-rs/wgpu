@@ -25,6 +25,5 @@ void main() {
     x = _e2;
     NoPadding _e4 = _group_0_binding_1_cs;
     x = _e4;
-    return;
 }
 

@@ -12,5 +12,4 @@ var<storage, read_write> output: array<u32, 512>;
 fn main() {
     let _e3 = w_mem.arr;
     output = _e3;
-    return;
 }

@@ -54,7 +54,6 @@ kernel void no_padding_comp(
     x = _e2;
     NoPadding _e4 = no_padding_storage;
     x = _e4;
-    return;
 }
 
 
@@ -99,5 +98,4 @@ kernel void needs_padding_comp(
     x_1 = _e2;
     NeedsPadding _e4 = needs_padding_storage;
     x_1 = _e4;
-    return;
 }

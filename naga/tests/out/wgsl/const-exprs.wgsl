@@ -44,7 +44,6 @@ fn non_constant_initializers() {
     let _e10 = y;
     let _e11 = z;
     out_3 = vec4<i32>(_e8, _e9, _e10, _e11);
-    return;
 }
 
 fn splat_of_constant() {
@@ -88,5 +87,4 @@ fn main() {
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
-    return;
 }

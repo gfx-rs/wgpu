@@ -87,7 +87,6 @@ void all_constant_arguments(
     iafpaiaf = type_7 {1.0, 2.0};
     iafpafai = type_7 {1.0, 2.0};
     iafpafaf = type_7 {1.0, 2.0};
-    return;
 }
 
 void mixed_constant_and_runtime_arguments(
@@ -195,5 +194,4 @@ void mixed_constant_and_runtime_arguments(
     xaip_iai = type_8 {_e169, 2};
     int _e172 = i;
     xaipai_i = type_8 {1, _e172};
-    return;
 }

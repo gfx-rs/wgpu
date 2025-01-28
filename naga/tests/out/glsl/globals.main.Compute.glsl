@@ -31,7 +31,6 @@ uniform type_15_block_6Compute { mat4x2 _group_0_binding_7_cs[2][2]; };
 
 
 void test_msl_packed_vec3_as_arg(vec3 arg) {
-    return;
 }
 
 void test_msl_packed_vec3_() {
@@ -78,6 +77,5 @@ void main() {
     _group_0_binding_1_cs.v1_ = 4.0;
     wg[1] = float(uint(_group_0_binding_2_cs.length()));
     at_1 = 2u;
-    return;
 }
 

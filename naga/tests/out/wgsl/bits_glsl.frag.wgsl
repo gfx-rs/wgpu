@@ -102,7 +102,6 @@ fn main_1() {
     i3_ = vec3<i32>(firstLeadingBit(_e190));
     let _e193 = u4_;
     i4_ = vec4<i32>(firstLeadingBit(_e193));
-    return;
 }
 
 @fragment 

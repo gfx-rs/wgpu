@@ -5,7 +5,6 @@ struct PushConstants {
 var<push_constant> c: PushConstants;
 
 fn main_1() {
-    return;
 }
 
 @fragment 

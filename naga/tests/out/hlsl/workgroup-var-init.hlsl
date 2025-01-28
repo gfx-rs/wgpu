@@ -530,5 +530,4 @@ void main(uint3 __local_invocation_id : SV_GroupThreadID)
         output.Store(2040, asuint(_value2[510]));
         output.Store(2044, asuint(_value2[511]));
     }
-    return;
 }

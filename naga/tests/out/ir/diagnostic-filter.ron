@@ -17,11 +17,7 @@
             local_variables: [],
             expressions: [],
             named_expressions: {},
-            body: [
-                Return(
-                    value: None,
-                ),
-            ],
+            body: [],
             diagnostic_filter_leaf: Some(0),
         ),
         (
@@ -31,11 +27,7 @@
             local_variables: [],
             expressions: [],
             named_expressions: {},
-            body: [
-                Return(
-                    value: None,
-                ),
-            ],
+            body: [],
             diagnostic_filter_leaf: Some(1),
         ),
     ],

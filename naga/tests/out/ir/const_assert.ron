@@ -43,11 +43,7 @@
             named_expressions: {
                 0: "z",
             },
-            body: [
-                Return(
-                    value: None,
-                ),
-            ],
+            body: [],
             diagnostic_filter_leaf: None,
         ),
     ],

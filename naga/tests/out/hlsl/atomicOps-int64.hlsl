@@ -114,5 +114,4 @@ void cs_main(uint3 id : SV_GroupThreadID, uint3 __local_invocation_id : SV_Group
     int64_t _e279; InterlockedExchange(workgroup_atomic_arr[1], 1L, _e279);
     uint64_t _e283; InterlockedExchange(workgroup_struct.atomic_scalar, 1uL, _e283);
     int64_t _e288; InterlockedExchange(workgroup_struct.atomic_arr[1], 1L, _e288);
-    return;
 }
