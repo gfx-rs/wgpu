@@ -13,6 +13,7 @@ use objc::runtime::{Class, Object, Sel, BOOL, NO};
 use objc::{class, msg_send, sel, sel_impl};
 use std::sync::OnceLock;
 
+#[link(name = "Foundation", kind = "framework")]
 extern "C" {
     static NSKeyValueChangeNewKey: &'static Object;
 }
