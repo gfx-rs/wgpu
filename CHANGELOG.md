@@ -81,6 +81,10 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 
+#### Metal
+
+- Use resize observers for smoother resizing. By @madsmtm in [#7026](https://github.com/gfx-rs/wgpu/pull/7026).
+
 #### WebGPU
 
 - Improve efficiency of dropping read-only buffer mappings. By @kpreid in [#7007](https://github.com/gfx-rs/wgpu/pull/7007).
