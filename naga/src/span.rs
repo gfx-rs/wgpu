@@ -360,8 +360,9 @@ impl<T> SpanProvider<T> for UniqueArena<T> {
 }
 
 impl<E> AddSpan for E
-where
-    E: Error,
+// XXX TODO REMOVE IN SEPARATE PR:
+// where
+//     ...
 {
     type Output = WithSpan<Self>;
     fn with_span(self) -> WithSpan<Self> {
