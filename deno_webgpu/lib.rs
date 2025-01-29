@@ -6,14 +6,12 @@ use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
+use hashbrown::HashSet;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::rc::Rc;
-pub use wgpu_core;
-pub use wgt as wgpu_types;
 
 use error::WebGpuResult;
 
@@ -395,9 +393,7 @@ pub fn op_webgpu_request_adapter(
                     dx12: wgpu_types::Dx12BackendOptions {
                         shader_compiler: wgpu_types::Dx12Compiler::Fxc,
                     },
-                    gl: wgpu_types::GlBackendOptions {
-                        gles_minor_version: wgpu_types::Gles3MinorVersion::default(),
-                    },
+                    gl: wgpu_types::GlBackendOptions::default(),
                 },
             },
         )));

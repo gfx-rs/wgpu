@@ -87,6 +87,7 @@ arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
+# XXX TODO RAISE SEPARATE PR FOR UPDATE RE: remove termcolor dep [...]
 # remove termcolor from here when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e

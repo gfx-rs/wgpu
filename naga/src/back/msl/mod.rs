@@ -498,7 +498,7 @@ impl Options {
                 index: 0,
                 interpolation: None,
             }),
-            None => Err(EntryPointError::MissingBindTarget(res_binding.clone())),
+            None => Err(EntryPointError::MissingBindTarget(*res_binding)),
         }
     }
 

@@ -156,6 +156,12 @@ pub struct TextureBlitter {
 
 impl TextureBlitter {
     /// Returns a [`TextureBlitter`] with default settings.
+    ///
+    /// # Arguments
+    /// - `device` - A [`Device`]
+    /// - `format` - The [`TextureFormat`] of the texture that will be copied to. This has to have the `RENDER_TARGET` usage.
+    ///
+    /// Properties of the blitting (such as the [`BlendState`]) can be customised by using [`TextureBlitterBuilder`] instead.
     pub fn new(device: &Device, format: TextureFormat) -> Self {
         TextureBlitterBuilder::new(device, format).build()
     }

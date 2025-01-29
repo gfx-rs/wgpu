@@ -1998,15 +1998,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(Typed::Plain(handle));
             }
             ast::Expression::Index { base, index } => {
-                let lowered_base = self.expression_for_reference(base, ctx)?;
+                let mut lowered_base = self.expression_for_reference(base, ctx)?;
                 let index = self.expression(index, ctx)?;
 
+                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+                // Declare pointer as reference
                 if let Typed::Plain(handle) = lowered_base {
                     if resolve_inner!(ctx, handle).pointer_space().is_some() {
-                        return Err(Error::Pointer(
-                            "the value indexed by a `[]` subscripting expression",
-                            ctx.ast_expressions.get_span(base),
-                        ));
+                        lowered_base = Typed::Reference(handle);
                     }
                 }
 
@@ -2016,7 +2015,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 })
             }
             ast::Expression::Member { base, ref field } => {
-                let lowered_base = self.expression_for_reference(base, ctx)?;
+                let mut lowered_base = self.expression_for_reference(base, ctx)?;
+
+                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+                // Declare pointer as reference
+                if let Typed::Plain(handle) = lowered_base {
+                    if resolve_inner!(ctx, handle).pointer_space().is_some() {
+                        lowered_base = Typed::Reference(handle);
+                    }
+                }
 
                 let temp_inner;
                 let composite_type: &crate::TypeInner = match lowered_base {
@@ -2045,16 +2052,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
 
                     Typed::Plain(handle) => {
-                        let inner = resolve_inner!(ctx, handle);
-                        if let crate::TypeInner::Pointer { .. }
-                        | crate::TypeInner::ValuePointer { .. } = *inner
-                        {
-                            return Err(Error::Pointer(
-                                "the value accessed by a `.member` expression",
-                                ctx.ast_expressions.get_span(base),
-                            ));
-                        }
-                        inner
+                        resolve_inner!(ctx, handle)
                     }
                 };
 

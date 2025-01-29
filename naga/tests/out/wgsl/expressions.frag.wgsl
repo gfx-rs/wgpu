@@ -282,16 +282,19 @@ fn testUnaryOpMat(a_16: mat3x3<f32>) {
 fn testStructConstructor() {
     var tree: BST = BST(1i);
 
+    return;
 }
 
 fn testNonScalarToScalarConstructor() {
     var f: f32 = 1f;
 
+    return;
 }
 
 fn testArrayConstructor() {
     var tree_1: array<f32, 1> = array<f32, 1>(0f);
 
+    return;
 }
 
 fn testFreestandingConstructor() {
@@ -389,6 +392,7 @@ fn testConstantLength(a_24: array<f32, 4>) {
     var len_1: i32 = 4i;
 
     a_25 = a_24;
+    return;
 }
 
 fn indexConstantNonConstantIndex(i: i32) {

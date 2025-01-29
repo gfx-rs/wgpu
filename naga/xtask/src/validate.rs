@@ -26,7 +26,7 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
         for job in jobs {
             let tx_results = tx_results.clone();
             crate::jobserver::start_job_thread(move || {
-                let result = match std::panic::catch_unwind(|| job()) {
+                let result = match std::panic::catch_unwind(job) {
                     Ok(result) => result,
                     Err(payload) => Err(match payload.downcast_ref::<&str>() {
                         Some(message) => {

@@ -1,5 +1,5 @@
 use arrayvec::ArrayVec;
-use wgt::{DownlevelCapabilities, DownlevelFlags, Features, Limits};
+use wgpu::{DownlevelCapabilities, DownlevelFlags, Features, Limits};
 
 use crate::{
     report::AdapterReport, FailureApplicationReasons, FailureBehavior, FailureCase,
@@ -7,9 +7,9 @@ use crate::{
 };
 
 const LOWEST_DOWNLEVEL_PROPERTIES: wgpu::DownlevelCapabilities = DownlevelCapabilities {
-    flags: wgt::DownlevelFlags::empty(),
-    limits: wgt::DownlevelLimits {},
-    shader_model: wgt::ShaderModel::Sm2,
+    flags: wgpu::DownlevelFlags::empty(),
+    limits: wgpu::DownlevelLimits {},
+    shader_model: wgpu::ShaderModel::Sm2,
 };
 
 /// This information determines if a test should run.
@@ -120,7 +120,7 @@ impl TestInfo {
 
         // Produce a lower-case version of the adapter info, for comparison against
         // `parameters.skips` and `parameters.failures`.
-        let adapter_lowercase_info = wgt::AdapterInfo {
+        let adapter_lowercase_info = wgpu::AdapterInfo {
             name: adapter.info.name.to_lowercase(),
             driver: adapter.info.driver.to_lowercase(),
             ..adapter.info.clone()

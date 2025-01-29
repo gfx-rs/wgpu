@@ -358,7 +358,7 @@ impl crate::CommandEncoder for Encoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &Resource,
-        src_usage: crate::TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &Resource,
         regions: T,
     ) {
@@ -369,7 +369,7 @@ impl crate::CommandEncoder for Encoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &Resource,
-        src_usage: crate::TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &Resource,
         regions: T,
     ) {

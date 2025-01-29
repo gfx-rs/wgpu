@@ -94,5 +94,6 @@ void main() {
     vec3 quantizeToF16_c = vec3(unpackHalf2x16(packHalf2x16(_e125.xy)), unpackHalf2x16(packHalf2x16(_e125.zz)).x);
     vec4 _e131 = vec4(1.0, 1.0, 1.0, 1.0);
     vec4 quantizeToF16_d = vec4(unpackHalf2x16(packHalf2x16(_e131.xy)), unpackHalf2x16(packHalf2x16(_e131.zw)));
+    return;
 }
 

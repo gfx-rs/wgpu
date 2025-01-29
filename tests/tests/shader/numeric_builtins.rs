@@ -84,7 +84,7 @@ fn create_int64_atomic_min_max_test() -> Vec<ShaderTest> {
 static INT64_ATOMIC_MIN_MAX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgt::Features::SHADER_INT64 | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX)
+            .features(wgpu::Features::SHADER_INT64 | wgpu::Features::SHADER_INT64_ATOMIC_MIN_MAX)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
@@ -139,7 +139,7 @@ fn create_int64_atomic_all_ops_test() -> Vec<ShaderTest> {
 static INT64_ATOMIC_ALL_OPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgt::Features::SHADER_INT64 | wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS)
+            .features(wgpu::Features::SHADER_INT64 | wgpu::Features::SHADER_INT64_ATOMIC_ALL_OPS)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
@@ -183,7 +183,7 @@ fn create_float32_atomic_test() -> Vec<ShaderTest> {
 static FLOAT32_ATOMIC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgt::Features::SHADER_FLOAT32_ATOMIC)
+            .features(wgpu::Features::SHADER_FLOAT32_ATOMIC)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )

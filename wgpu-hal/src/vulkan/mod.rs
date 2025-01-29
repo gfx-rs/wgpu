@@ -44,6 +44,8 @@ use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use hashbrown::HashSet;
 use parking_lot::{Mutex, RwLock};
+
+use naga::FastHashMap;
 use wgt::InternalCounter;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
@@ -614,7 +616,7 @@ struct FramebufferAttachment {
     /// Can be NULL if the framebuffer is image-less
     raw: vk::ImageView,
     raw_image_flags: vk::ImageCreateFlags,
-    view_usage: crate::TextureUses,
+    view_usage: wgt::TextureUses,
     view_format: wgt::TextureFormat,
     raw_view_formats: Vec<vk::Format>,
 }
@@ -642,9 +644,8 @@ struct DeviceShared {
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     features: wgt::Features,
-    // XXX TODO NEED UPDATE FROM OTHER PR: https://github.com/gfx-rs/wgpu/pull/6938
-    render_passes: Mutex<naga::FastHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<naga::FastHashMap<FramebufferKey, vk::Framebuffer>>,
+    render_passes: Mutex<FastHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<FastHashMap<FramebufferKey, vk::Framebuffer>>,
     sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
@@ -795,7 +796,7 @@ pub struct Texture {
     drop_guard: Option<crate::DropGuard>,
     external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: crate::TextureUses,
+    usage: wgt::TextureUses,
     format: wgt::TextureFormat,
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,

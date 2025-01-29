@@ -36,6 +36,7 @@ allow = [
     "Unicode-3.0",
     "Zlib",
 ]
+private = { ignore = true }
 
 [sources]
 allow-git = [

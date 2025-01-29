@@ -57,6 +57,9 @@
 			(group: 0, binding: 2): (space: 1, register: 0),
 		},
 		fake_missing_bindings: false,
+		sampler_buffer_binding_map: {
+			(group: 0): (space: 2, register: 0),
+		},
 		special_constants_binding: Some((space: 0, register: 1)),
 		zero_initialize_workgroup_memory: true,
 		restrict_indexing: true

@@ -1,8 +1,8 @@
 pub fn map_texture_usage(
     format: wgt::TextureFormat,
-    usage: crate::TextureUses,
+    usage: wgt::TextureUses,
 ) -> metal::MTLTextureUsage {
-    use crate::TextureUses as Tu;
+    use wgt::TextureUses as Tu;
 
     let mut mtl_usage = metal::MTLTextureUsage::Unknown;
 

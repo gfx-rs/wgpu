@@ -18,3 +18,6 @@ pico-args.workspace = true
 serde = { workspace = true, features = ["default"] }
 serde_json.workspace = true
 wgpu.workspace = true
+
+[lints.clippy]
+disallowed_types = "allow"

@@ -36,6 +36,7 @@ use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use metal::foreign_types::ForeignTypeRef as _;
+use naga::FastHashMap;
 use parking_lot::{Mutex, RwLock};
 
 #[derive(Clone, Debug)]
@@ -937,11 +938,9 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    // XXX TODO NEED UPDATE FROM OTHER PR: https://github.com/gfx-rs/wgpu/pull/6938
-    storage_buffer_length_map: naga::FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
 
-    // XXX TODO NEED UPDATE FROM OTHER PR: https://github.com/gfx-rs/wgpu/pull/6938
-    vertex_buffer_size_map: naga::FastHashMap<u64, wgt::BufferSize>,
+    vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,

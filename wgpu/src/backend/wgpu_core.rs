@@ -854,14 +854,17 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
 
     #[cfg(feature = "wgsl")]
     fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures {
-        wgc::naga::front::wgsl::ImplementedLanguageExtension::all()
-            .iter()
-            .copied()
-            .fold(
-                crate::WgslLanguageFeatures::empty(),
-                #[expect(unreachable_code)]
-                |acc, wle| acc | match wle {},
-            )
+        use wgc::naga::front::wgsl::ImplementedLanguageExtension;
+        ImplementedLanguageExtension::all().iter().copied().fold(
+            crate::WgslLanguageFeatures::empty(),
+            |acc, wle| {
+                acc | match wle {
+                    ImplementedLanguageExtension::PointerCompositeAccess => {
+                        crate::WgslLanguageFeatures::PointerCompositeAccess
+                    }
+                }
+            },
+        )
     }
 }
 
@@ -2539,6 +2542,37 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 &self.error_sink,
                 cause,
                 "CommandEncoder::build_acceleration_structures_unsafe_tlas",
+            );
+        }
+    }
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTexture>,
+        >,
+    ) {
+        let result = self.context.0.command_encoder_transition_resources(
+            self.id,
+            buffer_transitions.map(|t| wgt::BufferTransition {
+                buffer: t.buffer.as_core().id,
+                state: t.state,
+            }),
+            texture_transitions.map(|t| wgt::TextureTransition {
+                texture: t.texture.as_core().id,
+                selector: t.selector.clone(),
+                state: t.state,
+            }),
+        );
+
+        if let Err(cause) = result {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "CommandEncoder::transition_resources",
             );
         }
     }
