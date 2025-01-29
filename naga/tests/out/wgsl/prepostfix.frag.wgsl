@@ -29,6 +29,7 @@ fn main_1() {
     let _e41 = (_e37 - mat4x3<f32>(_e39, _e39, _e39, _e39));
     mat = _e41;
     mat_target = _e41;
+    return;
 }
 
 @fragment 

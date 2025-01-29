@@ -86,6 +86,7 @@ kernel void main_(
     output.visible = static_cast<uint>(_e7.kind == 0u);
     metal::float3 _e18 = get_torus_normal(dir_1 * _e7.t, _e7);
     output.normal = _e18;
+    return;
 }
 
 
@@ -104,4 +105,5 @@ kernel void main_candidate(
     rq.intersection = rq.intersector.intersect(metal::raytracing::ray(_e12.origin, _e12.dir, _e12.tmin, _e12.tmax), acc_struct, _e12.cull_mask);    rq.ready = true;
     RayIntersection intersection_1 = RayIntersection {_map_intersection_type(rq.intersection.type), rq.intersection.distance, rq.intersection.user_instance_id, rq.intersection.instance_id, {}, rq.intersection.geometry_id, rq.intersection.primitive_id, rq.intersection.triangle_barycentric_coord, rq.intersection.triangle_front_facing, {}, rq.intersection.object_to_world_transform, rq.intersection.world_to_object_transform};
     output.visible = static_cast<uint>(intersection_1.kind == 3u);
+    return;
 }

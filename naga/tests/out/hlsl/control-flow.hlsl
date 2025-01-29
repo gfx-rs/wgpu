@@ -35,6 +35,7 @@ void loop_switch_continue(int x)
             continue;
         }
     }
+    return;
 }
 
 void loop_switch_continue_nesting(int x_1, int y, int z)
@@ -107,6 +108,7 @@ void loop_switch_continue_nesting(int x_1, int y, int z)
             continue;
         }
     }
+    return;
 }
 
 void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w)
@@ -163,6 +165,7 @@ void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w)
             continue;
         }
     }
+    return;
 }
 
 [numthreads(1, 1, 1)]
@@ -216,18 +219,18 @@ void main(uint3 global_id : SV_DispatchThreadID)
         }
         case 2: {
             pos = 1;
-            break;
+            return;
         }
         case 3: {
             pos = 2;
-            break;
+            return;
         }
         case 4: {
-            break;
+            return;
         }
         default: {
             pos = 3;
-            break;
+            return;
         }
     }
 }

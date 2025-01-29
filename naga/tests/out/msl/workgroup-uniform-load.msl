@@ -25,5 +25,8 @@ kernel void test_workgroupUniformLoad(
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     if (unnamed > 10) {
         metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+        return;
+    } else {
+        return;
     }
 }

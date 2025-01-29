@@ -36,6 +36,7 @@ constant bool Foo_1 = true;
 void test_msl_packed_vec3_as_arg(
     metal::float3 arg
 ) {
+    return;
 }
 
 void test_msl_packed_vec3_(
@@ -55,6 +56,7 @@ void test_msl_packed_vec3_(
     metal::float3 mvm1_ = metal::float3x3 {} * metal::float3(data.v3_);
     metal::float3 svm0_ = data.v3_ * 2.0;
     metal::float3 svm1_ = 2.0 * data.v3_;
+    return;
 }
 
 kernel void main_(
@@ -95,4 +97,5 @@ kernel void main_(
     alignment.v1_ = 4.0;
     wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
+    return;
 }

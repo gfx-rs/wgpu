@@ -44,4 +44,5 @@ kernel void f(
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     _atomic_compare_exchange_resultUint4_ _e5 = naga_atomic_compare_exchange_weak_explicit(&a, 2u, 1u);
+    return;
 }

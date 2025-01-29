@@ -15,4 +15,5 @@ double f(double x)
 void main()
 {
     const double _e1 = f(6.0L);
+    return;
 }

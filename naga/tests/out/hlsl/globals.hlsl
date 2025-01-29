@@ -68,6 +68,7 @@ cbuffer global_nested_arrays_of_matrices_4x2_ : register(b7) { __mat4x2 global_n
 
 void test_msl_packed_vec3_as_arg(float3 arg)
 {
+    return;
 }
 
 float3x3 ZeroValuefloat3x3() {
@@ -98,6 +99,7 @@ void test_msl_packed_vec3_()
     float3 mvm1_ = mul(data.v3_, ZeroValuefloat3x3());
     float3 svm0_ = (data.v3_ * 2.0);
     float3 svm1_ = (2.0 * data.v3_);
+    return;
 }
 
 uint NagaBufferLength(ByteAddressBuffer buffer)
@@ -136,4 +138,5 @@ void main(uint3 __local_invocation_id : SV_GroupThreadID)
     alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
     at_1 = 2u;
+    return;
 }

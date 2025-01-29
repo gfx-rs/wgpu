@@ -36,6 +36,7 @@ fn no_padding_comp() {
     x = _e2;
     let _e4 = no_padding_storage;
     x = _e4;
+    return;
 }
 
 @fragment 
@@ -56,4 +57,5 @@ fn needs_padding_comp() {
     x_1 = _e2;
     let _e4 = needs_padding_storage;
     x_1 = _e4;
+    return;
 }

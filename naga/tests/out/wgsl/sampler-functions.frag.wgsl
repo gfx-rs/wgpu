@@ -27,6 +27,7 @@ fn CalcShadowPCF(T_P_t_TextureDepth_1: texture_depth_2d, S_P_t_TextureDepth_1: s
 }
 
 fn main_1() {
+    return;
 }
 
 @fragment 

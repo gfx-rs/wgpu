@@ -14,5 +14,6 @@ double f(double x) {
 
 void main() {
     double _e1 = f(6.0LF);
+    return;
 }
 

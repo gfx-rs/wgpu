@@ -53,6 +53,7 @@ void logical()
     bool3 bitwise_or1_ = ((true).xxx | (false).xxx);
     bool bitwise_and0_ = (true & false);
     bool4 bitwise_and1_ = ((true).xxxx & (false).xxxx);
+    return;
 }
 
 float3x3 ZeroValuefloat3x3() {
@@ -141,6 +142,7 @@ void arithmetic()
     float3 mul_vector0_ = mul((1.0).xxxx, ZeroValuefloat4x3());
     float4 mul_vector1_ = mul(ZeroValuefloat4x3(), (2.0).xxx);
     float3x3 mul_ = mul(ZeroValuefloat3x4(), ZeroValuefloat4x3());
+    return;
 }
 
 void bit()
@@ -169,6 +171,7 @@ void bit()
     uint shr1_ = (2u >> 1u);
     int2 shr2_ = ((2).xx >> (1u).xx);
     uint3 shr3_ = ((2u).xxx >> (1u).xxx);
+    return;
 }
 
 void comparison()
@@ -209,6 +212,7 @@ void comparison()
     bool2 gte3_ = ((2).xx >= (1).xx);
     bool3 gte4_ = ((2u).xxx >= (1u).xxx);
     bool4 gte5_ = ((2.0).xxxx >= (1.0).xxxx);
+    return;
 }
 
 int3 ZeroValueint3() {
@@ -251,6 +255,7 @@ void assignment()
     vec0_[1] = (_e37 + 1);
     int _e41 = vec0_[1];
     vec0_[1] = (_e41 - 1);
+    return;
 }
 
 void negation_avoids_prefix_decrement()
@@ -263,6 +268,7 @@ void negation_avoids_prefix_decrement()
     int p5_ = -(-(-(-(1))));
     int p6_ = -(-(-(-(-(1)))));
     int p7_ = -(-(-(-(-(1)))));
+    return;
 }
 
 [numthreads(1, 1, 1)]
@@ -276,4 +282,5 @@ void main(uint3 id : SV_GroupID)
     bit();
     comparison();
     assignment();
+    return;
 }

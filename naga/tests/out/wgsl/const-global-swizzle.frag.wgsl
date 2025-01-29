@@ -14,6 +14,7 @@ fn main_1() {
     col = (_e3.xy * blank);
     let _e7 = col;
     o_Target = vec4<f32>(_e7.x, _e7.y, 0f, 1f);
+    return;
 }
 
 @fragment 

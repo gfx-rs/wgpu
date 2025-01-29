@@ -77,6 +77,7 @@ void test_matrix_within_struct_accesses() {
     int _e85 = idx;
     int _e87 = idx;
     t.m[_e85][_e87] = 40.0;
+    return;
 }
 
 void test_matrix_within_array_within_struct_accesses() {
@@ -112,6 +113,7 @@ void test_matrix_within_array_within_struct_accesses() {
     int _e100 = idx_1;
     int _e102 = idx_1;
     t_1.am[0][_e100][_e102] = 40.0;
+    return;
 }
 
 float read_from_private(inout float foo_1) {
@@ -125,10 +127,12 @@ float test_arr_as_arg(float a[5][10]) {
 
 void assign_through_ptr_fn(inout uint p) {
     p = 42u;
+    return;
 }
 
 void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
     foo_2 = vec4[2](vec4(1.0), vec4(2.0));
+    return;
 }
 
 uint fetch_arg_ptr_member(inout AssignToMember p_1) {
@@ -138,6 +142,7 @@ uint fetch_arg_ptr_member(inout AssignToMember p_1) {
 
 void assign_to_arg_ptr_member(inout AssignToMember p_2) {
     p_2.x = 10u;
+    return;
 }
 
 uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
@@ -147,6 +152,7 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
 
 void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
     p_4[1] = 10u;
+    return;
 }
 
 bool index_ptr(bool value) {

@@ -24,4 +24,5 @@ kernel void cs_main(
     image_s.atomic_fetch_and(metal::uint2(metal::int2(0, 0)), 1);
     image_s.atomic_fetch_or(metal::uint2(metal::int2(0, 0)), 1);
     image_s.atomic_fetch_xor(metal::uint2(metal::int2(0, 0)), 1);
+    return;
 }

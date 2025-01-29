@@ -156,4 +156,5 @@ kernel void main_(
     particlesDst.particles[index].pos = _e174;
     metal::float2 _e179 = vVel;
     particlesDst.particles[index].vel = _e179;
+    return;
 }

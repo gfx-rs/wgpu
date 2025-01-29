@@ -41,6 +41,7 @@ fn main_1() {
             x = (_e6 + 1i);
         }
     }
+    return;
 }
 
 @fragment 

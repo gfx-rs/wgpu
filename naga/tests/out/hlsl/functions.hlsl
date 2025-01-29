@@ -23,4 +23,5 @@ void main()
 {
     const float2 _e0 = test_fma();
     const int _e1 = test_integer_dot_product();
+    return;
 }

@@ -48,6 +48,7 @@ fn logical() {
     let bitwise_or1_ = (vec3(true) | vec3(false));
     let bitwise_and0_ = (true & false);
     let bitwise_and1_ = (vec4(true) & vec4(false));
+    return;
 }
 
 fn arithmetic() {
@@ -123,6 +124,7 @@ fn arithmetic() {
     let mul_vector0_ = (mat4x3<f32>() * vec4(1f));
     let mul_vector1_ = (vec3(2f) * mat4x3<f32>());
     let mul = (mat4x3<f32>() * mat3x4<f32>());
+    return;
 }
 
 fn bit() {
@@ -150,6 +152,7 @@ fn bit() {
     let shr1_ = (2u >> 1u);
     let shr2_ = (vec2(2i) >> vec2(1u));
     let shr3_ = (vec3(2u) >> vec3(1u));
+    return;
 }
 
 fn comparison() {
@@ -189,6 +192,7 @@ fn comparison() {
     let gte3_ = (vec2(2i) >= vec2(1i));
     let gte4_ = (vec3(2u) >= vec3(1u));
     let gte5_ = (vec4(2f) >= vec4(1f));
+    return;
 }
 
 fn assignment() {
@@ -226,6 +230,7 @@ fn assignment() {
     vec0_[1i] = (_e37 + 1i);
     let _e41 = vec0_[1i];
     vec0_[1i] = (_e41 - 1i);
+    return;
 }
 
 fn negation_avoids_prefix_decrement() {
@@ -237,6 +242,7 @@ fn negation_avoids_prefix_decrement() {
     const p5_ = -(-(-(-(1i))));
     const p6_ = -(-(-(-(-(1i)))));
     const p7_ = -(-(-(-(-(1i)))));
+    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 
@@ -249,4 +255,5 @@ fn main(@builtin(workgroup_id) id: vec3<u32>) {
     bit();
     comparison();
     assignment();
+    return;
 }

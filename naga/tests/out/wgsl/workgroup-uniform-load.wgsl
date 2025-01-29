@@ -8,5 +8,8 @@ fn test_workgroupUniformLoad(@builtin(workgroup_id) workgroup_id: vec3<u32>) {
     let _e4 = workgroupUniformLoad(x);
     if (_e4 > 10i) {
         workgroupBarrier();
+        return;
+    } else {
+        return;
     }
 }

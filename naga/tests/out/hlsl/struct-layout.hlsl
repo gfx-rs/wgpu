@@ -52,6 +52,7 @@ void no_padding_comp()
     x = _e2;
     NoPadding _e4 = ConstructNoPadding(asfloat(no_padding_storage.Load3(0)), asfloat(no_padding_storage.Load(12)));
     x = _e4;
+    return;
 }
 
 float4 needs_padding_frag(FragmentInput_needs_padding_frag fragmentinput_needs_padding_frag) : SV_Target0
@@ -82,4 +83,5 @@ void needs_padding_comp()
     x_1 = _e2;
     NeedsPadding _e4 = ConstructNeedsPadding(asfloat(needs_padding_storage.Load(0)), asfloat(needs_padding_storage.Load3(16)), asfloat(needs_padding_storage.Load(28)));
     x_1 = _e4;
+    return;
 }

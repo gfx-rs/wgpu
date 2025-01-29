@@ -17,4 +17,5 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     textureAtomicAnd(image_s, vec2<i32>(0i, 0i), 1i);
     textureAtomicOr(image_s, vec2<i32>(0i, 0i), 1i);
     textureAtomicXor(image_s, vec2<i32>(0i, 0i), 1i);
+    return;
 }

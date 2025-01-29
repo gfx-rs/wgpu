@@ -114,6 +114,7 @@ void main()
     output.Store(0, asuint(uint((_e7.kind == 0u))));
     const float3 _e18 = get_torus_normal((dir_1 * _e7.t), _e7);
     output.Store3(16, asuint(_e18));
+    return;
 }
 
 RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
@@ -147,4 +148,5 @@ void main_candidate()
     rq.TraceRayInline(acc_struct, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2)));
     RayIntersection intersection_1 = GetCandidateIntersection(rq);
     output.Store(0, asuint(uint((intersection_1.kind == 3u))));
+    return;
 }

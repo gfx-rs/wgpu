@@ -29,5 +29,6 @@ int test_integer_dot_product() {
 void main() {
     vec2 _e0 = test_fma();
     int _e1 = test_integer_dot_product();
+    return;
 }
 

@@ -118,6 +118,7 @@ fn testTex1D(coord: f32) {
     let _e179 = coord_1;
     let _e183 = textureLoad(tex1D, i32(_e179), 3i);
     c = _e183;
+    return;
 }
 
 fn testTex1DArray(coord_2: vec2<f32>) {
@@ -158,6 +159,7 @@ fn testTex1DArray(coord_2: vec2<f32>) {
     let _e76 = vec2<i32>(_e75);
     let _e81 = textureLoad(tex1DArray, _e76.x, _e76.y, 3i);
     c_1 = _e81;
+    return;
 }
 
 fn testTex2D(coord_4: vec2<f32>) {
@@ -277,6 +279,7 @@ fn testTex2D(coord_4: vec2<f32>) {
     let _e307 = coord_5;
     let _e312 = textureLoad(itex2D, vec2<i32>(_e307), 3i);
     c_2 = vec4<f32>(_e312);
+    return;
 }
 
 fn testTex2DShadow(coord_6: vec2<f32>) {
@@ -344,6 +347,7 @@ fn testTex2DShadow(coord_6: vec2<f32>) {
     let _e182 = (_e176.xyz / vec3(_e176.w));
     let _e185 = textureSampleCompare(tex2DShadow, sampShadow, _e182.xy, _e182.z, vec2(5i));
     d = _e185;
+    return;
 }
 
 fn testTex2DArray(coord_8: vec3<f32>) {
@@ -390,6 +394,7 @@ fn testTex2DArray(coord_8: vec3<f32>) {
     let _e99 = vec3<i32>(_e98);
     let _e105 = textureLoad(tex2DArray, _e99.xy, _e99.z, 3i);
     c_3 = _e105;
+    return;
 }
 
 fn testTex2DArrayShadow(coord_10: vec3<f32>) {
@@ -420,6 +425,7 @@ fn testTex2DArrayShadow(coord_10: vec3<f32>) {
     let _e80 = vec4<f32>(_e75.x, _e75.y, _e75.z, 1f);
     let _e87 = textureSampleCompare(tex2DArrayShadow, sampShadow, _e80.xy, i32(_e80.z), _e80.w, vec2(5i));
     d_1 = _e87;
+    return;
 }
 
 fn testTexCube(coord_12: vec3<f32>) {
@@ -445,6 +451,7 @@ fn testTexCube(coord_12: vec3<f32>) {
     let _e39 = coord_13;
     let _e41 = textureSampleLevel(texCube, samp, _e39, 3f);
     c_4 = _e41;
+    return;
 }
 
 fn testTexCubeShadow(coord_14: vec3<f32>) {
@@ -466,6 +473,7 @@ fn testTexCubeShadow(coord_14: vec3<f32>) {
     let _e42 = vec4<f32>(_e37.x, _e37.y, _e37.z, 1f);
     let _e49 = textureSampleCompareLevel(texCubeShadow, sampShadow, _e42.xyz, _e42.w);
     d_2 = _e49;
+    return;
 }
 
 fn testTexCubeArray(coord_16: vec4<f32>) {
@@ -492,6 +500,7 @@ fn testTexCubeArray(coord_16: vec4<f32>) {
     let _e52 = coord_17;
     let _e57 = textureSampleLevel(texCubeArray, samp, _e52.xyz, i32(_e52.w), 3f);
     c_5 = _e57;
+    return;
 }
 
 fn testTexCubeArrayShadow(coord_18: vec4<f32>) {
@@ -509,6 +518,7 @@ fn testTexCubeArrayShadow(coord_18: vec4<f32>) {
     let _e32 = coord_19;
     let _e37 = textureSampleCompare(texCubeArrayShadow, sampShadow, _e32.xyz, i32(_e32.w), 1f);
     d_3 = _e37;
+    return;
 }
 
 fn testTex3D(coord_20: vec3<f32>) {
@@ -584,6 +594,7 @@ fn testTex3D(coord_20: vec3<f32>) {
     let _e176 = coord_21;
     let _e181 = textureLoad(tex3D, vec3<i32>(_e176), 3i);
     c_6 = _e181;
+    return;
 }
 
 fn testTex2DMS(coord_22: vec2<f32>) {
@@ -597,6 +608,7 @@ fn testTex2DMS(coord_22: vec2<f32>) {
     let _e24 = coord_23;
     let _e27 = textureLoad(tex2DMS, vec2<i32>(_e24), 3i);
     c_7 = _e27;
+    return;
 }
 
 fn testTex2DMSArray(coord_24: vec3<f32>) {
@@ -612,9 +624,11 @@ fn testTex2DMSArray(coord_24: vec3<f32>) {
     let _e29 = vec3<i32>(_e28);
     let _e33 = textureLoad(tex2DMSArray, _e29.xy, _e29.z, 3i);
     c_8 = _e33;
+    return;
 }
 
 fn main_1() {
+    return;
 }
 
 @fragment 

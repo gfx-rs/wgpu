@@ -40,6 +40,7 @@ fn main_1() {
     let _e42 = global.ViewProj;
     let _e43 = v_Position;
     gl_Position = (_e42 * vec4<f32>(_e43.x, _e43.y, _e43.z, 1f));
+    return;
 }
 
 @vertex 

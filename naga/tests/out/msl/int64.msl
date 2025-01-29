@@ -209,4 +209,5 @@ kernel void main_(
     ulong _e3 = uint64_function(67uL, input_uniform, input_storage, input_arrays, output, output_arrays);
     long _e5 = int64_function(60L, input_uniform, input_storage, input_arrays, output, output_arrays);
     output.final_value = _e3 + as_type<ulong>(_e5);
+    return;
 }

@@ -111,6 +111,7 @@ void test_textureStore_1d(
     metal::texture1d<float, metal::access::write> image_storage_1d
 ) {
     image_storage_1d.write(value, uint(coords_10));
+    return;
 }
 
 void test_textureStore_2d(
@@ -119,6 +120,7 @@ void test_textureStore_2d(
     metal::texture2d<float, metal::access::write> image_storage_2d
 ) {
     image_storage_2d.write(value_1, metal::uint2(coords_11));
+    return;
 }
 
 void test_textureStore_2d_array_u(
@@ -128,6 +130,7 @@ void test_textureStore_2d_array_u(
     metal::texture2d_array<float, metal::access::write> image_storage_2d_array
 ) {
     image_storage_2d_array.write(value_2, metal::uint2(coords_12), array_index);
+    return;
 }
 
 void test_textureStore_2d_array_s(
@@ -137,6 +140,7 @@ void test_textureStore_2d_array_s(
     metal::texture2d_array<float, metal::access::write> image_storage_2d_array
 ) {
     image_storage_2d_array.write(value_3, metal::uint2(coords_13), array_index_1);
+    return;
 }
 
 void test_textureStore_3d(
@@ -145,6 +149,7 @@ void test_textureStore_3d(
     metal::texture3d<float, metal::access::write> image_storage_3d
 ) {
     image_storage_3d.write(value_4, metal::uint3(coords_14));
+    return;
 }
 
 struct fragment_shaderOutput {

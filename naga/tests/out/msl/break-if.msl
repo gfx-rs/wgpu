@@ -18,6 +18,7 @@ void breakIfEmpty(
 #define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
         LOOP_IS_BOUNDED
     }
+    return;
 }
 
 void breakIfEmptyBody(
@@ -39,6 +40,7 @@ void breakIfEmptyBody(
         loop_init_1 = false;
         LOOP_IS_BOUNDED
     }
+    return;
 }
 
 void breakIf(
@@ -60,6 +62,7 @@ void breakIf(
         e = a_1 != _e2;
         LOOP_IS_BOUNDED
     }
+    return;
 }
 
 void breakIfSeparateVariable(
@@ -78,8 +81,10 @@ void breakIfSeparateVariable(
         counter = _e3 + 1u;
         LOOP_IS_BOUNDED
     }
+    return;
 }
 
 kernel void main_(
 ) {
+    return;
 }

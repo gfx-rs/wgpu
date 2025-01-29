@@ -12,4 +12,5 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let _e6 = five();
     let _e7 = five();
     let phony_2 = binding;
+    return;
 }

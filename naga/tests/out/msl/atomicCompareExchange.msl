@@ -114,6 +114,7 @@ kernel void test_atomic_compare_exchange_i32_(
         }
         LOOP_IS_BOUNDED
     }
+    return;
 }
 
 
@@ -160,4 +161,5 @@ kernel void test_atomic_compare_exchange_u32_(
         }
         LOOP_IS_BOUNDED
     }
+    return;
 }

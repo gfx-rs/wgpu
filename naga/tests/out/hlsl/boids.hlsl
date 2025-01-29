@@ -140,4 +140,5 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     particlesDst.Store2(0+index*16+0, asuint(_e174));
     float2 _e179 = vVel;
     particlesDst.Store2(8+index*16+0, asuint(_e179));
+    return;
 }

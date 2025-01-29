@@ -35,4 +35,5 @@ void main(uint3 global_id : SV_DispatchThreadID)
     uint _e9 = asuint(v_indices.Load(global_id.x*4+0));
     const uint _e10 = collatz_iterations(_e9);
     v_indices.Store(global_id.x*4+0, asuint(_e10));
+    return;
 }

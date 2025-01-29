@@ -29,6 +29,7 @@ fn main_1() {
     let _e20 = gl_Position;
     let _e22 = gl_Position;
     gl_Position.z = ((_e20.z + _e22.w) / 2f);
+    return;
 }
 
 @vertex 

@@ -29,4 +29,5 @@ void main()
     f3_ = asfloat(_e41);
     int4 _e43 = i4_;
     f4_ = asfloat(_e43);
+    return;
 }

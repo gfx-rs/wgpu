@@ -39,6 +39,7 @@ fn main_1() {
     let _e21 = global_1.Model;
     let _e23 = position;
     gl_Position = ((_e20 * _e21) * vec4<f32>(_e23.x, _e23.y, _e23.z, 1f));
+    return;
 }
 
 @vertex 

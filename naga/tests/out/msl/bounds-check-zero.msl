@@ -108,6 +108,7 @@ void set_array(
     if (uint(i_7) < 10) {
         globals.a.inner[i_7] = v_1;
     }
+    return;
 }
 
 void set_dynamic_array(
@@ -119,6 +120,7 @@ void set_dynamic_array(
     if (uint(i_8) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4) {
         globals.d[i_8] = v_2;
     }
+    return;
 }
 
 void set_vector(
@@ -130,6 +132,7 @@ void set_vector(
     if (uint(i_9) < 4) {
         globals.v[i_9] = v_3;
     }
+    return;
 }
 
 void set_matrix(
@@ -141,6 +144,7 @@ void set_matrix(
     if (uint(i_10) < 3) {
         globals.m[i_10] = v_4;
     }
+    return;
 }
 
 void set_index_twice(
@@ -153,6 +157,7 @@ void set_index_twice(
     if (uint(j_1) < 4 && uint(i_11) < 3) {
         globals.m[i_11][j_1] = v_5;
     }
+    return;
 }
 
 void set_expensive(
@@ -165,6 +170,7 @@ void set_expensive(
     if (uint(_e10) < 10) {
         globals.a.inner[_e10] = v_6;
     }
+    return;
 }
 
 void set_in_bounds(
@@ -175,6 +181,7 @@ void set_in_bounds(
     globals.a.inner[9] = v_7;
     globals.v.w = v_7;
     globals.m[2].w = v_7;
+    return;
 }
 
 float index_dynamic_array_constant_index(
@@ -193,4 +200,5 @@ void set_dynamic_array_constant_index(
     if (uint(1000) < 1 + (_buffer_sizes.size0 - 112 - 4) / 4) {
         globals.d[1000] = v_8;
     }
+    return;
 }

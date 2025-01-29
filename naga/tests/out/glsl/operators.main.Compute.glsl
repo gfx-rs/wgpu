@@ -55,6 +55,7 @@ void logical() {
     bvec3 bitwise_or1_ = bvec3(bvec3(true).x || bvec3(false).x, bvec3(true).y || bvec3(false).y, bvec3(true).z || bvec3(false).z);
     bool bitwise_and0_ = (true && false);
     bvec4 bitwise_and1_ = bvec4(bvec4(true).x && bvec4(false).x, bvec4(true).y && bvec4(false).y, bvec4(true).z && bvec4(false).z, bvec4(true).w && bvec4(false).w);
+    return;
 }
 
 void arithmetic() {
@@ -130,6 +131,7 @@ void arithmetic() {
     vec3 mul_vector0_ = (mat4x3(0.0) * vec4(1.0));
     vec4 mul_vector1_ = (vec3(2.0) * mat4x3(0.0));
     mat3x3 mul = (mat4x3(0.0) * mat3x4(0.0));
+    return;
 }
 
 void bit() {
@@ -157,6 +159,7 @@ void bit() {
     uint shr1_ = (2u >> 1u);
     ivec2 shr2_ = (ivec2(2) >> uvec2(1u));
     uvec3 shr3_ = (uvec3(2u) >> uvec3(1u));
+    return;
 }
 
 void comparison() {
@@ -196,6 +199,7 @@ void comparison() {
     bvec2 gte3_ = greaterThanEqual(ivec2(2), ivec2(1));
     bvec3 gte4_ = greaterThanEqual(uvec3(2u), uvec3(1u));
     bvec4 gte5_ = greaterThanEqual(vec4(2.0), vec4(1.0));
+    return;
 }
 
 void assignment() {
@@ -232,6 +236,7 @@ void assignment() {
     vec0_[1] = (_e37 + 1);
     int _e41 = vec0_[1];
     vec0_[1] = (_e41 - 1);
+    return;
 }
 
 void negation_avoids_prefix_decrement() {
@@ -243,6 +248,7 @@ void negation_avoids_prefix_decrement() {
     int p5_ = -(-(-(-(1))));
     int p6_ = -(-(-(-(-(1)))));
     int p7_ = -(-(-(-(-(1)))));
+    return;
 }
 
 void main() {
@@ -255,5 +261,6 @@ void main() {
     bit();
     comparison();
     assignment();
+    return;
 }
 

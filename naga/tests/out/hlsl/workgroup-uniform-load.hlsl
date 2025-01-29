@@ -14,5 +14,8 @@ void test_workgroupUniformLoad(uint3 workgroup_id : SV_GroupID, uint3 __local_in
     GroupMemoryBarrierWithGroupSync();
     if ((_e4 > 10)) {
         GroupMemoryBarrierWithGroupSync();
+        return;
+    } else {
+        return;
     }
 }

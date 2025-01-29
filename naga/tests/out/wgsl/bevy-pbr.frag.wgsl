@@ -849,6 +849,7 @@ fn main_1() {
     output_color.z = _e301.z;
     let _e308 = output_color;
     o_Target = _e308;
+    return;
 }
 
 @fragment 

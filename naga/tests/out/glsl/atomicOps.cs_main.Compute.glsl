@@ -127,5 +127,6 @@ void main() {
     int _e295 = atomicExchange(workgroup_atomic_arr[1], 1);
     uint _e299 = atomicExchange(workgroup_struct.atomic_scalar, 1u);
     int _e304 = atomicExchange(workgroup_struct.atomic_arr[1], 1);
+    return;
 }
 

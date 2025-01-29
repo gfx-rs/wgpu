@@ -49,6 +49,7 @@ fn main_1() {
     let _e56 = global.ViewProj;
     let _e57 = world_position;
     gl_Position = (_e56 * _e57);
+    return;
 }
 
 @vertex 

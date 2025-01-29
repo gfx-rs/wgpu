@@ -51,6 +51,7 @@ fn main_1() {
     let _e57 = array_toomanyd[0][0][0][0][0][0][0];
     b = _e57;
     out_array[0i] = vec4(2f);
+    return;
 }
 
 @fragment 

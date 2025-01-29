@@ -81,6 +81,7 @@ kernel void compute(
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     output.inner[0] = (((global_id.x + local_id.x) + local_index) + wg_id.x) + num_wgs.x;
+    return;
 }
 
 

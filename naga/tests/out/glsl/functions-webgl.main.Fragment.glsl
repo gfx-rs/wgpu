@@ -13,5 +13,6 @@ vec2 test_fma() {
 
 void main() {
     vec2 _e0 = test_fma();
+    return;
 }
 

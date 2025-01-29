@@ -204,6 +204,9 @@
                         pointer: 11,
                         value: 12,
                     ),
+                    Return(
+                        value: None,
+                    ),
                 ],
                 diagnostic_filter_leaf: None,
             ),

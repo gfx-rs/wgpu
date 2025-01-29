@@ -61,6 +61,7 @@ void logical(
     metal::bool3 bitwise_or1_ = metal::bool3(true) | metal::bool3(false);
     bool bitwise_and0_ = true & false;
     metal::bool4 bitwise_and1_ = metal::bool4(true) & metal::bool4(false);
+    return;
 }
 
 void arithmetic(
@@ -137,6 +138,7 @@ void arithmetic(
     metal::float3 mul_vector0_ = metal::float4x3 {} * metal::float4(1.0);
     metal::float4 mul_vector1_ = metal::float3(2.0) * metal::float4x3 {};
     metal::float3x3 mul = metal::float4x3 {} * metal::float3x4 {};
+    return;
 }
 
 void bit(
@@ -165,6 +167,7 @@ void bit(
     uint shr1_ = 2u >> 1u;
     metal::int2 shr2_ = metal::int2(2) >> metal::uint2(1u);
     metal::uint3 shr3_ = metal::uint3(2u) >> metal::uint3(1u);
+    return;
 }
 
 void comparison(
@@ -205,6 +208,7 @@ void comparison(
     metal::bool2 gte3_ = metal::int2(2) >= metal::int2(1);
     metal::bool3 gte4_ = metal::uint3(2u) >= metal::uint3(1u);
     metal::bool4 gte5_ = metal::float4(2.0) >= metal::float4(1.0);
+    return;
 }
 
 void assignment(
@@ -242,6 +246,7 @@ void assignment(
     vec0_[1] = as_type<int>(as_type<uint>(_e37) + as_type<uint>(1));
     int _e41 = vec0_[1];
     vec0_[1] = as_type<int>(as_type<uint>(_e41) - as_type<uint>(1));
+    return;
 }
 
 void negation_avoids_prefix_decrement(
@@ -254,6 +259,7 @@ void negation_avoids_prefix_decrement(
     int p5_ = -(-(-(-(1))));
     int p6_ = -(-(-(-(-(1)))));
     int p7_ = -(-(-(-(-(1)))));
+    return;
 }
 
 struct main_Input {
@@ -269,4 +275,5 @@ kernel void main_(
     bit();
     comparison();
     assignment();
+    return;
 }

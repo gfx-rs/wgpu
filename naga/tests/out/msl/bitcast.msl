@@ -34,4 +34,5 @@ kernel void main_(
     f3_ = as_type<metal::float3>(_e41);
     metal::int4 _e43 = i4_;
     f4_ = as_type<metal::float4>(_e43);
+    return;
 }

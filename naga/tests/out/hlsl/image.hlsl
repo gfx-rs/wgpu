@@ -50,6 +50,7 @@ void main(uint3 local_id : SV_GroupThreadID)
     uint4 value7u = image_1d_src.Load(int2(uint(local_id.x), int(local_id.z)));
     image_dst[itc.x] = ((((value1_ + value2_) + value4_) + value5_) + value6_);
     image_dst[uint(itc.x)] = ((((value1u + value2u) + value4u) + value5u) + value6u);
+    return;
 }
 
 [numthreads(16, 1, 1)]

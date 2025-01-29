@@ -129,4 +129,5 @@ kernel void main_(
     u3_ = metal::reverse_bits(_e168);
     metal::uint4 _e170 = u4_;
     u4_ = metal::reverse_bits(_e170);
+    return;
 }

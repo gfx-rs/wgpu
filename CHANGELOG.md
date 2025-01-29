@@ -68,6 +68,10 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 ### Bug Fixes
 
+#### Naga
+
+- Fix some instances of functions which have a return type but don't return a value being incorrectly validated. By @jamienicol in [#7013](https://github.com/gfx-rs/wgpu/pull/7013).
+
 #### General
 
 - Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#6933](https://github.com/gfx-rs/wgpu/pull/6933).
