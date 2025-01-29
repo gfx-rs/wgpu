@@ -4,7 +4,7 @@
 //!
 //! This should be temporary, see <https://github.com/gfx-rs/wgpu/pull/6210>.
 
-use core::ffi::{CStr, c_void};
+use core::ffi::{c_void, CStr};
 use core_graphics_types::base::CGFloat;
 use core_graphics_types::geometry::CGRect;
 use objc::declare::ClassDecl;
