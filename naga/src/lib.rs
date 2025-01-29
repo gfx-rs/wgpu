@@ -298,9 +298,6 @@ pub(crate) mod aliases {
             vec,
         };
 
-        // XXX TODO COMPLETELY REMOVE HACK NO LONGER NEEDED:
-        // pub(crate) use hashbrown as collections;
-
         // XXX TBD POSSIBLE IMPACT ON CORE MSRV with no-std - ???
         pub(crate) use core::error;
     }
@@ -342,7 +339,6 @@ pub const BOOL_WIDTH: Bytes = 1;
 /// Width of abstract types, in bytes.
 pub const ABSTRACT_WIDTH: Bytes = 8;
 
-// XXX TODO REMOVE THIS OUTDATED COMMENT RE: UPDATES FROM XXX
 /// Hash map that is faster but not resilient to DoS attacks.
 /// (Similar to rustc_hash::FxHashMap but using hashbrown::HashMap instead of std::collections::HashMap.)
 /// To construct a new instance: `FastHashMap::default()`
