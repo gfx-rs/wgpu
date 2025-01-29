@@ -4,7 +4,7 @@
 //!
 //! This should be temporary, see <https://github.com/gfx-rs/wgpu/pull/6210>.
 
-use core::ffi::c_void;
+use core::ffi::{CStr, c_void};
 use core_graphics_types::base::CGFloat;
 use core_graphics_types::geometry::CGRect;
 use objc::declare::ClassDecl;
@@ -22,6 +22,9 @@ const NSKeyValueObservingOptionNew: usize = 0x01;
 #[allow(non_upper_case_globals)]
 const NSKeyValueObservingOptionInitial: usize = 0x04;
 
+const CONTENTS_SCALE: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"contentsScale\0") };
+const BOUNDS: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"bounds\0") };
+
 /// Create a new custom layer that tracks parameters from the given super layer.
 ///
 /// Same as <https://docs.rs/raw-window-metal/1.1.0/src/raw_window_metal/observer.rs.html#74-132>.
@@ -33,7 +36,7 @@ pub unsafe fn new_observer_layer(root_layer: *mut Object) -> StrongPtr {
 
     // Register for key-value observing.
     let key_path: *const Object =
-        unsafe { msg_send![class!(NSString), stringWithUTF8String: c"contentsScale".as_ptr()] };
+        unsafe { msg_send![class!(NSString), stringWithUTF8String: CONTENTS_SCALE.as_ptr()] };
     let _: () = unsafe {
         msg_send![
             root_layer,
@@ -45,7 +48,7 @@ pub unsafe fn new_observer_layer(root_layer: *mut Object) -> StrongPtr {
     };
 
     let key_path: *const Object =
-        unsafe { msg_send![class!(NSString), stringWithUTF8String: c"bounds".as_ptr()] };
+        unsafe { msg_send![class!(NSString), stringWithUTF8String: BOUNDS.as_ptr()] };
     let _: () = unsafe {
         msg_send![
             root_layer,
@@ -131,7 +134,7 @@ extern "C" fn observe_value(
     assert!(!new.is_null());
 
     let to_compare: *const Object =
-        unsafe { msg_send![class!(NSString), stringWithUTF8String: c"contentsScale".as_ptr()] };
+        unsafe { msg_send![class!(NSString), stringWithUTF8String: CONTENTS_SCALE.as_ptr()] };
     let is_equal: BOOL = unsafe { msg_send![key_path, isEqual: to_compare] };
     if is_equal != NO {
         // `contentsScale` is a CGFloat, and so the observed value is always a NSNumber.
@@ -147,7 +150,7 @@ extern "C" fn observe_value(
     }
 
     let to_compare: *const Object =
-        unsafe { msg_send![class!(NSString), stringWithUTF8String: c"bounds".as_ptr()] };
+        unsafe { msg_send![class!(NSString), stringWithUTF8String: BOUNDS.as_ptr()] };
     let is_equal: BOOL = unsafe { msg_send![key_path, isEqual: to_compare] };
     if is_equal != NO {
         // `bounds` is a CGRect, and so the observed value is always a NSNumber.
@@ -176,11 +179,11 @@ extern "C" fn dealloc(this: &Object, _cmd: Sel) {
     let root_layer: *mut Object = unsafe { msg_send![this, superlayer] };
     if !root_layer.is_null() {
         let key_path: *const Object =
-            unsafe { msg_send![class!(NSString), stringWithUTF8String: c"contentsScale".as_ptr()] };
+            unsafe { msg_send![class!(NSString), stringWithUTF8String: CONTENTS_SCALE.as_ptr()] };
         let _: () = unsafe { msg_send![root_layer, removeObserver: this forKeyPath: key_path] };
 
         let key_path: *const Object =
-            unsafe { msg_send![class!(NSString), stringWithUTF8String: c"bounds".as_ptr()] };
+            unsafe { msg_send![class!(NSString), stringWithUTF8String: BOUNDS.as_ptr()] };
         let _: () = unsafe { msg_send![root_layer, removeObserver: this forKeyPath: key_path] };
     }
 }
