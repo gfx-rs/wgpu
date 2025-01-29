@@ -297,9 +297,6 @@ pub(crate) mod aliases {
             string,
             vec,
         };
-
-        // XXX TBD POSSIBLE IMPACT ON CORE MSRV with no-std - ???
-        pub(crate) use core::error;
     }
     pub(crate) use std::prelude::v1::*;
 }

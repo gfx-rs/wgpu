@@ -1,7 +1,11 @@
 #[cfg(not(feature = "std"))]
 use crate::aliases::*;
 use crate::{Arena, Handle, UniqueArena};
-use std::{error::Error, fmt, ops::Range};
+
+#[cfg(feature = "std")]
+use std::error::Error;
+
+use std::{fmt, ops::Range};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -154,6 +158,8 @@ where
     }
 }
 
+// XXX TODO ADD NOTE WITH TODO: supporting core::error::Error would be a nice feature but may affect core MSRV
+#[cfg(feature = "std")]
 impl<E> Error for WithSpan<E>
 where
     E: Error,

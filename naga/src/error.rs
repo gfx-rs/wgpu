@@ -1,7 +1,12 @@
 #[cfg(not(feature = "std"))]
 use crate::aliases::*;
 
-use std::{error::Error, fmt};
+#[cfg(feature = "std")]
+use std::error::Error;
+
+// XXX TODO ADD & IMPROVE NOTE: multiple features below only working with std at this point
+#[cfg(feature = "std")]
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub struct ShaderError<E> {
@@ -54,6 +59,9 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
         )
     }
 }
+
+// XXX TODO ADD NOTE WITH TODO: supporting core::error::Error would be a nice feature but may affect core MSRV
+#[cfg(feature = "std")]
 impl<E> Error for ShaderError<E>
 where
     ShaderError<E>: fmt::Display,
