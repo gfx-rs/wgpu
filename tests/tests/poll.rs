@@ -57,7 +57,7 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_async(|ctx| 
     let cmd_buf = generate_dummy_work(&ctx);
 
     ctx.queue.submit(Some(cmd_buf));
-    ctx.async_poll(PollType::wait()).await.panic_on_timeout();
+    ctx.async_poll(PollType::wait()).await.unwrap();
 });
 
 #[gpu_test]
@@ -66,8 +66,8 @@ static DOUBLE_WAIT: GpuTestConfiguration =
         let cmd_buf = generate_dummy_work(&ctx);
 
         ctx.queue.submit(Some(cmd_buf));
-        ctx.async_poll(PollType::wait()).await.panic_on_timeout();
-        ctx.async_poll(PollType::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollType::wait()).await.unwrap();
+        ctx.async_poll(PollType::wait()).await.unwrap();
     });
 
 #[gpu_test]
@@ -78,7 +78,7 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration =
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::wait_for(index))
             .await
-            .panic_on_timeout();
+            .unwrap();
     });
 
 #[gpu_test]
@@ -89,10 +89,10 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::wait_for(index.clone()))
             .await
-            .panic_on_timeout();
+            .unwrap();
         ctx.async_poll(PollType::wait_for(index))
             .await
-            .panic_on_timeout();
+            .unwrap();
     });
 
 #[gpu_test]
@@ -105,10 +105,10 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
         let index2 = ctx.queue.submit(Some(cmd_buf2));
         ctx.async_poll(PollType::wait_for(index2))
             .await
-            .panic_on_timeout();
+            .unwrap();
         ctx.async_poll(PollType::wait_for(index1))
             .await
-            .panic_on_timeout();
+            .unwrap();
     });
 
 /// Submit a command buffer to the wrong device. A wait poll shouldn't hang.

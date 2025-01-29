@@ -1869,9 +1869,20 @@ impl Global {
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
-                match device.maintain(fence, wgt::PollType::Wait, snatch_guard) {
-                    Ok((closures, _)) => {
-                        user_callbacks = closures;
+
+                let maintain_result;
+                (user_callbacks, maintain_result) =
+                    device.maintain(fence, wgt::PollType::Wait, snatch_guard);
+
+                match maintain_result {
+                    // We're happy
+                    Ok(wgt::PollStatus::QueueEmpty) => {}
+                    Ok(wgt::PollStatus::WaitSucceeded) => {
+                        // After the wait, the queue should be empty.
+                        break 'error E::GpuWaitTimeout;
+                    }
+                    Ok(wgt::PollStatus::Poll) => {
+                        unreachable!("Cannot get a Poll result from a Wait action.")
                     }
                     Err(e) => {
                         break 'error e.into();
@@ -1937,26 +1948,26 @@ impl Global {
 
         let device = self.hub.devices.get(device_id);
 
-        let DevicePoll { closures, status } = Self::poll_single_device(&device, maintain)?;
+        let (closures, result) = Self::poll_single_device(&device, maintain);
 
         closures.fire();
 
-        Ok(status)
+        result
     }
 
     fn poll_single_device(
         device: &crate::device::Device,
         maintain: wgt::PollType<crate::SubmissionIndex>,
-    ) -> Result<DevicePoll, WaitIdleError> {
+    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
-        let (closures, status) = device.maintain(fence, maintain, snatch_guard)?;
+        let maintain = device.maintain(fence, maintain, snatch_guard);
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
-        Ok(DevicePoll { closures, status })
+        maintain
     }
 
     /// Poll all devices belonging to the specified backend.
@@ -1984,9 +1995,11 @@ impl Global {
                     wgt::PollType::Poll
                 };
 
-                let DevicePoll { closures, status } = Self::poll_single_device(device, maintain)?;
+                let (closures, result) = Self::poll_single_device(device, maintain);
 
-                all_queue_empty &= status.is_queue_empty();
+                let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
+
+                all_queue_empty &= is_queue_empty;
 
                 closure_list.extend(closures);
             }
@@ -2255,9 +2268,4 @@ impl Global {
             buffer_id,
         )
     }
-}
-
-struct DevicePoll {
-    closures: UserClosures,
-    status: wgt::PollStatus,
 }

@@ -4831,6 +4831,7 @@ pub enum PollError {
 }
 
 /// Status of poll operation.
+#[derive(Debug, PartialEq, Eq)]
 pub enum PollStatus {
     /// There are no active submissions in flight as of the beginning of the poll call.
     /// Other submissions may have been queued on other threads during the call.

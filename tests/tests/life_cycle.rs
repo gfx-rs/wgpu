@@ -16,7 +16,7 @@ static BUFFER_DESTROY: GpuTestConfiguration =
 
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
 
         fail(
             &ctx.device,
@@ -32,7 +32,7 @@ static BUFFER_DESTROY: GpuTestConfiguration =
 
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
 
         buffer.destroy();
 
@@ -56,7 +56,7 @@ static BUFFER_DESTROY: GpuTestConfiguration =
         buffer.destroy();
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
         {
@@ -67,14 +67,14 @@ static BUFFER_DESTROY: GpuTestConfiguration =
             let buffer = ctx.device.create_buffer(&descriptor);
             ctx.async_poll(wgpu::PollType::wait())
                 .await
-                .panic_on_timeout();
+                .unwrap();
             buffer.destroy();
         }
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
     });
 
 #[gpu_test]
@@ -101,13 +101,13 @@ static TEXTURE_DESTROY: GpuTestConfiguration =
 
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
 
         texture.destroy();
 
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
 
         texture.destroy();
 

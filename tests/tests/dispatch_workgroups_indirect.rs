@@ -302,7 +302,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
 
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
 
         let view = test_resources.readback_buffer.slice(..).get_mapped_range();
 

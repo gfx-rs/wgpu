@@ -144,7 +144,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
         buffer_slice.map_async(wgpu::MapMode::Read, Result::unwrap);
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
 
         {
             let texels = buffer_slice.get_mapped_range();

@@ -122,7 +122,7 @@ async fn array_size_overrides(
     ctx.queue.submit(Some(encoder.finish()));
 
     mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-    ctx.async_poll(PollType::wait()).await.panic_on_timeout();
+    ctx.async_poll(PollType::wait()).await.unwrap();
 
     let mapped = mapping_buffer.slice(..).get_mapped_range();
 

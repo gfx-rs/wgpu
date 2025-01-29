@@ -146,7 +146,7 @@ async fn partial_update_test(ctx: TestingContext) {
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 
@@ -365,7 +365,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     cpu_buffer.slice(..).map_async(MapMode::Read, |_| ());
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
     let mapped_data = cpu_buffer.slice(..).get_mapped_range();
     let result = bytemuck::cast_slice::<u8, i32>(&mapped_data).to_vec();
     drop(mapped_data);

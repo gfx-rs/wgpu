@@ -399,10 +399,13 @@ impl Device {
                     .load(Ordering::Acquire);
 
                 if submission_index > last_successful_submission_index {
-                    return Err(WaitIdleError::WrongSubmissionIndex(
+                    let closures = UserClosures::default();
+                    let result = Err(WaitIdleError::WrongSubmissionIndex(
                         submission_index,
                         last_successful_submission_index,
                     ));
+
+                    return (closures, result);
                 }
 
                 Some(submission_index)
@@ -415,20 +418,32 @@ impl Device {
         };
 
         // Wait for the submission index if requested. If this is a poll, treat as a success.
-        let mut wait_succeeded = true;
         if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
-            wait_succeeded = unsafe {
+
+            let wait_result = unsafe {
                 self.raw()
                     .wait(fence.as_ref(), target_submission_index, CLEANUP_WAIT_MS)
+            };
+
+            if let Err(e) = wait_result {
+                let closures = UserClosures::default();
+                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                return (closures, Err(hal_error));
             }
-            .map_err(|e| self.handle_hal_error(e))?;
         }
 
         // Get the currently finished submission index. This may be higher than the requested
         // wait, or it may be less than the requested wait if the wait failed.
-        let current_finished_submission = unsafe { self.raw().get_fence_value(fence.as_ref()) }
-            .map_err(|e| self.handle_hal_error(e))?;
+        let fence_value_result = unsafe { self.raw().get_fence_value(fence.as_ref()) };
+        let current_finished_submission = match fence_value_result {
+            Ok(fence_value) => fence_value,
+            Err(e) => {
+                let closures = UserClosures::default();
+                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                return (closures, Err(hal_error));
+            }
+        };
 
         let (submission_closures, mapping_closures, queue_empty) =
             if let Some(queue) = self.get_queue() {
@@ -437,7 +452,7 @@ impl Device {
                 (SmallVec::new(), Vec::new(), true)
             };
 
-        let status = if queue_empty {
+        let result = if queue_empty {
             if let Some(wait_submission_index) = wait_submission_index {
                 assert!(
                     current_finished_submission >= wait_submission_index,
@@ -447,13 +462,15 @@ impl Device {
                 );
             }
 
-            wgt::PollStatus::QueueEmpty
+            Ok(wgt::PollStatus::QueueEmpty)
         } else if let Some(wait_submission_index) = wait_submission_index {
             if current_finished_submission >= wait_submission_index {
-                wgt::PollStatus::WaitSucceeded
+                Ok(wgt::PollStatus::WaitSucceeded)
             } else {
-                wgt::PollStatus::
+                Err(WaitIdleError::Timeout)
             }
+        } else {
+            Ok(wgt::PollStatus::Poll)
         };
 
         // Detect if we have been destroyed and now need to lose the device.
@@ -492,7 +509,7 @@ impl Device {
             submissions: submission_closures,
             device_lost_invocations,
         };
-        Ok((closures, queue_empty))
+        (closures, result)
     }
 
     pub(crate) fn create_buffer(

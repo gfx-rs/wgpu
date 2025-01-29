@@ -110,7 +110,7 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     context
         .device
         .poll(wgpu::PollType::wait())
-        .panic_on_timeout();
+        .unwrap();
     log::info!("Device polled.");
     // Now we await the receiving and panic if anything went wrong because we're lazy.
     receiver.recv_async().await.unwrap().unwrap();

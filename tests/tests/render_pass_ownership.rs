@@ -103,7 +103,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         drop(occlusion_query_set);
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -174,7 +174,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
         drop(query_set);
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -252,7 +252,7 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         drop(query_set_write_timestamp);
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -301,7 +301,7 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
 
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     // Record some a draw command.
     rpass.set_pipeline(&pipeline);
@@ -329,7 +329,7 @@ async fn assert_render_pass_executed_normally(
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 

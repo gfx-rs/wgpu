@@ -247,7 +247,7 @@ async fn draw_test_with_reports(
 
     ctx.async_poll(wgpu::PollType::wait_for(submit_index))
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report();

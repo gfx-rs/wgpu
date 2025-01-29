@@ -16,7 +16,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
 
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
 
         {
             let view = b0.slice(0..0).get_mapped_range();
@@ -52,7 +52,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
 
             ctx.async_poll(wgpu::PollType::wait())
                 .await
-                .panic_on_timeout();
+                .unwrap();
 
             //{
             //    let view = b0.slice(0..0).get_mapped_range_mut();
@@ -83,7 +83,7 @@ async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: 
 
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 }
 
 #[gpu_test]
@@ -124,7 +124,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
 
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     {
         let slice = write_buf.slice(32..48);
@@ -150,7 +150,7 @@ static MAP_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new().run_async(
 
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     let slice = read_buf.slice(..);
     let view = slice.get_mapped_range();

@@ -177,7 +177,7 @@ async fn validate_pipeline(
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 

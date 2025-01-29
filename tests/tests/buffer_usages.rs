@@ -141,7 +141,7 @@ async fn map_test(
 
     ctx.async_poll(wgpu::PollType::wait())
         .await
-        .panic_on_timeout();
+        .unwrap();
 
     if !before_unmap && !before_destroy {
         {

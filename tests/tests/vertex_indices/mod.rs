@@ -457,13 +457,13 @@ async fn vertex_index_common(ctx: TestingContext) {
         ctx.queue.submit([encoder1.finish()]);
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
         ctx.queue.submit([encoder2.finish()]);
         let slice = cpu_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
         ctx.async_poll(wgpu::PollType::wait())
             .await
-            .panic_on_timeout();
+            .unwrap();
         let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 
         let case_name = format!(
