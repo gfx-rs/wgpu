@@ -1672,13 +1672,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::StatementKind::Break => crate::Statement::Break,
             ast::StatementKind::Continue => crate::Statement::Continue,
-            ast::StatementKind::Return { value } => {
+            ast::StatementKind::Return { value: ast_value } => {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
-                let value = value
-                    .map(|expr| self.expression(expr, &mut ctx.as_expression(block, &mut emitter)))
-                    .transpose()?;
+                let value;
+                if let Some(ast_expr) = ast_value {
+                    let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
+                    let mut ectx = ctx.as_expression(block, &mut emitter);
+                    let expr = self.expression_for_abstract(ast_expr, &mut ectx)?;
+
+                    if let Some(result_ty) = result_ty {
+                        let mut ectx = ctx.as_expression(block, &mut emitter);
+                        let resolution = crate::proc::TypeResolution::Handle(result_ty);
+                        let converted =
+                            ectx.try_automatic_conversions(expr, &resolution, Span::default())?;
+                        value = Some(converted);
+                    } else {
+                        value = Some(expr);
+                    }
+                } else {
+                    value = None;
+                }
                 block.extend(emitter.finish(&ctx.function.expressions));
 
                 crate::Statement::Return { value }
