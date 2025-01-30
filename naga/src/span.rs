@@ -379,7 +379,7 @@ impl<T> SpanProvider<T> for UniqueArena<T> {
 
 /// Convenience trait for [`Result`], adding a [`MapErrWithSpan::map_err_inner`]
 /// mapping to [`WithSpan::and_then`].
-pub trait MapErrWithSpan<E, E2>: Sized {
+pub(crate) trait MapErrWithSpan<E, E2>: Sized {
     /// The returned output type.
     type Output: Sized;
 
