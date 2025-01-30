@@ -151,7 +151,7 @@ impl ComparisonType {
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
-    adapter_info: &wgt::AdapterInfo,
+    adapter_info: &wgpu::AdapterInfo,
     width: u32,
     height: u32,
     test_with_alpha: &[u8],
@@ -253,7 +253,7 @@ pub async fn compare_image_output(
 #[cfg(target_arch = "wasm32")]
 pub async fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
-    adapter_info: &wgt::AdapterInfo,
+    adapter_info: &wgpu::AdapterInfo,
     width: u32,
     height: u32,
     test_with_alpha: &[u8],

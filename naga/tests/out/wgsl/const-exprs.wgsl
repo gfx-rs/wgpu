@@ -16,16 +16,19 @@ const compare_vec: vec2<bool> = vec2<bool>(true, false);
 fn swizzle_of_compose() {
     var out: vec4<i32> = vec4<i32>(4i, 3i, 2i, 1i);
 
+    return;
 }
 
 fn index_of_compose() {
     var out_1: i32 = 2i;
 
+    return;
 }
 
 fn compose_three_deep() {
     var out_2: i32 = 6i;
 
+    return;
 }
 
 fn non_constant_initializers() {
@@ -50,16 +53,19 @@ fn non_constant_initializers() {
 fn splat_of_constant() {
     var out_4: vec4<i32> = vec4<i32>(-4i, -4i, -4i, -4i);
 
+    return;
 }
 
 fn compose_of_constant() {
     var out_5: vec4<i32> = vec4<i32>(-4i, -4i, -4i, -4i);
 
+    return;
 }
 
 fn compose_of_splat() {
     var x_1: vec4<f32> = vec4<f32>(2f, 1f, 1f, 1f);
 
+    return;
 }
 
 fn map_texture_kind(texture_kind: i32) -> u32 {

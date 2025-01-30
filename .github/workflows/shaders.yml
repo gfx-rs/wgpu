@@ -31,6 +31,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: debug symbols to line-tables-only
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
@@ -76,6 +86,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: debug symbols to line-tables-only
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
@@ -107,6 +127,16 @@ jobs:
 
       - name: Install graphviz
         run: sudo apt-get install graphviz
+
+      - name: debug symbols to line-tables-only
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
 
       - uses: Swatinem/rust-cache@v2
         with:

@@ -938,7 +938,7 @@ fn dispatch_indirect(
         let src_transition = state
             .intermediate_trackers
             .buffers
-            .set_single(&buffer, hal::BufferUses::STORAGE_READ_ONLY);
+            .set_single(&buffer, wgt::BufferUses::STORAGE_READ_ONLY);
         let src_barrier =
             src_transition.map(|transition| transition.into_hal(&buffer, &state.snatch_guard));
         unsafe {
@@ -949,8 +949,8 @@ fn dispatch_indirect(
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::INDIRECT,
-                    to: hal::BufferUses::STORAGE_READ_WRITE,
+                    from: wgt::BufferUses::INDIRECT,
+                    to: wgt::BufferUses::STORAGE_READ_WRITE,
                 },
             }]);
         }
@@ -996,8 +996,8 @@ fn dispatch_indirect(
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::STORAGE_READ_WRITE,
-                    to: hal::BufferUses::INDIRECT,
+                    from: wgt::BufferUses::STORAGE_READ_WRITE,
+                    to: wgt::BufferUses::INDIRECT,
                 },
             }]);
         }
@@ -1012,7 +1012,7 @@ fn dispatch_indirect(
         state
             .scope
             .buffers
-            .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
+            .merge_single(&buffer, wgt::BufferUses::INDIRECT)?;
 
         use crate::resource::Trackable;
         state.flush_states(Some(buffer.tracker_index()))?;

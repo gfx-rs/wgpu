@@ -154,6 +154,11 @@ impl super::Adapter {
         }
         .unwrap();
 
+        if options.ResourceHeapTier == Direct3D12::D3D12_RESOURCE_HEAP_TIER_1 {
+            // We require Tier 2 for the ability to make samplers bindless in all cases.
+            return None;
+        }
+
         let _depth_bounds_test_supported = {
             let mut features2 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS2::default();
             unsafe {
@@ -193,6 +198,23 @@ impl super::Adapter {
                 )
             }
             .is_ok()
+        };
+
+        let mut max_sampler_descriptor_heap_size =
+            Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE;
+        {
+            let mut features19 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS19::default();
+            let res = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS19,
+                    <*mut _>::cast(&mut features19),
+                    size_of_val(&features19) as u32,
+                )
+            };
+
+            if res.is_ok() {
+                max_sampler_descriptor_heap_size = features19.MaxSamplerDescriptorHeapSize;
+            }
         };
 
         let shader_model = if dxc_container.is_none() {
@@ -260,6 +282,7 @@ impl super::Adapter {
             // See https://github.com/gfx-rs/wgpu/issues/3552
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
             shader_model,
+            max_sampler_descriptor_heap_size,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
@@ -515,8 +538,10 @@ impl super::Adapter {
                     //   for the descriptor table
                     // - If a bind group has samplers it will consume a `DWORD`
                     //   for the descriptor table
-                    // - Each dynamic buffer will consume `2 DWORDs` for the
+                    // - Each dynamic uniform buffer will consume `2 DWORDs` for the
                     //   root descriptor
+                    // - Each dynamic storage buffer will consume `1 DWORD` for a
+                    //   root constant representing the dynamic offset
                     // - The special constants buffer count as constants
                     //
                     // Since we can't know beforehand all root signatures that
@@ -825,9 +850,9 @@ impl crate::Adapter for super::Adapter {
             // See https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgidevice1-setmaximumframelatency
             maximum_frame_latency: 1..=16,
             current_extent,
-            usage: crate::TextureUses::COLOR_TARGET
-                | crate::TextureUses::COPY_SRC
-                | crate::TextureUses::COPY_DST,
+            usage: wgt::TextureUses::COLOR_TARGET
+                | wgt::TextureUses::COPY_SRC
+                | wgt::TextureUses::COPY_DST,
             present_modes,
             composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
         })

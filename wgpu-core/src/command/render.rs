@@ -29,7 +29,7 @@ use crate::{
         DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
         ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
     },
-    track::{ResourceUsageCompatibilityError, TextureSelector, Tracker, UsageScope},
+    track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
     Label,
 };
 
@@ -37,7 +37,7 @@ use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
-    TextureUsages, TextureViewDimension, VertexStepMode,
+    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 #[cfg(feature = "serde")]
@@ -779,11 +779,11 @@ where
 struct RenderAttachment {
     texture: Arc<Texture>,
     selector: TextureSelector,
-    usage: hal::TextureUses,
+    usage: wgt::TextureUses,
 }
 
 impl TextureView {
-    fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment {
+    fn to_render_attachment(&self, usage: wgt::TextureUses) -> RenderAttachment {
         RenderAttachment {
             texture: self.parent.clone(),
             selector: self.selector.clone(),
@@ -1049,9 +1049,9 @@ impl<'d> RenderPassInfo<'d> {
                     .flags
                     .contains(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
             {
-                hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::RESOURCE
+                wgt::TextureUses::DEPTH_STENCIL_READ | wgt::TextureUses::RESOURCE
             } else {
-                hal::TextureUses::DEPTH_STENCIL_WRITE
+                wgt::TextureUses::DEPTH_STENCIL_WRITE
             };
             render_attachments.push(view.to_render_attachment(usage));
 
@@ -1104,7 +1104,7 @@ impl<'d> RenderPassInfo<'d> {
                 &mut pending_discard_init_fixups,
             );
             render_attachments
-                .push(color_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
+                .push(color_view.to_render_attachment(wgt::TextureUses::COLOR_TARGET));
 
             let mut hal_resolve_target = None;
             if let Some(resolve_view) = &at.resolve_target {
@@ -1160,18 +1160,18 @@ impl<'d> RenderPassInfo<'d> {
                     TextureInitRange::from(resolve_view.selector.clone()),
                 );
                 render_attachments
-                    .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
+                    .push(resolve_view.to_render_attachment(wgt::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
                     view: resolve_view.try_raw(snatch_guard)?,
-                    usage: hal::TextureUses::COLOR_TARGET,
+                    usage: wgt::TextureUses::COLOR_TARGET,
                 });
             }
 
             color_attachments_hal.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
                     view: color_view.try_raw(snatch_guard)?,
-                    usage: hal::TextureUses::COLOR_TARGET,
+                    usage: wgt::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
                 ops: at.hal_ops(),
@@ -1333,7 +1333,7 @@ impl<'d> RenderPassInfo<'d> {
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
                         view: view.try_raw(snatch_guard)?,
-                        usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
+                        usage: wgt::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,
                     stencil_ops,
@@ -2167,7 +2167,7 @@ fn set_index_buffer(
         .info
         .usage_scope
         .buffers
-        .merge_single(&buffer, hal::BufferUses::INDEX)?;
+        .merge_single(&buffer, wgt::BufferUses::INDEX)?;
 
     buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -2216,7 +2216,7 @@ fn set_vertex_buffer(
         .info
         .usage_scope
         .buffers
-        .merge_single(&buffer, hal::BufferUses::VERTEX)?;
+        .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
 
     buffer.same_device_as(cmd_buf.as_ref())?;
 
@@ -2496,7 +2496,7 @@ fn multi_draw_indirect(
         .info
         .usage_scope
         .buffers
-        .merge_single(&indirect_buffer, hal::BufferUses::INDIRECT)?;
+        .merge_single(&indirect_buffer, wgt::BufferUses::INDIRECT)?;
 
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
     let indirect_raw = indirect_buffer.try_raw(state.snatch_guard)?;
@@ -2573,7 +2573,7 @@ fn multi_draw_indirect_count(
         .info
         .usage_scope
         .buffers
-        .merge_single(&indirect_buffer, hal::BufferUses::INDIRECT)?;
+        .merge_single(&indirect_buffer, wgt::BufferUses::INDIRECT)?;
 
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
     let indirect_raw = indirect_buffer.try_raw(state.snatch_guard)?;
@@ -2582,7 +2582,7 @@ fn multi_draw_indirect_count(
         .info
         .usage_scope
         .buffers
-        .merge_single(&count_buffer, hal::BufferUses::INDIRECT)?;
+        .merge_single(&count_buffer, wgt::BufferUses::INDIRECT)?;
 
     count_buffer.check_usage(BufferUsages::INDIRECT)?;
     let count_raw = count_buffer.try_raw(state.snatch_guard)?;

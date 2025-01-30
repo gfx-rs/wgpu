@@ -89,8 +89,8 @@ pub enum ConfigureSurfaceError {
     },
     #[error("Requested usage {requested:?} is not in the list of supported usages: {available:?}")]
     UnsupportedUsage {
-        requested: hal::TextureUses,
-        available: hal::TextureUses,
+        requested: wgt::TextureUses,
+        available: wgt::TextureUses,
     },
 }
 
@@ -170,7 +170,7 @@ impl Surface {
                     ),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
-                    usage: hal::TextureUses::COLOR_TARGET,
+                    usage: wgt::TextureUses::COLOR_TARGET,
                     range: wgt::ImageSubresourceRange::default(),
                 };
                 let clear_view = unsafe {
@@ -200,7 +200,7 @@ impl Surface {
                     .trackers
                     .lock()
                     .textures
-                    .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+                    .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);

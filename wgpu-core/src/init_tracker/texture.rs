@@ -1,7 +1,8 @@
 use super::{InitTracker, MemoryInitKind};
-use crate::{resource::Texture, track::TextureSelector};
+use crate::resource::Texture;
 use arrayvec::ArrayVec;
 use std::{ops::Range, sync::Arc};
+use wgt::TextureSelector;
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextureInitRange {

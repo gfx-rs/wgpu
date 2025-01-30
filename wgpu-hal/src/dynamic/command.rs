@@ -4,7 +4,7 @@ use crate::{
     AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy,
     BufferTextureCopy, BuildAccelerationStructureDescriptor, ColorAttachment, CommandEncoder,
     ComputePassDescriptor, DepthStencilAttachment, DeviceError, Label, MemoryRange,
-    PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier, TextureCopy, TextureUses,
+    PassTimestampWrites, Rect, RenderPassDescriptor, TextureBarrier, TextureCopy,
 };
 
 use super::{
@@ -37,7 +37,7 @@ pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn copy_texture_to_texture(
         &mut self,
         src: &dyn DynTexture,
-        src_usage: TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &dyn DynTexture,
         regions: &[TextureCopy],
     );
@@ -52,7 +52,7 @@ pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &dyn DynTexture,
-        src_usage: TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &dyn DynBuffer,
         regions: &[BufferTextureCopy],
     );
@@ -240,7 +240,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn copy_texture_to_texture(
         &mut self,
         src: &dyn DynTexture,
-        src_usage: TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &dyn DynTexture,
         regions: &[TextureCopy],
     ) {
@@ -267,7 +267,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn copy_texture_to_buffer(
         &mut self,
         src: &dyn DynTexture,
-        src_usage: TextureUses,
+        src_usage: wgt::TextureUses,
         dst: &dyn DynBuffer,
         regions: &[BufferTextureCopy],
     ) {

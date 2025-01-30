@@ -28,7 +28,10 @@ cbuffer u_entity : register(b0, space1) { Entity u_entity; }
 ByteAddressBuffer s_lights : register(t1);
 cbuffer u_lights : register(b1) { Light u_lights[10]; }
 Texture2DArray<float> t_shadow : register(t2);
-SamplerComparisonState sampler_shadow : register(s3);
+SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s0, space1);
+StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t0, space255);
+static const SamplerComparisonState sampler_shadow = nagaComparisonSamplerHeap[nagaGroup0SamplerIndexArray[3]];
 
 struct VertexOutput_vs_main {
     float3 world_normal : LOC0;

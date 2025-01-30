@@ -146,8 +146,8 @@ impl Device {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),
                 size: instance_buffer_size as u64,
-                usage: hal::BufferUses::COPY_DST
-                    | hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                usage: wgt::BufferUses::COPY_DST
+                    | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
             })
         }

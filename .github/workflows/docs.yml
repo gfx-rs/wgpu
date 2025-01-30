@@ -9,9 +9,8 @@ on:
       - trunk
 
 env:
-  # We need to use nightly for various features
-  # when building docs.rs style docs.
-  NIGHTLY_VERSION: nightly-2025-01-09
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.83"
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
@@ -28,17 +27,31 @@ jobs:
           persist-credentials: false
 
       - name: Install documentation toolchain
-        run: rustup toolchain install ${{ env.NIGHTLY_VERSION }} --no-self-update --profile=minimal
-
-      - name: Build the docs (nightly)
         run: |
-          cargo +${{ env.NIGHTLY_VERSION }} doc --no-deps --lib
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          rustup override set ${{ env.REPO_MSRV }}
+
+      - name: disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: doc-build
+
+      - name: Build the docs
+        run: |
+          cargo doc --no-deps --lib --document-private-items
         env:
           RUSTDOCFLAGS: --cfg docsrs
-
-      - name: Build the docs (stable)
-        run: cargo +stable doc --no-deps --lib
-        if: ${{ failure() }}
+          RUSTC_BOOTSTRAP: 1
 
       - name: Deploy the docs
         uses: JamesIves/github-pages-deploy-action@v4.7.2

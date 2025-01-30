@@ -51,6 +51,7 @@ use crate::{
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
+use hashbrown::hash_map;
 use std::{
     cmp::Ordering,
     fmt::{self, Error as FmtError, Write},
@@ -4608,7 +4609,6 @@ impl<'a, W: Write> Writer<'a, W> {
 
     /// Helper method used to produce the reflection info that's returned to the user
     fn collect_reflection_info(&mut self) -> Result<ReflectionInfo, Error> {
-        use std::collections::hash_map::Entry;
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
         let mut texture_mapping = crate::FastHashMap::default();
         let mut uniforms = crate::FastHashMap::default();
@@ -4617,13 +4617,13 @@ impl<'a, W: Write> Writer<'a, W> {
             let tex_name = self.reflection_names_globals[&sampling.image].clone();
 
             match texture_mapping.entry(tex_name) {
-                Entry::Vacant(v) => {
+                hash_map::Entry::Vacant(v) => {
                     v.insert(TextureMapping {
                         texture: sampling.image,
                         sampler: Some(sampling.sampler),
                     });
                 }
-                Entry::Occupied(e) => {
+                hash_map::Entry::Occupied(e) => {
                     if e.get().sampler != Some(sampling.sampler) {
                         log::error!("Conflicting samplers for {}", e.key());
                         return Err(Error::ImageMultipleSamplers);
@@ -4641,13 +4641,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 TypeInner::Image { .. } => {
                     let tex_name = self.reflection_names_globals[&handle].clone();
                     match texture_mapping.entry(tex_name) {
-                        Entry::Vacant(v) => {
+                        hash_map::Entry::Vacant(v) => {
                             v.insert(TextureMapping {
                                 texture: handle,
                                 sampler: None,
                             });
                         }
-                        Entry::Occupied(_) => {
+                        hash_map::Entry::Occupied(_) => {
                             // already used with a sampler, do nothing
                         }
                     }

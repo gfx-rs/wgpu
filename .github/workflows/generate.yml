@@ -32,13 +32,28 @@ jobs:
     name: "${{ matrix.name }}"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Install Repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
+
+      - name: disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cargo-generate-${{ matrix.name }}
 
       - name: "Install cargo-generate"
         uses: taiki-e/install-action@v2

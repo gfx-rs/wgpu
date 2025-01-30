@@ -289,7 +289,7 @@ impl crate::Surface for super::Surface {
         *self.extent.write() = config.extent;
 
         let render_layer = self.render_layer.lock();
-        let framebuffer_only = config.usage == crate::TextureUses::COLOR_TARGET;
+        let framebuffer_only = config.usage == wgt::TextureUses::COLOR_TARGET;
         let display_sync = match config.present_mode {
             wgt::PresentMode::Fifo => true,
             wgt::PresentMode::Immediate => false,
