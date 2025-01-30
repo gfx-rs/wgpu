@@ -175,6 +175,12 @@ jobs:
             tier: 2
             kind: no_std
 
+          - name: hack check - Linux x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            tier: 1
+            kind: hack
+
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
@@ -287,6 +293,15 @@ jobs:
 
           # Check with all features except "std".
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
+
+      - name: hack check
+        if: matrix.kind == 'hack'
+        shell: bash
+        run: |
+          set -e
+
+          # hack check each feature
+          cargo hack --workspace --feature-powerset --depth 1 clippy
 
       # Building for native platforms with standard tests.
       - name: check native
