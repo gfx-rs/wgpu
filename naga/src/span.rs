@@ -383,7 +383,9 @@ impl<T> SpanProvider<T> for UniqueArena<T> {
 /// Convenience trait for [`Result`], adding a [`MapErrWithSpan::map_err_inner`]
 /// mapping to [`WithSpan::and_then`].
 pub trait MapErrWithSpan<E, E2>: Sized {
+    /// The returned output type.
     type Output: Sized;
+
     fn map_err_inner<F, E3>(self, func: F) -> Self::Output
     where
         F: FnOnce(E) -> WithSpan<E3>,
@@ -392,6 +394,7 @@ pub trait MapErrWithSpan<E, E2>: Sized {
 
 impl<T, E, E2> MapErrWithSpan<E, E2> for Result<T, WithSpan<E>> {
     type Output = Result<T, WithSpan<E2>>;
+
     fn map_err_inner<F, E3>(self, func: F) -> Result<T, WithSpan<E2>>
     where
         F: FnOnce(E) -> WithSpan<E3>,
