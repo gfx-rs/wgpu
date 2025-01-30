@@ -77,7 +77,8 @@ jobs:
     #
     # currently high due to documentation time problems on mac.
     # https://github.com/rust-lang/rust/issues/114891
-    timeout-minutes: 30
+    # XXX TBD ??? - increased further to avoid interrupting cargo hack
+    timeout-minutes: 90
 
     strategy:
       fail-fast: false
