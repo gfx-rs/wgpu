@@ -506,11 +506,13 @@ impl Device {
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
             if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
-                user_closures.device_lost_invocations.push(DeviceLostInvocation {
-                    closure: device_lost_closure,
-                    reason: DeviceLostReason::Destroyed,
-                    message: String::new(),
-                });
+                user_closures
+                    .device_lost_invocations
+                    .push(DeviceLostInvocation {
+                        closure: device_lost_closure,
+                        reason: DeviceLostReason::Destroyed,
+                        message: String::new(),
+                    });
             }
         }
 
