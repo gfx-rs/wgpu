@@ -90,7 +90,7 @@ pub enum PollError {
 }
 ```
 
-[!ERROR]
+> [!WARNING]
 > As part of this change, WebGL's default behavior has changed. Previously `device.poll(Wait)` appeared as though it functioned correctly. This was a quirk caused by the bug that these PRs fixed. Now it will always return `Timeout` if the submission has not already completed. As many people rely on this behavior on WebGL, there is a new options in `BackendOptions`. If you want the old behavior, set the following on instance creation:
 ```rust
 instance_desc.backend_options.gl.fence_behavior = wgpu::GlFenceBehavior::AutoFinish;
