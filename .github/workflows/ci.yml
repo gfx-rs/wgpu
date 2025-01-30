@@ -32,9 +32,9 @@ env:
 
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
-  MESA_VERSION: "24.2.3"
+  MESA_VERSION: "24.3.4"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
-  CI_BINARY_BUILD: "build19"
+  CI_BINARY_BUILD: "build20"
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.83"
