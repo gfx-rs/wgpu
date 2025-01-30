@@ -209,6 +209,9 @@
                         start: 10,
                         end: 12,
                     )),
+                    Return(
+                        value: None,
+                    ),
                 ],
                 diagnostic_filter_leaf: None,
             ),

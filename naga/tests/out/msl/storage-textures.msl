@@ -13,6 +13,7 @@ kernel void csLoad(
     metal::float4 phony = s_r_r.read(metal::uint2(metal::uint2(0u)));
     metal::float4 phony_1 = s_rg_r.read(metal::uint2(metal::uint2(0u)));
     metal::float4 phony_2 = s_rgba_r.read(metal::uint2(metal::uint2(0u)));
+    return;
 }
 
 

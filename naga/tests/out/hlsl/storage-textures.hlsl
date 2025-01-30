@@ -11,6 +11,7 @@ void csLoad()
     float4 phony = s_r_r.Load((0u).xx);
     float4 phony_1 = s_rg_r.Load((0u).xx);
     float4 phony_2 = s_rgba_r.Load((0u).xx);
+    return;
 }
 
 [numthreads(1, 1, 1)]
