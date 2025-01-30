@@ -43,7 +43,7 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
                 shader_compiler: dx12_shader_compiler,
             },
             gl: wgpu::GlBackendOptions {
-                short_circuit_fences: if cfg!(target_family = "wasm") {
+                fence_behavior: if cfg!(target_family = "wasm") {
                     wgpu::GlFenceBehavior::AutoFinish
                 } else {
                     wgpu::GlFenceBehavior::Normal
