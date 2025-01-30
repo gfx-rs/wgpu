@@ -370,19 +370,23 @@ impl Device {
         assert!(self.queue.set(Arc::downgrade(queue)).is_ok());
     }
 
-    /// Check this device for completed commands.
+    /// Check the current status of the GPU and process any submissions that have
+    /// finished.
     ///
-    /// The `maintain` argument tells how the maintenance function should behave, either
-    /// blocking or just polling the current state of the gpu.
+    /// The `poll_type` argument tells if this function should wait for a particular
+    /// submission index to complete, or if it should just poll the current status.
     ///
-    /// Return a pair `(closures, queue_empty)`, where:
+    /// This will process _all_ completed submissions, even if the caller only asked
+    /// us to poll to a given submission index.
     ///
-    /// - `closures` is a list of actions to take: mapping buffers, notifying the user
+    /// Return a pair `(closures, result)`, where:
     ///
-    /// - `queue_empty` is a boolean indicating whether there are more queue
-    ///   submissions still in flight. (We have to take the locks needed to
-    ///   produce this information for other reasons, so we might as well just
-    ///   return it to our callers.)
+    /// - `closures` is a list of callbacks that need to be invoked informing the user
+    ///   about various things occurring. These happen and should be handled even if
+    ///   this function returns an error, hence they are outside of the result.
+    ///
+    /// - `results` is a boolean indicating the result of the wait operation, including
+    ///   if there was a timeout or a validation error.
     pub(crate) fn maintain<'this>(
         &'this self,
         fence: crate::lock::RwLockReadGuard<ManuallyDrop<Box<dyn hal::DynFence>>>,
@@ -391,7 +395,9 @@ impl Device {
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         profiling::scope!("Device::maintain");
 
-        // Determine which submission index we should wait for, if a wait is requested.
+        let mut user_closures = UserClosures::default();
+
+        // If a wait was requested, determine which submission index to wait for.
         let wait_submission_index = match poll_type {
             wgt::PollType::WaitForSubmissionIndex(submission_index) => {
                 let last_successful_submission_index = self
@@ -399,13 +405,12 @@ impl Device {
                     .load(Ordering::Acquire);
 
                 if submission_index > last_successful_submission_index {
-                    let closures = UserClosures::default();
                     let result = Err(WaitIdleError::WrongSubmissionIndex(
                         submission_index,
                         last_successful_submission_index,
                     ));
 
-                    return (closures, result);
+                    return (user_closures, result);
                 }
 
                 Some(submission_index)
@@ -417,7 +422,7 @@ impl Device {
             wgt::PollType::Poll => None,
         };
 
-        // Wait for the submission index if requested. If this is a poll, treat as a success.
+        // Wait for the submission index if requested.
         if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
@@ -426,10 +431,11 @@ impl Device {
                     .wait(fence.as_ref(), target_submission_index, CLEANUP_WAIT_MS)
             };
 
+            // This error match is only about `DeviceErrors`. At this stage we do not care if
+            // the wait succeeded or not, and the `Ok(bool)`` variant is ignored.
             if let Err(e) = wait_result {
-                let closures = UserClosures::default();
                 let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (closures, Err(hal_error));
+                return (user_closures, Err(hal_error));
             }
         }
 
@@ -439,21 +445,30 @@ impl Device {
         let current_finished_submission = match fence_value_result {
             Ok(fence_value) => fence_value,
             Err(e) => {
-                let closures = UserClosures::default();
                 let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (closures, Err(hal_error));
+                return (user_closures, Err(hal_error));
             }
         };
 
-        let (submission_closures, mapping_closures, queue_empty) =
-            if let Some(queue) = self.get_queue() {
-                queue.maintain(current_finished_submission, &snatch_guard)
-            } else {
-                (SmallVec::new(), Vec::new(), true)
-            };
+        // Maintain all finished submissions on the queue, updating the relevant user closures and collecting if the queue is empty.
+        //
+        // We don't use the result of the wait here, as we want to progress forward as far as possible
+        // and the wait could have been for submissions that finished long ago.
+        let mut queue_empty = false;
+        if let Some(queue) = self.get_queue() {
+            let queue_result = queue.maintain(current_finished_submission, &snatch_guard);
+            (
+                user_closures.submissions,
+                user_closures.mappings,
+                queue_empty,
+            ) = queue_result
+        };
 
+        // Based on the queue empty status, and the current finished submission index, determine the result of the poll.
         let result = if queue_empty {
             if let Some(wait_submission_index) = wait_submission_index {
+                // Assert to ensure that if we received a queue empty status, the fence shows the correct value.
+                // This is defencive, as this should never be hit.
                 assert!(
                     current_finished_submission >= wait_submission_index,
                     "If the queue is empty, the current submission index ({}) should be at least the wait submission index ({})",
@@ -464,6 +479,9 @@ impl Device {
 
             Ok(wgt::PollStatus::QueueEmpty)
         } else if let Some(wait_submission_index) = wait_submission_index {
+            // This is theoretically possible to succeed more than checking on the poll result
+            // as submissions could have finished in the time between the timeout resolving,
+            // the thread getting scheduled again, and us checking the fence value.
             if current_finished_submission >= wait_submission_index {
                 Ok(wgt::PollStatus::WaitSucceeded)
             } else {
@@ -474,11 +492,11 @@ impl Device {
         };
 
         // Detect if we have been destroyed and now need to lose the device.
+        //
         // If we are invalid (set at start of destroy) and our queue is empty,
         // and we have a DeviceLostClosure, return the closure to be called by
         // our caller. This will complete the steps for both destroy and for
         // "lose the device".
-        let mut device_lost_invocations = SmallVec::new();
         let mut should_release_gpu_resource = false;
         if !self.is_valid() && queue_empty {
             // We can release gpu resources associated with this device (but not
@@ -488,7 +506,7 @@ impl Device {
             // If we have a DeviceLostClosure, build an invocation with the
             // reason DeviceLostReason::Destroyed and no message.
             if let Some(device_lost_closure) = self.device_lost_closure.lock().take() {
-                device_lost_invocations.push(DeviceLostInvocation {
+                user_closures.device_lost_invocations.push(DeviceLostInvocation {
                     closure: device_lost_closure,
                     reason: DeviceLostReason::Destroyed,
                     message: String::new(),
@@ -504,12 +522,7 @@ impl Device {
             self.release_gpu_resources();
         }
 
-        let closures = UserClosures {
-            mappings: mapping_closures,
-            submissions: submission_closures,
-            device_lost_invocations,
-        };
-        (closures, result)
+        (user_closures, result)
     }
 
     pub(crate) fn create_buffer(
