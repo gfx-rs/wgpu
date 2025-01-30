@@ -314,7 +314,9 @@ impl<E> WithSpan<E> {
 
 /// Convenience trait for [`Error`] to be able to apply spans to anything.
 pub(crate) trait AddSpan: Sized {
+    /// The returned output type.
     type Output;
+
     /// See [`WithSpan::new`].
     fn with_span(self) -> Self::Output;
     /// See [`WithSpan::with_span`].
@@ -330,6 +332,7 @@ where
     E: Error,
 {
     type Output = WithSpan<Self>;
+
     fn with_span(self) -> WithSpan<Self> {
         WithSpan::new(self)
     }
