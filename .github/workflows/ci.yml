@@ -306,6 +306,9 @@ jobs:
 
           # hack check each feature
           cargo hack --workspace --feature-powerset --depth 1 clippy
+        env:
+          # XXX TBD ???
+          RUSTFLAGS: ""
 
       # Building for native platforms with standard tests.
       - name: check native
