@@ -141,6 +141,7 @@ define_lock_ranks! {
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }
     rank SHARED_TRACKER_INDEX_ALLOCATOR_INNER "SharedTrackerIndexAllocator::inner" followed by { }
+    #[allow(dead_code)]
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
