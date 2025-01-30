@@ -411,7 +411,7 @@ pub enum GlFenceBehavior {
     ///
     /// This solves a very specific issue that arose due to a bug in wgpu-core that made
     /// many WebGL programs work when they "shouldn't" have. If you have code that is trying
-    /// to call `device.poll(wgpu::Maintain::Wait)` on WebGL, you need to enable this option
+    /// to call `device.poll(wgpu::PollType::Wait)` on WebGL, you need to enable this option
     /// for the "Wait" to behave how you would expect.
     ///
     /// Previously all `poll(Wait)` acted like the OpenGL fences were signalled even if they weren't.

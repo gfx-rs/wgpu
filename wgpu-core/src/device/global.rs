@@ -1942,13 +1942,13 @@ impl Global {
     pub fn device_poll(
         &self,
         device_id: DeviceId,
-        maintain: wgt::PollType<crate::SubmissionIndex>,
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
     ) -> Result<wgt::PollStatus, WaitIdleError> {
-        api_log!("Device::poll {maintain:?}");
+        api_log!("Device::poll {poll_type:?}");
 
         let device = self.hub.devices.get(device_id);
 
-        let (closures, result) = Self::poll_single_device(&device, maintain);
+        let (closures, result) = Self::poll_single_device(&device, poll_type);
 
         closures.fire();
 
@@ -1957,17 +1957,17 @@ impl Global {
 
     fn poll_single_device(
         device: &crate::device::Device,
-        maintain: wgt::PollType<crate::SubmissionIndex>,
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
-        let maintain = device.maintain(fence, maintain, snatch_guard);
+        let maintain_result = device.maintain(fence, poll_type, snatch_guard);
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
-        maintain
+        maintain_result
     }
 
     /// Poll all devices belonging to the specified backend.
@@ -1989,13 +1989,13 @@ impl Global {
             let device_guard = hub.devices.read();
 
             for (_id, device) in device_guard.iter() {
-                let maintain = if force_wait {
+                let poll_type = if force_wait {
                     wgt::PollType::Wait
                 } else {
                     wgt::PollType::Poll
                 };
 
-                let (closures, result) = Self::poll_single_device(device, maintain);
+                let (closures, result) = Self::poll_single_device(device, poll_type);
 
                 let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
 

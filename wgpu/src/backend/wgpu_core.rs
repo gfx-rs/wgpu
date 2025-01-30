@@ -1616,8 +1616,8 @@ impl dispatch::DeviceInterface for CoreDevice {
         self.context.0.device_stop_capture(self.id);
     }
 
-    fn poll(&self, maintain: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {
-        let maintain_inner = maintain.map_index(|i| i.index);
+    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {
+        let maintain_inner = poll_type.map_index(|i| i.index);
         match self.context.0.device_poll(self.id, maintain_inner) {
             Ok(status) => Ok(status),
             Err(err) => {

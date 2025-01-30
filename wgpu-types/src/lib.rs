@@ -21,7 +21,6 @@ use core::{
     num::NonZeroU32,
     ops::Range,
 };
-use thiserror::Error;
 
 #[cfg(any(feature = "serde", test))]
 use {
@@ -4799,7 +4798,7 @@ impl<T> PollType<T> {
         Self::WaitForSubmissionIndex(submission_index)
     }
 
-    /// This maintain represents a wait of some kind.
+    /// This `PollType` represents a wait of some kind.
     #[must_use]
     pub fn is_wait(&self) -> bool {
         match *self {
@@ -4823,10 +4822,14 @@ impl<T> PollType<T> {
 }
 
 /// Error states after a poll
-#[derive(Debug, Error)]
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum PollError {
     /// The requested Wait timed out before the submission was completed.
-    #[error("The requested Wait timed out before the submission was completed.")]
+    #[cfg_attr(
+        feature = "std",
+        error("The requested Wait timed out before the submission was completed.")
+    )]
     Timeout,
 }
 
@@ -4847,7 +4850,7 @@ pub enum PollStatus {
 }
 
 impl PollStatus {
-    /// Returns true if the result is [`Self::SubmissionQueueEmpty`]`.
+    /// Returns true if the result is [`Self::QueueEmpty`]`.
     #[must_use]
     pub fn is_queue_empty(&self) -> bool {
         matches!(self, Self::QueueEmpty)

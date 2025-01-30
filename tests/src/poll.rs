@@ -4,8 +4,8 @@ impl TestingContext {
     /// Utility to allow future asynchronous polling.
     pub async fn async_poll(
         &self,
-        maintain: wgpu::PollType,
+        poll_type: wgpu::PollType,
     ) -> Result<wgpu::PollStatus, wgpu::PollError> {
-        self.device.poll(maintain)
+        self.device.poll(poll_type)
     }
 }
