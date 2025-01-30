@@ -50,6 +50,8 @@ Bottom level categories:
 
   By @kpreid in [#7063](https://github.com/gfx-rs/wgpu/pull/7063).
 
+- Added `Buffer` methods corresponding to `BufferSlice` methods, so you can skip creating a `BufferSlice` when it offers no benefit, and `BufferSlice::slice()` for sub-slicing a slice. By @kpreid in [#7123](https://github.com/gfx-rs/wgpu/pull/7123).
+
 #### Naga
 
 - Support @must_use attribute on function declarations. By @turbocrime in [#6801](https://github.com/gfx-rs/wgpu/pull/6801).
