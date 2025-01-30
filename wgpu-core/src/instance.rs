@@ -4,7 +4,7 @@ use std::sync::Arc;
 use hashbrown::HashMap;
 
 // XXX TODO MORE FOCUSED allow directive
-#[allow(dead_code)]
+#[allow(unused_imports)]
 use crate::{
     api_log, api_log_debug,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
