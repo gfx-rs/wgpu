@@ -1,4 +1,8 @@
-use wgpu::{include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, ComputePassDescriptor, ComputePipelineDescriptor, DownlevelFlags, Extent3d, Features, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
+use wgpu::{
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, ComputePassDescriptor,
+    ComputePipelineDescriptor, DownlevelFlags, Extent3d, Features, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages,
+};
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
@@ -27,24 +31,26 @@ fn texture_binding(ctx: TestingContext) {
         usage: TextureUsages::STORAGE_BINDING,
         view_formats: &[],
     });
-    let shader = ctx.device.create_shader_module(include_wgsl!("shader.wgsl"));
-    let pipeline = ctx.device.create_compute_pipeline(&ComputePipelineDescriptor {
-        label: None,
-        layout: None,
-        module: &shader,
-        entry_point: None,
-        compilation_options: Default::default(),
-        cache: None,
-    });
+    let shader = ctx
+        .device
+        .create_shader_module(include_wgsl!("shader.wgsl"));
+    let pipeline = ctx
+        .device
+        .create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &shader,
+            entry_point: None,
+            compilation_options: Default::default(),
+            cache: None,
+        });
     let bind = ctx.device.create_bind_group(&BindGroupDescriptor {
         label: None,
         layout: &pipeline.get_bind_group_layout(0),
-        entries: &[
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(&texture.create_view(&Default::default())),
-            }
-        ],
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: BindingResource::TextureView(&texture.create_view(&Default::default())),
+        }],
     });
 
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
