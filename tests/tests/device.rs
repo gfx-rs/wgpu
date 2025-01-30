@@ -27,9 +27,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
             });
         }
 
-        ctx.async_poll(wgpu::PollType::Poll)
-            .await
-            .unwrap();
+        ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
@@ -617,6 +615,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         assert!(ctx
             .async_poll(wgpu::PollType::wait())
             .await
+            .unwrap()
             .is_queue_empty());
 
         assert!(

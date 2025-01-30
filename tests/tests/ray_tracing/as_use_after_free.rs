@@ -89,7 +89,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
 
     // Drop the blas and ensure that if it was going to die, it is dead.
     drop(blas);
-    ctx.device.poll(PollType::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     // build the tlas package to ensure the blas is dropped
     let mut encoder = ctx
@@ -124,7 +124,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
 
     // Drop the TLAS package and ensure that if it was going to die, it is dead.
     drop(tlas_package);
-    ctx.device.poll(PollType::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     // Run the pass with the bind group that references the TLAS package.
     let mut encoder = ctx

@@ -76,9 +76,7 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration =
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.async_poll(PollType::wait_for(index))
-            .await
-            .unwrap();
+        ctx.async_poll(PollType::wait_for(index)).await.unwrap();
     });
 
 #[gpu_test]
@@ -90,9 +88,7 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
         ctx.async_poll(PollType::wait_for(index.clone()))
             .await
             .unwrap();
-        ctx.async_poll(PollType::wait_for(index))
-            .await
-            .unwrap();
+        ctx.async_poll(PollType::wait_for(index)).await.unwrap();
     });
 
 #[gpu_test]
@@ -103,12 +99,8 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
 
         let index1 = ctx.queue.submit(Some(cmd_buf1));
         let index2 = ctx.queue.submit(Some(cmd_buf2));
-        ctx.async_poll(PollType::wait_for(index2))
-            .await
-            .unwrap();
-        ctx.async_poll(PollType::wait_for(index1))
-            .await
-            .unwrap();
+        ctx.async_poll(PollType::wait_for(index2)).await.unwrap();
+        ctx.async_poll(PollType::wait_for(index1)).await.unwrap();
     });
 
 /// Submit a command buffer to the wrong device. A wait poll shouldn't hang.
@@ -142,5 +134,5 @@ async fn wait_after_bad_submission(ctx: TestingContext) {
     // Specifically, the failed submission should not cause a new fence value to
     // be allocated that will not be signalled until further work is
     // successfully submitted, causing a greater fence value to be signalled.
-    device2.poll(wgpu::PollType::Wait);
+    device2.poll(wgpu::PollType::Wait).unwrap();
 }
