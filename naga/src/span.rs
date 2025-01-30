@@ -325,32 +325,6 @@ pub(crate) trait AddSpan: Sized {
     fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
 }
 
-/// Trait abstracting over getting a span from an [`Arena`] or a [`UniqueArena`].
-pub(crate) trait SpanProvider<T> {
-    fn get_span(&self, handle: Handle<T>) -> Span;
-    fn get_span_context(&self, handle: Handle<T>) -> SpanContext {
-        match self.get_span(handle) {
-            x if !x.is_defined() => (Default::default(), "".to_string()),
-            known => (
-                known,
-                format!("{} {:?}", std::any::type_name::<T>(), handle),
-            ),
-        }
-    }
-}
-
-impl<T> SpanProvider<T> for Arena<T> {
-    fn get_span(&self, handle: Handle<T>) -> Span {
-        self.get_span(handle)
-    }
-}
-
-impl<T> SpanProvider<T> for UniqueArena<T> {
-    fn get_span(&self, handle: Handle<T>) -> Span {
-        self.get_span(handle)
-    }
-}
-
 impl<E> AddSpan for E
 where
     E: Error,
@@ -374,6 +348,32 @@ where
         arena: &A,
     ) -> WithSpan<Self> {
         WithSpan::new(self).with_handle(handle, arena)
+    }
+}
+
+/// Trait abstracting over getting a span from an [`Arena`] or a [`UniqueArena`].
+pub(crate) trait SpanProvider<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span;
+    fn get_span_context(&self, handle: Handle<T>) -> SpanContext {
+        match self.get_span(handle) {
+            x if !x.is_defined() => (Default::default(), "".to_string()),
+            known => (
+                known,
+                format!("{} {:?}", std::any::type_name::<T>(), handle),
+            ),
+        }
+    }
+}
+
+impl<T> SpanProvider<T> for Arena<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span {
+        self.get_span(handle)
+    }
+}
+
+impl<T> SpanProvider<T> for UniqueArena<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span {
+        self.get_span(handle)
     }
 }
 
