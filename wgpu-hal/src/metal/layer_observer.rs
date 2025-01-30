@@ -172,7 +172,7 @@ extern "C" fn dealloc(this: &Object, _cmd: Sel) {
     // Load the root layer if it still exists, and deregister the observer.
     //
     // This is not entirely sound, as the ObserverLayer _could_ have been
-    // moved to another layer; but Wgpu does do that, so it should be fine.
+    // moved to another layer; but Wgpu doesn't do that, so it should be fine.
     //
     // `raw-window-metal` uses a weak instance variable to do it correctly:
     // https://docs.rs/raw-window-metal/1.1.0/src/raw_window_metal/observer.rs.html#74-132
