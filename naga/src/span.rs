@@ -327,10 +327,7 @@ pub(crate) trait AddSpan: Sized {
     fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
 }
 
-impl<E> AddSpan for E
-where
-    E: Error,
-{
+impl<E> AddSpan for E {
     type Output = WithSpan<Self>;
 
     fn with_span(self) -> WithSpan<Self> {
