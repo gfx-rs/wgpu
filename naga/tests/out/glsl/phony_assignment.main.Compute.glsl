@@ -19,5 +19,6 @@ void main() {
     int _e6 = five();
     int _e7 = five();
     float phony_2 = _group_0_binding_0_cs;
+    return;
 }
 

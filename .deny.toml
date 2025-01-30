@@ -41,8 +41,6 @@ private = { ignore = true }
 [sources]
 allow-git = [
     # Waiting on releases; used in examples only
-    "https://github.com/Razaekel/noise-rs",
-
     "https://github.com/grovesNL/glow",
     "https://github.com/gfx-rs/metal-rs",
 ]

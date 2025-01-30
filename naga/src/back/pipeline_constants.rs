@@ -6,7 +6,8 @@ use crate::{
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
     Span, Statement, TypeInner, WithSpan,
 };
-use std::{borrow::Cow, collections::HashSet, mem};
+use hashbrown::HashSet;
+use std::{borrow::Cow, mem};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]

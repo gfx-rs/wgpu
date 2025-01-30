@@ -7,5 +7,6 @@ const gf: f32 = 2f;
 
 fn const_in_fn() {
     const e = vec3<i32>(4i, 4i, 4i);
+    return;
 }
 

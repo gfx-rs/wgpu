@@ -60,14 +60,13 @@ impl State {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: self.surface_format,
-            // Without add_srgb_suffix() the image we will be working with
-            // might not be "gamma correct".
+            // Request compatibility with the sRGB-format texture view we‘re going to create later.
             view_formats: vec![self.surface_format.add_srgb_suffix()],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             width: self.size.width,
             height: self.size.height,
             desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::Mailbox,
+            present_mode: wgpu::PresentMode::AutoVsync,
         };
         self.surface.configure(&self.device, &surface_config);
     }
@@ -87,7 +86,12 @@ impl State {
             .expect("failed to acquire next swapchain texture");
         let texture_view = surface_texture
             .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+            .create_view(&wgpu::TextureViewDescriptor {
+                // Without add_srgb_suffix() the image we will be working with
+                // might not be "gamma correct".
+                format: Some(self.surface_format.add_srgb_suffix()),
+                ..Default::default()
+            });
 
         // Renders a GREEN screen
         let mut encoder = self.device.create_command_encoder(&Default::default());

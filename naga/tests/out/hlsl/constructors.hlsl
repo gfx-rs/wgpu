@@ -88,4 +88,5 @@ void main()
     int cit2_[4] = Constructarray4_int_(0, 1, 2, 3);
     uint2 ic4_ = uint2(0u, 0u);
     float2x3 ic5_ = float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
+    return;
 }

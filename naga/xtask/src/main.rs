@@ -16,7 +16,6 @@ mod glob;
 mod jobserver;
 mod path;
 mod process;
-mod result;
 mod validate;
 
 fn main() -> ExitCode {
