@@ -300,6 +300,9 @@ jobs:
         run: |
           set -e
 
+          # install cargo-hack
+          cargo install cargo-hack
+
           # hack check each feature
           cargo hack --workspace --feature-powerset --depth 1 clippy
 
