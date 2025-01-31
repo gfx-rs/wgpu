@@ -37,5 +37,5 @@ bincode.workspace = true
 codespan-reporting.workspace = true
 env_logger.workspace = true
 argh.workspace = true
-anyhow.workspace = true
+anyhow = { workspace = true, features = ["std"] }
 log.workspace = true
