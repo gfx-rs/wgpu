@@ -22,6 +22,10 @@ fn return_arrf32_ai() -> array<f32, 4> {
     return array<f32, 4>(1f, 1f, 1f, 1f);
 }
 
+fn return_const_f32_const_ai() -> f32 {
+    return 1f;
+}
+
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
     return;
