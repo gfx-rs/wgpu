@@ -36,4 +36,5 @@ fn main() {
     let quantizeToF16_b = quantizeToF16(vec2<f32>(1f, 1f));
     let quantizeToF16_c = quantizeToF16(vec3<f32>(1f, 1f, 1f));
     let quantizeToF16_d = quantizeToF16(vec4<f32>(1f, 1f, 1f, 1f));
+    return;
 }

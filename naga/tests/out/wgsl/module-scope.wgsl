@@ -21,5 +21,6 @@ fn call() {
     statement();
     let _e0 = returns();
     let s = textureSample(Texture, Sampler, vec2(1f));
+    return;
 }
 
