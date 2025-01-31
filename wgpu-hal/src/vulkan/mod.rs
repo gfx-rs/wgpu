@@ -666,7 +666,7 @@ impl Drop for DeviceShared {
 
 pub struct Device {
     shared: Arc<DeviceShared>,
-    mem_allocator: Mutex<gpu_alloc::GpuAllocator<vk::DeviceMemory>>,
+    mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
     desc_allocator:
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
@@ -678,7 +678,8 @@ pub struct Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { self.mem_allocator.lock().cleanup(&*self.shared) };
+        // TODO: how to cleanup gpu-allocator's vulkan memory allocator?
+        // unsafe { self.mem_allocator.lock().cleanup(&*self.shared) };
         unsafe { self.desc_allocator.lock().cleanup(&*self.shared) };
     }
 }
@@ -776,7 +777,8 @@ impl Drop for Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
+    // TODO: Do we need to wrap this in a mutex?
+    allocation: Option<gpu_allocator::vulkan::Allocation>,
 }
 
 impl crate::DynBuffer for Buffer {}
@@ -785,7 +787,8 @@ impl crate::DynBuffer for Buffer {}
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    // TODO: Do we need to wrap this in a mutex?
+    allocation: gpu_allocator::vulkan::Allocation,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
@@ -795,7 +798,7 @@ pub struct Texture {
     raw: vk::Image,
     drop_guard: Option<crate::DropGuard>,
     external_memory: Option<vk::DeviceMemory>,
-    block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    block: Option<gpu_allocator::vulkan::Allocation>,
     usage: wgt::TextureUses,
     format: wgt::TextureFormat,
     raw_flags: vk::ImageCreateFlags,

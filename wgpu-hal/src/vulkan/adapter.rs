@@ -1986,8 +1986,6 @@ impl super::Adapter {
         };
 
         let mem_allocator = {
-            let limits = self.phd_capabilities.properties.limits;
-
             // Note: the parameters here are not set in stone nor where they picked with
             // strong confidence.
             // `final_free_list_chunk` should be bigger than starting_free_list_chunk if
@@ -1999,72 +1997,42 @@ impl super::Adapter {
             // (then VMA doubles the block size each time it needs a new block).
             // At some point it would be good to experiment with real workloads
             //
-            // TODO(#5925): The plan is to switch the Vulkan backend from `gpu_alloc` to
-            // `gpu_allocator` which has a different (simpler) set of configuration options.
-            //
             // TODO: These parameters should take hardware capabilities into account.
             let mb = 1024 * 1024;
-            let perf_cfg = gpu_alloc::Config {
-                starting_free_list_chunk: 128 * mb,
-                final_free_list_chunk: 512 * mb,
-                minimal_buddy_size: 1,
-                initial_buddy_dedicated_size: 8 * mb,
-                dedicated_threshold: 32 * mb,
-                preferred_dedicated_threshold: mb,
-                transient_dedicated_threshold: 128 * mb,
-            };
-            let mem_usage_cfg = gpu_alloc::Config {
-                starting_free_list_chunk: 8 * mb,
-                final_free_list_chunk: 64 * mb,
-                minimal_buddy_size: 1,
-                initial_buddy_dedicated_size: 8 * mb,
-                dedicated_threshold: 8 * mb,
-                preferred_dedicated_threshold: mb,
-                transient_dedicated_threshold: 16 * mb,
-            };
-            let config = match memory_hints {
-                wgt::MemoryHints::Performance => perf_cfg,
-                wgt::MemoryHints::MemoryUsage => mem_usage_cfg,
+            let allocation_sizes = match memory_hints {
+                wgt::MemoryHints::Performance => gpu_allocator::AllocationSizes::default(),
+                wgt::MemoryHints::MemoryUsage => {
+                    gpu_allocator::AllocationSizes::new(8 * mb, 4 * mb)
+                }
                 wgt::MemoryHints::Manual {
                     suballocated_device_memory_block_size,
-                } => gpu_alloc::Config {
-                    starting_free_list_chunk: suballocated_device_memory_block_size.start,
-                    final_free_list_chunk: suballocated_device_memory_block_size.end,
-                    initial_buddy_dedicated_size: suballocated_device_memory_block_size.start,
-                    ..perf_cfg
-                },
+                } => {
+                    // TODO: Would it be useful to expose the host size in memory hints
+                    // instead of always using half of the device size?
+                    let device_size = suballocated_device_memory_block_size.start;
+                    let host_size = device_size / 2;
+                    gpu_allocator::AllocationSizes::new(device_size, host_size)
+                }
             };
 
-            let max_memory_allocation_size =
-                if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
-                    maintenance_3.max_memory_allocation_size
-                } else {
-                    u64::MAX
-                };
-            let properties = gpu_alloc::DeviceProperties {
-                max_memory_allocation_count: limits.max_memory_allocation_count,
-                max_memory_allocation_size,
-                non_coherent_atom_size: limits.non_coherent_atom_size,
-                memory_types: memory_types
-                    .iter()
-                    .map(|memory_type| gpu_alloc::MemoryType {
-                        props: gpu_alloc::MemoryPropertyFlags::from_bits_truncate(
-                            memory_type.property_flags.as_raw() as u8,
-                        ),
-                        heap: memory_type.heap_index,
-                    })
-                    .collect(),
-                memory_heaps: mem_properties
-                    .memory_heaps_as_slice()
-                    .iter()
-                    .map(|&memory_heap| gpu_alloc::MemoryHeap {
-                        size: memory_heap.size,
-                    })
-                    .collect(),
-                buffer_device_address: enabled_extensions
-                    .contains(&khr::buffer_device_address::NAME),
-            };
-            gpu_alloc::GpuAllocator::new(config, properties)
+            match gpu_allocator::vulkan::Allocator::new(
+                &gpu_allocator::vulkan::AllocatorCreateDesc {
+                    // TODO: Can we clone the arc for these instead somehow?
+                    instance: shared.instance.raw.clone(),
+                    device: shared.raw.clone(),
+                    physical_device: self.raw_physical_device(),
+                    debug_settings: Default::default(),
+                    // TODO: How do we decide if this should be enabled?
+                    buffer_device_address: false,
+                    allocation_sizes,
+                },
+            ) {
+                Ok(allocator) => allocator,
+                Err(e) => {
+                    log::error!("Failed to create vulkan allocator, error: {}", e);
+                    Err(e)?
+                }
+            }
         };
         let desc_allocator = gpu_descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
