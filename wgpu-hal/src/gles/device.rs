@@ -1,6 +1,7 @@
 use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
+use naga::FastHashMap;
 use std::{
     cmp::max,
     convert::TryInto,
@@ -16,7 +17,7 @@ type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::ShaderModule>,
 );
-type NameBindingMap = rustc_hash::FxHashMap<String, (super::BindingRegister, u8)>;
+type NameBindingMap = FastHashMap<String, (super::BindingRegister, u8)>;
 
 struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,

@@ -283,9 +283,15 @@ pub const BOOL_WIDTH: Bytes = 1;
 pub const ABSTRACT_WIDTH: Bytes = 8;
 
 /// Hash map that is faster but not resilient to DoS attacks.
-pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
+/// (Similar to rustc_hash::FxHashMap but using hashbrown::HashMap instead of std::collections::HashMap.)
+/// To construct a new instance: `FastHashMap::default()`
+pub type FastHashMap<K, T> =
+    hashbrown::HashMap<K, T, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
 /// Hash set that is faster but not resilient to DoS attacks.
-pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
+/// (Similar to rustc_hash::FxHashSet but using hashbrown::HashSet instead of std::collections::HashMap.)
+pub type FastHashSet<K> =
+    hashbrown::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
 /// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).
@@ -325,6 +331,7 @@ pub(crate) type NamedExpressions = FastIndexMap<Handle<Expression>, String>;
 pub struct EarlyDepthTest {
     pub conservative: Option<ConservativeDepth>,
 }
+
 /// Enables adjusting depth without disabling early Z.
 ///
 /// To use in a shader:

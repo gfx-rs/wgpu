@@ -13,4 +13,5 @@ void main(uint3 id : SV_DispatchThreadID)
     const int _e6 = five();
     const int _e7 = five();
     float phony_2 = binding;
+    return;
 }

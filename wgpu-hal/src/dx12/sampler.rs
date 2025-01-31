@@ -2,7 +2,7 @@
 //!
 //! Nearly identical to the Vulkan sampler cache, with added descriptor heap management.
 
-use std::collections::{hash_map::Entry, HashMap};
+use hashbrown::{hash_map::Entry, HashMap};
 
 use ordered_float::OrderedFloat;
 use parking_lot::Mutex;

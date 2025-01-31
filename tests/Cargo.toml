@@ -8,6 +8,7 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+rust-version.workspace = true
 autotests = false
 publish = false
 
@@ -70,3 +71,6 @@ wasm-bindgen-futures.workspace = true
 wasm-bindgen-test.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
+
+[lints.clippy]
+disallowed_types = "allow"

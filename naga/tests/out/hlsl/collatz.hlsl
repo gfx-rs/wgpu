@@ -6,7 +6,10 @@ uint collatz_iterations(uint n_base)
     uint i = 0u;
 
     n = n_base;
+    uint2 loop_bound = uint2(0u, 0u);
     while(true) {
+        if (all(loop_bound == uint2(4294967295u, 4294967295u))) { break; }
+        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
         uint _e4 = n;
         if ((_e4 > 1u)) {
         } else {

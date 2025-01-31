@@ -32,9 +32,9 @@ env:
 
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
-  MESA_VERSION: "24.2.3"
+  MESA_VERSION: "24.3.4"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
-  CI_BINARY_BUILD: "build19"
+  CI_BINARY_BUILD: "build20"
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.83"
@@ -476,7 +476,7 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -561,7 +561,7 @@ jobs:
           echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
 
       - name: (linux) install vulkan sdk
-        if: matrix.os == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |
           set -e
@@ -570,13 +570,13 @@ jobs:
 
           # vulkan sdk
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-jammy.list
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
 
           sudo apt-get update
           sudo apt install -y vulkan-sdk
 
       - name: (linux) install mesa
-        if: matrix.os == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |
           set -e
@@ -780,3 +780,22 @@ jobs:
           command: check bans licenses sources
           arguments: --all-features --workspace
           rust-version: ${{ env.REPO_MSRV }}
+
+  check-feature-dependencies:
+    # runtime is normally 1 minute
+    timeout-minutes: 5
+
+    name: "Feature Dependencies"
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      - name: Run `cargo feature-dependencies`
+        run: cargo xtask check-feature-dependencies

@@ -50,3 +50,6 @@ path = "fuzz_targets/ir.rs"
 bench = false
 test = false
 doc = false
+
+[lints.clippy]
+disallowed_types = "allow"
