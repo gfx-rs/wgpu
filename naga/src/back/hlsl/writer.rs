@@ -2452,7 +2452,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Proceed();")?;
                 }
+                RayQueryFunction::GenerateIntersection { hit_t } => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ".CommitProceduralPrimitiveHit(")?;
+                    self.write_expr(module, hit_t, func_ctx)?;
+                    writeln!(self.out, ");")?;
+                }
+                RayQueryFunction::ConfirmIntersection => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
+                }
                 RayQueryFunction::Terminate => {
+                    write!(self.out, "{level}")?;
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Abort();")?;
                 }

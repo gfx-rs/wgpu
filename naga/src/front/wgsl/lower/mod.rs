@@ -2692,6 +2692,40 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::RayQuery { query, fun }, span);
                             return Ok(Some(result));
                         }
+                        "rayQueryGenerateIntersection" => {
+                            let mut args = ctx.prepare_args(arguments, 2, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            let hit_t = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let fun = crate::RayQueryFunction::GenerateIntersection { hit_t };
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(None);
+                        }
+                        "rayQueryConfirmIntersection" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let fun = crate::RayQueryFunction::ConfirmIntersection;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(None);
+                        }
+                        "rayQueryTerminate" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let fun = crate::RayQueryFunction::Terminate;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(None);
+                        }
                         "rayQueryGetCommittedIntersection" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
                             let query = self.ray_query_pointer(args.next()?, ctx)?;

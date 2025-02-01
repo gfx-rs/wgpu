@@ -150,6 +150,16 @@ void main_candidate()
     float3 dir_2 = float3(0.0, 1.0, 0.0);
     rq.TraceRayInline(acc_struct, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2)));
     RayIntersection intersection_1 = GetCandidateIntersection(rq);
-    output.Store(0, asuint(uint((intersection_1.kind == 3u))));
-    return;
+    if ((intersection_1.kind == 3u)) {
+        rq.CommitProceduralPrimitiveHit(10.0);
+        return;
+    } else {
+        if ((intersection_1.kind == 1u)) {
+            rq.CommitNonOpaqueTriangleHit();
+            return;
+        } else {
+            rq.Abort();
+            return;
+        }
+    }
 }

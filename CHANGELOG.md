@@ -45,6 +45,7 @@ Bottom level categories:
 #### Naga
 
 - Support @must_use attribute on function declarations. By @turbocrime in [#6801](https://github.com/gfx-rs/wgpu/pull/6801).
+- Support for generating the candidate intersections from AABB geometry, and confirming the hits. By @kvark in [#7047](https://github.com/gfx-rs/wgpu/pull/7047).
 
 ### Changes
 

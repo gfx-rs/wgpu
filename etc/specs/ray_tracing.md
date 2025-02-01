@@ -2,7 +2,7 @@
 
 🧪Experimental🧪
 
-`wgpu` supports an experimental version of ray tracing which is subject to change. The extensions allow for acceleration structures to be created and built (with 
+`wgpu` supports an experimental version of ray tracing which is subject to change. The extensions allow for acceleration structures to be created and built (with
 `Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` enabled) and interacted with in shaders. Currently `naga` only supports ray queries
 (accessible with `Features::EXPERIMENTAL_RAY_QUERY` enabled in wgpu).
 
@@ -10,15 +10,15 @@
 to breaking changes, suggestions for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040).
 Large changes may mean that this documentation may be out of date.
 
-***This is not*** an introduction to raytracing, and assumes basic prior knowledge, to look at the fundamentals look at 
+***This is not*** an introduction to raytracing, and assumes basic prior knowledge, to look at the fundamentals look at
 an [introduction](https://developer.nvidia.com/blog/introduction-nvidia-rtx-directx-ray-tracing/).
 
 ## `wgpu`'s raytracing API:
 
 The documentation and specific details of the functions and structures provided
-can be found with their definitions.  
+can be found with their definitions.
 
-A [`Blas`] can be created with [`Device::create_blas`].  
+A [`Blas`] can be created with [`Device::create_blas`].
 A [`Tlas`] can be created with [`Device::create_tlas`].
 
 Unless one is planning on using the unsafe building API (not recommended for beginners) a [`Tlas`] should be put inside
@@ -57,12 +57,21 @@ rayQueryInitialize(rq: ptr<function, ray_query>, acceleration_structure: acceler
 // - The hit is considered `Candidate` if this function returns true, and the hit is considered `Committed` if
 //   this function returns false.
 // - A `Candidate` intersection interrupts the ray traversal.
-// - A `Candidate` intersection may happen anywhere along the ray, it should not be relied on to give the closest hit. A 
+// - A `Candidate` intersection may happen anywhere along the ray, it should not be relied on to give the closest hit. A
 //   `Candidate` intersection is to allow the user themselves to decide if that intersection is valid*. If one wants to get
 //   the closest hit a `Committed` intersection should be used.
 // - Calling this function multiple times will cause the ray traversal to continue if it was interrupted by a `Candidate`
 //   intersection.
-rayQueryProceed(rq: ptr<function, ray_query>) -> bool`
+rayQueryProceed(rq: ptr<function, ray_query>) -> bool
+
+// - Generates a hit from procedural geometry at a particular distance.
+rayQueryGenerateIntersection(hit_t: f32)
+
+// - Commits a hit from triangular non-opaque geometry.
+rayQueryConfirmIntersection()
+
+// - Aborts the query.
+rayQueryTerminate()
 
 // - Returns intersection details about a hit considered `Committed`.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection
@@ -71,19 +80,24 @@ rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersectio
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersection
 ```
 
-*The API to commit a candidate intersection is not yet implemented but would be possible to be user implemented.
-
 > [!CAUTION]
-> 
+>
 > ### ⚠️Undefined behavior ⚠️:
 > - Calling `rayQueryGetCommittedIntersection` or `rayQueryGetCandidateIntersection` when `rayQueryProceed` has not been
 > called on this ray query since it was initialized (or if the ray query has not been previously initialized).
 > - Calling `rayQueryGetCommittedIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
->   `Candidate`. 
+>   `Candidate`.
 > - Calling `rayQueryGetCandidateIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
 >   `Committed`.
 > - Calling `rayQueryProceed` when `rayQueryInitialize` has not previously been called on this ray query
-> 
+> - Calling `rayQueryGenerateIntersection` on a query with last intersection kind not being
+>   `RAY_QUERY_INTERSECTION_AABB`,
+> - Calling `rayQueryGenerateIntersection` with `hit_t` outside of `RayDesc::t_min .. RayDesc::t_max` range.
+>   or when `rayQueryProceed`'s latest return on this ray query is not considered `Candidate`.
+> - Calling `rayQueryConfirmIntersection` on a query with last intersection kind not being
+>   `RAY_QUERY_INTERSECTION_TRIANGLE`,
+>   or when `rayQueryProceed`'s latest return on this ray query is not considered `Candidate`.
+>
 > *this is only known undefined behaviour, and will be worked around in the future.
 
 ```wgsl

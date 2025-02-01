@@ -821,6 +821,10 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Proceed { ref mut result } => {
                     adjust(result);
                 }
+                crate::RayQueryFunction::GenerateIntersection { ref mut hit_t } => {
+                    adjust(hit_t);
+                }
+                crate::RayQueryFunction::ConfirmIntersection => {}
                 crate::RayQueryFunction::Terminate => {}
             }
         }

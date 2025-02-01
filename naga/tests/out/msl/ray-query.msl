@@ -58,7 +58,6 @@ RayIntersection query_loop(
         if (metal::all(loop_bound == uint2(4294967295u))) { break; }
         loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
         bool _e9 = rq_1.ready;
-        rq_1.ready = false;
         if (_e9) {
         } else {
             break;
@@ -93,7 +92,6 @@ kernel void main_(
 
 kernel void main_candidate(
   metal::raytracing::instance_acceleration_structure acc_struct [[user(fake0)]]
-, device Output& output [[user(fake0)]]
 ) {
     _RayQuery rq = {};
     metal::float3 pos_2 = metal::float3(0.0);
@@ -105,6 +103,14 @@ kernel void main_candidate(
     rq.intersector.accept_any_intersection((_e12.flags & 4) != 0);
     rq.intersection = rq.intersector.intersect(metal::raytracing::ray(_e12.origin, _e12.dir, _e12.tmin, _e12.tmax), acc_struct, _e12.cull_mask);    rq.ready = true;
     RayIntersection intersection_1 = RayIntersection {_map_intersection_type(rq.intersection.type), rq.intersection.distance, rq.intersection.user_instance_id, rq.intersection.instance_id, {}, rq.intersection.geometry_id, rq.intersection.primitive_id, rq.intersection.triangle_barycentric_coord, rq.intersection.triangle_front_facing, {}, rq.intersection.object_to_world_transform, rq.intersection.world_to_object_transform};
-    output.visible = static_cast<uint>(intersection_1.kind == 3u);
-    return;
+    if (intersection_1.kind == 3u) {
+        return;
+    } else {
+        if (intersection_1.kind == 1u) {
+            return;
+        } else {
+            rq.ready = false;
+            return;
+        }
+    }
 }
