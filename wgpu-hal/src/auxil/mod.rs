@@ -4,6 +4,9 @@ pub(super) mod dxgi;
 #[cfg(all(native, feature = "renderdoc"))]
 pub(super) mod renderdoc;
 
+// #[cfg(any(dx12, vulkan))]
+pub(super) mod error_impl;
+
 pub mod db {
     pub mod amd {
         pub const VENDOR: u32 = 0x1002;
