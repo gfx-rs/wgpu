@@ -154,7 +154,8 @@ ash = "0.38.0"
 gpu-descriptor = "0.3"
 
 # DX12 and Vulkan shared dependencies
-gpu-allocator = { version = "0.27", default-features = false }
+# gpu-allocator = { version = "0.27", default-features = false }
+gpu-allocator = { git = "https://github.com/Traverse-Research/gpu-allocator.git", rev = "5d4b86194139374d1bab644a610feba0da913a2d", default-features = false }
 
 # DX12 dependencies
 range-alloc = "0.1"
