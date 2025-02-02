@@ -20,30 +20,42 @@
 # use `direnv allow` to automatically always use this file
 # if you're navigating into this or a subfolder.
 
-{ pkgs ? import <nixpkgs> {} }:
+{
+  pkgs ? import <nixpkgs> { },
+}:
 
 pkgs.mkShell rec {
   buildInputs = with pkgs; [
     # necessary for building wgpu in 3rd party packages (in most cases)
     libxkbcommon
-    wayland xorg.libX11 xorg.libXcursor xorg.libXrandr xorg.libXi
+    wayland
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXrandr
+    xorg.libXi
     alsa-lib
-    fontconfig freetype
-    shaderc directx-shader-compiler
-    pkg-config cmake
+    fontconfig
+    freetype
+    shaderc
+    directx-shader-compiler
+    pkg-config
+    cmake
     mold # could use any linker, needed for rustix (but mold is fast)
 
     libGL
-    vulkan-headers vulkan-loader
-    vulkan-tools vulkan-tools-lunarg
+    vulkan-headers
+    vulkan-loader
+    vulkan-tools
+    vulkan-tools-lunarg
     vulkan-extension-layer
     vulkan-validation-layers # don't need them *strictly* but immensely helpful
 
     # necessary for developing (all of) wgpu itself
-    cargo-nextest cargo-fuzz
+    cargo-nextest
+    cargo-fuzz
 
     # nice for developing wgpu itself
-    typos 
+    typos
 
     # if you don't already have rust installed through other means,
     # this shell.nix can do that for you with this below
@@ -51,7 +63,8 @@ pkgs.mkShell rec {
     rustup
 
     # nice tools
-    gdb rr
+    gdb
+    rr
     evcxr
     valgrind
     renderdoc
