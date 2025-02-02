@@ -50,6 +50,7 @@ Bottom level categories:
 
 #### General
 
+- Avoid using default features in many dependencies, etc. By Brody in [#7031](https://github.com/gfx-rs/wgpu/pull/7031)
 - Use `hashbrown` to simplify no-std support. By Brody in [#6938](https://github.com/gfx-rs/wgpu/pull/6938) & [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
 - Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
@@ -85,6 +86,10 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 #### Vulkan
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
+
+#### Dx12
+
+- Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993)
 
 #### WebGPU
 

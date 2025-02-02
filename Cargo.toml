@@ -72,12 +72,13 @@ wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "24.0.0", path = "./tests" }
 wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
 
-anyhow = "1.0.95"
-argh = "0.1.13"
-arrayvec = "0.7"
+anyhow = { version = "1.0.95", default-features = false }
 approx = "0.5"
+argh = "0.1.13"
+arrayvec = { version = "0.7.6", default-features = false }
 bincode = "1"
-bit-vec = "0.8"
+bit-set = { version = "0.8", default-features = false }
+bit-vec = { version = "0.8", default-features = false }
 bitflags = "2.7"
 bytemuck = { version = "1.21", features = ["derive", "min_const_generics"] }
 cfg_aliases = "0.2.1"
@@ -99,10 +100,10 @@ hashbrown = { version = "0.15.2", default-features = false, features = [
 ] }
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
-indexmap = "2"
+indexmap = { version = "2.7.1", default-features = false }
 itertools = { version = "0.13.0" }
 ktx2 = "0.3"
-libc = "0.2"
+libc = { version = "0.2", default-features = false }
 libloading = "0.8"
 libtest-mimic = "0.8.1"
 log = "0.4"
@@ -110,9 +111,10 @@ nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
-once_cell = "1.20.2"
+# NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
+once_cell = { version = "1.20.2", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
-ordered-float = ">=3,<=4.6"
+ordered-float = { version = ">=3,<=4.6", default-features = false }
 parking_lot = "0.12.1"
 pico-args = { version = "0.5.0", features = [
     "eq-separator",
@@ -122,7 +124,7 @@ pico-args = { version = "0.5.0", features = [
 png = "0.17.16"
 pollster = "0.4"
 profiling = { version = "1", default-features = false }
-raw-window-handle = "0.6"
+raw-window-handle = { version = "0.6", default-features = false }
 rayon = "1"
 renderdoc-sys = "1.1.0"
 ron = "0.8"
@@ -134,10 +136,10 @@ serde_json = "1.0.137"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
-strum = { version = "0.26.0", features = ["derive"] }
+strum = { version = "0.26.3", default-features = false, features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
-thiserror = "2"
+thiserror = { version = "2", default-features = false }
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
@@ -153,7 +155,6 @@ gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
 # DX12 dependencies
-bit-set = "0.8"
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false }

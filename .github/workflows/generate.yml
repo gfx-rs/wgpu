@@ -28,6 +28,8 @@ jobs:
         include:
           - name: "01-hello-compute"
             path: "examples/standalone/01_hello_compute"
+          - name: "02-hello-window"
+            path: "examples/standalone/02_hello_window"
 
     name: "${{ matrix.name }}"
 
