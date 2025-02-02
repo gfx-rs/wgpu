@@ -38,14 +38,14 @@ impl<T> Recyclable for Vec<T> {
     }
 }
 
-impl<K, V, S: Clone> Recyclable for std::collections::HashMap<K, V, S> {
+impl<K, V, S: Clone> Recyclable for hashbrown::HashMap<K, V, S> {
     fn recycle(mut self) -> Self {
         self.clear();
         self
     }
 }
 
-impl<K, S: Clone> Recyclable for std::collections::HashSet<K, S> {
+impl<K, S: Clone> Recyclable for hashbrown::HashSet<K, S> {
     fn recycle(mut self) -> Self {
         self.clear();
         self

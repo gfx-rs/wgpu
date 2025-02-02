@@ -60,7 +60,7 @@ strict_asserts = ["wgpu-types/strict_asserts"]
 indirect-validation = ["naga/wgsl-in"]
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde"]
+serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
 
 ## Enable API tracing.
 trace = ["dep:ron", "serde", "naga/serialize"]

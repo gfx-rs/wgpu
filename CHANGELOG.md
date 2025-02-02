@@ -50,22 +50,16 @@ Bottom level categories:
 
 #### General
 
+- Use `hashbrown` to simplify no-std support. By Brody in [#6938](https://github.com/gfx-rs/wgpu/pull/6938) & [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
+- Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
+  [#6780](https://github.com/gfx-rs/wgpu/pull/6780)
 
 ##### Refactored internal trace path parameter
 
 Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
 
 By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
-
-##### Start using `hashbrown`
-
-Use `hashbrown` in `wgpu-core`, `wgpu-hal` & `wgpu-info` to simplify no-std support. (This may help improve performance as well.)
-
-By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
-
-- Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
-  [#6780](https://github.com/gfx-rs/wgpu/pull/6780)
 
 #### Vulkan
 
@@ -75,20 +69,32 @@ By @brodycj in [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 
 ### Bug Fixes
 
+#### Naga
+
+- Fix some instances of functions which have a return type but don't return a value being incorrectly validated. By @jamienicol in [#7013](https://github.com/gfx-rs/wgpu/pull/7013).
+
 #### General
 
 - Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#6933](https://github.com/gfx-rs/wgpu/pull/6933).
 - Add Flush to GL Queue::submit. By @cwfitzgerald in [#6941](https://github.com/gfx-rs/wgpu/pull/6941).
 - Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
 - Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
+- Fix drop order in `Surface`. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
+- Fix a possible deadlock within `Queue::write_texture`. By @metamuffin in [#7004](https://github.com/gfx-rs/wgpu/pull/7004)
 
 #### Vulkan
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 
+#### WebGPU
+
+- Improve efficiency of dropping read-only buffer mappings. By @kpreid in [#7007](https://github.com/gfx-rs/wgpu/pull/7007).
+
 ### Documentation
 
-- Improved documentation around pipeline caches. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978).
+- Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
+
+- Added a hello window example. By @laycookie in [#6992](https://github.com/gfx-rs/wgpu/pull/6992).
 
 ## v24.0.0 (2025-01-15)
 
@@ -595,7 +601,7 @@ By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
 - When mapping buffers for reading, mark buffers as initialized only when they have `MAP_WRITE` usage. By @teoxoy in [#6178](https://github.com/gfx-rs/wgpu/pull/6178).
 - Add a separate pipeline constants error. By @teoxoy in [#6094](https://github.com/gfx-rs/wgpu/pull/6094).
 - Ensure safety of indirect dispatch by injecting a compute shader that validates the content of the indirect buffer. By @teoxoy in [#5714](https://github.com/gfx-rs/wgpu/pull/5714).
-- Add conversions between `TextureFormat` and ` StorageFormat`. By @caelunshun in [#6185](https://github.com/gfx-rs/wgpu/pull/6185)
+- Add conversions between `TextureFormat` and `StorageFormat`. By @caelunshun in [#6185](https://github.com/gfx-rs/wgpu/pull/6185)
 
 #### GLES / OpenGL
 
@@ -683,7 +689,7 @@ This release includes `wgpu`, `wgpu-core` and `naga`. All other crates remain at
 
 ### Our first major version release!
 
-For the first time ever, WGPU is being released with a major version (i.e., 22.* instead of 0.22.*)! Maintainership has decided to fully adhere to [Semantic Versioning](https://semver.org/)'s recommendations for versioning production software. According to [SemVer 2.0.0's Q&A about when to use 1.0.0 versions (and beyond)](https://semver.org/spec/v2.0.0.html#how-do-i-know-when-to-release-100):
+For the first time ever, WGPU is being released with a major version (i.e., 22.\* instead of 0.22.\*)! Maintainership has decided to fully adhere to [Semantic Versioning](https://semver.org/)'s recommendations for versioning production software. According to [SemVer 2.0.0's Q&A about when to use 1.0.0 versions (and beyond)](https://semver.org/spec/v2.0.0.html#how-do-i-know-when-to-release-100):
 
 > ### How do I know when to release 1.0.0?
 >
@@ -924,7 +930,7 @@ This release fixes the validation errors whenever a surface is used with the vul
 
 #### GLES / OpenGL
 
--  Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
+- Fix regression on OpenGL (EGL) where non-sRGB still used sRGB [#5642](https://github.com/gfx-rs/wgpu/pull/5642)
 
 #### Naga
 

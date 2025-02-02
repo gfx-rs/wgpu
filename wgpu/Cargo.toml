@@ -140,6 +140,7 @@ wgpu-types = { workspace = true, features = ["serde"] }
 arrayvec.workspace = true
 bitflags.workspace = true
 document-features.workspace = true
+hashbrown.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true

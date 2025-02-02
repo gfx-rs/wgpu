@@ -61,5 +61,6 @@ fn switchLexicalScope(a_6: i32) {
         }
     }
     let test = (a_6 == 2i);
+    return;
 }
 
