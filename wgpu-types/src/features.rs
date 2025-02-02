@@ -1,4 +1,3 @@
-//TODO: make robust resource access configurable
 
 use crate::VertexFormat;
 #[cfg(feature = "serde")]
@@ -364,7 +363,6 @@ impl From<Features> for Bits {
     }
 }
 
-//TODO: make robust resource access configurable
 
 bitflags_array! {
     /// Features that are not guaranteed to be supported.
@@ -1026,12 +1024,6 @@ bitflags_array! {
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FeaturesWebGPU features_webgpu {
-        //
-        // ---- Start numbering at 1 << 0 ----
-        //
-        // WebGPU features:
-        //
-
         // API:
 
         /// By default, polygon depth is clipped to 0-1 range before/during rasterization.
