@@ -143,6 +143,33 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.need_bake_expressions.clear();
     }
 
+    /// Generates statements to be inserted immediately before and at the very
+    /// start of the body of each loop, to defeat infinite loop reasoning.
+    /// The 0th item of the returned tuple should be inserted immediately prior
+    /// to the loop and the 1st item should be inserted at the very start of
+    /// the loop body.
+    ///
+    /// See [`back::msl::Writer::gen_force_bounded_loop_statements`] for details.
+    fn gen_force_bounded_loop_statements(
+        &mut self,
+        level: back::Level,
+    ) -> Option<(String, String)> {
+        if !self.options.force_loop_bounding {
+            return None;
+        }
+
+        let loop_bound_name = self.namer.call("loop_bound");
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u, 0u);");
+        let level = level.next();
+        let max = u32::MAX;
+        let break_and_inc = format!(
+            "{level}if (all({loop_bound_name} == uint2({max}u, {max}u))) {{ break; }}
+{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+        );
+
+        Some((decl, break_and_inc))
+    }
+
     /// Helper method used to find which expressions of a given function require baking
     ///
     /// # Notes
@@ -2162,12 +2189,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ref continuing,
                 break_if,
             } => {
-                self.continue_ctx.enter_loop();
-                let l2 = level.next();
-                if !continuing.is_empty() || break_if.is_some() {
-                    let gate_name = self.namer.call("loop_init");
+                let force_loop_bound_statements = self.gen_force_bounded_loop_statements(level);
+                let gate_name = (!continuing.is_empty() || break_if.is_some())
+                    .then(|| self.namer.call("loop_init"));
+
+                if let Some((ref decl, _)) = force_loop_bound_statements {
+                    writeln!(self.out, "{decl}")?;
+                }
+                if let Some(ref gate_name) = gate_name {
                     writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                    writeln!(self.out, "{level}while(true) {{")?;
+                }
+
+                self.continue_ctx.enter_loop();
+                writeln!(self.out, "{level}while(true) {{")?;
+                if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                    writeln!(self.out, "{break_and_inc}")?;
+                }
+                let l2 = level.next();
+                if let Some(gate_name) = gate_name {
                     writeln!(self.out, "{l2}if (!{gate_name}) {{")?;
                     let l3 = l2.next();
                     for sta in continuing.iter() {
@@ -2182,13 +2221,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     writeln!(self.out, "{l2}}}")?;
                     writeln!(self.out, "{l2}{gate_name} = false;")?;
-                } else {
-                    writeln!(self.out, "{level}while(true) {{")?;
                 }
 
                 for sta in body.iter() {
                     self.write_stmt(module, sta, func_ctx, l2)?;
                 }
+
                 writeln!(self.out, "{level}}}")?;
                 self.continue_ctx.exit_loop();
             }

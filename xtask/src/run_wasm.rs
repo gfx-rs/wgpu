@@ -6,28 +6,22 @@ use xshell::Shell;
 use crate::util::{check_all_programs, Program};
 
 pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
-    let no_serve = args.contains("--no-serve");
+    let should_serve = !args.contains("--no-serve");
     let release = args.contains("--release");
 
-    let programs_needed: &[_] = if no_serve {
-        &[Program {
-            crate_name: "wasm-bindgen-cli",
-            binary_name: "wasm-bindgen",
-        }]
-    } else {
-        &[
-            Program {
-                crate_name: "wasm-bindgen-cli",
-                binary_name: "wasm-bindgen",
-            },
-            Program {
-                crate_name: "simple-http-server",
-                binary_name: "simple-http-server",
-            },
-        ]
-    };
+    let mut programs_needed = vec![Program {
+        crate_name: "wasm-bindgen-cli",
+        binary_name: "wasm-bindgen",
+    }];
 
-    check_all_programs(programs_needed)?;
+    if should_serve {
+        programs_needed.push(Program {
+            crate_name: "simple-http-server",
+            binary_name: "simple-http-server",
+        });
+    }
+
+    check_all_programs(&programs_needed)?;
 
     let release_flag: &[_] = if release { &["--release"] } else { &[] };
     let output_dir = if release { "release" } else { "debug" };
@@ -91,7 +85,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
             .with_context(|| format!("Failed to copy static file \"{}\"", file.display()))?;
     }
 
-    if !no_serve {
+    if should_serve {
         log::info!("serving on port 8000");
 
         // Explicitly specify the IP address to 127.0.0.1 since otherwise simple-http-server will

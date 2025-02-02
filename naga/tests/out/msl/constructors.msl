@@ -41,4 +41,5 @@ kernel void main_(
     type_11 cit2_ = type_11 {0, 1, 2, 3};
     metal::uint2 ic4_ = metal::uint2(0u, 0u);
     metal::float2x3 ic5_ = metal::float2x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
+    return;
 }

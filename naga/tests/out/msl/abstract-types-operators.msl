@@ -98,4 +98,5 @@ void wgpu_4435_(
     threadgroup type_3& a
 ) {
     uint y = a.inner[as_type<int>(as_type<uint>(1) - as_type<uint>(1))];
+    return;
 }

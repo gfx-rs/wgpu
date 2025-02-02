@@ -2092,6 +2092,27 @@ fn function_param_redefinition_as_local() {
 }
 
 #[test]
+fn function_must_return_value() {
+    check_validation!(
+        "fn func() -> i32 {
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
+    check_validation!(
+        "fn func(x: i32) -> i32 {
+            let y = x + 10;
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
+}
+
+#[test]
 fn constructor_type_error_span() {
     check(
         "

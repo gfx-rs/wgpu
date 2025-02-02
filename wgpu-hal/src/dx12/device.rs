@@ -275,12 +275,15 @@ impl super::Device {
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
             != layout.naga_options.zero_initialize_workgroup_memory
-            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing;
+            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
+            || stage.module.runtime_checks.force_loop_bounding
+                != layout.naga_options.force_loop_bounding;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
             temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
             temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
+            temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
             &temp_options
         } else {
             &layout.naga_options
@@ -1351,6 +1354,7 @@ impl crate::Device for super::Device {
                 restrict_indexing: true,
                 sampler_heap_target,
                 sampler_buffer_binding_map,
+                force_loop_bounding: true,
             },
         })
     }

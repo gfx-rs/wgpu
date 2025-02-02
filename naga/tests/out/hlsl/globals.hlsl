@@ -99,6 +99,7 @@ void test_msl_packed_vec3_()
     float3 mvm1_ = mul(data.v3_, ZeroValuefloat3x3());
     float3 svm0_ = (data.v3_ * 2.0);
     float3 svm1_ = (2.0 * data.v3_);
+    return;
 }
 
 uint NagaBufferLength(ByteAddressBuffer buffer)
