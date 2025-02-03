@@ -167,7 +167,10 @@ macro_rules! bitflags_array {
                  let [$($lower_inner_name,)*] = self.0;
                  let mut wrote = false;
                  let mut stager = alloc::string::String::with_capacity(size_of::<$T>() * 2);
-                 $(if $lower_inner_name != 0 {
+                 // we don't want to write it if it's just zero as there may be multiple zeros
+                 // resulting in something like "00" being written out. We do want to write it if
+                 // there has already been something written though.
+                 $(if ($lower_inner_name != 0) || wrote {
                      // First we write to a staging string, then we add any zeros (e.g if #1
                      // is f and a u8 and #2 is a then the two combined would be f0a which requires
                      // a 0 inserted)
@@ -239,7 +242,7 @@ macro_rules! bitflags_array {
         }
 
         impl $name {
-            const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
+            pub(crate) const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
 
             /// Gets the set flags as a container holding an array of bits.
             pub const fn bits(&self) -> FeatureBits {
@@ -392,6 +395,21 @@ fn check_hex() {
         FeatureBits::parse_hex(hex.as_str()).unwrap(),
         FeatureBits::ALL
     );
+    hex.clear();
+    FeatureBits::EMPTY.write_hex(&mut hex).unwrap();
+    assert_eq!(
+        FeatureBits::parse_hex(hex.as_str()).unwrap(),
+        FeatureBits::EMPTY
+    );
+    for feature in Features::FLAGS {
+        hex.clear();
+        feature.value().bits().write_hex(&mut hex).unwrap();
+        assert_eq!(
+            FeatureBits::parse_hex(hex.as_str()).unwrap(),
+            feature.value().bits(),
+            "{hex}"
+        );
+    }
 }
 
 impl From<FeatureBits> for Features {
