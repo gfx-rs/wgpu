@@ -1,10 +1,10 @@
-
 use crate::VertexFormat;
 #[cfg(feature = "serde")]
 use alloc::fmt;
 use alloc::vec::Vec;
 #[cfg(feature = "serde")]
 use bitflags::parser::{ParseError, ParseHex, WriteHex};
+#[cfg(feature = "serde")]
 use bitflags::Bits;
 use bitflags::Flags;
 #[cfg(feature = "serde")]
@@ -388,7 +388,10 @@ macro_rules! bitflags_array {
 fn check_hex() {
     let mut hex = alloc::string::String::new();
     FeatureBits::ALL.write_hex(&mut hex).unwrap();
-    assert_eq!(FeatureBits::parse_hex(hex.as_str()).unwrap(), FeatureBits::ALL);
+    assert_eq!(
+        FeatureBits::parse_hex(hex.as_str()).unwrap(),
+        FeatureBits::ALL
+    );
 }
 
 impl From<FeatureBits> for Features {
@@ -402,7 +405,6 @@ impl From<Features> for FeatureBits {
         value.bits()
     }
 }
-
 
 bitflags_array! {
     /// Features that are not guaranteed to be supported.
