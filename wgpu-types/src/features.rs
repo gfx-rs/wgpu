@@ -5,6 +5,7 @@ use alloc::fmt;
 use alloc::vec::Vec;
 #[cfg(feature = "serde")]
 use bitflags::parser::{ParseError, ParseHex, WriteHex};
+use bitflags::Bits;
 use bitflags::Flags;
 #[cfg(feature = "serde")]
 use core::mem::size_of;
@@ -164,24 +165,55 @@ macro_rules! bitflags_array {
         impl WriteHex for FeatureBits {
              fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
                  let [$($lower_inner_name,)*] = self.0;
-                 $($lower_inner_name.write_hex(&mut writer)?;)*
+                 let mut wrote = false;
+                 let mut stager = alloc::string::String::with_capacity(size_of::<$T>() * 2);
+                 $(if $lower_inner_name != 0 {
+                     // First we write to a staging string, then we add any zeros (e.g if #1
+                     // is f and a u8 and #2 is a then the two combined would be f0a which requires
+                     // a 0 inserted)
+                     $lower_inner_name.write_hex(&mut stager)?;
+                     if (stager.len() != size_of::<$T>() * 2) && wrote {
+                         let zeros_to_write = (size_of::<$T>() * 2) - stager.len();
+                         for _ in 0..zeros_to_write {
+                             writer.write_char('0')?
+                         }
+                     }
+                     writer.write_str(&stager)?;
+                     stager.clear();
+                     wrote = true;
+                 })*
+                 if !wrote {
+                     writer.write_str("0")?;
+                 }
                  Ok(())
              }
         }
 
         #[cfg(feature = "serde")]
         impl ParseHex for FeatureBits {
-             #[allow(unused_assignments)]
              fn parse_hex(input: &str) -> Result<Self, ParseError> {
-                 let mut offset = 0;
-                 $(
-                 // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
-                 let cur_input = &input[offset..(offset + (size_of::<$T>() * 2))];
-                 let $lower_inner_name = <$T>::from_str_radix(cur_input, 16).map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
-                 // Two hex chars is a byte.
-                 offset += (size_of::<$T>() * 2);
-                 )*
-                 Ok(Self([$($lower_inner_name,)*]))
+
+                 let mut unset = Self::EMPTY;
+                 let mut end = input.len();
+                 if end == 0 {
+                     return Err(ParseError::empty_flag())
+                 }
+                 // we iterate starting at the least significant places and going up
+                 for (idx, _) in [$(stringify!($lower_inner_name),)*].iter().enumerate().rev() {
+                     // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
+                     let checked_start = end.checked_sub(size_of::<$T>() * 2);
+                     let start = checked_start.unwrap_or(0);
+
+                     let cur_input = &input[start..end];
+                     unset.0[idx] = <$T>::from_str_radix(cur_input, 16).map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
+
+                     end = start;
+
+                     if let None = checked_start {
+                         break;
+                     }
+                 }
+                 Ok(unset)
              }
         }
 
@@ -349,6 +381,14 @@ macro_rules! bitflags_array {
             )*
         }
     };
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn check_hex() {
+    let mut hex = alloc::string::String::new();
+    FeatureBits::ALL.write_hex(&mut hex).unwrap();
+    assert_eq!(FeatureBits::parse_hex(hex.as_str()).unwrap(), FeatureBits::ALL);
 }
 
 impl From<FeatureBits> for Features {
