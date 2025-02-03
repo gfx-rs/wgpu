@@ -53,7 +53,14 @@ Bottom level categories:
 - Avoid using default features in many dependencies, etc. By Brody in [#7031](https://github.com/gfx-rs/wgpu/pull/7031)
 - Use `hashbrown` to simplify no-std support. By Brody in [#6938](https://github.com/gfx-rs/wgpu/pull/6938) & [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
-- Split up features internally and recombine them into a large struct. By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905).
+
+##### Split up `Features` internally
+
+Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking 
+changes from this. This means there are also namespaces (as well as the old `Features::*`) for all wgpu specific
+features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively).
+
+By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905).
 
 ##### Refactored internal trace path parameter
 
