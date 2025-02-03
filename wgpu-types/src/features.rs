@@ -90,10 +90,10 @@ macro_rules! bitflags_array {
         $(#[$outer])*
         pub struct $name{ $($lower_inner_name: $inner_name,)* }
 
-        /// Bits in array form
+        /// Bits from `Features` in array form
         #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-        pub struct Bits(pub [$T; $Len]);
+        pub struct FeatureBits(pub [$T; $Len]);
 
         bitflags_array_impl! { BitOr bitor $name | $($lower_inner_name)* }
         bitflags_array_impl! { BitAnd bitand $name & $($lower_inner_name)* }
@@ -146,11 +146,11 @@ macro_rules! bitflags_array {
         bitflags_array_impl_assign! { BitAndAssign bitand_assign $name &= $($lower_inner_name)* }
         bitflags_array_impl_assign! { BitXorAssign bitxor_assign $name ^= $($lower_inner_name)* }
 
-        bit_array_impl! { BitOr bitor Bits |= }
-        bit_array_impl! { BitAnd bitand Bits &= }
-        bit_array_impl! { BitXor bitxor Bits ^= }
+        bit_array_impl! { BitOr bitor FeatureBits |= }
+        bit_array_impl! { BitAnd bitand FeatureBits &= }
+        bit_array_impl! { BitXor bitxor FeatureBits ^= }
 
-        impl core::ops::Not for Bits {
+        impl core::ops::Not for FeatureBits {
             type Output = Self;
 
             #[inline]
@@ -161,7 +161,7 @@ macro_rules! bitflags_array {
         }
 
         #[cfg(feature = "serde")]
-        impl WriteHex for Bits {
+        impl WriteHex for FeatureBits {
              fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
                  let [$($lower_inner_name,)*] = self.0;
                  $($lower_inner_name.write_hex(&mut writer)?;)*
@@ -170,7 +170,7 @@ macro_rules! bitflags_array {
         }
 
         #[cfg(feature = "serde")]
-        impl ParseHex for Bits {
+        impl ParseHex for FeatureBits {
              #[allow(unused_assignments)]
              fn parse_hex(input: &str) -> Result<Self, ParseError> {
                  let mut offset = 0;
@@ -185,7 +185,7 @@ macro_rules! bitflags_array {
              }
         }
 
-        impl bitflags::Bits for Bits {
+        impl bitflags::Bits for FeatureBits {
             const EMPTY: Self = $name::empty().bits();
 
             const ALL: Self = $name::all().bits();
@@ -194,13 +194,13 @@ macro_rules! bitflags_array {
         impl Flags for $name {
             const FLAGS: &'static [bitflags::Flag<Self>] = $name::FLAGS;
 
-            type Bits = Bits;
+            type Bits = FeatureBits;
 
-            fn bits(&self) -> Bits {
-                Bits([$(self.$lower_inner_name.bits(),)*])
+            fn bits(&self) -> FeatureBits {
+                FeatureBits([$(self.$lower_inner_name.bits(),)*])
             }
 
-            fn from_bits_retain(bits:Bits) -> Self {
+            fn from_bits_retain(bits:FeatureBits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
@@ -210,8 +210,8 @@ macro_rules! bitflags_array {
             const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
 
             /// Gets the set flags as a container holding an array of bits.
-            pub const fn bits(&self) -> Bits {
-                Bits([$(self.$lower_inner_name.bits(),)*])
+            pub const fn bits(&self) -> FeatureBits {
+                FeatureBits([$(self.$lower_inner_name.bits(),)*])
             }
 
             /// Returns self with no flags set.
@@ -290,9 +290,9 @@ macro_rules! bitflags_array {
                 $(self.$lower_inner_name.toggle(other.$lower_inner_name);)*
             }
 
-            /// Takes in [`Bits`] and returns None if there are invalid bits or otherwise Self with
+            /// Takes in [`FeatureBits`] and returns None if there are invalid bits or otherwise Self with
             /// those bits set
-            pub const fn from_bits(bits:Bits) -> Option<Self> {
+            pub const fn from_bits(bits:FeatureBits) -> Option<Self> {
                 let [$($lower_inner_name,)*] = bits.0;
                 // The ? operator does not work in a const context.
                 Some(Self { $($lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
@@ -302,15 +302,15 @@ macro_rules! bitflags_array {
                 },)* })
             }
 
-            /// Takes in [`Bits`] and returns Self with only valid bits (all other bits removed)
-            pub const fn from_bits_truncate(bits:Bits) -> Self {
+            /// Takes in [`FeatureBits`] and returns Self with only valid bits (all other bits removed)
+            pub const fn from_bits_truncate(bits:FeatureBits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_truncate($lower_inner_name),)* }
             }
 
-            /// Takes in [`Bits`] and returns Self with all bits that were set without removing
+            /// Takes in [`FeatureBits`] and returns Self with all bits that were set without removing
             /// invalid bits
-            pub const fn from_bits_retain(bits:Bits) -> Self {
+            pub const fn from_bits_retain(bits:FeatureBits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
@@ -351,13 +351,13 @@ macro_rules! bitflags_array {
     };
 }
 
-impl From<Bits> for Features {
-    fn from(value: Bits) -> Self {
+impl From<FeatureBits> for Features {
+    fn from(value: FeatureBits) -> Self {
         Self::from_bits_retain(value)
     }
 }
 
-impl From<Features> for Bits {
+impl From<Features> for FeatureBits {
     fn from(value: Features) -> Self {
         value.bits()
     }
@@ -382,7 +382,7 @@ bitflags_array! {
 
     /// Features that are not guaranteed to be supported.
     ///
-    /// These are extension features supported by wgpu when targeting native. for all features see [`Features`]
+    /// These are extension features supported by wgpu when targeting native. For all features see [`Features`]
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
@@ -1218,7 +1218,7 @@ impl Features {
     /// Mask of all features which are part of the upstream WebGPU standard.
     #[must_use]
     pub const fn all_webgpu_mask() -> Self {
-        Self::from_bits_truncate(Bits([
+        Self::from_bits_truncate(FeatureBits([
             FeaturesWGPU::empty().bits(),
             FeaturesWebGPU::all().bits(),
         ]))
@@ -1227,7 +1227,7 @@ impl Features {
     /// Mask of all features that are only available when targeting native (not web).
     #[must_use]
     pub const fn all_native_mask() -> Self {
-        Self::from_bits_truncate(Bits([
+        Self::from_bits_truncate(FeatureBits([
             FeaturesWGPU::all().bits(),
             FeaturesWebGPU::empty().bits(),
         ]))
