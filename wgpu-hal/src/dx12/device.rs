@@ -2147,7 +2147,14 @@ impl crate::Device for super::Device {
                         // to check to see if a pointer is NULL or not, such as the optional
                         // transform in D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC, without
                         // dereferencing it.
-                        Transform3x4: if desc.flags.contains(wgt::AccelerationStructureFlags::USE_TRANSFORM) { 1 } else { 0 },
+                        Transform3x4: if desc
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            1
+                        } else {
+                            0
+                        },
                         IndexFormat: index_format,
                         VertexFormat: auxil::dxgi::conv::map_vertex_format(triangle.vertex_format),
                         IndexCount: index_count,

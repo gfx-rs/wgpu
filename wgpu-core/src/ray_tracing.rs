@@ -41,7 +41,7 @@ pub enum CreateTlasError {
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error("Flag {0:?} is not allowed on a TLAS")]
-    DisallowedFlag(wgt::AccelerationStructureFlags)
+    DisallowedFlag(wgt::AccelerationStructureFlags),
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.

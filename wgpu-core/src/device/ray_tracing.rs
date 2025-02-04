@@ -115,8 +115,13 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
 
-        if desc.flags.contains(wgt::AccelerationStructureFlags::USE_TRANSFORM) {
-            return Err(CreateTlasError::DisallowedFlag(wgt::AccelerationStructureFlags::USE_TRANSFORM));
+        if desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+        {
+            return Err(CreateTlasError::DisallowedFlag(
+                wgt::AccelerationStructureFlags::USE_TRANSFORM,
+            ));
         }
 
         let size_info = unsafe {

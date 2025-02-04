@@ -922,8 +922,13 @@ fn iter_blas<'a>(
                         None
                     };
                     let transform_data = if let Some(transform_id) = mesh.transform_buffer {
-                        if !blas.flags.contains(wgt::AccelerationStructureFlags::USE_TRANSFORM) {
-                            return Err(BuildAccelerationStructureError::UseTransformMissing(blas.error_ident()));
+                        if !blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::UseTransformMissing(
+                                blas.error_ident(),
+                            ));
                         }
                         let transform_buffer = hub.buffers.get(transform_id).get()?;
                         if mesh.transform_buffer_offset.is_none() {
@@ -937,8 +942,13 @@ fn iter_blas<'a>(
                         );
                         Some((transform_buffer, data))
                     } else {
-                        if blas.flags.contains(wgt::AccelerationStructureFlags::USE_TRANSFORM) {
-                            return Err(BuildAccelerationStructureError::TransformMissing(blas.error_ident()));
+                        if blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::TransformMissing(
+                                blas.error_ident(),
+                            ));
                         }
                         None
                     };
