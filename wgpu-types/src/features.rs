@@ -361,6 +361,13 @@ macro_rules! bitflags_array {
                 None
             }
 
+            /// Combines the features from the internal flags into the entire features struct
+            pub fn from_internal_flags($($lower_inner_name: $inner_name,)*) -> Self {
+                Self {
+                    $($lower_inner_name,)*
+                }
+            }
+
             /// Returns an iterator over the set flags.
             pub const fn iter(&self) -> bitflags::iter::Iter<$name> {
                 bitflags::iter::Iter::__private_const_new($name::FLAGS, *self, *self)
