@@ -158,11 +158,11 @@ impl<V: Copy + Default> ResolvedPassChannel<V> {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RenderPassColorAttachment {
+pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
     /// The view to use as an attachment.
-    pub view: id::TextureViewId,
+    pub view: TV,
     /// The view that will receive the resolved output if multisampling is used.
-    pub resolve_target: Option<id::TextureViewId>,
+    pub resolve_target: Option<TV>,
     /// Operation to perform to the output attachment at the start of a
     /// renderpass.
     ///
@@ -173,22 +173,8 @@ pub struct RenderPassColorAttachment {
     pub store_op: StoreOp,
 }
 
-/// Describes a color attachment to a render pass.
-#[derive(Debug)]
-struct ArcRenderPassColorAttachment {
-    /// The view to use as an attachment.
-    pub view: Arc<TextureView>,
-    /// The view that will receive the resolved output if multisampling is used.
-    pub resolve_target: Option<Arc<TextureView>>,
-    /// Operation to perform to the output attachment at the start of a
-    /// renderpass.
-    ///
-    /// This must be clear if it is the first renderpass rendering to a swap
-    /// chain image.
-    pub load_op: LoadOp<Color>,
-    /// Operation to perform to the output attachment at the end of a renderpass.
-    pub store_op: StoreOp,
-}
+pub type ArcRenderPassColorAttachment = RenderPassColorAttachment<Arc<TextureView>>;
+
 impl ArcRenderPassColorAttachment {
     fn hal_ops(&self) -> hal::AttachmentOps {
         load_hal_ops(self.load_op) | store_hal_ops(self.store_op)
