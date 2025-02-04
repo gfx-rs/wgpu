@@ -63,8 +63,10 @@ macro_rules! bitflags_independent_two_arg {
     )
 }
 
-/// Macro for creating sets of bitflags, we need this because there
-/// are almost more flags than bits left and the number of flags is increasing.
+// For the most part this macro should not be modified, most configuration should be possible
+// without changing this macro.
+/// Macro for creating sets of bitflags, we need this because there are almost more flags than bits
+/// in a u64, we can't use a u128 because of FFI, and the number of flags is increasing.
 macro_rules! bitflags_array {
     (
     $(#[$outer:meta])* pub struct $name:ident: [$T:ty; $Len:expr];
