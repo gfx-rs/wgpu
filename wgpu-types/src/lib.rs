@@ -7990,6 +7990,9 @@ bitflags::bitflags!(
         const PREFER_FAST_BUILD = 1 << 3;
         /// Optimize for low memory footprint (both while building and in the output BLAS).
         const LOW_MEMORY = 1 << 4;
+        /// Use `BlasTriangleGeometry::transform_buffer` when building a BLAS (only allowed in
+        /// BLAS creation)
+        const USE_TRANSFORM = 1 << 5;
     }
 );
 

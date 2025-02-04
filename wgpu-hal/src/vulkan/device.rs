@@ -2365,7 +2365,10 @@ impl crate::Device for super::Device {
                             .index_type(vk::IndexType::NONE_KHR)
                             .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                             .max_vertex(triangles.vertex_count)
-                            .vertex_stride(triangles.vertex_stride);
+                            .vertex_stride(triangles.vertex_stride)
+                            .transform_data(vk::DeviceOrHostAddressConstKHR {
+                                device_address: if desc.flags.contains(wgt::AccelerationStructureFlags::USE_TRANSFORM) { 1 } else { 0 },
+                            });
 
                     let pritive_count = if let Some(ref indices) = triangles.indices {
                         triangle_data =
