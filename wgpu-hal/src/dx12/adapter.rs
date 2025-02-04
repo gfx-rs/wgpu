@@ -212,7 +212,16 @@ impl super::Adapter {
                 )
             };
 
-            if res.is_ok() {
+            // Sometimes on Windows 11 23H2, the function returns success, even though the runtime
+            // does not know about `Options19`. This can cause this number to be 0 as the structure isn't written to.
+            // This value is nonsense and creating zero-sized sampler heaps can cause drivers to explode.
+            // As as we're guaranteed 2048 anyway, we make sure this value is not under 2048.
+            //
+            // https://github.com/gfx-rs/wgpu/issues/7053
+            let is_ok = res.is_ok();
+            let is_above_minimum = features19.MaxSamplerDescriptorHeapSize
+                > Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE;
+            if is_ok && is_above_minimum {
                 max_sampler_descriptor_heap_size = features19.MaxSamplerDescriptorHeapSize;
             }
         };
