@@ -268,7 +268,7 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
     let command_encoder = &command_encoder_resource.1;
     let descriptor = wgpu_core::command::ComputePassDescriptor {
         label: Some(label),
-        timestamp_writes: timestamp_writes.as_ref(),
+        timestamp_writes,
     };
 
     let (compute_pass, error) =
