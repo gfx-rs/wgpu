@@ -241,6 +241,14 @@ macro_rules! bitflags_array {
                 let [$($lower_inner_name,)*] = bits.0;
                 Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
             }
+
+            fn empty() -> Self {
+                Self::empty()
+            }
+
+            fn all() -> Self {
+                Self::all()
+            }
         }
 
         impl $name {
