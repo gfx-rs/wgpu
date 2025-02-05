@@ -441,55 +441,28 @@ fn check_features_display() {
 #[test]
 fn check_features_bits() {
     let bits = Features::all().bits();
-    assert_eq!(
-        Features::from_bits_retain(bits),
-        Features::all()
-    );
+    assert_eq!(Features::from_bits_retain(bits), Features::all());
     let bits = Features::empty().bits();
-    assert_eq!(
-        Features::from_bits_retain(bits),
-        Features::empty()
-    );
+    assert_eq!(Features::from_bits_retain(bits), Features::empty());
     for feature in Features::FLAGS {
         let bits = feature.value().bits();
-        assert_eq!(
-            Features::from_bits_retain(bits),
-            *feature.value()
-        );
+        assert_eq!(Features::from_bits_retain(bits), *feature.value());
     }
     let bits = Features::all().bits();
-    assert_eq!(
-        Features::from_bits_truncate(bits),
-        Features::all()
-    );
+    assert_eq!(Features::from_bits_truncate(bits), Features::all());
     let bits = Features::empty().bits();
-    assert_eq!(
-        Features::from_bits_truncate(bits),
-        Features::empty()
-    );
+    assert_eq!(Features::from_bits_truncate(bits), Features::empty());
     for feature in Features::FLAGS {
         let bits = feature.value().bits();
-        assert_eq!(
-            Features::from_bits_truncate(bits),
-            *feature.value()
-        );
+        assert_eq!(Features::from_bits_truncate(bits), *feature.value());
     }
     let bits = Features::all().bits();
-    assert_eq!(
-        Features::from_bits(bits).unwrap(),
-        Features::all()
-    );
+    assert_eq!(Features::from_bits(bits).unwrap(), Features::all());
     let bits = Features::empty().bits();
-    assert_eq!(
-        Features::from_bits(bits).unwrap(),
-        Features::empty()
-    );
+    assert_eq!(Features::from_bits(bits).unwrap(), Features::empty());
     for feature in Features::FLAGS {
         let bits = feature.value().bits();
-        assert_eq!(
-            Features::from_bits(bits).unwrap(),
-            *feature.value()
-        );
+        assert_eq!(Features::from_bits(bits).unwrap(), *feature.value());
     }
 }
 
