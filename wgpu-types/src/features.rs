@@ -438,6 +438,61 @@ fn check_features_display() {
     assert_eq!(format!("{}", feature), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
 }
 
+#[test]
+fn check_features_bits() {
+    let bits = Features::all().bits();
+    assert_eq!(
+        Features::from_bits_retain(bits),
+        Features::all()
+    );
+    let bits = Features::empty().bits();
+    assert_eq!(
+        Features::from_bits_retain(bits),
+        Features::empty()
+    );
+    for feature in Features::FLAGS {
+        let bits = feature.value().bits();
+        assert_eq!(
+            Features::from_bits_retain(bits),
+            *feature.value()
+        );
+    }
+    let bits = Features::all().bits();
+    assert_eq!(
+        Features::from_bits_truncate(bits),
+        Features::all()
+    );
+    let bits = Features::empty().bits();
+    assert_eq!(
+        Features::from_bits_truncate(bits),
+        Features::empty()
+    );
+    for feature in Features::FLAGS {
+        let bits = feature.value().bits();
+        assert_eq!(
+            Features::from_bits_truncate(bits),
+            *feature.value()
+        );
+    }
+    let bits = Features::all().bits();
+    assert_eq!(
+        Features::from_bits(bits).unwrap(),
+        Features::all()
+    );
+    let bits = Features::empty().bits();
+    assert_eq!(
+        Features::from_bits(bits).unwrap(),
+        Features::empty()
+    );
+    for feature in Features::FLAGS {
+        let bits = feature.value().bits();
+        assert_eq!(
+            Features::from_bits(bits).unwrap(),
+            *feature.value()
+        );
+    }
+}
+
 impl From<FeatureBits> for Features {
     fn from(value: FeatureBits) -> Self {
         Self::from_bits_retain(value)
