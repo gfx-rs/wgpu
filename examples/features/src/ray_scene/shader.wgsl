@@ -52,8 +52,8 @@ struct RayDesc {
 struct RayIntersection {
     kind: u32,
     t: f32,
-    instance_custom_index: u32,
-    instance_id: u32,
+    instance_custom_data: u32,
+    instance_index: u32,
     sbt_record_offset: u32,
     geometry_index: u32,
     primitive_index: u32,
@@ -131,7 +131,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
     let intersection = rayQueryGetCommittedIntersection(&rq);
     if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-        let instance = instances[intersection.instance_custom_index];
+        let instance = instances[intersection.instance_custom_data];
         let geometry = geometries[intersection.geometry_index + instance.first_geometry];
 
         let index_offset = geometry.first_index;
@@ -155,7 +155,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
         color = vec4<f32>(material.albedo, 1.0);
 
-        if(intersection.instance_custom_index == 1u){
+        if(intersection.instance_custom_data == 1u){
             color = vec4<f32>(normal, 1.0);
         }
     }

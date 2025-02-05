@@ -29,8 +29,8 @@ struct RayDesc {
 struct RayIntersection {
     kind: u32,
     t: f32,
-    instance_custom_index: u32,
-    instance_id: u32,
+    instance_custom_data: u32,
+    instance_index: u32,
     sbt_record_offset: u32,
     geometry_index: u32,
     primitive_index: u32,

@@ -2316,7 +2316,7 @@ impl crate::Device for super::Device {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
             Transform: instance.transform,
-            _bitfield1: (instance.custom_index & MAX_U24) | (u32::from(instance.mask) << 24),
+            _bitfield1: (instance.custom_data & MAX_U24) | (u32::from(instance.mask) << 24),
             _bitfield2: 0,
             AccelerationStructure: instance.blas_address,
         };

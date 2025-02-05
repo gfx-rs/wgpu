@@ -175,7 +175,7 @@ pub struct TlasBuildEntry {
 pub struct TlasInstance<'a> {
     pub blas_id: BlasId,
     pub transform: &'a [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
 }
 
@@ -243,7 +243,7 @@ pub struct TraceBlasBuildEntry {
 pub struct TraceTlasInstance {
     pub blas_id: BlasId,
     pub transform: [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
 }
 
