@@ -154,8 +154,8 @@ impl super::Adapter {
         }
         .unwrap();
 
-        if options.ResourceHeapTier == Direct3D12::D3D12_RESOURCE_HEAP_TIER_1 {
-            // We require Tier 2 for the ability to make samplers bindless in all cases.
+        if options.ResourceBindingTier.0 < Direct3D12::D3D12_RESOURCE_BINDING_TIER_2.0 {
+            // We require Tier 2 or higher for the ability to make samplers bindless in all cases.
             return None;
         }
 

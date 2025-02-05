@@ -2444,7 +2444,7 @@ pub struct AccelerationStructureBarrier {
 #[derive(Debug, Copy, Clone)]
 pub struct TlasInstance {
     pub transform: [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
     pub blas_address: u64,
 }

@@ -396,7 +396,7 @@ impl Global {
                         instance.map(|instance| TraceTlasInstance {
                             blas_id: instance.blas_id,
                             transform: *instance.transform,
-                            custom_index: instance.custom_index,
+                            custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                     })
@@ -444,7 +444,7 @@ impl Global {
                 instance.as_ref().map(|instance| TlasInstance {
                     blas_id: instance.blas_id,
                     transform: &instance.transform,
-                    custom_index: instance.custom_index,
+                    custom_data: instance.custom_data,
                     mask: instance.mask,
                 })
             });
@@ -512,7 +512,7 @@ impl Global {
 
             let mut instance_count = 0;
             for instance in package.instances.flatten() {
-                if instance.custom_index >= (1u32 << 24u32) {
+                if instance.custom_data >= (1u32 << 24u32) {
                     return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                         tlas.error_ident(),
                     ));
@@ -524,7 +524,7 @@ impl Global {
                 instance_buffer_staging_source.extend(device.raw().tlas_instance_to_bytes(
                     hal::TlasInstance {
                         transform: *instance.transform,
-                        custom_index: instance.custom_index,
+                        custom_data: instance.custom_data,
                         mask: instance.mask,
                         blas_address: blas.handle,
                     },
