@@ -429,10 +429,9 @@ fn check_hex() {
     }
 }
 
-#[cfg(feature = "std")]
 #[test]
 fn check_features_display() {
-    use std::format;
+    use alloc::format;
     let feature = Features::CLEAR_TEXTURE;
     assert_eq!(format!("{}", feature), "CLEAR_TEXTURE");
     let feature = Features::CLEAR_TEXTURE | Features::BGRA8UNORM_STORAGE;
