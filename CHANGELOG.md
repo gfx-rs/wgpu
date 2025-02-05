@@ -136,6 +136,7 @@ By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 
 #### Naga
 
+- Add support for unsigned types when calling textureLoad with the level parameter. By @ygdrasil-io in [#7058](https://github.com/gfx-rs/wgpu/pull/7058).
 - Support @must_use attribute on function declarations. By @turbocrime in [#6801](https://github.com/gfx-rs/wgpu/pull/6801).
 - Support for generating the candidate intersections from AABB geometry, and confirming the hits. By @kvark in [#7047](https://github.com/gfx-rs/wgpu/pull/7047).
 - Make naga::back::spv::Function::to_words write the OpFunctionEnd instruction in itself, instead of making another call after it. By @junjunjd in [#7156](https://github.com/gfx-rs/wgpu/pull/7156).
