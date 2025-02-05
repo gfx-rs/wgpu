@@ -686,12 +686,12 @@ impl Validator {
                     })?
             }
 
-            for (handle, override_) in module.overrides.iter() {
+            for (handle, r#override) in module.overrides.iter() {
                 self.validate_override(handle, module.to_ctx(), &mod_info)
                     .map_err(|source| {
                         ValidationError::Override {
                             handle,
-                            name: override_.name.clone().unwrap_or_default(),
+                            name: r#override.name.clone().unwrap_or_default(),
                             source,
                         }
                         .with_span_handle(handle, &module.overrides)

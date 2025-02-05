@@ -56,9 +56,9 @@ pub fn compact(module: &mut crate::Module) {
     }
 
     // We treat all overrides as used by definition.
-    for (_, override_) in module.overrides.iter() {
-        module_tracer.types_used.insert(override_.ty);
-        if let Some(init) = override_.init {
+    for (_, r#override) in module.overrides.iter() {
+        module_tracer.types_used.insert(r#override.ty);
+        if let Some(init) = r#override.init {
             module_tracer.global_expressions_used.insert(init);
         }
     }
@@ -169,9 +169,9 @@ pub fn compact(module: &mut crate::Module) {
 
     // Adjust override types and initializers.
     log::trace!("adjusting overrides");
-    for (_, override_) in module.overrides.iter_mut() {
-        module_map.types.adjust(&mut override_.ty);
-        if let Some(init) = override_.init.as_mut() {
+    for (_, r#override) in module.overrides.iter_mut() {
+        module_map.types.adjust(&mut r#override.ty);
+        if let Some(init) = r#override.init.as_mut() {
             module_map.global_expressions.adjust(init);
         }
     }
