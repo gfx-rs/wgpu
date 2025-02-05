@@ -671,15 +671,15 @@ impl super::Validator {
 
                         match (level, class.is_mipmapped()) {
                             (None, false) => {}
-                            (Some(level), true) => {
-                                match resolver[level] {
-                                    Ti::Scalar(Sc { 
-                                                   kind: Sk::Sint | Sk::Uint,
-                                                   width: _,
-                                               }) => {}
-                                    _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
+                            (Some(level), true) => match resolver[level] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    width: _,
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidImageArrayIndexType(level))
                                 }
-                            }
+                            },
                             _ => {
                                 return Err(ExpressionError::InvalidImageOtherIndex);
                             }
