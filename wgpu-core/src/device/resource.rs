@@ -32,10 +32,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
-use wgt::{
-    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureSelector,
-    TextureViewDimension,
-};
+use wgt::{math::align_to, DeviceLostReason, Features, TextureFormat, TextureSampleType, TextureSelector, TextureViewDimension};
 
 use crate::resource::{AccelerationStructure, Tlas};
 use std::{
@@ -203,14 +200,20 @@ impl Device {
 
         let command_allocator = command::CommandAllocator::new();
 
-        // Create zeroed buffer used for texture clears.
+        let rt_uses = if desc.required_features.contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+            wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
+        } else {
+            wgt::BufferUses::empty()
+        };
+
+        // Create zeroed buffer used for texture clears (and raytracing if required).
         let zero_buffer = unsafe {
             raw_device.create_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
                 size: ZERO_BUFFER_SIZE,
                 usage: wgt::BufferUses::COPY_SRC
                     | wgt::BufferUses::COPY_DST
-                    | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    | rt_uses,
                 memory_flags: hal::MemoryFlags::empty(),
             })
         }
