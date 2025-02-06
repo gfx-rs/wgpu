@@ -2210,7 +2210,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             self.id,
             &wgc::command::ComputePassDescriptor {
                 label: desc.label.map(Borrowed),
-                timestamp_writes: timestamp_writes.as_ref(),
+                timestamp_writes,
             },
         );
 
