@@ -37,20 +37,25 @@ default = ["wgsl", "dx12", "metal", "webgpu"]
 #! On Windows, Linux & Android the Vulkan & GLES backends are always enabled.
 #! See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more details.
 
+## Enables the Vulkan backend on Windows, Linux & Android.
+vulkan = ["wgpu-core?/vulkan"]
+
 ## Enables the DX12 backend on Windows.
 dx12 = ["wgpu-core?/dx12"]
 
 ## Enables the Metal backend on macOS & iOS.
 metal = ["wgpu-core?/metal"]
 
+## Enables the GLES backend on Windows, Linux & Android.
+
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 webgpu = ["naga?/wgsl-out"]
 
 ## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
-angle = ["wgpu-core?/gles"]
+angle = ["wgpu-core?/angle"]
 
 ## Enables the Vulkan backend on macOS & iOS.
-vulkan-portability = ["wgpu-core?/vulkan"]
+vulkan-portability = ["wgpu-core?/vulkan-portability"]
 
 ## Enables the GLES backend on Wasm
 ##

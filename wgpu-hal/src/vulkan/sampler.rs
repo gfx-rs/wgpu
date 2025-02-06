@@ -2,6 +2,8 @@
 //!
 //! Nearly identical to the DX12 sampler cache, without descriptor heap management.
 
+use super::dependencies::*;
+
 use ash::vk;
 use hashbrown::{hash_map::Entry, HashMap};
 use ordered_float::OrderedFloat;

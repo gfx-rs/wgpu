@@ -113,6 +113,10 @@ gles = ["wgpu-hal/gles"]
 ## Enable the `dx12` backend.
 dx12 = ["wgpu-hal/dx12"]
 
+angle = ["wgpu-hal/angle"]
+
+vulkan-portability = ["wgpu-hal/vulkan-portability"]
+
 [dependencies]
 naga.workspace = true
 wgpu-hal.workspace = true

@@ -1,0 +1,40 @@
+[package]
+name = "wgpu-hal-dependencies-mac-optional"
+version = "24.0.0"
+edition = "2021"
+
+[features]
+angle = [
+    "dep:bytemuck",
+    "dep:glow",
+    "dep:khronos-egl",
+    "dep:libloading",
+    "naga/glsl-out",
+]
+vulkan-portability = [
+    "dep:ash",
+    "dep:libc",
+    "dep:gpu-alloc",
+    "dep:gpu-descriptor",
+    "naga/spv-out",
+    "dep:ordered-float",
+    "dep:smallvec",
+]
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+# GLES on ANGLE
+bytemuck = { workspace = true, optional = true }
+glow = { workspace = true, optional = true }
+khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
+libloading = { workspace = true, optional = true }
+
+# Vulkan on vulkan-portability
+ash = { workspace = true, optional = true }
+libc = { workspace = true, optional = true }
+gpu-alloc = { workspace = true, optional = true }
+gpu-descriptor = { workspace = true, optional = true }
+ordered-float = { workspace = true, optional = true }
+smallvec = { workspace = true, optional = true, features = ["union"] }
+
+# Both
+naga = { workspace = true, optional = true }

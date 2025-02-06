@@ -1,3 +1,5 @@
+use super::dependencies::*;
+
 use ash::vk;
 
 impl super::PrivateCapabilities {

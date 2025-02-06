@@ -57,6 +57,7 @@ vulkan = [
     "dep:smallvec",
     "dep:android_system_properties",
     "dep:ordered-float",
+    "dep:libc",
 ]
 gles = [
     "naga/glsl-out",
@@ -98,6 +99,11 @@ dx12 = [
     "windows/Win32_System_Threading",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
+
+angle = ["wgpu-hal-dependencies-mac-optional/angle"]
+vulkan-portability = ["wgpu-hal-dependencies-mac-optional/vulkan-portability"]
+
+
 ## Enables statically linking DXC.
 static-dxc = ["dep:mach-dxcompiler-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
@@ -144,32 +150,28 @@ raw-window-handle.workspace = true
 rustc-hash.workspace = true
 thiserror.workspace = true
 
-# Backend: GLES
-bytemuck = { workspace = true, optional = true }
-glow = { workspace = true, optional = true }
-
-########################
-### Platform: Native ###
-########################
+###############################################
+### Platform: Vulkan/GLES Default Platforms ###
+###############################################
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Backend: Vulkan
 ash = { workspace = true, optional = true }
 gpu-alloc = { workspace = true, optional = true }
 gpu-descriptor = { workspace = true, optional = true }
+ordered-float = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true, features = ["union"] }
+
 # Backend: GLES
+bytemuck = { workspace = true, optional = true }
+glow = { workspace = true, optional = true }
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
 libloading = { workspace = true, optional = true }
 renderdoc-sys = { workspace = true, optional = true }
 
-##########################
-### Platform: All Unix ###
-##########################
-
 [target.'cfg(unix)'.dependencies]
 # Backend: Vulkan
-libc.workspace = true
+libc = { workspace = true, optional = true }
 
 #########################
 ### Platform: Windows ###
@@ -203,6 +205,8 @@ block = { workspace = true, optional = true }
 core-graphics-types.workspace = true
 metal.workspace = true
 objc.workspace = true
+
+wgpu-hal-dependencies-mac-optional = { workspace = true, optional = true }
 
 #########################
 ### Platform: Android ###

@@ -17,6 +17,7 @@ members = [
     "tests",
     "wgpu-core",
     "wgpu-hal",
+    "wgpu-hal/dependency-wrappers/*",
     "wgpu-info",
     "wgpu-macros",
     "wgpu-types",
@@ -36,6 +37,7 @@ default-members = [
     "tests",
     "wgpu-core",
     "wgpu-hal",
+    "wgpu-hal/dependency-wrappers/*",
     "wgpu-info",
     "wgpu-macros",
     "wgpu-types",
@@ -71,6 +73,8 @@ wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "24.0.0", path = "./tests" }
 wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
+
+wgpu-hal-dependencies-mac-optional = { version = "24.0.0", path = "./wgpu-hal/dependency-wrappers/mac-optional" }
 
 anyhow = { version = "1.0.95", default-features = false }
 approx = "0.5"

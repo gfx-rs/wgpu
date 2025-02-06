@@ -24,6 +24,23 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 !*/
 
+#[cfg(target_vendor = "apple")]
+mod dependencies {
+    pub use wgpu_hal_dependency_mac_optional::*;
+}
+#[cfg(not(target_vendor = "apple"))]
+mod dependencies {
+    pub use ash;
+    pub use gpu_alloc;
+    pub use gpu_descriptor;
+    pub use naga;
+    pub use ordered_float;
+    pub use parking_lot;
+    pub use smallvec;
+}
+
+use dependencies::*;
+
 mod adapter;
 mod command;
 mod conv;
