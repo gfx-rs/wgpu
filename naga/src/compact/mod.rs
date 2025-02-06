@@ -110,14 +110,27 @@ pub fn compact(module: &mut crate::Module) {
     log::trace!("tracing special types");
     module_tracer.trace_special_types(&module.special_types);
 
-    // We treat all named constants as used by definition.
+    // We treat all named constants as used by definition, unless they have an
+    // abstract type as we do not want those reaching the validator.
     log::trace!("tracing named constants");
     for (handle, constant) in module.constants.iter() {
         if constant.name.is_some() {
             log::trace!("tracing constant {:?}", constant.name.as_ref().unwrap());
-            module_tracer.constants_used.insert(handle);
-            module_tracer.types_used.insert(constant.ty);
-            module_tracer.global_expressions_used.insert(constant.init);
+            // If the type is an array (of an array, etc) then we must check whether the
+            // type of the innermost array's base type is abstract.
+            let mut ty = constant.ty;
+            while let crate::TypeInner::Array { base, .. } = module.types[ty].inner {
+                ty = base;
+            }
+            if !module.types[ty]
+                .inner
+                .scalar()
+                .is_some_and(|s| s.is_abstract())
+            {
+                module_tracer.constants_used.insert(handle);
+                module_tracer.types_used.insert(constant.ty);
+                module_tracer.global_expressions_used.insert(constant.init);
+            }
         }
     }
 

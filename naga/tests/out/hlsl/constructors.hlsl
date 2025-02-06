@@ -12,12 +12,6 @@ ret_Constructarray1_float2x2_ Constructarray1_float2x2_(float2x2 arg0) {
     return ret;
 }
 
-typedef int ret_Constructarray4_int_[4];
-ret_Constructarray4_int_ Constructarray4_int_(int arg0, int arg1, int arg2, int arg3) {
-    int ret[4] = { arg0, arg1, arg2, arg3 };
-    return ret;
-}
-
 bool ZeroValuebool() {
     return (bool)0;
 }
@@ -51,7 +45,6 @@ Foo ZeroValueFoo() {
     return (Foo)0;
 }
 
-static const float3 const2_ = float3(0.0, 1.0, 2.0);
 static const float2x2 const3_ = float2x2(float2(0.0, 1.0), float2(2.0, 3.0));
 static const float2x2 const4_[1] = Constructarray1_float2x2_(float2x2(float2(0.0, 1.0), float2(2.0, 3.0)));
 static const bool cz0_ = ZeroValuebool();
@@ -62,12 +55,17 @@ static const uint2 cz4_ = ZeroValueuint2();
 static const float2x2 cz5_ = ZeroValuefloat2x2();
 static const Foo cz6_[3] = ZeroValuearray3_Foo_();
 static const Foo cz7_ = ZeroValueFoo();
-static const int cp3_[4] = Constructarray4_int_(int(0), int(1), int(2), int(3));
 
 Foo ConstructFoo(float4 arg0, int arg1) {
     Foo ret = (Foo)0;
     ret.a = arg0;
     ret.b = arg1;
+    return ret;
+}
+
+typedef int ret_Constructarray4_int_[4];
+ret_Constructarray4_int_ Constructarray4_int_(int arg0, int arg1, int arg2, int arg3) {
+    int ret[4] = { arg0, arg1, arg2, arg3 };
     return ret;
 }
 

@@ -1072,8 +1072,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
-                    let (ty, initializer) =
-                        self.type_and_init(v.name, v.init, explicit_ty, &mut ctx.as_override())?;
+                    let (ty, initializer) = self.type_and_init(
+                        v.name,
+                        v.init,
+                        explicit_ty,
+                        false,
+                        &mut ctx.as_override(),
+                    )?;
 
                     let binding = if let Some(ref binding) = v.binding {
                         Some(crate::ResourceBinding {
@@ -1106,7 +1111,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             .transpose()?;
 
                     let (ty, init) =
-                        self.type_and_init(c.name, Some(c.init), explicit_ty, &mut ectx)?;
+                        self.type_and_init(c.name, Some(c.init), explicit_ty, true, &mut ectx)?;
                     let init = init.expect("Global const must have init");
 
                     let handle = ctx.module.constants.append(
@@ -1128,7 +1133,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let mut ectx = ctx.as_override();
 
-                    let (ty, init) = self.type_and_init(o.name, o.init, explicit_ty, &mut ectx)?;
+                    let (ty, init) =
+                        self.type_and_init(o.name, o.init, explicit_ty, false, &mut ectx)?;
 
                     let id =
                         o.id.map(|id| self.const_u32(id, &mut ctx.as_const()))
@@ -1201,6 +1207,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         name: ast::Ident<'source>,
         init: Option<Handle<ast::Expression<'source>>>,
         explicit_ty: Option<Handle<crate::Type>>,
+        allow_abstract: bool,
         ectx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<(Handle<crate::Type>, Option<Handle<crate::Expression>>), Error<'source>> {
         let ty;
@@ -1234,9 +1241,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 initializer = Some(init);
             }
             (Some(init), None) => {
-                let concretized = self.expression(init, ectx)?;
-                ty = ectx.register_type(concretized)?;
-                initializer = Some(concretized);
+                let mut init = self.expression_for_abstract(init, ectx)?;
+                if !allow_abstract {
+                    init = ectx.concretize(init)?;
+                }
+                ty = ectx.register_type(init)?;
+                initializer = Some(init);
             }
             (None, Some(explicit_ty)) => {
                 ty = explicit_ty;
@@ -1481,7 +1491,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let mut ectx = ctx.as_expression(block, &mut emitter);
                     let (ty, initializer) =
-                        self.type_and_init(v.name, v.init, explicit_ty, &mut ectx)?;
+                        self.type_and_init(v.name, v.init, explicit_ty, false, &mut ectx)?;
 
                     let (const_initializer, initializer) = {
                         match initializer {
@@ -1544,6 +1554,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         c.name,
                         Some(c.init),
                         explicit_ty,
+                        false,
                         &mut ectx.as_const(),
                     )?;
                     let init = init.expect("Local const must have init");

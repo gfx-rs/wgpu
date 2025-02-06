@@ -8,27 +8,25 @@ struct Foo {
     metal::float4 a;
     int b;
 };
-struct type_6 {
+struct type_5 {
     metal::float2x2 inner[1];
 };
-struct type_10 {
+struct type_9 {
     Foo inner[3];
 };
 struct type_11 {
     int inner[4];
 };
-constant metal::float3 const2_ = metal::float3(0.0, 1.0, 2.0);
 constant metal::float2x2 const3_ = metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0));
-constant type_6 const4_ = type_6 {metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0))};
+constant type_5 const4_ = type_5 {metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0))};
 constant bool cz0_ = bool {};
 constant int cz1_ = int {};
 constant uint cz2_ = uint {};
 constant float cz3_ = float {};
 constant metal::uint2 cz4_ = metal::uint2 {};
 constant metal::float2x2 cz5_ = metal::float2x2 {};
-constant type_10 cz6_ = type_10 {};
+constant type_9 cz6_ = type_9 {};
 constant Foo cz7_ = Foo {};
-constant type_11 cp3_ = type_11 {0, 1, 2, 3};
 
 kernel void main_(
 ) {

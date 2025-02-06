@@ -37,7 +37,6 @@ constant int shr_iai_u = 0;
 constant uint shr_uaiai = 0u;
 constant uint shr_uai_u = 0u;
 constant int wgpu_4492_ = -2147483648;
-constant int wgpu_4492_2_ = -2147483648;
 
 void runtime_values(
 ) {
