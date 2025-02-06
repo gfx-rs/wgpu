@@ -32,7 +32,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use bitflags::Flags;
 use smallvec::SmallVec;
-use wgt::{math::align_to, DeviceLostReason, Features, TextureFormat, TextureSampleType, TextureSelector, TextureViewDimension};
+use wgt::{math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureSelector, TextureViewDimension};
 
 use crate::resource::{AccelerationStructure, Tlas};
 use std::{
@@ -200,7 +200,7 @@ impl Device {
 
         let command_allocator = command::CommandAllocator::new();
 
-        let rt_uses = if desc.required_features.contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+        let rt_uses = if desc.required_features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
             wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
         } else {
             wgt::BufferUses::empty()
