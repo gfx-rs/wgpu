@@ -303,8 +303,9 @@ impl<'module> ModuleTracer<'module> {
         // as used by the time we visit it is genuinely unused, and can be
         // ignored.
         let mut exprs = self.module.global_expressions.iter().rev().peekable();
-        for ((ty_handle, ty), dep) in self.module.types.iter().rev().zip(max_dep.iter().rev()) {
-            while let Some((expr_handle, expr)) = exprs.next_if(|&(h, _)| Some(h) > *dep) {
+
+        for ((ty_handle, ty), dep) in self.module.types.iter().zip(max_dep).rev() {
+            while let Some((expr_handle, expr)) = exprs.next_if(|&(h, _)| Some(h) > dep) {
                 if self.global_expressions_used.contains(expr_handle) {
                     self.as_const_expression().trace_expression(expr);
                 }
