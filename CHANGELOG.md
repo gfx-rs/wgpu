@@ -102,6 +102,10 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 - Added a hello window example. By @laycookie in [#6992](https://github.com/gfx-rs/wgpu/pull/6992).
 
+### Examples
+
+- Call `pre_present_notify()` before presenting. By @kjarosh in [#7074](https://github.com/gfx-rs/wgpu/pull/7074).
+
 ## v24.0.0 (2025-01-15)
 
 ### Major changes
