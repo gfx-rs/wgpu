@@ -90,6 +90,7 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 #### Dx12
 
 - Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993)
+- Fix 3D storage texture bindings. By @SparkyPotato in [#7071](https://github.com/gfx-rs/wgpu/pull/7071)
 
 #### WebGPU
 
