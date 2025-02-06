@@ -1,3 +1,5 @@
+use super::dependencies::*;
+
 use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use glow::HasContext;

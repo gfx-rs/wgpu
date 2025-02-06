@@ -81,6 +81,20 @@ we don't bother with that combination.
 
 */
 
+#[cfg(target_vendor = "apple")]
+mod dependencies {
+    pub use wgpu_hal_dependencies_mac_optional::*;
+}
+#[cfg(not(target_vendor = "apple"))]
+mod dependencies {
+    pub use bytemuck;
+    pub use glow;
+    pub use khronos_egl;
+    pub use libloading;
+}
+
+use dependencies::*;
+
 ///cbindgen:ignore
 #[cfg(not(any(windows, webgl)))]
 mod egl;

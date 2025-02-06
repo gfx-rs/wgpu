@@ -1,3 +1,5 @@
+use super::dependencies::*;
+
 use glow::HasContext;
 use hashbrown::HashMap;
 use once_cell::sync::Lazy;

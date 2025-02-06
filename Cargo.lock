@@ -4595,6 +4595,7 @@ dependencies = [
  "libc",
  "libloading",
  "naga",
+ "once_cell",
  "ordered-float",
  "smallvec",
 ]

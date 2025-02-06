@@ -8,6 +8,8 @@ pub use glow;
 pub use khronos_egl;
 #[cfg(feature = "angle")]
 pub use libloading;
+#[cfg(feature = "angle")]
+pub use once_cell;
 
 #[cfg(feature = "vulkan-portability")]
 pub use ash;

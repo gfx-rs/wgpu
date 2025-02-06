@@ -1,3 +1,5 @@
+use super::dependencies::*;
+
 use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
 use glow::HasContext;

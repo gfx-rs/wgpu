@@ -9,6 +9,7 @@ angle = [
     "dep:glow",
     "dep:khronos-egl",
     "dep:libloading",
+    "dep:once_cell",
     "naga/glsl-out",
 ]
 vulkan-portability = [
@@ -27,6 +28,7 @@ bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
 libloading = { workspace = true, optional = true }
+once_cell = { workspace = true, optional = true }
 
 # Vulkan on vulkan-portability
 ash = { workspace = true, optional = true }

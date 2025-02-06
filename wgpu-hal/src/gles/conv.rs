@@ -1,3 +1,5 @@
+use super::dependencies::*;
+
 impl super::AdapterShared {
     pub(super) fn describe_texture_format(
         &self,

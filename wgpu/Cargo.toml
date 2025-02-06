@@ -47,6 +47,7 @@ dx12 = ["wgpu-core?/dx12"]
 metal = ["wgpu-core?/metal"]
 
 ## Enables the GLES backend on Windows, Linux & Android.
+gles = ["wgpu-core?/gles"]
 
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
 webgpu = ["naga?/wgsl-out"]

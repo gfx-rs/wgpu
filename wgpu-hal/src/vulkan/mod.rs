@@ -26,7 +26,7 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 #[cfg(target_vendor = "apple")]
 mod dependencies {
-    pub use wgpu_hal_dependency_mac_optional::*;
+    pub use wgpu_hal_dependencies_mac_optional::*;
 }
 #[cfg(not(target_vendor = "apple"))]
 mod dependencies {
