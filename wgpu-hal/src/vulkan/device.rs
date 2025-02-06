@@ -2379,7 +2379,20 @@ impl crate::Device for super::Device {
                                     .flags
                                     .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
                                 {
-                                    1
+                                    unsafe {
+                                        ray_tracing_functions
+                                            .buffer_device_address
+                                            .get_buffer_device_address(
+                                                &vk::BufferDeviceAddressInfo::default().buffer(
+                                                    triangles
+                                                        .transform
+                                                        .as_ref()
+                                                        .unwrap()
+                                                        .buffer
+                                                        .raw,
+                                                ),
+                                            )
+                                    }
                                 } else {
                                     0
                                 },

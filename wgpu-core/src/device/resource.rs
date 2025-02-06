@@ -208,7 +208,9 @@ impl Device {
             raw_device.create_buffer(&hal::BufferDescriptor {
                 label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
                 size: ZERO_BUFFER_SIZE,
-                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST,
+                usage: wgt::BufferUses::COPY_SRC
+                    | wgt::BufferUses::COPY_DST
+                    | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 memory_flags: hal::MemoryFlags::empty(),
             })
         }

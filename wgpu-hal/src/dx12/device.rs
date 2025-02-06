@@ -2151,7 +2151,15 @@ impl crate::Device for super::Device {
                             .flags
                             .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
                         {
-                            1
+                            unsafe {
+                                triangle
+                                    .transform
+                                    .as_ref()
+                                    .unwrap()
+                                    .buffer
+                                    .resource
+                                    .GetGPUVirtualAddress()
+                            }
                         } else {
                             0
                         },
