@@ -2367,7 +2367,7 @@ impl crate::Device for super::Device {
                             .max_vertex(triangles.vertex_count)
                             .vertex_stride(triangles.vertex_stride)
                             // The vulkan spec says that we can send garbage addresses into this, as the driver
-                            // should only check if it is null.
+                            // should only check if it is null. We use a buffer just in case.
                             // from https://registry.khronos.org/vulkan/specs/latest/man/html/vkGetAccelerationStructureBuildSizesKHR.html
                             // > The srcAccelerationStructure, dstAccelerationStructure, and mode members
                             // > of pBuildInfo are ignored. Any VkDeviceOrHostAddressKHR or VkDeviceOrHostAddressConstKHR

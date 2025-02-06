@@ -2147,6 +2147,8 @@ impl crate::Device for super::Device {
                         // to check to see if a pointer is NULL or not, such as the optional
                         // transform in D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC, without
                         // dereferencing it.
+                        //
+                        // This means we could just use one here (but just in case we use a real address).
                         Transform3x4: if desc
                             .flags
                             .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
