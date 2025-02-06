@@ -2366,6 +2366,13 @@ impl crate::Device for super::Device {
                             .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                             .max_vertex(triangles.vertex_count)
                             .vertex_stride(triangles.vertex_stride)
+                            // The vulkan spec says that we can send garbage addresses into this, as the driver
+                            // should only check if it is null.
+                            // > The srcAccelerationStructure, dstAccelerationStructure, and mode members
+                            // > of pBuildInfo are ignored. Any VkDeviceOrHostAddressKHR or VkDeviceOrHostAddressConstKHR
+                            // > members of pBuildInfo are ignored by this command, except that the hostAddress
+                            // > member of VkAccelerationStructureGeometryTrianglesDataKHR::transformData will
+                            // > be examined to check if it is NULL.
                             .transform_data(vk::DeviceOrHostAddressConstKHR {
                                 device_address: if desc
                                     .flags
