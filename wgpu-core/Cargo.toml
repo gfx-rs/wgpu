@@ -93,30 +93,30 @@ spirv = ["naga/spv-in", "dep:bytemuck"]
 ## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-hal/fragile-send-sync-non-atomic-wasm",
-    "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
+
+static-dxc = ["wgpu-hal/static-dxc"]
 
 #! ### Backends, passed through to wgpu-hal
 # --------------------------------------------------------------------
 
-## Enable the `metal` backend.
-metal = ["wgpu-hal/metal"]
-
-## Enable the `vulkan` backend.
-vulkan = ["wgpu-hal/vulkan"]
-
-## Enable the `GLES` backend.
-##
-## This is used for all of GLES, OpenGL, and WebGL.
-gles = ["wgpu-hal/gles"]
-
-## Enable the `dx12` backend.
 dx12 = ["wgpu-hal/dx12"]
+metal = ["wgpu-hal/metal"]
+vulkan = ["wgpu-core-platform-windows-linux-android/vulkan"]
+gles = ["wgpu-core-platform-windows-linux-android/gles"]
+
+webgl = ["wgpu-core-platform-wasm/webgl"]
+angle = ["wgpu-core-platform-apple/angle"]
+vulkan-portability = ["wgpu-core-platform-apple/vulkan-portability"]
 
 [dependencies]
 naga.workspace = true
 wgpu-hal.workspace = true
 wgpu-types.workspace = true
+
+wgpu-core-platform-windows-linux-android.workspace = true
+wgpu-core-platform-apple.workspace = true
+wgpu-core-platform-wasm.workspace = true
 
 arrayvec.workspace = true
 bit-vec.workspace = true

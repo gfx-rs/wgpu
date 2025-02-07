@@ -29,7 +29,7 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["wgsl", "dx12", "metal", "webgpu"]
+default = ["wgsl", "dx12", "metal", "gles", "vulkan", "webgpu"]
 
 #! ### Backends
 # --------------------------------------------------------------------
@@ -43,19 +43,25 @@ dx12 = ["wgpu-core?/dx12"]
 ## Enables the Metal backend on macOS & iOS.
 metal = ["wgpu-core?/metal"]
 
-## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
-webgpu = ["naga?/wgsl-out"]
+## Enables the OpenGL backend on Windows, Linux, and Android.
+gles = ["wgpu-core?/gles"]
+
+## Enables the Vulkan backend on Windows, Linux, and Android.
+vulkan = ["wgpu-core?/vulkan"]
 
 ## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
-angle = ["wgpu-core?/gles"]
+angle = ["wgpu-core?/angle"]
 
 ## Enables the Vulkan backend on macOS & iOS.
-vulkan-portability = ["wgpu-core?/vulkan"]
+vulkan-portability = ["wgpu-core?/vulkan-portability"]
+
+## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
+webgpu = ["naga?/wgsl-out"]
 
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-webgl = ["dep:wgpu-hal", "wgpu-core/gles"]
+webgl = ["wgpu-core/webgl"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
@@ -112,7 +118,6 @@ counters = ["wgpu-core?/counters"]
 ## but on a wasm binary compiled without atomics we know we are definitely
 ## not in a multithreaded environment.
 fragile-send-sync-non-atomic-wasm = [
-    "wgpu-hal?/fragile-send-sync-non-atomic-wasm",
     "wgpu-core?/fragile-send-sync-non-atomic-wasm",
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
@@ -127,7 +132,7 @@ fragile-send-sync-non-atomic-wasm = [
 ## must be shipped alongside `dxcompiler.dll` and `dxil.dll` (which can be downloaded from Microsoft's GitHub).
 ## This feature statically links a version of DXC so that no external binaries are required
 ## to compile DX12 shaders.
-static-dxc = ["wgpu-hal?/static-dxc"]
+static-dxc = ["wgpu-core?/static-dxc"]
 
 #########################
 # Standard Dependencies #
@@ -154,28 +159,10 @@ static_assertions.workspace = true
 # Target Specific Feature Dependencies #
 ########################################
 
-# Windows
-[target.'cfg(windows)'.dependencies]
-wgpu-core = { workspace = true, features = [
-    "raw-window-handle",
-    "vulkan",
-    "gles",
-] }
-wgpu-hal = { workspace = true, features = ["renderdoc"] }
-
-# Apple Platforms
-[target.'cfg(target_vendor = "apple")'.dependencies]
+# Not Webassembly
+[target.'cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))'.dependencies]
 wgpu-core = { workspace = true, features = ["raw-window-handle"] }
-wgpu-hal = { workspace = true, features = [] }
-
-# Linux + Android
-[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
-wgpu-core = { workspace = true, features = [
-    "raw-window-handle",
-    "vulkan",
-    "gles",
-] }
-wgpu-hal = { workspace = true, features = ["renderdoc"] }
+wgpu-hal.workspace = true
 
 # Webassembly
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
@@ -209,7 +196,7 @@ web-sys = { workspace = true, features = [
 # Emscripten
 [target.'cfg(target_os = "emscripten")'.dependencies]
 wgpu-core = { workspace = true, features = ["raw-window-handle", "gles"] }
-wgpu-hal = { workspace = true }
+wgpu-hal.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

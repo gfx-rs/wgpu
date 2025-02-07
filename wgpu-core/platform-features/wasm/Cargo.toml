@@ -1,0 +1,10 @@
+[package]
+name = "wgpu-core-platform-wasm"
+version = "24.0.0"
+edition = "2021"
+
+[features]
+webgl = ["wgpu-hal/gles"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu-hal.workspace = true

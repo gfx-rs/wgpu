@@ -16,6 +16,7 @@ members = [
     "player",
     "tests",
     "wgpu-core",
+    "wgpu-core/platform-features/*",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -35,6 +36,7 @@ default-members = [
     "player",
     "tests",
     "wgpu-core",
+    "wgpu-core/platform-features/*",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -71,6 +73,10 @@ wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "24.0.0", path = "./tests" }
 wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
+
+wgpu-core-platform-windows-linux-android = { version = "24.0.0", path = "./wgpu-core/platform-features/windows-linux-android" }
+wgpu-core-platform-apple = { version = "24.0.0", path = "./wgpu-core/platform-features/apple" }
+wgpu-core-platform-wasm = { version = "24.0.0", path = "./wgpu-core/platform-features/wasm" }
 
 anyhow = { version = "1.0.95", default-features = false }
 approx = "0.5"

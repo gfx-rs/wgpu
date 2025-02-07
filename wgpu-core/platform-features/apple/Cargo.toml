@@ -1,0 +1,12 @@
+[package]
+name = "wgpu-core-platform-apple"
+version = "24.0.0"
+edition = "2021"
+
+[features]
+metal = ["wgpu-hal/metal"]
+angle = ["wgpu-hal/gles"]
+vulkan-portability = ["wgpu-hal/vulkan"]
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu-hal.workspace = true

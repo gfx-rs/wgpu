@@ -1,0 +1,12 @@
+[package]
+name = "wgpu-core-platform-windows-linux-android"
+version = "24.0.0"
+edition = "2021"
+
+[features]
+gles = ["wgpu-hal/gles"]
+vulkan = ["wgpu-hal/vulkan"]
+dx12 = ["wgpu-hal/dx12"]
+
+[target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
+wgpu-hal.workspace = true
