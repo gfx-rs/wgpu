@@ -323,15 +323,12 @@ impl super::Validator {
             | crate::TypeInner::BindingArray { base, size, .. } => {
                 handle.check_dep(base)?;
                 match size {
-                    crate::ArraySize::Pending(pending) => match pending {
-                        crate::PendingArraySize::Expression(expr) => Some(expr),
-                        crate::PendingArraySize::Override(h) => {
-                            Self::validate_override_handle(h, overrides)?;
-                            let r#override = &overrides[h];
-                            handle.check_dep(r#override.ty)?;
-                            r#override.init
-                        }
-                    },
+                    crate::ArraySize::Pending(h) => {
+                        Self::validate_override_handle(h, overrides)?;
+                        let r#override = &overrides[h];
+                        handle.check_dep(r#override.ty)?;
+                        r#override.init
+                    }
                     crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => None,
                 }
             }
@@ -923,7 +920,7 @@ fn constant_deps() {
 #[test]
 fn array_size_deps() {
     use super::Validator;
-    use crate::{ArraySize, Expression, PendingArraySize, Scalar, Span, Type, TypeInner};
+    use crate::{ArraySize, Expression, Override, Scalar, Span, Type, TypeInner};
 
     let nowhere = Span::default();
 
@@ -939,12 +936,21 @@ fn array_size_deps() {
     let ex_zero = m
         .global_expressions
         .append(Expression::ZeroValue(ty_u32), nowhere);
+    let ty_handle = m.overrides.append(
+        Override {
+            name: None,
+            id: None,
+            ty: ty_u32,
+            init: Some(ex_zero),
+        },
+        nowhere,
+    );
     let ty_arr = m.types.insert(
         Type {
             name: Some("bad_array".to_string()),
             inner: TypeInner::Array {
                 base: ty_u32,
-                size: ArraySize::Pending(PendingArraySize::Expression(ex_zero)),
+                size: ArraySize::Pending(ty_handle),
                 stride: 4,
             },
         },
@@ -963,7 +969,7 @@ fn array_size_deps() {
 #[test]
 fn array_size_override() {
     use super::Validator;
-    use crate::{ArraySize, Override, PendingArraySize, Scalar, Span, Type, TypeInner};
+    use crate::{ArraySize, Override, Scalar, Span, Type, TypeInner};
 
     let nowhere = Span::default();
 
@@ -983,7 +989,7 @@ fn array_size_override() {
             name: Some("bad_array".to_string()),
             inner: TypeInner::Array {
                 base: ty_u32,
-                size: ArraySize::Pending(PendingArraySize::Override(bad_override)),
+                size: ArraySize::Pending(bad_override),
                 stride: 4,
             },
         },
@@ -996,7 +1002,7 @@ fn array_size_override() {
 #[test]
 fn override_init_deps() {
     use super::Validator;
-    use crate::{ArraySize, Expression, Override, PendingArraySize, Scalar, Span, Type, TypeInner};
+    use crate::{ArraySize, Expression, Override, Scalar, Span, Type, TypeInner};
 
     let nowhere = Span::default();
 
@@ -1026,7 +1032,7 @@ fn override_init_deps() {
             name: Some("bad_array".to_string()),
             inner: TypeInner::Array {
                 base: ty_u32,
-                size: ArraySize::Pending(PendingArraySize::Override(r#override)),
+                size: ArraySize::Pending(r#override),
                 stride: 4,
             },
         },

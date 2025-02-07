@@ -19,6 +19,7 @@ pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, Indexab
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
+use thiserror::Error;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
 
 impl From<super::StorageFormat> for super::Scalar {
@@ -479,6 +480,47 @@ impl GlobalCtx<'_> {
                 get(*self, self.constants[c].init, self.global_expressions)
             }
             _ => get(*self, handle, arena),
+        }
+    }
+}
+
+#[derive(Error, Debug, Clone, Copy, PartialEq)]
+pub enum ResolveArraySizeError {
+    #[error("array element count must be positive (> 0)")]
+    ExpectedPositiveArrayLength,
+    #[error("internal: array size override has not been resolved")]
+    NonConstArrayLength,
+}
+
+impl crate::ArraySize {
+    /// Return the number of elements that `size` represents, if known at code generation time.
+    ///
+    /// If `size` is override-based, return an error unless the override's
+    /// initializer is a fully evaluated constant expression. You can call
+    /// [`pipeline_constants::process_overrides`] to supply values for a
+    /// module's overrides and ensure their initializers are fully evaluated, as
+    /// this function expects.
+    ///
+    /// [`pipeline_constants::process_overrides`]: crate::back::pipeline_constants::process_overrides
+    pub fn resolve(&self, gctx: GlobalCtx) -> Result<IndexableLength, ResolveArraySizeError> {
+        match *self {
+            crate::ArraySize::Constant(length) => Ok(IndexableLength::Known(length.get())),
+            crate::ArraySize::Pending(handle) => {
+                let Some(expr) = gctx.overrides[handle].init else {
+                    return Err(ResolveArraySizeError::NonConstArrayLength);
+                };
+                let length = gctx.eval_expr_to_u32(expr).map_err(|err| match err {
+                    U32EvalError::NonConst => ResolveArraySizeError::NonConstArrayLength,
+                    U32EvalError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
+                })?;
+
+                if length == 0 {
+                    return Err(ResolveArraySizeError::ExpectedPositiveArrayLength);
+                }
+
+                Ok(IndexableLength::Known(length))
+            }
+            crate::ArraySize::Dynamic => Ok(IndexableLength::Dynamic),
         }
     }
 }

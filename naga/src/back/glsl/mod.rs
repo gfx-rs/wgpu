@@ -539,6 +539,8 @@ pub enum Error {
     /// [`crate::Sampling::First`] is unsupported.
     #[error("`{:?}` sampling is unsupported", crate::Sampling::First)]
     FirstSamplingNotSupported,
+    #[error(transparent)]
+    ResolveArraySizeError(#[from] proc::ResolveArraySizeError),
 }
 
 /// Binary operation with a different logic on the GLSL side.
@@ -612,10 +614,6 @@ impl<'a, W: Write> Writer<'a, W> {
         pipeline_options: &'a PipelineOptions,
         policies: proc::BoundsCheckPolicies,
     ) -> Result<Self, Error> {
-        if !module.overrides.is_empty() {
-            return Err(Error::Override);
-        }
-
         // Check if the requested version is supported
         if !options.version.is_supported() {
             log::error!("Version {}", options.version);
@@ -1013,13 +1011,12 @@ impl<'a, W: Write> Writer<'a, W> {
         write!(self.out, "[")?;
 
         // Write the array size
-        // Writes nothing if `ArraySize::Dynamic`
-        match size {
-            crate::ArraySize::Constant(size) => {
+        // Writes nothing if `IndexableLength::Dynamic`
+        match size.resolve(self.module.to_ctx())? {
+            proc::IndexableLength::Known(size) => {
                 write!(self.out, "{size}")?;
             }
-            crate::ArraySize::Pending(_) => unreachable!(),
-            crate::ArraySize::Dynamic => (),
+            proc::IndexableLength::Dynamic => (),
         }
 
         write!(self.out, "]")?;
@@ -2759,7 +2756,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 write_expression(self, value)?;
                 write!(self.out, ")")?
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(Error::Override);
+            }
         }
 
         Ok(())
@@ -4574,12 +4573,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ")")?;
             }
             TypeInner::Array { base, size, .. } => {
-                let count = match size
-                    .to_indexable_length(self.module)
-                    .expect("Bad array size")
-                {
+                let count = match size.resolve(self.module.to_ctx())? {
                     proc::IndexableLength::Known(count) => count,
-                    proc::IndexableLength::Pending => unreachable!(),
                     proc::IndexableLength::Dynamic => return Ok(()),
                 };
                 self.write_type(base)?;
