@@ -1174,7 +1174,7 @@ fn invalid_functions() {
         if function_name == "return_pointer"
     }
 
-    check_validation! {
+    check(
         "
         @group(0) @binding(0)
         var<storage> atom: atomic<u32>;
@@ -1182,14 +1182,15 @@ fn invalid_functions() {
         fn return_atomic() -> atomic<u32> {
            return atom;
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::NonConstructibleReturnType,
-            ..
-        })
-        if function_name == "return_atomic"
-    }
+        ",
+        "error: automatic conversions cannot convert `u32` to `atomic<u32>`
+  ┌─ wgsl:6:19
+  │
+6 │            return atom;
+  │                   ^^^^ this expression has type u32
+
+",
+    );
 }
 
 #[test]
