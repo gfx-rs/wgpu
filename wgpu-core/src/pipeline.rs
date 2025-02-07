@@ -324,12 +324,17 @@ pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RenderPipelineDescriptor<'a> {
+pub struct RenderPipelineDescriptor<
+    'a,
+    PLL = PipelineLayoutId,
+    SM = ShaderModuleId,
+    PLC = PipelineCacheId,
+> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: Option<PipelineLayoutId>,
+    pub layout: Option<PLL>,
     /// The vertex processing state for this pipeline.
-    pub vertex: VertexState<'a>,
+    pub vertex: VertexState<'a, SM>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     #[cfg_attr(feature = "serde", serde(default))]
     pub primitive: wgt::PrimitiveState,
@@ -340,36 +345,16 @@ pub struct RenderPipelineDescriptor<'a> {
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
-    pub fragment: Option<FragmentState<'a>>,
+    pub fragment: Option<FragmentState<'a, SM>>,
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<PipelineCacheId>,
+    pub cache: Option<PLC>,
 }
 
-/// Describes a render (graphics) pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedRenderPipelineDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<Arc<PipelineLayout>>,
-    /// The vertex processing state for this pipeline.
-    pub vertex: ResolvedVertexState<'a>,
-    /// The properties of the pipeline at the primitive assembly and rasterization level.
-    pub primitive: wgt::PrimitiveState,
-    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil: Option<wgt::DepthStencilState>,
-    /// The multi-sampling properties of the pipeline.
-    pub multisample: wgt::MultisampleState,
-    /// The fragment processing state for this pipeline.
-    pub fragment: Option<ResolvedFragmentState<'a>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<Arc<PipelineCache>>,
-}
+pub type ResolvedRenderPipelineDescriptor<'a> =
+    RenderPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
