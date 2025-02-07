@@ -1,0 +1,3 @@
+(
+	targets: "WGSL | GLSL | SPIRV | HLSL | METAL",
+)

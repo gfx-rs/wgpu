@@ -7,5 +7,6 @@
         "0": NaN,
         "1300": 1.1,
         "depth": 2.3,
-    }
+    },
+	targets: "IR | ANALYSIS | SPIRV | METAL | HLSL | GLSL",
 )

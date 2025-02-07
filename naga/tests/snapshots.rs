@@ -12,7 +12,13 @@ const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
 
 bitflags::bitflags! {
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Default)]
+    #[cfg_attr(
+        feature = "deserialize",
+        derive(serde::Deserialize),
+        serde(transparent)
+    )]
+    #[derive(Debug, Eq, PartialEq)]
     struct Targets: u32 {
         /// A serialization of the `naga::Module`, in RON format.
         const IR = 1;
@@ -66,6 +72,8 @@ struct Parameters {
 
     // -- SPIR-V options --
     spv: SpirvOutParameters,
+
+    targets: Targets,
 
     // -- MSL options --
     #[cfg(all(feature = "deserialize", msl_out))]
@@ -269,17 +277,20 @@ type FragmentEntryPoint<'a> = ();
 fn check_targets(
     input: &Input,
     module: &mut naga::Module,
-    targets: Targets,
+    expected_targets: Targets,
     source_code: Option<&str>,
     // For testing hlsl generation when fragment shader doesn't consume all vertex outputs.
     frag_ep: Option<FragmentEntryPoint>,
 ) {
+    let params = input.read_parameters();
+    let name = &input.file_name;
+
+    let targets = params.targets;
+    assert_eq!(targets, expected_targets);
+
     if frag_ep.is_some() && !targets.contains(Targets::HLSL) {
         panic!("Providing FragmentEntryPoint only makes sense when testing hlsl-out");
     }
-
-    let params = input.read_parameters();
-    let name = &input.file_name;
 
     let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
         (

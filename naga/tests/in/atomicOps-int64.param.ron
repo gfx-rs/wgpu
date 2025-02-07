@@ -13,4 +13,5 @@
 		zero_initialize_workgroup_memory: true,
 		restrict_indexing: true
 	),
+	targets: "SPIRV | HLSL | WGSL",
 )
