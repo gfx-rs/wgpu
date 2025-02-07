@@ -304,21 +304,14 @@ pub struct VertexBufferLayout<'a> {
 /// Describes the vertex process in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct VertexState<'a> {
+pub struct VertexState<'a, SM = ShaderModuleId> {
     /// The compiled vertex stage and its entry point.
-    pub stage: ProgrammableStageDescriptor<'a>,
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
 }
 
-/// Describes the vertex process in a render pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedVertexState<'a> {
-    /// The compiled vertex stage and its entry point.
-    pub stage: ResolvedProgrammableStageDescriptor<'a>,
-    /// The format of any vertex buffers used with this pipeline.
-    pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
-}
+pub type ResolvedVertexState<'a> = VertexState<'a, Arc<ShaderModule>>;
 
 /// Describes fragment processing in a render pipeline.
 #[derive(Clone, Debug)]
