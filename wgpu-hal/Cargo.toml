@@ -48,6 +48,7 @@ metal = [
     "naga/msl-out-if-target-apple",
     "dep:block",
     "dep:core-graphics-types",
+    "dep:libc",
     "dep:metal",
     "dep:objc",
 ]
@@ -60,6 +61,7 @@ vulkan = [
     "dep:gpu-alloc",
     "dep:gpu-descriptor",
     "dep:hashbrown",
+    "dep:libc",
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",

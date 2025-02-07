@@ -1,7 +1,14 @@
 [package]
 name = "wgpu-core-platform-apple"
-version = "24.0.0"
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Feature unification helper crate for Apple platforms"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+rust-version.workspace = true
 
 [features]
 metal = ["wgpu-hal/metal"]
