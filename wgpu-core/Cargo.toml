@@ -47,10 +47,6 @@ api_log_info = []
 ## Log resource lifecycle management at info instead of trace level.
 resource_log_info = []
 
-## Support the Renderdoc graphics debugger:
-## <https://renderdoc.org/>
-renderdoc = ["wgpu-hal/renderdoc"]
-
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgpu-types/strict_asserts"]
@@ -108,6 +104,7 @@ gles = ["wgpu-core-platform-windows-linux-android/gles"]
 webgl = ["wgpu-core-platform-wasm/webgl"]
 angle = ["wgpu-core-platform-apple/angle"]
 vulkan-portability = ["wgpu-core-platform-apple/vulkan-portability"]
+renderdoc = ["wgpu-core-platform-windows-linux-android/renderdoc"]
 
 [dependencies]
 naga.workspace = true

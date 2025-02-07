@@ -168,7 +168,7 @@ static_assertions.workspace = true
 # Not Webassembly #
 #########3#########
 [target.'cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))'.dependencies]
-wgpu-core = { workspace = true, features = ["raw-window-handle"] }
+wgpu-core = { workspace = true, features = ["raw-window-handle", "renderdoc"] }
 wgpu-hal.workspace = true
 
 # Needed for only wgpu-core backend

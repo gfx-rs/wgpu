@@ -78,6 +78,15 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
             search_terms: &[Search::Negative("ash")],
         },
         Requirement {
+            human_readable_name:
+                "apple with `vulkan-portability` feature depends on `ash` and `renderdoc-sys`",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &["vulkan-portability"],
+            default_features: false,
+            search_terms: &[Search::Positive("ash"), Search::Positive("renderdoc-sys")],
+        },
+        Requirement {
             human_readable_name: "apple with 'gles' feature does not depend on 'glow'",
             target: "aarch64-apple-darwin",
             packages: &["wgpu"],
@@ -86,9 +95,25 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
             search_terms: &[Search::Negative("glow")],
         },
         Requirement {
+            human_readable_name: "apple with 'angle' feature depends on 'glow' and `renderdoc-sys`",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &["angle"],
+            default_features: false,
+            search_terms: &[Search::Positive("glow"), Search::Positive("renderdoc-sys")],
+        },
+        Requirement {
+            human_readable_name: "apple with no features does not depend on 'renderdoc-sys'",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &[],
+            default_features: false,
+            search_terms: &[Search::Negative("renderdoc-sys")],
+        },
+        Requirement {
             human_readable_name:
                 "windows with no features does not depend on 'glow', `windows`, or `ash`",
-            target: "aarch64-apple-darwin",
+            target: "x86_64-pc-windows-msvc",
             packages: &["wgpu"],
             features: &[],
             default_features: false,
@@ -97,6 +122,14 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
                 Search::Negative("windows"),
                 Search::Negative("ash"),
             ],
+        },
+        Requirement {
+            human_readable_name: "windows with no features depends on renderdoc-sys",
+            target: "x86_64-pc-windows-msvc",
+            packages: &["wgpu"],
+            features: &[],
+            default_features: false,
+            search_terms: &[Search::Positive("renderdoc-sys")],
         },
     ];
 

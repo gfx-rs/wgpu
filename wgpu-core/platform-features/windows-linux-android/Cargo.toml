@@ -19,6 +19,7 @@ rust-version = "1.76"
 gles = ["wgpu-hal/gles"]
 vulkan = ["wgpu-hal/vulkan"]
 dx12 = ["wgpu-hal/dx12"]
+renderdoc = ["wgpu-hal/renderdoc"]
 
 [target.'cfg(any(windows, target_os = "linux", target_os = "emscripten", target_os = "android"))'.dependencies]
 wgpu-hal.workspace = true

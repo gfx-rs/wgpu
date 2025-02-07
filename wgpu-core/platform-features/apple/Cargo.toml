@@ -17,8 +17,8 @@ rust-version = "1.76"
 
 [features]
 metal = ["wgpu-hal/metal"]
-angle = ["wgpu-hal/gles"]
-vulkan-portability = ["wgpu-hal/vulkan"]
+angle = ["wgpu-hal/gles", "wgpu-hal/renderdoc"]
+vulkan-portability = ["wgpu-hal/vulkan", "wgpu-hal/renderdoc"]
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 wgpu-hal.workspace = true
