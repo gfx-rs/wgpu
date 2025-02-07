@@ -565,6 +565,7 @@ fn write_output_spv(
         bounds_check_policies,
         binding_map: params.binding_map.clone(),
         zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+        force_loop_bounding: true,
         debug_info,
     };
 
