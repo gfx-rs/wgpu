@@ -26,7 +26,6 @@ mod surface;
 mod time;
 
 use std::{
-    collections::HashMap,
     fmt, iter, ops,
     ptr::NonNull,
     sync::{atomic, Arc},
@@ -35,7 +34,9 @@ use std::{
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
+use hashbrown::HashMap;
 use metal::foreign_types::ForeignTypeRef as _;
+use naga::FastHashMap;
 use parking_lot::{Mutex, RwLock};
 
 #[derive(Clone, Debug)]
@@ -937,9 +938,9 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: rustc_hash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
 
-    vertex_buffer_size_map: rustc_hash::FxHashMap<u64, wgt::BufferSize>,
+    vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,

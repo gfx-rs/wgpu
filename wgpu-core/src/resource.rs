@@ -8,15 +8,20 @@ use crate::{
     },
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, BufferId, CommandEncoderId, DeviceId, SurfaceId, TextureId, TextureViewId},
+    id::{
+        AdapterId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
+        TextureViewId,
+    },
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{rank, Mutex, RwLock},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
-    track::{SharedTrackerIndexAllocator, TextureSelector, TrackerIndex},
+    track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
     Label, LabelHelpers, SubmissionIndex,
 };
+
+use wgt::TextureSelector;
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -455,8 +460,8 @@ impl Buffer {
         }
 
         let (pub_usage, internal_use) = match op.host {
-            HostMap::Read => (wgt::BufferUsages::MAP_READ, hal::BufferUses::MAP_READ),
-            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, hal::BufferUses::MAP_WRITE),
+            HostMap::Read => (wgt::BufferUsages::MAP_READ, wgt::BufferUses::MAP_READ),
+            HostMap::Write => (wgt::BufferUsages::MAP_WRITE, wgt::BufferUses::MAP_WRITE),
         };
 
         if let Err(e) = self.check_usage(pub_usage) {
@@ -634,15 +639,15 @@ impl Buffer {
                     let transition_src = hal::BufferBarrier {
                         buffer: staging_buffer.raw(),
                         usage: hal::StateTransition {
-                            from: hal::BufferUses::MAP_WRITE,
-                            to: hal::BufferUses::COPY_SRC,
+                            from: wgt::BufferUses::MAP_WRITE,
+                            to: wgt::BufferUses::COPY_SRC,
                         },
                     };
                     let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: raw_buf,
                         usage: hal::StateTransition {
-                            from: hal::BufferUses::empty(),
-                            to: hal::BufferUses::COPY_DST,
+                            from: wgt::BufferUses::empty(),
+                            to: wgt::BufferUses::COPY_DST,
                         },
                     };
                     let mut pending_writes = queue.pending_writes.lock();
@@ -856,7 +861,7 @@ impl StagingBuffer {
         let stage_desc = hal::BufferDescriptor {
             label: crate::hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
             size: size.get(),
-            usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
+            usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
         };
 
@@ -1010,7 +1015,7 @@ pub struct Texture {
     pub(crate) inner: Snatchable<TextureInner>,
     pub(crate) device: Arc<Device>,
     pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
-    pub(crate) hal_usage: hal::TextureUses,
+    pub(crate) hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
@@ -1026,7 +1031,7 @@ impl Texture {
     pub(crate) fn new(
         device: &Arc<Device>,
         inner: TextureInner,
-        hal_usage: hal::TextureUses,
+        hal_usage: wgt::TextureUses,
         desc: &TextureDescriptor,
         format_features: wgt::TextureFormatFeatures,
         clear_mode: TextureClearMode,
@@ -1387,6 +1392,21 @@ impl Global {
         } else {
             hal_command_encoder_callback(None)
         }
+    }
+
+    /// # Safety
+    ///
+    /// - The raw queue handle must not be manually destroyed
+    pub unsafe fn queue_as_hal<A: HalApi, F, R>(&self, id: QueueId, hal_queue_callback: F) -> R
+    where
+        F: FnOnce(Option<&A::Queue>) -> R,
+    {
+        profiling::scope!("Queue::as_hal");
+
+        let queue = self.hub.queues.get(id);
+        let hal_queue = queue.raw().as_any().downcast_ref();
+
+        hal_queue_callback(hal_queue)
     }
 }
 

@@ -5,10 +5,10 @@ mod ext_bindings;
 #[allow(clippy::allow_attributes)]
 mod webgpu_sys;
 
+use hashbrown::HashMap;
 use js_sys::Promise;
 use std::{
     cell::RefCell,
-    collections::HashMap,
     fmt,
     future::Future,
     ops::Range,
@@ -658,7 +658,7 @@ fn map_texture_copy_view(
 }
 
 fn map_tagged_texture_copy_view(
-    view: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
+    view: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
 ) -> webgpu_sys::GpuCopyExternalImageDestInfo {
     let texture = view.texture.inner.as_webgpu();
     let mapped = webgpu_sys::GpuCopyExternalImageDestInfo::new(&texture.inner);
@@ -1368,7 +1368,11 @@ pub struct WebQueueWriteBuffer {
 #[derive(Debug)]
 pub struct WebBufferMappedRange {
     actual_mapping: js_sys::Uint8Array,
+    /// Copy of the mapped data that lives in the Rust/Wasm heap instead of JS,
+    /// so Rust code can borrow it.
     temporary_mapping: Vec<u8>,
+    /// Whether `temporary_mapping` has possibly been written to and needs to be written back to JS.
+    temporary_mapping_modified: bool,
     /// Unique identifier for this BufferMappedRange.
     ident: crate::cmp::Identifier,
 }
@@ -2554,8 +2558,8 @@ impl dispatch::QueueInterface for WebQueue {
 
     fn copy_external_image_to_texture(
         &self,
-        source: &wgt::CopyExternalImageSourceInfo,
-        dest: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
+        source: &crate::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
         size: crate::Extent3d,
     ) {
         self.inner
@@ -2672,6 +2676,7 @@ impl dispatch::BufferInterface for WebBuffer {
         WebBufferMappedRange {
             actual_mapping,
             temporary_mapping,
+            temporary_mapping_modified: false,
             ident: crate::cmp::Identifier::create(),
         }
         .into()
@@ -3102,6 +3107,18 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         _tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
     ) {
         unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn transition_resources<'a>(
+        &mut self,
+        _buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        _texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTexture>,
+        >,
+    ) {
+        // no-op
     }
 }
 impl Drop for WebCommandEncoder {
@@ -3768,11 +3785,18 @@ impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
 
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
+        self.temporary_mapping_modified = true;
         &mut self.temporary_mapping
     }
 }
 impl Drop for WebBufferMappedRange {
     fn drop(&mut self) {
+        if !self.temporary_mapping_modified {
+            // For efficiency, skip the copy if it is not needed.
+            // This is also how we skip copying back on *read-only* mappings.
+            return;
+        }
+
         // Copy from the temporary mapping back into the array buffer that was
         // originally provided by the browser
         let temporary_mapping_slice = self.temporary_mapping.as_slice();

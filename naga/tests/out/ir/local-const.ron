@@ -133,6 +133,9 @@
                     start: 4,
                     end: 5,
                 )),
+                Return(
+                    value: None,
+                ),
             ],
             diagnostic_filter_leaf: None,
         ),

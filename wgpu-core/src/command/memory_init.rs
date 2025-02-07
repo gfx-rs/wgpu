@@ -1,4 +1,6 @@
-use std::{collections::hash_map::Entry, ops::Range, sync::Arc, vec::Drain};
+use std::{ops::Range, sync::Arc, vec::Drain};
+
+use hashbrown::hash_map::Entry;
 
 use crate::{
     device::Device,
@@ -211,7 +213,7 @@ impl BakedCommands {
             // must already know about it.
             let transition = device_tracker
                 .buffers
-                .set_single(&buffer, hal::BufferUses::COPY_DST);
+                .set_single(&buffer, wgt::BufferUses::COPY_DST);
 
             let raw_buf = buffer.try_raw(snatch_guard)?;
 

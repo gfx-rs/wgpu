@@ -778,7 +778,7 @@ impl super::Validator {
             }
 
             if let Some(ref bind) = var.binding {
-                if !self.ep_resource_bindings.insert(bind.clone()) {
+                if !self.ep_resource_bindings.insert(*bind) {
                     if self.flags.contains(super::ValidationFlags::BINDINGS) {
                         return Err(EntryPointError::BindingCollision(var_handle)
                             .with_span_handle(var_handle, &module.global_variables));

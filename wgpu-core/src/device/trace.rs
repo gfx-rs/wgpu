@@ -220,7 +220,8 @@ pub struct Trace {
 
 #[cfg(feature = "trace")]
 impl Trace {
-    pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
+    pub fn new(dir_path_name: &str) -> Result<Self, std::io::Error> {
+        let path = std::path::Path::new(dir_path_name);
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;

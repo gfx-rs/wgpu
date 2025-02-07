@@ -1,10 +1,9 @@
 use glow::HasContext;
+use hashbrown::HashMap;
 use once_cell::sync::Lazy;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
 
-use std::{
-    collections::HashMap, ffi, mem::ManuallyDrop, os::raw, ptr, rc::Rc, sync::Arc, time::Duration,
-};
+use std::{ffi, mem::ManuallyDrop, os::raw, ptr, rc::Rc, sync::Arc, time::Duration};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
 const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
@@ -738,6 +737,7 @@ struct WindowSystemInterface {
 pub struct Instance {
     wsi: WindowSystemInterface,
     flags: wgt::InstanceFlags,
+    options: wgt::GlBackendOptions,
     inner: Mutex<Inner>,
 }
 
@@ -922,7 +922,12 @@ impl crate::Instance for Instance {
             unsafe { (function)(Some(egl_debug_proc), attributes.as_ptr()) };
         }
 
-        let inner = Inner::create(desc.flags, egl, display, desc.gles_minor_version)?;
+        let inner = Inner::create(
+            desc.flags,
+            egl,
+            display,
+            desc.backend_options.gl.gles_minor_version,
+        )?;
 
         Ok(Instance {
             wsi: WindowSystemInterface {
@@ -930,6 +935,7 @@ impl crate::Instance for Instance {
                 kind: wsi_kind,
             },
             flags: desc.flags,
+            options: desc.backend_options.gl.clone(),
             inner: Mutex::new(inner),
         })
     }
@@ -1089,10 +1095,13 @@ impl crate::Instance for Instance {
         inner.egl.unmake_current();
 
         unsafe {
-            super::Adapter::expose(AdapterContext {
-                glow: Mutex::new(gl),
-                egl: Some(inner.egl.clone()),
-            })
+            super::Adapter::expose(
+                AdapterContext {
+                    glow: Mutex::new(gl),
+                    egl: Some(inner.egl.clone()),
+                },
+                self.options.clone(),
+            )
         }
         .into_iter()
         .collect()
@@ -1111,13 +1120,17 @@ impl super::Adapter {
     ///   dropping any objects returned from this adapter.
     pub unsafe fn new_external(
         fun: impl FnMut(&str) -> *const ffi::c_void,
+        options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let context = unsafe { glow::Context::from_loader_function(fun) };
         unsafe {
-            Self::expose(AdapterContext {
-                glow: Mutex::new(ManuallyDrop::new(context)),
-                egl: None,
-            })
+            Self::expose(
+                AdapterContext {
+                    glow: Mutex::new(ManuallyDrop::new(context)),
+                    egl: None,
+                },
+                options,
+            )
         }
     }
 

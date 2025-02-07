@@ -60,7 +60,7 @@ impl ComputePass {
         } = desc;
 
         Self {
-            base: Some(BasePass::new(label)),
+            base: Some(BasePass::new(&label)),
             parent,
             timestamp_writes,
 
@@ -95,17 +95,13 @@ impl fmt::Debug for ComputePass {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ComputePassDescriptor<'a> {
+pub struct ComputePassDescriptor<'a, PTW = PassTimestampWrites> {
     pub label: Label<'a>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<&'a PassTimestampWrites>,
+    pub timestamp_writes: Option<PTW>,
 }
 
-struct ArcComputePassDescriptor<'a> {
-    pub label: &'a Label<'a>,
-    /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Option<ArcPassTimestampWrites>,
-}
+type ArcComputePassDescriptor<'a> = ComputePassDescriptor<'a, ArcPassTimestampWrites>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -292,7 +288,7 @@ impl Global {
         let hub = &self.hub;
 
         let mut arc_desc = ArcComputePassDescriptor {
-            label: &desc.label,
+            label: desc.label.as_deref().map(std::borrow::Cow::Borrowed),
             timestamp_writes: None, // Handle only once we resolved the encoder.
         };
 
@@ -307,6 +303,7 @@ impl Global {
 
         arc_desc.timestamp_writes = match desc
             .timestamp_writes
+            .as_ref()
             .map(|tw| {
                 Self::validate_pass_timestamp_writes(&cmd_buf.device, &hub.query_sets.read(), tw)
             })
@@ -366,7 +363,7 @@ impl Global {
             encoder_id,
             &ComputePassDescriptor {
                 label: label.as_deref().map(std::borrow::Cow::Borrowed),
-                timestamp_writes,
+                timestamp_writes: timestamp_writes.cloned(),
             },
         );
         if let Some(err) = encoder_error {
@@ -938,7 +935,7 @@ fn dispatch_indirect(
         let src_transition = state
             .intermediate_trackers
             .buffers
-            .set_single(&buffer, hal::BufferUses::STORAGE_READ_ONLY);
+            .set_single(&buffer, wgt::BufferUses::STORAGE_READ_ONLY);
         let src_barrier =
             src_transition.map(|transition| transition.into_hal(&buffer, &state.snatch_guard));
         unsafe {
@@ -949,8 +946,8 @@ fn dispatch_indirect(
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::INDIRECT,
-                    to: hal::BufferUses::STORAGE_READ_WRITE,
+                    from: wgt::BufferUses::INDIRECT,
+                    to: wgt::BufferUses::STORAGE_READ_WRITE,
                 },
             }]);
         }
@@ -996,8 +993,8 @@ fn dispatch_indirect(
             state.raw_encoder.transition_buffers(&[hal::BufferBarrier {
                 buffer: params.dst_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::STORAGE_READ_WRITE,
-                    to: hal::BufferUses::INDIRECT,
+                    from: wgt::BufferUses::STORAGE_READ_WRITE,
+                    to: wgt::BufferUses::INDIRECT,
                 },
             }]);
         }
@@ -1012,7 +1009,7 @@ fn dispatch_indirect(
         state
             .scope
             .buffers
-            .merge_single(&buffer, hal::BufferUses::INDIRECT)?;
+            .merge_single(&buffer, wgt::BufferUses::INDIRECT)?;
 
         use crate::resource::Trackable;
         state.flush_states(Some(buffer.tracker_index()))?;

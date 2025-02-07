@@ -244,7 +244,7 @@ impl super::Device {
                 }
                 naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                     let br = match var.binding {
-                        Some(ref br) => br.clone(),
+                        Some(br) => br,
                         None => continue,
                     };
                     let storage_access_store = match var.space {
@@ -340,8 +340,8 @@ impl crate::Device for super::Device {
     type A = super::Api;
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
-        let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
-        let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+        let map_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+        let map_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
         let mut options = metal::MTLResourceOptions::empty();
         options |= if map_read || map_write {

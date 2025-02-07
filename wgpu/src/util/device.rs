@@ -9,7 +9,7 @@ pub struct BufferInitDescriptor<'a> {
     pub contents: &'a [u8],
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
-    pub usage: crate::BufferUsages,
+    pub usage: wgt::BufferUsages,
 }
 
 /// Utility methods not meant to be in the main API.

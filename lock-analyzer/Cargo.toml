@@ -17,3 +17,6 @@ anyhow.workspace = true
 [dependencies.serde]
 workspace = true
 features = ["default", "serde_derive"]
+
+[lints.clippy]
+disallowed_types = "allow"

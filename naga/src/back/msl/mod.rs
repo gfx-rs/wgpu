@@ -148,6 +148,8 @@ pub enum Error {
     UnsupportedRayTracing,
     #[error("overrides should not be present at this stage")]
     Override,
+    #[error("bitcasting to {0:?} is not supported")]
+    UnsupportedBitCast(crate::TypeInner),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -496,7 +498,7 @@ impl Options {
                 index: 0,
                 interpolation: None,
             }),
-            None => Err(EntryPointError::MissingBindTarget(res_binding.clone())),
+            None => Err(EntryPointError::MissingBindTarget(*res_binding)),
         }
     }
 

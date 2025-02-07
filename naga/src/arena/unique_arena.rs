@@ -108,7 +108,7 @@ impl<T> Iterator for UniqueArenaDrain<'_, T> {
 impl<T: Eq + hash::Hash> UniqueArena<T> {
     /// Returns an iterator over the items stored in this arena, returning both
     /// the item's handle and a reference to it.
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Handle<T>, &T)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Handle<T>, &T)> + ExactSizeIterator {
         self.set.iter().enumerate().map(|(i, v)| {
             let index = unsafe { Index::new_unchecked(i as u32) };
             (Handle::new(index), v)

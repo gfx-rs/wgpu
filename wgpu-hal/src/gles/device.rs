@@ -1,6 +1,7 @@
 use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
+use naga::FastHashMap;
 use std::{
     cmp::max,
     convert::TryInto,
@@ -8,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{AtomicFenceValue, TlasInstance};
+use crate::TlasInstance;
 use arrayvec::ArrayVec;
 use std::sync::atomic::Ordering;
 
@@ -16,7 +17,7 @@ type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::ShaderModule>,
 );
-type NameBindingMap = rustc_hash::FxHashMap<String, (super::BindingRegister, u8)>;
+type NameBindingMap = FastHashMap<String, (super::BindingRegister, u8)>;
 
 struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
@@ -505,7 +506,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let target = if desc.usage.contains(crate::BufferUses::INDEX) {
+        let target = if desc.usage.contains(wgt::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
             glow::ARRAY_BUFFER
@@ -520,7 +521,7 @@ impl crate::Device for super::Device {
                 .private_caps
                 .contains(PrivateCapabilities::BUFFER_ALLOCATION);
 
-        if emulate_map && desc.usage.intersects(crate::BufferUses::MAP_WRITE) {
+        if emulate_map && desc.usage.intersects(wgt::BufferUses::MAP_WRITE) {
             return Ok(super::Buffer {
                 raw: None,
                 target,
@@ -533,7 +534,7 @@ impl crate::Device for super::Device {
 
         let gl = &self.shared.context.lock();
 
-        let target = if desc.usage.contains(crate::BufferUses::INDEX) {
+        let target = if desc.usage.contains(wgt::BufferUses::INDEX) {
             glow::ELEMENT_ARRAY_BUFFER
         } else {
             glow::ARRAY_BUFFER
@@ -541,16 +542,16 @@ impl crate::Device for super::Device {
 
         let is_host_visible = desc
             .usage
-            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE);
+            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE);
         let is_coherent = desc
             .memory_flags
             .contains(crate::MemoryFlags::PREFER_COHERENT);
 
         let mut map_flags = 0;
-        if desc.usage.contains(crate::BufferUses::MAP_READ) {
+        if desc.usage.contains(wgt::BufferUses::MAP_READ) {
             map_flags |= glow::MAP_READ_BIT;
         }
-        if desc.usage.contains(crate::BufferUses::MAP_WRITE) {
+        if desc.usage.contains(wgt::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_WRITE_BIT;
         }
 
@@ -573,14 +574,14 @@ impl crate::Device for super::Device {
                 }
             }
             // TODO: may also be required for other calls involving `buffer_sub_data_u8_slice` (e.g. copy buffer to buffer and clear buffer)
-            if desc.usage.intersects(crate::BufferUses::QUERY_RESOLVE) {
+            if desc.usage.intersects(wgt::BufferUses::QUERY_RESOLVE) {
                 map_flags |= glow::DYNAMIC_STORAGE_BIT;
             }
             unsafe { gl.buffer_storage(target, raw_size, None, map_flags) };
         } else {
             assert!(!is_coherent);
             let usage = if is_host_visible {
-                if desc.usage.contains(crate::BufferUses::MAP_READ) {
+                if desc.usage.contains(wgt::BufferUses::MAP_READ) {
                     glow::STREAM_READ
                 } else {
                     glow::DYNAMIC_DRAW
@@ -596,7 +597,7 @@ impl crate::Device for super::Device {
 
         unsafe { gl.bind_buffer(target, None) };
 
-        if !is_coherent && desc.usage.contains(crate::BufferUses::MAP_WRITE) {
+        if !is_coherent && desc.usage.contains(wgt::BufferUses::MAP_WRITE) {
             map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
         }
         //TODO: do we need `glow::MAP_UNSYNCHRONIZED_BIT`?
@@ -613,7 +614,7 @@ impl crate::Device for super::Device {
             }
         }
 
-        let data = if emulate_map && desc.usage.contains(crate::BufferUses::MAP_READ) {
+        let data = if emulate_map && desc.usage.contains(wgt::BufferUses::MAP_READ) {
             Some(Arc::new(Mutex::new(vec![0; desc.size as usize])))
         } else {
             None
@@ -727,9 +728,9 @@ impl crate::Device for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let gl = &self.shared.context.lock();
 
-        let render_usage = crate::TextureUses::COLOR_TARGET
-            | crate::TextureUses::DEPTH_STENCIL_WRITE
-            | crate::TextureUses::DEPTH_STENCIL_READ;
+        let render_usage = wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
         let inner = if render_usage.contains(desc.usage)
@@ -1523,17 +1524,12 @@ impl crate::Device for super::Device {
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         self.counters.fences.add(1);
-        Ok(super::Fence {
-            last_completed: AtomicFenceValue::new(0),
-            pending: Vec::new(),
-        })
+        Ok(super::Fence::new(&self.shared.options))
     }
 
     unsafe fn destroy_fence(&self, fence: super::Fence) {
         let gl = &self.shared.context.lock();
-        for (_, sync) in fence.pending {
-            unsafe { gl.delete_sync(sync) };
-        }
+        fence.destroy(gl);
         self.counters.fences.sub(1);
     }
 
@@ -1550,44 +1546,21 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> Result<bool, crate::DeviceError> {
-        if fence.last_completed.load(Ordering::Relaxed) < wait_value {
-            let gl = &self.shared.context.lock();
-            // MAX_CLIENT_WAIT_TIMEOUT_WEBGL is:
-            // - 1s in Gecko https://searchfox.org/mozilla-central/rev/754074e05178e017ef6c3d8e30428ffa8f1b794d/dom/canvas/WebGLTypes.h#1386
-            // - 0 in WebKit https://github.com/WebKit/WebKit/blob/4ef90d4672ca50267c0971b85db403d9684508ea/Source/WebCore/html/canvas/WebGL2RenderingContext.cpp#L110
-            // - 0 in Chromium https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/modules/webgl/webgl2_rendering_context_base.cc;l=112;drc=a3cb0ac4c71ec04abfeaed199e5d63230eca2551
-            let timeout_ns = if cfg!(any(webgl, Emscripten)) {
-                0
-            } else {
-                (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
-            };
-            if let Some(&(_, sync)) = fence
-                .pending
-                .iter()
-                .find(|&&(value, _)| value >= wait_value)
-            {
-                let signalled = match unsafe {
-                    gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
-                } {
-                    // for some reason firefox returns WAIT_FAILED, to investigate
-                    #[cfg(any(webgl, Emscripten))]
-                    glow::WAIT_FAILED => {
-                        log::warn!("wait failed!");
-                        false
-                    }
-                    glow::TIMEOUT_EXPIRED => false,
-                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => true,
-                    _ => return Err(crate::DeviceError::Lost),
-                };
-                if signalled {
-                    fence
-                        .last_completed
-                        .fetch_max(wait_value, Ordering::Relaxed);
-                }
-                return Ok(signalled);
-            }
+        if fence.satisfied(wait_value) {
+            return Ok(true);
         }
-        Ok(true)
+
+        let gl = &self.shared.context.lock();
+        // MAX_CLIENT_WAIT_TIMEOUT_WEBGL is:
+        // - 1s in Gecko https://searchfox.org/mozilla-central/rev/754074e05178e017ef6c3d8e30428ffa8f1b794d/dom/canvas/WebGLTypes.h#1386
+        // - 0 in WebKit https://github.com/WebKit/WebKit/blob/4ef90d4672ca50267c0971b85db403d9684508ea/Source/WebCore/html/canvas/WebGL2RenderingContext.cpp#L110
+        // - 0 in Chromium https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/modules/webgl/webgl2_rendering_context_base.cc;l=112;drc=a3cb0ac4c71ec04abfeaed199e5d63230eca2551
+        let timeout_ns = if cfg!(any(webgl, Emscripten)) {
+            0
+        } else {
+            (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
+        };
+        fence.wait(gl, wait_value, timeout_ns)
     }
 
     unsafe fn start_capture(&self) -> bool {
