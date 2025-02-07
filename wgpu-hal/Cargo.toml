@@ -46,21 +46,17 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
     "naga/msl-out-if-target-apple",
-    "dep:bitflags",
     "dep:block",
     "dep:core-graphics-types",
     "dep:libc",
     "dep:metal",
     "dep:objc",
-    "dep:parking_lot",
-    "dep:thiserror",
 ]
 vulkan = [
     "naga/spv-out",
     "dep:android_system_properties",
     "dep:arrayvec",
     "dep:ash",
-    "dep:bitflags",
     "dep:gpu-alloc",
     "dep:gpu-descriptor",
     "dep:hashbrown",
@@ -68,18 +64,14 @@ vulkan = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
-    "dep:parking_lot",
     "dep:profiling",
-    "dep:raw-window-handle",
     "dep:smallvec",
-    "dep:thiserror",
     "dep:windows",
     "windows/Win32",
 ]
 gles = [
     "naga/glsl-out",
     "dep:arrayvec",
-    "dep:bitflags",
     "dep:bytemuck",
     "dep:glow",
     "dep:glutin_wgl_sys",
@@ -89,10 +81,7 @@ gles = [
     "dep:libloading",
     "dep:log",
     "dep:ndk-sys",
-    "dep:parking_lot",
     "dep:profiling",
-    "dep:raw-window-handle",
-    "dep:thiserror",
     "dep:wasm-bindgen",
     "dep:web-sys",
     "once_cell/std",
@@ -108,16 +97,12 @@ dx12 = [
     "naga/hlsl-out",
     "dep:arrayvec",
     "dep:bit-set",
-    "dep:bitflags",
     "dep:hashbrown",
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
-    "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
-    "dep:raw-window-handle",
-    "dep:thiserror",
     "dep:windows-core",
     "gpu-allocator/d3d12",
     "windows/Win32_Graphics_Direct3D_Fxc",
@@ -167,17 +152,19 @@ required-features = ["gles"]
 naga.workspace = true
 wgpu-types.workspace = true
 
+# Dependencies in the lib and empty backend
+bitflags.workspace = true
+raw-window-handle.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+
 arrayvec = { workspace = true, optional = true }
-bitflags = { workspace = true, optional = true }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 once_cell = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
-parking_lot = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
-raw-window-handle = { workspace = true, optional = true }
 rustc-hash = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }
 
 # Backend: GLES
 bytemuck = { workspace = true, optional = true }

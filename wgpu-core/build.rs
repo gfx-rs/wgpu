@@ -1,6 +1,6 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
-        windows_linux_android: { any(windows, target_os = "linux", target_os = "android") },
+        windows_linux_android: { any(windows, target_os = "linux", target_os = "emscripten", target_os = "android") },
         send_sync: { any(
             not(target_arch = "wasm32"),
             all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))

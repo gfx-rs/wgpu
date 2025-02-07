@@ -61,7 +61,7 @@ webgpu = ["naga?/wgsl-out"]
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-webgl = ["wgpu-core/webgl"]
+webgl = ["wgpu-core/webgl", "dep:wgpu-hal"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
