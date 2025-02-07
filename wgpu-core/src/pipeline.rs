@@ -122,9 +122,9 @@ pub enum CreateShaderModuleError {
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ProgrammableStageDescriptor<'a> {
+pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// The compiled shader module for this stage.
-    pub module: ShaderModuleId,
+    pub module: SM,
     /// The name of the entry point in the compiled shader. The name is selected using the
     /// following logic:
     ///
@@ -147,32 +147,8 @@ pub struct ProgrammableStageDescriptor<'a> {
     pub zero_initialize_workgroup_memory: bool,
 }
 
-/// Describes a programmable pipeline stage.
-#[derive(Clone, Debug)]
-pub struct ResolvedProgrammableStageDescriptor<'a> {
-    /// The compiled shader module for this stage.
-    pub module: Arc<ShaderModule>,
-    /// The name of the entry point in the compiled shader. The name is selected using the
-    /// following logic:
-    ///
-    /// * If `Some(name)` is specified, there must be a function with this name in the shader.
-    /// * If a single entry point associated with this stage must be in the shader, then proceed as
-    ///   if `Some(…)` was specified with that entry point's name.
-    pub entry_point: Option<Cow<'a, str>>,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
-    ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: Cow<'a, naga::back::PipelineConstants>,
-    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
-    ///
-    /// This is required by the WebGPU spec, but may have overhead which can be avoided
-    /// for cross-platform applications
-    pub zero_initialize_workgroup_memory: bool,
-}
+pub type ResolvedProgrammableStageDescriptor<'a> =
+    ProgrammableStageDescriptor<'a, Arc<ShaderModule>>;
 
 /// Number of implicit bind groups derived at pipeline creation.
 pub type ImplicitBindGroupCount = u8;
