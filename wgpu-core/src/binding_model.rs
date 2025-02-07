@@ -465,29 +465,47 @@ pub type ResolvedBindGroupEntry<'a> =
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BindGroupDescriptor<'a> {
+pub struct BindGroupDescriptor<
+    'a,
+    BGL = BindGroupLayoutId,
+    B = BufferId,
+    S = SamplerId,
+    TV = TextureViewId,
+    TLAS = TlasId,
+> where
+    [BufferBinding<B>]: ToOwned,
+    [S]: ToOwned,
+    [TV]: ToOwned,
+    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
+    <[S] as ToOwned>::Owned: std::fmt::Debug,
+    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    [BindGroupEntry<'a, B, S, TV, TLAS>]: ToOwned,
+    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: std::fmt::Debug,
+{
     /// Debug label of the bind group.
     ///
     /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// The [`BindGroupLayout`] that corresponds to this bind group.
-    pub layout: BindGroupLayoutId,
+    pub layout: BGL,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            deserialize = "<[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: Deserialize<'de>"
+        ))
+    )]
     /// The resources to bind to this bind group.
-    pub entries: Cow<'a, [BindGroupEntry<'a>]>,
+    pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS>]>,
 }
 
-/// Describes a group of bindings and the resources to be bound.
-#[derive(Clone, Debug)]
-pub struct ResolvedBindGroupDescriptor<'a> {
-    /// Debug label of the bind group.
-    ///
-    /// This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// The [`BindGroupLayout`] that corresponds to this bind group.
-    pub layout: Arc<BindGroupLayout>,
-    /// The resources to bind to this bind group.
-    pub entries: Cow<'a, [ResolvedBindGroupEntry<'a>]>,
-}
+pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
+    'a,
+    Arc<BindGroupLayout>,
+    Arc<Buffer>,
+    Arc<Sampler>,
+    Arc<TextureView>,
+    Arc<Tlas>,
+>;
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
