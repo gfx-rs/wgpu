@@ -641,14 +641,23 @@ pub enum PushConstantUploadError {
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PipelineLayoutDescriptor<'a> {
+#[cfg_attr(feature = "serde", serde(bound = "BGL: Serialize"))]
+pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
+where
+    [BGL]: ToOwned,
+    <[BGL] as ToOwned>::Owned: std::fmt::Debug,
+{
     /// Debug label of the pipeline layout.
     ///
     /// This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: Cow<'a, [BindGroupLayoutId]>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "<[BGL] as ToOwned>::Owned: Deserialize<'de>"))
+    )]
+    pub bind_group_layouts: Cow<'a, [BGL]>,
     /// Set of push constant ranges this pipeline uses. Each shader stage that
     /// uses push constants must define the range in push constant memory that
     /// corresponds to its single `layout(push_constant)` uniform block.
@@ -659,27 +668,7 @@ pub struct PipelineLayoutDescriptor<'a> {
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 
-/// Describes a pipeline layout.
-///
-/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
-#[derive(Debug)]
-pub struct ResolvedPipelineLayoutDescriptor<'a> {
-    /// Debug label of the pipeline layout.
-    ///
-    /// This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
-    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: Cow<'a, [Arc<BindGroupLayout>]>,
-    /// Set of push constant ranges this pipeline uses. Each shader stage that
-    /// uses push constants must define the range in push constant memory that
-    /// corresponds to its single `layout(push_constant)` uniform block.
-    ///
-    /// If this array is non-empty, the
-    /// [`Features::PUSH_CONSTANTS`](wgt::Features::PUSH_CONSTANTS) feature must
-    /// be enabled.
-    pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
-}
+pub type ResolvedPipelineLayoutDescriptor<'a> = PipelineLayoutDescriptor<'a, Arc<BindGroupLayout>>;
 
 #[derive(Debug)]
 pub struct PipelineLayout {
