@@ -801,18 +801,13 @@ crate::impl_storage_item!(PipelineLayout);
 #[repr(C)]
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BufferBinding {
-    pub buffer_id: BufferId,
+pub struct BufferBinding<B = BufferId> {
+    pub buffer: B,
     pub offset: wgt::BufferAddress,
     pub size: Option<wgt::BufferSize>,
 }
 
-#[derive(Clone, Debug)]
-pub struct ResolvedBufferBinding {
-    pub buffer: Arc<Buffer>,
-    pub offset: wgt::BufferAddress,
-    pub size: Option<wgt::BufferSize>,
-}
+pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
 
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type

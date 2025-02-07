@@ -1121,7 +1121,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             for entry in desc.entries.iter() {
                 if let BindingResource::BufferArray(array) = entry.resource {
                     arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
-                        buffer_id: binding.buffer.inner.as_core().id,
+                        buffer: binding.buffer.inner.as_core().id,
                         offset: binding.offset,
                         size: binding.size,
                     }));
@@ -1141,7 +1141,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                         offset,
                         size,
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
-                        buffer_id: buffer.inner.as_core().id,
+                        buffer: buffer.inner.as_core().id,
                         offset,
                         size,
                     }),
