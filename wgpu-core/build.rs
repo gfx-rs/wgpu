@@ -1,6 +1,6 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
-        windows_linux_android: { any(windows, target_os = "linux", target_os = "emscripten", target_os = "android") },
+        windows_linux_android: { any(windows, target_os = "linux", target_os = "android") },
         send_sync: { any(
             not(target_arch = "wasm32"),
             all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
@@ -10,6 +10,7 @@ fn main() {
         gles: { any(
             all(windows_linux_android, feature = "gles"), // Regular GLES
             all(webgl), // WebGL
+            all(target_os = "emscripten", feature = "gles"), // Emscripten GLES
             all(target_vendor = "apple", feature = "angle") // ANGLE on Apple
         ) },
         vulkan: { any(
