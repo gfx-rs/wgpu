@@ -439,23 +439,28 @@ impl BindingTypeMaxCountValidator {
 /// Bindable resource and the slot to bind it to.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BindGroupEntry<'a> {
+pub struct BindGroupEntry<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
+where
+    [BufferBinding<B>]: ToOwned,
+    [S]: ToOwned,
+    [TV]: ToOwned,
+    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
+    <[S] as ToOwned>::Owned: std::fmt::Debug,
+    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+{
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
     pub binding: u32,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "BindingResource<'a, B, S, TV, TLAS>: Deserialize<'de>"))
+    )]
     /// Resource to attach to the binding
-    pub resource: BindingResource<'a>,
+    pub resource: BindingResource<'a, B, S, TV, TLAS>,
 }
 
-/// Bindable resource and the slot to bind it to.
-#[derive(Clone, Debug)]
-pub struct ResolvedBindGroupEntry<'a> {
-    /// Slot for which binding provides resource. Corresponds to an entry of the same
-    /// binding index in the [`BindGroupLayoutDescriptor`].
-    pub binding: u32,
-    /// Resource to attach to the binding
-    pub resource: ResolvedBindingResource<'a>,
-}
+pub type ResolvedBindGroupEntry<'a> =
+    BindGroupEntry<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
 
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
