@@ -316,21 +316,14 @@ pub type ResolvedVertexState<'a> = VertexState<'a, Arc<ShaderModule>>;
 /// Describes fragment processing in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FragmentState<'a> {
+pub struct FragmentState<'a, SM = ShaderModuleId> {
     /// The compiled fragment stage and its entry point.
-    pub stage: ProgrammableStageDescriptor<'a>,
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The effect of draw calls on the color aspect of the output target.
     pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
 
-/// Describes fragment processing in a render pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedFragmentState<'a> {
-    /// The compiled fragment stage and its entry point.
-    pub stage: ResolvedProgrammableStageDescriptor<'a>,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
-}
+pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
