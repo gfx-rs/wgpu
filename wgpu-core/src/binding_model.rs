@@ -802,28 +802,38 @@ pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum BindingResource<'a> {
-    Buffer(BufferBinding),
-    BufferArray(Cow<'a, [BufferBinding]>),
-    Sampler(SamplerId),
-    SamplerArray(Cow<'a, [SamplerId]>),
-    TextureView(TextureViewId),
-    TextureViewArray(Cow<'a, [TextureViewId]>),
-    AccelerationStructure(TlasId),
+pub enum BindingResource<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
+where
+    [BufferBinding<B>]: ToOwned,
+    [S]: ToOwned,
+    [TV]: ToOwned,
+    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
+    <[S] as ToOwned>::Owned: std::fmt::Debug,
+    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+{
+    Buffer(BufferBinding<B>),
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "<[BufferBinding<B>] as ToOwned>::Owned: Deserialize<'de>"))
+    )]
+    BufferArray(Cow<'a, [BufferBinding<B>]>),
+    Sampler(S),
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "<[S] as ToOwned>::Owned: Deserialize<'de>"))
+    )]
+    SamplerArray(Cow<'a, [S]>),
+    TextureView(TV),
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(deserialize = "<[TV] as ToOwned>::Owned: Deserialize<'de>"))
+    )]
+    TextureViewArray(Cow<'a, [TV]>),
+    AccelerationStructure(TLAS),
 }
 
-// Note: Duplicated in `wgpu-rs` as `BindingResource`
-// They're different enough that it doesn't make sense to share a common type
-#[derive(Debug, Clone)]
-pub enum ResolvedBindingResource<'a> {
-    Buffer(ResolvedBufferBinding),
-    BufferArray(Cow<'a, [ResolvedBufferBinding]>),
-    Sampler(Arc<Sampler>),
-    SamplerArray(Cow<'a, [Arc<Sampler>]>),
-    TextureView(Arc<TextureView>),
-    TextureViewArray(Cow<'a, [Arc<TextureView>]>),
-    AccelerationStructure(Arc<Tlas>),
-}
+pub type ResolvedBindingResource<'a> =
+    BindingResource<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
