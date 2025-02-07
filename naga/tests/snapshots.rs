@@ -975,41 +975,23 @@ fn convert_wgsl() {
             "storage-textures",
             Targets::IR | Targets::ANALYSIS | Targets::SPIRV | Targets::METAL | Targets::HLSL,
         ),
+        ("debug-symbol-simple", Targets::SPIRV),
+        ("debug-symbol-terrain", Targets::SPIRV),
+        ("debug-symbol-large-source", Targets::SPIRV),
     ];
 
     for &(name, targets) in inputs.iter() {
         // WGSL shaders lives in root dir as a privileged.
         let input = Input::new(None, name, "wgsl");
         let source = input.read_source();
+        // crlf will make the large split output different on different platform
+        let source = source.replace('\r', "");
         match naga::front::wgsl::parse_str(&source) {
             Ok(mut module) => check_targets(&input, &mut module, targets, None, None),
             Err(e) => panic!(
                 "{}",
                 e.emit_to_string_with_path(&source, input.input_path())
             ),
-        }
-    }
-
-    {
-        let inputs = [
-            ("debug-symbol-simple", Targets::SPIRV),
-            ("debug-symbol-terrain", Targets::SPIRV),
-            ("debug-symbol-large-source", Targets::SPIRV),
-        ];
-        for &(name, targets) in inputs.iter() {
-            // WGSL shaders lives in root dir as a privileged.
-            let input = Input::new(None, name, "wgsl");
-            let source = input.read_source();
-
-            // crlf will make the large split output different on different platform
-            let source = source.replace('\r', "");
-            match naga::front::wgsl::parse_str(&source) {
-                Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source), None),
-                Err(e) => panic!(
-                    "{}",
-                    e.emit_to_string_with_path(&source, input.input_path())
-                ),
-            }
         }
     }
 }
