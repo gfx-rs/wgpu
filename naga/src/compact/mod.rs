@@ -127,6 +127,7 @@ pub fn compact(module: &mut crate::Module) {
         if r#override.name.is_some() {
             log::trace!("tracing override {:?}", r#override.name.as_ref().unwrap());
             module_tracer.overrides_used.insert(handle);
+            module_tracer.types_used.insert(r#override.ty);
             if let Some(init) = r#override.init {
                 module_tracer.global_expressions_used.insert(init);
             }
@@ -170,15 +171,6 @@ pub fn compact(module: &mut crate::Module) {
             FunctionMap::from(used)
         })
         .collect();
-
-    // Overrides' initializers are taken care of already, because
-    // expression tracing sees through overrides. But we still need to
-    // note type usage.
-    for (handle, r#override) in module.overrides.iter() {
-        if module_tracer.overrides_used.contains(handle) {
-            module_tracer.types_used.insert(r#override.ty);
-        }
-    }
 
     // Treat all named types as used.
     for (handle, ty) in module.types.iter() {
@@ -993,6 +985,78 @@ fn unnamed_constant_type() {
             name: Some("totally_named".to_string()),
             ty: ty_vec_u32,
             init: named_init,
+        },
+        nowhere,
+    );
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
+}
+
+#[test]
+fn unnamed_override_type() {
+    let mut module = crate::Module::default();
+    let nowhere = crate::Span::default();
+
+    // This type is used only by the unnamed override.
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+        },
+        nowhere,
+    );
+
+    // This type is used by the named override.
+    let ty_i32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::I32),
+        },
+        nowhere,
+    );
+
+    let unnamed_init = module
+        .global_expressions
+        .append(crate::Expression::Literal(crate::Literal::U32(0)), nowhere);
+
+    let unnamed_override = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: Some(42),
+            ty: ty_u32,
+            init: Some(unnamed_init),
+        },
+        nowhere,
+    );
+
+    // The named override is initialized using a Splat expression, to
+    // give the named override a type distinct from the unnamed
+    // override's.
+    let unnamed_override_expr = module
+        .global_expressions
+        .append(crate::Expression::Override(unnamed_override), nowhere);
+    let named_init = module.global_expressions.append(
+        crate::Expression::As {
+            expr: unnamed_override_expr,
+            kind: crate::ScalarKind::Sint,
+            convert: None,
+        },
+        nowhere,
+    );
+
+    let _named_override = module.overrides.append(
+        crate::Override {
+            name: Some("totally_named".to_string()),
+            id: None,
+            ty: ty_i32,
+            init: Some(named_init),
         },
         nowhere,
     );
