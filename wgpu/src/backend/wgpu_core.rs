@@ -3484,7 +3484,10 @@ impl dispatch::SurfaceInterface for CoreSurface {
         .into();
 
         match self.context.0.surface_get_current_texture(self.id, None) {
-            Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
+            Ok(wgc::present::SurfaceOutput {
+                status,
+                texture: texture_id,
+            }) => {
                 let data = texture_id
                     .map(|id| CoreTexture {
                         context: self.context.clone(),
