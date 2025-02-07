@@ -21,4 +21,5 @@
 		fake_missing_bindings: true,
 		zero_initialize_workgroup_memory: true,
 	),
+	targets: "SPIRV | HLSL | WGSL | METAL",
 )

@@ -43,5 +43,6 @@
 		index: ReadZeroSkipWrite,
 		buffer: ReadZeroSkipWrite,
 		image_load: ReadZeroSkipWrite,
-	)
+	),
+	targets: "WGSL | HLSL | METAL | SPIRV",
 )

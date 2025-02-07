@@ -3,4 +3,5 @@
 		index: Restrict,
 		buffer: Restrict,
 	),
+	targets: "SPIRV | METAL",
 )

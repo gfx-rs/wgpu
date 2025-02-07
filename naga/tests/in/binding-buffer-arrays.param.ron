@@ -10,5 +10,7 @@
 		index: ReadZeroSkipWrite,
 		buffer: ReadZeroSkipWrite,
 		image: ReadZeroSkipWrite,
-	)
+	),
+	//TODO: more backends, eventually merge into "binding-arrays"
+	targets: "WGSL | SPIRV",
 )

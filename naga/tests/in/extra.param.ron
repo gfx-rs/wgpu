@@ -15,4 +15,5 @@
 		fake_missing_bindings: false,
 		zero_initialize_workgroup_memory: true,
 	),
+	targets: "SPIRV | METAL | WGSL",
 )

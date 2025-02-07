@@ -9,4 +9,5 @@
 		binding_map: { },
 		zero_initialize_workgroup_memory: true,
 	),
+	targets: "SPIRV | GLSL | HLSL | WGSL",
 )

@@ -1,3 +1,4 @@
+//TODO: GLSL https://github.com/gfx-rs/naga/issues/874
 (
 	spv: (
 		version: (1, 0),
@@ -31,4 +32,5 @@
 		vertex_pulling_transform: false,
 		vertex_buffer_mappings: [],
 	),
+	targets: "SPIRV | METAL | HLSL | WGSL",
 )
