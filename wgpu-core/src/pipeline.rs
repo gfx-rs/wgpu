@@ -171,27 +171,23 @@ pub enum ImplicitLayoutError {
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ComputePipelineDescriptor<'a> {
+pub struct ComputePipelineDescriptor<
+    'a,
+    PLL = PipelineLayoutId,
+    SM = ShaderModuleId,
+    PLC = PipelineCacheId,
+> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: Option<PipelineLayoutId>,
+    pub layout: Option<PLL>,
     /// The compiled compute stage and its entry point.
-    pub stage: ProgrammableStageDescriptor<'a>,
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<PipelineCacheId>,
+    pub cache: Option<PLC>,
 }
 
-/// Describes a compute pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedComputePipelineDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<Arc<PipelineLayout>>,
-    /// The compiled compute stage and its entry point.
-    pub stage: ResolvedProgrammableStageDescriptor<'a>,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<Arc<PipelineCache>>,
-}
+pub type ResolvedComputePipelineDescriptor<'a> =
+    ComputePipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
