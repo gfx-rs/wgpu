@@ -94,10 +94,11 @@ impl ExpressionTracer<'_> {
             // it.
             Ex::Constant(handle) => {
                 self.constants_used.insert(handle);
-                let init = self.constants[handle].init;
+                let constant = &self.constants[handle];
+                self.types_used.insert(constant.ty);
                 match self.global_expressions_used {
-                    Some(ref mut used) => used.insert(init),
-                    None => self.expressions_used.insert(init),
+                    Some(ref mut used) => used.insert(constant.init),
+                    None => self.expressions_used.insert(constant.init),
                 };
             }
             Ex::Override(handle) => {
