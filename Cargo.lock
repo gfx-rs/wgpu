@@ -4402,7 +4402,6 @@ dependencies = [
  "parking_lot",
  "profiling",
  "raw-window-handle 0.6.2",
- "serde",
  "smallvec",
  "static_assertions",
  "wasm-bindgen",

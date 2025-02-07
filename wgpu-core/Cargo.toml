@@ -114,9 +114,9 @@ naga.workspace = true
 wgpu-hal.workspace = true
 wgpu-types.workspace = true
 
-wgpu-core-platform-windows-linux-android.workspace = true
-wgpu-core-platform-apple.workspace = true
-wgpu-core-platform-wasm.workspace = true
+wgpu-core-platform-windows-linux-android = { workspace = true, optional = true }
+wgpu-core-platform-apple = { workspace = true, optional = true }
+wgpu-core-platform-wasm = { workspace = true, optional = true }
 
 arrayvec.workspace = true
 bit-vec.workspace = true

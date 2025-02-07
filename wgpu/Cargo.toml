@@ -56,12 +56,22 @@ angle = ["wgpu-core?/angle"]
 vulkan-portability = ["wgpu-core?/vulkan-portability"]
 
 ## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
-webgpu = ["naga?/wgsl-out"]
+webgpu = [
+    "naga?/wgsl-out",
+    "dep:wasm-bindgen-futures",
+    "web-sys/Document",
+    "web-sys/Event",
+    "web-sys/Navigator",
+    "web-sys/NodeList",
+    "web-sys/Window",
+    "web-sys/WorkerGlobalScope",
+    "web-sys/WorkerNavigator",
+]
 
 ## Enables the GLES backend on Wasm
 ##
 ## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-webgl = ["wgpu-core/webgl", "dep:wgpu-hal"]
+webgl = ["wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
@@ -91,15 +101,11 @@ naga-ir = ["dep:naga"]
 strict_asserts = ["wgpu-core?/strict_asserts", "wgpu-types/strict_asserts"]
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-core?/serde"]
+serde = ["wgpu-core?/serde", "wgpu-types/serde"]
 
 # Uncomment once we get to https://github.com/gfx-rs/wgpu/issues/5974
 # ## Allow writing of trace capture files. See [`Adapter::request_device`].
 # trace = ["serde", "wgpu-core/trace"]
-
-## Allow deserializing of trace capture files that were written with the `trace` feature.
-## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
-replay = ["serde", "wgpu-core?/replay"]
 
 #! ### Other
 # --------------------------------------------------------------------
@@ -141,8 +147,9 @@ static-dxc = ["wgpu-core?/static-dxc"]
 [dependencies]
 naga = { workspace = true, optional = true }
 wgpu-core = { workspace = true, optional = true }
-wgpu-types = { workspace = true, features = ["serde"] }
+wgpu-types.workspace = true
 
+# Needed for both wgpu-core and webgpu
 arrayvec.workspace = true
 bitflags.workspace = true
 document-features.workspace = true
@@ -151,47 +158,44 @@ log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true
 raw-window-handle = { workspace = true, features = ["std"] }
-serde = { workspace = true, features = ["default", "derive"], optional = true }
-smallvec.workspace = true
 static_assertions.workspace = true
 
 ########################################
 # Target Specific Feature Dependencies #
 ########################################
 
-# Not Webassembly
+###################
+# Not Webassembly #
+#########3#########
 [target.'cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))'.dependencies]
 wgpu-core = { workspace = true, features = ["raw-window-handle"] }
 wgpu-hal.workspace = true
 
-# Webassembly
+# Needed for only wgpu-core backend
+smallvec.workspace = true
+
+###############
+# Webassembly #
+###############
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wgpu-core = { workspace = true, optional = true, features = [
     "raw-window-handle",
 ] }
 wgpu-hal = { workspace = true, optional = true }
 
+# Needed for all backends
 js-sys = { workspace = true, features = ["default"] }
-parking_lot.workspace = true
-wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = [
-    "default",
-    "Document",
-    "Navigator",
-    "Node",
-    "NodeList",
     "HtmlCanvasElement",
     "OffscreenCanvas",
-    "ImageBitmap",
-    "ImageBitmapRenderingContext",
-    "Window",
-    "WorkerGlobalScope",
-    "WorkerNavigator",
-    # Needed by webgpu_sys
-    "Event",
-    "EventTarget",
 ] }
+
+# Needed for only wgpu-core backend
+smallvec = { workspace = true, optional = true }
+
+# Needed for the webgpu backend
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 # Emscripten
 [target.'cfg(target_os = "emscripten")'.dependencies]
