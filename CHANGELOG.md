@@ -63,7 +63,7 @@ changes from this. This means there are also namespaces (as well as the old `Fea
 features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively) and `Features::from_internal_flags` which
 allow you to be explicit about whether features you need are available on the web too.
 
-By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905).
+By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https://github.com/gfx-rs/wgpu/pull/7086)
 
 ##### Refactored internal trace path parameter
 

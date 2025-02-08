@@ -400,6 +400,19 @@ macro_rules! bitflags_array {
             )*
             )*
         }
+
+        $(
+        impl From<$inner_name> for Features {
+            // We need this for structs with only a member.
+            #[allow(clippy::needless_update)]
+            fn from($lower_inner_name: $inner_name) -> Self {
+                Self {
+                    $lower_inner_name,
+                    ..Self::empty()
+                }
+            }
+        }
+        )*
     };
 }
 
@@ -1297,7 +1310,7 @@ impl Features {
 
 #[cfg(test)]
 mod tests {
-    use crate::Features;
+    use crate::{Features, FeaturesWGPU, FeaturesWebGPU};
 
     #[cfg(feature = "serde")]
     #[test]
@@ -1379,5 +1392,28 @@ mod tests {
             let bits = feature.value().bits();
             assert_eq!(Features::from_bits(bits).unwrap(), *feature.value());
         }
+    }
+
+    #[test]
+    fn create_features_from_parts() {
+        let features: Features = FeaturesWGPU::TEXTURE_ATOMIC.into();
+        assert_eq!(features, Features::TEXTURE_ATOMIC);
+
+        let features: Features = FeaturesWebGPU::TIMESTAMP_QUERY.into();
+        assert_eq!(features, Features::TIMESTAMP_QUERY);
+
+        let features: Features = Features::from(FeaturesWGPU::TEXTURE_ATOMIC)
+            | Features::from(FeaturesWebGPU::TIMESTAMP_QUERY);
+        assert_eq!(
+            features,
+            Features::TEXTURE_ATOMIC | Features::TIMESTAMP_QUERY
+        );
+        assert_eq!(
+            features,
+            Features::from_internal_flags(
+                FeaturesWGPU::TEXTURE_ATOMIC,
+                FeaturesWebGPU::TIMESTAMP_QUERY
+            )
+        );
     }
 }
