@@ -403,69 +403,6 @@ macro_rules! bitflags_array {
     };
 }
 
-#[cfg(feature = "serde")]
-#[test]
-fn check_hex() {
-    let mut hex = alloc::string::String::new();
-    FeatureBits::ALL.write_hex(&mut hex).unwrap();
-    assert_eq!(
-        FeatureBits::parse_hex(hex.as_str()).unwrap(),
-        FeatureBits::ALL
-    );
-    hex.clear();
-    FeatureBits::EMPTY.write_hex(&mut hex).unwrap();
-    assert_eq!(
-        FeatureBits::parse_hex(hex.as_str()).unwrap(),
-        FeatureBits::EMPTY
-    );
-    for feature in Features::FLAGS {
-        hex.clear();
-        feature.value().bits().write_hex(&mut hex).unwrap();
-        assert_eq!(
-            FeatureBits::parse_hex(hex.as_str()).unwrap(),
-            feature.value().bits(),
-            "{hex}"
-        );
-    }
-}
-
-#[test]
-fn check_features_display() {
-    use alloc::format;
-    let feature = Features::CLEAR_TEXTURE;
-    assert_eq!(format!("{}", feature), "CLEAR_TEXTURE");
-    let feature = Features::CLEAR_TEXTURE | Features::BGRA8UNORM_STORAGE;
-    assert_eq!(format!("{}", feature), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
-}
-
-#[test]
-fn check_features_bits() {
-    let bits = Features::all().bits();
-    assert_eq!(Features::from_bits_retain(bits), Features::all());
-    let bits = Features::empty().bits();
-    assert_eq!(Features::from_bits_retain(bits), Features::empty());
-    for feature in Features::FLAGS {
-        let bits = feature.value().bits();
-        assert_eq!(Features::from_bits_retain(bits), *feature.value());
-    }
-    let bits = Features::all().bits();
-    assert_eq!(Features::from_bits_truncate(bits), Features::all());
-    let bits = Features::empty().bits();
-    assert_eq!(Features::from_bits_truncate(bits), Features::empty());
-    for feature in Features::FLAGS {
-        let bits = feature.value().bits();
-        assert_eq!(Features::from_bits_truncate(bits), *feature.value());
-    }
-    let bits = Features::all().bits();
-    assert_eq!(Features::from_bits(bits).unwrap(), Features::all());
-    let bits = Features::empty().bits();
-    assert_eq!(Features::from_bits(bits).unwrap(), Features::empty());
-    for feature in Features::FLAGS {
-        let bits = feature.value().bits();
-        assert_eq!(Features::from_bits(bits).unwrap(), *feature.value());
-    }
-}
-
 impl From<FeatureBits> for Features {
     fn from(value: FeatureBits) -> Self {
         Self::from_bits_retain(value)
@@ -1355,5 +1292,92 @@ impl Features {
             formats.push(VertexFormat::Float32x3);
         }
         formats
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Features;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn check_hex() {
+        use crate::FeatureBits;
+
+        use bitflags::{
+            parser::{ParseHex as _, WriteHex as _},
+            Bits as _,
+        };
+
+        let mut hex = alloc::string::String::new();
+        FeatureBits::ALL.write_hex(&mut hex).unwrap();
+        assert_eq!(
+            FeatureBits::parse_hex(hex.as_str()).unwrap(),
+            FeatureBits::ALL
+        );
+
+        hex.clear();
+        FeatureBits::EMPTY.write_hex(&mut hex).unwrap();
+        assert_eq!(
+            FeatureBits::parse_hex(hex.as_str()).unwrap(),
+            FeatureBits::EMPTY
+        );
+
+        for feature in Features::FLAGS {
+            hex.clear();
+            feature.value().bits().write_hex(&mut hex).unwrap();
+            assert_eq!(
+                FeatureBits::parse_hex(hex.as_str()).unwrap(),
+                feature.value().bits(),
+                "{hex}"
+            );
+        }
+    }
+
+    #[test]
+    fn check_features_display() {
+        use alloc::format;
+
+        let feature = Features::CLEAR_TEXTURE;
+        assert_eq!(format!("{}", feature), "CLEAR_TEXTURE");
+
+        let feature = Features::CLEAR_TEXTURE | Features::BGRA8UNORM_STORAGE;
+        assert_eq!(format!("{}", feature), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
+    }
+
+    #[test]
+    fn check_features_bits() {
+        let bits = Features::all().bits();
+        assert_eq!(Features::from_bits_retain(bits), Features::all());
+
+        let bits = Features::empty().bits();
+        assert_eq!(Features::from_bits_retain(bits), Features::empty());
+
+        for feature in Features::FLAGS {
+            let bits = feature.value().bits();
+            assert_eq!(Features::from_bits_retain(bits), *feature.value());
+        }
+
+        let bits = Features::all().bits();
+        assert_eq!(Features::from_bits_truncate(bits), Features::all());
+
+        let bits = Features::empty().bits();
+        assert_eq!(Features::from_bits_truncate(bits), Features::empty());
+
+        for feature in Features::FLAGS {
+            let bits = feature.value().bits();
+            assert_eq!(Features::from_bits_truncate(bits), *feature.value());
+        }
+
+        let bits = Features::all().bits();
+        assert_eq!(Features::from_bits(bits).unwrap(), Features::all());
+
+        let bits = Features::empty().bits();
+        assert_eq!(Features::from_bits(bits).unwrap(), Features::empty());
+
+        for feature in Features::FLAGS {
+            let bits = feature.value().bits();
+            assert_eq!(Features::from_bits(bits).unwrap(), *feature.value());
+        }
     }
 }

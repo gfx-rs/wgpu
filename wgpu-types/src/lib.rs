@@ -36,9 +36,8 @@ pub mod instance;
 pub mod math;
 
 pub use counters::*;
-pub use instance::*;
-
 pub use features::*;
+pub use instance::*;
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
