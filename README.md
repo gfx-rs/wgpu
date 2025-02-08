@@ -12,6 +12,13 @@
 
 The API is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox, Servo, and Deno.
 
+## Quick Links
+
+| Docs                                 | Examples                                                             | Changelog                                                                    |
+|:------------------------------------:|:--------------------------------------------------------------------:|:----------------------------------------------------------------------------:|
+| [v24](https://docs.rs/wgpu/)         | [v24](https://github.com/gfx-rs/wgpu/tree/v24/examples#readme)       | [v24](https://github.com/gfx-rs/wgpu/releases)                               |
+| [`trunk`](https://wgpu.rs/doc/wgpu/) | [`trunk`](https://github.com/gfx-rs/wgpu/tree/trunk/examples#readme) | [`trunk`](https://github.com/gfx-rs/wgpu/blob/trunk/CHANGELOG.md#unreleased) |
+
 ## Repo Overview
 
 The repository hosts the following libraries:
@@ -42,13 +49,11 @@ Go to [https://wgpu.rs/examples/] to play with our examples in your browser. Req
 
 Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin wgpu-examples <example>`. See the [list of examples](examples).
 
+If you are new to wgpu and graphics programming, we recommend starting with https://sotrh.github.io/learn-wgpu/.
+
 To run the examples in a browser, run `cargo xtask run-wasm`.
 Then open `http://localhost:8000` in your browser, and you can choose an example to run.
 Naturally, in order to display any of the WebGPU based examples, you need to make sure your browser supports it.
-
-If you are looking for a wgpu tutorial, look at the following:
-
-- https://sotrh.github.io/learn-wgpu/
 
 ### C/C++
 

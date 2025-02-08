@@ -25,6 +25,14 @@ targets = [
     "wasm32-unknown-unknown",
 ]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+
+[lints.clippy]
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
 [lib]
 
 [features]
@@ -35,9 +43,6 @@ fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
@@ -62,8 +67,3 @@ web-sys = { workspace = true, default-features = false, features = [
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-
-[lints.clippy]
-std_instead_of_core = "warn"
-std_instead_of_alloc = "warn"
-alloc_instead_of_core = "warn"

@@ -2,6 +2,9 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    extern crate wgpu_core as wgc;
+    extern crate wgpu_types as wgt;
+
     use player::GlobalPlay as _;
     use wgc::device::trace;
 

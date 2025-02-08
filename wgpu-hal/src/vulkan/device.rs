@@ -1040,17 +1040,17 @@ impl crate::Device for super::Device {
 
         let mut alloc_usage = if desc
             .usage
-            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE)
+            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE)
         {
             let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
             //TODO: find a way to use `crate::MemoryFlags::PREFER_COHERENT`
             flags.set(
                 gpu_alloc::UsageFlags::DOWNLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_READ),
+                desc.usage.contains(wgt::BufferUses::MAP_READ),
             );
             flags.set(
                 gpu_alloc::UsageFlags::UPLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_WRITE),
+                desc.usage.contains(wgt::BufferUses::MAP_WRITE),
             );
             flags
         } else {
@@ -2803,7 +2803,7 @@ impl crate::Device for super::Device {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = RawTlasInstance {
             transform: instance.transform,
-            custom_index_and_mask: (instance.custom_index & MAX_U24)
+            custom_data_and_mask: (instance.custom_data & MAX_U24)
                 | (u32::from(instance.mask) << 24),
             shader_binding_table_record_offset_and_flags: 0,
             acceleration_structure_reference: instance.blas_address,

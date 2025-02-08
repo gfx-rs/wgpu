@@ -184,8 +184,8 @@ impl ViewDescriptor {
                 desc.ViewDimension = Direct3D12::D3D12_UAV_DIMENSION_TEXTURE3D;
                 desc.Anonymous.Texture3D = Direct3D12::D3D12_TEX3D_UAV {
                     MipSlice: self.mip_level_base,
-                    FirstWSlice: self.array_layer_base,
-                    WSize: self.array_layer_count,
+                    FirstWSlice: 0,
+                    WSize: u32::MAX,
                 }
             }
             wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {

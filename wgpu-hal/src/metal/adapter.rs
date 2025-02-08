@@ -377,12 +377,12 @@ impl crate::Adapter for super::Adapter {
             ],
 
             current_extent,
-            usage: crate::TextureUses::COLOR_TARGET
-                | crate::TextureUses::COPY_SRC
-                | crate::TextureUses::COPY_DST
-                | crate::TextureUses::STORAGE_READ_ONLY
-                | crate::TextureUses::STORAGE_WRITE_ONLY
-                | crate::TextureUses::STORAGE_READ_WRITE,
+            usage: wgt::TextureUses::COLOR_TARGET
+                | wgt::TextureUses::COPY_SRC
+                | wgt::TextureUses::COPY_DST
+                | wgt::TextureUses::STORAGE_READ_ONLY
+                | wgt::TextureUses::STORAGE_WRITE_ONLY
+                | wgt::TextureUses::STORAGE_READ_WRITE,
         })
     }
 

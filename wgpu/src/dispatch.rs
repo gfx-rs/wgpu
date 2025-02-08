@@ -227,8 +227,8 @@ pub trait QueueInterface: CommonTraits {
     #[cfg(any(webgpu, webgl))]
     fn copy_external_image_to_texture(
         &self,
-        source: &wgt::CopyExternalImageSourceInfo,
-        dest: wgt::CopyExternalImageDestInfo<&crate::api::Texture>,
+        source: &crate::CopyExternalImageSourceInfo,
+        dest: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
         size: crate::Extent3d,
     );
 
@@ -349,6 +349,12 @@ pub trait CommandEncoderInterface: CommonTraits {
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+    );
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
+        texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
     );
 }
 pub trait ComputePassInterface: CommonTraits {
@@ -636,6 +642,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value.as_ref(),
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value.as_ref(),
+                    #[cfg(not(any(wgpu_core, webgpu)))]
+                    _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
             }
         }
@@ -765,6 +773,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
+                    #[cfg(not(any(wgpu_core, webgpu)))]
+                    _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
             }
         }
@@ -777,6 +787,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
+                    #[cfg(not(any(wgpu_core, webgpu)))]
+                    _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
             }
         }
@@ -826,7 +838,7 @@ dispatch_types! {
         {mut type DispatchCommandEncoder = InterfaceTypes::CommandEncoder: CommandEncoderInterface};
         {mut type DispatchComputePass = InterfaceTypes::ComputePass: ComputePassInterface};
         {mut type DispatchRenderPass = InterfaceTypes::RenderPass: RenderPassInterface};
-        {ref type DispatchCommandBuffer = InterfaceTypes::CommandBuffer: CommandBufferInterface};
+        {mut type DispatchCommandBuffer = InterfaceTypes::CommandBuffer: CommandBufferInterface};
         {mut type DispatchRenderBundleEncoder = InterfaceTypes::RenderBundleEncoder: RenderBundleEncoderInterface};
         {ref type DispatchRenderBundle = InterfaceTypes::RenderBundle: RenderBundleInterface};
         {ref type DispatchSurface = InterfaceTypes::Surface: SurfaceInterface};

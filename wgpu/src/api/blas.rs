@@ -49,7 +49,7 @@ pub struct TlasInstance {
     ///
     /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes
     /// invalid and generates a validation error when built
-    pub custom_index: u32,
+    pub custom_data: u32,
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
@@ -59,7 +59,7 @@ impl TlasInstance {
     /// Construct TlasInstance.
     /// - blas: Reference to the bottom level acceleration structure
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
-    /// - custom_index: Custom index for the instance used inside the shader (max 24 bits)
+    /// - custom_data: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
     ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
@@ -67,11 +67,11 @@ impl TlasInstance {
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
     /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
     /// generate a validation error.
-    pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
+    pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {
         Self {
             blas: blas.inner.clone(),
             transform,
-            custom_index,
+            custom_data,
             mask,
         }
     }

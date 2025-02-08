@@ -89,8 +89,8 @@ pub enum ConfigureSurfaceError {
     },
     #[error("Requested usage {requested:?} is not in the list of supported usages: {available:?}")]
     UnsupportedUsage {
-        requested: hal::TextureUses,
-        available: hal::TextureUses,
+        requested: wgt::TextureUses,
+        available: wgt::TextureUses,
     },
 }
 
@@ -103,17 +103,13 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
     }
 }
 
-#[derive(Debug)]
-pub struct ResolvedSurfaceOutput {
-    pub status: Status,
-    pub texture: Option<Arc<resource::Texture>>,
-}
+pub type ResolvedSurfaceOutput = SurfaceOutput<Arc<resource::Texture>>;
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct SurfaceOutput {
+pub struct SurfaceOutput<T = id::TextureId> {
     pub status: Status,
-    pub texture_id: Option<id::TextureId>,
+    pub texture: Option<T>,
 }
 
 impl Surface {
@@ -170,7 +166,7 @@ impl Surface {
                     ),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
-                    usage: hal::TextureUses::COLOR_TARGET,
+                    usage: wgt::TextureUses::COLOR_TARGET,
                     range: wgt::ImageSubresourceRange::default(),
                 };
                 let clear_view = unsafe {
@@ -200,7 +196,7 @@ impl Surface {
                     .trackers
                     .lock()
                     .textures
-                    .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+                    .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
@@ -337,7 +333,10 @@ impl Global {
             .texture
             .map(|texture| fid.assign(resource::Fallible::Valid(texture)));
 
-        Ok(SurfaceOutput { status, texture_id })
+        Ok(SurfaceOutput {
+            status,
+            texture: texture_id,
+        })
     }
 
     pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {

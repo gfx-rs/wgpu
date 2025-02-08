@@ -114,6 +114,7 @@ pub struct FunctionArgument<'a> {
 pub struct FunctionResult<'a> {
     pub ty: Handle<Type<'a>>,
     pub binding: Option<Binding<'a>>,
+    pub must_use: bool,
 }
 
 #[derive(Debug)]

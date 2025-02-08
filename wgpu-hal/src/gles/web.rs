@@ -25,7 +25,9 @@ impl AdapterContext {
 }
 
 #[derive(Debug)]
-pub struct Instance;
+pub struct Instance {
+    options: wgt::GlBackendOptions,
+}
 
 impl Instance {
     pub fn create_surface_from_canvas(
@@ -110,9 +112,11 @@ unsafe impl Send for Instance {}
 impl crate::Instance for Instance {
     type A = super::Api;
 
-    unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WebGL) Backend");
-        Ok(Instance)
+        Ok(Instance {
+            options: desc.backend_options.gl.clone(),
+        })
     }
 
     unsafe fn enumerate_adapters(
@@ -123,10 +127,13 @@ impl crate::Instance for Instance {
             let gl = glow::Context::from_webgl2_context(surface_hint.webgl2_context.clone());
 
             unsafe {
-                super::Adapter::expose(AdapterContext {
-                    glow_context: gl,
-                    webgl2_context: surface_hint.webgl2_context.clone(),
-                })
+                super::Adapter::expose(
+                    AdapterContext {
+                        glow_context: gl,
+                        webgl2_context: surface_hint.webgl2_context.clone(),
+                    },
+                    self.options.clone(),
+                )
             }
             .into_iter()
             .collect()

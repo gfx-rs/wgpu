@@ -4,8 +4,8 @@ var acc_struct: acceleration_structure;
 struct Intersection {
     kind: u32,
     t: f32,
-    instance_custom_index: u32,
-    instance_id: u32,
+    instance_custom_data: u32,
+    instance_index: u32,
     sbt_record_offset: u32,
     geometry_index: u32,
     primitive_index: u32,
@@ -38,8 +38,8 @@ fn all_of_struct() {
     out = Intersection(
         intersection.kind,
         intersection.t,
-        intersection.instance_custom_index,
-        intersection.instance_id,
+        intersection.instance_custom_data,
+        intersection.instance_index,
         intersection.sbt_record_offset,
         intersection.geometry_index,
         intersection.primitive_index,

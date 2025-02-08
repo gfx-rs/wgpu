@@ -581,44 +581,6 @@ fn local_var_missing_type() {
 }
 
 #[test]
-fn postfix_pointers() {
-    check(
-        r#"
-            fn main() {
-                var v: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-                let pv = &v;
-                let a = *pv[3]; // Problematic line
-            }
-        "#,
-        r#"error: the value indexed by a `[]` subscripting expression must not be a pointer
-  ┌─ wgsl:5:26
-  │
-5 │                 let a = *pv[3]; // Problematic line
-  │                          ^^ expression is a pointer
-
-"#,
-    );
-
-    check(
-        r#"
-            struct S { m: i32 };
-            fn main() {
-                var s: S = S(42);
-                let ps = &s;
-                let a = *ps.m; // Problematic line
-            }
-        "#,
-        r#"error: the value accessed by a `.member` expression must not be a pointer
-  ┌─ wgsl:6:26
-  │
-6 │                 let a = *ps.m; // Problematic line
-  │                          ^^ expression is a pointer
-
-"#,
-    );
-}
-
-#[test]
 fn reserved_keyword() {
     // global var
     check(
@@ -1212,7 +1174,7 @@ fn invalid_functions() {
         if function_name == "return_pointer"
     }
 
-    check_validation! {
+    check(
         "
         @group(0) @binding(0)
         var<storage> atom: atomic<u32>;
@@ -1220,14 +1182,15 @@ fn invalid_functions() {
         fn return_atomic() -> atomic<u32> {
            return atom;
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            name: function_name,
-            source: naga::valid::FunctionError::NonConstructibleReturnType,
-            ..
-        })
-        if function_name == "return_atomic"
-    }
+        ",
+        "error: automatic conversions cannot convert `u32` to `atomic<u32>`
+  ┌─ wgsl:6:19
+  │
+6 │            return atom;
+  │                   ^^^^ this expression has type u32
+
+",
+    );
 }
 
 #[test]
@@ -2004,6 +1967,94 @@ fn function_returns_void() {
 }
 
 #[test]
+fn function_must_use_unused() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+
+fn useless() -> i32 {
+  use_me(1);
+  return 0;
+}
+"#,
+        r#"error: unused return value from function annotated with @must_use
+  ┌─ wgsl:8:3
+  │
+8 │   use_me(1);
+  │   ^^^^^^
+  │
+  = note: function 'use_me' is declared with `@must_use` attribute
+  = note: use a phony assignment or declare a value using the function call as the initializer
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_returns_void() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) {
+  let x = a;
+}
+"#,
+        r#"error: function annotated with @must_use but does not return any value
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+3 │ fn use_me(a: i32) {
+  │    ^^^^^^^^^^^^^
+  │
+  = note: declare a return type or remove the attribute
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_repeated() {
+    check(
+        r#"
+@must_use
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+"#,
+        r#"error: repeated attribute: `must_use`
+  ┌─ wgsl:3:2
+  │
+3 │ @must_use
+  │  ^^^^^^^^ repeated attribute
+
+"#,
+    );
+}
+
+#[test]
+fn struct_member_must_use() {
+    check(
+        r#"
+struct S {
+  @must_use a: i32,
+}
+"#,
+        r#"error: unknown attribute: `must_use`
+  ┌─ wgsl:3:4
+  │
+3 │   @must_use a: i32,
+  │    ^^^^^^^^ unknown attribute
+
+"#,
+    )
+}
+
+#[test]
 fn function_param_redefinition_as_param() {
     check(
         "
@@ -2039,6 +2090,27 @@ fn function_param_redefinition_as_local() {
 
 "###,
     )
+}
+
+#[test]
+fn function_must_return_value() {
+    check_validation!(
+        "fn func() -> i32 {
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
+    check_validation!(
+        "fn func(x: i32) -> i32 {
+            let y = x + 10;
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
 }
 
 #[test]
