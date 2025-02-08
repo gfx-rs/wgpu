@@ -136,7 +136,7 @@ impl crate::framework::Example for Example {
             | wgpu::Features::VERTEX_WRITABLE_STORAGE
             | wgpu::Features::EXPERIMENTAL_RAY_QUERY
             | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-            | wgpu::Features::RAY_HIT_VERTEX_RETURN
+            | wgpu::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
