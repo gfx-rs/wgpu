@@ -1,0 +1,181 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [],
+    global_expressions: [],
+    functions: [
+        (
+            name: Some("use_me"),
+            arguments: [],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                Literal(I32(10)),
+            ],
+            named_expressions: {},
+            body: [
+                Return(
+                    value: Some(0),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("use_return"),
+            arguments: [],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                CallResult(0),
+            ],
+            named_expressions: {},
+            body: [
+                Call(
+                    function: 0,
+                    arguments: [],
+                    result: Some(0),
+                ),
+                Return(
+                    value: Some(0),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("use_assign_var"),
+            arguments: [],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("q"),
+                    ty: 0,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                CallResult(0),
+                LocalVariable(0),
+                Load(
+                    pointer: 1,
+                ),
+            ],
+            named_expressions: {},
+            body: [
+                Call(
+                    function: 0,
+                    arguments: [],
+                    result: Some(0),
+                ),
+                Store(
+                    pointer: 1,
+                    value: 0,
+                ),
+                Emit((
+                    start: 2,
+                    end: 3,
+                )),
+                Return(
+                    value: Some(2),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("use_assign_let"),
+            arguments: [],
+            result: Some((
+                ty: 0,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                CallResult(0),
+            ],
+            named_expressions: {
+                0: "q",
+            },
+            body: [
+                Call(
+                    function: 0,
+                    arguments: [],
+                    result: Some(0),
+                ),
+                Return(
+                    value: Some(0),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("use_phony_assign"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [
+                CallResult(0),
+            ],
+            named_expressions: {
+                0: "phony",
+            },
+            body: [
+                Call(
+                    function: 0,
+                    arguments: [],
+                    result: Some(0),
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+)

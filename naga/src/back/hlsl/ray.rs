@@ -42,11 +42,11 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out, "        ret.t = rq.CommittedRayT();")?;
         writeln!(
             self.out,
-            "        ret.instance_custom_index = rq.CommittedInstanceID();"
+            "        ret.instance_custom_data = rq.CommittedInstanceID();"
         )?;
         writeln!(
             self.out,
-            "        ret.instance_id = rq.CommittedInstanceIndex();"
+            "        ret.instance_index = rq.CommittedInstanceIndex();"
         )?;
         writeln!(
             self.out,
@@ -129,11 +129,11 @@ impl<W: Write> super::Writer<'_, W> {
 
         writeln!(
             self.out,
-            "    ret.instance_custom_index = rq.CandidateInstanceID();"
+            "    ret.instance_custom_data = rq.CandidateInstanceID();"
         )?;
         writeln!(
             self.out,
-            "    ret.instance_id = rq.CandidateInstanceIndex();"
+            "    ret.instance_index = rq.CandidateInstanceIndex();"
         )?;
         writeln!(
             self.out,

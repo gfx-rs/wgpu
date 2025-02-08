@@ -1,5 +1,4 @@
-use wgpu::{Adapter, Device, Instance, Queue};
-use wgt::{Backends, Features, Limits};
+use wgpu::{Adapter, Backends, Device, Features, Instance, Limits, Queue};
 
 use crate::report::AdapterReport;
 
@@ -36,7 +35,6 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
     } else {
         wgpu::Dx12Compiler::from_env().unwrap_or(wgpu::Dx12Compiler::StaticDxc)
     };
-    let gles_minor_version = wgpu::Gles3MinorVersion::from_env().unwrap_or_default();
     Instance::new(&wgpu::InstanceDescriptor {
         backends,
         flags: wgpu::InstanceFlags::debugging().with_env(),
@@ -44,7 +42,7 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
             dx12: wgpu::Dx12BackendOptions {
                 shader_compiler: dx12_shader_compiler,
             },
-            gl: wgpu::GlBackendOptions { gles_minor_version },
+            gl: wgpu::GlBackendOptions::from_env_or_default(),
         },
     })
 }

@@ -372,6 +372,7 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
 }
 
 impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
+    #[allow(dead_code)]
     fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
             globals: self.globals,
@@ -379,7 +380,21 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
             module: self.module,
-            expr_type: ExpressionContextType::Constant(None),
+            expr_type: ExpressionContextType::Constant(match self.expr_type {
+                ExpressionContextType::Runtime(ref mut local_expression_context)
+                | ExpressionContextType::Constant(Some(ref mut local_expression_context)) => {
+                    Some(LocalExpressionContext {
+                        local_table: local_expression_context.local_table,
+                        function: local_expression_context.function,
+                        block: local_expression_context.block,
+                        emitter: local_expression_context.emitter,
+                        typifier: local_expression_context.typifier,
+                        local_expression_kind_tracker: local_expression_context
+                            .local_expression_kind_tracker,
+                    })
+                }
+                ExpressionContextType::Constant(None) | ExpressionContextType::Override => None,
+            }),
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -919,7 +934,10 @@ impl Components {
 
 /// An `ast::GlobalDecl` for which we have built the Naga IR equivalent.
 enum LoweredGlobalDecl {
-    Function(Handle<crate::Function>),
+    Function {
+        handle: Handle<crate::Function>,
+        must_use: bool,
+    },
     Var(Handle<crate::GlobalVariable>),
     Const(Handle<crate::Constant>),
     Override(Handle<crate::Override>),
@@ -1352,7 +1370,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             Ok(LoweredGlobalDecl::EntryPoint)
         } else {
             let handle = ctx.module.functions.append(function, span);
-            Ok(LoweredGlobalDecl::Function(handle))
+            Ok(LoweredGlobalDecl::Function {
+                handle,
+                must_use: f.result.as_ref().is_some_and(|res| res.must_use),
+            })
         }
     }
 
@@ -1653,13 +1674,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::StatementKind::Break => crate::Statement::Break,
             ast::StatementKind::Continue => crate::Statement::Continue,
-            ast::StatementKind::Return { value } => {
+            ast::StatementKind::Return { value: ast_value } => {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
-                let value = value
-                    .map(|expr| self.expression(expr, &mut ctx.as_expression(block, &mut emitter)))
-                    .transpose()?;
+                let value;
+                if let Some(ast_expr) = ast_value {
+                    let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
+                    let mut ectx = ctx.as_expression(block, &mut emitter);
+                    let expr = self.expression_for_abstract(ast_expr, &mut ectx)?;
+
+                    if let Some(result_ty) = result_ty {
+                        let mut ectx = ctx.as_expression(block, &mut emitter);
+                        let resolution = crate::proc::TypeResolution::Handle(result_ty);
+                        let converted =
+                            ectx.try_automatic_conversions(expr, &resolution, Span::default())?;
+                        value = Some(converted);
+                    } else {
+                        value = Some(expr);
+                    }
+                } else {
+                    value = None;
+                }
                 block.extend(emitter.finish(&ctx.function.expressions));
 
                 crate::Statement::Return { value }
@@ -1921,7 +1957,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     LoweredGlobalDecl::Override(handle) => {
                         Typed::Plain(crate::Expression::Override(handle))
                     }
-                    LoweredGlobalDecl::Function(_)
+                    LoweredGlobalDecl::Function { .. }
                     | LoweredGlobalDecl::Type(_)
                     | LoweredGlobalDecl::EntryPoint => {
                         return Err(Error::Unexpected(span, ExpectedToken::Variable));
@@ -1979,15 +2015,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(Typed::Plain(handle));
             }
             ast::Expression::Index { base, index } => {
-                let lowered_base = self.expression_for_reference(base, ctx)?;
+                let mut lowered_base = self.expression_for_reference(base, ctx)?;
                 let index = self.expression(index, ctx)?;
 
+                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+                // Declare pointer as reference
                 if let Typed::Plain(handle) = lowered_base {
                     if resolve_inner!(ctx, handle).pointer_space().is_some() {
-                        return Err(Error::Pointer(
-                            "the value indexed by a `[]` subscripting expression",
-                            ctx.ast_expressions.get_span(base),
-                        ));
+                        lowered_base = Typed::Reference(handle);
                     }
                 }
 
@@ -1997,7 +2032,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 })
             }
             ast::Expression::Member { base, ref field } => {
-                let lowered_base = self.expression_for_reference(base, ctx)?;
+                let mut lowered_base = self.expression_for_reference(base, ctx)?;
+
+                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+                // Declare pointer as reference
+                if let Typed::Plain(handle) = lowered_base {
+                    if resolve_inner!(ctx, handle).pointer_space().is_some() {
+                        lowered_base = Typed::Reference(handle);
+                    }
+                }
 
                 let temp_inner;
                 let composite_type: &crate::TypeInner = match lowered_base {
@@ -2026,16 +2069,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
 
                     Typed::Plain(handle) => {
-                        let inner = resolve_inner!(ctx, handle);
-                        if let crate::TypeInner::Pointer { .. }
-                        | crate::TypeInner::ValuePointer { .. } = *inner
-                        {
-                            return Err(Error::Pointer(
-                                "the value accessed by a `.member` expression",
-                                ctx.ast_expressions.get_span(base),
-                            ));
-                        }
-                        inner
+                        resolve_inner!(ctx, handle)
                     }
                 };
 
@@ -2168,12 +2202,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
     ) -> Result<Option<Handle<crate::Expression>>, Error<'source>> {
+        let function_span = function.span;
         match ctx.globals.get(function.name) {
             Some(&LoweredGlobalDecl::Type(ty)) => {
                 let handle = self.construct(
                     span,
                     &ast::ConstructorType::Type(ty),
-                    function.span,
+                    function_span,
                     arguments,
                     ctx,
                 )?;
@@ -2183,9 +2218,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 &LoweredGlobalDecl::Const(_)
                 | &LoweredGlobalDecl::Override(_)
                 | &LoweredGlobalDecl::Var(_),
-            ) => Err(Error::Unexpected(function.span, ExpectedToken::Function)),
-            Some(&LoweredGlobalDecl::EntryPoint) => Err(Error::CalledEntryPoint(function.span)),
-            Some(&LoweredGlobalDecl::Function(function)) => {
+            ) => Err(Error::Unexpected(function_span, ExpectedToken::Function)),
+            Some(&LoweredGlobalDecl::EntryPoint) => Err(Error::CalledEntryPoint(function_span)),
+            Some(&LoweredGlobalDecl::Function {
+                handle: function,
+                must_use,
+            }) => {
                 let arguments = arguments
                     .iter()
                     .enumerate()
@@ -2210,6 +2248,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let has_result = ctx.module.functions[function].result.is_some();
+
+                if must_use && is_statement {
+                    return Err(Error::FunctionMustUseUnused(function_span));
+                }
+
                 let rctx = ctx.runtime_expression_ctx(span)?;
                 // we need to always do this before a fn call since all arguments need to be emitted before the fn call
                 rctx.block
@@ -2236,7 +2279,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(result)
             }
             None => {
-                let span = function.span;
+                let span = function_span;
                 let expr = if let Some(fun) = conv::map_relational_fun(function.name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
                     let argument = self.expression(args.next()?, ctx)?;
@@ -2905,7 +2948,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let offset = args
             .next()
-            .map(|arg| self.expression(arg, &mut ctx.as_const()))
+            .map(|arg| self.expression(arg, &mut ctx.as_global().as_const()))
             .ok()
             .transpose()?;
 

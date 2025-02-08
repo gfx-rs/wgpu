@@ -15,11 +15,14 @@ use crate::{
         ParentDevice, ResourceErrorIdent, Texture, TextureClearMode,
     },
     snatch::SnatchGuard,
-    track::{TextureSelector, TextureTrackerSetSingle},
+    track::TextureTrackerSetSingle,
 };
 
 use thiserror::Error;
-use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, TextureAspect};
+use wgt::{
+    math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, TextureAspect,
+    TextureSelector,
+};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
@@ -107,7 +110,7 @@ impl Global {
         let dst_pending = cmd_buf_data
             .trackers
             .buffers
-            .set_single(&dst_buffer, hal::BufferUses::COPY_DST);
+            .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
 
         let snatch_guard = dst_buffer.device.snatchable_lock.read();
         let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
@@ -269,12 +272,12 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
 
     // Issue the right barrier.
     let clear_usage = match dst_texture.clear_mode {
-        TextureClearMode::BufferCopy => hal::TextureUses::COPY_DST,
+        TextureClearMode::BufferCopy => wgt::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
-        } => hal::TextureUses::DEPTH_STENCIL_WRITE,
+        } => wgt::TextureUses::DEPTH_STENCIL_WRITE,
         TextureClearMode::Surface { .. } | TextureClearMode::RenderPass { is_color: true, .. } => {
-            hal::TextureUses::COLOR_TARGET
+            wgt::TextureUses::COLOR_TARGET
         }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(
@@ -455,7 +458,7 @@ fn clear_texture_via_render_passes(
                             mip_level,
                             depth_or_layer,
                         ),
-                        usage: hal::TextureUses::COLOR_TARGET,
+                        usage: wgt::TextureUses::COLOR_TARGET,
                     },
                     resolve_target: None,
                     ops: hal::AttachmentOps::STORE,
@@ -473,7 +476,7 @@ fn clear_texture_via_render_passes(
                                 mip_level,
                                 depth_or_layer,
                             ),
-                            usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
+                            usage: wgt::TextureUses::DEPTH_STENCIL_WRITE,
                         },
                         depth_ops: hal::AttachmentOps::STORE,
                         stencil_ops: hal::AttachmentOps::STORE,

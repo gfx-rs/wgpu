@@ -28,7 +28,10 @@ cbuffer u_entity : register(b0, space1) { Entity u_entity; }
 ByteAddressBuffer s_lights : register(t1);
 cbuffer u_lights : register(b1) { Light u_lights[10]; }
 Texture2DArray<float> t_shadow : register(t2);
-SamplerComparisonState sampler_shadow : register(s3);
+SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s0, space1);
+StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t0, space255);
+static const SamplerComparisonState sampler_shadow = nagaComparisonSamplerHeap[nagaGroup0SamplerIndexArray[3]];
 
 struct VertexOutput_vs_main {
     float3 world_normal : LOC0;
@@ -92,8 +95,11 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
     uint i = 0u;
 
     float3 normal_1 = normalize(in_.world_normal);
+    uint2 loop_bound = uint2(0u, 0u);
     bool loop_init = true;
     while(true) {
+        if (all(loop_bound == uint2(4294967295u, 4294967295u))) { break; }
+        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
         if (!loop_init) {
             uint _e40 = i;
             i = (_e40 + 1u);
@@ -128,8 +134,11 @@ float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinp
     uint i_1 = 0u;
 
     float3 normal_2 = normalize(in_1.world_normal);
+    uint2 loop_bound_1 = uint2(0u, 0u);
     bool loop_init_1 = true;
     while(true) {
+        if (all(loop_bound_1 == uint2(4294967295u, 4294967295u))) { break; }
+        loop_bound_1 += uint2(loop_bound_1.y == 4294967295u, 1u);
         if (!loop_init_1) {
             uint _e40 = i_1;
             i_1 = (_e40 + 1u);

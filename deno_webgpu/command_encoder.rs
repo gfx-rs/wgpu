@@ -1,6 +1,5 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
-use super::wgpu_types;
 use crate::WebGpuQuerySet;
 use deno_core::error::AnyError;
 use deno_core::op2;
@@ -269,7 +268,7 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
     let command_encoder = &command_encoder_resource.1;
     let descriptor = wgpu_core::command::ComputePassDescriptor {
         label: Some(label),
-        timestamp_writes: timestamp_writes.as_ref(),
+        timestamp_writes,
     };
 
     let (compute_pass, error) =

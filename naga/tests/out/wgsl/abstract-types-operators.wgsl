@@ -88,5 +88,6 @@ fn wgpu_4445_() {
 
 fn wgpu_4435_() {
     let y = a[(1i - 1i)];
+    return;
 }
 

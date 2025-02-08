@@ -37,7 +37,11 @@ impl Texture {
         }
     }
 
-    /// Creates a view of this texture.
+    /// Creates a view of this texture, specifying an interpretation of its texels and
+    /// possibly a subset of its layers and mip levels.
+    ///
+    /// Texture views are needed to use a texture as a binding in a [`BindGroup`]
+    /// or as an attachment in a [`RenderPass`].
     pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
         let view = self.inner.create_view(desc);
 

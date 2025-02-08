@@ -49,6 +49,7 @@ void test_msl_packed_vec3_() {
     vec3 mvm1_ = (mat3x3(0.0) * data.v3_);
     vec3 svm0_ = (data.v3_ * 2.0);
     vec3 svm1_ = (2.0 * data.v3_);
+    return;
 }
 
 void main() {

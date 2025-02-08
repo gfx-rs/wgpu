@@ -1,6 +1,5 @@
 // Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
 
-use super::wgpu_types;
 use super::WebGpuResult;
 use deno_core::op2;
 use deno_core::OpState;
@@ -97,7 +96,7 @@ pub fn op_webgpu_surface_get_current_texture(
 
     match output.status {
         wgpu_types::SurfaceStatus::Good | wgpu_types::SurfaceStatus::Suboptimal => {
-            let id = output.texture_id.unwrap();
+            let id = output.texture.unwrap();
             let rid = state.resource_table.add(crate::texture::WebGpuTexture {
                 instance: instance.clone(),
                 id,

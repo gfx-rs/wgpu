@@ -353,6 +353,69 @@
                 space: Function,
             ),
         ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 33,
+                size: Constant(1),
+                stride: 1,
+            ),
+        ),
+        (
+            name: Some("S"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: Some("Inner"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("delicious"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: Some("Outer"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("om_nom_nom"),
+                        ty: 36,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("thing"),
+                        ty: 0,
+                        binding: None,
+                        offset: 4,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -1843,6 +1906,301 @@
                 ),
                 Return(
                     value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("index_ptr"),
+            arguments: [
+                (
+                    name: Some("value"),
+                    ty: 33,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 33,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("a"),
+                    ty: 34,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                FunctionArgument(0),
+                Compose(
+                    ty: 34,
+                    components: [
+                        0,
+                    ],
+                ),
+                LocalVariable(0),
+                AccessIndex(
+                    base: 2,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 3,
+                ),
+            ],
+            named_expressions: {
+                0: "value",
+                2: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Store(
+                    pointer: 2,
+                    value: 1,
+                ),
+                Emit((
+                    start: 3,
+                    end: 5,
+                )),
+                Return(
+                    value: Some(4),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("member_ptr"),
+            arguments: [],
+            result: Some((
+                ty: 2,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("s"),
+                    ty: 35,
+                    init: Some(1),
+                ),
+            ],
+            expressions: [
+                Literal(I32(42)),
+                Compose(
+                    ty: 35,
+                    components: [
+                        0,
+                    ],
+                ),
+                LocalVariable(0),
+                AccessIndex(
+                    base: 2,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 3,
+                ),
+            ],
+            named_expressions: {
+                2: "p",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Emit((
+                    start: 3,
+                    end: 5,
+                )),
+                Return(
+                    value: Some(4),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("let_members_of_members"),
+            arguments: [],
+            result: Some((
+                ty: 2,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                ZeroValue(37),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 0,
+                    index: 1,
+                ),
+                As(
+                    expr: 2,
+                    kind: Uint,
+                    convert: Some(4),
+                ),
+                Binary(
+                    op: NotEqual,
+                    left: 3,
+                    right: 4,
+                ),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+            ],
+            named_expressions: {
+                0: "thing",
+                1: "inner",
+                2: "delishus",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Emit((
+                    start: 2,
+                    end: 3,
+                )),
+                Emit((
+                    start: 3,
+                    end: 6,
+                )),
+                If(
+                    condition: 5,
+                    accept: [],
+                    reject: [],
+                ),
+                Emit((
+                    start: 6,
+                    end: 8,
+                )),
+                Return(
+                    value: Some(7),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("var_members_of_members"),
+            arguments: [],
+            result: Some((
+                ty: 2,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("thing"),
+                    ty: 37,
+                    init: Some(0),
+                ),
+                (
+                    name: Some("inner"),
+                    ty: 36,
+                    init: None,
+                ),
+                (
+                    name: Some("delishus"),
+                    ty: 2,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                ZeroValue(37),
+                LocalVariable(0),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 2,
+                ),
+                LocalVariable(1),
+                AccessIndex(
+                    base: 4,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 5,
+                ),
+                LocalVariable(2),
+                AccessIndex(
+                    base: 1,
+                    index: 1,
+                ),
+                Load(
+                    pointer: 8,
+                ),
+                Load(
+                    pointer: 7,
+                ),
+                As(
+                    expr: 10,
+                    kind: Uint,
+                    convert: Some(4),
+                ),
+                Binary(
+                    op: NotEqual,
+                    left: 9,
+                    right: 11,
+                ),
+                AccessIndex(
+                    base: 1,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 13,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 14,
+                ),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 2,
+                    end: 4,
+                )),
+                Store(
+                    pointer: 4,
+                    value: 3,
+                ),
+                Emit((
+                    start: 5,
+                    end: 7,
+                )),
+                Store(
+                    pointer: 7,
+                    value: 6,
+                ),
+                Emit((
+                    start: 8,
+                    end: 13,
+                )),
+                If(
+                    condition: 12,
+                    accept: [],
+                    reject: [],
+                ),
+                Emit((
+                    start: 13,
+                    end: 16,
+                )),
+                Return(
+                    value: Some(15),
                 ),
             ],
             diagnostic_filter_leaf: None,

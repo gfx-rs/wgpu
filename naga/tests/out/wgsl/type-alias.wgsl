@@ -6,5 +6,6 @@ fn main() {
     const e = vec3<i32>(d);
     const f = mat2x2<f32>(vec2<f32>(1f, 2f), vec2<f32>(3f, 4f));
     const g = mat3x3<f32>(a, a, a);
+    return;
 }
 

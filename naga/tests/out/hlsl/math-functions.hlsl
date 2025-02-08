@@ -105,4 +105,5 @@ void main()
     float2 quantizeToF16_b = f16tof32(f32tof16(float2(1.0, 1.0)));
     float3 quantizeToF16_c = f16tof32(f32tof16(float3(1.0, 1.0, 1.0)));
     float4 quantizeToF16_d = f16tof32(f32tof16(float4(1.0, 1.0, 1.0, 1.0)));
+    return;
 }
