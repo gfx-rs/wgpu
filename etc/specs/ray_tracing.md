@@ -78,6 +78,12 @@ rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersectio
 
 // - Returns intersection details about a hit considered `Candidate`.
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersection
+
+// - Returns the vertices of the hit triangle considered `Committed`.
+getCommittedHitVertexPositions(rq: ptr<function, ray_query>) -> array<vec3<f32>, 3>
+
+// - Returns the vertices of the hit triangle considered `Candidate`.
+getCandidateHitVertexPositions(rq: ptr<function, ray_query>) -> array<vec3<f32>, 3>
 ```
 
 > [!CAUTION]
@@ -89,6 +95,7 @@ rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersectio
 >   `Candidate`.
 > - Calling `rayQueryGetCandidateIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
 >   `Committed`.
+> - Calling 
 > - Calling `rayQueryProceed` when `rayQueryInitialize` has not previously been called on this ray query
 > - Calling `rayQueryGenerateIntersection` on a query with last intersection kind not being
 >   `RAY_QUERY_INTERSECTION_AABB`,
