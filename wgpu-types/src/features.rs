@@ -1121,6 +1121,14 @@ bitflags_array! {
         /// This is a native only feature.
         const TEXTURE_INT64_ATOMIC = 1 << 45;
 
+        /// Allows for returning of hit triangles vertex position on acceleration
+        /// structure marked with [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`].
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature
+        const RAY_HIT_VERTEX_RETURN = 1 << 46;
     }
 
     /// Features that are not guaranteed to be supported.
