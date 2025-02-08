@@ -2672,6 +2672,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 committed: true,
                             }
                         }
+                        "getCandidateHitVertexPositions" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let _ = ctx.module.generate_vertex_return_type();
+
+                            crate::Expression::RayQueryVertexPositions {
+                                query,
+                                committed: true,
+                            }
+                        }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
                             let query = self.ray_query_pointer(args.next()?, ctx)?;
