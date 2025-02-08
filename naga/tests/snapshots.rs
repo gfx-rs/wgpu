@@ -277,7 +277,6 @@ type FragmentEntryPoint<'a> = ();
 fn check_targets(
     input: &Input,
     module: &mut naga::Module,
-    expected_targets: Targets,
     source_code: Option<&str>,
     // For testing hlsl generation when fragment shader doesn't consume all vertex outputs.
     frag_ep: Option<FragmentEntryPoint>,
@@ -286,7 +285,6 @@ fn check_targets(
     let name = &input.file_name;
 
     let targets = params.targets;
-    assert_eq!(targets, expected_targets);
 
     if frag_ep.is_some() && !targets.contains(Targets::HLSL) {
         panic!("Providing FragmentEntryPoint only makes sense when testing hlsl-out");
@@ -692,313 +690,111 @@ fn convert_wgsl() {
     let _ = env_logger::try_init();
 
     let inputs = [
-        (
-            "array-in-ctor",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "array-in-function-return-type",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "empty",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "quad",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::GLSL
-                | Targets::DOT
-                | Targets::HLSL
-                | Targets::WGSL,
-        ),
-        (
-            "bits",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "bitcast",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "boids",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "skybox",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "collatz",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::IR
-                | Targets::ANALYSIS
-                | Targets::HLSL
-                | Targets::WGSL,
-        ),
-        (
-            "shadow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "image",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL | Targets::GLSL,
-        ),
-        ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
-        ("push-constants", Targets::GLSL | Targets::HLSL),
-        (
-            "operators",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "fragment-output",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "dualsource",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("functions-webgl", Targets::GLSL),
-        (
-            "interpolate",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "interpolate_compat",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "access",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::GLSL
-                | Targets::HLSL
-                | Targets::WGSL
-                | Targets::IR
-                | Targets::ANALYSIS,
-        ),
-        (
-            "atomicOps",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicCompareExchange",
-            Targets::SPIRV | Targets::METAL | Targets::WGSL,
-        ),
-        (
-            "padding",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicOps-int64",
-            Targets::SPIRV | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicOps-int64-min-max",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicTexture",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicOps-float32",
-            Targets::SPIRV | Targets::METAL | Targets::WGSL,
-        ),
-        (
-            "atomicTexture-int64",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicCompareExchange-int64",
-            Targets::SPIRV | Targets::WGSL,
-        ),
-        ("pointers", Targets::SPIRV | Targets::WGSL),
-        (
-            "control-flow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "standard",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        //TODO: GLSL https://github.com/gfx-rs/naga/issues/874
-        (
-            "interface",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "globals",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("bounds-check-zero", Targets::SPIRV | Targets::METAL),
-        ("bounds-check-zero-atomic", Targets::METAL),
-        ("bounds-check-restrict", Targets::SPIRV | Targets::METAL),
-        (
-            "bounds-check-image-restrict",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        (
-            "bounds-check-image-rzsw",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        ("policy-mix", Targets::SPIRV | Targets::METAL),
-        ("bounds-check-dynamic-buffer", Targets::HLSL),
-        (
-            "texture-arg",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("cubeArrayShadow", Targets::GLSL),
-        ("sample-cube-array-depth-lod", Targets::GLSL),
-        (
-            "use-gl-ext-over-grad-workaround-if-instructed",
-            Targets::GLSL,
-        ),
-        ("local-const", Targets::IR | Targets::WGSL),
-        (
-            "math-functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "binding-arrays",
-            Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
-        ),
-        (
-            "binding-buffer-arrays",
-            Targets::WGSL | Targets::SPIRV, //TODO: more backends, eventually merge into "binding-arrays"
-        ),
-        ("resource-binding-map", Targets::METAL),
-        ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
-        ("multiview_webgl", Targets::GLSL),
-        (
-            "break-if",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        ("lexical-scopes", Targets::WGSL),
-        ("type-alias", Targets::WGSL),
-        ("module-scope", Targets::WGSL),
-        (
-            "workgroup-var-init",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        (
-            "workgroup-uniform-load",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        ("runtime-array-in-unused-struct", Targets::SPIRV),
-        ("sprite", Targets::SPIRV),
-        ("force_point_size_vertex_shader_webgl", Targets::GLSL),
-        ("invariant", Targets::GLSL),
-        ("ray-query", Targets::SPIRV | Targets::METAL | Targets::HLSL),
-        ("hlsl-keyword", Targets::HLSL),
-        (
-            "constructors",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("msl-varyings", Targets::METAL),
-        (
-            "const-exprs",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("const_assert", Targets::WGSL | Targets::IR),
-        ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
-        (
-            "struct-layout",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        (
-            "f64",
-            Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-const",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-function-calls",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-var",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-operators",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-return",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "int64",
-            Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
-        ),
-        (
-            "subgroup-operations",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "overrides",
-            Targets::IR
-                | Targets::ANALYSIS
-                | Targets::SPIRV
-                | Targets::METAL
-                | Targets::HLSL
-                | Targets::GLSL,
-        ),
-        (
-            "overrides-atomicCompareExchangeWeak",
-            Targets::IR | Targets::SPIRV | Targets::METAL,
-        ),
-        (
-            "overrides-ray-query",
-            Targets::IR | Targets::SPIRV | Targets::METAL,
-        ),
-        ("vertex-pulling-transform", Targets::METAL),
-        (
-            "cross",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "phony_assignment",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("6220-break-from-loop", Targets::SPIRV),
-        ("index-by-value", Targets::SPIRV | Targets::IR),
-        (
-            "6438-conflicting-idents",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("diagnostic-filter", Targets::IR),
-        (
-            "6772-unpack-expr-accesses",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("must-use", Targets::IR),
-        (
-            "storage-textures",
-            Targets::IR | Targets::ANALYSIS | Targets::SPIRV | Targets::METAL | Targets::HLSL,
-        ),
-        ("debug-symbol-simple", Targets::SPIRV),
-        ("debug-symbol-terrain", Targets::SPIRV),
-        ("debug-symbol-large-source", Targets::SPIRV),
+        "array-in-ctor",
+        "array-in-function-return-type",
+        "empty",
+        "quad",
+        "bits",
+        "bitcast",
+        "boids",
+        "skybox",
+        "collatz",
+        "shadow",
+        "image",
+        "extra",
+        "push-constants",
+        "operators",
+        "functions",
+        "fragment-output",
+        "dualsource",
+        "functions-webgl",
+        "interpolate",
+        "interpolate_compat",
+        "access",
+        "atomicOps",
+        "atomicCompareExchange",
+        "padding",
+        "atomicOps-int64",
+        "atomicOps-int64-min-max",
+        "atomicTexture",
+        "atomicOps-float32",
+        "atomicTexture-int64",
+        "atomicCompareExchange-int64",
+        "pointers",
+        "control-flow",
+        "standard",
+        "interface",
+        "globals",
+        "bounds-check-zero",
+        "bounds-check-zero-atomic",
+        "bounds-check-restrict",
+        "bounds-check-image-restrict",
+        "bounds-check-image-rzsw",
+        "policy-mix",
+        "bounds-check-dynamic-buffer",
+        "texture-arg",
+        "cubeArrayShadow",
+        "sample-cube-array-depth-lod",
+        "use-gl-ext-over-grad-workaround-if-instructed",
+        "local-const",
+        "math-functions",
+        "binding-arrays",
+        "binding-buffer-arrays",
+        "resource-binding-map",
+        "multiview",
+        "multiview_webgl",
+        "break-if",
+        "lexical-scopes",
+        "type-alias",
+        "module-scope",
+        "workgroup-var-init",
+        "workgroup-uniform-load",
+        "runtime-array-in-unused-struct",
+        "sprite",
+        "force_point_size_vertex_shader_webgl",
+        "invariant",
+        "ray-query",
+        "hlsl-keyword",
+        "constructors",
+        "msl-varyings",
+        "const-exprs",
+        "const_assert",
+        "separate-entry-points",
+        "struct-layout",
+        "f64",
+        "abstract-types-const",
+        "abstract-types-function-calls",
+        "abstract-types-var",
+        "abstract-types-operators",
+        "abstract-types-return",
+        "int64",
+        "subgroup-operations",
+        "overrides",
+        "overrides-atomicCompareExchangeWeak",
+        "overrides-ray-query",
+        "vertex-pulling-transform",
+        "cross",
+        "phony_assignment",
+        "6220-break-from-loop",
+        "index-by-value",
+        "6438-conflicting-idents",
+        "diagnostic-filter",
+        "6772-unpack-expr-accesses",
+        "must-use",
+        "storage-textures",
+        "debug-symbol-simple",
+        "debug-symbol-terrain",
+        "debug-symbol-large-source",
     ];
 
-    for &(name, targets) in inputs.iter() {
+    for &name in inputs.iter() {
         // WGSL shaders lives in root dir as a privileged.
         let input = Input::new(None, name, "wgsl");
         let source = input.read_source();
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
         match naga::front::wgsl::parse_str(&source) {
-            Ok(mut module) => check_targets(&input, &mut module, targets, None, None),
+            Ok(mut module) => check_targets(&input, &mut module, None, None),
             Err(e) => panic!(
                 "{}",
                 e.emit_to_string_with_path(&source, input.input_path())
@@ -1033,8 +829,8 @@ fn unconsumed_vertex_outputs_hlsl_out() {
     let frag_ep = naga::back::hlsl::FragmentEntryPoint::new(&frag_module, "fs_main")
         .expect("fs_main not found");
 
-    check_targets(&input, &mut module, Targets::HLSL, None, Some(frag_ep));
-    check_targets(&frag_input, &mut frag_module, Targets::HLSL, None, None);
+    check_targets(&input, &mut module, None, Some(frag_ep));
+    check_targets(&frag_input, &mut frag_module, None, None);
 }
 
 #[cfg(feature = "spv-in")]
@@ -1051,7 +847,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         },
     )
     .unwrap();
-    check_targets(&input, &mut module, targets, None, None);
+    check_targets(&input, &mut module, None, None);
 }
 
 #[cfg(feature = "spv-in")]
@@ -1123,7 +919,7 @@ fn convert_glsl_variations_check() {
             &source,
         )
         .unwrap();
-    check_targets(&input, &mut module, Targets::GLSL, None, None);
+    check_targets(&input, &mut module, None, None);
 }
 
 #[cfg(feature = "glsl-in")]
