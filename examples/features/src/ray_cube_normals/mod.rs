@@ -120,16 +120,6 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
 
 struct Example {
     rt_target: wgpu::Texture,
-    #[expect(dead_code)]
-    rt_view: wgpu::TextureView,
-    #[expect(dead_code)]
-    sampler: wgpu::Sampler,
-    #[expect(dead_code)]
-    uniform_buf: wgpu::Buffer,
-    #[expect(dead_code)]
-    vertex_buf: wgpu::Buffer,
-    #[expect(dead_code)]
-    index_buf: wgpu::Buffer,
     tlas_package: wgpu::TlasPackage,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
@@ -397,11 +387,6 @@ impl crate::framework::Example for Example {
 
         Example {
             rt_target,
-            rt_view,
-            sampler,
-            uniform_buf,
-            vertex_buf,
-            index_buf,
             tlas_package,
             compute_pipeline,
             compute_bind_group,
