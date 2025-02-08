@@ -103,6 +103,10 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 
+#### Gles
+
+- Support OpenHarmony render with `gles`. By @richerfu in [#7085](https://github.com/gfx-rs/wgpu/pull/7085)
+
 #### Dx12
 
 - Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993) and [#7104](https://github.com/gfx-rs/wgpu/pull/7104)
