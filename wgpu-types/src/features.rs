@@ -1132,6 +1132,8 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature
+        ///
+        /// [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`]: super::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN
         const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 46;
     }
 
