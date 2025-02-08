@@ -103,17 +103,13 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
     }
 }
 
-#[derive(Debug)]
-pub struct ResolvedSurfaceOutput {
-    pub status: Status,
-    pub texture: Option<Arc<resource::Texture>>,
-}
+pub type ResolvedSurfaceOutput = SurfaceOutput<Arc<resource::Texture>>;
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct SurfaceOutput {
+pub struct SurfaceOutput<T = id::TextureId> {
     pub status: Status,
-    pub texture_id: Option<id::TextureId>,
+    pub texture: Option<T>,
 }
 
 impl Surface {
@@ -337,7 +333,10 @@ impl Global {
             .texture
             .map(|texture| fid.assign(resource::Fallible::Valid(texture)));
 
-        Ok(SurfaceOutput { status, texture_id })
+        Ok(SurfaceOutput {
+            status,
+            texture: texture_id,
+        })
     }
 
     pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {

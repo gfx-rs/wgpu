@@ -289,7 +289,7 @@ impl GlobalPlay for wgc::global::Global {
             Action::GetSurfaceTexture { id, parent_id } => {
                 self.surface_get_current_texture(parent_id, Some(id))
                     .unwrap()
-                    .texture_id
+                    .texture
                     .unwrap();
             }
             Action::CreateBindGroupLayout(id, desc) => {
