@@ -284,7 +284,7 @@ pub fn op_webgpu_create_bind_group(
                             .get::<super::buffer::WebGpuBuffer>(entry.resource)?;
                         wgpu_core::binding_model::BindingResource::Buffer(
                             wgpu_core::binding_model::BufferBinding {
-                                buffer_id: buffer_resource.1,
+                                buffer: buffer_resource.1,
                                 offset: entry.offset.unwrap_or(0),
                                 size: std::num::NonZeroU64::new(entry.size.unwrap_or(0)),
                             },

@@ -96,7 +96,7 @@ pub fn op_webgpu_surface_get_current_texture(
 
     match output.status {
         wgpu_types::SurfaceStatus::Good | wgpu_types::SurfaceStatus::Suboptimal => {
-            let id = output.texture_id.unwrap();
+            let id = output.texture.unwrap();
             let rid = state.resource_table.add(crate::texture::WebGpuTexture {
                 instance: instance.clone(),
                 id,
