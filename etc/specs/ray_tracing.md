@@ -88,7 +88,11 @@ getCandidateHitVertexPositions(rq: ptr<function, ray_query>) -> array<vec3<f32>,
 >   `Candidate`. 
 > - Calling `rayQueryGetCandidateIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
 >   `Committed`.
-> - Calling 
+> - Calling `getCommittedHitVertexPositions` when `rayQueryProceed`'s latest return on this ray query is considered
+>   `Candidate`.
+> - Calling `getCandidateHitVertexPositions` when `rayQueryProceed`'s latest return on this ray query is considered
+>   `Committed`.
+> - Calling `get*HitVertexPositions` when the last `rayQueryProceed` did not hit a triangle
 > - Calling `rayQueryProceed` when `rayQueryInitialize` has not previously been called on this ray query
 > 
 > *this is only known undefined behaviour, and will be worked around in the future.
