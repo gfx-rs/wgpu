@@ -118,15 +118,17 @@ impl Writer {
             .types
             .get(&Type {
                 name: None,
-                inner: TypeInner::RayQuery { vertex_return: false },
+                inner: TypeInner::RayQuery {
+                    vertex_return: false,
+                },
             })
             .or_else(|| {
-                ir_module
-                    .types
-                    .get(&Type {
-                        name: None,
-                        inner: TypeInner::RayQuery { vertex_return: true },
-                    })
+                ir_module.types.get(&Type {
+                    name: None,
+                    inner: TypeInner::RayQuery {
+                        vertex_return: true,
+                    },
+                })
             })
             .expect("ray_query type should have been populated by the variable passed into this!");
         let argument_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
