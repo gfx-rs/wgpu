@@ -1121,6 +1121,10 @@ bitflags_array! {
         /// This is a native only feature.
         const TEXTURE_INT64_ATOMIC = 1 << 45;
 
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/6762)
+        ///
         /// Allows for returning of hit triangles vertex position on acceleration
         /// structure marked with [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`].
         ///
@@ -1128,7 +1132,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature
-        const RAY_HIT_VERTEX_RETURN = 1 << 46;
+        const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 46;
     }
 
     /// Features that are not guaranteed to be supported.

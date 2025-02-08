@@ -31,7 +31,7 @@ impl Device {
             .flags
             .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
         {
-            self.require_features(Features::RAY_HIT_VERTEX_RETURN)?;
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
 
         let size_info = match &sizes {
@@ -126,7 +126,7 @@ impl Device {
             .flags
             .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
         {
-            self.require_features(Features::RAY_HIT_VERTEX_RETURN)?;
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
 
         let size_info = unsafe {

@@ -657,7 +657,7 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(ext::conservative_rasterization::NAME),
         );
         features.set(
-            F::RAY_HIT_VERTEX_RETURN,
+            F::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN,
             caps.supports_extension(khr::ray_tracing_position_fetch::NAME),
         );
 
@@ -1041,7 +1041,7 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::ray_query::NAME);
         }
 
-        if requested_features.contains(wgt::Features::RAY_HIT_VERTEX_RETURN) {
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
             extensions.push(khr::ray_tracing_position_fetch::NAME)
         }
 
@@ -1913,7 +1913,7 @@ impl super::Adapter {
             if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
             }
-            if features.contains(wgt::Features::RAY_HIT_VERTEX_RETURN) {
+            if features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
                 capabilities.push(spv::Capability::RayQueryPositionFetchKHR)
             }
             spv::Options {

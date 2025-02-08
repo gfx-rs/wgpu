@@ -467,7 +467,7 @@ pub fn create_validator(
     );
     caps.set(
         Caps::RAY_HIT_VERTEX_POSITION,
-        features.intersects(wgt::Features::RAY_HIT_VERTEX_RETURN),
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
     );
 
     naga::valid::Validator::new(flags, caps)
