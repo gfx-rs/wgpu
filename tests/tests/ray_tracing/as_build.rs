@@ -522,7 +522,6 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-
     fail(
         &ctx.device,
         || {
