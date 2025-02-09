@@ -119,6 +119,10 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
     TlasInstanceCountExceeded(ResourceErrorIdent, u32, u32),
+    #[error(
+        "Tlas {0:?} dependent {1:?} is missing AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN"
+    )]
+    TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
