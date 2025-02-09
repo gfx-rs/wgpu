@@ -173,6 +173,7 @@ wgpu-core = { workspace = true, features = [
     "indirect-validation",
 ] }
 wgpu-hal.workspace = true
+
 smallvec.workspace = true
 
 ###############
@@ -188,11 +189,12 @@ web-sys = { workspace = true, features = [
 ] }
 
 # Needed for only wgpu-core backend. Optional as webgl is optional on WebAssembly.
-smallvec = { workspace = true, optional = true }
 wgpu-core = { workspace = true, optional = true, features = [
     "raw-window-handle",
 ] }
 wgpu-hal = { workspace = true, optional = true }
+
+smallvec = { workspace = true, optional = true }
 
 # Needed for the webgpu backend. Optional as webgpu is optional on WebAssembly.
 wasm-bindgen-futures = { workspace = true, optional = true }
@@ -203,6 +205,8 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 [target.'cfg(target_os = "emscripten")'.dependencies]
 wgpu-core = { workspace = true, features = ["raw-window-handle"] }
 wgpu-hal.workspace = true
+
+smallvec.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

@@ -67,11 +67,15 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
     "naga/msl-out",
+    "dep:arrayvec",
     "dep:block",
     "dep:core-graphics-types",
+    "dep:hashbrown",
     "dep:libc",
+    "dep:log",
     "dep:metal",
     "dep:objc",
+    "dep:profiling",
 ]
 vulkan = [
     "naga/spv-out",
