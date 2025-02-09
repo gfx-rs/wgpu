@@ -50,6 +50,8 @@ Naming is mostly taken from vulkan.
 ```wgsl
 // - Initializes the `ray_query` to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure
 rayQueryInitialize(rq: ptr<function, ray_query>, acceleration_structure: acceleration_structure, ray_desc: RayDesc)
+// Overload.
+rayQueryInitialize(rq: ptr<function, ray_query<vertex_return>>, acceleration_structure: acceleration_structure<vertex_return>, ray_desc: RayDesc)
 
 // - Traces the ray in the initialized ray_query (partially) through the scene.
 // - Returns true if a triangle that was hit by the ray was in a `Blas` that is not marked as opaque.
@@ -62,19 +64,25 @@ rayQueryInitialize(rq: ptr<function, ray_query>, acceleration_structure: acceler
 //   the closest hit a `Committed` intersection should be used.
 // - Calling this function multiple times will cause the ray traversal to continue if it was interrupted by a `Candidate`
 //   intersection.
-rayQueryProceed(rq: ptr<function, ray_query>) -> bool`
+rayQueryProceed(rq: ptr<function, ray_query>) -> bool
+// Overload.
+rayQueryProceed(rq: ptr<function, ray_query<vertex_return>>) -> bool
 
 // - Returns intersection details about a hit considered `Committed`.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection
+// Overload.
+rayQueryGetCommittedIntersection(rq: ptr<function, ray_query<vertex_return>>) -> RayIntersection
 
 // - Returns intersection details about a hit considered `Candidate`.
 rayQueryGetCandidateIntersection(rq: ptr<function, ray_query>) -> RayIntersection
+// Overload.
+rayQueryGetCandidateIntersection(rq: ptr<function, ray_query<vertex_return>>) -> RayIntersection
 
 // - Returns the vertices of the hit triangle considered `Committed`.
-getCommittedHitVertexPositions(rq: ptr<function, ray_query>) -> array<vec3<f32>, 3>
+getCommittedHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> array<vec3<f32>, 3>
 
 // - Returns the vertices of the hit triangle considered `Candidate`.
-getCandidateHitVertexPositions(rq: ptr<function, ray_query>) -> array<vec3<f32>, 3>
+getCandidateHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> array<vec3<f32>, 3>
 ```
 
 *The API to commit a candidate intersection is not yet implemented but would be possible to be user implemented.
