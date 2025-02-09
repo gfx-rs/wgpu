@@ -586,6 +586,9 @@ struct MultiStageData<T> {
     vs: T,
     fs: T,
     cs: T,
+    // TODO: work on this for metal
+    /*ts: T,
+    ms: T,*/
 }
 
 const NAGA_STAGES: MultiStageData<naga::ShaderStage> = MultiStageData {
@@ -601,6 +604,7 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
             naga::ShaderStage::Vertex => &self.vs,
             naga::ShaderStage::Fragment => &self.fs,
             naga::ShaderStage::Compute => &self.cs,
+            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
         }
     }
 }

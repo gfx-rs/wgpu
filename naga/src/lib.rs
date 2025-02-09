@@ -2268,6 +2268,7 @@ pub enum MeshOutputTopology {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[allow(dead_code)]
 pub struct MeshStageInfo {
     topology: MeshOutputTopology,
     // Should this be an expression or what? Not clear
