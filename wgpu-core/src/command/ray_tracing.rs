@@ -530,8 +530,19 @@ impl Global {
                     },
                 ));
 
-                if tlas.flags.contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN) && !blas.flags.contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN) {
-                    return Err(BuildAccelerationStructureError::TlasDependentMissingVertexReturn(tlas.error_ident(), blas.error_ident()))
+                if tlas
+                    .flags
+                    .contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+                    && !blas.flags.contains(
+                        wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                    )
+                {
+                    return Err(
+                        BuildAccelerationStructureError::TlasDependentMissingVertexReturn(
+                            tlas.error_ident(),
+                            blas.error_ident(),
+                        ),
+                    );
                 }
 
                 instance_count += 1;
