@@ -1124,10 +1124,9 @@ bitflags_array! {
         /// Enables mesh shaders and task shaders in mesh shader pipelines.
         ///
         /// Supported platforms:
-        /// - Vulkan (with VK_EXT_mesh_shader)
+        /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
         ///
         /// This is a native only feature.
-        /// [VK_EXT_mesh_shader]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html
         const MESH_SHADER = 1 << 46;
 
     }
