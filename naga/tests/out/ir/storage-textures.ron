@@ -215,6 +215,8 @@
                 ],
                 diagnostic_filter_leaf: None,
             ),
+            mesh_info: None,
+            task_payload: None,
         ),
         (
             name: "csStore",
@@ -312,6 +314,8 @@
                 ],
                 diagnostic_filter_leaf: None,
             ),
+            mesh_info: None,
+            task_payload: None,
         ),
     ],
     diagnostic_filters: [],

@@ -42,7 +42,7 @@
     functions: [
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -1200,7 +1200,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -2526,7 +2526,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(0),
                 requirements: (""),
@@ -2566,7 +2566,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(0),
                 requirements: (""),
@@ -2615,7 +2615,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -2658,7 +2658,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -2752,7 +2752,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(0),
                 requirements: (""),
@@ -2804,7 +2804,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -2859,7 +2859,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(0),
                 requirements: (""),
@@ -2911,7 +2911,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -2966,7 +2966,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(2),
                 requirements: (""),
@@ -3039,7 +3039,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(2),
                 requirements: (""),
@@ -3115,7 +3115,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -3215,7 +3215,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(1),
                 requirements: (""),
@@ -3413,7 +3413,7 @@
     entry_points: [
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(0),
                 requirements: (""),
@@ -4087,7 +4087,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -4539,7 +4539,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -4660,7 +4660,7 @@
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: Some(0),
                 requirements: (""),
