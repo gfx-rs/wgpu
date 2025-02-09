@@ -40,12 +40,33 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 [lib]
 
 [features]
+
+########################
+### Backend Features ###
+########################
+
+# The interaction of features between wgpu-core and wgpu-hal is a bit nuanced to get
+# the desired behavior on all platforms.
+#
+# At the wgpu-hal level the features are defined to enable the backends on all platforms
+# that can compile the backend. Vulkan for example will have an effect on Windows, Mac, Linux, and Android.
+# This is done with target conditional dependencies in wgpu-hal. This allows `--all-features`
+# to compile on all platforms.
+#
+# wgpu-core's features are defined to enable the backends on their "default" platforms. For example we
+# exclude the Vulkan backend on MacOS unless a separate feature `vulkan-portability` is enabled. In response
+# to these features, it enables features of platform specific crates. For example, the `vulkan` feature in wgpu-core
+# enables the `vulkan` feature in `wgpu-core-platform-windows-linux-android-emscripten` which in turn enables the
+# `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it 
+# will enable the `vulkan` feature in `wgpu-core-platform-apple`. The only way to do this is unfortunately to have
+# a separate crate for each platform category that participates in the feature unification.
+#
+# See https://github.com/gfx-rs/wgpu/issues/3514 and https://github.com/gfx-rs/wgpu/pull/7076 for more information.
+
 ## Enables the Metal backend when targeting Apple platforms.
-##
-## Has no effect on non-Apple platforms.
 metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
-    "naga/msl-out-if-target-apple",
+    "naga/msl-out",
     "dep:block",
     "dep:core-graphics-types",
     "dep:libc",
@@ -91,8 +112,6 @@ gles = [
     "windows/Win32_UI_WindowsAndMessaging",
 ]
 ## Enables the DX12 backend when targeting Windows.
-##
-## Has no effect if not targeting Windows.
 dx12 = [
     "naga/hlsl-out",
     "dep:arrayvec",
@@ -118,12 +137,21 @@ dx12 = [
     "windows/Win32_System_Threading",
     "windows/Win32_UI_WindowsAndMessaging",
 ]
-## Enables statically linking DXC.
+
+###########################
+### Misc Other Features ###
+###########################
+
 static-dxc = ["dep:mach-dxcompiler-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
+
+###################################
+### Internal Debugging Features ###
+###################################
+
 # Panic when running into an out-of-memory error (for debugging purposes).
 #
 # Only affects the d3d12 and vulkan backends.
@@ -158,6 +186,7 @@ raw-window-handle.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
 
+# Target agnostic dependencies used only in backends.
 arrayvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }

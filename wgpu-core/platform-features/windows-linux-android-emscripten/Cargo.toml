@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-core-platform-windows-linux-android"
+name = "wgpu-core-platform-windows-linux-android-emscripten"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -21,5 +21,6 @@ vulkan = ["wgpu-hal/vulkan"]
 dx12 = ["wgpu-hal/dx12"]
 renderdoc = ["wgpu-hal/renderdoc"]
 
+# Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
 [target.'cfg(any(windows, target_os = "linux", target_os = "emscripten", target_os = "android"))'.dependencies]
 wgpu-hal.workspace = true

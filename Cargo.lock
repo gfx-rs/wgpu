@@ -4453,7 +4453,7 @@ dependencies = [
  "thiserror 2.0.11",
  "wgpu-core-platform-apple",
  "wgpu-core-platform-wasm",
- "wgpu-core-platform-windows-linux-android",
+ "wgpu-core-platform-windows-linux-android-emscripten",
  "wgpu-hal",
  "wgpu-types",
 ]
@@ -4473,7 +4473,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-core-platform-windows-linux-android"
+name = "wgpu-core-platform-windows-linux-android-emscripten"
 version = "24.0.0"
 dependencies = [
  "wgpu-hal",

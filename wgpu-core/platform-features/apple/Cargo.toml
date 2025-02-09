@@ -20,5 +20,6 @@ metal = ["wgpu-hal/metal"]
 angle = ["wgpu-hal/gles", "wgpu-hal/renderdoc"]
 vulkan-portability = ["wgpu-hal/vulkan", "wgpu-hal/renderdoc"]
 
+# Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
 [target.'cfg(target_vendor = "apple")'.dependencies]
 wgpu-hal.workspace = true
