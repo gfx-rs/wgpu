@@ -1088,28 +1088,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Const(ref c) => {
                     let mut ectx = ctx.as_const();
-                    let mut init = self.expression_for_abstract(c.init, &mut ectx)?;
 
-                    let ty;
-                    if let Some(explicit_ty) = c.ty {
-                        let explicit_ty =
-                            self.resolve_ast_type(explicit_ty, &mut ectx.as_global())?;
-                        let explicit_ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
-                        init = ectx
-                            .try_automatic_conversions(init, &explicit_ty_res, c.name.span)
-                            .map_err(|error| match error {
-                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
-                                    name: c.name.span,
-                                    expected: e.dest_type,
-                                    got: e.source_type,
-                                },
-                                other => other,
-                            })?;
-                        ty = explicit_ty;
-                    } else {
-                        init = ectx.concretize(init)?;
-                        ty = ectx.register_type(init)?;
-                    }
+                    let explicit_ty =
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global()))
+                            .transpose()?;
+
+                    let (ty, init) =
+                        self.type_and_init(c.name, Some(c.init), explicit_ty, &mut ectx)?;
+                    let init = init.expect("Global const must have init");
 
                     let handle = ctx.module.constants.append(
                         crate::Constant {
@@ -1221,6 +1207,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         },
                         other => other,
                     })?;
+
+                let init_ty = ectx.register_type(init)?;
+                let explicit_inner = &ectx.module.types[explicit_ty].inner;
+                let init_inner = &ectx.module.types[init_ty].inner;
+                if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
+                    return Err(Error::InitializationTypeMismatch {
+                        name: name.span,
+                        expected: explicit_inner.to_wgsl(&ectx.module.to_ctx()).into(),
+                        got: init_inner.to_wgsl(&ectx.module.to_ctx()).into(),
+                    });
+                }
                 ty = explicit_ty;
                 initializer = Some(init);
             }
@@ -1466,37 +1463,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let mut emitter = Emitter::default();
                     emitter.start(&ctx.function.expressions);
                     let mut ectx = ctx.as_expression(block, &mut emitter);
-
-                    let ty;
-                    let initializer;
-                    match (v.init, explicit_ty) {
-                        (Some(init), Some(explicit_ty)) => {
-                            let init = self.expression_for_abstract(init, &mut ectx)?;
-                            let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
-                            let init = ectx
-                                .try_automatic_conversions(init, &ty_res, v.name.span)
-                                .map_err(|error| match error {
-                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
-                                    name: v.name.span,
-                                    expected: e.dest_type,
-                                    got: e.source_type,
-                                },
-                                other => other,
-                            })?;
-                            ty = explicit_ty;
-                            initializer = Some(init);
-                        }
-                        (Some(init), None) => {
-                            let concretized = self.expression(init, &mut ectx)?;
-                            ty = ectx.register_type(concretized)?;
-                            initializer = Some(concretized);
-                        }
-                        (None, Some(explicit_ty)) => {
-                            ty = explicit_ty;
-                            initializer = None;
-                        }
-                        (None, None) => return Err(Error::DeclMissingTypeAndInit(v.name.span)),
-                    }
+                    let (ty, initializer) =
+                        self.type_and_init(v.name, v.init, explicit_ty, &mut ectx)?;
 
                     let (const_initializer, initializer) = {
                         match initializer {
@@ -1551,26 +1519,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let ectx = &mut ctx.as_const(block, &mut emitter);
 
-                    let mut init = self.expression_for_abstract(c.init, ectx)?;
+                    let explicit_ty =
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global()))
+                            .transpose()?;
 
-                    if let Some(explicit_ty) = c.ty {
-                        let explicit_ty =
-                            self.resolve_ast_type(explicit_ty, &mut ectx.as_global())?;
-                        let explicit_ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
-                        init = ectx
-                            .try_automatic_conversions(init, &explicit_ty_res, c.name.span)
-                            .map_err(|error| match error {
-                                Error::AutoConversion(error) => Error::InitializationTypeMismatch {
-                                    name: c.name.span,
-                                    expected: error.dest_type,
-                                    got: error.source_type,
-                                },
-                                other => other,
-                            })?;
-                    } else {
-                        init = ectx.concretize(init)?;
-                        ectx.register_type(init)?;
-                    }
+                    let (_ty, init) =
+                        self.type_and_init(c.name, Some(c.init), explicit_ty, ectx)?;
+                    let init = init.expect("Local const must have init");
 
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
