@@ -147,7 +147,7 @@ dx12 = [
 ###########################
 
 static-dxc = ["dep:mach-dxcompiler-rs"]
-renderdoc = ["dep:libloading", "dep:renderdoc-sys"]
+renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]

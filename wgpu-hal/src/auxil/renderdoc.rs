@@ -1,4 +1,5 @@
 //! RenderDoc integration - <https://renderdoc.org/>
+#![cfg_attr(not(any(feature = "gles", feature = "vulkan")), allow(dead_code))]
 
 use std::{ffi, os, ptr};
 
