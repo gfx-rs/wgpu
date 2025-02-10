@@ -4736,6 +4736,8 @@ bitflags::bitflags! {
         const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
         /// Buffer used for top level acceleration structure building.
         const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 13;
+        /// A buffer used to store the compacted size of an acceleration structure
+        const ACCELERATION_STRUCTURE_QUERY = 1 << 14;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
@@ -7194,6 +7196,26 @@ bitflags::bitflags!(
         const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
     }
 );
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// What a copy between acceleration structures should do
+pub enum AccelerationStructureCopy {
+    /// Directly duplicate an acceleration structure to another
+    Clone,
+    /// Duplicate and compact an acceleration structure
+    Compact,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// What type the data of an acceleration structure is
+pub enum AccelerationStructureType {
+    /// The types of the acceleration structure are triangles
+    Triangles,
+    /// The types of the acceleration structure are axis aligned bounding boxes
+    AABBs,
+    /// The types of the acceleration structure are instances
+    Instances,
+}
 
 /// Alignment requirement for transform buffers used in acceleration structure builds
 pub const TRANSFORM_BUFFER_ALIGNMENT: BufferAddress = 16;

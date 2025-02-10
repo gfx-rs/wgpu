@@ -2525,10 +2525,26 @@ impl crate::Device for super::Device {
                     .set_object_name(raw_acceleration_structure, label);
             }
 
+            let pool = if desc.allow_compaction {
+                let vk_info = vk::QueryPoolCreateInfo::default()
+                    .query_type(vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
+                    .query_count(1);
+
+                let raw = self
+                    .shared
+                    .raw
+                    .create_query_pool(&vk_info, None)
+                    .map_err(super::map_host_oom_and_ioca_err)?;
+                Some(raw)
+            } else {
+                None
+            };
+
             Ok(super::AccelerationStructure {
                 raw: raw_acceleration_structure,
                 buffer: raw_buffer,
                 block: Mutex::new(block),
+                compacted_size_query: pool,
             })
         }
     }
@@ -2554,6 +2570,9 @@ impl crate::Device for super::Device {
             self.mem_allocator
                 .lock()
                 .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+            if let Some(query) = acceleration_structure.compacted_size_query {
+                self.shared.raw.destroy_query_pool(query, None)
+            }
         }
     }
 

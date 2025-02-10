@@ -1249,6 +1249,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     ) where
         T: Iterator<Item = BufferTextureCopy>;
 
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        src: &<Self::A as Api>::AccelerationStructure,
+        dst: &<Self::A as Api>::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
+    );
     // pass common
 
     /// Sets the bind group at `index` to `group`.
@@ -1508,6 +1514,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         barrier: AccelerationStructureBarrier,
+    );
+    // modeled off dx12, because this is able to be polyfilled in vulkan as opposed to the other way round
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        acceleration_structure: &<Self::A as Api>::AccelerationStructure,
+        buf: &<Self::A as Api>::Buffer,
     );
 }
 
@@ -2311,6 +2323,7 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
     pub format: AccelerationStructureFormat,
+    pub allow_compaction: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -2397,6 +2410,11 @@ pub struct AccelerationStructureAABBs<'a, B: DynBuffer + ?Sized> {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
+pub struct AccelerationStructureCopy {
+    pub copy_flags: wgt::AccelerationStructureCopy,
+    pub type_flags: wgt::AccelerationStructureType,
+}
+
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
 pub struct AccelerationStructureInstances<'a, B: DynBuffer + ?Sized> {
@@ -2433,6 +2451,12 @@ bitflags::bitflags! {
         const BUILD_OUTPUT = 1 << 1;
         // Tlas used in a shader
         const SHADER_INPUT = 1 << 2;
+        // Blas used to query compacted size
+        const QUERY_INPUT = 1 << 3;
+        // BLAS used as a src for a copy operation
+        const COPY_SRC = 1 << 4;
+        // BLAS used as a dst for a copy operation
+        const COPY_DST = 1 << 5;
     }
 }
 

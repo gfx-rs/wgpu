@@ -786,6 +786,7 @@ pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    compacted_size_query: Option<vk::QueryPool>,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
