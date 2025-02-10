@@ -558,7 +558,7 @@ impl<W: Write> super::Writer<'_, W> {
         }
 
         let ty = scalar_type.to_hlsl_str()?;
-        write!(
+        writeln!(
             self.out,
             "{ty}4 {IMAGE_STORAGE_LOAD_SCALAR_WRAPPER}{ty}({ty} {ARGUMENT_VARIABLE_NAME}) {{\
     {ty}4 {RETURN_VARIABLE_NAME} = {ty}4({ARGUMENT_VARIABLE_NAME}, {zero}, {zero}, {one});\
@@ -938,7 +938,7 @@ impl<W: Write> super::Writer<'_, W> {
                                 }
                             }
                         }
-                        _ => unreachable!("image expression must be of type image"),
+                        _ => {}
                     }
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
@@ -1553,8 +1553,8 @@ impl<W: Write> super::Writer<'_, W> {
 
 impl crate::StorageFormat {
     /// Returns `true` if there is just one component, otherwise `false`
-    pub(super) fn single_component(&self) -> bool {
-        match self {
+    pub(super) const fn single_component(&self) -> bool {
+        match *self {
             crate::StorageFormat::R16Float
             | crate::StorageFormat::R32Float
             | crate::StorageFormat::R8Unorm

@@ -3146,7 +3146,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         class: crate::ImageClass::Storage { format, .. },
                         ..
                     } => {
-                        wrapping_type = Some(Scalar::from(format));
+                        if format.single_component() {
+                            wrapping_type = Some(Scalar::from(format));
+                        }
                     }
                     _ => {}
                 }
