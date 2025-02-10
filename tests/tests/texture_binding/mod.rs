@@ -1,6 +1,11 @@
 use std::time::Duration;
-use wgpu::{include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferUsages, ComputePassDescriptor, ComputePipelineDescriptor, DownlevelFlags, Extent3d, Features, Maintain, MapMode, Origin3d, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
 use wgpu::wgt::BufferDescriptor;
+use wgpu::{
+    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferUsages,
+    ComputePassDescriptor, ComputePipelineDescriptor, DownlevelFlags, Extent3d, Features, Maintain,
+    MapMode, Origin3d, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
+    TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+};
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
@@ -124,13 +129,17 @@ fn single_scalar_load(ctx: TestingContext) {
         layout: &pipeline.get_bind_group_layout(0),
         entries: &[
             BindGroupEntry {
-            binding: 0,
-            resource: BindingResource::TextureView(&texture_write.create_view(&Default::default())),
-        },
+                binding: 0,
+                resource: BindingResource::TextureView(
+                    &texture_write.create_view(&Default::default()),
+                ),
+            },
             BindGroupEntry {
                 binding: 1,
-                resource: BindingResource::TextureView(&texture_read.create_view(&Default::default())),
-            }
+                resource: BindingResource::TextureView(
+                    &texture_read.create_view(&Default::default()),
+                ),
+            },
         ],
     });
 
@@ -160,7 +169,8 @@ fn single_scalar_load(ctx: TestingContext) {
             width: 1,
             height: 1,
             depth_or_array_layers: 1,
-        });
+        },
+    );
     ctx.queue.submit([encoder.finish()]);
     let (send, recv) = std::sync::mpsc::channel();
     buffer.slice(..).map_async(MapMode::Read, move |res| {
@@ -169,7 +179,8 @@ fn single_scalar_load(ctx: TestingContext) {
     });
     // Poll to run map.
     ctx.device.poll(Maintain::Wait);
-    recv.recv_timeout(Duration::from_secs(10)).expect("mapping should not take this long");
+    recv.recv_timeout(Duration::from_secs(10))
+        .expect("mapping should not take this long");
     let val = *bytemuck::from_bytes::<[f32; 4]>(&buffer.slice(..).get_mapped_range());
     assert_eq!(val, [0.0, 0.0, 0.0, 1.0]);
 }
