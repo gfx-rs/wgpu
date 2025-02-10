@@ -100,7 +100,7 @@ hashbrown = { version = "0.14.5", default-features = false, features = [
 ] }
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
-indexmap = { version = "2.5.0", default-features = false }
+indexmap = { version = "2.7.1", default-features = false }
 itertools = { version = "0.13.0" }
 ktx2 = "0.3"
 libc = { version = "0.2", default-features = false }
@@ -112,7 +112,7 @@ noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
-once_cell = { version = "1.20.2", default-features = false }
+once_cell = { version = "1.20.3", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3,<=4.6", default-features = false }
 parking_lot = "0.12.1"
