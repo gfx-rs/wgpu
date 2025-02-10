@@ -2148,7 +2148,9 @@ impl crate::Device for super::Device {
                         // transform in D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC, without
                         // dereferencing it.
                         //
-                        // This means we could just use one here (but just in case we use a real address).
+                        // This suggests we could pass a non-zero invalid address here if fetching the
+                        // real address has significant overhead, but we pass the real one to be on the
+                        // safe side for now.
                         Transform3x4: if desc
                             .flags
                             .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
