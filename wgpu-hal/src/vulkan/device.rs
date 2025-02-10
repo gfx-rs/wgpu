@@ -2366,8 +2366,9 @@ impl crate::Device for super::Device {
                             .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                             .max_vertex(triangles.vertex_count)
                             .vertex_stride(triangles.vertex_stride)
-                            // The vulkan spec says that we can send garbage addresses into this, as the driver
-                            // should only check if it is null. We use a buffer just in case.
+                            // The vulkan spec suggests we could pass a non-zero invalid address here if fetching
+                            // the real address has significant overhead, but we pass the real one to be on the
+                            // safe side for now.
                             // from https://registry.khronos.org/vulkan/specs/latest/man/html/vkGetAccelerationStructureBuildSizesKHR.html
                             // > The srcAccelerationStructure, dstAccelerationStructure, and mode members
                             // > of pBuildInfo are ignored. Any VkDeviceOrHostAddressKHR or VkDeviceOrHostAddressConstKHR
