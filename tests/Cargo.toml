@@ -22,11 +22,16 @@ name = "wgpu-compile-test"
 path = "compile_tests/root.rs"
 harness = true
 
+[[test]]
+name = "wgpu-validation-test"
+path = "validation_tests/root.rs"
+harness = true
+
 [features]
 webgl = ["wgpu/webgl"]
 
 [dependencies]
-wgpu.workspace = true
+wgpu = { workspace = true, features = ["noop"] }
 wgpu-macros.workspace = true
 
 anyhow.workspace = true
