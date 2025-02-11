@@ -731,7 +731,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 13] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -779,6 +779,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
     ),
     (
         wgt::Features::FLOAT32_FILTERABLE,
+        webgpu_sys::GpuFeatureName::Float32Filterable,
+    ),
+    (
+        wgt::Features::DUAL_SOURCE_BLENDING,
         webgpu_sys::GpuFeatureName::Float32Filterable,
     ),
 ];
