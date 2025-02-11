@@ -4,8 +4,8 @@ use std::sync::Arc;
 use crate::api_log;
 #[cfg(feature = "trace")]
 use crate::device::trace;
-use crate::lock::rank;
-use crate::resource::{Fallible, TrackingData};
+use crate::lock::{rank, Mutex};
+use crate::resource::{BlasCompactCallback, BlasCompactState, Fallible, TrackingData};
 use crate::snatch::Snatchable;
 use crate::{
     device::{Device, DeviceError},
@@ -17,6 +17,7 @@ use crate::{
 };
 use hal::AccelerationStructureTriangleIndices;
 use wgt::Features;
+use crate::ray_tracing::BlasPrepareCompactError;
 
 impl Device {
     fn create_blas(
@@ -85,11 +86,23 @@ impl Device {
                     label: blas_desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
-                    // change this once compaction is implemented in wgpu-core
-                    allow_compaction: false,
+                    allow_compaction: blas_desc.flags.contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
                 })
         }
         .map_err(DeviceError::from_hal)?;
+
+        let compaction_buffer = if blas_desc.flags.contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION) {
+            Some(ManuallyDrop::new(unsafe {
+                self.raw().create_buffer(&hal::BufferDescriptor {
+                    label: None,
+                    size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
+                    usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY | wgpu_types::BufferUses::MAP_READ,
+                    memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+                }).map_err(DeviceError::from_hal)?
+            }))
+        } else {
+            None
+        };
 
         let handle = unsafe {
             self.raw()
@@ -107,6 +120,8 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
+            compaction_buffer,
+            compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
         }))
     }
 
@@ -272,6 +287,33 @@ impl Global {
         if let Ok(tlas) = _tlas.get() {
             if let Some(t) = tlas.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTlas(tlas_id));
+            }
+        }
+    }
+
+    /// `callback` is guaranteed to be called.
+    pub fn blas_prepare_compact_async(
+        &self,
+        blas_id: BlasId,
+        callback: Option<BlasCompactCallback>,
+    ) -> Result<crate::SubmissionIndex, BlasPrepareCompactError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {blas_id:?}");
+
+        let hub = &self.hub;
+
+        let map_result = match hub.blas_s.get(blas_id).get() {
+            Ok(blas) => blas.prepare_compact_async(callback),
+            Err(e) => Err((callback, e.into())),
+        };
+
+        match map_result {
+            Ok(submission_index) => Ok(submission_index),
+            Err((mut callback, err)) => {
+                if let Some(callback) = callback.take() {
+                    callback(Err(err.clone()));
+                }
+                Err(err)
             }
         }
     }

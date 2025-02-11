@@ -16,7 +16,7 @@ use crate::{
 use std::num::NonZeroU64;
 use std::sync::Arc;
 
-use crate::resource::{Blas, ResourceErrorIdent, Tlas};
+use crate::resource::{Blas, BlasCompactCallback, BlasPrepareCompactResult, ResourceErrorIdent, Tlas};
 use thiserror::Error;
 use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
@@ -254,3 +254,19 @@ pub struct TraceTlasPackage {
     pub instances: Vec<Option<TraceTlasInstance>>,
     pub lowest_unmodified: u32,
 }
+
+#[derive(Clone, Debug, Error)]
+pub enum BlasPrepareCompactError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error("Compaction is already being prepared")]
+    CompactionPreparingAlready,
+    #[error("Cannot compact an already compacted BLAS")]
+    DoubleCompaction,
+    #[error("BLAS is not yet built")]
+    NotBuilt,
+}
+
+pub type BlasCompactReadyPendingClosure = (Option<BlasCompactCallback>, BlasPrepareCompactResult);

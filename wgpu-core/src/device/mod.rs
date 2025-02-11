@@ -26,6 +26,7 @@ pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 pub use {life::WaitIdleError, resource::Device};
+use crate::ray_tracing::BlasCompactReadyPendingClosure;
 
 pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;
 // Should be large enough for the largest possible texture row. This
@@ -155,6 +156,7 @@ pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
+    pub blas_compact_ready: Vec<BlasCompactReadyPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
     pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
@@ -162,6 +164,7 @@ pub struct UserClosures {
 impl UserClosures {
     fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
+        self.blas_compact_ready.extend(other.blas_compact_ready);
         self.submissions.extend(other.submissions);
         self.device_lost_invocations
             .extend(other.device_lost_invocations);
@@ -175,6 +178,11 @@ impl UserClosures {
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
         for (mut operation, status) in self.mappings {
             if let Some(callback) = operation.callback.take() {
+                callback(status);
+            }
+        }
+        for (mut operation, status) in self.blas_compact_ready {
+            if let Some(callback) = operation.take() {
                 callback(status);
             }
         }

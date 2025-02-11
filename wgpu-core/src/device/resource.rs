@@ -424,11 +424,11 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
         }
 
-        let (submission_closures, mapping_closures, queue_empty) =
+        let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
             if let Some(queue) = self.get_queue() {
                 queue.maintain(submission_index, &snatch_guard)
             } else {
-                (SmallVec::new(), Vec::new(), true)
+                (SmallVec::new(), Vec::new(), Vec::new(), true)
             };
 
         // Detect if we have been destroyed and now need to lose the device.
@@ -464,6 +464,7 @@ impl Device {
 
         let closures = UserClosures {
             mappings: mapping_closures,
+            blas_compact_ready: blas_compact_ready_closures,
             submissions: submission_closures,
             device_lost_invocations,
         };

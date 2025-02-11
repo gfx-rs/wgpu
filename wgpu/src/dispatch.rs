@@ -47,6 +47,11 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 
+#[cfg(send_sync)]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + 'static>;
+
 // Common traits on all the interface traits
 trait_alias!(CommonTraits: Any + Debug + WasmNotSendSync);
 // Non-object-safe traits that are added as a bound on InterfaceTypes.
@@ -269,7 +274,9 @@ pub trait TextureInterface: CommonTraits {
 
     fn destroy(&self);
 }
-pub trait BlasInterface: CommonTraits {}
+pub trait BlasInterface: CommonTraits {
+    fn prepare_compact_async(&self, callback: BlasCompactCallback);
+}
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {}
 pub trait PipelineLayoutInterface: CommonTraits {}

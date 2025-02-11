@@ -1,6 +1,7 @@
 use crate::dispatch;
 use crate::{Buffer, Label};
-use wgt::WasmNotSendSync;
+use std::{error, fmt};
+use wgt::{WasmNotSend, WasmNotSendSync};
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
@@ -181,4 +182,24 @@ pub struct ContextBlasBuildEntry<'a> {
     pub(crate) blas: &'a dispatch::DispatchBlas,
     #[expect(dead_code)]
     pub(crate) geometries: ContextBlasGeometries<'a>,
+}
+
+/// Error occurred when trying to asynchronously prepare a blas for compaction.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BlasAsyncError;
+static_assertions::assert_impl_all!(BlasAsyncError: Send, Sync);
+
+impl fmt::Display for BlasAsyncError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error occurred when trying to asynchronously prepare a blas for compaction")
+    }
+}
+
+impl error::Error for BlasAsyncError {}
+
+impl Blas {
+    /// Asynchronously prepares this BLAS for compaction.
+    pub fn prepare_compaction_async(&self, callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static) {
+        self.inner.prepare_compact_async(Box::new(callback));
+    }
 }

@@ -35,7 +35,7 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
-
+use crate::ray_tracing::BlasCompactReadyPendingClosure;
 use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
@@ -115,16 +115,18 @@ impl Queue {
     ) -> (
         SmallVec<[SubmittedWorkDoneClosure; 1]>,
         Vec<super::BufferMapPendingClosure>,
+        Vec<BlasCompactReadyPendingClosure>,
         bool,
     ) {
         let mut life_tracker = self.lock_life();
         let submission_closures = life_tracker.triage_submissions(submission_index);
 
         let mapping_closures = life_tracker.handle_mapping(snatch_guard);
+        let blas_closures = life_tracker.handle_compact_read_back();
 
         let queue_empty = life_tracker.queue_empty();
 
-        (submission_closures, mapping_closures, queue_empty)
+        (submission_closures, mapping_closures, blas_closures, queue_empty)
     }
 }
 
@@ -219,7 +221,7 @@ impl Drop for Queue {
         drop(fence);
 
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission_closures, mapping_closures, queue_empty) =
+        let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
             self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
 
@@ -227,6 +229,7 @@ impl Drop for Queue {
 
         let closures = crate::device::UserClosures {
             mappings: mapping_closures,
+            blas_compact_ready: blas_compact_ready_closures,
             submissions: submission_closures,
             device_lost_invocations: SmallVec::new(),
         };

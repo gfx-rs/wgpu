@@ -100,6 +100,7 @@ mod metadata;
 mod range;
 mod stateless;
 mod texture;
+mod blas;
 
 use crate::{
     binding_model, command,
@@ -122,6 +123,7 @@ pub(crate) use texture::{
     TextureViewBindGroupState,
 };
 use wgt::strict_assert_ne;
+use crate::track::blas::BlasTracker;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -600,7 +602,7 @@ impl DeviceTracker {
 pub(crate) struct Tracker {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
-    pub blas_s: StatelessTracker<resource::Blas>,
+    pub blas_s: BlasTracker,
     pub tlas_s: StatelessTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
@@ -615,7 +617,7 @@ impl Tracker {
         Self {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
-            blas_s: StatelessTracker::new(),
+            blas_s: BlasTracker::new(),
             tlas_s: StatelessTracker::new(),
             views: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),

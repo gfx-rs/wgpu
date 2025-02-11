@@ -11,6 +11,8 @@ use smallvec::SmallVec;
 
 use std::sync::Arc;
 use thiserror::Error;
+use crate::ray_tracing::BlasCompactReadyPendingClosure;
+use crate::resource::Blas;
 
 /// A command submitted to the GPU for execution.
 ///
@@ -30,6 +32,9 @@ struct ActiveSubmission {
 
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer>>,
+
+    /// BLASes to have their compacted size read back once this submission has completed.
+    compact_read_back: Vec<Arc<Blas>>,
 
     /// Command buffers used by this submission, and the encoder that owns them.
     ///
@@ -100,6 +105,19 @@ impl ActiveSubmission {
 
         false
     }
+
+    /// Returns true if this submission contains the given blas.
+    ///
+    /// This only uses constant-time operations.
+    pub fn contains_blas(&self, blas: &Blas) -> bool {
+        for encoder in &self.encoders {
+            if encoder.trackers.blas_s.contains(blas) {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -147,6 +165,10 @@ pub(crate) struct LifetimeTracker {
     /// queue submission still in flight.
     ready_to_map: Vec<Arc<Buffer>>,
 
+    /// BLASes the user has asked us to prepare to compact, and which are not used by any
+    /// queue submission still in flight.
+    ready_to_compact: Vec<Arc<Blas>>,
+
     /// Queue "on_submitted_work_done" closures that were initiated for while there is no
     /// currently pending submissions. These cannot be immediately invoked as they
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
@@ -159,6 +181,7 @@ impl LifetimeTracker {
         Self {
             active: Vec::new(),
             ready_to_map: Vec::new(),
+            ready_to_compact: Vec::new(),
             work_done_closures: SmallVec::new(),
         }
     }
@@ -173,6 +196,7 @@ impl LifetimeTracker {
         self.active.push(ActiveSubmission {
             index,
             mapped: Vec::new(),
+            compact_read_back: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
         });
@@ -191,6 +215,23 @@ impl LifetimeTracker {
         submission
             .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
             .push(buffer.clone());
+
+        maybe_submission_index
+    }
+
+    pub(crate) fn prepare_compact(&mut self, blas: &Arc<Blas>) -> Option<SubmissionIndex> {
+        // Determine which BLASes are ready to map, and which must wait for the GPU.
+        let submission = self
+            .active
+            .iter_mut()
+            .rev()
+            .find(|a| a.contains_blas(blas));
+
+        let maybe_submission_index = submission.as_ref().map(|s| s.index);
+
+        submission
+            .map_or(&mut self.ready_to_compact, |a| &mut a.compact_read_back)
+            .push(blas.clone());
 
         maybe_submission_index
     }
@@ -258,6 +299,7 @@ impl LifetimeTracker {
         let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {
             self.ready_to_map.extend(a.mapped);
+            self.ready_to_compact.extend(a.compact_read_back);
             for encoder in a.encoders {
                 // This involves actually decrementing the ref count of all command buffer
                 // resources, so can be _very_ expensive.
@@ -325,6 +367,29 @@ impl LifetimeTracker {
 
         for buffer in self.ready_to_map.drain(..) {
             match buffer.map(snatch_guard) {
+                Some(cb) => pending_callbacks.push(cb),
+                None => continue,
+            }
+        }
+        pending_callbacks
+    }
+    /// Read back compact sizes from the BLASes in `self.ready_to_compact`.
+    ///
+    /// Return a list of mapping notifications to send.
+    ///
+    /// See the documentation for [`LifetimeTracker`] for details.
+    #[must_use]
+    pub(crate) fn handle_compact_read_back(
+        &mut self,
+    ) -> Vec<BlasCompactReadyPendingClosure> {
+        if self.ready_to_compact.is_empty() {
+            return Vec::new();
+        }
+        let mut pending_callbacks: Vec<BlasCompactReadyPendingClosure> =
+            Vec::with_capacity(self.ready_to_compact.len());
+
+        for blas in self.ready_to_compact.drain(..) {
+            match blas.read_back_compact_size() {
                 Some(cb) => pending_callbacks.push(cb),
                 None => continue,
             }

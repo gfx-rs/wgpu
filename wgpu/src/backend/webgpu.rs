@@ -21,6 +21,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 use crate::{dispatch, SurfaceTargetUnsafe};
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
+use crate::dispatch::BlasCompactCallback;
 
 // We need to mark various types as Send and Sync to satisfy the Rust type system.
 //
@@ -2749,7 +2750,11 @@ impl Drop for WebTexture {
     }
 }
 
-impl dispatch::BlasInterface for WebBlas {}
+impl dispatch::BlasInterface for WebBlas {
+    fn prepare_compact_async(&self, _callback: BlasCompactCallback) {
+        unreachable!("Ray-tracing not implemented on the web")
+    }
+}
 impl Drop for WebBlas {
     fn drop(&mut self) {
         // no-op

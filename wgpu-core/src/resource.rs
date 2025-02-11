@@ -35,6 +35,7 @@ use std::{
     ptr::NonNull,
     sync::Arc,
 };
+use crate::ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError};
 
 /// Information about the wgpu-core resource.
 ///
@@ -1915,6 +1916,49 @@ pub(crate) trait AccelerationStructure: Trackable {
     ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError>;
 }
 
+pub type BlasPrepareCompactResult = Result<(), BlasPrepareCompactError>;
+
+#[cfg(send_sync)]
+pub type BlasCompactCallback = Box<dyn FnOnce(BlasPrepareCompactResult) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type BlasCompactCallback = Box<dyn FnOnce(BlasPrepareCompactResult) + 'static>;
+
+pub(crate) struct BlasPendingCompact {
+    pub(crate) op: Option<BlasCompactCallback>,
+    // hold the parent alive while the mapping is active
+    pub(crate) _parent_blas: Arc<Blas>,
+}
+
+impl Debug for BlasPendingCompact {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f
+            .debug_struct("BlasPendingCompact")
+            .field("op", &())
+            .field("_parent_blas", &self._parent_blas)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
+#[expect(dead_code)]
+pub(crate) enum BlasCompactState {
+    /// Created from a compact operation.
+    Compacted,
+    /// Waiting for GPU to be done before mapping to get compacted size
+    Waiting(BlasPendingCompact),
+    /// Ready to be compacted
+    Ready {
+        size: wgt::BufferAddress,
+    },
+    /// Not mapped
+    Idle,
+}
+
+#[cfg(send_sync)]
+unsafe impl Send for BlasCompactState {}
+#[cfg(send_sync)]
+unsafe impl Sync for BlasCompactState {}
+
 #[derive(Debug)]
 pub struct Blas {
     pub(crate) raw: Snatchable<Box<dyn hal::DynAccelerationStructure>>,
@@ -1928,15 +1972,22 @@ pub struct Blas {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
+    pub(crate) compaction_buffer: Option<ManuallyDrop<Box<dyn hal::DynBuffer>>>,
+    pub(crate) compacted_state: Mutex<BlasCompactState>
 }
 
 impl Drop for Blas {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl, and we don't use self.raw anymore after this point.
+        // SAFETY: We are in the Drop impl, and we don't use self.raw or self.compaction_buffer anymore after this point.
         if let Some(raw) = self.raw.take() {
             unsafe {
                 self.device.raw().destroy_acceleration_structure(raw);
+            }
+        }
+        if let Some(mut raw) = self.compaction_buffer.take() {
+            unsafe {
+                self.device.raw().destroy_buffer(ManuallyDrop::take(&mut raw))
             }
         }
     }
@@ -1951,6 +2002,89 @@ impl AccelerationStructure for Blas {
             .get(guard)
             .map(|raw| raw.as_ref())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
+}
+
+impl Blas {
+    pub(crate) fn prepare_compact_async(self: &Arc<Self>, op: Option<BlasCompactCallback>) -> Result<SubmissionIndex, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
+        let device = &self.device;
+        if let Err(e) = device.check_is_valid() {
+            return Err((op, e.into()));
+        }
+
+        if self.built_index.read().is_none() {
+            return Err((op, BlasPrepareCompactError::NotBuilt))
+        }
+        let mut state = self.compacted_state.lock();
+        *state = match *state {
+            BlasCompactState::Compacted => {
+                return Err((op, BlasPrepareCompactError::DoubleCompaction))
+            }
+            BlasCompactState::Waiting(_) => {
+                return Err((op, BlasPrepareCompactError::CompactionPreparingAlready))
+            }
+            BlasCompactState::Ready { .. } => {
+                return Err((op, BlasPrepareCompactError::CompactionPreparingAlready))
+            }
+            BlasCompactState::Idle => {
+                BlasCompactState::Waiting(BlasPendingCompact {
+                    op,
+                    _parent_blas: self.clone(),
+                })
+            }
+        };
+
+        let submit_index = if let Some(queue) = device.get_queue() {
+            queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
+        } else {
+            // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
+            let (mut callback, status) = self.read_back_compact_size().unwrap();
+            if let Some(callback) = callback.take() {
+                callback(status);
+            }
+            0
+        };
+
+        Ok(submit_index)
+    }
+
+    /// This function returns [`None`] only if [`Self::compacted_state`] is not [`BlasCompactState::Waiting`].
+    #[must_use]
+    pub(crate) fn read_back_compact_size(&self) -> Option<BlasCompactReadyPendingClosure> {
+        let mut state = self.compacted_state.lock();
+        let pending_compact = match mem::replace(&mut *state, BlasCompactState::Idle) {
+            BlasCompactState::Waiting(pending_mapping) => pending_mapping,
+            // Compaction cancelled e.g. by rebuild
+            BlasCompactState::Idle => return None,
+            BlasCompactState::Ready { .. } => {
+                unreachable!("This should be validated out by `prepare_for_compaction`")
+            }
+            _ => panic!("No pending mapping."),
+        };
+        let status = {
+            unsafe {
+                let map_res = self.device.raw().map_buffer(
+                    self.compaction_buffer.as_ref().unwrap().as_ref(),
+                    0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress,
+                );
+                match map_res {
+                    Ok(mapping) => {
+                        assert!(mapping.is_coherent);
+                        let size = core::ptr::read_unaligned(mapping.ptr.as_ptr().cast::<wgt::BufferAddress>());
+                        self.device.raw().unmap_buffer(self.compaction_buffer.as_ref().unwrap().as_ref());
+                        if self.size_info.acceleration_structure_size != 0 {
+                            debug_assert_ne!(size, 0);
+                        }
+                        *state = BlasCompactState::Ready { size };
+                        Ok(())
+                    }
+                    Err(err) => {
+                        Err(BlasPrepareCompactError::from(DeviceError::from_hal(err)))
+                    }
+                }
+            }
+        };
+        Some((pending_compact.op, status))
     }
 }
 
