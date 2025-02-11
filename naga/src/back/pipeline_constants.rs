@@ -75,6 +75,7 @@ pub fn process_overrides<'a>(
     let mut adjusted_constant_initializers = HashSet::with_capacity(module.constants.len());
 
     let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
+    let mut layouter = crate::proc::Layouter::default();
 
     // An iterator through the original overrides table, consumed in
     // approximate tandem with the global expressions.
@@ -147,6 +148,7 @@ pub fn process_overrides<'a>(
         let mut evaluator = ConstantEvaluator::for_wgsl_module(
             &mut module,
             &mut global_expression_kind_tracker,
+            &mut layouter,
             false,
         );
         adjust_expr(&adjusted_global_expressions, &mut expr);
@@ -186,13 +188,13 @@ pub fn process_overrides<'a>(
 
     let mut functions = mem::take(&mut module.functions);
     for (_, function) in functions.iter_mut() {
-        process_function(&mut module, &override_map, function)?;
+        process_function(&mut module, &override_map, &mut layouter, function)?;
     }
     module.functions = functions;
 
     let mut entry_points = mem::take(&mut module.entry_points);
     for ep in entry_points.iter_mut() {
-        process_function(&mut module, &override_map, &mut ep.function)?;
+        process_function(&mut module, &override_map, &mut layouter, &mut ep.function)?;
         process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
@@ -365,6 +367,7 @@ fn process_override(
 fn process_function(
     module: &mut Module,
     override_map: &HandleVec<Override, Handle<Constant>>,
+    layouter: &mut crate::proc::Layouter,
     function: &mut Function,
 ) -> Result<(), ConstantEvaluatorError> {
     // A map from original local expression handles to
@@ -389,6 +392,7 @@ fn process_function(
         module,
         &mut function.expressions,
         &mut local_expression_kind_tracker,
+        layouter,
         &mut emitter,
         &mut block,
         false,

@@ -87,6 +87,8 @@ pub struct GlobalContext<'source, 'temp, 'out> {
 
     const_typifier: &'temp mut Typifier,
 
+    layouter: &'temp mut Layouter,
+
     global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 }
 
@@ -98,6 +100,7 @@ impl<'source> GlobalContext<'source, '_, '_> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             expr_type: ExpressionContextType::Constant(None),
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
@@ -110,6 +113,7 @@ impl<'source> GlobalContext<'source, '_, '_> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             expr_type: ExpressionContextType::Override,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
@@ -165,6 +169,7 @@ pub struct StatementContext<'source, 'temp, 'out> {
 
     const_typifier: &'temp mut Typifier,
     typifier: &'temp mut Typifier,
+    layouter: &'temp mut Layouter,
     function: &'out mut crate::Function,
     /// Stores the names of expressions that are assigned in `let` statement
     /// Also stores the spans of the names, for use in errors.
@@ -198,6 +203,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
             module: self.module,
             expr_type: ExpressionContextType::Constant(Some(LocalExpressionContext {
@@ -224,6 +230,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
             module: self.module,
             expr_type: ExpressionContextType::Runtime(LocalExpressionContext {
@@ -244,6 +251,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -364,6 +372,7 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
     ///
     /// [`module::global_expressions`]: crate::Module::global_expressions
     const_typifier: &'temp mut Typifier,
+    layouter: &'temp mut Layouter,
     global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 
     /// Whether we are lowering a constant expression or a general
@@ -379,6 +388,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             module: self.module,
             expr_type: ExpressionContextType::Constant(match self.expr_type {
                 ExpressionContextType::Runtime(ref mut local_expression_context)
@@ -406,6 +416,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -416,6 +427,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 self.module,
                 &mut rctx.function.expressions,
                 rctx.local_expression_kind_tracker,
+                self.layouter,
                 rctx.emitter,
                 rctx.block,
                 false,
@@ -425,6 +437,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     self.module,
                     &mut rctx.function.expressions,
                     rctx.local_expression_kind_tracker,
+                    self.layouter,
                     rctx.emitter,
                     rctx.block,
                     true,
@@ -433,11 +446,13 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             ExpressionContextType::Constant(None) => ConstantEvaluator::for_wgsl_module(
                 self.module,
                 self.global_expression_kind_tracker,
+                self.layouter,
                 false,
             ),
             ExpressionContextType::Override => ConstantEvaluator::for_wgsl_module(
                 self.module,
                 self.global_expression_kind_tracker,
+                self.layouter,
                 true,
             ),
         }
@@ -1016,15 +1031,11 @@ impl SubgroupGather {
 
 pub struct Lowerer<'source, 'temp> {
     index: &'temp Index<'source>,
-    layouter: Layouter,
 }
 
 impl<'source, 'temp> Lowerer<'source, 'temp> {
-    pub fn new(index: &'temp Index<'source>) -> Self {
-        Self {
-            index,
-            layouter: Layouter::default(),
-        }
+    pub const fn new(index: &'temp Index<'source>) -> Self {
+        Self { index }
     }
 
     pub fn lower(
@@ -1043,6 +1054,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             types: &tu.types,
             module: &mut module,
             const_typifier: &mut Typifier::new(),
+            layouter: &mut Layouter::default(),
             global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker::new(),
         };
 
@@ -1299,6 +1311,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast_expressions: ctx.ast_expressions,
             const_typifier: ctx.const_typifier,
             typifier: &mut typifier,
+            layouter: ctx.layouter,
             function: &mut function,
             named_expressions: &mut named_expressions,
             types: ctx.types,
@@ -3051,10 +3064,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, ctx)?;
 
-            self.layouter.update(ctx.module.to_ctx()).unwrap();
+            ctx.layouter.update(ctx.module.to_ctx()).unwrap();
 
-            let member_min_size = self.layouter[ty].size;
-            let member_min_alignment = self.layouter[ty].alignment;
+            let member_min_size = ctx.layouter[ty].size;
+            let member_min_alignment = ctx.layouter[ty].alignment;
 
             let member_size = if let Some(size_expr) = member.size {
                 let (size, span) = self.const_u32(size_expr, &mut ctx.as_const())?;
@@ -3258,8 +3271,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let base = self.resolve_ast_type(base, ctx)?;
                 let size = self.array_size(size, ctx)?;
 
-                self.layouter.update(ctx.module.to_ctx()).unwrap();
-                let stride = self.layouter[base].to_stride();
+                ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                let stride = ctx.layouter[base].to_stride();
 
                 crate::TypeInner::Array { base, size, stride }
             }

@@ -22,6 +22,9 @@ var<private> xafpaiai_1: array<i32, 2> = array<i32, 2>(1i, 2i);
 var<private> xafpaiaf_1: array<f32, 2> = array<f32, 2>(1f, 2f);
 var<private> xafpafai_1: array<f32, 2> = array<f32, 2>(1f, 2f);
 var<private> xafpafaf_1: array<f32, 2> = array<f32, 2>(1f, 2f);
+var<private> xavipai_1: array<vec3<i32>, 1> = array<vec3<i32>, 1>(vec3(1i));
+var<private> xavfpai_1: array<vec3<f32>, 1> = array<vec3<f32>, 1>(vec3(1f));
+var<private> xavfpaf_1: array<vec3<f32>, 1> = array<vec3<f32>, 1>(vec3(1f));
 var<private> ivispai: vec2<i32> = vec2(1i);
 var<private> ivfspaf: vec2<f32> = vec2(1f);
 var<private> ivis_ai: vec2<i32> = vec2(1i);
@@ -34,6 +37,9 @@ var<private> iaipaiai_1: array<i32, 2> = array<i32, 2>(1i, 2i);
 var<private> iafpafaf_1: array<f32, 2> = array<f32, 2>(1f, 2f);
 var<private> iafpaiaf_1: array<f32, 2> = array<f32, 2>(1f, 2f);
 var<private> iafpafai_1: array<f32, 2> = array<f32, 2>(1f, 2f);
+var<private> iavipai: array<vec3<i32>, 1> = array<vec3<i32>, 1>(vec3(1i));
+var<private> iavfpai: array<vec3<i32>, 1> = array<vec3<i32>, 1>(vec3(1i));
+var<private> iavfpaf: array<vec3<f32>, 1> = array<vec3<f32>, 1>(vec3(1f));
 
 fn all_constant_arguments() {
     var xvipaiai: vec2<i32> = vec2<i32>(42i, 43i);
@@ -69,6 +75,9 @@ fn all_constant_arguments() {
     var xafpaiaf: array<f32, 2> = array<f32, 2>(1f, 2f);
     var xafpafai: array<f32, 2> = array<f32, 2>(1f, 2f);
     var xafpafaf: array<f32, 2> = array<f32, 2>(1f, 2f);
+    var xavipai: array<vec3<i32>, 1> = array<vec3<i32>, 1>(vec3(1i));
+    var xavfpai: array<vec3<f32>, 1> = array<vec3<f32>, 1>(vec3(1f));
+    var xavfpaf: array<vec3<f32>, 1> = array<vec3<f32>, 1>(vec3(1f));
     var iaipaiai: array<i32, 2> = array<i32, 2>(1i, 2i);
     var iafpaiaf: array<f32, 2> = array<f32, 2>(1f, 2f);
     var iafpafai: array<f32, 2> = array<f32, 2>(1f, 2f);
@@ -107,6 +116,9 @@ fn all_constant_arguments() {
     xafpaiaf = array<f32, 2>(1f, 2f);
     xafpafai = array<f32, 2>(1f, 2f);
     xafpafaf = array<f32, 2>(1f, 2f);
+    xavipai = array<vec3<i32>, 1>(vec3(1i));
+    xavfpai = array<vec3<f32>, 1>(vec3(1f));
+    xavfpaf = array<vec3<f32>, 1>(vec3(1f));
     iaipaiai = array<i32, 2>(1i, 2i);
     iafpaiaf = array<f32, 2>(1f, 2f);
     iafpafai = array<f32, 2>(1f, 2f);
