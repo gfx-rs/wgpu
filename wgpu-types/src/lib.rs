@@ -75,8 +75,8 @@ pub const QUERY_SIZE: u32 = 8;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backend {
-    /// Dummy backend, used for testing.
-    Empty = 0,
+    /// Dummy backend, which may be used for testing.
+    Noop = 0,
     /// Vulkan API (Windows, Linux, Android, MacOS via `vulkan-portability`/MoltenVK)
     Vulkan = 1,
     /// Metal API (Apple platforms)
@@ -94,7 +94,7 @@ impl Backend {
     #[must_use]
     pub const fn to_str(self) -> &'static str {
         match self {
-            Backend::Empty => "empty",
+            Backend::Noop => "noop",
             Backend::Vulkan => "vulkan",
             Backend::Metal => "metal",
             Backend::Dx12 => "dx12",
