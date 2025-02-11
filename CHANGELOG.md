@@ -137,6 +137,33 @@ allow you to be explicit about whether features you need are available on the we
 
 By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https://github.com/gfx-rs/wgpu/pull/7086)
 
+#### WebGPU compliant dual source blending feature
+
+Previously, dual source blending was implemented with a `wgpu` native only feature flag and used a custom syntax in wgpu.
+By now, dual source blending was added to the [WebGPU spec as an extension](https://www.w3.org/TR/webgpu/#dom-gpufeaturename-dual-source-blending).
+We're now following suite and implement the official syntax.
+
+Existing shaders using dual source blending need to be updated:
+
+```diff
+struct FragmentOutput{
+-    @location(0) source0: vec4<f32>,
+-    @location(0) @second_blend_source source1: vec4<f32>,
++    @location(0) @blend_src(0) source0: vec4<f32>,
++    @location(0) @blend_src(1) source1: vec4<f32>,
+}
+
+```
+With that `wgpu::Features::DUAL_SOURCE_BLENDING` is now available on WebGPU.
+
+Furthermore, GLSL shaders now support dual source blending as well via the `index` layout qualifier:
+```c
+layout(location = 0, index = 0) out vec4 output0;
+layout(location = 0, index = 1) out vec4 output1;
+```
+
+By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
+
 ### New Features
 
 - Added mesh shader support to `wgpu_hal`. By @SupaMaggie70Incorporated in [#7089](https://github.com/gfx-rs/wgpu/pull/7089)

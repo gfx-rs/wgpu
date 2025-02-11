@@ -456,7 +456,7 @@ impl Frontend {
                         location,
                         interpolation,
                         sampling,
-                        second_blend_source: false,
+                        blend_src: None,
                     },
                     handle,
                     storage,
