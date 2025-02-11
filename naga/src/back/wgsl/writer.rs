@@ -18,7 +18,7 @@ enum Attribute {
     Invariant,
     Interpolate(Option<crate::Interpolation>, Option<crate::Sampling>),
     Location(u32),
-    SecondBlendSource,
+    BlendSrc(u32),
     Stage(ShaderStage),
     WorkGroupSize([u32; 3]),
 }
@@ -340,7 +340,7 @@ impl<W: Write> Writer<W> {
         for attribute in attributes {
             match *attribute {
                 Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
-                Attribute::SecondBlendSource => write!(self.out, "@second_blend_source ")?,
+                Attribute::BlendSrc(blend_src) => write!(self.out, "@blend_src({blend_src}) ")?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     let builtin = builtin_str(builtin_attrib)?;
                     write!(self.out, "@builtin({builtin}) ")?;
@@ -2162,7 +2162,7 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             location,
             interpolation,
             sampling,
-            second_blend_source: false,
+            blend_src: None,
         } => vec![
             Attribute::Location(location),
             Attribute::Interpolate(interpolation, sampling),
@@ -2171,10 +2171,10 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             location,
             interpolation,
             sampling,
-            second_blend_source: true,
+            blend_src: Some(blend_src),
         } => vec![
             Attribute::Location(location),
-            Attribute::SecondBlendSource,
+            Attribute::BlendSrc(blend_src),
             Attribute::Interpolate(interpolation, sampling),
         ],
     }

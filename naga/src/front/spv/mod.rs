@@ -250,7 +250,7 @@ impl Decoration {
                 location,
                 interpolation,
                 sampling,
-                second_blend_source: false,
+                blend_src: None,
             }),
             _ => Err(Error::MissingDecoration(spirv::Decoration::Location)),
         }

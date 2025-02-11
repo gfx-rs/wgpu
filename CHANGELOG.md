@@ -107,7 +107,7 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 #### WebGPU
 
 - Improve efficiency of dropping read-only buffer mappings. By @kpreid in [#7007](https://github.com/gfx-rs/wgpu/pull/7007).
-- `wgpu::Features::DUAL_SOURCE_BLENDING` is now available on WebGPU. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????).
+- `wgpu::Features::DUAL_SOURCE_BLENDING` is now available on WebGPU. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????). TODO: not the full story, not a WebGPU thing, it's a Naga/general thing.
 
 ### Documentation
 
