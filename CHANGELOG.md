@@ -178,12 +178,6 @@ allow you to be explicit about whether features you need are available on the we
 
 By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https://github.com/gfx-rs/wgpu/pull/7086)
 
-##### Refactored internal trace path parameter
-
-Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
-
-By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
-
 #### Naga
 
 - Refactored `use` statements to simplify future `no_std` support. By @bushrat011899 in [#7256](https://github.com/gfx-rs/wgpu/pull/7256)
