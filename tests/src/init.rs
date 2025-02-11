@@ -43,6 +43,8 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
                 shader_compiler: dx12_shader_compiler,
             },
             gl: wgpu::GlBackendOptions::from_env_or_default(),
+            // TODO(https://github.com/gfx-rs/wgpu/issues/7119): Enable noop backend?
+            noop: wgpu::NoopBackendOptions::default(),
         },
     })
 }

@@ -394,6 +394,7 @@ pub fn op_webgpu_request_adapter(
                         shader_compiler: wgpu_types::Dx12Compiler::Fxc,
                     },
                     gl: wgpu_types::GlBackendOptions::default(),
+                    noop: wgpu_types::NoopBackendOptions::default(),
                 },
             },
         )));

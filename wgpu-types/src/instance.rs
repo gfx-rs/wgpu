@@ -4,6 +4,9 @@ use alloc::string::String;
 
 use crate::Backends;
 
+#[cfg(doc)]
+use crate::Backend;
+
 /// Options for creating an instance.
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor {
@@ -181,12 +184,16 @@ impl InstanceFlags {
 }
 
 /// Options that are passed to a given backend.
+///
+/// Part of [`InstanceDescriptor`].
 #[derive(Clone, Debug, Default)]
 pub struct BackendOptions {
-    /// Options for the OpenGL/OpenGLES backend.
+    /// Options for the OpenGL/OpenGLES backend, [`Backend::Gl`].
     pub gl: GlBackendOptions,
-    /// Options for the DX12 backend.
+    /// Options for the DX12 backend, [`Backend::Dx12`].
     pub dx12: Dx12BackendOptions,
+    /// Options for the noop backend, [`Backend::Noop`].
+    pub noop: NoopBackendOptions,
 }
 
 impl BackendOptions {
@@ -195,9 +202,11 @@ impl BackendOptions {
     /// See those methods for more information.
     #[must_use]
     pub fn from_env_or_default() -> Self {
-        let gl = GlBackendOptions::from_env_or_default();
-        let dx12 = Dx12BackendOptions::from_env_or_default();
-        Self { gl, dx12 }
+        Self {
+            gl: GlBackendOptions::from_env_or_default(),
+            dx12: Dx12BackendOptions::from_env_or_default(),
+            noop: NoopBackendOptions::from_env_or_default(),
+        }
     }
 
     /// Takes the given options, modifies them based on the environment variables, and returns the result.
@@ -205,13 +214,17 @@ impl BackendOptions {
     /// This is equivalent to calling `with_env` on every field.
     #[must_use]
     pub fn with_env(self) -> Self {
-        let gl = self.gl.with_env();
-        let dx12 = self.dx12.with_env();
-        Self { gl, dx12 }
+        Self {
+            gl: self.gl.with_env(),
+            dx12: self.dx12.with_env(),
+            noop: self.noop.with_env(),
+        }
     }
 }
 
 /// Configuration for the OpenGL/OpenGLES backend.
+///
+/// Part of [`BackendOptions`].
 #[derive(Clone, Debug, Default)]
 pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
@@ -248,6 +261,8 @@ impl GlBackendOptions {
 }
 
 /// Configuration for the DX12 backend.
+///
+/// Part of [`BackendOptions`].
 #[derive(Clone, Debug, Default)]
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
@@ -273,6 +288,52 @@ impl Dx12BackendOptions {
     pub fn with_env(self) -> Self {
         let shader_compiler = self.shader_compiler.with_env();
         Self { shader_compiler }
+    }
+}
+
+/// Configuration for the noop backend.
+///
+/// Part of [`BackendOptions`].
+#[derive(Clone, Debug, Default)]
+pub struct NoopBackendOptions {
+    /// Whether to allow the noop backend to be used.
+    ///
+    /// The noop backend stubs out all operations except for buffer creation and mapping, so
+    /// it must not be used when not expected. Therefore, it will not be used unless explicitly
+    /// enabled.
+    pub enable: bool,
+}
+
+impl NoopBackendOptions {
+    /// Choose whether the noop backend is enabled from the environment.
+    ///
+    /// It will be enabled if the environment variable `WGPU_NOOP_BACKEND` has the value `1`
+    /// and not otherwise. Future versions may assign other meanings to other values.
+    #[must_use]
+    pub fn from_env_or_default() -> Self {
+        Self {
+            enable: Self::enable_from_env().unwrap_or(false),
+        }
+    }
+
+    /// Takes the given options, modifies them based on the environment variables, and returns the
+    /// result.
+    ///
+    /// See [`from_env_or_default()`](Self::from_env_or_default) for the interpretation.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        Self {
+            enable: Self::enable_from_env().unwrap_or(self.enable),
+        }
+    }
+
+    fn enable_from_env() -> Option<bool> {
+        let value = crate::env::var("WGPU_NOOP_BACKEND")?;
+        match value.as_str() {
+            "1" => Some(true),
+            "0" => Some(false),
+            _ => None,
+        }
     }
 }
 

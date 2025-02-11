@@ -246,6 +246,7 @@ pub mod gles;
 #[cfg(metal)]
 pub mod metal;
 /// A dummy API implementation.
+// TODO(https://github.com/gfx-rs/wgpu/issues/7120): this should have a cfg
 pub mod noop;
 /// Vulkan API internals.
 #[cfg(vulkan)]

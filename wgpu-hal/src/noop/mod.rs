@@ -81,7 +81,22 @@ impl crate::Instance for Context {
     type A = Api;
 
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        Ok(Context)
+        let crate::InstanceDescriptor {
+            backend_options:
+                wgt::BackendOptions {
+                    noop: wgt::NoopBackendOptions { enable },
+                    ..
+                },
+            name: _,
+            flags: _,
+        } = *desc;
+        if enable {
+            Ok(Context)
+        } else {
+            Err(crate::InstanceError::new(String::from(
+                "noop backend disabled because NoopBackendOptions::enable is false",
+            )))
+        }
     }
     unsafe fn create_surface(
         &self,

@@ -42,6 +42,14 @@ Bottom level categories:
 
 ### New Features
 
+#### General
+
+- It is now possible to create a dummy `wgpu` device even when no GPU is available. This may be useful for testing of code which manages graphics resources. Currently, it supports reading and writing buffers, and other resource types can be created but do nothing.
+
+  To use it, enable the `noop` feature of `wgpu`, and add `NoopBackendOptions { enable: true }` to the backend options; this is an additional safeguard beyond the `Backends` bits.
+
+  By @kpreid in [#7063](https://github.com/gfx-rs/wgpu/pull/7063).
+
 #### Naga
 
 - Support @must_use attribute on function declarations. By @turbocrime in [#6801](https://github.com/gfx-rs/wgpu/pull/6801).
