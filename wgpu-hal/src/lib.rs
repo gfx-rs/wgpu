@@ -936,6 +936,8 @@ pub trait Device: WasmNotSendSync {
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
+    /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
+    ///
     /// [`Fence`]: Api::Fence
     /// [`FencePool`]: vulkan/enum.Fence.html#variant.FencePool
     unsafe fn wait(
