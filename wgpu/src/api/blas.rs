@@ -198,7 +198,10 @@ impl fmt::Display for BlasAsyncError {
 impl error::Error for BlasAsyncError {}
 
 impl Blas {
-    /// Asynchronously prepares this BLAS for compaction.
+    /// Asynchronously prepares this BLAS for compaction. The callback is called once all builds
+    /// using this BLAS are finished and the BLAS is compactable. This can be polled (won't
+    /// guarantee callback is called) with `queue.submit(..)` while `instance.poll_all(..)` and
+    /// `device.poll(..)` guarantee callback is called.
     pub fn prepare_compaction_async(&self, callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static) {
         self.inner.prepare_compact_async(Box::new(callback));
     }
