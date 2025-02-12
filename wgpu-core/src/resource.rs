@@ -23,6 +23,7 @@ use crate::{
 
 use wgt::TextureSelector;
 
+use core::mem::size_of;
 use smallvec::SmallVec;
 use thiserror::Error;
 
