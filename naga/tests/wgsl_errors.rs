@@ -3,6 +3,8 @@ Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
 
+use naga::valid::Capabilities;
+
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
         .expect_err("expected parser error")
@@ -1317,6 +1319,210 @@ fn missing_bindings2() {
             ..
         })
     }
+}
+
+#[test]
+fn invalid_blend_src() {
+    // Missing capability.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::DUAL_SOURCE_BLENDING),
+                ),
+                ..
+            },
+        )
+    }
+
+    // Using blend_src on an input.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        @fragment
+        fn main(@location(0) @blend_src(0) input: f32) -> vec4f { return vec4f(0.0); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Argument(
+                    0,
+                    naga::valid::VaryingError::InvalidInputAttributeInStage("blend_src", naga::ShaderStage::Fragment),
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Using blend_src as output on something that isn't a fragment shader.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct VertexOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+        }
+        @vertex
+        fn main() -> VertexOutput { return VertexOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Vertex,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::InvalidAttributeInStage("blend_src", naga::ShaderStage::Vertex),
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Invalid blend_src index.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(2) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 0, blend_src: 2 },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Using a location other than 1 on blend_src
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(1) @blend_src(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 1, blend_src: 1 },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Using same blend_src several times.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(1) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::BindingCollisionBlendSrc { blend_src: 1 },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Two attributes, only one has blend_src
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Single attribute using blend_src.
+    check_validation! {
+        "
+            enable dual_source_blending;
+            struct FragmentOutput {
+                @location(0) @blend_src(0) output0: vec4<f32>,
+            }
+            @fragment
+            fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0)); }
+            ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // TODO:
+    // Missing enable directive.
+    // check_validation! {
+    //     "
+    //     struct FragmentOutput {
+    //         @location(0) @blend_src(0) output0: vec4<f32>,
+    //         @location(0) @blend_src(1) output1: vec4<f32>,
+    //     }
+    //     @fragment
+    //     fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput {
+    //         return FragmentOutput(vec4(0.0), vec4(0.0));
+    //     }
+    //     ":
+    //     Err(naga::valid::ValidationError::Function {
+    //         source: naga::valid::FunctionError::Expression {
+    //             source: naga::valid::ExpressionError::IndexOutOfBounds(_, _),
+    //             ..
+    //         },
+    //         ..
+    //     })
+    // }
 }
 
 #[test]

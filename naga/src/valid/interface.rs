@@ -67,6 +67,8 @@ pub enum VaryingError {
     MemberMissingBinding(u32),
     #[error("Multiple bindings at location {location} are present")]
     BindingCollision { location: u32 },
+    #[error("Multiple bindings use the same blend_src {blend_src}")]
+    BindingCollisionBlendSrc { blend_src: u32 },
     #[error("Built-in {0:?} is present more than once")]
     DuplicateBuiltIn(crate::BuiltIn),
     #[error("Capability {0:?} is not supported")]
@@ -75,10 +77,10 @@ pub enum VaryingError {
     InvalidInputAttributeInStage(&'static str, crate::ShaderStage),
     #[error("The attribute {0:?} is not valid for stage {1:?}")]
     InvalidAttributeInStage(&'static str, crate::ShaderStage),
-    #[error(
-        "The location index {location} uses a blend source index of {index} other than 0 or 1."
-    )]
-    InvalidBlendSrcIndex { location: u32, index: u32 },
+    #[error("The blend_src attribute can only be used on location 0, only indices 0 and 1 are valid. Location was {location}, index was {blend_src}.")]
+    InvalidBlendSrcIndex { location: u32, blend_src: u32 },
+    #[error("If blend_src is used, there must be exactly two outputs both with location 0, one with blend_src(0) and the other with blend_src(1).")]
+    IncompleteBlendSrcUsage,
     #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
     InvalidMultiDimensionalSubgroupBuiltIn,
 }
@@ -112,10 +114,6 @@ pub enum EntryPointError {
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
-    #[error(
-        "Invalid locations `blend_src` index set {index:?}. Only index 0 and, if dual source blending is enabled, 1 may be set."
-    )]
-    InvalidBlendSrcIndex { index: u32 },
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -137,9 +135,8 @@ struct VaryingContext<'a> {
     output: bool,
     types: &'a UniqueArena<crate::Type>,
     type_info: &'a Vec<super::r#type::TypeInfo>,
-    location_mask0: &'a mut BitSet,
-    location_mask1: &'a mut BitSet,
-    blend_src: u32, // 0 if not set.
+    location_mask: &'a mut BitSet,
+    blend_src_mask: &'a mut BitSet,
     built_ins: &'a mut crate::FastHashSet<crate::BuiltIn>,
     capabilities: Capabilities,
     flags: super::ValidationFlags,
@@ -314,13 +311,10 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::NotIOShareableType(ty));
                 }
 
-                // `blend_src` is only valid if dual source blending was explicitly enabled,
-                // see https://www.w3.org/TR/WGSL/#extension-dual_source_blending
-                if let Some(blend_src_index) = blend_src {
+                if let Some(blend_src) = blend_src {
+                    // `blend_src` is only valid if dual source blending was explicitly enabled,
+                    // see https://www.w3.org/TR/WGSL/#extension-dual_source_blending
                     // TODO: check that dual source blending feature was enabled in the shader.
-                    // TODO: If ANY location uses blend_src, all of them have to.
-                    // TODO: all locations must have the same data type
-
                     if !self
                         .capabilities
                         .contains(Capabilities::DUAL_SOURCE_BLENDING)
@@ -341,28 +335,17 @@ impl VaryingContext<'_> {
                             self.stage,
                         ));
                     }
-                    if blend_src_index != 0 && blend_src_index != 1 {
+                    if (blend_src != 0 && blend_src != 1) || location != 0 {
                         return Err(VaryingError::InvalidBlendSrcIndex {
                             location,
-                            index: blend_src_index,
+                            blend_src,
                         });
                     }
-
-                    self.blend_src = blend_src_index;
-
-                    let mask = if blend_src_index == 0 {
-                        &mut self.location_mask0
-                        // TODO: report blend src index
-                    } else {
-                        &mut self.location_mask1
-                    };
-                    if !mask.insert(location as usize) {
-                        if self.flags.contains(super::ValidationFlags::BINDINGS) {
-                            return Err(VaryingError::BindingCollision { location });
-                        }
+                    if !self.blend_src_mask.insert(blend_src as usize) {
+                        return Err(VaryingError::BindingCollisionBlendSrc { blend_src });
                     }
                 } else {
-                    if !self.location_mask0.insert(location as usize) {
+                    if !self.location_mask.insert(location as usize) {
                         if self.flags.contains(super::ValidationFlags::BINDINGS) {
                             return Err(VaryingError::BindingCollision { location });
                         }
@@ -462,6 +445,15 @@ impl VaryingContext<'_> {
                                     .validate_impl(ep, member.ty, binding)
                                     .map_err(|e| e.with_span_context(span_context))?,
                             }
+                        }
+
+                        // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
+                        if !self.blend_src_mask.is_empty()
+                            && (members.len() != 2 || self.blend_src_mask.len() != 2)
+                        {
+                            let span_context = self.types.get_span_context(ty);
+                            return Err(VaryingError::IncompleteBlendSrcUsage
+                                .with_span_context(span_context));
                         }
                     }
                     _ => {
@@ -665,7 +657,7 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize.with_span());
         }
 
-        let mut info = self
+        let info = self
             .validate_function(&ep.function, module, mod_info, true, global_expr_kind)
             .map_err(WithSpan::into_other)?;
 
@@ -683,8 +675,7 @@ impl super::Validator {
             }
         }
 
-        self.location_mask0.clear();
-        self.location_mask1.clear();
+        self.location_mask.clear();
         let mut argument_built_ins = crate::FastHashSet::default();
         // TODO: add span info to function arguments
         for (index, fa) in ep.function.arguments.iter().enumerate() {
@@ -693,9 +684,8 @@ impl super::Validator {
                 output: false,
                 types: &module.types,
                 type_info: &self.types,
-                location_mask0: &mut self.location_mask0,
-                location_mask1: &mut self.location_mask1,
-                blend_src: self.blend_src_index,
+                location_mask: &mut self.location_mask,
+                blend_src_mask: &mut self.blend_src_mask,
                 built_ins: &mut argument_built_ins,
                 capabilities: self.capabilities,
                 flags: self.flags,
@@ -704,8 +694,7 @@ impl super::Validator {
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
         }
 
-        self.location_mask0.clear();
-        self.location_mask1.clear();
+        self.location_mask.clear();
         if let Some(ref fr) = ep.function.result {
             let mut result_built_ins = crate::FastHashSet::default();
             let mut ctx = VaryingContext {
@@ -713,9 +702,8 @@ impl super::Validator {
                 output: true,
                 types: &module.types,
                 type_info: &self.types,
-                location_mask0: &mut self.location_mask0,
-                location_mask1: &mut self.location_mask1,
-                blend_src: self.blend_src_index,
+                location_mask: &mut self.location_mask,
+                blend_src_mask: &mut self.blend_src_mask,
                 built_ins: &mut result_built_ins,
                 capabilities: self.capabilities,
                 flags: self.flags,

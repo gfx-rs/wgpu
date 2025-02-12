@@ -267,15 +267,8 @@ pub struct Validator {
     subgroup_operations: SubgroupOperationSet,
     types: Vec<r#type::TypeInfo>,
     layouter: Layouter,
-
-    /// Location mask for blend_src 0 or no blend_src specified.
-    location_mask0: BitSet,
-    /// Location mask for blend_src 1.
-    location_mask1: BitSet,
-
-    /// Index of the blend_src attribute, or 0 if no blend_src is specified.
-    blend_src_index: u32,
-
+    location_mask: BitSet,
+    blend_src_mask: BitSet,
     ep_resource_bindings: FastHashSet<crate::ResourceBinding>,
     #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
@@ -467,9 +460,8 @@ impl Validator {
             subgroup_operations,
             types: Vec::new(),
             layouter: Layouter::default(),
-            location_mask0: BitSet::new(),
-            location_mask1: BitSet::new(),
-            blend_src_index: 0,
+            location_mask: BitSet::new(),
+            blend_src_mask: BitSet::new(),
             ep_resource_bindings: FastHashSet::default(),
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
@@ -494,8 +486,8 @@ impl Validator {
     pub fn reset(&mut self) {
         self.types.clear();
         self.layouter.clear();
-        self.location_mask0.clear();
-        self.location_mask1.clear();
+        self.location_mask.clear();
+        self.blend_src_mask.clear();
         self.ep_resource_bindings.clear();
         self.switch_values.clear();
         self.valid_expression_list.clear();
