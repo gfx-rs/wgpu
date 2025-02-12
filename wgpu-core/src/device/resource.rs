@@ -3350,17 +3350,16 @@ impl Device {
             None => None,
         };
 
-        // TODO: re-enable
-        // if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
-        //     return Err(
-        //         pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
-        //     );
-        // }
-        // if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
-        //     return Err(
-        //         pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
-        //     );
-        // }
+        if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
+            return Err(
+                pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
+            );
+        }
+        if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
+            return Err(
+                pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
+            );
+        }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.iter() {

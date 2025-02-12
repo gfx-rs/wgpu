@@ -671,7 +671,7 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize.with_span());
         }
 
-        let info = self
+        let mut info = self
             .validate_function(&ep.function, module, mod_info, true, global_expr_kind)
             .map_err(WithSpan::into_other)?;
 
@@ -728,6 +728,9 @@ impl super::Validator {
                 && !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false })
             {
                 return Err(EntryPointError::MissingVertexOutputPosition.with_span());
+            }
+            if !self.blend_src_mask.is_empty() {
+                info.dual_source_blending = true;
             }
         } else if ep.stage == crate::ShaderStage::Vertex {
             return Err(EntryPointError::MissingVertexOutputPosition.with_span());
