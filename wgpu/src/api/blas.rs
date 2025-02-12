@@ -203,8 +203,18 @@ impl error::Error for BlasAsyncError {}
 impl Blas {
     /// Asynchronously prepares this BLAS for compaction. The callback is called once all builds
     /// using this BLAS are finished and the BLAS is compactable. This can be polled (won't
-    /// guarantee callback is called) with `queue.submit(..)` while `instance.poll_all(..)` and
+    /// guarantee callback is called) with while  and
     /// `device.poll(..)` guarantee callback is called.
+    ///
+    /// ### Interaction with other functions
+    /// On native, `queue.submit(..)` and polling devices (that is calling `instance.poll_all` or
+    /// `device.poll`) with [`Maintain::Poll`] may call the callback. On native, polling devices with
+    /// [`Maintain::Wait`] (or [`Maintain::WaitForSubmissionIndex`] with a submission index greater
+    /// than the last submit the BLAS was used in) will guarantee callback is called.
+    ///
+    /// [`Maintain::Poll`]: wgpu_types::Maintain::Poll
+    /// [`Maintain::Wait`]: wgpu_types::Maintain::Wait
+    /// [`Maintain::WaitForSubmissionIndex`]: wgpu_types::Maintain::WaitForSubmissionIndex
     pub fn prepare_compaction_async(
         &self,
         callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static,
