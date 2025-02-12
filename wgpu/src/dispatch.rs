@@ -358,6 +358,8 @@ pub trait CommandEncoderInterface: CommonTraits {
         tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
     );
 
+    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
+
     fn transition_resources<'a>(
         &mut self,
         buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,

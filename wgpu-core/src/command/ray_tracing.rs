@@ -1,31 +1,25 @@
-use crate::{
-    device::queue::TempResource,
-    global::Global,
-    hub::Hub,
-    id::CommandEncoderId,
-    init_tracker::MemoryInitKind,
-    ray_tracing::{
-        BlasAction, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
-        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
-        TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
-        TraceTlasPackage, ValidateBlasActionsError, ValidateTlasActionsError,
-    },
-    resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas, Trackable},
-    scratch::ScratchBuffer,
-    snatch::SnatchGuard,
-    track::PendingTransition,
-    FastHashSet,
-};
+use crate::{api_log, device::queue::TempResource, global::Global, hub::Hub, id::CommandEncoderId, init_tracker::MemoryInitKind, ray_tracing::{
+    BlasAction, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
+    BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
+    TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
+    TraceTlasPackage, ValidateBlasActionsError, ValidateTlasActionsError,
+}, resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas, Trackable}, scratch::ScratchBuffer, snatch::SnatchGuard, track::PendingTransition, FastHashSet};
 
-use wgt::{math::align_to, BufferUsages, BufferUses, Features};
+use wgt::{math::align_to, AccelerationStructureFlags, BufferUsages, BufferUses, Features};
 
-use super::CommandBufferMutable;
+use super::{CommandBuffer, CommandBufferMutable};
 use std::{
     cmp::max,
     num::NonZeroU64,
     ops::{Deref, Range},
     sync::{atomic::Ordering, Arc},
 };
+use crate::device::Device;
+use crate::id::BlasId;
+use crate::lock::{rank, Mutex, RwLock};
+use crate::ray_tracing::CompactBlasError;
+use crate::resource::{BlasCompactState, Fallible, ParentDevice, TrackingData};
+use crate::snatch::Snatchable;
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -59,7 +53,127 @@ struct TlasBufferStore {
     entry: TlasBuildEntry,
 }
 
+impl CommandBuffer {
+    fn compact_blas(self: &Arc<Self>, blas: &Arc<Blas>, snatch_guard: &SnatchGuard, device: Arc<Device>) -> Result<Arc<Blas>, CompactBlasError> {
+        self.same_device(blas.device.as_ref())?;
+
+        let BlasCompactState::Ready { size } = *blas.compacted_state.lock() else {
+            return Err(CompactBlasError::BlasNotReady)
+        };
+
+        let mut size_info = blas.size_info;
+        size_info.acceleration_structure_size = size;
+
+        let build_command_index = NonZeroU64::new(
+            device
+                .last_acceleration_structure_build_command_index
+                .fetch_add(1, Ordering::Relaxed),
+        ).unwrap();
+
+        let mut cmd_buf_data = self.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
+
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+
+        let raw = unsafe {
+            blas.device.raw()
+                .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                    label: None,
+                    size: size_info.acceleration_structure_size,
+                    format: hal::AccelerationStructureFormat::BottomLevel,
+                    allow_compaction: false,
+                })
+        }
+            .map_err(crate::device::DeviceError::from_hal)?;
+
+        let src_raw = blas.try_raw(snatch_guard)?;
+
+        unsafe { cmd_buf_raw.copy_acceleration_structure_to_acceleration_structure(src_raw, raw.as_ref(), wgt::AccelerationStructureCopy::Compact) };
+
+        let handle = unsafe {
+            blas.device.raw()
+                .get_acceleration_structure_device_address(raw.as_ref())
+        };
+
+        let new_blas = Arc::new(Blas {
+            raw: Snatchable::new(raw),
+            device,
+            size_info,
+            sizes: blas.sizes.clone(),
+            flags: blas.flags & !AccelerationStructureFlags::ALLOW_COMPACTION,
+            update_mode: blas.update_mode,
+            built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(build_command_index)),
+            handle,
+            label: blas.label.clone() + " compacted",
+            tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),
+            compaction_buffer: None,
+            compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Compacted),
+        });
+
+        cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
+        cmd_buf_data.trackers.blas_s.insert_single(new_blas.clone());
+
+        cmd_buf_data_guard.mark_successful();
+
+        Ok(new_blas)
+    }
+}
+
 impl Global {
+    pub fn command_encoder_compact_blas(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        blas_id: BlasId,
+        id_in: Option<BlasId>,
+    ) -> (BlasId, Option<u64>, Option<CompactBlasError>) {
+        profiling::scope!("CommandEncoder::compact_blas");
+
+        let hub = &self.hub;
+
+        let cmd_buf = hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id());
+
+        let device = &cmd_buf.device;
+
+        let fid = self.hub.blas_s.prepare(id_in);
+
+        // TODO: Tracing
+
+        let error = 'error: {
+            match device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+                Ok(_) => {}
+                Err(err) => break 'error err.into(),
+            }
+
+            let blas = match hub.blas_s.get(blas_id).get() {
+                Ok(blas) => blas,
+                Err(err) => break 'error err.into(),
+            };
+
+            let new_blas = match cmd_buf.compact_blas(&blas, &device.snatchable_lock.read(), device.clone()) {
+                Ok(blas) => blas,
+                Err(err) => break 'error err,
+            };
+
+            // We should have no more errors after this because we have marked the command encoder as successful.
+            let old_blas_size = blas.size_info.acceleration_structure_size;
+            let new_blas_size = new_blas.size_info.acceleration_structure_size;
+            let handle = new_blas.handle;
+
+            let id = fid.assign(Fallible::Valid(new_blas));
+
+            api_log!("CommandEncoder::compact_blas {blas_id:?} (size: {old_blas_size}) -> {id:?} (size: {new_blas_size})");
+
+            return (id, Some(handle), None);
+        };
+
+        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
+
+        (id, None, Some(error))
+    }
+
     // Currently this function is very similar to its safe counterpart, however certain parts of it are very different,
     // making for the two to be implemented differently, the main difference is this function has separate buffers for each
     // of the TLAS instances while the other has one large buffer

@@ -1940,7 +1940,6 @@ impl Debug for BlasPendingCompact {
 }
 
 #[derive(Debug)]
-#[expect(dead_code)]
 pub(crate) enum BlasCompactState {
     /// Created from a compact operation.
     Compacted,
@@ -2015,6 +2014,11 @@ impl Blas {
         if self.built_index.read().is_none() {
             return Err((op, BlasPrepareCompactError::NotBuilt))
         }
+
+        if self.compaction_buffer.is_none() {
+            return Err((op, BlasPrepareCompactError::CompactionUnsupported))
+        }
+
         let mut state = self.compacted_state.lock();
         *state = match *state {
             BlasCompactState::Compacted => {

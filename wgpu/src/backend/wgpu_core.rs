@@ -2566,6 +2566,29 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         }
     }
 
+    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
+        let (id, handle, error) = self
+            .context
+            .0
+            .command_encoder_compact_blas(self.id, blas.as_core().id, None);
+        if let Some(cause) = error {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "CommandEncoder::compact_blas",
+            );
+        }
+        (
+            handle,
+            CoreBlas {
+                context: self.context.clone(),
+                id,
+                error_sink: Arc::clone(&self.error_sink),
+            }
+                .into(),
+        )
+    }
+
     fn transition_resources<'a>(
         &mut self,
         buffer_transitions: &mut dyn Iterator<

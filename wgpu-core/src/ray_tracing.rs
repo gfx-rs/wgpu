@@ -267,6 +267,29 @@ pub enum BlasPrepareCompactError {
     DoubleCompaction,
     #[error("BLAS is not yet built")]
     NotBuilt,
+    #[error("BLAS does not support compaction (is AccelerationStructureFlags::ALLOW_COMPACTION missing?)")]
+    CompactionUnsupported,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CompactBlasError {
+    #[error(transparent)]
+    Encoder(#[from] CommandEncoderError),
+
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+
+    #[error("BLAS was not prepared for compaction")]
+    BlasNotReady,
 }
 
 pub type BlasCompactReadyPendingClosure = (Option<BlasCompactCallback>, BlasPrepareCompactResult);
