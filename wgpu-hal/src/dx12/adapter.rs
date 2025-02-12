@@ -863,7 +863,13 @@ impl crate::Adapter for super::Adapter {
                 | wgt::TextureUses::COPY_SRC
                 | wgt::TextureUses::COPY_DST,
             present_modes,
-            composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            composite_alpha_modes: vec![
+                wgt::CompositeAlphaMode::Auto,
+                wgt::CompositeAlphaMode::Inherit,
+                wgt::CompositeAlphaMode::Opaque,
+                wgt::CompositeAlphaMode::PostMultiplied,
+                wgt::CompositeAlphaMode::PreMultiplied,
+            ],
         })
     }
 
