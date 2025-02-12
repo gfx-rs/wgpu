@@ -1321,7 +1321,11 @@ fn map_blas<'a>(
     {
         let mut state_lock = blas.compacted_state.lock();
         *state_lock = match *state_lock {
-            BlasCompactState::Compacted => return Err(BuildAccelerationStructureError::CompactedBlas(blas.error_ident())),
+            BlasCompactState::Compacted => {
+                return Err(BuildAccelerationStructureError::CompactedBlas(
+                    blas.error_ident(),
+                ))
+            }
             // Reset the compacted state to idle. This means any prepares, before mapping their
             // internal buffer, will terminate.
             _ => BlasCompactState::Idle,

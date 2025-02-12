@@ -1,6 +1,6 @@
+use core::mem::size_of;
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
-use core::mem::size_of;
 
 use crate::api_log;
 #[cfg(feature = "trace")]
