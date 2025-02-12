@@ -94,13 +94,13 @@ flume = "0.11"
 futures-lite = "2"
 getrandom = "0.2"
 glam = "0.29"
-hashbrown = { version = "0.15.2", default-features = false, features = [
-    "default-hasher",
+hashbrown = { version = "0.14.5", default-features = false, features = [
+    "ahash",
     "inline-more",
 ] }
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
-indexmap = { version = "2.7.1", default-features = false }
+indexmap = { version = "2.5.0", default-features = false }
 itertools = { version = "0.13.0" }
 ktx2 = "0.3"
 libc = { version = "0.2", default-features = false }
@@ -112,7 +112,7 @@ noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
-once_cell = { version = "1.20.2", default-features = false }
+once_cell = { version = "1.20.3", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3,<=4.6", default-features = false }
 parking_lot = "0.12.1"
@@ -132,7 +132,7 @@ ron = "0.8"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1", default-features = false }
-serde_json = "1.0.137"
+serde_json = "1.0.138"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"

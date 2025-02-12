@@ -33,7 +33,7 @@ impl std::fmt::Debug for AccelerationStructureInstance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Instance")
             .field("transform", &self.transform)
-            .field("custom_index()", &self.custom_index())
+            .field("custom_data()", &self.custom_index())
             .field("mask()", &self.mask())
             .field(
                 "shader_binding_table_record_offset()",
@@ -525,6 +525,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("blas"),
                 size: blas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::BottomLevel,
+                allow_compaction: false,
             })
         }
         .unwrap();
@@ -534,6 +535,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("tlas"),
                 size: tlas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::TopLevel,
+                allow_compaction: false,
             })
         }
         .unwrap();

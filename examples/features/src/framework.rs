@@ -438,6 +438,7 @@ async fn start<E: Example>(title: &str) {
                             .unwrap()
                             .render(&view, &context.device, &context.queue);
 
+                        window_loop.window.pre_present_notify();
                         frame.present();
 
                         window_loop.window.request_redraw();

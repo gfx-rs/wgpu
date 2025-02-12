@@ -1121,7 +1121,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             for entry in desc.entries.iter() {
                 if let BindingResource::BufferArray(array) = entry.resource {
                     arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
-                        buffer_id: binding.buffer.inner.as_core().id,
+                        buffer: binding.buffer.inner.as_core().id,
                         offset: binding.offset,
                         size: binding.size,
                     }));
@@ -1141,7 +1141,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                         offset,
                         size,
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
-                        buffer_id: buffer.inner.as_core().id,
+                        buffer: buffer.inner.as_core().id,
                         offset,
                         size,
                     }),
@@ -2210,7 +2210,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             self.id,
             &wgc::command::ComputePassDescriptor {
                 label: desc.label.map(Borrowed),
-                timestamp_writes: timestamp_writes.as_ref(),
+                timestamp_writes,
             },
         );
 
@@ -2522,7 +2522,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                         .map(|instance| wgc::ray_tracing::TlasInstance {
                             blas_id: instance.blas.as_core().id,
                             transform: &instance.transform,
-                            custom_index: instance.custom_index,
+                            custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                 });
@@ -3484,7 +3484,10 @@ impl dispatch::SurfaceInterface for CoreSurface {
         .into();
 
         match self.context.0.surface_get_current_texture(self.id, None) {
-            Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
+            Ok(wgc::present::SurfaceOutput {
+                status,
+                texture: texture_id,
+            }) => {
                 let data = texture_id
                     .map(|id| CoreTexture {
                         context: self.context.clone(),

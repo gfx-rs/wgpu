@@ -1209,4 +1209,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         unimplemented!()
     }
+
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        _src: &super::AccelerationStructure,
+        _dst: &super::AccelerationStructure,
+        _copy: wgt::AccelerationStructureCopy,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        _acceleration_structure: &super::AccelerationStructure,
+        _buf: &super::Buffer,
+    ) {
+        unimplemented!()
+    }
 }

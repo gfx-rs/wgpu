@@ -1,8 +1,8 @@
 struct RayIntersection {
     uint kind;
     float t;
-    uint instance_custom_index;
-    uint instance_id;
+    uint instance_custom_data;
+    uint instance_index;
     uint sbt_record_offset;
     uint geometry_index;
     uint primitive_index;
@@ -64,8 +64,8 @@ RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq) {
     ret.kind = rq.CommittedStatus();
     if( rq.CommittedStatus() == COMMITTED_NOTHING) {} else {
         ret.t = rq.CommittedRayT();
-        ret.instance_custom_index = rq.CommittedInstanceID();
-        ret.instance_id = rq.CommittedInstanceIndex();
+        ret.instance_custom_data = rq.CommittedInstanceID();
+        ret.instance_index = rq.CommittedInstanceIndex();
         ret.sbt_record_offset = rq.CommittedInstanceContributionToHitGroupIndex();
         ret.geometry_index = rq.CommittedGeometryIndex();
         ret.primitive_index = rq.CommittedPrimitiveIndex();
@@ -131,8 +131,8 @@ RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
     } else {
         ret.kind = 3;
     }
-    ret.instance_custom_index = rq.CandidateInstanceID();
-    ret.instance_id = rq.CandidateInstanceIndex();
+    ret.instance_custom_data = rq.CandidateInstanceID();
+    ret.instance_index = rq.CandidateInstanceIndex();
     ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();
     ret.geometry_index = rq.CandidateGeometryIndex();
     ret.primitive_index = rq.CandidatePrimitiveIndex();
@@ -150,6 +150,16 @@ void main_candidate()
     float3 dir_2 = float3(0.0, 1.0, 0.0);
     rq.TraceRayInline(acc_struct, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2)));
     RayIntersection intersection_1 = GetCandidateIntersection(rq);
-    output.Store(0, asuint(uint((intersection_1.kind == 3u))));
-    return;
+    if ((intersection_1.kind == 3u)) {
+        rq.CommitProceduralPrimitiveHit(10.0);
+        return;
+    } else {
+        if ((intersection_1.kind == 1u)) {
+            rq.CommitNonOpaqueTriangleHit();
+            return;
+        } else {
+            rq.Abort();
+            return;
+        }
+    }
 }

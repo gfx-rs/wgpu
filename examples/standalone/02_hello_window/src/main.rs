@@ -118,6 +118,7 @@ impl State {
 
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
+        self.window.pre_present_notify();
         surface_texture.present();
     }
 }
@@ -156,7 +157,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(size) => {
                 // Reconfigures the size of the surface. We do not re-render
-                // here as this event is always folloed up by redraw request.
+                // here as this event is always followed up by redraw request.
                 state.resize(size);
             }
             _ => (),
