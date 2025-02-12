@@ -1345,6 +1345,21 @@ fn invalid_blend_src() {
         )
     }
 
+    // Missing enable directive.
+    // TODO:
+    // check_validation! {
+    //     "
+    //     struct FragmentOutput {
+    //         @location(0) @blend_src(0) output0: vec4<f32>,
+    //         @location(0) @blend_src(1) output1: vec4<f32>,
+    //     }
+    //     @fragment
+    //     fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(0.0)); }
+    //     ":
+    //     Err(???),
+    //     Capabilities::DUAL_SOURCE_BLENDING
+    // }
+
     // Using blend_src on an input.
     check_validation! {
         "
@@ -1502,27 +1517,28 @@ fn invalid_blend_src() {
         Capabilities::DUAL_SOURCE_BLENDING
     }
 
-    // TODO:
-    // Missing enable directive.
-    // check_validation! {
-    //     "
-    //     struct FragmentOutput {
-    //         @location(0) @blend_src(0) output0: vec4<f32>,
-    //         @location(0) @blend_src(1) output1: vec4<f32>,
-    //     }
-    //     @fragment
-    //     fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput {
-    //         return FragmentOutput(vec4(0.0), vec4(0.0));
-    //     }
-    //     ":
-    //     Err(naga::valid::ValidationError::Function {
-    //         source: naga::valid::FunctionError::Expression {
-    //             source: naga::valid::ExpressionError::IndexOutOfBounds(_, _),
-    //             ..
-    //         },
-    //         ..
-    //     })
-    // }
+    // Mixed output types.
+    check_validation! {
+        "
+            enable dual_source_blending;
+            struct FragmentOutput {
+                @location(0) @blend_src(0) output0: vec4<f32>,
+                @location(0) @blend_src(1) output1: f32,
+            }
+            @fragment
+            fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), 1.0); }
+            ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::BlendSrcOutputTypeMismatch { blend_src_0_type: _, blend_src_1_type: _ },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
 }
 
 #[test]

@@ -81,6 +81,11 @@ pub enum VaryingError {
     InvalidBlendSrcIndex { location: u32, blend_src: u32 },
     #[error("If blend_src is used, there must be exactly two outputs both with location 0, one with blend_src(0) and the other with blend_src(1).")]
     IncompleteBlendSrcUsage,
+    #[error("If blend_src is used, both outputs must have the same type. blend_src(0) has type {blend_src_0_type:?} and blend_src(1) has type {blend_src_1_type:?}.")]
+    BlendSrcOutputTypeMismatch {
+        blend_src_0_type: Handle<crate::Type>,
+        blend_src_1_type: Handle<crate::Type>,
+    },
     #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
     InvalidMultiDimensionalSubgroupBuiltIn,
 }
@@ -447,13 +452,22 @@ impl VaryingContext<'_> {
                             }
                         }
 
-                        // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
-                        if !self.blend_src_mask.is_empty()
-                            && (members.len() != 2 || self.blend_src_mask.len() != 2)
-                        {
+                        if !self.blend_src_mask.is_empty() {
                             let span_context = self.types.get_span_context(ty);
-                            return Err(VaryingError::IncompleteBlendSrcUsage
+
+                            // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
+                            if members.len() != 2 || self.blend_src_mask.len() != 2 {
+                                return Err(VaryingError::IncompleteBlendSrcUsage
+                                    .with_span_context(span_context));
+                            }
+                            // Also, all members must have the same type.
+                            if members[0].ty != members[1].ty {
+                                return Err(VaryingError::BlendSrcOutputTypeMismatch {
+                                    blend_src_0_type: members[0].ty,
+                                    blend_src_1_type: members[1].ty,
+                                }
                                 .with_span_context(span_context));
+                            }
                         }
                     }
                     _ => {
