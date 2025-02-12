@@ -1,9 +1,12 @@
 use parking_lot::Mutex;
-use std::{
-    ptr::NonNull,
-    sync::{atomic, Arc},
-    thread, time,
-};
+use std::{ptr::NonNull, sync::Arc, thread, time};
+mod atomic {
+    #[cfg(not(target_has_atomic = "64"))]
+    pub use portable_atomic::AtomicU64;
+    #[cfg(target_has_atomic = "64")]
+    pub use std::sync::atomic::AtomicU64;
+    pub use std::sync::atomic::Ordering;
+}
 
 use super::conv;
 use crate::auxil::map_naga_stage;

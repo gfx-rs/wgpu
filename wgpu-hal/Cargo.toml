@@ -148,6 +148,10 @@ thiserror.workspace = true
 bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
 
+# replace missing AtomicU64
+[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+portable-atomic.workspace = true
+
 ########################
 ### Platform: Native ###
 ########################

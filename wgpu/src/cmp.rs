@@ -4,10 +4,11 @@
 //!
 //! For types (like WebGPU) that don't have such a property, we generate an identifier and use that.
 
-use std::{
-    num::NonZeroU64,
-    sync::atomic::{AtomicU64, Ordering},
-};
+#[cfg(not(target_has_atomic = "64"))]
+pub use portable_atomic::AtomicU64;
+#[cfg(target_has_atomic = "64")]
+pub use std::sync::atomic::AtomicU64;
+use std::{num::NonZeroU64, sync::atomic::Ordering};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 

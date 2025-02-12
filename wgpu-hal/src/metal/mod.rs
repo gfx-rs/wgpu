@@ -25,12 +25,14 @@ mod device;
 mod surface;
 mod time;
 
-use std::{
-    fmt, iter, ops,
-    ptr::NonNull,
-    sync::{atomic, Arc},
-    thread,
-};
+use std::{fmt, iter, ops, ptr::NonNull, sync::Arc, thread};
+mod atomic {
+    #[cfg(not(target_has_atomic = "64"))]
+    pub use portable_atomic::AtomicU64;
+    #[cfg(target_has_atomic = "64")]
+    pub use std::sync::atomic::AtomicU64;
+    pub use std::sync::atomic::Ordering;
+}
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;

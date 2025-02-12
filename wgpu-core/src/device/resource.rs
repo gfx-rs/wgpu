@@ -38,12 +38,16 @@ use wgt::{
 };
 
 use crate::resource::{AccelerationStructure, Tlas};
+#[cfg(not(target_has_atomic = "64"))]
+pub use portable_atomic::AtomicU64;
+#[cfg(target_has_atomic = "64")]
+pub use std::sync::atomic::AtomicU64;
 use std::{
     borrow::Cow,
     mem::{self, ManuallyDrop},
     num::NonZeroU32,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
         Arc, OnceLock, Weak,
     },
 };

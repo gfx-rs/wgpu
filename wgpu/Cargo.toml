@@ -150,6 +150,10 @@ serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
 
+# replace missing AtomicU64
+[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+portable-atomic.workspace = true
+
 ########################################
 # Target Specific Feature Dependencies #
 ########################################
