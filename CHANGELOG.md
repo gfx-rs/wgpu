@@ -50,7 +50,7 @@ Bottom level categories:
 
 #### General
 
-- Support compaction in wgpu-hal. By @Vecvec in [#7101](https://github.com/gfx-rs/wgpu/pull/7101).
+- Support BLAS compaction in wgpu-hal. By @Vecvec in [#7101](https://github.com/gfx-rs/wgpu/pull/7101).
 - Avoid using default features in many dependencies, etc. By Brody in [#7031](https://github.com/gfx-rs/wgpu/pull/7031)
 - Use `hashbrown` to simplify no-std support. By Brody in [#6938](https://github.com/gfx-rs/wgpu/pull/6938) & [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
