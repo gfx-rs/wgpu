@@ -1946,7 +1946,7 @@ pub(crate) enum BlasCompactState {
     Waiting(BlasPendingCompact),
     /// Ready to be compacted
     Ready { size: wgt::BufferAddress },
-    /// Not mapped
+    /// Ready to prepare to compact.
     Idle,
 }
 

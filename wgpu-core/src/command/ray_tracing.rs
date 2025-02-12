@@ -1319,7 +1319,14 @@ fn map_blas<'a>(
         .flags
         .contains(AccelerationStructureFlags::ALLOW_COMPACTION)
     {
-        blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw))
+        let state_lock = blas.compacted_state.lock();
+        *state_lock = match *state_lock {
+            BlasCompactState::Compacted => return Err(BuildAccelerationStructureError::CompactedBlas(blas.error_ident())),
+            // Reset the compacted state to idle. This means any prepares, before mapping their
+            // internal buffer, will terminate.
+            _ => BlasCompactState::Idle,
+        };
+        blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw));
     }
     Ok(hal::BuildAccelerationStructureDescriptor {
         entries,

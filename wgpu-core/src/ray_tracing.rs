@@ -109,6 +109,9 @@ pub enum BuildAccelerationStructureError {
     #[error("Blas {0:?} index formats are different, creation format: {1:?}, provided: {2:?}")]
     DifferentBlasIndexFormats(ResourceErrorIdent, Option<IndexFormat>, Option<IndexFormat>),
 
+    #[error("Blas {0:?} is compacted and so cannot be built")]
+    CompactedBlas(ResourceErrorIdent),
+
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 

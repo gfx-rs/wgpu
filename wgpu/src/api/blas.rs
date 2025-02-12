@@ -203,8 +203,8 @@ impl error::Error for BlasAsyncError {}
 impl Blas {
     /// Asynchronously prepares this BLAS for compaction. The callback is called once all builds
     /// using this BLAS are finished and the BLAS is compactable. This can be polled (won't
-    /// guarantee callback is called) with while  and
-    /// `device.poll(..)` guarantee callback is called.
+    /// guarantee callback is called). Rebuilding this BLAS will reset its compacted state, and it
+    /// will need to be prepared again.
     ///
     /// ### Interaction with other functions
     /// On native, `queue.submit(..)` and polling devices (that is calling `instance.poll_all` or

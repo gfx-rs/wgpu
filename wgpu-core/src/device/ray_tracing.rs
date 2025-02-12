@@ -299,7 +299,6 @@ impl Global {
         }
     }
 
-    /// `callback` is guaranteed to be called.
     pub fn blas_prepare_compact_async(
         &self,
         blas_id: BlasId,
