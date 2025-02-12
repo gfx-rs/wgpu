@@ -2093,6 +2093,27 @@ fn function_param_redefinition_as_local() {
 }
 
 #[test]
+fn struct_member_redefinition() {
+    check(
+        "
+        struct A {
+            a: f32,
+            a: f32,
+        }
+    ",
+        r###"error: redefinition of `a`
+  ┌─ wgsl:3:13
+  │
+3 │             a: f32,
+  │             ^ previous definition of `a`
+4 │             a: f32,
+  │             ^ redefinition of `a`
+
+"###,
+    )
+}
+
+#[test]
 fn function_must_return_value() {
     check_validation!(
         "fn func() -> i32 {
