@@ -3,7 +3,7 @@ use crate::{
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use std::fmt;
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 
 /// Efficiently performs many buffer writes by sharing and reusing temporary buffers.
 ///
@@ -146,12 +146,12 @@ impl StagingBelt {
             } else {
                 let size = self.chunk_size.max(size.get());
                 Chunk {
-                    buffer: Arc::new(device.create_buffer(&BufferDescriptor {
+                    buffer: device.create_buffer(&BufferDescriptor {
                         label: Some("(wgpu internal) StagingBelt staging buffer"),
                         size,
                         usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
                         mapped_at_creation: true,
-                    })),
+                    }),
                     size,
                     offset: 0,
                 }
@@ -230,7 +230,7 @@ impl fmt::Debug for StagingBelt {
 }
 
 struct Chunk {
-    buffer: Arc<Buffer>,
+    buffer: Buffer,
     size: BufferAddress,
     offset: BufferAddress,
 }
