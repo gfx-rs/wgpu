@@ -412,10 +412,11 @@ impl Global {
 
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
 
+        let mut blas_s_compactable = Vec::new();
         let mut descriptors = Vec::new();
 
         for storage in &blas_storage {
-            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard)?);
+            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard, &mut blas_s_compactable)?);
         }
 
         build_blas(
@@ -425,6 +426,7 @@ impl Global {
             input_barriers,
             &descriptors,
             scratch_buffer_barrier,
+            blas_s_compactable,
         );
 
         if tlas_present {
@@ -738,10 +740,11 @@ impl Global {
 
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
 
+        let mut blas_s_compactable = Vec::new();
         let mut descriptors = Vec::new();
 
         for storage in &blas_storage {
-            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard)?);
+            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard, &mut blas_s_compactable)?);
         }
 
         build_blas(
@@ -751,6 +754,7 @@ impl Global {
             input_barriers,
             &descriptors,
             scratch_buffer_barrier,
+            blas_s_compactable,
         );
 
         if tlas_present {
@@ -1251,6 +1255,7 @@ fn map_blas<'a>(
     storage: &'a BlasStore<'_>,
     scratch_buffer: &'a dyn hal::DynBuffer,
     snatch_guard: &'a SnatchGuard,
+    blas_s_compactable: &mut Vec<(&'a dyn hal::DynBuffer, &'a dyn hal::DynAccelerationStructure)>,
 ) -> Result<
     hal::BuildAccelerationStructureDescriptor<
         'a,
@@ -1267,12 +1272,16 @@ fn map_blas<'a>(
     if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
         log::info!("only rebuild implemented")
     }
+    let raw = blas.try_raw(snatch_guard)?;
+    if blas.flags.contains(AccelerationStructureFlags::ALLOW_COMPACTION) {
+        blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw))
+    }
     Ok(hal::BuildAccelerationStructureDescriptor {
         entries,
         mode: hal::AccelerationStructureBuildMode::Build,
         flags: blas.flags,
         source_acceleration_structure: None,
-        destination_acceleration_structure: blas.try_raw(snatch_guard)?,
+        destination_acceleration_structure: raw,
         scratch_buffer,
         scratch_buffer_offset: *scratch_buffer_offset,
     })
@@ -1289,6 +1298,7 @@ fn build_blas<'a>(
         dyn hal::DynAccelerationStructure,
     >],
     scratch_buffer_barrier: hal::BufferBarrier<dyn hal::DynBuffer>,
+    blas_s_for_compaction: Vec<(&'a dyn hal::DynBuffer, &'a dyn hal::DynAccelerationStructure)>,
 ) {
     unsafe {
         cmd_buf_raw.transition_buffers(&input_barriers);
@@ -1315,6 +1325,18 @@ fn build_blas<'a>(
 
     let mut source_usage = hal::AccelerationStructureUses::empty();
     let mut destination_usage = hal::AccelerationStructureUses::empty();
+    for &(buf, blas) in blas_s_for_compaction.iter() {
+        unsafe { cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
+            buffer: buf,
+            usage: hal::StateTransition {
+                from: BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                to: BufferUses::ACCELERATION_STRUCTURE_QUERY,
+            }
+        }])}
+        unsafe { cmd_buf_raw.read_acceleration_structure_compact_size(blas, buf) }
+        destination_usage |= hal::AccelerationStructureUses::COPY_SRC;
+    }
+
     if blas_present {
         source_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT;
         destination_usage |= hal::AccelerationStructureUses::BUILD_INPUT

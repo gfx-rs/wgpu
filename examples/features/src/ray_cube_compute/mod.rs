@@ -245,7 +245,7 @@ impl crate::framework::Example for Example {
         let blas = device.create_blas(
             &wgpu::CreateBlasDescriptor {
                 label: None,
-                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
                 update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
@@ -346,24 +346,6 @@ impl crate::framework::Example for Example {
 
         let dist = 3.0;
 
-        for x in 0..side_count {
-            for y in 0..side_count {
-                tlas_package[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
-                    &blas,
-                    affine_to_rows(&Affine3A::from_rotation_translation(
-                        Quat::from_rotation_y(45.9_f32.to_radians()),
-                        Vec3 {
-                            x: x as f32 * dist,
-                            y: y as f32 * dist,
-                            z: -30.0,
-                        },
-                    )),
-                    0,
-                    0xff,
-                ));
-            }
-        }
-
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
@@ -383,6 +365,41 @@ impl crate::framework::Example for Example {
                     },
                 ]),
             }),
+            iter::empty(),
+        );
+
+        queue.submit(Some(encoder.finish()));
+
+        blas.prepare_compaction_async(|res| res.unwrap());
+
+        // Compaction is guaranteed to be finished after a device poll
+        device.poll(wgpu::Maintain::Wait);
+
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        let compacted_blas = encoder.compact_blas(&blas);
+
+        for x in 0..side_count {
+            for y in 0..side_count {
+                tlas_package[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
+                    &compacted_blas,
+                    affine_to_rows(&Affine3A::from_rotation_translation(
+                        Quat::from_rotation_y(45.9_f32.to_radians()),
+                        Vec3 {
+                            x: x as f32 * dist,
+                            y: y as f32 * dist,
+                            z: -30.0,
+                        },
+                    )),
+                    0,
+                    0xff,
+                ));
+            }
+        }
+
+        encoder.build_acceleration_structures(
+            iter::empty(),
             iter::once(&tlas_package),
         );
 
