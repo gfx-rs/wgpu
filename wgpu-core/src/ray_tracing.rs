@@ -5,6 +5,7 @@
 // - lazy instance buffer allocation
 // - maybe share scratch and instance staging buffer allocation
 // - partial instance buffer uploads (api surface already designed with this in mind)
+// - Batch BLAS read-backs (if it shows up in performance).
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
 use crate::{
