@@ -2801,6 +2801,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
             }
 
+            // WGSL says that floating-point division by zero should return
+            // infinity. Microsoft's Direct3D 11 functional specification
+            // (https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm)
+            // says:
+            //
+            //     Divide by 0 produces +/- INF, except 0/0 which results in NaN.
+            //
+            // which is what we want. The DXIL specification for the FDiv
+            // instruction corroborates this:
+            //
+            // https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/DXIL.rst#fdiv
             Expression::Binary {
                 op: crate::BinaryOperator::Divide,
                 left,
@@ -2833,7 +2844,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
             }
 
-            // TODO: if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
             // While HLSL supports float operands with the % operator it is only
             // defined in cases where both sides are either positive or negative.
             Expression::Binary {
