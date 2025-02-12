@@ -109,6 +109,11 @@ impl Queue {
     /// If possible, consider using [`Queue::write_buffer_with`] instead. That
     /// method avoids an intermediate copy and is often able to transfer data
     /// more efficiently than this one.
+    ///
+    /// Currently on native platforms, for both of these methods the staging
+    /// memory will be a new allocation. This will then be released after the
+    /// next submission finishes. To entirely avoid short-lived allocations, you might
+    /// be able to use [`StagingBelt`](crate::util::StagingBelt).
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
         self.inner.write_buffer(&buffer.inner, offset, data);
     }
@@ -141,6 +146,10 @@ impl Queue {
     /// ```
     ///
     /// This method fails if `size` is greater than the size of `buffer` starting at `offset`.
+    ///
+    /// Currently on native platforms, the staging memory will be a new allocation, which will
+    /// then be released after the next submission finishes. To entirely avoid short-lived
+    /// allocations, you might be able to use [`StagingBelt`](crate::util::StagingBelt).
     #[must_use]
     pub fn write_buffer_with<'a>(
         &'a self,
