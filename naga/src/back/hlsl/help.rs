@@ -1011,6 +1011,8 @@ impl<W: Write> super::Writer<'_, W> {
                 arg3: _arg3,
             } = *expression
             {
+                let arg_ty = func_ctx.resolve_type(arg, &module.types);
+
                 match fun {
                     crate::MathFunction::ExtractBits => {
                         // The behavior of our extractBits polyfill is undefined if offset + count > bit_width. We need
@@ -1025,7 +1027,6 @@ impl<W: Write> super::Writer<'_, W> {
                         // c = min(count, w - o)
                         //
                         // bitfieldExtract(x, o, c)
-                        let arg_ty = func_ctx.resolve_type(arg, &module.types);
                         let scalar = arg_ty.scalar().unwrap();
                         let components = arg_ty.components();
 
@@ -1068,7 +1069,6 @@ impl<W: Write> super::Writer<'_, W> {
                     crate::MathFunction::InsertBits => {
                         // The behavior of our insertBits polyfill has the same constraints as the extractBits polyfill.
 
-                        let arg_ty = func_ctx.resolve_type(arg, &module.types);
                         let scalar = arg_ty.scalar().unwrap();
                         let components = arg_ty.components();
 
@@ -1126,12 +1126,8 @@ impl<W: Write> super::Writer<'_, W> {
                         writeln!(self.out, "}}")?;
                     }
                     crate::MathFunction::Abs
-                        if matches!(
-                            func_ctx.resolve_type(arg, &module.types).scalar(),
-                            Some(crate::Scalar::I32)
-                        ) =>
+                        if matches!(arg_ty.scalar(), Some(crate::Scalar::I32)) =>
                     {
-                        let arg_ty = func_ctx.resolve_type(arg, &module.types);
                         let scalar = arg_ty.scalar().unwrap();
                         let components = arg_ty.components();
 
