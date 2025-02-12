@@ -191,7 +191,10 @@ static_assertions::assert_impl_all!(BlasAsyncError: Send, Sync);
 
 impl fmt::Display for BlasAsyncError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Error occurred when trying to asynchronously prepare a blas for compaction")
+        write!(
+            f,
+            "Error occurred when trying to asynchronously prepare a blas for compaction"
+        )
     }
 }
 
@@ -202,7 +205,10 @@ impl Blas {
     /// using this BLAS are finished and the BLAS is compactable. This can be polled (won't
     /// guarantee callback is called) with `queue.submit(..)` while `instance.poll_all(..)` and
     /// `device.poll(..)` guarantee callback is called.
-    pub fn prepare_compaction_async(&self, callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static) {
+    pub fn prepare_compaction_async(
+        &self,
+        callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static,
+    ) {
         self.inner.prepare_compact_async(Box::new(callback));
     }
 }

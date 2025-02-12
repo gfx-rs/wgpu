@@ -5,6 +5,7 @@ use crate::api_log;
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::lock::{rank, Mutex};
+use crate::ray_tracing::BlasPrepareCompactError;
 use crate::resource::{BlasCompactCallback, BlasCompactState, Fallible, TrackingData};
 use crate::snatch::Snatchable;
 use crate::{
@@ -17,7 +18,6 @@ use crate::{
 };
 use hal::AccelerationStructureTriangleIndices;
 use wgt::Features;
-use crate::ray_tracing::BlasPrepareCompactError;
 
 impl Device {
     fn create_blas(
@@ -86,19 +86,27 @@ impl Device {
                     label: blas_desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
-                    allow_compaction: blas_desc.flags.contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
+                    allow_compaction: blas_desc
+                        .flags
+                        .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
                 })
         }
         .map_err(DeviceError::from_hal)?;
 
-        let compaction_buffer = if blas_desc.flags.contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION) {
+        let compaction_buffer = if blas_desc
+            .flags
+            .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION)
+        {
             Some(ManuallyDrop::new(unsafe {
-                self.raw().create_buffer(&hal::BufferDescriptor {
-                    label: None,
-                    size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
-                    usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY | wgpu_types::BufferUses::MAP_READ,
-                    memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-                }).map_err(DeviceError::from_hal)?
+                self.raw()
+                    .create_buffer(&hal::BufferDescriptor {
+                        label: None,
+                        size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
+                        usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
+                            | wgpu_types::BufferUses::MAP_READ,
+                        memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+                    })
+                    .map_err(DeviceError::from_hal)?
             }))
         } else {
             None

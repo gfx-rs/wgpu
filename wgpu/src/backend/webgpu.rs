@@ -20,8 +20,8 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{dispatch, SurfaceTargetUnsafe};
 
-use defined_non_null_js_value::DefinedNonNullJsValue;
 use crate::dispatch::BlasCompactCallback;
+use defined_non_null_js_value::DefinedNonNullJsValue;
 
 // We need to mark various types as Send and Sync to satisfy the Rust type system.
 //

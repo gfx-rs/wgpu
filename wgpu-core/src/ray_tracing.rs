@@ -16,7 +16,9 @@ use crate::{
 use std::num::NonZeroU64;
 use std::sync::Arc;
 
-use crate::resource::{Blas, BlasCompactCallback, BlasPrepareCompactResult, ResourceErrorIdent, Tlas};
+use crate::resource::{
+    Blas, BlasCompactCallback, BlasPrepareCompactResult, ResourceErrorIdent, Tlas,
+};
 use thiserror::Error;
 use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 

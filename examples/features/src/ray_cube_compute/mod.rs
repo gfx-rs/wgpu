@@ -245,7 +245,8 @@ impl crate::framework::Example for Example {
         let blas = device.create_blas(
             &wgpu::CreateBlasDescriptor {
                 label: None,
-                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
+                    | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
                 update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
@@ -398,10 +399,7 @@ impl crate::framework::Example for Example {
             }
         }
 
-        encoder.build_acceleration_structures(
-            iter::empty(),
-            iter::once(&tlas_package),
-        );
+        encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
 
         queue.submit(Some(encoder.finish()));
 

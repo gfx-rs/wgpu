@@ -6,6 +6,7 @@ use crate::{
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor,
 };
 
+use crate::dispatch::BlasCompactCallback;
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
@@ -13,10 +14,9 @@ use std::{
     borrow::Cow::Borrowed, error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull,
     slice, sync::Arc,
 };
-use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
 use wgc::resource::BlasPrepareCompactResult;
+use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
 use wgt::WasmNotSendSync;
-use crate::dispatch::BlasCompactCallback;
 
 #[derive(Clone)]
 pub struct ContextWgpuCore(Arc<wgc::global::Global>);
@@ -2011,20 +2011,19 @@ impl Drop for CoreTexture {
 
 impl dispatch::BlasInterface for CoreBlas {
     fn prepare_compact_async(&self, callback: BlasCompactCallback) {
-        let callback: Option<wgc::resource::BlasCompactCallback> = Some(Box::new(|status: BlasPrepareCompactResult| {
-            let res = status.map_err(|_| crate::BlasAsyncError);
-            callback(res);
-        }));
+        let callback: Option<wgc::resource::BlasCompactCallback> =
+            Some(Box::new(|status: BlasPrepareCompactResult| {
+                let res = status.map_err(|_| crate::BlasAsyncError);
+                callback(res);
+            }));
 
-        match self.context.0.blas_prepare_compact_async(
-            self.id,
-            callback,
-        ) {
+        match self.context.0.blas_prepare_compact_async(self.id, callback) {
             Ok(_) => (),
-            Err(cause) => {
-                self.context
-                    .handle_error_nolabel(&self.error_sink, cause, "Blas::prepare_compact_async")
-            }
+            Err(cause) => self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "Blas::prepare_compact_async",
+            ),
         }
     }
 }
@@ -2567,10 +2566,10 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     }
 
     fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
-        let (id, handle, error) = self
-            .context
-            .0
-            .command_encoder_compact_blas(self.id, blas.as_core().id, None);
+        let (id, handle, error) =
+            self.context
+                .0
+                .command_encoder_compact_blas(self.id, blas.as_core().id, None);
         if let Some(cause) = error {
             self.context.handle_error_nolabel(
                 &self.error_sink,
@@ -2585,7 +2584,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 id,
                 error_sink: Arc::clone(&self.error_sink),
             }
-                .into(),
+            .into(),
         )
     }
 

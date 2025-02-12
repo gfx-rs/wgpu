@@ -95,12 +95,12 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
 */
 
+mod blas;
 mod buffer;
 mod metadata;
 mod range;
 mod stateless;
 mod texture;
-mod blas;
 
 use crate::{
     binding_model, command,
@@ -113,6 +113,7 @@ use crate::{
 use std::{fmt, ops, sync::Arc};
 use thiserror::Error;
 
+use crate::track::blas::BlasTracker;
 pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };
@@ -123,7 +124,6 @@ pub(crate) use texture::{
     TextureViewBindGroupState,
 };
 use wgt::strict_assert_ne;
-use crate::track::blas::BlasTracker;
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

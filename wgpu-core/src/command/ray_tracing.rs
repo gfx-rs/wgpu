@@ -1,25 +1,38 @@
-use crate::{api_log, device::queue::TempResource, global::Global, hub::Hub, id::CommandEncoderId, init_tracker::MemoryInitKind, ray_tracing::{
-    BlasAction, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
-    BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
-    TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
-    TraceTlasPackage, ValidateBlasActionsError, ValidateTlasActionsError,
-}, resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas, Trackable}, scratch::ScratchBuffer, snatch::SnatchGuard, track::PendingTransition, FastHashSet};
+use crate::{
+    api_log,
+    device::queue::TempResource,
+    global::Global,
+    hub::Hub,
+    id::CommandEncoderId,
+    init_tracker::MemoryInitKind,
+    ray_tracing::{
+        BlasAction, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
+        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
+        TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
+        TraceTlasPackage, ValidateBlasActionsError, ValidateTlasActionsError,
+    },
+    resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas, Trackable},
+    scratch::ScratchBuffer,
+    snatch::SnatchGuard,
+    track::PendingTransition,
+    FastHashSet,
+};
 
 use wgt::{math::align_to, AccelerationStructureFlags, BufferUsages, BufferUses, Features};
 
 use super::{CommandBuffer, CommandBufferMutable};
-use std::{
-    cmp::max,
-    num::NonZeroU64,
-    ops::{Deref, Range},
-    sync::{atomic::Ordering, Arc},
-};
 use crate::device::Device;
 use crate::id::BlasId;
 use crate::lock::{rank, Mutex, RwLock};
 use crate::ray_tracing::CompactBlasError;
 use crate::resource::{BlasCompactState, Fallible, ParentDevice, TrackingData};
 use crate::snatch::Snatchable;
+use std::{
+    cmp::max,
+    num::NonZeroU64,
+    ops::{Deref, Range},
+    sync::{atomic::Ordering, Arc},
+};
 
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
@@ -54,11 +67,16 @@ struct TlasBufferStore {
 }
 
 impl CommandBuffer {
-    fn compact_blas(self: &Arc<Self>, blas: &Arc<Blas>, snatch_guard: &SnatchGuard, device: Arc<Device>) -> Result<Arc<Blas>, CompactBlasError> {
+    fn compact_blas(
+        self: &Arc<Self>,
+        blas: &Arc<Blas>,
+        snatch_guard: &SnatchGuard,
+        device: Arc<Device>,
+    ) -> Result<Arc<Blas>, CompactBlasError> {
         self.same_device(blas.device.as_ref())?;
 
         let BlasCompactState::Ready { size } = *blas.compacted_state.lock() else {
-            return Err(CompactBlasError::BlasNotReady)
+            return Err(CompactBlasError::BlasNotReady);
         };
 
         let mut size_info = blas.size_info;
@@ -68,7 +86,8 @@ impl CommandBuffer {
             device
                 .last_acceleration_structure_build_command_index
                 .fetch_add(1, Ordering::Relaxed),
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut cmd_buf_data = self.data.lock();
         let mut cmd_buf_data_guard = cmd_buf_data.record()?;
@@ -77,7 +96,8 @@ impl CommandBuffer {
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
 
         let raw = unsafe {
-            blas.device.raw()
+            blas.device
+                .raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
                     label: None,
                     size: size_info.acceleration_structure_size,
@@ -85,14 +105,21 @@ impl CommandBuffer {
                     allow_compaction: false,
                 })
         }
-            .map_err(crate::device::DeviceError::from_hal)?;
+        .map_err(crate::device::DeviceError::from_hal)?;
 
         let src_raw = blas.try_raw(snatch_guard)?;
 
-        unsafe { cmd_buf_raw.copy_acceleration_structure_to_acceleration_structure(src_raw, raw.as_ref(), wgt::AccelerationStructureCopy::Compact) };
+        unsafe {
+            cmd_buf_raw.copy_acceleration_structure_to_acceleration_structure(
+                src_raw,
+                raw.as_ref(),
+                wgt::AccelerationStructureCopy::Compact,
+            )
+        };
 
         let handle = unsafe {
-            blas.device.raw()
+            blas.device
+                .raw()
                 .get_acceleration_structure_device_address(raw.as_ref())
         };
 
@@ -142,7 +169,8 @@ impl Global {
         // TODO: Tracing
 
         let error = 'error: {
-            match device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+            match device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            {
                 Ok(_) => {}
                 Err(err) => break 'error err.into(),
             }
@@ -152,10 +180,11 @@ impl Global {
                 Err(err) => break 'error err.into(),
             };
 
-            let new_blas = match cmd_buf.compact_blas(&blas, &device.snatchable_lock.read(), device.clone()) {
-                Ok(blas) => blas,
-                Err(err) => break 'error err,
-            };
+            let new_blas =
+                match cmd_buf.compact_blas(&blas, &device.snatchable_lock.read(), device.clone()) {
+                    Ok(blas) => blas,
+                    Err(err) => break 'error err,
+                };
 
             // We should have no more errors after this because we have marked the command encoder as successful.
             let old_blas_size = blas.size_info.acceleration_structure_size;
@@ -416,7 +445,12 @@ impl Global {
         let mut descriptors = Vec::new();
 
         for storage in &blas_storage {
-            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard, &mut blas_s_compactable)?);
+            descriptors.push(map_blas(
+                storage,
+                scratch_buffer.raw(),
+                &snatch_guard,
+                &mut blas_s_compactable,
+            )?);
         }
 
         build_blas(
@@ -744,7 +778,12 @@ impl Global {
         let mut descriptors = Vec::new();
 
         for storage in &blas_storage {
-            descriptors.push(map_blas(storage, scratch_buffer.raw(), &snatch_guard, &mut blas_s_compactable)?);
+            descriptors.push(map_blas(
+                storage,
+                scratch_buffer.raw(),
+                &snatch_guard,
+                &mut blas_s_compactable,
+            )?);
         }
 
         build_blas(
@@ -1255,7 +1294,10 @@ fn map_blas<'a>(
     storage: &'a BlasStore<'_>,
     scratch_buffer: &'a dyn hal::DynBuffer,
     snatch_guard: &'a SnatchGuard,
-    blas_s_compactable: &mut Vec<(&'a dyn hal::DynBuffer, &'a dyn hal::DynAccelerationStructure)>,
+    blas_s_compactable: &mut Vec<(
+        &'a dyn hal::DynBuffer,
+        &'a dyn hal::DynAccelerationStructure,
+    )>,
 ) -> Result<
     hal::BuildAccelerationStructureDescriptor<
         'a,
@@ -1273,7 +1315,10 @@ fn map_blas<'a>(
         log::info!("only rebuild implemented")
     }
     let raw = blas.try_raw(snatch_guard)?;
-    if blas.flags.contains(AccelerationStructureFlags::ALLOW_COMPACTION) {
+    if blas
+        .flags
+        .contains(AccelerationStructureFlags::ALLOW_COMPACTION)
+    {
         blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw))
     }
     Ok(hal::BuildAccelerationStructureDescriptor {
@@ -1298,7 +1343,10 @@ fn build_blas<'a>(
         dyn hal::DynAccelerationStructure,
     >],
     scratch_buffer_barrier: hal::BufferBarrier<dyn hal::DynBuffer>,
-    blas_s_for_compaction: Vec<(&'a dyn hal::DynBuffer, &'a dyn hal::DynAccelerationStructure)>,
+    blas_s_for_compaction: Vec<(
+        &'a dyn hal::DynBuffer,
+        &'a dyn hal::DynAccelerationStructure,
+    )>,
 ) {
     unsafe {
         cmd_buf_raw.transition_buffers(&input_barriers);
@@ -1326,13 +1374,15 @@ fn build_blas<'a>(
     let mut source_usage = hal::AccelerationStructureUses::empty();
     let mut destination_usage = hal::AccelerationStructureUses::empty();
     for &(buf, blas) in blas_s_for_compaction.iter() {
-        unsafe { cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
-            buffer: buf,
-            usage: hal::StateTransition {
-                from: BufferUses::ACCELERATION_STRUCTURE_QUERY,
-                to: BufferUses::ACCELERATION_STRUCTURE_QUERY,
-            }
-        }])}
+        unsafe {
+            cmd_buf_raw.transition_buffers(&[hal::BufferBarrier {
+                buffer: buf,
+                usage: hal::StateTransition {
+                    from: BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                    to: BufferUses::ACCELERATION_STRUCTURE_QUERY,
+                },
+            }])
+        }
         unsafe { cmd_buf_raw.read_acceleration_structure_compact_size(blas, buf) }
         destination_usage |= hal::AccelerationStructureUses::COPY_SRC;
     }

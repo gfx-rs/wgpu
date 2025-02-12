@@ -9,10 +9,10 @@ use crate::{
 };
 use smallvec::SmallVec;
 
-use std::sync::Arc;
-use thiserror::Error;
 use crate::ray_tracing::BlasCompactReadyPendingClosure;
 use crate::resource::Blas;
+use std::sync::Arc;
+use thiserror::Error;
 
 /// A command submitted to the GPU for execution.
 ///
@@ -221,11 +221,7 @@ impl LifetimeTracker {
 
     pub(crate) fn prepare_compact(&mut self, blas: &Arc<Blas>) -> Option<SubmissionIndex> {
         // Determine which BLASes are ready to map, and which must wait for the GPU.
-        let submission = self
-            .active
-            .iter_mut()
-            .rev()
-            .find(|a| a.contains_blas(blas));
+        let submission = self.active.iter_mut().rev().find(|a| a.contains_blas(blas));
 
         let maybe_submission_index = submission.as_ref().map(|s| s.index);
 
@@ -379,9 +375,7 @@ impl LifetimeTracker {
     ///
     /// See the documentation for [`LifetimeTracker`] for details.
     #[must_use]
-    pub(crate) fn handle_compact_read_back(
-        &mut self,
-    ) -> Vec<BlasCompactReadyPendingClosure> {
+    pub(crate) fn handle_compact_read_back(&mut self) -> Vec<BlasCompactReadyPendingClosure> {
         if self.ready_to_compact.is_empty() {
             return Vec::new();
         }

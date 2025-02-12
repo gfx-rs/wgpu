@@ -27,6 +27,8 @@ use crate::{
 
 use smallvec::SmallVec;
 
+use super::{life::LifetimeTracker, Device};
+use crate::ray_tracing::BlasCompactReadyPendingClosure;
 use crate::scratch::ScratchBuffer;
 use std::{
     iter,
@@ -35,8 +37,6 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
-use crate::ray_tracing::BlasCompactReadyPendingClosure;
-use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
@@ -126,7 +126,12 @@ impl Queue {
 
         let queue_empty = life_tracker.queue_empty();
 
-        (submission_closures, mapping_closures, blas_closures, queue_empty)
+        (
+            submission_closures,
+            mapping_closures,
+            blas_closures,
+            queue_empty,
+        )
     }
 }
 
