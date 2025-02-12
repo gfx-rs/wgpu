@@ -2775,10 +2775,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 right,
             } if matches!(
                 func_ctx.resolve_type(expr, &module.types).scalar(),
-                Some(Scalar {
-                    kind: ScalarKind::Sint,
-                    width: 4
-                })
+                Some(Scalar::I32)
             ) =>
             {
                 write!(self.out, "asint(asuint(",)?;
@@ -3338,10 +3335,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let op_str = match op {
                     crate::UnaryOperator::Negate => {
                         match func_ctx.resolve_type(expr, &module.types).scalar() {
-                            Some(Scalar {
-                                kind: ScalarKind::Sint,
-                                width: 4,
-                            }) => NEG_FUNCTION,
+                            Some(Scalar::I32) => NEG_FUNCTION,
                             _ => "-",
                         }
                     }
@@ -3444,10 +3438,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let fun = match fun {
                     // comparison
                     Mf::Abs => match func_ctx.resolve_type(arg, &module.types).scalar() {
-                        Some(Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        }) => Function::Regular(ABS_FUNCTION),
+                        Some(Scalar::I32) => Function::Regular(ABS_FUNCTION),
                         _ => Function::Regular("abs"),
                     },
                     Mf::Min => Function::Regular("min"),
@@ -3735,11 +3726,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntOverload(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        }) = scalar_kind
-                        {
+                        if let Some(Scalar::I32) = scalar_kind {
                             write!(self.out, "asint({fun_name}(asuint(")?;
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")))")?;
@@ -3753,11 +3740,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntReturnType(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        }) = scalar_kind
-                        {
+                        if let Some(Scalar::I32) = scalar_kind {
                             write!(self.out, "asint({fun_name}(")?;
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, "))")?;

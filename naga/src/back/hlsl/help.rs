@@ -1128,10 +1128,7 @@ impl<W: Write> super::Writer<'_, W> {
                     crate::MathFunction::Abs
                         if matches!(
                             func_ctx.resolve_type(arg, &module.types).scalar(),
-                            Some(crate::Scalar {
-                                kind: ScalarKind::Sint,
-                                width: 4,
-                            })
+                            Some(crate::Scalar::I32)
                         ) =>
                     {
                         let arg_ty = func_ctx.resolve_type(arg, &module.types);
@@ -1186,13 +1183,7 @@ impl<W: Write> super::Writer<'_, W> {
                 };
 
                 match (op, scalar) {
-                    (
-                        crate::UnaryOperator::Negate,
-                        crate::Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        },
-                    ) => {
+                    (crate::UnaryOperator::Negate, crate::Scalar::I32) => {
                         if !self.wrapped.unary_op.insert(wrapped) {
                             continue;
                         }
