@@ -144,15 +144,13 @@ impl StagingBelt {
             {
                 self.free_chunks.swap_remove(index)
             } else {
-                let size = self.chunk_size.max(size.get());
                 Chunk {
                     buffer: device.create_buffer(&BufferDescriptor {
                         label: Some("(wgpu internal) StagingBelt staging buffer"),
-                        size,
+                        size: self.chunk_size.max(size.get()),
                         usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
                         mapped_at_creation: true,
                     }),
-                    size,
                     offset: 0,
                 }
             }
@@ -231,7 +229,6 @@ impl fmt::Debug for StagingBelt {
 
 struct Chunk {
     buffer: Buffer,
-    size: BufferAddress,
     offset: BufferAddress,
 }
 
@@ -240,14 +237,14 @@ impl Chunk {
         let alloc_start = align_to(self.offset, alignment);
         let alloc_end = alloc_start + size.get();
 
-        alloc_end <= self.size
+        alloc_end <= self.buffer.size()
     }
 
     fn allocate(&mut self, size: BufferSize, alignment: BufferAddress) -> BufferAddress {
         let alloc_start = align_to(self.offset, alignment);
         let alloc_end = alloc_start + size.get();
 
-        assert!(alloc_end <= self.size);
+        assert!(alloc_end <= self.buffer.size());
         self.offset = alloc_end;
         alloc_start
     }
