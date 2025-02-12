@@ -106,7 +106,7 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 - Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993) and [#7104](https://github.com/gfx-rs/wgpu/pull/7104)
 - Fix 3D storage texture bindings. By @SparkyPotato in [#7071](https://github.com/gfx-rs/wgpu/pull/7071)
-- Fix DX12 composite alpha modes. By @amrbashir [#7117](https://github.com/gfx-rs/wgpu/pull/7117)
+- Fix DX12 composite alpha modes. By @amrbashir in [#7117](https://github.com/gfx-rs/wgpu/pull/7117)
 
 #### WebGPU
 
