@@ -303,6 +303,14 @@ impl NumericType {
         }
     }
 
+    const fn scalar(self) -> crate::Scalar {
+        match self {
+            NumericType::Scalar(scalar)
+            | NumericType::Vector { scalar, .. }
+            | NumericType::Matrix { scalar, .. } => scalar,
+        }
+    }
+
     const fn with_scalar(self, scalar: crate::Scalar) -> Self {
         match self {
             NumericType::Scalar(_) => NumericType::Scalar(scalar),
