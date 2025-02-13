@@ -3008,7 +3008,10 @@ impl BlockContext<'_> {
                 Statement::MeshFunction(
                     crate::MeshFunction::SetVertex { .. }
                     | crate::MeshFunction::SetPrimitive { .. },
-                ) => todo!(),
+                ) => {
+                    // TODO: work on this
+                    unimplemented!();
+                }
                 Statement::SubgroupBallot {
                     result,
                     ref predicate,

@@ -1092,6 +1092,7 @@ impl FunctionInfo {
                     FunctionUniformity::new()
                 }
                 S::MeshFunction(func) => match func {
+                    // TODO: double check all of this uniformity stuff. I frankly don't fully understand all of it.
                     crate::MeshFunction::SetMeshOutputs {
                         vertex_count,
                         primitive_count,
@@ -1100,11 +1101,11 @@ impl FunctionInfo {
                         let _ = self.add_ref(primitive_count);
                         FunctionUniformity::new()
                     }
-                    crate::MeshFunction::SetVertex { index, value } => {
-                        todo!()
-                    }
-                    crate::MeshFunction::SetPrimitive { index, value } => {
-                        todo!()
+                    crate::MeshFunction::SetVertex { index, value }
+                    | crate::MeshFunction::SetPrimitive { index, value } => {
+                        let _ = self.add_ref(index);
+                        let _ = self.add_ref(value);
+                        FunctionUniformity::new()
                     }
                 },
                 S::SubgroupBallot {

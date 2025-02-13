@@ -720,11 +720,11 @@ impl super::Validator {
                     validate_expr(primitive_count)?;
                     Ok(())
                 }
-                crate::MeshFunction::SetVertex { index, value } => {
-                    todo!()
-                }
-                crate::MeshFunction::SetPrimitive { index, value } => {
-                    todo!()
+                crate::MeshFunction::SetVertex { index, value }
+                | crate::MeshFunction::SetPrimitive { index, value } => {
+                    validate_expr(index)?;
+                    validate_expr(value)?;
+                    Ok(())
                 }
             },
             crate::Statement::SubgroupBallot { result, predicate } => {

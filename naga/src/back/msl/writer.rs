@@ -3530,7 +3530,7 @@ impl<W: Write> Writer<W> {
                 crate::Statement::MeshFunction(
                     crate::MeshFunction::SetVertex { .. }
                     | crate::MeshFunction::SetPrimitive { .. },
-                ) => todo!(),
+                ) => unimplemented!(),
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
                     let name = self.namer.call("");

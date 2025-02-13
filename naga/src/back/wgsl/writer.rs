@@ -989,9 +989,20 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, primitive_count, func_ctx)?;
                 writeln!(self.out, ");")?;
             }
-            Statement::MeshFunction(
-                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
-            ) => todo!(),
+            Statement::MeshFunction(crate::MeshFunction::SetVertex { index, value }) => {
+                write!(self.out, "{level}setVertex(")?;
+                self.write_expr(module, index, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, value, func_ctx)?;
+                writeln!(self.out, ");")?;
+            }
+            Statement::MeshFunction(crate::MeshFunction::SetPrimitive { index, value }) => {
+                write!(self.out, "{level}setPrimitive(")?;
+                self.write_expr(module, index, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, value, func_ctx)?;
+                writeln!(self.out, ");")?;
+            }
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();

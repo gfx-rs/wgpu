@@ -2470,7 +2470,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Statement::MeshFunction(
                 crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
-            ) => todo!(),
+            ) => unimplemented!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();

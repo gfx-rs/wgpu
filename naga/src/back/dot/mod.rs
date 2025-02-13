@@ -305,10 +305,16 @@ impl StatementGraph {
                         .push((id, primitive_count, "primitive_count"));
                     "SetMeshOutputs"
                 }
-                S::MeshFunction(
-                    crate::MeshFunction::SetVertex { .. }
-                    | crate::MeshFunction::SetPrimitive { .. },
-                ) => todo!(),
+                S::MeshFunction(crate::MeshFunction::SetVertex { index, value }) => {
+                    self.dependencies.push((id, index, "index"));
+                    self.dependencies.push((id, value, "value"));
+                    "SetVertex"
+                }
+                S::MeshFunction(crate::MeshFunction::SetPrimitive { index, value }) => {
+                    self.dependencies.push((id, index, "index"));
+                    self.dependencies.push((id, value, "value"));
+                    "SetPrimitive"
+                }
                 S::SubgroupBallot { result, predicate } => {
                     if let Some(predicate) = predicate {
                         self.dependencies.push((id, predicate, "predicate"));

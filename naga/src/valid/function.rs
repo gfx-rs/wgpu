@@ -1511,11 +1511,10 @@ impl super::Validator {
                             ensure_correct(vertex_count)?;
                             ensure_correct(primitive_count)?;
                         }
-                        crate::MeshFunction::SetVertex { index, value } => {
-                            todo!()
-                        }
-                        crate::MeshFunction::SetPrimitive { index, value } => {
-                            todo!()
+                        crate::MeshFunction::SetVertex { index, value }
+                        | crate::MeshFunction::SetPrimitive { index, value } => {
+                            ensure_correct(index)?;
+                            ensure_correct(value)?;
                         }
                     }
                 }
