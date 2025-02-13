@@ -12,6 +12,49 @@ use core::mem::size_of;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+pub use webgpu_impl::*;
+mod webgpu_impl {
+    //! Constant values for [`super::FeaturesWebGPU`], separated so they can be picked up by
+    //! `cbindgen` in `mozilla-central` (where Firefox is developed).
+    #![allow(missing_docs)]
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 0;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 1;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 2;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 3;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 4;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 5;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 6;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 7;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 8;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 9;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 10;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 11;
+}
+
 macro_rules! bitflags_array_impl {
     ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
         impl core::ops::$impl_name for $name {
@@ -1138,7 +1181,7 @@ bitflags_array! {
         /// - some mobile chips
         ///
         /// This is a web and native feature.
-        const DEPTH_CLIP_CONTROL = 1 << 0;
+        const DEPTH_CLIP_CONTROL = WEBGPU_FEATURE_DEPTH_CLIP_CONTROL;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
@@ -1151,7 +1194,7 @@ bitflags_array! {
         /// This is a web and native feature.
         ///
         /// [`TextureFormat::Depth32FloatStencil8`]: super::TextureFormat::Depth32FloatStencil8
-        const DEPTH32FLOAT_STENCIL8 = 1 << 1;
+        const DEPTH32FLOAT_STENCIL8 = WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8;
 
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
         /// with 8 or 16 bytes per block.
@@ -1169,7 +1212,7 @@ bitflags_array! {
         /// - Mobile (All Apple9 and some Apple7 and Apple8 devices)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_BC = 1 << 2;
+        const TEXTURE_COMPRESSION_BC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC;
 
 
         /// Allows the 3d dimension for textures with BC compressed formats.
@@ -1182,7 +1225,7 @@ bitflags_array! {
         /// - Mobile (All Apple9 and some Apple7 and Apple8 devices)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_BC_SLICED_3D = 1 << 3;
+        const TEXTURE_COMPRESSION_BC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D;
 
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
@@ -1198,7 +1241,7 @@ bitflags_array! {
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_ETC2 = 1 << 4;
+        const TEXTURE_COMPRESSION_ETC2 = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2;
 
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
@@ -1214,7 +1257,7 @@ bitflags_array! {
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_ASTC = 1 << 5;
+        const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished.
@@ -1243,7 +1286,7 @@ bitflags_array! {
         /// [`ComputePassDescriptor::timestamp_writes`]: https://docs.rs/wgpu/latest/wgpu/struct.ComputePassDescriptor.html#structfield.timestamp_writes
         /// [`CommandEncoder::resolve_query_set`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.resolve_query_set
         /// [`Queue::get_timestamp_period`]: https://docs.rs/wgpu/latest/wgpu/struct.Queue.html#method.get_timestamp_period
-        const TIMESTAMP_QUERY = 1 << 6;
+        const TIMESTAMP_QUERY = WEBGPU_FEATURE_TIMESTAMP_QUERY;
 
         /// Allows non-zero value for the `first_instance` member in indirect draw calls.
         ///
@@ -1262,7 +1305,7 @@ bitflags_array! {
         /// - OpenGL ES / WebGL
         ///
         /// This is a web and native feature.
-        const INDIRECT_FIRST_INSTANCE = 1 << 7;
+        const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
         /// Allows shaders to acquire the FP16 ability
         ///
@@ -1273,7 +1316,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const SHADER_F16 = 1 << 8;
+        const SHADER_F16 = WEBGPU_FEATURE_SHADER_F16;
 
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Ufloat`] as a render target
@@ -1286,7 +1329,7 @@ bitflags_array! {
         /// This is a web and native feature.
         ///
         /// [`TextureFormat::Rg11b10Ufloat`]: super::TextureFormat::Rg11b10Ufloat
-        const RG11B10UFLOAT_RENDERABLE = 1 << 9;
+        const RG11B10UFLOAT_RENDERABLE = WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE;
 
         /// Allows the [`TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8Unorm`]
         ///
@@ -1299,7 +1342,7 @@ bitflags_array! {
         ///
         /// [`TextureFormat::Bgra8Unorm`]: super::TextureFormat::Bgra8Unorm
         /// [`TextureUsages::STORAGE_BINDING`]: super::TextureUsages::STORAGE_BINDING
-        const BGRA8UNORM_STORAGE = 1 << 10;
+        const BGRA8UNORM_STORAGE = WEBGPU_FEATURE_BGRA8UNORM_STORAGE;
 
 
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be filterable.
@@ -1311,7 +1354,7 @@ bitflags_array! {
         /// - GL with one of `GL_ARB_color_buffer_float`/`GL_EXT_color_buffer_float`/`OES_texture_float_linear`
         ///
         /// This is a web and native feature.
-        const FLOAT32_FILTERABLE = 1 << 11;
+        const FLOAT32_FILTERABLE = WEBGPU_FEATURE_FLOAT32_FILTERABLE;
     }
 }
 
