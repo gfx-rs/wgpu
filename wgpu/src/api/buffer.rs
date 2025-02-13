@@ -506,6 +506,28 @@ impl<'a> BufferSlice<'a> {
             readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
     }
+
+    /// Returns the buffer this is a slice of.
+    ///
+    /// You should usually not need to call this, and if you received the buffer from code you
+    /// do not control, you should refrain from accessing the buffer outside the bounds of the
+    /// slice. Nevertheless, it’s possible to get this access, so this method makes it simple.
+    pub fn buffer(&self) -> &'a Buffer {
+        self.buffer
+    }
+
+    /// Returns the offset in [`Self::buffer()`] this slice starts at.
+    pub fn offset(&self) -> BufferAddress {
+        self.offset
+    }
+
+    /// Returns the size of this slice.
+    pub fn size(&self) -> BufferSize {
+        self.size.unwrap_or_else(|| {
+            (|| BufferSize::new(self.buffer.size().checked_sub(self.offset)?))()
+                .expect("can't happen: slice has incorrect size for its buffer")
+        })
+    }
 }
 
 /// The mapped portion of a buffer, if any, and its outstanding views.
