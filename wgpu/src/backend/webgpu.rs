@@ -20,7 +20,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{dispatch, SurfaceTargetUnsafe};
 
-use crate::dispatch::{BlasCompactCallback, DispatchBlas};
+use crate::dispatch::BlasCompactCallback;
 use defined_non_null_js_value::DefinedNonNullJsValue;
 
 // We need to mark various types as Send and Sync to satisfy the Rust type system.
@@ -2597,7 +2597,7 @@ impl dispatch::QueueInterface for WebQueue {
         unimplemented!("on_submitted_work_done is not yet implemented");
     }
 
-    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
+    fn compact_blas(&self, _blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
         unimplemented!("Raytracing not implemented for web")
     }
 }
