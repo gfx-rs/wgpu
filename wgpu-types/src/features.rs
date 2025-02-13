@@ -315,7 +315,7 @@ macro_rules! bitflags_array {
                 Self { $($lower_inner_name: self.$lower_inner_name.complement(),)* }
             }
 
-            /// Calls [Self::insert] if `set` is true and otherwise calls [Self::remove].
+            /// Calls [`Self::insert`] if `set` is true and otherwise calls [`Self::remove`].
             pub fn set(&mut self, other:Self, set: bool) {
                 $(self.$lower_inner_name.set(other.$lower_inner_name, set);)*
             }

@@ -430,13 +430,13 @@ pub struct Limits {
     /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
     /// Defaults to 256. Higher is "better".
     pub max_compute_invocations_per_workgroup: u32,
-    /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
+    /// The maximum value of the `workgroup_size` X dimension for a compute stage `ShaderModule` entry-point.
     /// Defaults to 256. Higher is "better".
     pub max_compute_workgroup_size_x: u32,
-    /// The maximum value of the workgroup_size Y dimension for a compute stage `ShaderModule` entry-point.
+    /// The maximum value of the `workgroup_size` Y dimension for a compute stage `ShaderModule` entry-point.
     /// Defaults to 256. Higher is "better".
     pub max_compute_workgroup_size_y: u32,
-    /// The maximum value of the workgroup_size Z dimension for a compute stage `ShaderModule` entry-point.
+    /// The maximum value of the `workgroup_size` Z dimension for a compute stage `ShaderModule` entry-point.
     /// Defaults to 64. Higher is "better".
     pub max_compute_workgroup_size_z: u32,
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
@@ -906,7 +906,8 @@ bitflags::bitflags! {
         /// WebGL doesn't support this. WebGPU does.
         const UNRESTRICTED_EXTERNAL_TEXTURE_COPIES = 1 << 20;
 
-        /// Supports specifying which view formats are allowed when calling create_view on the texture returned by get_current_texture.
+        /// Supports specifying which view formats are allowed when calling create_view on the texture returned by
+        /// `Surface::get_current_texture`.
         ///
         /// The GLES/WebGL and Vulkan on Android doesn't support this.
         const SURFACE_VIEW_FORMATS = 1 << 21;
@@ -1014,7 +1015,7 @@ pub struct AdapterInfo {
     /// representation.
     ///
     /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::vendorID`] is used, which is
-    ///     a superset of PCI IDs.
+    ///   a superset of PCI IDs.
     ///
     /// [`VkPhysicalDeviceProperties::vendorID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
     pub vendor: u32,
@@ -1026,7 +1027,7 @@ pub struct AdapterInfo {
     /// representation.
     ///
     /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::deviceID`] is used, which is
-    ///    a superset of PCI IDs.
+    ///   a superset of PCI IDs.
     ///
     /// [`VkPhysicalDeviceProperties::deviceID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
     pub device: u32,
@@ -1138,7 +1139,7 @@ bitflags::bitflags! {
     }
 }
 
-/// Order in which TextureData is laid out in memory.
+/// Order in which texture data is laid out in memory.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub enum TextureDataOrder {
     /// The texture is laid out densely in memory as:
@@ -1322,7 +1323,7 @@ impl BlendComponent {
         operation: BlendOperation::Add,
     };
 
-    /// Blend state of (1 * src) + ((1 - src_alpha) * dst)
+    /// Blend state of `(1 * src) + ((1 - src_alpha) * dst)`.
     pub const OVER: Self = Self {
         src_factor: BlendFactor::One,
         dst_factor: BlendFactor::OneMinusSrcAlpha,
@@ -1539,20 +1540,20 @@ pub struct PrimitiveState {
     pub cull_mode: Option<Face>,
     /// If set to true, the polygon depth is not clipped to 0-1 before rasterization.
     ///
-    /// Enabling this requires `Features::DEPTH_CLIP_CONTROL` to be enabled.
+    /// Enabling this requires [`Features::DEPTH_CLIP_CONTROL`] to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
     pub unclipped_depth: bool,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
-    /// Setting this to `Line` requires `Features::POLYGON_MODE_LINE` to be enabled.
+    /// Setting this to `Line` requires [`Features::POLYGON_MODE_LINE`] to be enabled.
     ///
-    /// Setting this to `Point` requires `Features::POLYGON_MODE_POINT` to be enabled.
+    /// Setting this to `Point` requires [`Features::POLYGON_MODE_POINT`] to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
     pub polygon_mode: PolygonMode,
     /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.
-    /// Only valid for PolygonMode::Fill!
+    /// Only valid for `[PolygonMode::Fill`]!
     ///
-    /// Enabling this requires `Features::CONSERVATIVE_RASTERIZATION` to be enabled.
+    /// Enabling this requires [`Features::CONSERVATIVE_RASTERIZATION`] to be enabled.
     pub conservative: bool,
 }
 
@@ -1572,7 +1573,7 @@ pub struct MultisampleState {
     /// can be enabled using the value `!0`
     pub mask: u64,
     /// When enabled, produces another sample mask per pixel based on the alpha output value, that
-    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
+    /// is ANDed with the sample mask and the primitive coverage to restrict the set of samples
     /// affected by a primitive.
     ///
     /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
@@ -1659,7 +1660,7 @@ impl TextureFormatFeatureFlags {
 
 /// Features supported by a given texture format
 ///
-/// Features are defined by WebGPU specification unless `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
+/// Features are defined by WebGPU specification unless [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] is enabled.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextureFormatFeatures {
@@ -3992,14 +3993,14 @@ pub enum Maintain<T> {
     /// On WebGPU, this has no effect. Callbacks are invoked from the
     /// window event loop.
     WaitForSubmissionIndex(T),
-    /// Same as WaitForSubmissionIndex but waits for the most recent submission.
+    /// Same as `WaitForSubmissionIndex` but waits for the most recent submission.
     Wait,
     /// Check the device for a single time without blocking.
     Poll,
 }
 
 impl<T> Maintain<T> {
-    /// Construct a wait variant
+    /// Construct a [`Self::Wait`] variant
     #[must_use]
     pub fn wait() -> Self {
         // This function seems a little silly, but it is useful to allow
@@ -4008,7 +4009,7 @@ impl<T> Maintain<T> {
         Self::Wait
     }
 
-    /// Construct a WaitForSubmissionIndex variant
+    /// Construct a [`Self::WaitForSubmissionIndex`] variant
     #[must_use]
     pub fn wait_for(submission_index: T) -> Self {
         // This function seems a little silly, but it is useful to allow
@@ -4052,13 +4053,13 @@ pub enum MaintainResult {
 }
 
 impl MaintainResult {
-    /// Returns true if the result is [`Self::SubmissionQueueEmpty`]`.
+    /// Returns true if the result is [`Self::SubmissionQueueEmpty`].
     #[must_use]
     pub fn is_queue_empty(&self) -> bool {
         matches!(self, Self::SubmissionQueueEmpty)
     }
 
-    /// Panics if the MaintainResult is not Ok.
+    /// Panics if the [`MaintainResult`] is not Ok.
     pub fn panic_on_timeout(self) {
         let _ = self;
     }
@@ -4866,11 +4867,11 @@ impl<T> Default for CommandEncoderDescriptor<Option<T>> {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PresentMode {
-    /// Chooses FifoRelaxed -> Fifo based on availability.
+    /// Chooses `FifoRelaxed` -> `Fifo` based on availability.
     ///
     /// Because of the fallback behavior, it is supported everywhere.
     AutoVsync = 0,
-    /// Chooses Immediate -> Mailbox -> Fifo (on web) based on availability.
+    /// Chooses `Immediate` -> `Mailbox` -> `Fifo` (on web) based on availability.
     ///
     /// Because of the fallback behavior, it is supported everywhere.
     AutoNoVsync = 1,
@@ -4883,7 +4884,7 @@ pub enum PresentMode {
     ///
     /// No tearing will be observed.
     ///
-    /// Calls to get_current_texture will block until there is a spot in the queue.
+    /// Calls to `Surface::get_current_texture` will block until there is a spot in the queue.
     ///
     /// Supported on all platforms.
     ///
@@ -4900,7 +4901,7 @@ pub enum PresentMode {
     ///
     /// Tearing will be observed if frames last more than one vblank as the front buffer.
     ///
-    /// Calls to get_current_texture will block until there is a spot in the queue.
+    /// Calls to `Surface::get_current_texture` will block until there is a spot in the queue.
     ///
     /// Supported on AMD on Vulkan.
     ///
@@ -5091,11 +5092,11 @@ pub struct SurfaceCapabilities {
     pub present_modes: Vec<PresentMode>,
     /// List of supported alpha modes to use with the given adapter.
     ///
-    /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
+    /// Will return at least one element, [`CompositeAlphaMode::Opaque`] or [`CompositeAlphaMode::Inherit`].
     pub alpha_modes: Vec<CompositeAlphaMode>,
     /// Bitflag of supported texture usages for the surface to use with the given adapter.
     ///
-    /// The usage TextureUsages::RENDER_ATTACHMENT is guaranteed.
+    /// The usage [`TextureUsages::RENDER_ATTACHMENT`] is guaranteed.
     pub usages: TextureUsages,
 }
 
@@ -5117,10 +5118,10 @@ impl Default for SurfaceCapabilities {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SurfaceConfiguration<V> {
-    /// The usage of the swap chain. The only usage guaranteed to be supported is `RENDER_ATTACHMENT`.
+    /// The usage of the swap chain. The only usage guaranteed to be supported is [`TextureUsages::RENDER_ATTACHMENT`].
     pub usage: TextureUsages,
     /// The texture format of the swap chain. The only formats that are guaranteed are
-    /// `Bgra8Unorm` and `Bgra8UnormSrgb`
+    /// [`TextureFormat::Bgra8Unorm`] and [`TextureFormat::Bgra8UnormSrgb`].
     pub format: TextureFormat,
     /// Width of the swap chain. Must be the same size as the surface, and nonzero.
     ///
@@ -5137,8 +5138,8 @@ pub struct SurfaceConfiguration<V> {
     /// scales the surface, other platforms may do something else).
     pub height: u32,
     /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
-    /// FifoRelaxed, Immediate, and Mailbox will crash if unsupported, while AutoVsync and
-    /// AutoNoVsync will gracefully do a designed sets of fallbacks if their primary modes are
+    /// `FifoRelaxed`, `Immediate`, and `Mailbox` will crash if unsupported, while `AutoVsync` and
+    /// `AutoNoVsync` will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
     /// Desired maximum number of frames that the presentation engine should queue in advance.
@@ -5148,7 +5149,7 @@ pub struct SurfaceConfiguration<V> {
     /// or waits on present are scheduled to avoid exceeding the maximum frame latency if supported,
     /// or the swap chain size is set to (max-latency + 1).
     ///
-    /// Defaults to 2 when created via `wgpu::Surface::get_default_config`.
+    /// Defaults to 2 when created via `Surface::get_default_config`.
     ///
     /// Typical values range from 3 to 1, but higher values are possible:
     /// * Choose 2 or higher for potentially smoother frame display, as it allows to be at least one frame
@@ -5156,23 +5157,23 @@ pub struct SurfaceConfiguration<V> {
     ///   Higher values are useful for achieving a constant flow of frames to the display under varying load.
     /// * Choose 1 for low latency from frame recording to frame display.
     ///   ⚠️ If the backend does not support waiting on present, this will cause the CPU to wait for the GPU
-    ///   to finish all work related to the previous frame when calling `wgpu::Surface::get_current_texture`,
-    ///   causing CPU-GPU serialization (i.e. when `wgpu::Surface::get_current_texture` returns, the GPU might be idle).
+    ///   to finish all work related to the previous frame when calling `Surface::get_current_texture`,
+    ///   causing CPU-GPU serialization (i.e. when `Surface::get_current_texture` returns, the GPU might be idle).
     ///   It is currently not possible to query this. See <https://github.com/gfx-rs/wgpu/issues/2869>.
     /// * A value of 0 is generally not supported and always clamped to a higher value.
     pub desired_maximum_frame_latency: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
-    /// Specifies what view formats will be allowed when calling create_view() on texture returned by get_current_texture().
+    /// Specifies what view formats will be allowed when calling `Texture::create_view` on the texture returned by `Surface::get_current_texture`.
     ///
     /// View formats of the same format as the texture are always allowed.
     ///
-    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
 }
 
 impl<V: Clone> SurfaceConfiguration<V> {
-    /// Map view_formats of the texture descriptor into another.
+    /// Map `view_formats` of the texture descriptor into another.
     pub fn map_view_formats<M>(&self, fun: impl FnOnce(V) -> M) -> SurfaceConfiguration<M> {
         SurfaceConfiguration {
             usage: self.usage,
@@ -5202,7 +5203,7 @@ pub enum SurfaceStatus {
     Outdated,
     /// The surface under the swap chain is lost.
     Lost,
-    /// The surface status is not known since `get_current_texture` previously failed.
+    /// The surface status is not known since `Surface::get_current_texture` previously failed.
     Unknown,
 }
 
@@ -5666,11 +5667,11 @@ pub struct TextureDescriptor<L, V> {
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsages,
-    /// Specifies what view formats will be allowed when calling create_view() on this texture.
+    /// Specifies what view formats will be allowed when calling `Texture::create_view` on this texture.
     ///
     /// View formats of the same format as the texture are always allowed.
     ///
-    /// Note: currently, only the srgb-ness is allowed to change. (ex: Rgba8Unorm texture + Rgba8UnormSrgb view)
+    /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
 }
 
@@ -5693,7 +5694,7 @@ impl<L, V> TextureDescriptor<L, V> {
         }
     }
 
-    /// Maps the label and view_formats of the texture descriptor into another.
+    /// Maps the label and view formats of the texture descriptor into another.
     #[must_use]
     pub fn map_label_and_view_formats<K, M>(
         &self,
@@ -5809,7 +5810,7 @@ pub struct SamplerDescriptor<L> {
     pub compare: Option<CompareFunction>,
     /// Must be at least 1. If this is not 1, all filter modes must be linear.
     pub anisotropy_clamp: u16,
-    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
+    /// Border color to use when `address_mode` is [`AddressMode::ClampToBorder`]
     pub border_color: Option<SamplerBorderColor>,
 }
 
@@ -5956,7 +5957,7 @@ pub struct RenderBundleDepthStencil {
     /// If the depth aspect of the depth stencil attachment is going to be written to.
     ///
     /// This must match the [`RenderPassDepthStencilAttachment::depth_ops`] of the renderpass this render bundle is executed in.
-    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
+    /// If `depth_ops` is `Some(..)` this must be false. If it is `None` this must be true.
     ///
     /// [`RenderPassDepthStencilAttachment::depth_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.depth_ops
     pub depth_read_only: bool,
@@ -5964,7 +5965,7 @@ pub struct RenderBundleDepthStencil {
     /// If the stencil aspect of the depth stencil attachment is going to be written to.
     ///
     /// This must match the [`RenderPassDepthStencilAttachment::stencil_ops`] of the renderpass this render bundle is executed in.
-    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
+    /// If `depth_ops` is `Some(..)` this must be false. If it is `None` this must be true.
     ///
     /// [`RenderPassDepthStencilAttachment::stencil_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.stencil_ops
     pub stencil_read_only: bool,
@@ -6454,7 +6455,7 @@ impl BindingType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupLayoutEntry {
-    /// Binding index. Must match shader index and be unique inside a BindGroupLayout. A binding
+    /// Binding index. Must match shader index and be unique inside a `BindGroupLayout`. A binding
     /// of index 1, would be described as `@group(0) @binding(1)` in shaders.
     pub binding: u32,
     /// Which shader stages can see this binding.
@@ -6844,7 +6845,7 @@ pub enum SamplerBorderColor {
     Zero,
 }
 
-/// Describes how to create a QuerySet.
+/// Describes how to create a `QuerySet`.
 ///
 /// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
@@ -6872,7 +6873,7 @@ impl<L> QuerySetDescriptor<L> {
     }
 }
 
-/// Type of query contained in a QuerySet.
+/// Type of query contained in a `QuerySet`.
 ///
 /// Corresponds to [WebGPU `GPUQueryType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
@@ -6939,7 +6940,7 @@ bitflags::bitflags! {
     }
 }
 
-/// Argument buffer layout for draw_indirect commands.
+/// Argument buffer layout for `draw_indirect` commands.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndirectArgs {
@@ -6968,7 +6969,7 @@ impl DrawIndirectArgs {
     }
 }
 
-/// Argument buffer layout for draw_indexed_indirect commands.
+/// Argument buffer layout for `draw_indexed_indirect` commands.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndexedIndirectArgs {
@@ -6999,7 +7000,7 @@ impl DrawIndexedIndirectArgs {
     }
 }
 
-/// Argument buffer layout for dispatch_indirect commands.
+/// Argument buffer layout for `dispatch_indirect` commands.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct DispatchIndirectArgs {
@@ -7099,8 +7100,8 @@ impl Default for ShaderRuntimeChecks {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for all size defining attributes of a single triangle geometry inside a bottom level acceleration structure.
 pub struct BlasTriangleGeometrySizeDescriptor {
-    /// Format of a vertex position, must be [VertexFormat::Float32x3]
-    /// with just [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]
+    /// Format of a vertex position, must be [`VertexFormat::Float32x3`]
+    /// with just [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
     /// but later features may add more formats.
     pub vertex_format: VertexFormat,
     /// Number of vertices.
@@ -7345,6 +7346,6 @@ mod send_sync {
 pub enum DeviceLostReason {
     /// Triggered by driver
     Unknown = 0,
-    /// After Device::destroy
+    /// After `Device::destroy`
     Destroyed = 1,
 }

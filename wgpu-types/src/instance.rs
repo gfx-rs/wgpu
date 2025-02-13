@@ -122,7 +122,7 @@ impl InstanceFlags {
 
     /// Infer decent defaults from the build type.
     ///
-    /// If cfg!(debug_assertions) is true, then this returns [`Self::debugging()`].
+    /// If `cfg!(debug_assertions)` is true, then this returns [`Self::debugging()`].
     /// Otherwise, it returns [`Self::empty()`].
     #[must_use]
     pub fn from_build_config() -> Self {
@@ -146,7 +146,7 @@ impl InstanceFlags {
     /// - If the environment variable is not present, then the flag retains its initial value.
     ///
     /// For example `let flags = InstanceFlags::debugging().with_env();` with `WGPU_VALIDATION=0`
-    /// does not contain `InstanceFlags::VALIDATION`.
+    /// does not contain [`InstanceFlags::VALIDATION`].
     ///
     /// The environment variables are named after the flags prefixed with "WGPU_". For example:
     /// - `WGPU_DEBUG`
