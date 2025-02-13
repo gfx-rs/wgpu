@@ -281,6 +281,13 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> Dxgi::Common::DXGI_FORMAT
     }
 }
 
-pub fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> Dxgi::Common::DXGI_ALPHA_MODE {
-    Dxgi::Common::DXGI_ALPHA_MODE_IGNORE
+pub fn map_acomposite_alpha_mode(mode: wgt::CompositeAlphaMode) -> Dxgi::Common::DXGI_ALPHA_MODE {
+    match mode {
+        wgt::CompositeAlphaMode::PreMultiplied => Dxgi::Common::DXGI_ALPHA_MODE_PREMULTIPLIED,
+        wgt::CompositeAlphaMode::PostMultiplied => Dxgi::Common::DXGI_ALPHA_MODE_STRAIGHT,
+        wgt::CompositeAlphaMode::Opaque => Dxgi::Common::DXGI_ALPHA_MODE_IGNORE,
+        wgt::CompositeAlphaMode::Auto | wgt::CompositeAlphaMode::Inherit => {
+            Dxgi::Common::DXGI_ALPHA_MODE_UNSPECIFIED
+        }
+    }
 }

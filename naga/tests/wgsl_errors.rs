@@ -1174,7 +1174,7 @@ fn invalid_functions() {
         if function_name == "return_pointer"
     }
 
-    check(
+    check_validation! {
         "
         @group(0) @binding(0)
         var<storage> atom: atomic<u32>;
@@ -1182,15 +1182,14 @@ fn invalid_functions() {
         fn return_atomic() -> atomic<u32> {
            return atom;
         }
-        ",
-        "error: automatic conversions cannot convert `u32` to `atomic<u32>`
-  ┌─ wgsl:6:19
-  │
-6 │            return atom;
-  │                   ^^^^ this expression has type u32
-
-",
-    );
+        ":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            source: naga::valid::FunctionError::NonConstructibleReturnType,
+            ..
+        })
+        if function_name == "return_atomic"
+    }
 }
 
 #[test]
@@ -2139,15 +2138,16 @@ fn constructor_type_error_span() {
     check(
         "
         fn unfortunate() {
-            var i: i32;
-            var a: array<f32, 1> = array<f32, 1>(i);
+            var a: array<i32, 1> = array<i32, 1>(1.0);
         }
     ",
-        r###"error: automatic conversions cannot convert `i32` to `f32`
-  ┌─ wgsl:4:36
+        r###"error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
+  ┌─ wgsl:3:36
   │
-4 │             var a: array<f32, 1> = array<f32, 1>(i);
-  │                                    ^^^^^^^^^^^^^ a value of type f32 is required here
+3 │             var a: array<i32, 1> = array<i32, 1>(1.0);
+  │                                    ^^^^^^^^^^^^^ ^^^ this expression has type {AbstractFloat}
+  │                                    │              
+  │                                    a value of type i32 is required here
 
 "###,
     )

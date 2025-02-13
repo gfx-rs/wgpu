@@ -145,6 +145,13 @@ jobs:
             tier: 2
             kind: native
 
+          # OpenHarmony
+          - name: OpenHarmony aarch64
+            os: ubuntu-22.04
+            target: aarch64-unknown-linux-ohos
+            tier: 2
+            kind: native
+
           # WebGPU/WebGL
           - name: WebAssembly
             os: ubuntu-22.04

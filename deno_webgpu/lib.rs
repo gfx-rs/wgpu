@@ -143,14 +143,18 @@ impl GPU {
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
       instance
     } else {
-      state.put(Arc::new(wgpu_core::global::Global::new(
-        "webgpu",
-        &wgpu_types::InstanceDescriptor {
-          backends,
-          flags: wgpu_types::InstanceFlags::from_build_config(),
-          backend_options: wgpu_types::BackendOptions {
-            dx12: wgpu_types::Dx12BackendOptions {
-              shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+        state.put(std::sync::Arc::new(wgpu_core::global::Global::new(
+            "webgpu",
+            &wgpu_types::InstanceDescriptor {
+                backends,
+                flags: wgpu_types::InstanceFlags::from_build_config(),
+                backend_options: wgpu_types::BackendOptions {
+                    dx12: wgpu_types::Dx12BackendOptions {
+                        shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+                    },
+                    gl: wgpu_types::GlBackendOptions::default(),
+                    noop: wgpu_types::NoopBackendOptions::default(),
+                },
             },
             gl: wgpu_types::GlBackendOptions::default(),
           },

@@ -177,6 +177,8 @@ pub enum FunctionError {
     InvalidRayDescriptor(Handle<crate::Expression>),
     #[error("Ray Query {0:?} does not have a matching type")]
     InvalidRayQueryType(Handle<crate::Type>),
+    #[error("Hit distance {0:?} must be an f32")]
+    InvalidHitDistanceType(Handle<crate::Expression>),
     #[error("Shader requires capability {0:?}")]
     MissingCapability(super::Capabilities),
     #[error(
@@ -1487,6 +1489,19 @@ impl super::Validator {
                         crate::RayQueryFunction::Proceed { result } => {
                             self.emit_expression(result, context)?;
                         }
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            match *context.resolve_type(hit_t, &self.valid_expression_set)? {
+                                Ti::Scalar(crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    width: _,
+                                }) => {}
+                                _ => {
+                                    return Err(FunctionError::InvalidHitDistanceType(hit_t)
+                                        .with_span_static(span, "invalid hit_t"))
+                                }
+                            }
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
                     }
                 }
