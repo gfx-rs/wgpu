@@ -26,4 +26,5 @@ threads-required = 8
 # https://github.com/gfx-rs/wgpu/issues/7126
 [[profile.ci.overrides]]
 filter = "test(Bind Group Creation)"
+slow-timeout = { period = "1s", "terminate-after" = 1 }
 retries = 3
