@@ -1,5 +1,6 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+#[allow(clippy::disallowed_types)]
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -113,6 +114,7 @@ impl GPUAdapter {
     ) -> Result<v8::Global<v8::Value>, CreateDeviceError> {
         let features = self.instance.adapter_features(self.id);
         let supported_features = features_to_feature_names(features);
+        #[allow(clippy::disallowed_types)]
         let required_features = descriptor
             .required_features
             .iter()
@@ -401,6 +403,7 @@ pub struct GPUSupportedFeatures(v8::Global<v8::Value>);
 impl GarbageCollected for GPUSupportedFeatures {}
 
 impl GPUSupportedFeatures {
+    #[allow(clippy::disallowed_types)]
     pub fn new(scope: &mut v8::HandleScope, features: HashSet<GPUFeatureName>) -> Self {
         let set = v8::Set::new(scope);
 

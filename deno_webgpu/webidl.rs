@@ -1,6 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 use std::borrow::Cow;
+#[allow(clippy::disallowed_types)]
 use std::collections::HashSet;
 
 use deno_core::cppgc::Ptr;
@@ -487,6 +488,7 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
     features
 }
 
+#[allow(clippy::disallowed_types)]
 pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUFeatureName> {
     use GPUFeatureName::*;
     let mut return_features = HashSet::new();
