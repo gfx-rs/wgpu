@@ -624,7 +624,7 @@ jobs:
         run: |
           set -e
 
-          cargo xtask test --llvm-cov
+          cargo xtask test --llvm-cov --profile ci
 
       - name: check naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.

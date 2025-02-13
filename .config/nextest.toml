@@ -17,3 +17,13 @@ threads-required = 4
 [[profile.default.overrides]]
 filter = 'test(~8_threads) | test(~8 threads)'
 threads-required = 8
+
+################
+## CI profile ##
+################
+[profile.ci]
+
+# https://github.com/gfx-rs/wgpu/issues/7126
+[[profile.ci.overrides]]
+filter = "test(Bind Group Creation)"
+retries = 3
