@@ -373,7 +373,8 @@ impl crate::framework::Example for Example {
 
         blas.prepare_compaction_async(|res| res.unwrap());
 
-        // Compaction is guaranteed to be finished after a device poll
+        // Compaction is guaranteed to be finished after a device poll with Maintain::Wait on
+        // native (ray-tracing is not yet on web).
         device.poll(wgpu::Maintain::Wait);
 
         let mut encoder =
