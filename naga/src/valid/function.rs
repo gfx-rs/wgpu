@@ -1504,17 +1504,18 @@ impl super::Validator {
                             }
                         };
                     match func {
-                        crate::MeshFunction::EmitMeshTasks { group_size } => {
-                            for g in group_size {
-                                ensure_correct(g)?;
-                            }
-                        }
                         crate::MeshFunction::SetMeshOutputs {
                             vertex_count,
                             primitive_count,
                         } => {
                             ensure_correct(vertex_count)?;
                             ensure_correct(primitive_count)?;
+                        }
+                        crate::MeshFunction::SetVertex { index, value } => {
+                            todo!()
+                        }
+                        crate::MeshFunction::SetPrimitive { index, value } => {
+                            todo!()
                         }
                     }
                 }

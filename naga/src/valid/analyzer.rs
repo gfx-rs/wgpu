@@ -1092,19 +1092,6 @@ impl FunctionInfo {
                     FunctionUniformity::new()
                 }
                 S::MeshFunction(func) => match func {
-                    crate::MeshFunction::EmitMeshTasks { group_size } => {
-                        for g in group_size {
-                            let _ = self.add_ref(g);
-                        }
-                        // TODO: reexamine this
-                        FunctionUniformity {
-                            result: Uniformity {
-                                non_uniform_result: None,
-                                requirements: UniformityRequirements::WORK_GROUP_BARRIER,
-                            },
-                            exit: ExitFlags::MAY_KILL,
-                        }
-                    }
                     crate::MeshFunction::SetMeshOutputs {
                         vertex_count,
                         primitive_count,
@@ -1112,6 +1099,12 @@ impl FunctionInfo {
                         let _ = self.add_ref(vertex_count);
                         let _ = self.add_ref(primitive_count);
                         FunctionUniformity::new()
+                    }
+                    crate::MeshFunction::SetVertex { index, value } => {
+                        todo!()
+                    }
+                    crate::MeshFunction::SetPrimitive { index, value } => {
+                        todo!()
                     }
                 },
                 S::SubgroupBallot {

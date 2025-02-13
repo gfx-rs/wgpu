@@ -979,15 +979,6 @@ impl<W: Write> Writer<W> {
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::MeshFunction(crate::MeshFunction::EmitMeshTasks { group_size }) => {
-                write!(self.out, "{level}emitMeshTasks(")?;
-                self.write_expr(module, group_size[0], func_ctx)?;
-                for &a in &group_size[1..] {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, a, func_ctx)?;
-                }
-                writeln!(self.out, ");")?;
-            }
             Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
                 vertex_count,
                 primitive_count,
@@ -998,6 +989,9 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, primitive_count, func_ctx)?;
                 writeln!(self.out, ");")?;
             }
+            Statement::MeshFunction(
+                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
+            ) => todo!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();
@@ -2023,7 +2017,6 @@ fn builtin_str(built_in: crate::BuiltIn) -> Result<&'static str, Error> {
         | Bi::WorkGroupSize
         | Bi::DrawID => return Err(Error::Custom(format!("Unsupported builtin {built_in:?}"))),
         Bi::CullPrimitive => "cull_primitive",
-        Bi::PointIndices => "point_indices",
         Bi::LineIndices => "line_indices",
         Bi::TriangleIndices => "triangle_indices",
     })

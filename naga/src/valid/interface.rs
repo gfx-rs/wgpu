@@ -296,10 +296,6 @@ impl VaryingContext<'_> {
                         self.stage == St::Mesh && self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::BOOL),
                     ),
-                    Bi::PointIndices => (
-                        self.stage == St::Mesh && self.output,
-                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
-                    ),
                     Bi::LineIndices => (
                         self.stage == St::Mesh && self.output,
                         *ty_inner

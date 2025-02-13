@@ -2458,15 +2458,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, ".Abort();")?;
                 }
             },
-            Statement::MeshFunction(crate::MeshFunction::EmitMeshTasks { group_size }) => {
-                write!(self.out, "{level}DispatchMesh(")?;
-                self.write_expr(module, group_size[0], func_ctx)?;
-                for &g in &group_size[1..] {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, g, func_ctx)?;
-                }
-                write!(self.out, ");")?;
-            }
             Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
                 vertex_count,
                 primitive_count,
@@ -2477,6 +2468,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, primitive_count, func_ctx)?;
                 write!(self.out, ");")?;
             }
+            Statement::MeshFunction(
+                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
+            ) => todo!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();

@@ -712,12 +712,6 @@ impl super::Validator {
                 Ok(())
             }
             crate::Statement::MeshFunction(func) => match func {
-                crate::MeshFunction::EmitMeshTasks { group_size } => {
-                    for g in group_size {
-                        validate_expr(g)?;
-                    }
-                    Ok(())
-                }
                 crate::MeshFunction::SetMeshOutputs {
                     vertex_count,
                     primitive_count,
@@ -725,6 +719,12 @@ impl super::Validator {
                     validate_expr(vertex_count)?;
                     validate_expr(primitive_count)?;
                     Ok(())
+                }
+                crate::MeshFunction::SetVertex { index, value } => {
+                    todo!()
+                }
+                crate::MeshFunction::SetPrimitive { index, value } => {
+                    todo!()
                 }
             },
             crate::Statement::SubgroupBallot { result, predicate } => {

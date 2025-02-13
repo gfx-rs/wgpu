@@ -2499,15 +2499,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_image_atomic(ctx, image, coordinate, array_index, fun, value)?
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::MeshFunction(crate::MeshFunction::EmitMeshTasks { group_size }) => {
-                write!(self.out, "{level}EmitMeshTasksEXT(")?;
-                self.write_expr(group_size[0], ctx)?;
-                for &g in &group_size[1..] {
-                    write!(self.out, ", ")?;
-                    self.write_expr(g, ctx)?;
-                }
-                write!(self.out, ");")?;
-            }
             Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
                 vertex_count,
                 primitive_count,
@@ -2518,6 +2509,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(primitive_count, ctx)?;
                 write!(self.out, ");")?;
             }
+            Statement::MeshFunction(
+                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
+            ) => todo!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();
@@ -4894,7 +4888,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         Bi::SubgroupInvocationId => "gl_SubgroupInvocationID",
         // mesh
         // TODO: figure out how to map these to glsl things as glsl treats them as arrays
-        Bi::CullPrimitive | Bi::PointIndices | Bi::LineIndices | Bi::TriangleIndices => {
+        Bi::CullPrimitive | Bi::LineIndices | Bi::TriangleIndices => {
             unimplemented!()
         }
     }

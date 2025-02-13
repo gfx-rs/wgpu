@@ -2997,14 +2997,6 @@ impl BlockContext<'_> {
                 Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
                 }
-                Statement::MeshFunction(crate::MeshFunction::EmitMeshTasks { group_size }) => {
-                    let mut ins = Instruction::new(spirv::Op::EmitMeshTasksEXT);
-                    for g in group_size {
-                        ins.add_operand(self.cached[g]);
-                    }
-                    // TODO: make this also add the payload as an optional parameter
-                    block.body.push(ins);
-                }
                 Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
                     vertex_count,
                     primitive_count,
@@ -3013,6 +3005,10 @@ impl BlockContext<'_> {
                     ins.operands = vec![self.cached[vertex_count], self.cached[primitive_count]];
                     block.body.push(ins);
                 }
+                Statement::MeshFunction(
+                    crate::MeshFunction::SetVertex { .. }
+                    | crate::MeshFunction::SetPrimitive { .. },
+                ) => todo!(),
                 Statement::SubgroupBallot {
                     result,
                     ref predicate,

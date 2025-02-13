@@ -185,7 +185,7 @@ impl crate::BuiltIn {
             }
             Self::CullPrimitive => "SV_CullPrimitive",
             // TODO: make this work
-            Self::PointIndices | Self::LineIndices | Self::TriangleIndices => unimplemented!(),
+            Self::LineIndices | Self::TriangleIndices => unimplemented!(),
         })
     }
 }

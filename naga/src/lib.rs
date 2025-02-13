@@ -445,7 +445,6 @@ pub enum BuiltIn {
     SubgroupInvocationId,
     // mesh
     CullPrimitive,
-    PointIndices,
     LineIndices,
     TriangleIndices,
 }
@@ -1805,12 +1804,17 @@ pub enum RayQueryFunction {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum MeshFunction {
-    EmitMeshTasks {
-        group_size: [Handle<Expression>; 3],
-    },
     SetMeshOutputs {
         vertex_count: Handle<Expression>,
         primitive_count: Handle<Expression>,
+    },
+    SetVertex {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
+    },
+    SetPrimitive {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
     },
 }
 
@@ -2260,7 +2264,6 @@ pub struct Function {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum MeshOutputTopology {
-    Points,
     Lines,
     Triangles,
 }
@@ -2275,7 +2278,7 @@ pub struct MeshStageInfo {
     max_vertices: u32,
     max_primitives: u32,
     vertex_output_type: Handle<Type>,
-    primitive_output_type: Option<Handle<Type>>,
+    primitive_output_type: Handle<Type>,
 }
 
 /// The main function for a pipeline stage.

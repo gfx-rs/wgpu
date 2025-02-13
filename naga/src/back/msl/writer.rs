@@ -3524,12 +3524,13 @@ impl<W: Write> Writer<W> {
                     }
                 }
                 // TODO: write emitters for these
-                crate::Statement::MeshFunction(crate::MeshFunction::EmitMeshTasks { .. }) => {
-                    unimplemented!()
-                }
                 crate::Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs { .. }) => {
                     unimplemented!()
                 }
+                crate::Statement::MeshFunction(
+                    crate::MeshFunction::SetVertex { .. }
+                    | crate::MeshFunction::SetPrimitive { .. },
+                ) => todo!(),
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
                     let name = self.namer.call("");
