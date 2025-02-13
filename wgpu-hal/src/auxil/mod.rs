@@ -6,21 +6,27 @@ pub(super) mod renderdoc;
 
 pub mod db {
     pub mod amd {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x1002;
     }
     pub mod apple {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x106B;
     }
     pub mod arm {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x13B5;
     }
     pub mod broadcom {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x14E4;
     }
     pub mod imgtec {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x1010;
     }
     pub mod intel {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x8086;
         pub const DEVICE_KABY_LAKE_MASK: u32 = 0x5900;
         pub const DEVICE_SKY_LAKE_MASK: u32 = 0x1900;
@@ -30,12 +36,15 @@ pub mod db {
         //
         // To match Vulkan, we use the VkVendorId for Mesa in the gles backend so that lavapipe (Vulkan) and
         // llvmpipe (OpenGL) have the same vendor id.
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x10005;
     }
     pub mod nvidia {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x10DE;
     }
     pub mod qualcomm {
+        /// cbindgen:ignore
         pub const VENDOR: u32 = 0x5143;
     }
 }

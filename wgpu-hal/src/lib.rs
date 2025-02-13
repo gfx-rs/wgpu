@@ -299,6 +299,7 @@ pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_COLOR_ATTACHMENTS: usize = 8;
 pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
+/// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
 
 pub type Label<'a> = Option<&'a str>;
@@ -1969,6 +1970,7 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
     }
 }
 
+/// cbindgen:ignore
 #[derive(Clone, Debug)]
 pub struct BindGroupEntry {
     pub binding: u32,
