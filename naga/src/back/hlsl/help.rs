@@ -31,7 +31,7 @@ use super::{
     writer::{EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION},
     BackendResult,
 };
-use crate::{arena::Handle, proc::NameKey};
+use crate::{arena::Handle, proc::NameKey, ScalarKind};
 use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -127,6 +127,8 @@ impl From<crate::ImageQuery> for ImageQuery {
         }
     }
 }
+
+pub(super) const IMAGE_STORAGE_LOAD_SCALAR_WRAPPER: &str = "LoadedStorageValueFrom";
 
 impl<W: Write> super::Writer<'_, W> {
     pub(super) fn write_image_type(
@@ -513,6 +515,60 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Writes the conversion from a single length storage texture load to a vec4 with the loaded
+    /// scalar in its `x` component, 1 in its `a` component and 0 everywhere else.
+    fn write_loaded_scalar_to_storage_loaded_value(
+        &mut self,
+        scalar_type: crate::Scalar,
+    ) -> BackendResult {
+        const ARGUMENT_VARIABLE_NAME: &str = "arg";
+        const RETURN_VARIABLE_NAME: &str = "ret";
+
+        let zero;
+        let one;
+        match scalar_type.kind {
+            ScalarKind::Sint => {
+                assert_eq!(
+                    scalar_type.width, 4,
+                    "Scalar {scalar_type:?} is not a result from any storage format"
+                );
+                zero = "0";
+                one = "1";
+            }
+            ScalarKind::Uint => match scalar_type.width {
+                4 => {
+                    zero = "0u";
+                    one = "1u";
+                }
+                8 => {
+                    zero = "0uL";
+                    one = "1uL"
+                }
+                _ => unreachable!("Scalar {scalar_type:?} is not a result from any storage format"),
+            },
+            ScalarKind::Float => {
+                assert_eq!(
+                    scalar_type.width, 4,
+                    "Scalar {scalar_type:?} is not a result from any storage format"
+                );
+                zero = "0.0";
+                one = "1.0";
+            }
+            _ => unreachable!("Scalar {scalar_type:?} is not a result from any storage format"),
+        }
+
+        let ty = scalar_type.to_hlsl_str()?;
+        writeln!(
+            self.out,
+            "{ty}4 {IMAGE_STORAGE_LOAD_SCALAR_WRAPPER}{ty}({ty} {ARGUMENT_VARIABLE_NAME}) {{\
+    {ty}4 {RETURN_VARIABLE_NAME} = {ty}4({ARGUMENT_VARIABLE_NAME}, {zero}, {zero}, {one});\
+    return {RETURN_VARIABLE_NAME};\
+}}"
+        )?;
+
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_struct_matrix_get_function_name(
         &mut self,
         access: WrappedStructMatrixAccess,
@@ -848,11 +904,12 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    /// Helper function that writes compose wrapped functions
-    pub(super) fn write_wrapped_compose_functions(
+    /// Helper function that writes wrapped functions for expressions in a function
+    pub(super) fn write_wrapped_expression_functions(
         &mut self,
         module: &crate::Module,
         expressions: &crate::Arena<crate::Expression>,
+        context: Option<&FunctionCtx>,
     ) -> BackendResult {
         for (handle, _) in expressions.iter() {
             match expressions[handle] {
@@ -866,6 +923,23 @@ impl<W: Write> super::Writer<'_, W> {
                         }
                         _ => {}
                     };
+                }
+                crate::Expression::ImageLoad { image, .. } => {
+                    // This can only happen in a function as this is not a valid const expression
+                    match *context.as_ref().unwrap().resolve_type(image, &module.types) {
+                        crate::TypeInner::Image {
+                            class: crate::ImageClass::Storage { format, .. },
+                            ..
+                        } => {
+                            if format.single_component() {
+                                let scalar: crate::Scalar = format.into();
+                                if self.wrapped.image_load_scalars.insert(scalar) {
+                                    self.write_loaded_scalar_to_storage_loaded_value(scalar)?;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
                     if committed {
@@ -884,7 +958,7 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    // TODO: we could merge this with iteration in write_wrapped_compose_functions...
+    // TODO: we could merge this with iteration in write_wrapped_expression_functions...
     //
     /// Helper function that writes zero value wrapped functions
     pub(super) fn write_wrapped_zero_value_functions(
@@ -1046,7 +1120,7 @@ impl<W: Write> super::Writer<'_, W> {
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
         self.write_wrapped_math_functions(module, func_ctx)?;
-        self.write_wrapped_compose_functions(module, func_ctx.expressions)?;
+        self.write_wrapped_expression_functions(module, func_ctx.expressions, Some(func_ctx))?;
         self.write_wrapped_zero_value_functions(module, func_ctx.expressions)?;
 
         for (handle, _) in func_ctx.expressions.iter() {
@@ -1474,5 +1548,27 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out)?;
 
         Ok(())
+    }
+}
+
+impl crate::StorageFormat {
+    /// Returns `true` if there is just one component, otherwise `false`
+    pub(super) const fn single_component(&self) -> bool {
+        match *self {
+            crate::StorageFormat::R16Float
+            | crate::StorageFormat::R32Float
+            | crate::StorageFormat::R8Unorm
+            | crate::StorageFormat::R16Unorm
+            | crate::StorageFormat::R8Snorm
+            | crate::StorageFormat::R16Snorm
+            | crate::StorageFormat::R8Uint
+            | crate::StorageFormat::R16Uint
+            | crate::StorageFormat::R32Uint
+            | crate::StorageFormat::R8Sint
+            | crate::StorageFormat::R16Sint
+            | crate::StorageFormat::R32Sint
+            | crate::StorageFormat::R64Uint => true,
+            _ => false,
+        }
     }
 }

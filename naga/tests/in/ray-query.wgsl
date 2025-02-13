@@ -87,5 +87,11 @@ fn main_candidate() {
     var rq: ray_query;
     rayQueryInitialize(&rq, acc_struct, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, pos, dir));
     let intersection = rayQueryGetCandidateIntersection(&rq);
-    output.visible = u32(intersection.kind == RAY_QUERY_INTERSECTION_AABB);
+    if (intersection.kind == RAY_QUERY_INTERSECTION_AABB) {
+        rayQueryGenerateIntersection(&rq, 10.0);
+    } else if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
+        rayQueryConfirmIntersection(&rq);
+    } else {
+        rayQueryTerminate(&rq);
+    }
 }

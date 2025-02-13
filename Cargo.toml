@@ -65,6 +65,8 @@ wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features
     "dx12",
     "metal",
     "static-dxc",
+    "webgl",
+    "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
@@ -112,7 +114,7 @@ noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
-once_cell = { version = "1.20.2", default-features = false }
+once_cell = { version = "1.20.3", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3,<=4.6", default-features = false }
 parking_lot = "0.12.1"
@@ -181,19 +183,21 @@ web-sys = { version = "0.3.74", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies
-deno_console = "0.179.0"
-deno_core = "0.321.0"
-deno_url = "0.179.0"
-deno_web = "0.210.0"
-deno_webidl = "0.179.0"
-deno_webgpu = { version = "0.146.0", path = "./deno_webgpu" }
+deno_console = "0.190.0"
+deno_core = "0.336.0"
+deno_url = "0.190.0"
+deno_web = "0.221.0"
+deno_webidl = "0.190.0"
+deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
+deno_unsync = "0.4.2"
+deno_error = "0.5.5"
 tokio = "1.41.1"
 termcolor = "1.4.1"
 
 # android dependencies
 ndk-sys = "0.5.0"
 
-# These overrides allow our examples to explicitly depend on release crates 
+# These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
 
