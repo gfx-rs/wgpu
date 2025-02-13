@@ -1790,18 +1790,6 @@ impl<W: Write> Writer<W> {
                     .scalar_kind()
                     .ok_or(Error::UnsupportedBinaryOp(op))?;
 
-                // TODO: handle undefined behavior of BinaryOperator::Modulo
-                //
-                // sint:
-                // if right == 0 return 0
-                // if left == min(type_of(left)) && right == -1 return 0
-                // if sign(left) == -1 || sign(right) == -1 return result as defined by WGSL
-                //
-                // uint:
-                // if right == 0 return 0
-                //
-                // float:
-                // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                 if op == crate::BinaryOperator::Divide
                     && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
                 {
@@ -1819,6 +1807,10 @@ impl<W: Write> Writer<W> {
                     self.put_expression(right, context, true)?;
                     write!(self.out, ")")?;
                 } else if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
+                    // TODO: handle undefined behavior of BinaryOperator::Modulo
+                    //
+                    // float:
+                    // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                     write!(self.out, "{NAMESPACE}::fmod(")?;
                     self.put_expression(left, context, true)?;
                     write!(self.out, ", ")?;
@@ -5076,6 +5068,12 @@ template <typename A>
                 crate::Expression::Unary { op, expr: operand } => {
                     let operand_ty = func_ctx.resolve_type(operand, &module.types);
                     match op {
+                        // Negating the TYPE_MIN of a two's complement signed integer
+                        // type causes overflow, which is undefined behaviour in MSL. To
+                        // avoid this we bitcast the value to unsigned and negate it,
+                        // then bitcast back to signed.
+                        // This adheres to the WGSL spec in that the negative of the
+                        // type's minimum value should equal to the minimum value.
                         crate::UnaryOperator::Negate
                             if operand_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
                         {
@@ -5126,6 +5124,12 @@ template <typename A>
                     let left_ty = func_ctx.resolve_type(left, &module.types);
                     let right_ty = func_ctx.resolve_type(right, &module.types);
                     match (op, expr_ty.scalar_kind()) {
+                        // Signed integer division of TYPE_MIN / -1, or signed or
+                        // unsigned division by zero, gives an unspecified value in MSL.
+                        // We override the divisor to 1 in these cases.
+                        // This adheres to the WGSL spec in that:
+                        // * TYPE_MIN / -1 == TYPE_MIN
+                        // * x / 0 == x
                         (
                             crate::BinaryOperator::Divide,
                             Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
@@ -5173,6 +5177,18 @@ template <typename A>
                             writeln!(self.out, "}}")?;
                             writeln!(self.out)?;
                         }
+                        // Integer modulo where one or both operands are negative, or the
+                        // divisor is zero, is undefined behaviour in MSL. To avoid this
+                        // we use the following equation:
+                        //
+                        // dividend - (dividend / divisor) * divisor
+                        //
+                        // overriding the divisor to 1 if either it is 0, or it is -1
+                        // and the dividend is TYPE_MIN.
+                        //
+                        // This adheres to the WGSL spec in that:
+                        // * TYPE_MIN % -1 == 0
+                        // * x % 0 == 0
                         (
                             crate::BinaryOperator::Modulo,
                             Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
@@ -5246,6 +5262,13 @@ template <typename A>
                 } => {
                     let arg_ty = func_ctx.resolve_type(arg, &module.types);
                     match fun {
+                        // Taking the absolute value of the TYPE_MIN of a two's
+                        // complement signed integer type causes overflow, which is
+                        // undefined behaviour in MSL. To avoid this, when the value is
+                        // negative we bitcast the value to unsigned and negate it, then
+                        // bitcast back to signed.
+                        // This adheres to the WGSL spec in that the absolute of the
+                        // type's minimum value should equal to the minimum value.
                         crate::MathFunction::Abs
                             if arg_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
                         {
