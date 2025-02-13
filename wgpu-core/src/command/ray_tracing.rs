@@ -1332,7 +1332,7 @@ fn map_blas<'a>(
         if let BlasCompactState::Compacted = *state_lock {
             return Err(BuildAccelerationStructureError::CompactedBlas(
                 blas.error_ident(),
-            ))
+            ));
         }
         blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw));
     }

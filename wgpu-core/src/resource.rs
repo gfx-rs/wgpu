@@ -2018,7 +2018,10 @@ impl Blas {
             return Err((op, BlasPrepareCompactError::NotBuilt));
         }
 
-        if !self.flags.contains(wgt::AccelerationStructureFlags::ALLOW_COMPACTION) {
+        if !self
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_COMPACTION)
+        {
             return Err((op, BlasPrepareCompactError::CompactionUnsupported));
         }
 
