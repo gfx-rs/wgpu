@@ -67,7 +67,7 @@ pub use wgt::{
     Dx12BackendOptions, Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FeaturesWGPU,
     FeaturesWebGPU, FilterMode, FrontFace, GlBackendOptions, Gles3MinorVersion, HalCounters,
     ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters,
-    Limits, MaintainResult, MemoryHints, MultisampleState, Origin2d, Origin3d,
+    Limits, MaintainResult, MemoryHints, MultisampleState, NoopBackendOptions, Origin2d, Origin3d,
     PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode,
     PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType,
     RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,

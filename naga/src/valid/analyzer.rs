@@ -1080,13 +1080,20 @@ impl FunctionInfo {
                 }
                 S::RayQuery { query, ref fun } => {
                     let _ = self.add_ref(query);
-                    if let crate::RayQueryFunction::Initialize {
-                        acceleration_structure,
-                        descriptor,
-                    } = *fun
-                    {
-                        let _ = self.add_ref(acceleration_structure);
-                        let _ = self.add_ref(descriptor);
+                    match *fun {
+                        crate::RayQueryFunction::Initialize {
+                            acceleration_structure,
+                            descriptor,
+                        } => {
+                            let _ = self.add_ref(acceleration_structure);
+                            let _ = self.add_ref(descriptor);
+                        }
+                        crate::RayQueryFunction::Proceed { result: _ } => {}
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            let _ = self.add_ref(hit_t);
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {}
+                        crate::RayQueryFunction::Terminate => {}
                     }
                     FunctionUniformity::new()
                 }

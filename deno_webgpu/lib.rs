@@ -136,28 +136,29 @@ impl GPU {
     ) -> Option<adapter::GPUAdapter> {
         let mut state = state.borrow_mut();
 
-        let backends = std::env::var("DENO_WEBGPU_BACKEND").map_or_else(
-            |_| wgpu_types::Backends::all(),
-            |s| wgpu_types::Backends::from_comma_list(&s),
-        );
-        let instance = if let Some(instance) = state.try_borrow::<Instance>() {
-            instance
-        } else {
-            state.put(Arc::new(wgpu_core::global::Global::new(
-                "webgpu",
-                &wgpu_types::InstanceDescriptor {
-                    backends,
-                    flags: wgpu_types::InstanceFlags::from_build_config(),
-                    backend_options: wgpu_types::BackendOptions {
-                        dx12: wgpu_types::Dx12BackendOptions {
-                            shader_compiler: wgpu_types::Dx12Compiler::Fxc,
-                        },
-                        gl: wgpu_types::GlBackendOptions::default(),
-                    },
-                },
-            )));
-            state.borrow::<Instance>()
-        };
+    let backends = std::env::var("DENO_WEBGPU_BACKEND").map_or_else(
+      |_| wgpu_types::Backends::all(),
+      |s| wgpu_types::Backends::from_comma_list(&s),
+    );
+    let instance = if let Some(instance) = state.try_borrow::<Instance>() {
+      instance
+    } else {
+      state.put(Arc::new(wgpu_core::global::Global::new(
+        "webgpu",
+        &wgpu_types::InstanceDescriptor {
+          backends,
+          flags: wgpu_types::InstanceFlags::from_build_config(),
+          backend_options: wgpu_types::BackendOptions {
+            dx12: wgpu_types::Dx12BackendOptions {
+              shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+            },
+            gl: wgpu_types::GlBackendOptions::default(),
+            noop: wgpu_types::NoopBackendOptions::default(),
+          },
+        },
+      )));
+      state.borrow::<Instance>()
+    };
 
         let descriptor = wgpu_core::instance::RequestAdapterOptions {
             power_preference: options

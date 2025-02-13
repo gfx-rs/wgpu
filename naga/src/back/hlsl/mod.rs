@@ -360,6 +360,7 @@ struct Wrapped {
     zero_values: crate::FastHashSet<help::WrappedZeroValue>,
     array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
     image_queries: crate::FastHashSet<help::WrappedImageQuery>,
+    image_load_scalars: crate::FastHashSet<crate::Scalar>,
     constructors: crate::FastHashSet<help::WrappedConstructor>,
     struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
     mat_cx2s: crate::FastHashSet<help::WrappedMatCx2>,

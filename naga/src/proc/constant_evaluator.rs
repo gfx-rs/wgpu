@@ -312,6 +312,8 @@ pub struct ConstantEvaluator<'a> {
 
     /// Tracks the constness of expressions residing in [`Self::expressions`]
     expression_kind_tracker: &'a mut ExpressionKindTracker,
+
+    layouter: &'a mut crate::proc::Layouter,
 }
 
 #[derive(Debug)]
@@ -594,6 +596,7 @@ impl<'a> ConstantEvaluator<'a> {
     pub fn for_wgsl_module(
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
         in_override_ctx: bool,
     ) -> Self {
         Self::for_module(
@@ -604,6 +607,7 @@ impl<'a> ConstantEvaluator<'a> {
             }),
             module,
             global_expression_kind_tracker,
+            layouter,
         )
     }
 
@@ -614,11 +618,13 @@ impl<'a> ConstantEvaluator<'a> {
     pub fn for_glsl_module(
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
     ) -> Self {
         Self::for_module(
             Behavior::Glsl(GlslRestrictions::Const),
             module,
             global_expression_kind_tracker,
+            layouter,
         )
     }
 
@@ -626,6 +632,7 @@ impl<'a> ConstantEvaluator<'a> {
         behavior: Behavior<'a>,
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
     ) -> Self {
         Self {
             behavior,
@@ -634,6 +641,7 @@ impl<'a> ConstantEvaluator<'a> {
             overrides: &module.overrides,
             expressions: &mut module.global_expressions,
             expression_kind_tracker: global_expression_kind_tracker,
+            layouter,
         }
     }
 
@@ -645,6 +653,7 @@ impl<'a> ConstantEvaluator<'a> {
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
         is_const: bool,
@@ -665,6 +674,7 @@ impl<'a> ConstantEvaluator<'a> {
             overrides: &module.overrides,
             expressions,
             expression_kind_tracker: local_expression_kind_tracker,
+            layouter,
         }
     }
 
@@ -676,6 +686,7 @@ impl<'a> ConstantEvaluator<'a> {
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
     ) -> Self {
@@ -690,6 +701,7 @@ impl<'a> ConstantEvaluator<'a> {
             overrides: &module.overrides,
             expressions,
             expression_kind_tracker: local_expression_kind_tracker,
+            layouter,
         }
     }
 
@@ -1718,7 +1730,11 @@ impl<'a> ConstantEvaluator<'a> {
                 self.types.insert(Type { name: None, inner }, span)
             }
         };
-        let new_base_stride = self.types[new_base].inner.size(self.to_ctx());
+        let mut layouter = std::mem::take(self.layouter);
+        layouter.update(self.to_ctx()).unwrap();
+        *self.layouter = layouter;
+
+        let new_base_stride = self.layouter[new_base].to_stride();
         let new_array_ty = self.types.insert(
             Type {
                 name: None,
@@ -2567,6 +2583,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let res1 = solver
@@ -2653,6 +2670,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let res = solver
@@ -2771,6 +2789,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let root1 = Expression::AccessIndex { base, index: 1 };
@@ -2864,6 +2883,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let solved_compose = solver
@@ -2946,6 +2966,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let solved_compose = solver
@@ -3034,6 +3055,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let solved_add = solver

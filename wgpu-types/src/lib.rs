@@ -71,12 +71,33 @@ pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
 pub const QUERY_SIZE: u32 = 8;
 
 /// Backends supported by wgpu.
+///
+/// See also [`Backends`].
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backend {
-    /// Dummy backend, used for testing.
-    Empty = 0,
+    /// Dummy backend, which may be used for testing.
+    ///
+    /// It performs no rendering or computation, but allows creation of stub GPU resource types,
+    /// so that code which manages GPU resources can be tested without an available GPU.
+    /// Specifically, the following operations are implemented:
+    ///
+    /// * Enumerating adapters will always return one noop adapter, which can be used to create
+    ///   devices.
+    /// * Buffers may be created, written, mapped, and copied to other buffers.
+    /// * Command encoders may be created, but only buffer operations are useful.
+    ///
+    /// Other resources can be created but are nonfunctional; notably,
+    ///
+    /// * Render passes and compute passes are not executed.
+    /// * Textures may be created, but do not store any texels.
+    /// * There are no compatible surfaces.
+    ///
+    /// An adapter using the noop backend can only be obtained if [`NoopBackendOptions`]
+    /// enables it, in addition to the ordinary requirement of [`Backends::NOOP`] being set.
+    /// This ensures that applications not desiring a non-functional backend will not receive it.
+    Noop = 0,
     /// Vulkan API (Windows, Linux, Android, MacOS via `vulkan-portability`/MoltenVK)
     Vulkan = 1,
     /// Metal API (Apple platforms)
@@ -94,7 +115,7 @@ impl Backend {
     #[must_use]
     pub const fn to_str(self) -> &'static str {
         match self {
-            Backend::Empty => "empty",
+            Backend::Noop => "noop",
             Backend::Vulkan => "vulkan",
             Backend::Metal => "metal",
             Backend::Dx12 => "dx12",
@@ -148,22 +169,35 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Backends: u32 {
+        /// [`Backend::Noop`].
+        const NOOP = 1 << Backend::Noop as u32;
+
+        /// [`Backend::Vulkan`].
         /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
         const VULKAN = 1 << Backend::Vulkan as u32;
+
+        /// [`Backend::Gl`].
         /// Supported on Linux/Android, the web through webassembly via WebGL, and Windows and
         /// macOS/iOS via ANGLE
         const GL = 1 << Backend::Gl as u32;
-        /// Supported on macOS/iOS
+
+        /// [`Backend::Metal`].
+        /// Supported on macOS and iOS.
         const METAL = 1 << Backend::Metal as u32;
+
+        /// [`Backend::Dx12`].
         /// Supported on Windows 10 and later
         const DX12 = 1 << Backend::Dx12 as u32;
-        /// Supported when targeting the web through webassembly with the `webgpu` feature enabled.
+
+        /// [`Backend::BrowserWebGpu`].
+        /// Supported when targeting the web through WebAssembly with the `webgpu` feature enabled.
         ///
         /// The WebGPU backend is special in several ways:
         /// It is not not implemented by `wgpu_core` and instead by the higher level `wgpu` crate.
         /// Whether WebGPU is targeted is decided upon the creation of the `wgpu::Instance`,
         /// *not* upon adapter creation. See `wgpu::Instance::new`.
         const BROWSER_WEBGPU = 1 << Backend::BrowserWebGpu as u32;
+
         /// All the apis that wgpu offers first tier of support for.
         ///
         /// * [`Backends::VULKAN`]
@@ -174,6 +208,7 @@ bitflags::bitflags! {
             | Self::METAL.bits()
             | Self::DX12.bits()
             | Self::BROWSER_WEBGPU.bits();
+
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
         ///
@@ -233,6 +268,7 @@ impl Backends {
                 "metal" | "mtl" => Self::METAL,
                 "opengl" | "gles" | "gl" => Self::GL,
                 "webgpu" => Self::BROWSER_WEBGPU,
+                "noop" => Self::NOOP,
                 b => {
                     log::warn!("unknown backend string '{}'", b);
                     continue;
@@ -506,7 +542,7 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 60,
-    ///     max_color_attachments: 8,
+    ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16352, // *
     ///     max_compute_invocations_per_workgroup: 256,
@@ -526,6 +562,7 @@ impl Limits {
             max_texture_dimension_3d: 256,
             max_storage_buffers_per_shader_stage: 4,
             max_uniform_buffer_binding_size: 16 << 10, // (16 KiB)
+            max_color_attachments: 4,
             // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_compute_workgroup_storage_size: 16352,
             ..Self::defaults()
@@ -563,7 +600,7 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 31,
-    ///     max_color_attachments: 8,
+    ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 0, // +
     ///     max_compute_invocations_per_workgroup: 0, // +
@@ -4736,6 +4773,8 @@ bitflags::bitflags! {
         const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
         /// Buffer used for top level acceleration structure building.
         const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 13;
+        /// A buffer used to store the compacted size of an acceleration structure
+        const ACCELERATION_STRUCTURE_QUERY = 1 << 14;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
@@ -7197,6 +7236,26 @@ bitflags::bitflags!(
         const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
     }
 );
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// What a copy between acceleration structures should do
+pub enum AccelerationStructureCopy {
+    /// Directly duplicate an acceleration structure to another
+    Clone,
+    /// Duplicate and compact an acceleration structure
+    Compact,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// What type the data of an acceleration structure is
+pub enum AccelerationStructureType {
+    /// The types of the acceleration structure are triangles
+    Triangles,
+    /// The types of the acceleration structure are axis aligned bounding boxes
+    AABBs,
+    /// The types of the acceleration structure are instances
+    Instances,
+}
 
 /// Alignment requirement for transform buffers used in acceleration structure builds
 pub const TRANSFORM_BUFFER_ALIGNMENT: BufferAddress = 16;

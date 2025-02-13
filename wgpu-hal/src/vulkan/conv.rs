@@ -551,6 +551,9 @@ pub fn map_buffer_usage(usage: wgt::BufferUses) -> vk::BufferUsageFlags {
         flags |= vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
             | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
     }
+    if usage.intersects(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
+        flags |= vk::BufferUsageFlags::TRANSFER_DST;
+    }
     flags
 }
 
@@ -611,6 +614,10 @@ pub fn map_buffer_usage_to_barrier(
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR
             | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
+    }
+    if usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
+        stages |= vk::PipelineStageFlags::TRANSFER;
+        access |= vk::AccessFlags::TRANSFER_WRITE;
     }
 
     (stages, access)
@@ -974,6 +981,10 @@ pub fn map_acceleration_structure_usage_to_barrier(
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
     }
+    if usage.contains(crate::AccelerationStructureUses::QUERY_INPUT) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
     if usage.contains(crate::AccelerationStructureUses::BUILD_OUTPUT) {
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
@@ -985,6 +996,14 @@ pub fn map_acceleration_structure_usage_to_barrier(
             | vk::PipelineStageFlags::FRAGMENT_SHADER
             | vk::PipelineStageFlags::COMPUTE_SHADER;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::COPY_SRC) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::COPY_DST) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
     }
 
     (stages, access)

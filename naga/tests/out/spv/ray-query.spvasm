@@ -1,14 +1,14 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 160
+; Bound: 166
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %123 "main" %15 %17
-OpEntryPoint GLCompute %143 "main_candidate" %15 %17
+OpEntryPoint GLCompute %143 "main_candidate" %15
 OpExecutionMode %123 LocalSize 1 1 1
 OpExecutionMode %143 LocalSize 1 1 1
 OpMemberDecorate %10 0 Offset 0
@@ -92,7 +92,8 @@ OpMemberDecorate %18 0 Offset 0
 %129 = OpConstantComposite  %4  %109 %107 %109
 %132 = OpTypePointer StorageBuffer %6
 %137 = OpTypePointer StorageBuffer %4
-%146 = OpConstantComposite  %12  %27 %28 %29 %30 %128 %129
+%145 = OpConstantComposite  %12  %27 %28 %29 %30 %128 %129
+%146 = OpConstant  %3  10.0
 %57 = OpFunction  %10  None %56
 %59 = OpFunctionParameter  %32
 %60 = OpLabel
@@ -226,21 +227,35 @@ OpFunctionEnd
 %142 = OpLabel
 %147 = OpVariable  %32  Function
 %144 = OpLoad  %5  %15
-%145 = OpAccessChain  %126  %17 %64
 OpBranch %148
 %148 = OpLabel
-%149 = OpCompositeExtract  %6  %146 0
-%150 = OpCompositeExtract  %6  %146 1
-%151 = OpCompositeExtract  %3  %146 2
-%152 = OpCompositeExtract  %3  %146 3
-%153 = OpCompositeExtract  %4  %146 4
-%154 = OpCompositeExtract  %4  %146 5
+%149 = OpCompositeExtract  %6  %145 0
+%150 = OpCompositeExtract  %6  %145 1
+%151 = OpCompositeExtract  %3  %145 2
+%152 = OpCompositeExtract  %3  %145 3
+%153 = OpCompositeExtract  %4  %145 4
+%154 = OpCompositeExtract  %4  %145 5
 OpRayQueryInitializeKHR %147 %144 %149 %150 %153 %151 %154 %152
 %155 = OpFunctionCall  %10  %57 %147
 %156 = OpCompositeExtract  %6  %155 0
 %157 = OpIEqual  %8  %156 %78
-%158 = OpSelect  %6  %157 %62 %64
-%159 = OpAccessChain  %132  %145 %64
-OpStore %159 %158
+OpSelectionMerge %158 None
+OpBranchConditional %157 %159 %160
+%159 = OpLabel
+OpRayQueryGenerateIntersectionKHR %147 %146
+OpReturn
+%160 = OpLabel
+%161 = OpCompositeExtract  %6  %155 0
+%162 = OpIEqual  %8  %161 %62
+OpSelectionMerge %163 None
+OpBranchConditional %162 %164 %165
+%164 = OpLabel
+OpRayQueryConfirmIntersectionKHR %147
+OpReturn
+%165 = OpLabel
+OpReturn
+%163 = OpLabel
+OpBranch %158
+%158 = OpLabel
 OpReturn
 OpFunctionEnd
