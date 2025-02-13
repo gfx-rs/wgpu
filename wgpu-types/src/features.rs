@@ -69,29 +69,37 @@ macro_rules! bitflags_independent_two_arg {
 /// in a u64, we can't use a u128 because of FFI, and the number of flags is increasing.
 macro_rules! bitflags_array {
     (
-    $(#[$outer:meta])* pub struct $name:ident: [$T:ty; $Len:expr];
-    $($(#[$bit_outer:meta])*
-    $vis:vis struct $inner_name:ident $lower_inner_name:ident {
+        $(#[$outer:meta])*
+        pub struct $name:ident: [$T:ty; $Len:expr];
+
         $(
-            $(#[$inner:ident $($args:tt)*])*
-            const $Flag:tt = $value:expr;
-        )*
-    })*
-    ) => {
-        $(
-        bitflags::bitflags! {
-            $(#[$bit_outer])*
-            $vis struct $inner_name: $T {
+            $(#[$bit_outer:meta])*
+            $vis:vis struct $inner_name:ident $lower_inner_name:ident {
                 $(
-                    $(#[$inner $($args)*])*
-                    const $Flag = $value;
+                    $(#[$inner:ident $($args:tt)*])*
+                    const $Flag:tt = $value:expr;
                 )*
             }
-        }
+        )*
+    ) => {
+        $(
+            bitflags::bitflags! {
+                $(#[$bit_outer])*
+                $vis struct $inner_name: $T {
+                    $(
+                        $(#[$inner $($args)*])*
+                        const $Flag = $value;
+                    )*
+                }
+            }
         )*
 
         $(#[$outer])*
-        pub struct $name{ $($lower_inner_name: $inner_name,)* }
+        pub struct $name {
+            $(
+                $lower_inner_name: $inner_name,
+            )*
+        }
 
         /// Bits from `Features` in array form
         #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
@@ -116,7 +124,9 @@ macro_rules! bitflags_array {
         #[cfg(feature = "serde")]
         impl Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where S: serde::Serializer {
+            where
+                S: serde::Serializer,
+            {
                 bitflags::serde::serialize(self, serializer)
             }
         }
@@ -124,7 +134,9 @@ macro_rules! bitflags_array {
         #[cfg(feature = "serde")]
         impl<'de> Deserialize<'de> for $name {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where D: serde::Deserializer<'de> {
+            where
+                D: serde::Deserializer<'de>,
+            {
                 bitflags::serde::deserialize(deserializer)
             }
         }
@@ -165,61 +177,62 @@ macro_rules! bitflags_array {
 
         #[cfg(feature = "serde")]
         impl WriteHex for FeatureBits {
-             fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
-                 let [$($lower_inner_name,)*] = self.0;
-                 let mut wrote = false;
-                 let mut stager = alloc::string::String::with_capacity(size_of::<$T>() * 2);
-                 // we don't want to write it if it's just zero as there may be multiple zeros
-                 // resulting in something like "00" being written out. We do want to write it if
-                 // there has already been something written though.
-                 $(if ($lower_inner_name != 0) || wrote {
-                     // First we write to a staging string, then we add any zeros (e.g if #1
-                     // is f and a u8 and #2 is a then the two combined would be f0a which requires
-                     // a 0 inserted)
-                     $lower_inner_name.write_hex(&mut stager)?;
-                     if (stager.len() != size_of::<$T>() * 2) && wrote {
-                         let zeros_to_write = (size_of::<$T>() * 2) - stager.len();
-                         for _ in 0..zeros_to_write {
-                             writer.write_char('0')?
-                         }
-                     }
-                     writer.write_str(&stager)?;
-                     stager.clear();
-                     wrote = true;
-                 })*
-                 if !wrote {
-                     writer.write_str("0")?;
-                 }
-                 Ok(())
-             }
+            fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
+                let [$($lower_inner_name,)*] = self.0;
+                let mut wrote = false;
+                let mut stager = alloc::string::String::with_capacity(size_of::<$T>() * 2);
+                // we don't want to write it if it's just zero as there may be multiple zeros
+                // resulting in something like "00" being written out. We do want to write it if
+                // there has already been something written though.
+                $(if ($lower_inner_name != 0) || wrote {
+                    // First we write to a staging string, then we add any zeros (e.g if #1
+                    // is f and a u8 and #2 is a then the two combined would be f0a which requires
+                    // a 0 inserted)
+                    $lower_inner_name.write_hex(&mut stager)?;
+                    if (stager.len() != size_of::<$T>() * 2) && wrote {
+                        let zeros_to_write = (size_of::<$T>() * 2) - stager.len();
+                        for _ in 0..zeros_to_write {
+                            writer.write_char('0')?
+                        }
+                    }
+                    writer.write_str(&stager)?;
+                    stager.clear();
+                    wrote = true;
+                })*
+                if !wrote {
+                    writer.write_str("0")?;
+                }
+                Ok(())
+            }
         }
 
         #[cfg(feature = "serde")]
         impl ParseHex for FeatureBits {
-             fn parse_hex(input: &str) -> Result<Self, ParseError> {
+            fn parse_hex(input: &str) -> Result<Self, ParseError> {
 
-                 let mut unset = Self::EMPTY;
-                 let mut end = input.len();
-                 if end == 0 {
-                     return Err(ParseError::empty_flag())
-                 }
-                 // we iterate starting at the least significant places and going up
-                 for (idx, _) in [$(stringify!($lower_inner_name),)*].iter().enumerate().rev() {
-                     // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
-                     let checked_start = end.checked_sub(size_of::<$T>() * 2);
-                     let start = checked_start.unwrap_or(0);
+                let mut unset = Self::EMPTY;
+                let mut end = input.len();
+                if end == 0 {
+                    return Err(ParseError::empty_flag())
+                }
+                // we iterate starting at the least significant places and going up
+                for (idx, _) in [$(stringify!($lower_inner_name),)*].iter().enumerate().rev() {
+                    // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
+                    let checked_start = end.checked_sub(size_of::<$T>() * 2);
+                    let start = checked_start.unwrap_or(0);
 
-                     let cur_input = &input[start..end];
-                     unset.0[idx] = <$T>::from_str_radix(cur_input, 16).map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
+                    let cur_input = &input[start..end];
+                    unset.0[idx] = <$T>::from_str_radix(cur_input, 16)
+                        .map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
 
-                     end = start;
+                    end = start;
 
-                     if let None = checked_start {
-                         break;
-                     }
-                 }
-                 Ok(unset)
-             }
+                    if let None = checked_start {
+                        break;
+                    }
+                }
+                Ok(unset)
+            }
         }
 
         impl bitflags::Bits for FeatureBits {
@@ -234,12 +247,16 @@ macro_rules! bitflags_array {
             type Bits = FeatureBits;
 
             fn bits(&self) -> FeatureBits {
-                FeatureBits([$(self.$lower_inner_name.bits(),)*])
+                FeatureBits([
+                    $(self.$lower_inner_name.bits(),)*
+                ])
             }
 
-            fn from_bits_retain(bits:FeatureBits) -> Self {
+            fn from_bits_retain(bits: FeatureBits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
-                Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
+                Self {
+                    $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)*
+                }
             }
 
             fn empty() -> Self {
@@ -252,21 +269,33 @@ macro_rules! bitflags_array {
         }
 
         impl $name {
-            pub(crate) const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
+            pub(crate) const FLAGS: &'static [bitflags::Flag<Self>] = &[
+                $(
+                    $(
+                        bitflags::Flag::new(stringify!($Flag), $name::$Flag),
+                    )*
+                )*
+            ];
 
             /// Gets the set flags as a container holding an array of bits.
             pub const fn bits(&self) -> FeatureBits {
-                FeatureBits([$(self.$lower_inner_name.bits(),)*])
+                FeatureBits([
+                    $(self.$lower_inner_name.bits(),)*
+                ])
             }
 
             /// Returns self with no flags set.
             pub const fn empty() -> Self {
-                Self { $($lower_inner_name: $inner_name::empty(),)* }
+                Self {
+                    $($lower_inner_name: $inner_name::empty(),)*
+                }
             }
 
             /// Returns self with all flags set.
             pub const fn all() -> Self {
-                Self { $($lower_inner_name: $inner_name::all(),)* }
+                Self {
+                    $($lower_inner_name: $inner_name::all(),)*
+                }
             }
 
             /// Whether all the bits set in `other` are all set in `self`
@@ -312,7 +341,9 @@ macro_rules! bitflags_array {
 
             /// Bitwise not - `!self`
             pub const fn complement(self) -> Self {
-                Self { $($lower_inner_name: self.$lower_inner_name.complement(),)* }
+                Self {
+                    $($lower_inner_name: self.$lower_inner_name.complement(),)*
+                }
             }
 
             /// Calls [Self::insert] if `set` is true and otherwise calls [Self::remove].
@@ -340,11 +371,15 @@ macro_rules! bitflags_array {
             pub const fn from_bits(bits:FeatureBits) -> Option<Self> {
                 let [$($lower_inner_name,)*] = bits.0;
                 // The ? operator does not work in a const context.
-                Some(Self { $($lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
-                    $lower_inner_name
-                } else {
-                    return None
-                },)* })
+                Some(Self {
+                    $(
+                        $lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
+                            $lower_inner_name
+                        } else {
+                            return None
+                        },
+                    )*
+                })
             }
 
             /// Takes in [`FeatureBits`] and returns Self with only valid bits (all other bits removed)
@@ -363,11 +398,15 @@ macro_rules! bitflags_array {
             /// Takes in a name and returns Self if it matches or none if the name does not match
             /// the name of any of the flags. Name is capitalisation dependent.
             pub fn from_name(name: &str) -> Option<Self> {
-                $($({
-                    if name == stringify!($Flag) {
-                        return Some(Self::$Flag);
-                    }
-                })*)*
+                $(
+                    $(
+                        {
+                            if name == stringify!($Flag) {
+                                return Some(Self::$Flag);
+                            }
+                        }
+                    )*
+                )*
                 None
             }
 
@@ -389,29 +428,29 @@ macro_rules! bitflags_array {
             }
 
             $(
-            $(
-            $(#[$inner $($args)*])*
-            // We need this for structs with only a member.
-            #[allow(clippy::needless_update)]
-            pub const $Flag: Self = Self {
-                $lower_inner_name: $inner_name::from_bits_truncate($value),
-                ..Self::empty()
-            };
-            )*
+                $(
+                    $(#[$inner $($args)*])*
+                    // We need this for structs with only a member.
+                    #[allow(clippy::needless_update)]
+                    pub const $Flag: Self = Self {
+                        $lower_inner_name: $inner_name::from_bits_truncate($value),
+                        ..Self::empty()
+                    };
+                )*
             )*
         }
 
         $(
-        impl From<$inner_name> for Features {
-            // We need this for structs with only a member.
-            #[allow(clippy::needless_update)]
-            fn from($lower_inner_name: $inner_name) -> Self {
-                Self {
-                    $lower_inner_name,
-                    ..Self::empty()
+            impl From<$inner_name> for Features {
+                // We need this for structs with only a member.
+                #[allow(clippy::needless_update)]
+                fn from($lower_inner_name: $inner_name) -> Self {
+                    Self {
+                        $lower_inner_name,
+                        ..Self::empty()
+                    }
                 }
             }
-        }
         )*
     };
 }
