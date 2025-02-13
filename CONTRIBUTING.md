@@ -131,3 +131,8 @@ you make significant efforts…
 The "Assigned" field on a PR indicates who has taken responsibility
 for reviewing the PR, not who is responsible for the content of the
 PR.
+
+You can see some common things that PR reviewers are going to look for in
+[`REVIEW-CHECKLIST.md`].
+
+[`REVIEW-CHECKLIST.md`]: ./REVIEW-CHECKLIST.md

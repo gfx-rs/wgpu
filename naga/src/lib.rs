@@ -1796,6 +1796,16 @@ pub enum RayQueryFunction {
         result: Handle<Expression>,
     },
 
+    /// Add a candidate generated intersection to be included
+    /// in the determination of the closest hit for a ray query.
+    GenerateIntersection {
+        hit_t: Handle<Expression>,
+    },
+
+    /// Confirm a triangle intersection to be included in the determination of
+    /// the closest hit for a ray query.
+    ConfirmIntersection,
+
     Terminate,
 }
 /// A function provided by task or mesh shaders

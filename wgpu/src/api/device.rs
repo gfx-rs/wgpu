@@ -530,15 +530,9 @@ pub(crate) enum RequestDeviceErrorKind {
     ///
     /// (This is currently never used by the webgl backend, but it could be.)
     #[cfg(webgpu)]
-    WebGpu(wasm_bindgen::JsValue),
+    WebGpu(String),
 }
 
-#[cfg(send_sync)]
-unsafe impl Send for RequestDeviceErrorKind {}
-#[cfg(send_sync)]
-unsafe impl Sync for RequestDeviceErrorKind {}
-
-#[cfg(send_sync)]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
@@ -547,9 +541,8 @@ impl fmt::Display for RequestDeviceError {
             #[cfg(wgpu_core)]
             RequestDeviceErrorKind::Core(error) => error.fmt(_f),
             #[cfg(webgpu)]
-            RequestDeviceErrorKind::WebGpu(error_js_value) => {
-                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
-                write!(_f, "{error_js_value:?}")
+            RequestDeviceErrorKind::WebGpu(error) => {
+                write!(_f, "{error}")
             }
             #[cfg(not(any(webgpu, wgpu_core)))]
             _ => unimplemented!("unknown `RequestDeviceErrorKind`"),

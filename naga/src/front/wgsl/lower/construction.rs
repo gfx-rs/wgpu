@@ -490,8 +490,8 @@ impl<'source> Lowerer<'source, '_> {
                         NonZeroU32::new(u32::try_from(components.len()).unwrap()).unwrap(),
                     ),
                     stride: {
-                        self.layouter.update(ctx.module.to_ctx()).unwrap();
-                        self.layouter[base].to_stride()
+                        ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                        ctx.layouter[base].to_stride()
                     },
                 };
                 let ty = ctx.ensure_type_exists(inner);
@@ -616,8 +616,8 @@ impl<'source> Lowerer<'source, '_> {
                 let base = self.resolve_ast_type(base, &mut ctx.as_global())?;
                 let size = self.array_size(size, &mut ctx.as_global())?;
 
-                self.layouter.update(ctx.module.to_ctx()).unwrap();
-                let stride = self.layouter[base].to_stride();
+                ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                let stride = ctx.layouter[base].to_stride();
 
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Array { base, size, stride });
                 Constructor::Type(ty)

@@ -57,6 +57,19 @@ impl Device {
                             self.features.allowed_vertex_formats_for_blas(),
                         ));
                     }
+
+                    let mut transform = None;
+
+                    if blas_desc
+                        .flags
+                        .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                    {
+                        transform = Some(wgpu_hal::AccelerationStructureTriangleTransform {
+                            buffer: self.zero_buffer.as_ref(),
+                            offset: 0,
+                        })
+                    }
+
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
                         vertex_buffer: None,
                         vertex_format: desc.vertex_format,
@@ -64,7 +77,7 @@ impl Device {
                         vertex_count: desc.vertex_count,
                         vertex_stride: 0,
                         indices,
-                        transform: None,
+                        transform,
                         flags: desc.flags,
                     });
                 }
@@ -85,6 +98,8 @@ impl Device {
                     label: blas_desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
+                    // change this once compaction is implemented in wgpu-core
+                    allow_compaction: false,
                 })
         }
         .map_err(DeviceError::from_hal)?;
@@ -115,6 +130,15 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
 
+        if desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+        {
+            return Err(CreateTlasError::DisallowedFlag(
+                wgt::AccelerationStructureFlags::USE_TRANSFORM,
+            ));
+        }
+
         let size_info = unsafe {
             self.raw().get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
@@ -136,6 +160,7 @@ impl Device {
                     label: desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::TopLevel,
+                    allow_compaction: false,
                 })
         }
         .map_err(DeviceError::from_hal)?;

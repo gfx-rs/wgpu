@@ -707,6 +707,10 @@ impl super::Validator {
                     crate::RayQueryFunction::Proceed { result } => {
                         validate_expr(result)?;
                     }
+                    crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                        validate_expr(hit_t)?;
+                    }
+                    crate::RayQueryFunction::ConfirmIntersection => {}
                     crate::RayQueryFunction::Terminate => {}
                 }
                 Ok(())

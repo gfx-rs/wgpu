@@ -118,6 +118,7 @@ impl State {
 
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
+        self.window.pre_present_notify();
         surface_texture.present();
     }
 }

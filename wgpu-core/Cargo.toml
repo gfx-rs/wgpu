@@ -113,6 +113,10 @@ gles = ["wgpu-hal/gles"]
 ## Enable the `dx12` backend.
 dx12 = ["wgpu-hal/dx12"]
 
+## Enable the `noop` backend.
+# TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
+noop = []
+
 [dependencies]
 naga.workspace = true
 wgpu-hal.workspace = true
