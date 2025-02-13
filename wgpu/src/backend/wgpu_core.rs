@@ -1830,14 +1830,14 @@ impl dispatch::QueueInterface for CoreQueue {
     }
 
     fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
-        let (id, handle, error) = self.context.0.queue_compact_blas(self.id, blas.as_core().id, None);
+        let (id, handle, error) =
+            self.context
+                .0
+                .queue_compact_blas(self.id, blas.as_core().id, None);
 
         if let Some(cause) = error {
-            self.context.handle_error_nolabel(
-                &self.error_sink,
-                cause,
-                "Queue::compact_blas",
-            );
+            self.context
+                .handle_error_nolabel(&self.error_sink, cause, "Queue::compact_blas");
         }
         (
             handle,
@@ -1846,7 +1846,7 @@ impl dispatch::QueueInterface for CoreQueue {
                 id,
                 error_sink: Arc::clone(&self.error_sink),
             }
-                .into(),
+            .into(),
         )
     }
 }

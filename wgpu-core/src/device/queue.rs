@@ -28,21 +28,21 @@ use crate::{
 use smallvec::SmallVec;
 
 use super::{life::LifetimeTracker, Device};
+use crate::id::BlasId;
+use crate::lock::RwLock;
 use crate::ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError};
+use crate::resource::{AccelerationStructure, Blas, BlasCompactState, TrackingData};
 use crate::scratch::ScratchBuffer;
+use crate::snatch::Snatchable;
+use std::num::NonZeroU64;
 use std::{
     iter,
     mem::{self, ManuallyDrop},
     ptr::NonNull,
     sync::{atomic::Ordering, Arc},
 };
-use std::num::NonZeroU64;
 use thiserror::Error;
 use wgt::{AccelerationStructureFlags, Features};
-use crate::id::BlasId;
-use crate::lock::RwLock;
-use crate::resource::{AccelerationStructure, Blas, BlasCompactState, TrackingData};
-use crate::snatch::Snatchable;
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
@@ -1370,10 +1370,7 @@ impl Queue {
         self.lock_life().add_work_done_closure(closure)
     }
 
-    pub fn compact_blas(
-        &self,
-        blas: &Arc<Blas>,
-    ) -> Result<Arc<Blas>, CompactBlasError> {
+    pub fn compact_blas(&self, blas: &Arc<Blas>) -> Result<Arc<Blas>, CompactBlasError> {
         profiling::scope!("Queue::compact_blas");
         api_log!("Queue::compact_blas");
 
@@ -1395,7 +1392,7 @@ impl Queue {
                 .last_acceleration_structure_build_command_index
                 .fetch_add(1, Ordering::Relaxed),
         )
-            .unwrap();
+        .unwrap();
 
         let mut pending_writes = self.pending_writes.lock();
         let cmd_buf_raw = pending_writes.activate();
@@ -1410,7 +1407,7 @@ impl Queue {
                     allow_compaction: false,
                 })
         }
-            .map_err(DeviceError::from_hal)?;
+        .map_err(DeviceError::from_hal)?;
 
         let src_raw = blas.try_raw(&snatch_guard)?;
 
@@ -1618,7 +1615,8 @@ impl Global {
         // TODO: Tracing
 
         let error = 'error: {
-            match device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+            match device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            {
                 Ok(_) => {}
                 Err(err) => break 'error err.into(),
             }
@@ -1628,11 +1626,10 @@ impl Global {
                 Err(err) => break 'error err.into(),
             };
 
-            let new_blas =
-                match queue.compact_blas(&blas) {
-                    Ok(blas) => blas,
-                    Err(err) => break 'error err,
-                };
+            let new_blas = match queue.compact_blas(&blas) {
+                Ok(blas) => blas,
+                Err(err) => break 'error err,
+            };
 
             // We should have no more errors after this because we have marked the command encoder as successful.
             let old_blas_size = blas.size_info.acceleration_structure_size;

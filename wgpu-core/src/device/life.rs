@@ -115,10 +115,7 @@ impl ActiveSubmission {
                 return true;
             }
 
-            if encoder
-                .pending_blas_s
-                .contains_key(&blas .tracker_index())
-            {
+            if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
                 return true;
             }
         }

@@ -10,7 +10,10 @@ use crate::{
         TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
         TraceTlasPackage, ValidateBlasActionsError, ValidateTlasActionsError,
     },
-    resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas, Trackable, BlasCompactState},
+    resource::{
+        AccelerationStructure, Blas, BlasCompactState, Buffer, Labeled, StagingBuffer, Tlas,
+        Trackable,
+    },
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
     track::PendingTransition,

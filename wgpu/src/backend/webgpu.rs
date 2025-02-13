@@ -20,7 +20,7 @@ use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{dispatch, SurfaceTargetUnsafe};
 
-use crate::dispatch::BlasCompactCallback;
+use crate::dispatch::{BlasCompactCallback, DispatchBlas};
 use defined_non_null_js_value::DefinedNonNullJsValue;
 
 // We need to mark various types as Send and Sync to satisfy the Rust type system.
@@ -2596,6 +2596,10 @@ impl dispatch::QueueInterface for WebQueue {
     fn on_submitted_work_done(&self, _callback: dispatch::BoxSubmittedWorkDoneCallback) {
         unimplemented!("on_submitted_work_done is not yet implemented");
     }
+
+    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
+        unimplemented!("Raytracing not implemented for web")
+    }
 }
 impl Drop for WebQueue {
     fn drop(&mut self) {
@@ -2752,10 +2756,10 @@ impl Drop for WebTexture {
 
 impl dispatch::BlasInterface for WebBlas {
     fn prepare_compact_async(&self, _callback: BlasCompactCallback) {
-        unreachable!("Ray-tracing not implemented on the web")
+        unimplemented!("Raytracing not implemented for web")
     }
     fn ready_for_compaction(&self) -> bool {
-        unreachable!("Ray-tracing not implemented on the web")
+        unimplemented!("Raytracing not implemented for web")
     }
 }
 impl Drop for WebBlas {

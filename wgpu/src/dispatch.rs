@@ -242,7 +242,7 @@ pub trait QueueInterface: CommonTraits {
     fn get_timestamp_period(&self) -> f32;
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
 
-    fn compact_blas(&self, blas:&DispatchBlas) -> (Option<u64>, DispatchBlas);
+    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
