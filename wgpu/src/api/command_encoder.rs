@@ -345,15 +345,6 @@ impl CommandEncoder {
         );
     }
 
-    /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the callback provided called.
-    pub fn compact_blas(&mut self, blas: &Blas) -> Blas {
-        let (handle, dispatch) = self.inner.compact_blas(&blas.inner);
-        Blas {
-            handle,
-            inner: dispatch,
-        }
-    }
-
     /// Transition resources to an underlying hal resource state.
     ///
     /// This is an advanced, native-only API (no-op on web) that has two main use cases:

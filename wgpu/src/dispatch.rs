@@ -241,6 +241,8 @@ pub trait QueueInterface: CommonTraits {
 
     fn get_timestamp_period(&self) -> f32;
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
+
+    fn compact_blas(&self, blas:&DispatchBlas) -> (Option<u64>, DispatchBlas);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -358,8 +360,6 @@ pub trait CommandEncoderInterface: CommonTraits {
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
     );
-
-    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 
     fn transition_resources<'a>(
         &mut self,

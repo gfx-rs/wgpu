@@ -1828,6 +1828,27 @@ impl dispatch::QueueInterface for CoreQueue {
             .0
             .queue_on_submitted_work_done(self.id, callback);
     }
+
+    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
+        let (id, handle, error) = self.context.0.queue_compact_blas(self.id, blas.as_core().id, None);
+
+        if let Some(cause) = error {
+            self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "Queue::compact_blas",
+            );
+        }
+        (
+            handle,
+            CoreBlas {
+                context: self.context.clone(),
+                id,
+                error_sink: Arc::clone(&self.error_sink),
+            }
+                .into(),
+        )
+    }
 }
 
 impl Drop for CoreQueue {
@@ -2578,29 +2599,6 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 "CommandEncoder::build_acceleration_structures_unsafe_tlas",
             );
         }
-    }
-
-    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
-        let (id, handle, error) =
-            self.context
-                .0
-                .command_encoder_compact_blas(self.id, blas.as_core().id, None);
-        if let Some(cause) = error {
-            self.context.handle_error_nolabel(
-                &self.error_sink,
-                cause,
-                "CommandEncoder::compact_blas",
-            );
-        }
-        (
-            handle,
-            CoreBlas {
-                context: self.context.clone(),
-                id,
-                error_sink: Arc::clone(&self.error_sink),
-            }
-            .into(),
-        )
     }
 
     fn transition_resources<'a>(

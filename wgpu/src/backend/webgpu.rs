@@ -3117,13 +3117,6 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         unimplemented!("Raytracing not implemented for web");
     }
 
-    fn compact_blas(
-        &self,
-        _blas: &dispatch::DispatchBlas,
-    ) -> (Option<u64>, dispatch::DispatchBlas) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
     fn transition_resources<'a>(
         &mut self,
         _buffer_transitions: &mut dyn Iterator<

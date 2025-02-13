@@ -115,11 +115,7 @@ fn unprepared_blas_compaction(ctx: TestingContext) {
 
     ctx.queue.submit([encoder.finish()]);
 
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
-
-    fail(&ctx.device, || encoder.compact_blas(&as_ctx.blas), None);
+    fail(&ctx.device, || ctx.queue.compact_blas(&as_ctx.blas), None);
 }
 
 #[gpu_test]
@@ -154,13 +150,10 @@ fn blas_compaction(ctx: TestingContext) {
     ctx.device.poll(Maintain::Wait);
     recv.recv().unwrap();
 
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
+    ctx.queue.compact_blas(&as_ctx.blas);
 
-    encoder.compact_blas(&as_ctx.blas);
-
-    ctx.queue.submit([encoder.finish()]);
+    // This actually executes the compact call.
+    ctx.queue.submit([]);
 }
 
 #[gpu_test]
