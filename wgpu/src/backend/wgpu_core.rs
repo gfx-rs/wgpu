@@ -2026,6 +2026,21 @@ impl dispatch::BlasInterface for CoreBlas {
             ),
         }
     }
+
+    fn ready_for_compaction(&self) -> bool {
+        match self.context.0.ready_for_compaction(self.id) {
+            Ok(ready) => ready,
+            Err(cause) => {
+                self.context.handle_error_nolabel(
+                    &self.error_sink,
+                    cause,
+                    "Blas::ready_for_compaction",
+                );
+                // A BLAS is definitely not ready for compaction if it's not valid
+                false
+            }
+        }
+    }
 }
 
 impl Drop for CoreBlas {

@@ -221,4 +221,11 @@ impl Blas {
     ) {
         self.inner.prepare_compact_async(Box::new(callback));
     }
+
+    /// Checks whether this BLAS is ready for compaction. The returned value is `true` if
+    /// [`Blas::prepare_compaction_async`]'s callback was called with a non-error value, otherwise
+    /// this is `false`.
+    pub fn ready_for_compaction(&self) -> bool {
+        self.inner.ready_for_compaction()
+    }
 }

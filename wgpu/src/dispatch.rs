@@ -276,6 +276,7 @@ pub trait TextureInterface: CommonTraits {
 }
 pub trait BlasInterface: CommonTraits {
     fn prepare_compact_async(&self, callback: BlasCompactCallback);
+    fn ready_for_compaction(&self) -> bool;
 }
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {}

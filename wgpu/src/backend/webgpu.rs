@@ -2754,6 +2754,9 @@ impl dispatch::BlasInterface for WebBlas {
     fn prepare_compact_async(&self, _callback: BlasCompactCallback) {
         unreachable!("Ray-tracing not implemented on the web")
     }
+    fn ready_for_compaction(&self) -> bool {
+        unreachable!("Ray-tracing not implemented on the web")
+    }
 }
 impl Drop for WebBlas {
     fn drop(&mut self) {

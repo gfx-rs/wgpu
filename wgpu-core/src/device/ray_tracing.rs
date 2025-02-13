@@ -7,7 +7,7 @@ use crate::api_log;
 use crate::device::trace;
 use crate::lock::{rank, Mutex};
 use crate::ray_tracing::BlasPrepareCompactError;
-use crate::resource::{BlasCompactCallback, BlasCompactState, Fallible, TrackingData};
+use crate::resource::{BlasCompactCallback, BlasCompactState, Fallible, InvalidResourceError, TrackingData};
 use crate::snatch::Snatchable;
 use crate::{
     device::{Device, DeviceError},
@@ -324,5 +324,27 @@ impl Global {
                 Err(err)
             }
         }
+    }
+
+    pub fn ready_for_compaction(
+        &self,
+        blas_id: BlasId,
+    ) -> Result<bool, InvalidResourceError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {blas_id:?}");
+
+        let hub = &self.hub;
+
+        let blas = match hub.blas_s.get(blas_id).get() {
+            Ok(blas) => blas,
+            Err(e) => return Err(e),
+        };
+
+        let lock = blas.compacted_state.lock();
+
+        Ok(matches!(
+            *lock,
+            BlasCompactState::Ready { .. }
+        ))
     }
 }
