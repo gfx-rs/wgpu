@@ -146,7 +146,7 @@ jobs:
             kind: native
 
           # OpenHarmony
-          - name: OpenHarmony
+          - name: OpenHarmony aarch64
             os: ubuntu-22.04
             target: aarch64-unknown-linux-ohos
             tier: 2
