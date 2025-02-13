@@ -147,6 +147,7 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     pub zero_initialize_workgroup_memory: bool,
 }
 
+/// cbindgen:ignore
 pub type ResolvedProgrammableStageDescriptor<'a> =
     ProgrammableStageDescriptor<'a, Arc<ShaderModule>>;
 
@@ -186,6 +187,7 @@ pub struct ComputePipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedComputePipelineDescriptor<'a> =
     ComputePipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
@@ -307,6 +309,7 @@ pub struct VertexState<'a, SM = ShaderModuleId> {
     pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedVertexState<'a> = VertexState<'a, Arc<ShaderModule>>;
 
 /// Describes fragment processing in a render pipeline.
@@ -319,6 +322,7 @@ pub struct FragmentState<'a, SM = ShaderModuleId> {
     pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 
 /// Describes a render (graphics) pipeline.
@@ -353,6 +357,7 @@ pub struct RenderPipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedRenderPipelineDescriptor<'a> =
     RenderPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
