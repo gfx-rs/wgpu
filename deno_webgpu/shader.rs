@@ -8,42 +8,42 @@ use deno_core::WebIDL;
 use crate::Instance;
 
 pub struct GPUShaderModule {
-  pub instance: Instance,
-  pub id: wgpu_core::id::ShaderModuleId,
-  pub label: String,
+    pub instance: Instance,
+    pub id: wgpu_core::id::ShaderModuleId,
+    pub label: String,
 }
 
 impl Drop for GPUShaderModule {
-  fn drop(&mut self) {
-    self.instance.shader_module_drop(self.id);
-  }
+    fn drop(&mut self) {
+        self.instance.shader_module_drop(self.id);
+    }
 }
 
 impl WebIdlInterfaceConverter for GPUShaderModule {
-  const NAME: &'static str = "GPUShaderModule";
+    const NAME: &'static str = "GPUShaderModule";
 }
 
 impl GarbageCollected for GPUShaderModule {}
 
 #[op2]
 impl GPUShaderModule {
-  #[getter]
-  #[string]
-  fn label(&self) -> String {
-    self.label.clone()
-  }
-  #[setter]
-  #[string]
-  fn label(&self, #[webidl] _label: String) {
-    // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
-  }
+    #[getter]
+    #[string]
+    fn label(&self) -> String {
+        self.label.clone()
+    }
+    #[setter]
+    #[string]
+    fn label(&self, #[webidl] _label: String) {
+        // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
+    }
 }
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUShaderModuleDescriptor {
-  #[webidl(default = String::new())]
-  pub label: String,
+    #[webidl(default = String::new())]
+    pub label: String,
 
-  pub code: String,
+    pub code: String,
 }
