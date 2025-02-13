@@ -399,16 +399,14 @@ macro_rules! bitflags_array {
             /// Takes in a name and returns Self if it matches or none if the name does not match
             /// the name of any of the flags. Name is capitalisation dependent.
             pub fn from_name(name: &str) -> Option<Self> {
-                $(
+                match name {
                     $(
-                        {
-                            if name == stringify!($Flag) {
-                                return Some(Self::$Flag);
-                            }
-                        }
+                        $(
+                            stringify!($Flag) => Some(Self::$Flag),
+                        )*
                     )*
-                )*
-                None
+                    _ => None,
+                }
             }
 
             /// Combines the features from the internal flags into the entire features struct
