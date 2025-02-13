@@ -26,7 +26,7 @@ pub struct AsBuildContext {
 }
 
 impl AsBuildContext {
-    pub fn new(ctx: &TestingContext) -> Self {
+    pub fn new(ctx: &TestingContext, additional_blas_flags: AccelerationStructureFlags) -> Self {
         let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
@@ -44,7 +44,7 @@ impl AsBuildContext {
         let blas = ctx.device.create_blas(
             &CreateBlasDescriptor {
                 label: Some("BLAS"),
-                flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+                flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_blas_flags,
                 update_mode: AccelerationStructureUpdateMode::Build,
             },
             BlasGeometrySizeDescriptors::Triangles {
