@@ -1125,6 +1125,16 @@ impl<W: Write> super::Writer<'_, W> {
                         // End of function body
                         writeln!(self.out, "}}")?;
                     }
+                    // Taking the absolute value of the minimum value of a two's
+                    // complement signed integer type causes overflow, which is
+                    // undefined behaviour in HLSL. To avoid this, when the value is
+                    // negative we bitcast the value to unsigned and negate it, then
+                    // bitcast back to signed.
+                    // This adheres to the WGSL spec in that the absolute of the type's
+                    // minimum value should equal to the minimum value.
+                    //
+                    // TODO(#7109): asint()/asuint() only support 32-bit integers, so we
+                    // must find another solution for different bit-widths.
                     crate::MathFunction::Abs
                         if matches!(arg_ty.scalar(), Some(crate::Scalar::I32)) =>
                     {
@@ -1178,6 +1188,14 @@ impl<W: Write> super::Writer<'_, W> {
                     ty: (vector_size, scalar),
                 };
 
+                // Negating the minimum value of a two's complement signed integer type
+                // causes overflow, which is undefined behaviour in HLSL. To avoid this
+                // we bitcast the value to unsigned and negate it, then bitcast back to
+                // signed. This adheres to the WGSL spec in that the negative of the
+                // type's minimum value should equal to the minimum value.
+                //
+                // TODO(#7109): asint()/asuint() only support 32-bit integers, so we must
+                // find another solution for different bit-widths.
                 match (op, scalar) {
                     (crate::UnaryOperator::Negate, crate::Scalar::I32) => {
                         if !self.wrapped.unary_op.insert(wrapped) {
@@ -1214,6 +1232,13 @@ impl<W: Write> super::Writer<'_, W> {
                 let right_ty = func_ctx.resolve_type(right, &module.types);
 
                 match (op, expr_ty.scalar()) {
+                    // Signed integer division of the type's minimum representable value
+                    // divided by -1, or signed or unsigned division by zero, is
+                    // undefined behaviour in HLSL. We override the divisor to 1 in these
+                    // cases.
+                    // This adheres to the WGSL spec in that:
+                    // * TYPE_MIN / -1 == TYPE_MIN
+                    // * x / 0 == x
                     (
                         crate::BinaryOperator::Divide,
                         Some(
@@ -1258,6 +1283,18 @@ impl<W: Write> super::Writer<'_, W> {
                         writeln!(self.out, "}}")?;
                         writeln!(self.out)?;
                     }
+                    // The modulus operator is only defined for integers in HLSL when
+                    // either both sides are positive or both sides are negative. To
+                    // avoid this undefined behaviour we use the following equation:
+                    //
+                    // dividend - (dividend / divisor) * divisor
+                    //
+                    // overriding the divisor to 1 if either it is 0, or it is -1
+                    // and the dividend is the minimum representable value.
+                    //
+                    // This adheres to the WGSL spec in that:
+                    // * min_value % -1 == 0
+                    // * x % 0 == 0
                     (
                         crate::BinaryOperator::Modulo,
                         Some(

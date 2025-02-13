@@ -2764,8 +2764,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // Avoid undefined behaviour for addition, subtraction, and
             // multiplication of signed integers by casting operands to
             // unsigned, performing the operation, then casting the result back
-            // to signed. This relies on the asint/asuint functions which only
-            // work for 32-bit types.
+            // to signed.
+            // TODO(#7109): This relies on the asint()/asuint() functions which only work
+            // for 32-bit types, so we must find another solution for different bit widths.
             Expression::Binary {
                 op:
                     op @ crate::BinaryOperator::Add
