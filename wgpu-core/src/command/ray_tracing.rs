@@ -901,6 +901,15 @@ impl CommandBufferMutable {
         for action in &self.blas_actions {
             match &action.kind {
                 crate::ray_tracing::BlasActionKind::Build(id) => {
+                    let mut state_lock = action.blas.compacted_state.lock();
+                    *state_lock = match *state_lock {
+                        BlasCompactState::Compacted => {
+                            unreachable!("Should be validated out in build.")
+                        }
+                        // Reset the compacted state to idle. This means any prepares, before mapping their
+                        // internal buffer, will terminate.
+                        _ => BlasCompactState::Idle,
+                    };
                     built.insert(action.blas.tracker_index());
                     *action.blas.built_index.write() = Some(*id);
                 }
@@ -1319,17 +1328,12 @@ fn map_blas<'a>(
         .flags
         .contains(AccelerationStructureFlags::ALLOW_COMPACTION)
     {
-        let mut state_lock = blas.compacted_state.lock();
-        *state_lock = match *state_lock {
-            BlasCompactState::Compacted => {
-                return Err(BuildAccelerationStructureError::CompactedBlas(
-                    blas.error_ident(),
-                ))
-            }
-            // Reset the compacted state to idle. This means any prepares, before mapping their
-            // internal buffer, will terminate.
-            _ => BlasCompactState::Idle,
-        };
+        let state_lock = blas.compacted_state.lock();
+        if let BlasCompactState::Compacted = *state_lock {
+            return Err(BuildAccelerationStructureError::CompactedBlas(
+                blas.error_ident(),
+            ))
+        }
         blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw));
     }
     Ok(hal::BuildAccelerationStructureDescriptor {
