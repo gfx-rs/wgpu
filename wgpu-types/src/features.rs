@@ -374,10 +374,9 @@ macro_rules! bitflags_array {
                 // The ? operator does not work in a const context.
                 Some(Self {
                     $(
-                        $lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
-                            $lower_inner_name
-                        } else {
-                            return None
+                        $lower_inner_name: match $inner_name::from_bits($lower_inner_name) {
+                            Some(some) => some,
+                            None => return None,
                         },
                     )*
                 })
