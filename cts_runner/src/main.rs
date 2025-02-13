@@ -88,13 +88,13 @@ mod native {
     );
 
     #[op2(fast)]
-    fn op_exit(code: i32) -> Result<(), AnyError> {
+    fn op_exit(code: i32) {
         std::process::exit(code)
     }
 
     #[op2]
     #[buffer]
-    fn op_read_file_sync(#[string] path: &str) -> Result<Vec<u8>, AnyError> {
+    fn op_read_file_sync(#[string] path: &str) -> Result<Vec<u8>, std::io::Error> {
         let path = std::path::Path::new(path);
         let mut file = std::fs::File::open(path)?;
         let mut buf = Vec::new();
@@ -103,7 +103,10 @@ mod native {
     }
 
     #[op2(fast)]
-    fn op_write_file_sync(#[string] path: &str, #[buffer] buf: &[u8]) -> Result<(), AnyError> {
+    fn op_write_file_sync(
+        #[string] path: &str,
+        #[buffer] buf: &[u8],
+    ) -> Result<(), std::io::Error> {
         let path = std::path::Path::new(path);
         let mut file = std::fs::File::create(path)?;
         file.write_all(buf)?;
