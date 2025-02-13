@@ -117,8 +117,12 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
-    mesh_shader: Option<vk::PhysicalDeviceMeshShaderFeaturesEXT<'static>>,
+
+    /// Features proved by `VK_KHR_maintenance4`, needed for mesh shaders
     maintenance4: Option<vk::PhysicalDeviceMaintenance4FeaturesKHR<'static>>,
+
+    /// Features proved by `VK_EXT_mesh_shader`
+    mesh_shader: Option<vk::PhysicalDeviceMeshShaderFeaturesEXT<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -141,6 +145,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.robustness2 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.multiview {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.astc_hdr {
@@ -174,10 +181,10 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.subgroup_size_control {
             info = info.push_next(feature);
         }
-        if let Some(ref mut feature) = self.mesh_shader {
+        if let Some(ref mut feature) = self.maintenance4 {
             info = info.push_next(feature);
         }
-        if let Some(ref mut feature) = self.maintenance4 {
+        if let Some(ref mut feature) = self.mesh_shader {
             info = info.push_next(feature);
         }
         info
@@ -210,12 +217,14 @@ impl PhysicalDeviceFeatures {
     /// [`add_to_device_create`]: PhysicalDeviceFeatures::add_to_device_create
     /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
-        device_api_version: u32,
+        phd_capabilities: &PhysicalDeviceProperties,
+        phd_features: &PhysicalDeviceFeatures,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
         private_caps: &super::PrivateCapabilities,
     ) -> Self {
+        let device_api_version = phd_capabilities.device_api_version;
         let needs_sampled_image_non_uniform = requested_features.contains(
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
@@ -496,7 +505,11 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceMeshShaderFeaturesEXT::default()
                         .mesh_shader(needed)
                         .task_shader(needed)
-                        .multiview_mesh_shader(needed && multiview),
+                        .multiview_mesh_shader(
+                            needed
+                                && multiview
+                                && phd_features.mesh_shader.unwrap().multiview_mesh_shader == 1,
+                        ),
                 )
             } else {
                 None
@@ -836,12 +849,10 @@ impl PhysicalDeviceFeatures {
             F::VULKAN_EXTERNAL_MEMORY_WIN32,
             caps.supports_extension(khr::external_memory_win32::NAME),
         );
-
         features.set(
             F::MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
-
         (features, dl_flags)
     }
 }
@@ -1539,7 +1550,6 @@ impl super::Instance {
             },
             backend: wgt::Backend::Vulkan,
         };
-
         let (available_features, downlevel_flags) =
             phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
@@ -1694,7 +1704,7 @@ impl super::Instance {
                 | vk::MemoryPropertyFlags::HOST_CACHED
                 | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
             phd_capabilities,
-            //phd_features,
+            phd_features,
             downlevel_flags,
             private_caps,
             workarounds,
@@ -1759,7 +1769,8 @@ impl super::Adapter {
         features: wgt::Features,
     ) -> PhysicalDeviceFeatures {
         PhysicalDeviceFeatures::from_extensions_and_requested_features(
-            self.phd_capabilities.device_api_version,
+            &self.phd_capabilities,
+            &self.phd_features,
             enabled_extensions,
             features,
             self.downlevel_flags,

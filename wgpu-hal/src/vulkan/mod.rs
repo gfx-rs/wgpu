@@ -460,7 +460,7 @@ pub struct Adapter {
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceProperties,
-    //phd_features: adapter::PhysicalDeviceFeatures,
+    phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
