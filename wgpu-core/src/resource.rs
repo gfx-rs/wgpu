@@ -21,7 +21,7 @@ use crate::{
     Label, LabelHelpers, SubmissionIndex,
 };
 
-use wgt::{AccelerationStructureFlags, TextureSelector};
+use wgt::TextureSelector;
 
 use core::mem::size_of;
 use smallvec::SmallVec;
@@ -2018,7 +2018,7 @@ impl Blas {
             return Err((op, BlasPrepareCompactError::NotBuilt));
         }
 
-        if !self.flags.contains(AccelerationStructureFlags::ALLOW_COMPACTION) {
+        if !self.flags.contains(wgt::AccelerationStructureFlags::ALLOW_COMPACTION) {
             return Err((op, BlasPrepareCompactError::CompactionUnsupported));
         }
 
