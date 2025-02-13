@@ -97,6 +97,7 @@ macro_rules! bitflags_array {
         $(#[$outer])*
         pub struct $name {
             $(
+                #[allow(missing_docs)]
                 $lower_inner_name: $inner_name,
             )*
         }
