@@ -310,12 +310,12 @@ impl Global {
 
         let hub = &self.hub;
 
-        let map_result = match hub.blas_s.get(blas_id).get() {
+        let compact_result = match hub.blas_s.get(blas_id).get() {
             Ok(blas) => blas.prepare_compact_async(callback),
             Err(e) => Err((callback, e.into())),
         };
 
-        match map_result {
+        match compact_result {
             Ok(submission_index) => Ok(submission_index),
             Err((mut callback, err)) => {
                 if let Some(callback) = callback.take() {
