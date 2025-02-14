@@ -65,11 +65,11 @@ impl RawId {
 /// any backend, but the corresponding resource types ([`Texture<A>`], for
 /// example) are always parameterized by a specific backend `A`.
 ///
-/// So the `T` in `Id<T>` is usually a resource type like `Texture<Empty>`,
-/// where [`Empty`] is the `wgpu_hal` dummy back end. These empty types are
+/// So the `T` in `Id<T>` is usually a resource type like `Texture<Noop>`,
+/// where [`Noop`] is the `wgpu_hal` dummy back end. These empty types are
 /// never actually used, beyond just making sure you access each `Storage` with
 /// the right kind of identifier. The members of [`Hub<A>`] pair up each
-/// `X<Empty>` type with the resource type `X<A>`, for some specific backend
+/// `X<Noop>` type with the resource type `X<A>`, for some specific backend
 /// `A`.
 ///
 /// [`Global`]: crate::global::Global
@@ -77,7 +77,7 @@ impl RawId {
 /// [`Hub<A>`]: crate::hub::Hub
 /// [`Texture<A>`]: crate::resource::Texture
 /// [`Registry`]: crate::hub::Registry
-/// [`Empty`]: hal::api::Empty
+/// [`Noop`]: hal::api::Noop
 #[repr(transparent)]
 #[cfg_attr(any(feature = "serde", feature = "trace"), derive(serde::Serialize))]
 #[cfg_attr(any(feature = "serde", feature = "replay"), derive(serde::Deserialize))]

@@ -1,7 +1,13 @@
 #![allow(unused_variables)]
 
 use crate::TlasInstance;
-use std::ops::Range;
+use core::ptr;
+use core::sync::atomic::{AtomicU64, Ordering};
+
+mod buffer;
+pub use buffer::Buffer;
+mod command;
+pub use command::CommandBuffer;
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -10,6 +16,11 @@ pub struct Context;
 pub struct Encoder;
 #[derive(Debug)]
 pub struct Resource;
+
+#[derive(Debug)]
+pub struct Fence {
+    value: AtomicU64,
+}
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -20,16 +31,16 @@ impl crate::Api for Api {
     type Device = Context;
 
     type Queue = Context;
-    type CommandEncoder = Encoder;
-    type CommandBuffer = Resource;
+    type CommandEncoder = CommandBuffer;
+    type CommandBuffer = CommandBuffer;
 
-    type Buffer = Resource;
+    type Buffer = Buffer;
     type Texture = Resource;
     type SurfaceTexture = Resource;
     type TextureView = Resource;
     type Sampler = Resource;
     type QuerySet = Resource;
-    type Fence = Resource;
+    type Fence = Fence;
     type AccelerationStructure = Resource;
     type PipelineCache = Resource;
 
@@ -41,15 +52,15 @@ impl crate::Api for Api {
     type ComputePipeline = Resource;
 }
 
-crate::impl_dyn_resource!(Context, Encoder, Resource);
+crate::impl_dyn_resource!(Buffer, CommandBuffer, Context, Fence, Resource);
 
 impl crate::DynAccelerationStructure for Resource {}
 impl crate::DynBindGroup for Resource {}
 impl crate::DynBindGroupLayout for Resource {}
-impl crate::DynBuffer for Resource {}
-impl crate::DynCommandBuffer for Resource {}
+impl crate::DynBuffer for Buffer {}
+impl crate::DynCommandBuffer for CommandBuffer {}
 impl crate::DynComputePipeline for Resource {}
-impl crate::DynFence for Resource {}
+impl crate::DynFence for Fence {}
 impl crate::DynPipelineCache for Resource {}
 impl crate::DynPipelineLayout for Resource {}
 impl crate::DynQuerySet for Resource {}
@@ -70,7 +81,22 @@ impl crate::Instance for Context {
     type A = Api;
 
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        Ok(Context)
+        let crate::InstanceDescriptor {
+            backend_options:
+                wgt::BackendOptions {
+                    noop: wgt::NoopBackendOptions { enable },
+                    ..
+                },
+            name: _,
+            flags: _,
+        } = *desc;
+        if enable {
+            Ok(Context)
+        } else {
+            Err(crate::InstanceError::new(String::from(
+                "noop backend disabled because NoopBackendOptions::enable is false",
+            )))
+        }
     }
     unsafe fn create_surface(
         &self,
@@ -83,9 +109,81 @@ impl crate::Instance for Context {
         &self,
         _surface_hint: Option<&Context>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
-        Vec::new()
+        vec![crate::ExposedAdapter {
+            adapter: Context,
+            info: wgt::AdapterInfo {
+                name: String::from("noop wgpu backend"),
+                vendor: 0,
+                device: 0,
+                device_type: wgt::DeviceType::Cpu,
+                driver: String::from("wgpu"),
+                driver_info: String::new(),
+                backend: wgt::Backend::Noop,
+            },
+            features: wgt::Features::all(),
+            capabilities: CAPABILITIES,
+        }]
     }
 }
+
+const CAPABILITIES: crate::Capabilities = {
+    /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
+    /// except on 16-bit platforms which we certainly don’t fit in.
+    const ALLOC_MAX_U32: u32 = i32::MAX as u32;
+
+    crate::Capabilities {
+        limits: wgt::Limits {
+            // All maximally permissive
+            max_texture_dimension_1d: ALLOC_MAX_U32,
+            max_texture_dimension_2d: ALLOC_MAX_U32,
+            max_texture_dimension_3d: ALLOC_MAX_U32,
+            max_texture_array_layers: ALLOC_MAX_U32,
+            max_bind_groups: ALLOC_MAX_U32,
+            max_bindings_per_bind_group: ALLOC_MAX_U32,
+            max_dynamic_uniform_buffers_per_pipeline_layout: ALLOC_MAX_U32,
+            max_dynamic_storage_buffers_per_pipeline_layout: ALLOC_MAX_U32,
+            max_sampled_textures_per_shader_stage: ALLOC_MAX_U32,
+            max_samplers_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
+            max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_uniform_buffer_binding_size: ALLOC_MAX_U32,
+            max_storage_buffer_binding_size: ALLOC_MAX_U32,
+            max_vertex_buffers: ALLOC_MAX_U32,
+            max_buffer_size: ALLOC_MAX_U32 as u64,
+            max_vertex_attributes: ALLOC_MAX_U32,
+            max_vertex_buffer_array_stride: ALLOC_MAX_U32,
+            min_uniform_buffer_offset_alignment: 1,
+            min_storage_buffer_offset_alignment: 1,
+            max_inter_stage_shader_components: ALLOC_MAX_U32,
+            max_color_attachments: ALLOC_MAX_U32,
+            max_color_attachment_bytes_per_sample: ALLOC_MAX_U32,
+            max_compute_workgroup_storage_size: ALLOC_MAX_U32,
+            max_compute_invocations_per_workgroup: ALLOC_MAX_U32,
+            max_compute_workgroup_size_x: ALLOC_MAX_U32,
+            max_compute_workgroup_size_y: ALLOC_MAX_U32,
+            max_compute_workgroup_size_z: ALLOC_MAX_U32,
+            max_compute_workgroups_per_dimension: ALLOC_MAX_U32,
+            min_subgroup_size: 1,
+            max_subgroup_size: ALLOC_MAX_U32,
+            max_push_constant_size: ALLOC_MAX_U32,
+            max_non_sampler_bindings: ALLOC_MAX_U32,
+        },
+        alignments: crate::Alignments {
+            // All maximally permissive
+            buffer_copy_offset: wgt::BufferSize::MIN,
+            buffer_copy_pitch: wgt::BufferSize::MIN,
+            uniform_bounds_check_alignment: wgt::BufferSize::MIN,
+            raw_tlas_instance_size: 0,
+            ray_tracing_scratch_buffer_alignment: 1,
+        },
+        downlevel: wgt::DownlevelCapabilities {
+            flags: wgt::DownlevelFlags::all(),
+            limits: wgt::DownlevelLimits {},
+            shader_model: wgt::ShaderModel::Sm5,
+        },
+    }
+};
 
 impl crate::Surface for Context {
     type A = Api;
@@ -103,7 +201,7 @@ impl crate::Surface for Context {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
-        fence: &Resource,
+        fence: &Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
@@ -119,7 +217,10 @@ impl crate::Adapter for Context {
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
-        Err(crate::DeviceError::Lost)
+        Ok(crate::OpenDevice {
+            device: Context,
+            queue: Context,
+        })
     }
     unsafe fn texture_format_capabilities(
         &self,
@@ -142,10 +243,19 @@ impl crate::Queue for Context {
 
     unsafe fn submit(
         &self,
-        command_buffers: &[&Resource],
+        command_buffers: &[&CommandBuffer],
         surface_textures: &[&Resource],
-        signal_fence: (&mut Resource, crate::FenceValue),
+        (fence, fence_value): (&mut Fence, crate::FenceValue),
     ) -> DeviceResult<()> {
+        // All commands are executed synchronously.
+        for cb in command_buffers {
+            // SAFETY: Caller is responsible for ensuring synchronization between commands and
+            // other mutations.
+            unsafe {
+                cb.execute();
+            }
+        }
+        fence.value.store(fence_value, Ordering::Release);
         Ok(())
     }
     unsafe fn present(
@@ -164,22 +274,29 @@ impl crate::Queue for Context {
 impl crate::Device for Context {
     type A = Api;
 
-    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Resource> {
-        Ok(Resource)
+    unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Buffer> {
+        Buffer::new(desc)
     }
-    unsafe fn destroy_buffer(&self, buffer: Resource) {}
-    unsafe fn add_raw_buffer(&self, _buffer: &Resource) {}
+
+    unsafe fn destroy_buffer(&self, buffer: Buffer) {}
+    unsafe fn add_raw_buffer(&self, _buffer: &Buffer) {}
 
     unsafe fn map_buffer(
         &self,
-        buffer: &Resource,
+        buffer: &Buffer,
         range: crate::MemoryRange,
     ) -> DeviceResult<crate::BufferMapping> {
-        Err(crate::DeviceError::Lost)
+        // Safety: the `wgpu-core` validation layer will prevent any user-accessible aliasing
+        // mappings from being created, so we don’t need to perform any checks here, except for
+        // bounds checks on the range which are built into `get_slice_ptr()`.
+        Ok(crate::BufferMapping {
+            ptr: ptr::NonNull::new(buffer.get_slice_ptr(range).cast::<u8>()).unwrap(),
+            is_coherent: true,
+        })
     }
-    unsafe fn unmap_buffer(&self, buffer: &Resource) {}
-    unsafe fn flush_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
-    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
+    unsafe fn unmap_buffer(&self, buffer: &Buffer) {}
+    unsafe fn flush_mapped_ranges<I>(&self, buffer: &Buffer, ranges: I) {}
+    unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &Buffer, ranges: I) {}
 
     unsafe fn create_texture(&self, desc: &crate::TextureDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)
@@ -203,8 +320,8 @@ impl crate::Device for Context {
     unsafe fn create_command_encoder(
         &self,
         desc: &crate::CommandEncoderDescriptor<Context>,
-    ) -> DeviceResult<Encoder> {
-        Ok(Encoder)
+    ) -> DeviceResult<CommandBuffer> {
+        Ok(CommandBuffer::new())
     }
 
     unsafe fn create_bind_group_layout(
@@ -223,7 +340,7 @@ impl crate::Device for Context {
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: Resource) {}
     unsafe fn create_bind_group(
         &self,
-        desc: &crate::BindGroupDescriptor<Resource, Resource, Resource, Resource, Resource>,
+        desc: &crate::BindGroupDescriptor<Resource, Buffer, Resource, Resource, Resource>,
     ) -> DeviceResult<Resource> {
         Ok(Resource)
     }
@@ -266,19 +383,28 @@ impl crate::Device for Context {
         Ok(Resource)
     }
     unsafe fn destroy_query_set(&self, set: Resource) {}
-    unsafe fn create_fence(&self) -> DeviceResult<Resource> {
-        Ok(Resource)
+    unsafe fn create_fence(&self) -> DeviceResult<Fence> {
+        Ok(Fence {
+            value: AtomicU64::new(0),
+        })
     }
-    unsafe fn destroy_fence(&self, fence: Resource) {}
-    unsafe fn get_fence_value(&self, fence: &Resource) -> DeviceResult<crate::FenceValue> {
-        Ok(0)
+    unsafe fn destroy_fence(&self, fence: Fence) {}
+    unsafe fn get_fence_value(&self, fence: &Fence) -> DeviceResult<crate::FenceValue> {
+        Ok(fence.value.load(Ordering::Acquire))
     }
     unsafe fn wait(
         &self,
-        fence: &Resource,
+        fence: &Fence,
         value: crate::FenceValue,
         timeout_ms: u32,
     ) -> DeviceResult<bool> {
+        // The relevant commands must have already been submitted, and noop-backend commands are
+        // executed synchronously, so there is no waiting — either it is already done,
+        // or this method was called incorrectly.
+        assert!(
+            fence.value.load(Ordering::Acquire) >= value,
+            "submission must have already been done"
+        );
         Ok(true)
     }
 
@@ -294,7 +420,7 @@ impl crate::Device for Context {
     }
     unsafe fn get_acceleration_structure_build_sizes<'a>(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, Resource>,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
         Default::default()
     }
@@ -312,202 +438,5 @@ impl crate::Device for Context {
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()
-    }
-}
-
-impl crate::CommandEncoder for Encoder {
-    type A = Api;
-
-    unsafe fn begin_encoding(&mut self, label: crate::Label) -> DeviceResult<()> {
-        Ok(())
-    }
-    unsafe fn discard_encoding(&mut self) {}
-    unsafe fn end_encoding(&mut self) -> DeviceResult<Resource> {
-        Ok(Resource)
-    }
-    unsafe fn reset_all<I>(&mut self, command_buffers: I) {}
-
-    unsafe fn transition_buffers<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::BufferBarrier<'a, Resource>>,
-    {
-    }
-
-    unsafe fn transition_textures<'a, T>(&mut self, barriers: T)
-    where
-        T: Iterator<Item = crate::TextureBarrier<'a, Resource>>,
-    {
-    }
-
-    unsafe fn clear_buffer(&mut self, buffer: &Resource, range: crate::MemoryRange) {}
-
-    unsafe fn copy_buffer_to_buffer<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
-
-    #[cfg(webgl)]
-    unsafe fn copy_external_image_to_texture<T>(
-        &mut self,
-        src: &wgt::CopyExternalImageSourceInfo,
-        dst: &Resource,
-        dst_premultiplication: bool,
-        regions: T,
-    ) where
-        T: Iterator<Item = crate::TextureCopy>,
-    {
-    }
-
-    unsafe fn copy_texture_to_texture<T>(
-        &mut self,
-        src: &Resource,
-        src_usage: wgt::TextureUses,
-        dst: &Resource,
-        regions: T,
-    ) {
-    }
-
-    unsafe fn copy_buffer_to_texture<T>(&mut self, src: &Resource, dst: &Resource, regions: T) {}
-
-    unsafe fn copy_texture_to_buffer<T>(
-        &mut self,
-        src: &Resource,
-        src_usage: wgt::TextureUses,
-        dst: &Resource,
-        regions: T,
-    ) {
-    }
-
-    unsafe fn begin_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn end_query(&mut self, set: &Resource, index: u32) {}
-    unsafe fn write_timestamp(&mut self, set: &Resource, index: u32) {}
-    unsafe fn reset_queries(&mut self, set: &Resource, range: Range<u32>) {}
-    unsafe fn copy_query_results(
-        &mut self,
-        set: &Resource,
-        range: Range<u32>,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        stride: wgt::BufferSize,
-    ) {
-    }
-
-    // render
-
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<Resource, Resource>) {
-    }
-    unsafe fn end_render_pass(&mut self) {}
-
-    unsafe fn set_bind_group(
-        &mut self,
-        layout: &Resource,
-        index: u32,
-        group: &Resource,
-        dynamic_offsets: &[wgt::DynamicOffset],
-    ) {
-    }
-    unsafe fn set_push_constants(
-        &mut self,
-        layout: &Resource,
-        stages: wgt::ShaderStages,
-        offset_bytes: u32,
-        data: &[u32],
-    ) {
-    }
-
-    unsafe fn insert_debug_marker(&mut self, label: &str) {}
-    unsafe fn begin_debug_marker(&mut self, group_label: &str) {}
-    unsafe fn end_debug_marker(&mut self) {}
-
-    unsafe fn set_render_pipeline(&mut self, pipeline: &Resource) {}
-
-    unsafe fn set_index_buffer<'a>(
-        &mut self,
-        binding: crate::BufferBinding<'a, Resource>,
-        format: wgt::IndexFormat,
-    ) {
-    }
-    unsafe fn set_vertex_buffer<'a>(
-        &mut self,
-        index: u32,
-        binding: crate::BufferBinding<'a, Resource>,
-    ) {
-    }
-    unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {}
-    unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {}
-    unsafe fn set_stencil_reference(&mut self, value: u32) {}
-    unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {}
-
-    unsafe fn draw(
-        &mut self,
-        first_vertex: u32,
-        vertex_count: u32,
-        first_instance: u32,
-        instance_count: u32,
-    ) {
-    }
-    unsafe fn draw_indexed(
-        &mut self,
-        first_index: u32,
-        index_count: u32,
-        base_vertex: i32,
-        first_instance: u32,
-        instance_count: u32,
-    ) {
-    }
-    unsafe fn draw_indirect(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) {
-    }
-    unsafe fn draw_indexed_indirect(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        draw_count: u32,
-    ) {
-    }
-    unsafe fn draw_indirect_count(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        count_buffer: &Resource,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
-    ) {
-    }
-    unsafe fn draw_indexed_indirect_count(
-        &mut self,
-        buffer: &Resource,
-        offset: wgt::BufferAddress,
-        count_buffer: &Resource,
-        count_offset: wgt::BufferAddress,
-        max_count: u32,
-    ) {
-    }
-
-    // compute
-
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<Resource>) {}
-    unsafe fn end_compute_pass(&mut self) {}
-
-    unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}
-
-    unsafe fn dispatch(&mut self, count: [u32; 3]) {}
-    unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
-
-    unsafe fn build_acceleration_structures<'a, T>(
-        &mut self,
-        _descriptor_count: u32,
-        descriptors: T,
-    ) where
-        Api: 'a,
-        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, Resource, Resource>>,
-    {
-    }
-
-    unsafe fn place_acceleration_structure_barrier(
-        &mut self,
-        _barriers: crate::AccelerationStructureBarrier,
-    ) {
     }
 }

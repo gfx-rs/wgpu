@@ -137,8 +137,17 @@ pub enum FunctionError {
     LastCaseFallTrough,
     #[error("The pointer {0:?} doesn't relate to a valid destination for a store")]
     InvalidStorePointer(Handle<crate::Expression>),
-    #[error("The value {0:?} can not be stored")]
-    InvalidStoreValue(Handle<crate::Expression>),
+    #[error("Image store texture parameter type mismatch")]
+    InvalidStoreTexture {
+        actual: Handle<crate::Expression>,
+        actual_ty: crate::TypeInner,
+    },
+    #[error("Image store value parameter type mismatch")]
+    InvalidStoreValue {
+        actual: Handle<crate::Expression>,
+        actual_ty: crate::TypeInner,
+        expected_ty: crate::TypeInner,
+    },
     #[error("The type of {value:?} doesn't match the type stored in {pointer:?}")]
     InvalidStoreTypes {
         pointer: Handle<crate::Expression>,
@@ -168,6 +177,8 @@ pub enum FunctionError {
     InvalidRayDescriptor(Handle<crate::Expression>),
     #[error("Ray Query {0:?} does not have a matching type")]
     InvalidRayQueryType(Handle<crate::Type>),
+    #[error("Hit distance {0:?} must be an f32")]
+    InvalidHitDistanceType(Handle<crate::Expression>),
     #[error("Shader requires capability {0:?}")]
     MissingCapability(super::Capabilities),
     #[error(
@@ -1007,8 +1018,15 @@ impl super::Validator {
                     let value_ty = context.resolve_type(value, &self.valid_expression_set)?;
                     match *value_ty {
                         Ti::Image { .. } | Ti::Sampler { .. } => {
-                            return Err(FunctionError::InvalidStoreValue(value)
-                                .with_span_handle(value, context.expressions));
+                            return Err(FunctionError::InvalidStoreTexture {
+                                actual: value,
+                                actual_ty: value_ty.clone(),
+                            }
+                            .with_span_context((
+                                context.expressions.get_span(value),
+                                format!("this value is of type {value_ty:?}"),
+                            ))
+                            .with_span(span, "expects a texture argument"));
                         }
                         _ => {}
                     }
@@ -1165,9 +1183,22 @@ impl super::Validator {
 
                     // The value we're writing had better match the scalar type
                     // for `image`'s format.
-                    if *context.resolve_type(value, &self.valid_expression_set)? != value_ty {
-                        return Err(FunctionError::InvalidStoreValue(value)
-                            .with_span_handle(value, context.expressions));
+                    let actual_value_ty =
+                        context.resolve_type(value, &self.valid_expression_set)?;
+                    if actual_value_ty != &value_ty {
+                        return Err(FunctionError::InvalidStoreValue {
+                            actual: value,
+                            actual_ty: actual_value_ty.clone(),
+                            expected_ty: value_ty.clone(),
+                        }
+                        .with_span_context((
+                            context.expressions.get_span(value),
+                            format!("this value is of type {actual_value_ty:?}"),
+                        ))
+                        .with_span(
+                            span,
+                            format!("expects a value argument of type {value_ty:?}"),
+                        ));
                     }
                 }
                 S::Call {
@@ -1458,6 +1489,19 @@ impl super::Validator {
                         crate::RayQueryFunction::Proceed { result } => {
                             self.emit_expression(result, context)?;
                         }
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            match *context.resolve_type(hit_t, &self.valid_expression_set)? {
+                                Ti::Scalar(crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    width: _,
+                                }) => {}
+                                _ => {
+                                    return Err(FunctionError::InvalidHitDistanceType(hit_t)
+                                        .with_span_static(span, "invalid hit_t"))
+                                }
+                            }
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
                     }
                 }

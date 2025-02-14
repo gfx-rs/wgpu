@@ -4,7 +4,15 @@ use criterion::{criterion_group, Criterion, Throughput};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::sync::LazyLock;
 
-use crate::DeviceState;
+use crate::{is_test, DeviceState};
+
+fn thread_count_list() -> &'static [usize] {
+    if is_test() {
+        &[2]
+    } else {
+        &[1, 2, 4, 8]
+    }
+}
 
 fn run_bench(ctx: &mut Criterion) {
     let state = LazyLock::new(DeviceState::new);
@@ -14,7 +22,7 @@ fn run_bench(ctx: &mut Criterion) {
     let mut group = ctx.benchmark_group("Resource Creation: Large Buffer");
     group.throughput(Throughput::Elements(RESOURCES_TO_CREATE as _));
 
-    for threads in [1, 2, 4, 8] {
+    for &threads in thread_count_list() {
         let resources_per_thread = RESOURCES_TO_CREATE / threads;
         group.bench_function(
             format!("{threads} threads x {resources_per_thread} resource"),

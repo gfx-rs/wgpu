@@ -17,18 +17,21 @@ void swizzle_of_compose()
 {
     int4 out_ = int4(4, 3, 2, 1);
 
+    return;
 }
 
 void index_of_compose()
 {
     int out_1 = 2;
 
+    return;
 }
 
 void compose_three_deep()
 {
     int out_2 = 6;
 
+    return;
 }
 
 void non_constant_initializers()
@@ -55,18 +58,21 @@ void splat_of_constant()
 {
     int4 out_4 = int4(-4, -4, -4, -4);
 
+    return;
 }
 
 void compose_of_constant()
 {
     int4 out_5 = int4(-4, -4, -4, -4);
 
+    return;
 }
 
 void compose_of_splat()
 {
     float4 x_1 = float4(2.0, 1.0, 1.0, 1.0);
 
+    return;
 }
 
 uint map_texture_kind(int texture_kind)
@@ -85,6 +91,15 @@ uint map_texture_kind(int texture_kind)
             return 0u;
         }
     }
+}
+
+void compose_vector_zero_val_binop()
+{
+    int3 a = int3(1, 1, 1);
+    int3 b = int3(0, 1, 2);
+    int3 c = int3(1, 0, 2);
+
+    return;
 }
 
 [numthreads(2, 3, 1)]

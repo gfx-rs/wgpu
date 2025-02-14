@@ -87,3 +87,10 @@ fn compose_of_splat() {
 
 const add_vec = vec2(1.0f) + vec2(3.0f, 4.0f);
 const compare_vec = vec2(3.0f) == vec2(3.0f, 4.0f);
+
+// Ensure binary ops correctly flatten compositions of vector zero values
+fn compose_vector_zero_val_binop() {
+    var a = vec3(vec2i(), 0) + vec3(1);
+    var b = vec3(vec2i(), 0) + vec3(0, 1, 2);
+    var c = vec3(vec2i(), 2) + vec3(1, vec2i());
+}

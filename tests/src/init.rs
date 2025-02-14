@@ -51,6 +51,8 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
                 ..Default::default()
             }
             .with_env(),
+            // TODO(https://github.com/gfx-rs/wgpu/issues/7119): Enable noop backend?
+            noop: wgpu::NoopBackendOptions::default(),
         },
     })
 }

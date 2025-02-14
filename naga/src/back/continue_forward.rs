@@ -222,7 +222,7 @@ impl ContinueCtx {
             // forward continue statements within this `Switch`. We can leave
             // the stack empty.
             None => None,
-            Some(&Nesting::Loop { .. }) => {
+            Some(&Nesting::Loop) => {
                 let variable = Rc::new(namer.call("should_continue"));
                 self.stack.push(Nesting::Switch {
                     variable: Rc::clone(&variable),
@@ -253,7 +253,7 @@ impl ContinueCtx {
             // This doesn't indicate a problem: we don't start pushing entries
             // for `Switch` statements unless we have an enclosing `Loop`.
             None => ExitControlFlow::None,
-            Some(Nesting::Loop { .. }) => {
+            Some(Nesting::Loop) => {
                 unreachable!("Unexpected loop state when exiting switch");
             }
             Some(Nesting::Switch {

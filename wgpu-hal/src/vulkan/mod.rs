@@ -786,6 +786,7 @@ pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    compacted_size_query: Option<vk::QueryPool>,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
@@ -1480,7 +1481,7 @@ fn get_lost_err() -> crate::DeviceError {
 #[repr(C)]
 struct RawTlasInstance {
     transform: [f32; 12],
-    custom_index_and_mask: u32,
+    custom_data_and_mask: u32,
     shader_binding_table_record_offset_and_flags: u32,
     acceleration_structure_reference: u64,
 }

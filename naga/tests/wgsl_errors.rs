@@ -1107,7 +1107,7 @@ fn invalid_functions() {
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::InvalidPointerToUnsized {
                 base: _,
-                space: naga::AddressSpace::WorkGroup { .. },
+                space: naga::AddressSpace::WorkGroup,
             },
             ..
         })
@@ -2092,19 +2092,62 @@ fn function_param_redefinition_as_local() {
 }
 
 #[test]
+fn struct_member_redefinition() {
+    check(
+        "
+        struct A {
+            a: f32,
+            a: f32,
+        }
+    ",
+        r###"error: redefinition of `a`
+  ┌─ wgsl:3:13
+  │
+3 │             a: f32,
+  │             ^ previous definition of `a`
+4 │             a: f32,
+  │             ^ redefinition of `a`
+
+"###,
+    )
+}
+
+#[test]
+fn function_must_return_value() {
+    check_validation!(
+        "fn func() -> i32 {
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
+    check_validation!(
+        "fn func(x: i32) -> i32 {
+            let y = x + 10;
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
+}
+
+#[test]
 fn constructor_type_error_span() {
     check(
         "
         fn unfortunate() {
-            var i: i32;
-            var a: array<f32, 1> = array<f32, 1>(i);
+            var a: array<i32, 1> = array<i32, 1>(1.0);
         }
     ",
-        r###"error: automatic conversions cannot convert `i32` to `f32`
-  ┌─ wgsl:4:36
+        r###"error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
+  ┌─ wgsl:3:36
   │
-4 │             var a: array<f32, 1> = array<f32, 1>(i);
-  │                                    ^^^^^^^^^^^^^ a value of type f32 is required here
+3 │             var a: array<i32, 1> = array<i32, 1>(1.0);
+  │                                    ^^^^^^^^^^^^^ ^^^ this expression has type {AbstractFloat}
+  │                                    │              
+  │                                    a value of type i32 is required here
 
 "###,
     )

@@ -3,6 +3,7 @@ use crate::arena::{Arena, Handle};
 
 pub struct ExpressionTracer<'tracer> {
     pub constants: &'tracer Arena<crate::Constant>,
+    pub overrides: &'tracer Arena<crate::Override>,
 
     /// The arena in which we are currently tracing expressions.
     pub expressions: &'tracer Arena<crate::Expression>,
@@ -12,6 +13,9 @@ pub struct ExpressionTracer<'tracer> {
 
     /// The used map for `constants`.
     pub constants_used: &'tracer mut HandleSet<crate::Constant>,
+
+    /// The used map for `overrides`.
+    pub overrides_used: &'tracer mut HandleSet<crate::Override>,
 
     /// The used set for `arena`.
     ///
@@ -78,25 +82,35 @@ impl ExpressionTracer<'_> {
             | Ex::SubgroupBallotResult
             | Ex::RayQueryProceedResult => {}
 
+            // Expressions can refer to constants and overrides, which can refer
+            // in turn to expressions, which complicates our nice one-pass
+            // algorithm. But since constants and overrides don't refer to each
+            // other directly, only via expressions, we can get around this by
+            // looking *through* each constant/override and marking its
+            // initializer expression as used immediately. Since `expr` refers
+            // to the constant/override, which then refers to the initializer,
+            // the initializer must precede `expr` in the arena, so we know we
+            // have yet to visit the initializer, so it's not too late to mark
+            // it.
             Ex::Constant(handle) => {
                 self.constants_used.insert(handle);
-                // Constants and expressions are mutually recursive, which
-                // complicates our nice one-pass algorithm. However, since
-                // constants don't refer to each other, we can get around
-                // this by looking *through* each constant and marking its
-                // initializer as used. Since `expr` refers to the constant,
-                // and the constant refers to the initializer, it must
-                // precede `expr` in the arena.
-                let init = self.constants[handle].init;
+                let constant = &self.constants[handle];
+                self.types_used.insert(constant.ty);
                 match self.global_expressions_used {
-                    Some(ref mut used) => used.insert(init),
-                    None => self.expressions_used.insert(init),
+                    Some(ref mut used) => used.insert(constant.init),
+                    None => self.expressions_used.insert(constant.init),
                 };
             }
-            Ex::Override(_) => {
-                // All overrides are considered used by definition. We mark
-                // their types and initialization expressions as used in
-                // `compact::compact`, so we have no more work to do here.
+            Ex::Override(handle) => {
+                self.overrides_used.insert(handle);
+                let r#override = &self.overrides[handle];
+                self.types_used.insert(r#override.ty);
+                if let Some(init) = r#override.init {
+                    match self.global_expressions_used {
+                        Some(ref mut used) => used.insert(init),
+                        None => self.expressions_used.insert(init),
+                    };
+                }
             }
             Ex::ZeroValue(ty) => {
                 self.types_used.insert(ty);
@@ -256,11 +270,9 @@ impl ModuleMap {
             | Ex::SubgroupBallotResult
             | Ex::RayQueryProceedResult => {}
 
-            // All overrides are retained, so their handles never change.
-            Ex::Override(_) => {}
-
             // Expressions that contain handles that need to be adjusted.
             Ex::Constant(ref mut constant) => self.constants.adjust(constant),
+            Ex::Override(ref mut r#override) => self.overrides.adjust(r#override),
             Ex::ZeroValue(ref mut ty) => self.types.adjust(ty),
             Ex::Compose {
                 ref mut ty,

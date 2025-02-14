@@ -908,4 +908,7 @@ pub const TYPES: &[&str] = &{
     res
 };
 
-pub const RESERVED_PREFIXES: &[&str] = &["__dynamic_buffer_offsets"];
+pub const RESERVED_PREFIXES: &[&str] = &[
+    "__dynamic_buffer_offsets",
+    super::help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+];

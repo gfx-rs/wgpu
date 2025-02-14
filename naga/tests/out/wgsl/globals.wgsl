@@ -42,6 +42,7 @@ fn test_msl_packed_vec3_() {
     let mvm1_ = (mat3x3<f32>() * data.v3_);
     let svm0_ = (data.v3_ * 2f);
     let svm1_ = (2f * data.v3_);
+    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 

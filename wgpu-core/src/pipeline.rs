@@ -122,9 +122,9 @@ pub enum CreateShaderModuleError {
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ProgrammableStageDescriptor<'a> {
+pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// The compiled shader module for this stage.
-    pub module: ShaderModuleId,
+    pub module: SM,
     /// The name of the entry point in the compiled shader. The name is selected using the
     /// following logic:
     ///
@@ -139,7 +139,7 @@ pub struct ProgrammableStageDescriptor<'a> {
     /// the key must be the constant's identifier name.
     ///
     /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: Cow<'a, naga::back::PipelineConstants>,
+    pub constants: naga::back::PipelineConstants,
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
@@ -147,32 +147,9 @@ pub struct ProgrammableStageDescriptor<'a> {
     pub zero_initialize_workgroup_memory: bool,
 }
 
-/// Describes a programmable pipeline stage.
-#[derive(Clone, Debug)]
-pub struct ResolvedProgrammableStageDescriptor<'a> {
-    /// The compiled shader module for this stage.
-    pub module: Arc<ShaderModule>,
-    /// The name of the entry point in the compiled shader. The name is selected using the
-    /// following logic:
-    ///
-    /// * If `Some(name)` is specified, there must be a function with this name in the shader.
-    /// * If a single entry point associated with this stage must be in the shader, then proceed as
-    ///   if `Some(…)` was specified with that entry point's name.
-    pub entry_point: Option<Cow<'a, str>>,
-    /// Specifies the values of pipeline-overridable constants in the shader module.
-    ///
-    /// If an `@id` attribute was specified on the declaration,
-    /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-    /// the key must be the constant's identifier name.
-    ///
-    /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: Cow<'a, naga::back::PipelineConstants>,
-    /// Whether workgroup scoped memory will be initialized with zero values for this stage.
-    ///
-    /// This is required by the WebGPU spec, but may have overhead which can be avoided
-    /// for cross-platform applications
-    pub zero_initialize_workgroup_memory: bool,
-}
+/// cbindgen:ignore
+pub type ResolvedProgrammableStageDescriptor<'a> =
+    ProgrammableStageDescriptor<'a, Arc<ShaderModule>>;
 
 /// Number of implicit bind groups derived at pipeline creation.
 pub type ImplicitBindGroupCount = u8;
@@ -195,27 +172,24 @@ pub enum ImplicitLayoutError {
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ComputePipelineDescriptor<'a> {
+pub struct ComputePipelineDescriptor<
+    'a,
+    PLL = PipelineLayoutId,
+    SM = ShaderModuleId,
+    PLC = PipelineCacheId,
+> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: Option<PipelineLayoutId>,
+    pub layout: Option<PLL>,
     /// The compiled compute stage and its entry point.
-    pub stage: ProgrammableStageDescriptor<'a>,
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<PipelineCacheId>,
+    pub cache: Option<PLC>,
 }
 
-/// Describes a compute pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedComputePipelineDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<Arc<PipelineLayout>>,
-    /// The compiled compute stage and its entry point.
-    pub stage: ResolvedProgrammableStageDescriptor<'a>,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<Arc<PipelineCache>>,
-}
+/// cbindgen:ignore
+pub type ResolvedComputePipelineDescriptor<'a> =
+    ComputePipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -328,50 +302,43 @@ pub struct VertexBufferLayout<'a> {
 /// Describes the vertex process in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct VertexState<'a> {
+pub struct VertexState<'a, SM = ShaderModuleId> {
     /// The compiled vertex stage and its entry point.
-    pub stage: ProgrammableStageDescriptor<'a>,
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
 }
 
-/// Describes the vertex process in a render pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedVertexState<'a> {
-    /// The compiled vertex stage and its entry point.
-    pub stage: ResolvedProgrammableStageDescriptor<'a>,
-    /// The format of any vertex buffers used with this pipeline.
-    pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
-}
+/// cbindgen:ignore
+pub type ResolvedVertexState<'a> = VertexState<'a, Arc<ShaderModule>>;
 
 /// Describes fragment processing in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FragmentState<'a> {
+pub struct FragmentState<'a, SM = ShaderModuleId> {
     /// The compiled fragment stage and its entry point.
-    pub stage: ProgrammableStageDescriptor<'a>,
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
     /// The effect of draw calls on the color aspect of the output target.
     pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
 
-/// Describes fragment processing in a render pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedFragmentState<'a> {
-    /// The compiled fragment stage and its entry point.
-    pub stage: ResolvedProgrammableStageDescriptor<'a>,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
-}
+/// cbindgen:ignore
+pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RenderPipelineDescriptor<'a> {
+pub struct RenderPipelineDescriptor<
+    'a,
+    PLL = PipelineLayoutId,
+    SM = ShaderModuleId,
+    PLC = PipelineCacheId,
+> {
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
-    pub layout: Option<PipelineLayoutId>,
+    pub layout: Option<PLL>,
     /// The vertex processing state for this pipeline.
-    pub vertex: VertexState<'a>,
+    pub vertex: VertexState<'a, SM>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     #[cfg_attr(feature = "serde", serde(default))]
     pub primitive: wgt::PrimitiveState,
@@ -382,36 +349,17 @@ pub struct RenderPipelineDescriptor<'a> {
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,
     /// The fragment processing state for this pipeline.
-    pub fragment: Option<FragmentState<'a>>,
+    pub fragment: Option<FragmentState<'a, SM>>,
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<PipelineCacheId>,
+    pub cache: Option<PLC>,
 }
 
-/// Describes a render (graphics) pipeline.
-#[derive(Clone, Debug)]
-pub struct ResolvedRenderPipelineDescriptor<'a> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<Arc<PipelineLayout>>,
-    /// The vertex processing state for this pipeline.
-    pub vertex: ResolvedVertexState<'a>,
-    /// The properties of the pipeline at the primitive assembly and rasterization level.
-    pub primitive: wgt::PrimitiveState,
-    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil: Option<wgt::DepthStencilState>,
-    /// The multi-sampling properties of the pipeline.
-    pub multisample: wgt::MultisampleState,
-    /// The fragment processing state for this pipeline.
-    pub fragment: Option<ResolvedFragmentState<'a>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
-    /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<Arc<PipelineCache>>,
-}
+/// cbindgen:ignore
+pub type ResolvedRenderPipelineDescriptor<'a> =
+    RenderPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

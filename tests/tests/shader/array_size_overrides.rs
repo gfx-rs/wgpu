@@ -52,7 +52,7 @@ async fn array_size_overrides(
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(SHADER)),
         });
     let pipeline_options = wgpu::PipelineCompilationOptions {
-        constants: &[("n".to_owned(), n.unwrap_or(0).into())].into(),
+        constants: &[("n", f64::from(n.unwrap_or(0)))],
         ..Default::default()
     };
     let compute_pipeline = fail_if(

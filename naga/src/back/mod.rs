@@ -263,7 +263,7 @@ impl crate::TypeInner {
         match *self {
             crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure { .. } => true,
+            | crate::TypeInner::AccelerationStructure => true,
             _ => false,
         }
     }

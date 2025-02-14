@@ -7,7 +7,17 @@ use criterion::{criterion_group, Criterion, Throughput};
 use nanorand::{Rng, WyRand};
 use std::sync::LazyLock;
 
-use crate::DeviceState;
+use crate::{is_test, DeviceState};
+
+// Creating 50_000 textures takes a considerable amount of time with syncval enabled.
+//
+// We greatly reduce the number of textures for the test case to keep the runtime
+// reasonable for testing.
+const MAX_TEXTURE_COUNT_BENCHMARK: u32 = 50_000;
+const TEXTURE_COUNTS_BENCHMARK: &[u32] = &[5, 50, 500, 5_000, 50_000];
+
+const MAX_TEXTURE_COUNT_TEST: u32 = 5;
+const TEXTURE_COUNTS_TEST: &[u32] = &[5];
 
 struct BindGroupState {
     device_state: DeviceState,
@@ -19,7 +29,11 @@ impl BindGroupState {
     fn new() -> Self {
         let device_state = DeviceState::new();
 
-        const TEXTURE_COUNT: u32 = 50_000;
+        let texture_count = if is_test() {
+            MAX_TEXTURE_COUNT_TEST
+        } else {
+            MAX_TEXTURE_COUNT_BENCHMARK
+        };
 
         // Performance gets considerably worse if the resources are shuffled.
         //
@@ -27,8 +41,8 @@ impl BindGroupState {
         // well defined usage order.
         let mut random = WyRand::new_seed(0x8BADF00D);
 
-        let mut texture_views = Vec::with_capacity(TEXTURE_COUNT as usize);
-        for i in 0..TEXTURE_COUNT {
+        let mut texture_views = Vec::with_capacity(texture_count as usize);
+        for i in 0..texture_count {
             let texture = device_state
                 .device
                 .create_texture(&wgpu::TextureDescriptor {
@@ -64,7 +78,13 @@ fn run_bench(ctx: &mut Criterion) {
 
     let mut group = ctx.benchmark_group("Bind Group Creation");
 
-    for count in [5, 50, 500, 5_000, 50_000] {
+    let count_list = if is_test() {
+        TEXTURE_COUNTS_TEST
+    } else {
+        TEXTURE_COUNTS_BENCHMARK
+    };
+
+    for &count in count_list {
         group.throughput(Throughput::Elements(count as u64));
         group.bench_with_input(
             format!("{} Element Bind Group", count),

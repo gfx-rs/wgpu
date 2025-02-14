@@ -734,7 +734,7 @@ impl Global {
             {
                 let resolve_buffer = |bb: &BufferBinding| {
                     buffer_storage
-                        .get(bb.buffer_id)
+                        .get(bb.buffer)
                         .get()
                         .map(|buffer| ResolvedBufferBinding {
                             buffer,

@@ -154,8 +154,8 @@ impl super::Adapter {
         }
         .unwrap();
 
-        if options.ResourceHeapTier == Direct3D12::D3D12_RESOURCE_HEAP_TIER_1 {
-            // We require Tier 2 for the ability to make samplers bindless in all cases.
+        if options.ResourceBindingTier.0 < Direct3D12::D3D12_RESOURCE_BINDING_TIER_2.0 {
+            // We require Tier 2 or higher for the ability to make samplers bindless in all cases.
             return None;
         }
 
@@ -212,7 +212,16 @@ impl super::Adapter {
                 )
             };
 
-            if res.is_ok() {
+            // Sometimes on Windows 11 23H2, the function returns success, even though the runtime
+            // does not know about `Options19`. This can cause this number to be 0 as the structure isn't written to.
+            // This value is nonsense and creating zero-sized sampler heaps can cause drivers to explode.
+            // As as we're guaranteed 2048 anyway, we make sure this value is not under 2048.
+            //
+            // https://github.com/gfx-rs/wgpu/issues/7053
+            let is_ok = res.is_ok();
+            let is_above_minimum = features19.MaxSamplerDescriptorHeapSize
+                > Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE;
+            if is_ok && is_above_minimum {
                 max_sampler_descriptor_heap_size = features19.MaxSamplerDescriptorHeapSize;
             }
         };
@@ -854,7 +863,18 @@ impl crate::Adapter for super::Adapter {
                 | wgt::TextureUses::COPY_SRC
                 | wgt::TextureUses::COPY_DST,
             present_modes,
-            composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            composite_alpha_modes: match surface.target {
+                SurfaceTarget::WndHandle(_) => vec![wgt::CompositeAlphaMode::Opaque],
+                SurfaceTarget::Visual(_)
+                | SurfaceTarget::SurfaceHandle(_)
+                | SurfaceTarget::SwapChainPanel(_) => vec![
+                    wgt::CompositeAlphaMode::Auto,
+                    wgt::CompositeAlphaMode::Inherit,
+                    wgt::CompositeAlphaMode::Opaque,
+                    wgt::CompositeAlphaMode::PostMultiplied,
+                    wgt::CompositeAlphaMode::PreMultiplied,
+                ],
+            },
         })
     }
 

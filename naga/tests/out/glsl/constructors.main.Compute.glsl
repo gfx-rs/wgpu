@@ -33,5 +33,6 @@ void main() {
     int cit2_[4] = int[4](0, 1, 2, 3);
     uvec2 ic4_ = uvec2(0u, 0u);
     mat2x3 ic5_ = mat2x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+    return;
 }
 

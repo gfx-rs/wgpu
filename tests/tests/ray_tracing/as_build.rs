@@ -292,7 +292,8 @@ fn build_with_transform(ctx: TestingContext) {
     let blas = ctx.device.create_blas(
         &CreateBlasDescriptor {
             label: Some("BLAS"),
-            flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
+            flags: AccelerationStructureFlags::PREFER_FAST_TRACE
+                | AccelerationStructureFlags::USE_TRANSFORM,
             update_mode: AccelerationStructureUpdateMode::Build,
         },
         BlasGeometrySizeDescriptors::Triangles {

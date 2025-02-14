@@ -1,4 +1,5 @@
 use super::{
+    help,
     help::{
         WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess,
         WrappedZeroValue,
@@ -141,6 +142,33 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.written_candidate_intersection = false;
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
+    }
+
+    /// Generates statements to be inserted immediately before and at the very
+    /// start of the body of each loop, to defeat infinite loop reasoning.
+    /// The 0th item of the returned tuple should be inserted immediately prior
+    /// to the loop and the 1st item should be inserted at the very start of
+    /// the loop body.
+    ///
+    /// See [`back::msl::Writer::gen_force_bounded_loop_statements`] for details.
+    fn gen_force_bounded_loop_statements(
+        &mut self,
+        level: back::Level,
+    ) -> Option<(String, String)> {
+        if !self.options.force_loop_bounding {
+            return None;
+        }
+
+        let loop_bound_name = self.namer.call("loop_bound");
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u, 0u);");
+        let level = level.next();
+        let max = u32::MAX;
+        let break_and_inc = format!(
+            "{level}if (all({loop_bound_name} == uint2({max}u, {max}u))) {{ break; }}
+{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+        );
+
+        Some((decl, break_and_inc))
     }
 
     /// Helper method used to find which expressions of a given function require baking
@@ -314,7 +342,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.write_special_functions(module)?;
 
-        self.write_wrapped_compose_functions(module, &module.global_expressions)?;
+        self.write_wrapped_expression_functions(module, &module.global_expressions, None)?;
         self.write_wrapped_zero_value_functions(module, &module.global_expressions)?;
 
         // Write all named constants
@@ -2162,12 +2190,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ref continuing,
                 break_if,
             } => {
-                self.continue_ctx.enter_loop();
-                let l2 = level.next();
-                if !continuing.is_empty() || break_if.is_some() {
-                    let gate_name = self.namer.call("loop_init");
+                let force_loop_bound_statements = self.gen_force_bounded_loop_statements(level);
+                let gate_name = (!continuing.is_empty() || break_if.is_some())
+                    .then(|| self.namer.call("loop_init"));
+
+                if let Some((ref decl, _)) = force_loop_bound_statements {
+                    writeln!(self.out, "{decl}")?;
+                }
+                if let Some(ref gate_name) = gate_name {
                     writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                    writeln!(self.out, "{level}while(true) {{")?;
+                }
+
+                self.continue_ctx.enter_loop();
+                writeln!(self.out, "{level}while(true) {{")?;
+                if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                    writeln!(self.out, "{break_and_inc}")?;
+                }
+                let l2 = level.next();
+                if let Some(gate_name) = gate_name {
                     writeln!(self.out, "{l2}if (!{gate_name}) {{")?;
                     let l3 = l2.next();
                     for sta in continuing.iter() {
@@ -2182,13 +2222,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     writeln!(self.out, "{l2}}}")?;
                     writeln!(self.out, "{l2}{gate_name} = false;")?;
-                } else {
-                    writeln!(self.out, "{level}while(true) {{")?;
                 }
 
                 for sta in body.iter() {
                     self.write_stmt(module, sta, func_ctx, l2)?;
                 }
+
                 writeln!(self.out, "{level}}}")?;
                 self.continue_ctx.exit_loop();
             }
@@ -2414,7 +2453,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Proceed();")?;
                 }
+                RayQueryFunction::GenerateIntersection { hit_t } => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ".CommitProceduralPrimitiveHit(")?;
+                    self.write_expr(module, hit_t, func_ctx)?;
+                    writeln!(self.out, ");")?;
+                }
+                RayQueryFunction::ConfirmIntersection => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
+                }
                 RayQueryFunction::Terminate => {
+                    write!(self.out, "{level}")?;
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Abort();")?;
                 }
@@ -3101,6 +3153,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 sample,
                 level,
             } => {
+                let mut wrapping_type = None;
+                match *func_ctx.resolve_type(image, &module.types) {
+                    TypeInner::Image {
+                        class: crate::ImageClass::Storage { format, .. },
+                        ..
+                    } => {
+                        if format.single_component() {
+                            wrapping_type = Some(Scalar::from(format));
+                        }
+                    }
+                    _ => {}
+                }
+                if let Some(scalar) = wrapping_type {
+                    write!(
+                        self.out,
+                        "{}{}(",
+                        help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+                        scalar.to_hlsl_str()?
+                    )?;
+                }
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ".Load(")?;
@@ -3121,6 +3193,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 // close bracket for Load function
                 write!(self.out, ")")?;
+
+                if wrapping_type.is_some() {
+                    write!(self.out, ")")?;
+                }
 
                 // return x component if return type is scalar
                 if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
