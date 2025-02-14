@@ -465,16 +465,20 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn next_acceleration_structure_flags(
         &mut self,
     ) -> Result<bool, Error<'a>> {
-        Ok(if self.peek().0 == Token::Paren('<') {
-            self.expect(Token::Paren('<'))?;
-            let (name, span) = self.next_ident_with_span()?;
-            let ret = if name == "vertex_return" {
-                true
+        Ok(if self.skip(Token::Paren('<')) {
+            if !self.skip(Token::Paren('>')) {
+                let (name, span) = self.next_ident_with_span()?;
+                let ret = if name == "vertex_return" {
+                    true
+                } else {
+                    return Err(Error::UnknownAttribute(span));
+                };
+                self.skip(Token::Separator(','));
+                self.expect(Token::Paren('>'))?;
+                ret
             } else {
-                return Err(Error::UnknownAttribute(span));
-            };
-            self.expect(Token::Paren('>'))?;
-            ret
+                false
+            }
         } else {
             false
         })
