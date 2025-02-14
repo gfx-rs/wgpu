@@ -477,7 +477,7 @@ impl Device {
         let result = if queue_empty {
             if let Some(wait_submission_index) = wait_submission_index {
                 // Assert to ensure that if we received a queue empty status, the fence shows the correct value.
-                // This is defencive, as this should never be hit.
+                // This is defensive, as this should never be hit.
                 assert!(
                     current_finished_submission >= wait_submission_index,
                     "If the queue is empty, the current submission index ({}) should be at least the wait submission index ({})",

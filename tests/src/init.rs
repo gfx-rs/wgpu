@@ -44,6 +44,11 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
             },
             gl: wgpu::GlBackendOptions {
                 fence_behavior: if cfg!(target_family = "wasm") {
+                    // On WebGL, you cannot call Poll(Wait) with any timeout. This is because the
+                    // browser does not things to block. However all of our tests are written to
+                    // expect this behavior. This is the workaround to allow this to work.
+                    //
+                    // However on native you can wait, so we want to ensure that behavior as well.
                     wgpu::GlFenceBehavior::AutoFinish
                 } else {
                     wgpu::GlFenceBehavior::Normal

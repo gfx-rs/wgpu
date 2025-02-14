@@ -1878,7 +1878,8 @@ impl Global {
                     // We're happy
                     Ok(wgt::PollStatus::QueueEmpty) => {}
                     Ok(wgt::PollStatus::WaitSucceeded) => {
-                        // After the wait, the queue should be empty.
+                        // After the wait, the queue should be empty. It can only be non-empty
+                        // if another thread is submitting at the same time.
                         break 'error E::GpuWaitTimeout;
                     }
                     Ok(wgt::PollStatus::Poll) => {

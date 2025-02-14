@@ -4041,7 +4041,7 @@ impl<T> PollType<T> {
     }
 }
 
-/// Error states after a poll
+/// Error states after a device poll
 #[derive(Debug)]
 #[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum PollError {
@@ -4053,7 +4053,7 @@ pub enum PollError {
     Timeout,
 }
 
-/// Status of poll operation.
+/// Status of device poll operation.
 #[derive(Debug, PartialEq, Eq)]
 pub enum PollStatus {
     /// There are no active submissions in flight as of the beginning of the poll call.
