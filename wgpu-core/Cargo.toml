@@ -126,7 +126,10 @@ metal = ["wgpu-core-platform-apple/metal"]
 ## Vulkan backend, only available on Windows, Linux, Android
 vulkan = ["wgpu-core-platform-windows-linux-android/vulkan"]
 ## OpenGL backend, only available on Windows, Linux, Android, and Emscripten
-gles = ["wgpu-core-platform-windows-linux-android/gles", "wgpu-core-platform-emscripten/gles"]
+gles = [
+    "wgpu-core-platform-windows-linux-android/gles",
+    "wgpu-core-platform-emscripten/gles",
+]
 
 ## WebGL backend, only available on Emscripten
 webgl = ["wgpu-core-platform-wasm/webgl"]
@@ -141,11 +144,6 @@ renderdoc = ["wgpu-core-platform-windows-linux-android/renderdoc"]
 # TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
 noop = []
 
-[dependencies]
-naga.workspace = true
-wgpu-hal.workspace = true
-wgpu-types.workspace = true
-
 # The target limitation here isn't needed, but prevents more than one of these
 # platform crates from being included in the build at a time, preventing users
 # from getting confused by seeing them in the list of crates.
@@ -157,6 +155,11 @@ wgpu-core-platform-emscripten = { workspace = true, optional = true }
 wgpu-core-platform-wasm = { workspace = true, optional = true }
 [target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
 wgpu-core-platform-windows-linux-android = { workspace = true, optional = true }
+
+[dependencies]
+naga.workspace = true
+wgpu-hal.workspace = true
+wgpu-types.workspace = true
 
 arrayvec.workspace = true
 bit-vec.workspace = true
