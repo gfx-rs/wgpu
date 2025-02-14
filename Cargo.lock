@@ -4649,6 +4649,7 @@ name = "wgpu-core"
 version = "24.0.0"
 dependencies = [
  "arrayvec",
+ "bit-set 0.8.0",
  "bit-vec 0.8.0",
  "bitflags 2.9.0",
  "bytemuck",

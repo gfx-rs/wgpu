@@ -30,6 +30,11 @@ impl<T> Mutex<T> {
     pub fn lock(&self) -> MutexGuard<T> {
         MutexGuard(self.0.lock())
     }
+
+    #[allow(dead_code)]
+    pub fn into_inner(self) -> T {
+        self.0.into_inner()
+    }
 }
 
 impl<'a, T> ops::Deref for MutexGuard<'a, T> {

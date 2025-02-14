@@ -784,29 +784,38 @@ fn multi_draw_indirect(
 
     let buffer = buffer_guard.get(buffer_id).get()?;
 
-    state
-        .trackers
-        .buffers
-        .merge_single(&buffer, wgt::BufferUses::INDIRECT)?;
-
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
+    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
+
+    let stride = super::get_stride_of_indirect_args(indexed);
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..(offset + size_of::<wgt::DrawIndirectArgs>() as u64),
+            offset..(offset + stride),
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    if indexed {
+    let vertex_or_index_limit = if indexed {
         let index = match state.index {
             Some(ref mut index) => index,
             None => return Err(DrawError::MissingIndexBuffer.into()),
         };
         state.commands.extend(index.flush());
-    }
+        index.limit()
+    } else {
+        vertex_limits.vertex_limit
+    };
+    let instance_limit = vertex_limits.instance_limit;
+
+    #[cfg(feature = "indirect-validation")]
+    let buffer_uses = wgt::BufferUses::STORAGE_READ_ONLY;
+    #[cfg(not(feature = "indirect-validation"))]
+    let buffer_uses = wgt::BufferUses::INDIRECT;
+
+    state.trackers.buffers.merge_single(&buffer, buffer_uses)?;
 
     state.flush_vertices();
     state.flush_binds(used_bind_groups, dynamic_offsets);
@@ -815,6 +824,9 @@ fn multi_draw_indirect(
         offset,
         count: 1,
         indexed,
+
+        vertex_or_index_limit,
+        instance_limit,
     });
     Ok(())
 }
@@ -833,6 +845,8 @@ pub enum CreateRenderBundleError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ExecutionError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error("Using {0} in a render bundle is not implemented")]
@@ -886,6 +900,10 @@ impl RenderBundle {
     pub(super) unsafe fn execute(
         &self,
         raw: &mut dyn hal::DynCommandEncoder,
+        #[cfg(feature = "indirect-validation")]
+        indirect_draw_validation_resources: &mut crate::indirect_draw_validation::IndirectDrawValidationResources,
+        #[cfg(feature = "indirect-validation")]
+        indirect_draw_validation_batcher: &mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
@@ -1028,19 +1046,28 @@ impl RenderBundle {
                     buffer,
                     offset,
                     count: 1,
-                    indexed: false,
+                    indexed,
+
+                    vertex_or_index_limit: _vertex_or_index_limit,
+                    instance_limit: _instance_limit,
                 } => {
-                    let buffer = buffer.try_raw(snatch_guard)?;
-                    unsafe { raw.draw_indirect(buffer, *offset, 1) };
-                }
-                Cmd::DrawIndirect {
-                    buffer,
-                    offset,
-                    count: 1,
-                    indexed: true,
-                } => {
-                    let buffer = buffer.try_raw(snatch_guard)?;
-                    unsafe { raw.draw_indexed_indirect(buffer, *offset, 1) };
+                    #[cfg(feature = "indirect-validation")]
+                    let (buffer, offset) = indirect_draw_validation_batcher.add(
+                        indirect_draw_validation_resources,
+                        &self.device,
+                        buffer.clone(),
+                        *offset,
+                        *indexed,
+                        *_vertex_or_index_limit,
+                        *_instance_limit,
+                    )?;
+                    #[cfg(not(feature = "indirect-validation"))]
+                    let (buffer, offset) = (buffer.try_raw(snatch_guard)?, *offset);
+                    if *indexed {
+                        unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
+                    } else {
+                        unsafe { raw.draw_indirect(buffer, offset, 1) };
+                    }
                 }
                 Cmd::DrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
                     return Err(ExecutionError::Unimplemented("multi-draw-indirect"))

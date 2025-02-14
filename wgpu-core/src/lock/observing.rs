@@ -80,6 +80,11 @@ impl<T> Mutex<T> {
             _state: LockStateGuard { saved },
         }
     }
+
+    #[allow(dead_code)]
+    pub fn into_inner(self) -> T {
+        self.inner.into_inner()
+    }
 }
 
 impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {

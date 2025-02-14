@@ -131,6 +131,9 @@ pub struct Device {
     pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
     #[cfg(feature = "indirect-validation")]
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    #[cfg(feature = "indirect-validation")]
+    pub(crate) indirect_draw_validation:
+        Option<crate::indirect_draw_validation::IndirectDrawValidation>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
@@ -163,6 +166,10 @@ impl Drop for Device {
         #[cfg(feature = "indirect-validation")]
         if let Some(indirect_validation) = self.indirect_validation.take() {
             indirect_validation.dispose(self.raw.as_ref());
+        }
+        #[cfg(feature = "indirect-validation")]
+        if let Some(indirect_draw_validation) = self.indirect_draw_validation.take() {
+            indirect_draw_validation.dispose(self.raw.as_ref());
         }
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
@@ -267,6 +274,25 @@ impl Device {
             None
         };
 
+        #[cfg(feature = "indirect-validation")]
+        let indirect_draw_validation = if downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION)
+        {
+            match crate::indirect_draw_validation::IndirectDrawValidation::new(
+                raw_device.as_ref(),
+                &desc.required_features,
+            ) {
+                Ok(indirect_draw_validation) => Some(indirect_draw_validation),
+                Err(e) => {
+                    log::error!("indirect-draw-validation error: {e:?}");
+                    return Err(DeviceError::Lost);
+                }
+            }
+        } else {
+            None
+        };
+
         Ok(Self {
             raw: raw_device,
             adapter: adapter.clone(),
@@ -314,6 +340,8 @@ impl Device {
             last_acceleration_structure_build_command_index: AtomicU64::new(1),
             #[cfg(feature = "indirect-validation")]
             indirect_validation,
+            #[cfg(feature = "indirect-validation")]
+            indirect_draw_validation,
         })
     }
 
@@ -655,6 +683,10 @@ impl Device {
         let raw_indirect_validation_bind_group =
             self.create_indirect_validation_bind_group(buffer.as_ref(), desc.size, desc.usage)?;
 
+        #[cfg(feature = "indirect-validation")]
+        let raw_indirect_draw_validation_bind_group = self
+            .create_indirect_draw_validation_bind_group(buffer.as_ref(), desc.size, desc.usage)?;
+
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
             device: self.clone(),
@@ -670,6 +702,8 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             #[cfg(feature = "indirect-validation")]
             raw_indirect_validation_bind_group,
+            #[cfg(feature = "indirect-validation")]
+            raw_indirect_draw_validation_bind_group,
         };
 
         let buffer = Arc::new(buffer);
@@ -761,6 +795,14 @@ impl Device {
             Err(e) => return (Fallible::Invalid(Arc::new(desc.label.to_string())), Some(e)),
         };
 
+        #[cfg(feature = "indirect-validation")]
+        let raw_indirect_draw_validation_bind_group = match self
+            .create_indirect_draw_validation_bind_group(hal_buffer.as_ref(), desc.size, desc.usage)
+        {
+            Ok(ok) => ok,
+            Err(e) => return (Fallible::Invalid(Arc::new(desc.label.to_string())), Some(e)),
+        };
+
         unsafe { self.raw().add_raw_buffer(&*hal_buffer) };
 
         let buffer = Buffer {
@@ -778,6 +820,8 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             #[cfg(feature = "indirect-validation")]
             raw_indirect_validation_bind_group,
+            #[cfg(feature = "indirect-validation")]
+            raw_indirect_draw_validation_bind_group,
         };
 
         let buffer = Arc::new(buffer);
@@ -801,6 +845,27 @@ impl Device {
             let indirect_validation = self.indirect_validation.as_ref().unwrap();
             let bind_group = indirect_validation
                 .create_src_bind_group(self.raw(), &self.limits, buffer_size, raw_buffer)
+                .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
+            match bind_group {
+                Some(bind_group) => Ok(Snatchable::new(bind_group)),
+                None => Ok(Snatchable::empty()),
+            }
+        } else {
+            Ok(Snatchable::empty())
+        }
+    }
+
+    #[cfg(feature = "indirect-validation")]
+    fn create_indirect_draw_validation_bind_group(
+        &self,
+        raw_buffer: &dyn hal::DynBuffer,
+        buffer_size: u64,
+        usage: wgt::BufferUsages,
+    ) -> Result<Snatchable<Box<dyn hal::DynBindGroup>>, resource::CreateBufferError> {
+        if usage.contains(wgt::BufferUsages::INDIRECT) {
+            let indirect_draw_validation = self.indirect_draw_validation.as_ref().unwrap();
+            let bind_group = indirect_draw_validation
+                .create_src_bind_group(self.raw(), &self.adapter.limits(), buffer_size, raw_buffer)
                 .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
             match bind_group {
                 Some(bind_group) => Ok(Snatchable::new(bind_group)),

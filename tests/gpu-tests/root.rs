@@ -24,6 +24,7 @@ mod compute_pass_ownership;
 mod create_surface_error;
 mod device;
 mod dispatch_workgroups_indirect;
+mod draw_indirect;
 mod dual_source_blending;
 mod encoder;
 mod external_texture;

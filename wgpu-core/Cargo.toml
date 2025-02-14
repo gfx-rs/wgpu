@@ -182,6 +182,7 @@ wgpu-types.workspace = true
 
 arrayvec.workspace = true
 bit-vec.workspace = true
+bit-set.workspace = true
 bitflags.workspace = true
 bytemuck = { workspace = true, optional = true }
 document-features.workspace = true

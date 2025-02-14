@@ -148,6 +148,8 @@ define_lock_ranks! {
     rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
+    #[allow(dead_code)]
+    rank BUFFER_POOL "BufferPool::buffers" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

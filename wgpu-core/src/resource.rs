@@ -368,12 +368,20 @@ pub struct Buffer {
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     #[cfg(feature = "indirect-validation")]
     pub(crate) raw_indirect_validation_bind_group: Snatchable<Box<dyn hal::DynBindGroup>>,
+    #[cfg(feature = "indirect-validation")]
+    pub(crate) raw_indirect_draw_validation_bind_group: Snatchable<Box<dyn hal::DynBindGroup>>,
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
         #[cfg(feature = "indirect-validation")]
         if let Some(raw) = self.raw_indirect_validation_bind_group.take() {
+            unsafe {
+                self.device.raw().destroy_bind_group(raw);
+            }
+        }
+        #[cfg(feature = "indirect-validation")]
+        if let Some(raw) = self.raw_indirect_draw_validation_bind_group.take() {
             unsafe {
                 self.device.raw().destroy_bind_group(raw);
             }
@@ -717,6 +725,11 @@ impl Buffer {
                 .raw_indirect_validation_bind_group
                 .snatch(&mut snatch_guard);
 
+            #[cfg(feature = "indirect-validation")]
+            let raw_indirect_draw_validation_bind_group = self
+                .raw_indirect_draw_validation_bind_group
+                .snatch(&mut snatch_guard);
+
             drop(snatch_guard);
 
             let bind_groups = {
@@ -731,6 +744,8 @@ impl Buffer {
                 bind_groups,
                 #[cfg(feature = "indirect-validation")]
                 raw_indirect_validation_bind_group,
+                #[cfg(feature = "indirect-validation")]
+                raw_indirect_draw_validation_bind_group,
             })
         };
 
@@ -787,6 +802,8 @@ pub struct DestroyedBuffer {
     bind_groups: WeakVec<BindGroup>,
     #[cfg(feature = "indirect-validation")]
     raw_indirect_validation_bind_group: Option<Box<dyn hal::DynBindGroup>>,
+    #[cfg(feature = "indirect-validation")]
+    raw_indirect_draw_validation_bind_group: Option<Box<dyn hal::DynBindGroup>>,
 }
 
 impl DestroyedBuffer {
@@ -805,6 +822,13 @@ impl Drop for DestroyedBuffer {
 
         #[cfg(feature = "indirect-validation")]
         if let Some(raw) = self.raw_indirect_validation_bind_group.take() {
+            unsafe {
+                self.device.raw().destroy_bind_group(raw);
+            }
+        }
+
+        #[cfg(feature = "indirect-validation")]
+        if let Some(raw) = self.raw_indirect_draw_validation_bind_group.take() {
             unsafe {
                 self.device.raw().destroy_bind_group(raw);
             }
