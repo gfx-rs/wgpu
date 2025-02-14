@@ -293,6 +293,13 @@ impl StatementGraph {
                             self.emits.push((id, result));
                             "RayQueryProceed"
                         }
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            self.dependencies.push((id, hit_t, "hit_t"));
+                            "RayQueryGenerateIntersection"
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {
+                            "RayQueryConfirmIntersection"
+                        }
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
                 }

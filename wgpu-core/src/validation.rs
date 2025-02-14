@@ -37,7 +37,7 @@ impl From<&ResourceType> for BindingTypeName {
             ResourceType::Buffer { .. } => BindingTypeName::Buffer,
             ResourceType::Texture { .. } => BindingTypeName::Texture,
             ResourceType::Sampler { .. } => BindingTypeName::Sampler,
-            ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            ResourceType::AccelerationStructure => BindingTypeName::AccelerationStructure,
         }
     }
 }
@@ -49,7 +49,7 @@ impl From<&BindingType> for BindingTypeName {
             BindingType::Texture { .. } => BindingTypeName::Texture,
             BindingType::StorageTexture { .. } => BindingTypeName::Texture,
             BindingType::Sampler { .. } => BindingTypeName::Sampler,
-            BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            BindingType::AccelerationStructure => BindingTypeName::AccelerationStructure,
         }
     }
 }

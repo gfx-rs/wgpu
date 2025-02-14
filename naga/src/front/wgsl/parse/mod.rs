@@ -12,7 +12,7 @@ use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
 use crate::front::SymbolTable;
-use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span};
+use crate::{Arena, FastHashSet, FastIndexSet, Handle, ShaderStage, Span};
 
 pub mod ast;
 pub mod conv;
@@ -1171,6 +1171,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Vec<ast::StructMember<'a>>, Error<'a>> {
         let mut members = Vec::new();
+        let mut member_names = FastHashSet::default();
 
         lexer.expect(Token::Paren('{'))?;
         let mut ready = true;
@@ -1217,6 +1218,17 @@ impl Parser {
                 size: size.value,
                 align: align.value,
             });
+
+            if !member_names.insert(name.name) {
+                return Err(Error::Redefinition {
+                    previous: members
+                        .iter()
+                        .find(|x| x.name.name == name.name)
+                        .map(|x| x.name.span)
+                        .unwrap(),
+                    current: name.span,
+                });
+            }
         }
 
         Ok(members)

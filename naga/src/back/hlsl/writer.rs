@@ -1,4 +1,5 @@
 use super::{
+    help,
     help::{
         WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess,
         WrappedZeroValue,
@@ -341,7 +342,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.write_special_functions(module)?;
 
-        self.write_wrapped_compose_functions(module, &module.global_expressions)?;
+        self.write_wrapped_expression_functions(module, &module.global_expressions, None)?;
         self.write_wrapped_zero_value_functions(module, &module.global_expressions)?;
 
         // Write all named constants
@@ -2452,7 +2453,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Proceed();")?;
                 }
+                RayQueryFunction::GenerateIntersection { hit_t } => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ".CommitProceduralPrimitiveHit(")?;
+                    self.write_expr(module, hit_t, func_ctx)?;
+                    writeln!(self.out, ");")?;
+                }
+                RayQueryFunction::ConfirmIntersection => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
+                }
                 RayQueryFunction::Terminate => {
+                    write!(self.out, "{level}")?;
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Abort();")?;
                 }
@@ -3139,6 +3153,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 sample,
                 level,
             } => {
+                let mut wrapping_type = None;
+                match *func_ctx.resolve_type(image, &module.types) {
+                    TypeInner::Image {
+                        class: crate::ImageClass::Storage { format, .. },
+                        ..
+                    } => {
+                        if format.single_component() {
+                            wrapping_type = Some(Scalar::from(format));
+                        }
+                    }
+                    _ => {}
+                }
+                if let Some(scalar) = wrapping_type {
+                    write!(
+                        self.out,
+                        "{}{}(",
+                        help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+                        scalar.to_hlsl_str()?
+                    )?;
+                }
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
                 self.write_expr(module, image, func_ctx)?;
                 write!(self.out, ".Load(")?;
@@ -3159,6 +3193,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 // close bracket for Load function
                 write!(self.out, ")")?;
+
+                if wrapping_type.is_some() {
+                    write!(self.out, ")")?;
+                }
 
                 // return x component if return type is scalar
                 if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {

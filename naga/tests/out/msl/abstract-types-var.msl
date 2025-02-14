@@ -10,6 +10,12 @@ struct type_7 {
 struct type_8 {
     int inner[2];
 };
+struct type_10 {
+    metal::int3 inner[1];
+};
+struct type_12 {
+    metal::float3 inner[1];
+};
 
 void all_constant_arguments(
 ) {
@@ -46,6 +52,9 @@ void all_constant_arguments(
     type_7 xafpaiaf = type_7 {1.0, 2.0};
     type_7 xafpafai = type_7 {1.0, 2.0};
     type_7 xafpafaf = type_7 {1.0, 2.0};
+    type_10 xavipai = type_10 {metal::int3(1)};
+    type_12 xavfpai = type_12 {metal::float3(1.0)};
+    type_12 xavfpaf = type_12 {metal::float3(1.0)};
     type_8 iaipaiai = type_8 {1, 2};
     type_7 iafpaiaf = type_7 {1.0, 2.0};
     type_7 iafpafai = type_7 {1.0, 2.0};
@@ -83,6 +92,9 @@ void all_constant_arguments(
     xafpaiaf = type_7 {1.0, 2.0};
     xafpafai = type_7 {1.0, 2.0};
     xafpafaf = type_7 {1.0, 2.0};
+    xavipai = type_10 {metal::int3(1)};
+    xavfpai = type_12 {metal::float3(1.0)};
+    xavfpaf = type_12 {metal::float3(1.0)};
     iaipaiai = type_8 {1, 2};
     iafpaiaf = type_7 {1.0, 2.0};
     iafpafai = type_7 {1.0, 2.0};

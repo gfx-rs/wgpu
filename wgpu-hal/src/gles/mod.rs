@@ -274,6 +274,7 @@ struct AdapterShared {
     context: AdapterContext,
     private_caps: PrivateCapabilities,
     features: wgt::Features,
+    limits: wgt::Limits,
     workarounds: Workarounds,
     options: wgt::GlBackendOptions,
     shading_language_version: naga::back::glsl::Version,

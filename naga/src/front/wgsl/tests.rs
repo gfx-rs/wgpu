@@ -77,7 +77,7 @@ fn parse_type_cast() {
     assert!(parse_str(
         "
         fn main() {
-            let x: vec2<f32> = vec2<f32>(0i, 0i);
+            let x: vec2<i32> = vec2<i32>(0.0, 0.0);
         }
     ",
     )

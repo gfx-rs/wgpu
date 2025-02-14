@@ -8,15 +8,23 @@ use nanorand::{Rng, WyRand};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::sync::LazyLock;
 
-use crate::DeviceState;
+use crate::{is_test, DeviceState};
 
 fn draw_count() -> usize {
     // When testing we only want to run a very lightweight version of the benchmark
     // to ensure that it does not break.
-    if std::env::var("NEXTEST").is_ok() {
+    if is_test() {
         8
     } else {
         10_000
+    }
+}
+
+fn thread_count_list() -> &'static [usize] {
+    if is_test() {
+        &[2]
+    } else {
+        &[1, 2, 4, 8]
     }
 }
 
@@ -438,7 +446,7 @@ fn run_bench(ctx: &mut Criterion) {
     group.throughput(Throughput::Elements(draw_count as _));
 
     for time_submit in [false, true] {
-        for rpasses in [1, 2, 4, 8] {
+        for &rpasses in thread_count_list() {
             let draws_per_pass = draw_count / rpasses;
 
             let label = if time_submit {
@@ -499,7 +507,7 @@ fn run_bench(ctx: &mut Criterion) {
     let mut group = ctx.benchmark_group("Renderpass: Multi Threaded");
     group.throughput(Throughput::Elements(draw_count as _));
 
-    for threads in [2, 4, 8] {
+    for &threads in thread_count_list() {
         let draws_per_pass = draw_count / threads;
         group.bench_function(format!("{threads} threads x {draws_per_pass} draws"), |b| {
             LazyLock::force(&state);

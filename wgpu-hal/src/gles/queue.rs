@@ -1078,8 +1078,8 @@ impl super::Queue {
                             0,
                         )
                     };
-                    for i in 0..crate::MAX_COLOR_ATTACHMENTS {
-                        let target = glow::COLOR_ATTACHMENT0 + i as u32;
+                    for i in 0..self.shared.limits.max_color_attachments {
+                        let target = glow::COLOR_ATTACHMENT0 + i;
                         unsafe {
                             gl.framebuffer_texture_2d(
                                 glow::DRAW_FRAMEBUFFER,

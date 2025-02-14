@@ -994,7 +994,13 @@ impl dispatch::DeviceInterface for CoreDevice {
                 stage,
                 defines,
             } => {
-                let options = naga::front::glsl::Options { stage, defines };
+                let options = naga::front::glsl::Options {
+                    stage,
+                    defines: defines
+                        .iter()
+                        .map(|&(key, value)| (String::from(key), String::from(value)))
+                        .collect(),
+                };
                 wgc::pipeline::ShaderModuleSource::Glsl(Borrowed(shader), options)
             }
             #[cfg(feature = "wgsl")]
@@ -1261,6 +1267,14 @@ impl dispatch::DeviceInterface for CoreDevice {
             })
             .collect();
 
+        let vert_constants = desc
+            .vertex
+            .compilation_options
+            .constants
+            .iter()
+            .map(|&(key, value)| (String::from(key), value))
+            .collect();
+
         let descriptor = pipe::RenderPipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|layout| layout.inner.as_core().id),
@@ -1268,7 +1282,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.inner.as_core().id,
                     entry_point: desc.vertex.entry_point.map(Borrowed),
-                    constants: Borrowed(desc.vertex.compilation_options.constants),
+                    constants: vert_constants,
                     zero_initialize_workgroup_memory: desc
                         .vertex
                         .compilation_options
@@ -1279,16 +1293,24 @@ impl dispatch::DeviceInterface for CoreDevice {
             primitive: desc.primitive,
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
-            fragment: desc.fragment.as_ref().map(|frag| pipe::FragmentState {
-                stage: pipe::ProgrammableStageDescriptor {
-                    module: frag.module.inner.as_core().id,
-                    entry_point: frag.entry_point.map(Borrowed),
-                    constants: Borrowed(frag.compilation_options.constants),
-                    zero_initialize_workgroup_memory: frag
-                        .compilation_options
-                        .zero_initialize_workgroup_memory,
-                },
-                targets: Borrowed(frag.targets),
+            fragment: desc.fragment.as_ref().map(|frag| {
+                let frag_constants = frag
+                    .compilation_options
+                    .constants
+                    .iter()
+                    .map(|&(key, value)| (String::from(key), value))
+                    .collect();
+                pipe::FragmentState {
+                    stage: pipe::ProgrammableStageDescriptor {
+                        module: frag.module.inner.as_core().id,
+                        entry_point: frag.entry_point.map(Borrowed),
+                        constants: frag_constants,
+                        zero_initialize_workgroup_memory: frag
+                            .compilation_options
+                            .zero_initialize_workgroup_memory,
+                    },
+                    targets: Borrowed(frag.targets),
+                }
             }),
             multiview: desc.multiview,
             cache: desc.cache.map(|cache| cache.inner.as_core().id),
@@ -1324,13 +1346,20 @@ impl dispatch::DeviceInterface for CoreDevice {
     ) -> dispatch::DispatchComputePipeline {
         use wgc::pipeline as pipe;
 
+        let constants = desc
+            .compilation_options
+            .constants
+            .iter()
+            .map(|&(key, value)| (String::from(key), value))
+            .collect();
+
         let descriptor = pipe::ComputePipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|pll| pll.inner.as_core().id),
             stage: pipe::ProgrammableStageDescriptor {
                 module: desc.module.inner.as_core().id,
                 entry_point: desc.entry_point.map(Borrowed),
-                constants: Borrowed(desc.compilation_options.constants),
+                constants,
                 zero_initialize_workgroup_memory: desc
                     .compilation_options
                     .zero_initialize_workgroup_memory,

@@ -1,5 +1,3 @@
-use hashbrown::HashMap;
-
 use crate::*;
 
 #[derive(Clone, Debug)]
@@ -13,8 +11,10 @@ pub struct PipelineCompilationOptions<'a> {
     /// the key must be the pipeline constant ID as a decimal ASCII number; if not,
     /// the key must be the constant's identifier name.
     ///
+    /// If the given constant is specified more than once, the last value specified is used.
+    ///
     /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a HashMap<String, f64>,
+    pub constants: &'a [(&'a str, f64)],
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
@@ -24,14 +24,8 @@ pub struct PipelineCompilationOptions<'a> {
 
 impl Default for PipelineCompilationOptions<'_> {
     fn default() -> Self {
-        // HashMap doesn't have a const constructor, due to the use of RandomState
-        // This does introduce some synchronisation costs, but these should be minor,
-        // and might be cheaper than the alternative of getting new random state
-        static DEFAULT_CONSTANTS: std::sync::OnceLock<HashMap<String, f64>> =
-            std::sync::OnceLock::new();
-        let constants = DEFAULT_CONSTANTS.get_or_init(Default::default);
         Self {
-            constants,
+            constants: Default::default(),
             zero_initialize_workgroup_memory: true,
         }
     }

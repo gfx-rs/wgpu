@@ -93,6 +93,15 @@ uint map_texture_kind(int texture_kind)
     }
 }
 
+void compose_vector_zero_val_binop()
+{
+    int3 a = int3(1, 1, 1);
+    int3 b = int3(0, 1, 2);
+    int3 c = int3(1, 0, 2);
+
+    return;
+}
+
 [numthreads(2, 3, 1)]
 void main()
 {

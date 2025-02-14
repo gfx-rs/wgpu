@@ -291,16 +291,16 @@ impl CommandEncoder {
     /// # Validation
     ///
     /// - blas: Iterator of bottom level acceleration structure entries to build.
-    ///     For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at BLAS creation, this means:
-    ///     - Less or equal number of geometries
-    ///     - Same kind of geometry (with index buffer or without) (same vertex/index format)
-    ///     - Same flags
-    ///     - Less or equal number of vertices
-    ///     - Less or equal number of indices (if applicable)
+    ///   For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at BLAS creation, this means:
+    ///   - Less or equal number of geometries
+    ///   - Same kind of geometry (with index buffer or without) (same vertex/index format)
+    ///   - Same flags
+    ///   - Less or equal number of vertices
+    ///   - Less or equal number of indices (if applicable)
     /// - tlas: iterator of top level acceleration structure packages to build
-    ///     For each entry:
-    ///     - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
-    ///     - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
+    ///   For each entry:
+    ///   - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
+    ///   - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
     ///
     /// If the device the command encoder is created from does not have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled then a validation error is generated
     ///
@@ -331,7 +331,7 @@ impl CommandEncoder {
     ///
     ///    - The contents of the raw instance buffer must be valid for the underling api.
     ///    - All bottom level acceleration structures, referenced in the raw instance buffer must be valid and built,
-    ///       when the corresponding top level acceleration structure is built. (builds may happen in the same invocation of this function).
+    ///      when the corresponding top level acceleration structure is built. (builds may happen in the same invocation of this function).
     ///    - At the time when the top level acceleration structure is used in a bind group, all associated bottom level acceleration structures must be valid,
     ///      and built (no later than the time when the top level acceleration structure was built).
     pub unsafe fn build_acceleration_structures_unsafe_tlas<'a>(
