@@ -161,7 +161,7 @@ impl GPUBuffer {
             while !*done.borrow() {
                 {
                     self.instance
-                        .device_poll(self.device, wgpu_types::Maintain::wait())
+                        .device_poll(self.device, wgpu_types::PollType::wait())
                         .unwrap();
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;

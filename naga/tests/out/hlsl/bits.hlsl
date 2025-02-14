@@ -177,10 +177,10 @@ uint4 naga_extractBits(
 [numthreads(1, 1, 1)]
 void main()
 {
-    int i = 0;
-    int2 i2_ = (0).xx;
-    int3 i3_ = (0).xxx;
-    int4 i4_ = (0).xxxx;
+    int i = int(0);
+    int2 i2_ = (int(0)).xx;
+    int3 i3_ = (int(0)).xxx;
+    int4 i4_ = (int(0)).xxxx;
     uint u = 0u;
     uint2 u2_ = (0u).xx;
     uint3 u3_ = (0u).xxx;

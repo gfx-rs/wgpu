@@ -41,6 +41,6 @@ fn device_and_buffers() {
         assert_eq!(*result.unwrap(), [1, 2, 3, 4, 5, 6, 7, 8],);
         done.store(true, Relaxed);
     });
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::PollType::Wait).unwrap();
     assert!(done2.load(Relaxed));
 }

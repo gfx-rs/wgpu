@@ -95,7 +95,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
 
     ctx.queue.submit(Some(encoder.finish()));
 
-    ctx.device.poll(wgpu::Maintain::Wait);
+    ctx.device.poll(wgpu::PollType::Wait).unwrap();
 }
 
 #[gpu_test]

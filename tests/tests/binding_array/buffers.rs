@@ -257,7 +257,7 @@ async fn binding_array_buffers(
     let slice = readback_buffer.slice(..);
     slice.map_async(MapMode::Read, |_| {});
 
-    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     let data = slice.get_mapped_range();
 

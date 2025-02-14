@@ -40,7 +40,7 @@ Bottom level categories:
 
 ## Unreleased
 
-### Major Changes
+### Major Features
 
 #### Hashmaps Removed from APIs
 
@@ -50,6 +50,66 @@ support and allow us to keep which `hashmap` hasher and such as implementation d
 also allows more easily creating these structures inline.
 
 By @cwfitzgerald in [#7133](https://github.com/gfx-rs/wgpu/pull/7133)
+
+#### `device.poll` Api Reworked
+
+This release reworked the poll api significantly to allow polling to return errors when polling hits internal timeout limits.
+
+`Maintain` was renamed `PollType`. Additionally, `poll` now returns a result containing information about what happened during the poll.
+
+```diff
+-pub fn wgpu::Device::poll(&self, maintain: wgpu::Maintain) -> wgpu::MaintainResult
++pub fn wgpu::Device::poll(&self, poll_type: wgpu::PollType) -> Result<wgpu::PollStatus, wgpu::PollError>
+
+-device.poll(wgpu::Maintain::Poll);
++device.poll(wgpu::PollType::Poll).unwrap();
+```
+
+```rust
+pub enum PollType<T> {
+    /// On wgpu-core based backends, block until the given submission has
+    /// completed execution, and any callbacks have been invoked.
+    ///
+    /// On WebGPU, this has no effect. Callbacks are invoked from the
+    /// window event loop.
+    WaitForSubmissionIndex(T),
+    /// Same as WaitForSubmissionIndex but waits for the most recent submission.
+    Wait,
+    /// Check the device for a single time without blocking.
+    Poll,
+}
+
+pub enum PollStatus {
+    /// There are no active submissions in flight as of the beginning of the poll call.
+    /// Other submissions may have been queued on other threads during the call.
+    ///
+    /// This implies that the given Wait was satisfied before the timeout.
+    QueueEmpty,
+
+    /// The requested Wait was satisfied before the timeout.
+    WaitSucceeded,
+
+    /// This was a poll.
+    Poll,
+}
+
+pub enum PollError {
+    /// The requested Wait timed out before the submission was completed.
+    Timeout,
+}
+```
+
+> [!WARNING]
+> As part of this change, WebGL's default behavior has changed. Previously `device.poll(Wait)` appeared as though it functioned correctly. This was a quirk caused by the bug that these PRs fixed. Now it will always return `Timeout` if the submission has not already completed. As many people rely on this behavior on WebGL, there is a new options in `BackendOptions`. If you want the old behavior, set the following on instance creation:
+> 
+> ```rust
+> instance_desc.backend_options.gl.fence_behavior = wgpu::GlFenceBehavior::AutoFinish;
+> ```
+> 
+> You will lose the ability to know exactly when a submission has completed, but `device.poll(Wait)` will behave the same as it does on native.
+
+By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942).  
+By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 
 ### New Features
 

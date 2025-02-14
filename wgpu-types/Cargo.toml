@@ -37,7 +37,7 @@ alloc_instead_of_core = "warn"
 
 [features]
 default = ["std"]
-std = ["js-sys/std", "web-sys/std"]
+std = ["js-sys/std", "web-sys/std", "thiserror/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde"]
@@ -47,6 +47,7 @@ counters = []
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
 log.workspace = true
+thiserror = { workspace = true, optional = true }
 serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",

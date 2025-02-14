@@ -234,14 +234,22 @@ fn assignment() {
 }
 
 fn negation_avoids_prefix_decrement() {
-    const p0_ = -(1i);
-    const p1_ = -(-(1i));
-    const p2_ = -(-(1i));
-    const p3_ = -(-(1i));
-    const p4_ = -(-(-(1i)));
-    const p5_ = -(-(-(-(1i))));
-    const p6_ = -(-(-(-(-(1i)))));
-    const p7_ = -(-(-(-(-(1i)))));
+    const i0_ = -(1i);
+    const i1_ = -(-(1i));
+    const i2_ = -(-(1i));
+    const i3_ = -(-(1i));
+    const i4_ = -(-(-(1i)));
+    const i5_ = -(-(-(-(1i))));
+    const i6_ = -(-(-(-(-(1i)))));
+    const i7_ = -(-(-(-(-(1i)))));
+    const f0_ = -(1f);
+    const f1_ = -(-(1f));
+    const f2_ = -(-(1f));
+    const f3_ = -(-(1f));
+    const f4_ = -(-(-(1f)));
+    const f5_ = -(-(-(-(1f))));
+    const f6_ = -(-(-(-(-(1f)))));
+    const f7_ = -(-(-(-(-(1f)))));
     return;
 }
 

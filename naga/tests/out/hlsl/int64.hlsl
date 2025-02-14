@@ -75,7 +75,7 @@ int64_t int64_function(int64_t x)
     int _e26 = input_uniform.val_i32_;
     int64_t _e27 = val;
     int64_t _e31 = val;
-    val = (_e31 + int64_t((_e26 + int(_e27))));
+    val = (_e31 + int64_t(asint(asuint(_e26) + asuint(int(_e27)))));
     float _e35 = input_uniform.val_f32_;
     int64_t _e36 = val;
     int64_t _e40 = val;
@@ -162,7 +162,7 @@ uint64_t uint64_function(uint64_t x_1)
     int _e26 = input_uniform.val_i32_;
     uint64_t _e27 = val_1;
     uint64_t _e31 = val_1;
-    val_1 = (_e31 + uint64_t((_e26 + int(_e27))));
+    val_1 = (_e31 + uint64_t(asint(asuint(_e26) + asuint(int(_e27)))));
     float _e35 = input_uniform.val_f32_;
     uint64_t _e36 = val_1;
     uint64_t _e40 = val_1;

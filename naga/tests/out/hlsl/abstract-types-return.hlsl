@@ -1,6 +1,6 @@
 int return_i32_ai()
 {
-    return 1;
+    return int(1);
 }
 
 uint return_u32_ai()
