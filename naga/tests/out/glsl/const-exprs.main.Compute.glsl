@@ -86,6 +86,13 @@ uint map_texture_kind(int texture_kind) {
     }
 }
 
+void compose_vector_zero_val_binop() {
+    ivec3 a = ivec3(1, 1, 1);
+    ivec3 b = ivec3(0, 1, 2);
+    ivec3 c = ivec3(1, 0, 2);
+    return;
+}
+
 void main() {
     swizzle_of_compose();
     index_of_compose();
