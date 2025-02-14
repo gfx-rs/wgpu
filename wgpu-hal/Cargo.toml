@@ -117,6 +117,9 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
+## Replaces AtomicU64.
+portable-atomic = ["dep:portable-atomic"]
+
 [[example]]
 name = "halmark"
 
@@ -139,6 +142,7 @@ log.workspace = true
 once_cell = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
 parking_lot.workspace = true
+portable-atomic = { workspace = true, optional = true }
 profiling = { workspace = true, default-features = false }
 raw-window-handle.workspace = true
 rustc-hash.workspace = true
@@ -147,10 +151,6 @@ thiserror.workspace = true
 # Backend: GLES
 bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
-
-# replace missing AtomicU64
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
-portable-atomic.workspace = true
 
 ########################
 ### Platform: Native ###

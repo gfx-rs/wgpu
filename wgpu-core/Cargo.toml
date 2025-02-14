@@ -96,6 +96,9 @@ fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 
+## Replaces AtomicU64.
+portable-atomic = ["dep:portable-atomic", "wgpu-hal/portable-atomic"]
+
 #! ### Backends, passed through to wgpu-hal
 # --------------------------------------------------------------------
 
@@ -128,6 +131,7 @@ indexmap.workspace = true
 log.workspace = true
 once_cell = { workspace = true, features = ["std"] }
 parking_lot.workspace = true
+portable-atomic = { workspace = true, optional = true }
 profiling = { workspace = true, default-features = false }
 raw-window-handle = { workspace = true, optional = true }
 ron = { workspace = true, optional = true }
@@ -135,10 +139,6 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
-
-# replace missing AtomicU64
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
-portable-atomic.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

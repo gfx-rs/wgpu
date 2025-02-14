@@ -4,9 +4,9 @@
 //!
 //! For types (like WebGPU) that don't have such a property, we generate an identifier and use that.
 
-#[cfg(not(target_has_atomic = "64"))]
+#[cfg(feature = "portable-atomic")]
 pub use portable_atomic::AtomicU64;
-#[cfg(target_has_atomic = "64")]
+#[cfg(not(feature = "portable-atomic"))]
 pub use std::sync::atomic::AtomicU64;
 use std::{num::NonZeroU64, sync::atomic::Ordering};
 

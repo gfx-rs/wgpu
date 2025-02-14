@@ -1,9 +1,9 @@
 use parking_lot::Mutex;
 use std::{ptr::NonNull, sync::Arc, thread, time};
 mod atomic {
-    #[cfg(not(target_has_atomic = "64"))]
+    #[cfg(feature = "portable-atomic")]
     pub use portable_atomic::AtomicU64;
-    #[cfg(target_has_atomic = "64")]
+    #[cfg(not(feature = "portable-atomic"))]
     pub use std::sync::atomic::AtomicU64;
     pub use std::sync::atomic::Ordering;
 }
