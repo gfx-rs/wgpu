@@ -1411,6 +1411,17 @@ impl<'a> ConstantEvaluator<'a> {
         mut expr: Handle<Expression>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        // If expr is a Compose expression, eliminate ZeroValue and Splat expressions for
+        // each of its components.
+        if let Expression::Compose { ty, ref components } = self.expressions[expr] {
+            let components = components
+                .clone()
+                .iter()
+                .map(|component| self.eval_zero_value_and_splat(*component, span))
+                .collect::<Result<_, _>>()?;
+            expr = self.register_evaluated_expr(Expression::Compose { ty, components }, span)?;
+        }
+
         // The result of the splat() for a Splat of a scalar ZeroValue is a
         // vector ZeroValue, so we must call eval_zero_value_impl() after
         // splat() in order to ensure we have no ZeroValues remaining.

@@ -4751,8 +4751,10 @@ bitflags::bitflags! {
         /// The argument to a write-only mapping.
         const MAP_WRITE = 1 << 1;
         /// The source of a hardware copy.
+        /// cbindgen:ignore
         const COPY_SRC = 1 << 2;
         /// The destination of a hardware copy.
+        /// cbindgen:ignore
         const COPY_DST = 1 << 3;
         /// The index buffer used for drawing.
         const INDEX = 1 << 4;
@@ -4761,8 +4763,10 @@ bitflags::bitflags! {
         /// A uniform buffer bound in a bind group.
         const UNIFORM = 1 << 6;
         /// A read-only storage buffer used in a bind group.
+        /// cbindgen:ignore
         const STORAGE_READ_ONLY = 1 << 7;
         /// A read-write buffer used in a bind group.
+        /// cbindgen:ignore
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
@@ -5021,8 +5025,10 @@ bitflags::bitflags! {
         /// Ready to present image to the surface.
         const PRESENT = 1 << 1;
         /// The source of a hardware copy.
+        /// cbindgen:ignore
         const COPY_SRC = 1 << 2;
         /// The destination of a hardware copy.
+        /// cbindgen:ignore
         const COPY_DST = 1 << 3;
         /// Read-only sampled or fetched resource.
         const RESOURCE = 1 << 4;
@@ -5033,20 +5039,27 @@ bitflags::bitflags! {
         /// Read-write depth stencil usage
         const DEPTH_STENCIL_WRITE = 1 << 7;
         /// Read-only storage texture usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
+        /// cbindgen:ignore
         const STORAGE_READ_ONLY = 1 << 8;
         /// Write-only storage texture usage.
+        /// cbindgen:ignore
         const STORAGE_WRITE_ONLY = 1 << 9;
         /// Read-write storage texture usage.
+        /// cbindgen:ignore
         const STORAGE_READ_WRITE = 1 << 10;
         /// Image atomic enabled storage.
+        /// cbindgen:ignore
         const STORAGE_ATOMIC = 1 << 11;
         /// The combination of states that a texture may be in _at the same time_.
+        /// cbindgen:ignore
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
         /// The combination of states that a texture must exclusively be in.
+        /// cbindgen:ignore
         const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
+        /// cbindgen:ignore
         const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource

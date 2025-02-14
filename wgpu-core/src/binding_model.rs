@@ -437,6 +437,7 @@ impl BindingTypeMaxCountValidator {
 }
 
 /// Bindable resource and the slot to bind it to.
+/// cbindgen:ignore
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupEntry<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
@@ -459,6 +460,7 @@ where
     pub resource: BindingResource<'a, B, S, TV, TLAS>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedBindGroupEntry<'a> =
     BindGroupEntry<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
 
@@ -498,6 +500,7 @@ pub struct BindGroupDescriptor<
     pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS>]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
     'a,
     Arc<BindGroupLayout>,
@@ -691,6 +694,7 @@ where
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedPipelineLayoutDescriptor<'a> = PipelineLayoutDescriptor<'a, Arc<BindGroupLayout>>;
 
 #[derive(Debug)]

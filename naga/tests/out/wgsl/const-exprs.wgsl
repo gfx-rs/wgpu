@@ -85,6 +85,14 @@ fn map_texture_kind(texture_kind: i32) -> u32 {
     }
 }
 
+fn compose_vector_zero_val_binop() {
+    var a: vec3<i32> = vec3<i32>(1i, 1i, 1i);
+    var b: vec3<i32> = vec3<i32>(0i, 1i, 2i);
+    var c: vec3<i32> = vec3<i32>(1i, 0i, 2i);
+
+    return;
+}
+
 @compute @workgroup_size(2, 3, 1) 
 fn main() {
     swizzle_of_compose();

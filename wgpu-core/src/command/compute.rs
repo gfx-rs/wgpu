@@ -101,6 +101,7 @@ pub struct ComputePassDescriptor<'a, PTW = PassTimestampWrites> {
     pub timestamp_writes: Option<PTW>,
 }
 
+/// cbindgen:ignore
 type ArcComputePassDescriptor<'a> = ComputePassDescriptor<'a, ArcPassTimestampWrites>;
 
 #[derive(Clone, Debug, Error)]

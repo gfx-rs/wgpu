@@ -3,13 +3,13 @@
 //! Timestamp queries are typically used to profile how long certain operations take on the GPU.
 //! wgpu has several ways of performing gpu timestamp queries:
 //! * passing `wgpu::RenderPassTimestampWrites`/`wgpu::ComputePassTimestampWrites` during render/compute pass creation.
-//!     This writes timestamps for the beginning and end of a given pass.
-//!     (enabled with wgpu::Features::TIMESTAMP_QUERY)
+//!   This writes timestamps for the beginning and end of a given pass.
+//!   (enabled with wgpu::Features::TIMESTAMP_QUERY)
 //! * `wgpu::CommandEncoder::write_timestamp` writes a timestamp between any commands recorded on an encoder.
-//!     (enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
+//!   (enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)
 //! * `wgpu::RenderPass/ComputePass::write_timestamp` writes a timestamp within commands of a render pass.
-//!     Note that some GPU architectures do not support this.
-//!     (native only, enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
+//!   Note that some GPU architectures do not support this.
+//!   (native only, enabled with wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
 //!
 //! Any timestamp is written to a `wgpu::QuerySet` which needs to be resolved to a buffer with `wgpu::BufferUsages::QUERY_RESOLVE`.
 //! Since this usage is incompatible with `wgpu::BufferUsages::MAP_READ` we need to copy the resolved timestamps to a separate buffer afterwards.
