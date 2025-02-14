@@ -6403,7 +6403,7 @@ pub enum BindingType {
         /// Whether this acceleration structure can be used to
         /// create a ray query that has flag vertex return in the shader
         ///
-        /// If enabled requires
+        /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
         vertex_return: bool,
     },
 }
@@ -7185,7 +7185,7 @@ bitflags::bitflags!(
         const PREFER_FAST_BUILD = 1 << 3;
         /// Optimize for low memory footprint (both while building and in the output BLAS).
         const LOW_MEMORY = 1 << 4;
-        /// Allow retrieval of a vertex hit by ay ray in a raytraced scene
+        /// Allow retrieval of the vertices of the triangle hit by a ray.
         const ALLOW_RAY_HIT_VERTEX_RETURN = 1 << 5;
     }
 );

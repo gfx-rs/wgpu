@@ -1125,8 +1125,8 @@ bitflags_array! {
         /// major bugs in them and are expected to be subject to breaking changes, suggestions
         /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/6762)
         ///
-        /// Allows for returning of hit triangles vertex position on acceleration
-        /// structure marked with [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`].
+        /// Allows for returning of the hit triangle's vertex position when tracing with an
+        /// acceleration structure marked with [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`].
         ///
         /// Supported platforms:
         /// - Vulkan
