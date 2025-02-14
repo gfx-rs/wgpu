@@ -40,6 +40,45 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### Split up `Features` internally
+
+Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking 
+changes from this. This means there are also namespaces (as well as the old `Features::*`) for all wgpu specific
+features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively) and `Features::from_internal_flags` which
+allow you to be explicit about whether features you need are available on the web too.
+
+By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https://github.com/gfx-rs/wgpu/pull/7086)
+
+#### Refactored internal trace path parameter
+
+Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
+
+By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
+
+#### WebGPU compliant dual source blending feature
+
+Previously, dual source blending was implemented with a `wgpu` native only feature flag and used a custom syntax in wgpu.
+By now, dual source blending was added to the [WebGPU spec as an extension](https://www.w3.org/TR/webgpu/#dom-gpufeaturename-dual-source-blending).
+We're now following suite and implement the official syntax.
+
+Existing shaders using dual source blending need to be updated:
+
+```diff
+struct FragmentOutput{
+-    @location(0) source0: vec4<f32>,
+-    @location(0) @second_blend_source source1: vec4<f32>,
++    @location(0) @blend_src(0) source0: vec4<f32>,
++    @location(0) @blend_src(1) source1: vec4<f32>,
+}
+
+```
+
+With that `wgpu::Features::DUAL_SOURCE_BLENDING` is now available on WebGPU.
+
+By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+
 ### New Features
 
 #### Naga
@@ -56,20 +95,6 @@ Bottom level categories:
 - Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
   [#6780](https://github.com/gfx-rs/wgpu/pull/6780)
 
-##### Split up `Features` internally
-
-Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking 
-changes from this. This means there are also namespaces (as well as the old `Features::*`) for all wgpu specific
-features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively) and `Features::from_internal_flags` which
-allow you to be explicit about whether features you need are available on the web too.
-
-By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https://github.com/gfx-rs/wgpu/pull/7086)
-
-##### Refactored internal trace path parameter
-
-Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
-
-By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 #### Vulkan
 
@@ -107,7 +132,6 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 #### WebGPU
 
 - Improve efficiency of dropping read-only buffer mappings. By @kpreid in [#7007](https://github.com/gfx-rs/wgpu/pull/7007).
-- `wgpu::Features::DUAL_SOURCE_BLENDING` is now available on WebGPU. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????). TODO: not the full story, not a WebGPU thing, it's a Naga/general thing.
 
 ### Documentation
 
