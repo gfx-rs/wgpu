@@ -1107,7 +1107,7 @@ fn invalid_functions() {
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::InvalidPointerToUnsized {
                 base: _,
-                space: naga::AddressSpace::WorkGroup { .. },
+                space: naga::AddressSpace::WorkGroup,
             },
             ..
         })

@@ -5286,13 +5286,13 @@ template <typename A>
                     LocationMode::VertexOutput,
                     true,
                 ),
-                crate::ShaderStage::Fragment { .. } => (
+                crate::ShaderStage::Fragment => (
                     "fragment",
                     LocationMode::FragmentInput,
                     LocationMode::FragmentOutput,
                     false,
                 ),
-                crate::ShaderStage::Compute { .. } => (
+                crate::ShaderStage::Compute => (
                     "kernel",
                     LocationMode::Uniform,
                     LocationMode::Uniform,
