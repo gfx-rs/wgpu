@@ -2828,7 +2828,7 @@ impl Device {
             stage: hal::ProgrammableStage {
                 module: shader_module.raw(),
                 entry_point: final_entry_point_name.as_ref(),
-                constants: desc.stage.constants.as_ref(),
+                constants: &desc.stage.constants,
                 zero_initialize_workgroup_memory: desc.stage.zero_initialize_workgroup_memory,
             },
             cache: cache.as_ref().map(|it| it.raw()),
@@ -3287,7 +3287,7 @@ impl Device {
             hal::ProgrammableStage {
                 module: vertex_shader_module.raw(),
                 entry_point: &vertex_entry_point_name,
-                constants: stage_desc.constants.as_ref(),
+                constants: &stage_desc.constants,
                 zero_initialize_workgroup_memory: stage_desc.zero_initialize_workgroup_memory,
             }
         };
@@ -3341,7 +3341,7 @@ impl Device {
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
                     entry_point: &fragment_entry_point_name,
-                    constants: fragment_state.stage.constants.as_ref(),
+                    constants: &fragment_state.stage.constants,
                     zero_initialize_workgroup_memory: fragment_state
                         .stage
                         .zero_initialize_workgroup_memory,
