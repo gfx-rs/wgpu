@@ -349,12 +349,10 @@ impl VaryingContext<'_> {
                     if !self.blend_src_mask.insert(blend_src as usize) {
                         return Err(VaryingError::BindingCollisionBlendSrc { blend_src });
                     }
-                } else {
-                    if !self.location_mask.insert(location as usize) {
-                        if self.flags.contains(super::ValidationFlags::BINDINGS) {
-                            return Err(VaryingError::BindingCollision { location });
-                        }
-                    }
+                } else if !self.location_mask.insert(location as usize)
+                    && self.flags.contains(super::ValidationFlags::BINDINGS)
+                {
+                    return Err(VaryingError::BindingCollision { location });
                 }
 
                 if let Some(interpolation) = interpolation {
