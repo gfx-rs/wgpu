@@ -110,7 +110,7 @@ fn sampler_creation_failure(ctx: TestingContext) {
     let failed_count = sampler_storage.len();
 
     sampler_storage.clear();
-    ctx.device.poll(wgpu::Maintain::Wait);
+    ctx.device.poll(wgpu::PollType::Wait).unwrap();
 
     for i in 0..failed_count {
         valid(&ctx.device, || {
@@ -525,7 +525,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
     let buffer_slice = transfer_buffer.slice(..);
     buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
 
-    ctx.device.poll(wgpu::Maintain::Wait);
+    ctx.device.poll(wgpu::PollType::Wait).unwrap();
 
     let buffer_data = buffer_slice.get_mapped_range();
 

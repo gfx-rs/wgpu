@@ -109,6 +109,17 @@ pub enum WaitIdleError {
     Device(#[from] DeviceError),
     #[error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")]
     WrongSubmissionIndex(SubmissionIndex, SubmissionIndex),
+    #[error("Timed out trying to wait for the given submission index.")]
+    Timeout,
+}
+
+impl WaitIdleError {
+    pub fn to_poll_error(&self) -> Option<wgt::PollError> {
+        match self {
+            WaitIdleError::Timeout => Some(wgt::PollError::Timeout),
+            _ => None,
+        }
+    }
 }
 
 /// Resource tracking for a device.

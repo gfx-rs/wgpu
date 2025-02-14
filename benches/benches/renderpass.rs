@@ -492,7 +492,11 @@ fn run_bench(ctx: &mut Criterion) {
                                 duration += start.elapsed();
                             }
 
-                            state.device_state.device.poll(wgpu::Maintain::Wait);
+                            state
+                                .device_state
+                                .device
+                                .poll(wgpu::PollType::Wait)
+                                .unwrap();
                         }
 
                         duration
@@ -535,7 +539,11 @@ fn run_bench(ctx: &mut Criterion) {
                     duration += start.elapsed();
 
                     state.device_state.queue.submit(buffers);
-                    state.device_state.device.poll(wgpu::Maintain::Wait);
+                    state
+                        .device_state
+                        .device
+                        .poll(wgpu::PollType::Wait)
+                        .unwrap();
                 }
 
                 duration
@@ -571,7 +579,11 @@ fn run_bench(ctx: &mut Criterion) {
                 duration += start.elapsed();
 
                 state.device_state.queue.submit([buffer]);
-                state.device_state.device.poll(wgpu::Maintain::Wait);
+                state
+                    .device_state
+                    .device
+                    .poll(wgpu::PollType::Wait)
+                    .unwrap();
             }
 
             duration

@@ -4,6 +4,11 @@
 
 using metal::uint;
 
+metal::int2 naga_mod(metal::int2 lhs, metal::int2 rhs) {
+    metal::int2 divisor = metal::select(rhs, 1, (lhs == -2147483648 & rhs == -1) | (rhs == 0));
+    return lhs - (lhs / divisor) * divisor;
+}
+
 
 struct main_Input {
 };
@@ -17,7 +22,7 @@ kernel void main_(
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
     metal::uint2 dim = metal::uint2(image_storage_src.get_width(), image_storage_src.get_height());
-    metal::int2 itc = static_cast<metal::int2>(dim * local_id.xy) % metal::int2(10, 20);
+    metal::int2 itc = naga_mod(static_cast<metal::int2>(dim * local_id.xy), metal::int2(10, 20));
     metal::uint4 value1_ = image_mipmapped_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value2_ = image_multisampled_src.read(metal::uint2(itc), static_cast<int>(local_id.z));
     metal::uint4 value4_ = image_storage_src.read(metal::uint2(itc));
@@ -45,7 +50,7 @@ kernel void depth_load(
 , metal::texture1d<uint, metal::access::write> image_dst [[user(fake0)]]
 ) {
     metal::uint2 dim_1 = metal::uint2(image_storage_src.get_width(), image_storage_src.get_height());
-    metal::int2 itc_1 = static_cast<metal::int2>(dim_1 * local_id_1.xy) % metal::int2(10, 20);
+    metal::int2 itc_1 = naga_mod(static_cast<metal::int2>(dim_1 * local_id_1.xy), metal::int2(10, 20));
     float val = image_depth_multisampled_src.read(metal::uint2(itc_1), static_cast<int>(local_id_1.z));
     image_dst.write(metal::uint4(static_cast<uint>(val)), uint(itc_1.x));
     return;

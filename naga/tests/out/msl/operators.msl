@@ -22,12 +22,17 @@ metal::float4 builtins(
     return ((((static_cast<metal::float4>(as_type<metal::int4>(as_type<metal::uint4>(metal::int4(s1_)) + as_type<metal::uint4>(v_i32_zero))) + s2_) + m1_) + m2_) + metal::float4(b1_)) + b2_;
 }
 
+metal::int4 naga_mod(metal::int4 lhs, metal::int4 rhs) {
+    metal::int4 divisor = metal::select(rhs, 1, (lhs == -2147483648 & rhs == -1) | (rhs == 0));
+    return lhs - (lhs / divisor) * divisor;
+}
+
 metal::float4 splat(
     float m,
     int n
 ) {
     metal::float2 a_2 = ((metal::float2(2.0) + metal::float2(m)) - metal::float2(4.0)) / metal::float2(8.0);
-    metal::int4 b = metal::int4(n) % metal::int4(2);
+    metal::int4 b = naga_mod(metal::int4(n), metal::int4(2));
     return a_2.xyxy + static_cast<metal::float4>(b);
 }
 
@@ -64,10 +69,56 @@ void logical(
     return;
 }
 
+metal::int2 naga_neg(metal::int2 val) {
+    return as_type<metal::int2>(-as_type<metal::uint2>(val));
+}
+
+int naga_div(int lhs, int rhs) {
+    return lhs / metal::select(rhs, 1, (lhs == -2147483648 & rhs == -1) | (rhs == 0));
+}
+
+uint naga_div(uint lhs, uint rhs) {
+    return lhs / metal::select(rhs, 1u, rhs == 0u);
+}
+
+metal::int2 naga_div(metal::int2 lhs, metal::int2 rhs) {
+    return lhs / metal::select(rhs, 1, (lhs == -2147483648 & rhs == -1) | (rhs == 0));
+}
+
+metal::uint3 naga_div(metal::uint3 lhs, metal::uint3 rhs) {
+    return lhs / metal::select(rhs, 1u, rhs == 0u);
+}
+
+int naga_mod(int lhs, int rhs) {
+    int divisor = metal::select(rhs, 1, (lhs == -2147483648 & rhs == -1) | (rhs == 0));
+    return lhs - (lhs / divisor) * divisor;
+}
+
+uint naga_mod(uint lhs, uint rhs) {
+    return lhs % metal::select(rhs, 1u, rhs == 0u);
+}
+
+metal::int2 naga_mod(metal::int2 lhs, metal::int2 rhs) {
+    metal::int2 divisor = metal::select(rhs, 1, (lhs == -2147483648 & rhs == -1) | (rhs == 0));
+    return lhs - (lhs / divisor) * divisor;
+}
+
+metal::uint3 naga_mod(metal::uint3 lhs, metal::uint3 rhs) {
+    return lhs % metal::select(rhs, 1u, rhs == 0u);
+}
+
+metal::uint2 naga_div(metal::uint2 lhs, metal::uint2 rhs) {
+    return lhs / metal::select(rhs, 1u, rhs == 0u);
+}
+
+metal::uint2 naga_mod(metal::uint2 lhs, metal::uint2 rhs) {
+    return lhs % metal::select(rhs, 1u, rhs == 0u);
+}
+
 void arithmetic(
 ) {
     float neg0_1 = -(1.0);
-    metal::int2 neg1_1 = -(metal::int2(1));
+    metal::int2 neg1_1 = naga_neg(metal::int2(1));
     metal::float2 neg2_ = -(metal::float2(1.0));
     int add0_ = as_type<int>(as_type<uint>(2) + as_type<uint>(1));
     uint add1_ = 2u + 1u;
@@ -87,17 +138,17 @@ void arithmetic(
     metal::int2 mul3_ = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) * as_type<metal::uint2>(metal::int2(1)));
     metal::uint3 mul4_ = metal::uint3(2u) * metal::uint3(1u);
     metal::float4 mul5_ = metal::float4(2.0) * metal::float4(1.0);
-    int div0_ = 2 / 1;
-    uint div1_ = 2u / 1u;
+    int div0_ = naga_div(2, 1);
+    uint div1_ = naga_div(2u, 1u);
     float div2_ = 2.0 / 1.0;
-    metal::int2 div3_ = metal::int2(2) / metal::int2(1);
-    metal::uint3 div4_ = metal::uint3(2u) / metal::uint3(1u);
+    metal::int2 div3_ = naga_div(metal::int2(2), metal::int2(1));
+    metal::uint3 div4_ = naga_div(metal::uint3(2u), metal::uint3(1u));
     metal::float4 div5_ = metal::float4(2.0) / metal::float4(1.0);
-    int rem0_ = 2 % 1;
-    uint rem1_ = 2u % 1u;
+    int rem0_ = naga_mod(2, 1);
+    uint rem1_ = naga_mod(2u, 1u);
     float rem2_ = metal::fmod(2.0, 1.0);
-    metal::int2 rem3_ = metal::int2(2) % metal::int2(1);
-    metal::uint3 rem4_ = metal::uint3(2u) % metal::uint3(1u);
+    metal::int2 rem3_ = naga_mod(metal::int2(2), metal::int2(1));
+    metal::uint3 rem4_ = naga_mod(metal::uint3(2u), metal::uint3(1u));
     metal::float4 rem5_ = metal::fmod(metal::float4(2.0), metal::float4(1.0));
     {
         metal::int2 add0_1 = as_type<metal::int2>(as_type<metal::uint2>(metal::int2(2)) + as_type<metal::uint2>(metal::int2(1)));
@@ -118,16 +169,16 @@ void arithmetic(
         metal::uint2 mul3_1 = 2u * metal::uint2(1u);
         metal::float2 mul4_1 = metal::float2(2.0) * 1.0;
         metal::float2 mul5_1 = 2.0 * metal::float2(1.0);
-        metal::int2 div0_1 = metal::int2(2) / metal::int2(1);
-        metal::int2 div1_1 = metal::int2(2) / metal::int2(1);
-        metal::uint2 div2_1 = metal::uint2(2u) / metal::uint2(1u);
-        metal::uint2 div3_1 = metal::uint2(2u) / metal::uint2(1u);
+        metal::int2 div0_1 = naga_div(metal::int2(2), metal::int2(1));
+        metal::int2 div1_1 = naga_div(metal::int2(2), metal::int2(1));
+        metal::uint2 div2_1 = naga_div(metal::uint2(2u), metal::uint2(1u));
+        metal::uint2 div3_1 = naga_div(metal::uint2(2u), metal::uint2(1u));
         metal::float2 div4_1 = metal::float2(2.0) / metal::float2(1.0);
         metal::float2 div5_1 = metal::float2(2.0) / metal::float2(1.0);
-        metal::int2 rem0_1 = metal::int2(2) % metal::int2(1);
-        metal::int2 rem1_1 = metal::int2(2) % metal::int2(1);
-        metal::uint2 rem2_1 = metal::uint2(2u) % metal::uint2(1u);
-        metal::uint2 rem3_1 = metal::uint2(2u) % metal::uint2(1u);
+        metal::int2 rem0_1 = naga_mod(metal::int2(2), metal::int2(1));
+        metal::int2 rem1_1 = naga_mod(metal::int2(2), metal::int2(1));
+        metal::uint2 rem2_1 = naga_mod(metal::uint2(2u), metal::uint2(1u));
+        metal::uint2 rem3_1 = naga_mod(metal::uint2(2u), metal::uint2(1u));
         metal::float2 rem4_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
         metal::float2 rem5_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
     }
@@ -225,9 +276,9 @@ void assignment(
     a_1 = as_type<int>(as_type<uint>(_e10) * as_type<uint>(_e9));
     int _e12 = a_1;
     int _e13 = a_1;
-    a_1 = _e13 / _e12;
+    a_1 = naga_div(_e13, _e12);
     int _e15 = a_1;
-    a_1 = _e15 % 1;
+    a_1 = naga_mod(_e15, 1);
     int _e17 = a_1;
     a_1 = _e17 & 0;
     int _e19 = a_1;
@@ -249,16 +300,28 @@ void assignment(
     return;
 }
 
+int naga_neg(int val) {
+    return as_type<int>(-as_type<uint>(val));
+}
+
 void negation_avoids_prefix_decrement(
 ) {
-    int p0_ = -(1);
-    int p1_ = -(-(1));
-    int p2_ = -(-(1));
-    int p3_ = -(-(1));
-    int p4_ = -(-(-(1)));
-    int p5_ = -(-(-(-(1))));
-    int p6_ = -(-(-(-(-(1)))));
-    int p7_ = -(-(-(-(-(1)))));
+    int i0_ = naga_neg(1);
+    int i1_ = naga_neg(naga_neg(1));
+    int i2_ = naga_neg(naga_neg(1));
+    int i3_ = naga_neg(naga_neg(1));
+    int i4_ = naga_neg(naga_neg(naga_neg(1)));
+    int i5_ = naga_neg(naga_neg(naga_neg(naga_neg(1))));
+    int i6_ = naga_neg(naga_neg(naga_neg(naga_neg(naga_neg(1)))));
+    int i7_ = naga_neg(naga_neg(naga_neg(naga_neg(naga_neg(1)))));
+    float f0_ = -(1.0);
+    float f1_ = -(-(1.0));
+    float f2_ = -(-(1.0));
+    float f3_ = -(-(1.0));
+    float f4_ = -(-(-(1.0)));
+    float f5_ = -(-(-(-(1.0))));
+    float f6_ = -(-(-(-(-(1.0)))));
+    float f7_ = -(-(-(-(-(1.0)))));
     return;
 }
 

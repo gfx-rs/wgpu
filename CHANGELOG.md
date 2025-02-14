@@ -40,6 +40,77 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Features
+
+#### Hashmaps Removed from APIs
+
+Both `PipelineCompilationOptions::constants` and `ShaderSource::Glsl::defines` now take
+slices of key-value pairs instead of `hashmap`s. This is to prepare for `no_std`
+support and allow us to keep which `hashmap` hasher and such as implementation details. It
+also allows more easily creating these structures inline.
+
+By @cwfitzgerald in [#7133](https://github.com/gfx-rs/wgpu/pull/7133)
+
+#### `device.poll` Api Reworked
+
+This release reworked the poll api significantly to allow polling to return errors when polling hits internal timeout limits.
+
+`Maintain` was renamed `PollType`. Additionally, `poll` now returns a result containing information about what happened during the poll.
+
+```diff
+-pub fn wgpu::Device::poll(&self, maintain: wgpu::Maintain) -> wgpu::MaintainResult
++pub fn wgpu::Device::poll(&self, poll_type: wgpu::PollType) -> Result<wgpu::PollStatus, wgpu::PollError>
+
+-device.poll(wgpu::Maintain::Poll);
++device.poll(wgpu::PollType::Poll).unwrap();
+```
+
+```rust
+pub enum PollType<T> {
+    /// On wgpu-core based backends, block until the given submission has
+    /// completed execution, and any callbacks have been invoked.
+    ///
+    /// On WebGPU, this has no effect. Callbacks are invoked from the
+    /// window event loop.
+    WaitForSubmissionIndex(T),
+    /// Same as WaitForSubmissionIndex but waits for the most recent submission.
+    Wait,
+    /// Check the device for a single time without blocking.
+    Poll,
+}
+
+pub enum PollStatus {
+    /// There are no active submissions in flight as of the beginning of the poll call.
+    /// Other submissions may have been queued on other threads during the call.
+    ///
+    /// This implies that the given Wait was satisfied before the timeout.
+    QueueEmpty,
+
+    /// The requested Wait was satisfied before the timeout.
+    WaitSucceeded,
+
+    /// This was a poll.
+    Poll,
+}
+
+pub enum PollError {
+    /// The requested Wait timed out before the submission was completed.
+    Timeout,
+}
+```
+
+> [!WARNING]
+> As part of this change, WebGL's default behavior has changed. Previously `device.poll(Wait)` appeared as though it functioned correctly. This was a quirk caused by the bug that these PRs fixed. Now it will always return `Timeout` if the submission has not already completed. As many people rely on this behavior on WebGL, there is a new options in `BackendOptions`. If you want the old behavior, set the following on instance creation:
+> 
+> ```rust
+> instance_desc.backend_options.gl.fence_behavior = wgpu::GlFenceBehavior::AutoFinish;
+> ```
+> 
+> You will lose the ability to know exactly when a submission has completed, but `device.poll(Wait)` will behave the same as it does on native.
+
+By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942).  
+By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
+
 ### New Features
 
 #### General
@@ -53,6 +124,7 @@ Bottom level categories:
 - Added `Buffer` methods corresponding to `BufferSlice` methods, so you can skip creating a `BufferSlice` when it offers no benefit, and `BufferSlice::slice()` for sub-slicing a slice. By @kpreid in [#7123](https://github.com/gfx-rs/wgpu/pull/7123).
 
 - Add `util::StagingBelt::allocate()` so the staging belt can be used to write textures. By @kpreid in [#6900](https://github.com/gfx-rs/wgpu/pull/6900).
+- Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [#6678](https://github.com/gfx-rs/wgpu/pull/6678).
 
 #### Naga
 
@@ -72,7 +144,7 @@ Bottom level categories:
 
 ##### Split up `Features` internally
 
-Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking 
+Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking
 changes from this. This means there are also namespaces (as well as the old `Features::*`) for all wgpu specific
 features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively) and `Features::from_internal_flags` which
 allow you to be explicit about whether features you need are available on the web too.
@@ -108,7 +180,7 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 - Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
 - Fix drop order in `Surface`. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
 - Fix a possible deadlock within `Queue::write_texture`. By @metamuffin in [#7004](https://github.com/gfx-rs/wgpu/pull/7004)
-- Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in 
+- Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in
 [#7062](https://github.com/gfx-rs/wgpu/pull/7062).
 
 #### Vulkan
@@ -336,7 +408,6 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Image atomic support in shaders. By @atlv24 in [#6706](https://github.com/gfx-rs/wgpu/pull/6706)
 - 64 bit image atomic support in shaders. By @atlv24 in [#5537](https://github.com/gfx-rs/wgpu/pull/5537)
 - Add `no_std` support to `wgpu-types`. By @bushrat011899 in [#6892](https://github.com/gfx-rs/wgpu/pull/6892).
-- Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [6678](https://github.com/gfx-rs/wgpu/pull/6678).
 
 ##### Vulkan
 

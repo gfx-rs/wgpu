@@ -75,6 +75,13 @@ impl Surface<'_> {
 
     /// Initializes [`Surface`] for presentation.
     ///
+    /// If the surface is already configured, this will wait for the GPU to come idle
+    /// before recreating the swapchain to prevent race conditions.
+    ///
+    /// # Validation Errors
+    /// - Submissions that happen _during_ the configure may cause the
+    ///   internal wait-for-idle to fail, raising a validation error.
+    ///
     /// # Panics
     ///
     /// - A old [`SurfaceTexture`] is still alive referencing an old surface.

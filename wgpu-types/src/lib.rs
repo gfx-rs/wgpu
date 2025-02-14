@@ -3986,7 +3986,7 @@ impl Default for ColorWrites {
 
 /// Passed to `Device::poll` to control how and if it should block.
 #[derive(Clone, Debug)]
-pub enum Maintain<T> {
+pub enum PollType<T> {
     /// On wgpu-core based backends, block until the given submission has
     /// completed execution, and any callbacks have been invoked.
     ///
@@ -3999,7 +3999,7 @@ pub enum Maintain<T> {
     Poll,
 }
 
-impl<T> Maintain<T> {
+impl<T> PollType<T> {
     /// Construct a [`Self::Wait`] variant
     #[must_use]
     pub fn wait() -> Self {
@@ -4018,7 +4018,7 @@ impl<T> Maintain<T> {
         Self::WaitForSubmissionIndex(submission_index)
     }
 
-    /// This maintain represents a wait of some kind.
+    /// This `PollType` represents a wait of some kind.
     #[must_use]
     pub fn is_wait(&self) -> bool {
         match *self {
@@ -4029,39 +4029,57 @@ impl<T> Maintain<T> {
 
     /// Map on the wait index type.
     #[must_use]
-    pub fn map_index<U, F>(self, func: F) -> Maintain<U>
+    pub fn map_index<U, F>(self, func: F) -> PollType<U>
     where
         F: FnOnce(T) -> U,
     {
         match self {
-            Self::WaitForSubmissionIndex(i) => Maintain::WaitForSubmissionIndex(func(i)),
-            Self::Wait => Maintain::Wait,
-            Self::Poll => Maintain::Poll,
+            Self::WaitForSubmissionIndex(i) => PollType::WaitForSubmissionIndex(func(i)),
+            Self::Wait => PollType::Wait,
+            Self::Poll => PollType::Poll,
         }
     }
 }
 
-/// Result of a maintain operation.
-pub enum MaintainResult {
-    /// There are no active submissions in flight as of the beginning of the poll call.
-    /// Other submissions may have been queued on other threads at the same time.
-    ///
-    /// This implies that the given poll is complete.
-    SubmissionQueueEmpty,
-    /// More information coming soon <https://github.com/gfx-rs/wgpu/pull/5012>
-    Ok,
+/// Error states after a device poll
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+pub enum PollError {
+    /// The requested Wait timed out before the submission was completed.
+    #[cfg_attr(
+        feature = "std",
+        error("The requested Wait timed out before the submission was completed.")
+    )]
+    Timeout,
 }
 
-impl MaintainResult {
-    /// Returns true if the result is [`Self::SubmissionQueueEmpty`].
+/// Status of device poll operation.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PollStatus {
+    /// There are no active submissions in flight as of the beginning of the poll call.
+    /// Other submissions may have been queued on other threads during the call.
+    ///
+    /// This implies that the given Wait was satisfied before the timeout.
+    QueueEmpty,
+
+    /// The requested Wait was satisfied before the timeout.
+    WaitSucceeded,
+
+    /// This was a poll.
+    Poll,
+}
+
+impl PollStatus {
+    /// Returns true if the result is [`Self::QueueEmpty`]`.
     #[must_use]
     pub fn is_queue_empty(&self) -> bool {
-        matches!(self, Self::SubmissionQueueEmpty)
+        matches!(self, Self::QueueEmpty)
     }
 
-    /// Panics if the [`MaintainResult`] is not Ok.
-    pub fn panic_on_timeout(self) {
-        let _ = self;
+    /// Returns true if the result is either [`Self::WaitSucceeded`] or [`Self::QueueEmpty`].
+    #[must_use]
+    pub fn wait_finished(&self) -> bool {
+        matches!(self, Self::WaitSucceeded | Self::QueueEmpty)
     }
 }
 

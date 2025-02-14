@@ -230,7 +230,7 @@ pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
-    pub short_circuit_fences: GlFenceBehavior,
+    pub fence_behavior: GlFenceBehavior,
 }
 
 impl GlBackendOptions {
@@ -242,7 +242,7 @@ impl GlBackendOptions {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
         Self {
             gles_minor_version,
-            short_circuit_fences: GlFenceBehavior::Normal,
+            fence_behavior: GlFenceBehavior::Normal,
         }
     }
 
@@ -252,10 +252,10 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        let short_circuit_fences = self.short_circuit_fences.with_env();
+        let short_circuit_fences = self.fence_behavior.with_env();
         Self {
             gles_minor_version,
-            short_circuit_fences,
+            fence_behavior: short_circuit_fences,
         }
     }
 }
@@ -472,7 +472,7 @@ pub enum GlFenceBehavior {
     ///
     /// This solves a very specific issue that arose due to a bug in wgpu-core that made
     /// many WebGL programs work when they "shouldn't" have. If you have code that is trying
-    /// to call `device.poll(wgpu::Maintain::Wait)` on WebGL, you need to enable this option
+    /// to call `device.poll(wgpu::PollType::Wait)` on WebGL, you need to enable this option
     /// for the "Wait" to behave how you would expect.
     ///
     /// Previously all `poll(Wait)` acted like the OpenGL fences were signalled even if they weren't.

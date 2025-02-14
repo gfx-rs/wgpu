@@ -259,4 +259,26 @@ impl crate::TypeInner {
             _ => return None,
         })
     }
+
+    /// If the type is a Vector or a Scalar return a tuple of the vector size (or None
+    /// for Scalars), and the scalar kind. Returns (None, None) for other types.
+    pub const fn vector_size_and_scalar(
+        &self,
+    ) -> Option<(Option<crate::VectorSize>, crate::Scalar)> {
+        match *self {
+            crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
+            crate::TypeInner::Vector { size, scalar } => Some((Some(size), scalar)),
+            crate::TypeInner::Matrix { .. }
+            | crate::TypeInner::Atomic(_)
+            | crate::TypeInner::Pointer { .. }
+            | crate::TypeInner::ValuePointer { .. }
+            | crate::TypeInner::Array { .. }
+            | crate::TypeInner::Struct { .. }
+            | crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure
+            | crate::TypeInner::RayQuery
+            | crate::TypeInner::BindingArray { .. } => None,
+        }
+    }
 }

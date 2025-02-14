@@ -139,7 +139,7 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// the key must be the constant's identifier name.
     ///
     /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: Cow<'a, naga::back::PipelineConstants>,
+    pub constants: naga::back::PipelineConstants,
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided

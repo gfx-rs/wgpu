@@ -27,9 +27,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
             });
         }
 
-        ctx.async_poll(wgpu::Maintain::Poll)
-            .await
-            .panic_on_timeout();
+        ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
@@ -615,8 +613,9 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
         assert!(ctx
-            .async_poll(wgpu::Maintain::wait())
+            .async_poll(wgpu::PollType::wait())
             .await
+            .unwrap()
             .is_queue_empty());
 
         assert!(

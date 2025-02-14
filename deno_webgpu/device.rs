@@ -615,7 +615,7 @@ impl GPUDevice {
     #[fast]
     fn stop_capture(&self) {
         self.instance
-            .device_poll(self.id, wgpu_types::Maintain::wait())
+            .device_poll(self.id, wgpu_types::PollType::wait())
             .unwrap();
         self.instance.device_stop_capture(self.id);
     }
@@ -632,7 +632,7 @@ impl GPUDevice {
             stage: ProgrammableStageDescriptor {
                 module: descriptor.compute.module.id,
                 entry_point: descriptor.compute.entry_point.map(Into::into),
-                constants: Cow::Owned(descriptor.compute.constants.into_iter().collect()),
+                constants: descriptor.compute.constants.into_iter().collect(),
                 zero_initialize_workgroup_memory: true,
             },
             cache: None,
@@ -660,7 +660,7 @@ impl GPUDevice {
             stage: ProgrammableStageDescriptor {
                 module: descriptor.vertex.module.id,
                 entry_point: descriptor.vertex.entry_point.map(Into::into),
-                constants: Cow::Owned(descriptor.vertex.constants.into_iter().collect()),
+                constants: descriptor.vertex.constants.into_iter().collect(),
                 zero_initialize_workgroup_memory: true,
             },
             buffers: Cow::Owned(
@@ -753,7 +753,7 @@ impl GPUDevice {
                     stage: ProgrammableStageDescriptor {
                         module: fragment.module.id,
                         entry_point: fragment.entry_point.map(Into::into),
-                        constants: Cow::Owned(fragment.constants.into_iter().collect()),
+                        constants: fragment.constants.into_iter().collect(),
                         zero_initialize_workgroup_memory: true,
                     },
                     targets: Cow::Owned(

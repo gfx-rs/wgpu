@@ -111,7 +111,7 @@ fn main() {
         }
 
         global.device_stop_capture(device);
-        global.device_poll(device, wgt::Maintain::wait()).unwrap();
+        global.device_poll(device, wgt::PollType::wait()).unwrap();
     }
     #[cfg(feature = "winit")]
     {
@@ -203,7 +203,7 @@ fn main() {
                     },
                     Event::LoopExiting => {
                         log::info!("Closing");
-                        global.device_poll(device, wgt::Maintain::wait()).unwrap();
+                        global.device_poll(device, wgt::PollType::wait()).unwrap();
                     }
                     _ => {}
                 }

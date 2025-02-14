@@ -101,9 +101,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
         drop(vertex_buffer);
         drop(index_buffer);
         drop(occlusion_query_set);
-        ctx.async_poll(wgpu::Maintain::wait())
-            .await
-            .panic_on_timeout();
+        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -172,9 +170,7 @@ async fn render_pass_query_set_ownership_pipeline_statistics(ctx: TestingContext
 
         // Drop the query set. Then do a device poll to make sure it's not dropped too early, no matter what.
         drop(query_set);
-        ctx.async_poll(wgpu::Maintain::wait())
-            .await
-            .panic_on_timeout();
+        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -250,9 +246,7 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
         // Drop the query sets. Then do a device poll to make sure they're not dropped too early, no matter what.
         drop(query_set_timestamp_writes);
         drop(query_set_write_timestamp);
-        ctx.async_poll(wgpu::Maintain::wait())
-            .await
-            .panic_on_timeout();
+        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
     }
 
     assert_render_pass_executed_normally(encoder, gpu_buffer, cpu_buffer, buffer_size, ctx).await;
@@ -299,9 +293,7 @@ async fn render_pass_keep_encoder_alive(ctx: TestingContext) {
     let mut rpass = rpass.forget_lifetime();
     drop(encoder);
 
-    ctx.async_poll(wgpu::Maintain::wait())
-        .await
-        .panic_on_timeout();
+    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
     // Record some a draw command.
     rpass.set_pipeline(&pipeline);
@@ -327,9 +319,7 @@ async fn assert_render_pass_executed_normally(
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
     ctx.queue.submit([encoder.finish()]);
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::Maintain::wait())
-        .await
-        .panic_on_timeout();
+    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 

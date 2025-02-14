@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
-    back::spv::BindingInfo,
+    back::spv::{BindingInfo, WrappedFunction},
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
@@ -74,6 +74,7 @@ impl Writer {
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
+            wrapped_functions: crate::FastHashMap::default(),
             constant_ids: HandleVec::new(),
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
@@ -127,6 +128,7 @@ impl Writer {
             lookup_type: take(&mut self.lookup_type).recycle(),
             lookup_function: take(&mut self.lookup_function).recycle(),
             lookup_function_type: take(&mut self.lookup_function_type).recycle(),
+            wrapped_functions: take(&mut self.wrapped_functions).recycle(),
             constant_ids: take(&mut self.constant_ids).recycle(),
             cached_constants: take(&mut self.cached_constants).recycle(),
             global_variables: take(&mut self.global_variables).recycle(),
@@ -221,6 +223,10 @@ impl Writer {
         self.get_type_id(lookup_ty)
     }
 
+    pub(super) fn get_localtype_id(&mut self, local: LocalType) -> Word {
+        self.get_type_id(LookupType::Local(local))
+    }
+
     pub(super) fn get_pointer_id(
         &mut self,
         handle: Handle<crate::Type>,
@@ -305,6 +311,243 @@ impl Writer {
             .push(Instruction::decorate(id, decoration, operands));
     }
 
+    /// Emits code for any wrapper functions required by the expressions in ir_function.
+    /// The IDs of any emitted functions will be stored in [`Self::wrapped_functions`].
+    fn write_wrapped_functions(
+        &mut self,
+        ir_function: &crate::Function,
+        info: &FunctionInfo,
+        ir_module: &crate::Module,
+    ) -> Result<(), Error> {
+        log::trace!("Generating wrapped functions for {:?}", ir_function.name);
+
+        for (expr_handle, expr) in ir_function.expressions.iter() {
+            match *expr {
+                crate::Expression::Binary { op, left, right } => {
+                    let expr_ty_inner = info[expr_handle].ty.inner_with(&ir_module.types);
+                    if let Some(expr_ty) = NumericType::from_inner(expr_ty_inner) {
+                        match (op, expr_ty.scalar().kind) {
+                            // Division and modulo are undefined behaviour when the
+                            // dividend is the minimum representable value and the divisor
+                            // is negative one, or when the divisor is zero. These wrapped
+                            // functions override the divisor to one in these cases,
+                            // matching the WGSL spec.
+                            (
+                                crate::BinaryOperator::Divide | crate::BinaryOperator::Modulo,
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                            ) => {
+                                self.write_wrapped_binary_op(
+                                    op,
+                                    expr_ty,
+                                    &info[left].ty,
+                                    &info[right].ty,
+                                )?;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Write a SPIR-V function that performs the operator `op` with Naga IR semantics.
+    ///
+    /// Define a function that performs an integer division or modulo operation,
+    /// except that using a divisor of zero or causing signed overflow with a
+    /// divisor of -1 returns the numerator unchanged, rather than exhibiting
+    /// undefined behavior.
+    ///
+    /// Store the generated function's id in the [`wrapped_functions`] table.
+    ///
+    /// The operator `op` must be either [`Divide`] or [`Modulo`].
+    ///
+    /// # Panics
+    ///
+    /// The `return_type`, `left_type` or `right_type` arguments must all be
+    /// integer scalars or vectors. If not, this function panics.
+    ///
+    /// [`wrapped_functions`]: Writer::wrapped_functions
+    /// [`Divide`]: crate::BinaryOperator::Divide
+    /// [`Modulo`]: crate::BinaryOperator::Modulo
+    fn write_wrapped_binary_op(
+        &mut self,
+        op: crate::BinaryOperator,
+        return_type: NumericType,
+        left_type: &TypeResolution,
+        right_type: &TypeResolution,
+    ) -> Result<(), Error> {
+        let return_type_id = self.get_localtype_id(LocalType::Numeric(return_type));
+        let left_type_id = self.get_expression_type_id(left_type);
+        let right_type_id = self.get_expression_type_id(right_type);
+
+        // Check if we've already emitted this function.
+        let wrapped = WrappedFunction::BinaryOp {
+            op,
+            left_type_id,
+            right_type_id,
+        };
+        let function_id = match self.wrapped_functions.entry(wrapped) {
+            Entry::Occupied(_) => return Ok(()),
+            Entry::Vacant(e) => *e.insert(self.id_gen.next()),
+        };
+
+        let scalar = return_type.scalar();
+
+        if self.flags.contains(WriterFlags::DEBUG) {
+            let function_name = match op {
+                crate::BinaryOperator::Divide => "naga_div",
+                crate::BinaryOperator::Modulo => "naga_mod",
+                _ => unreachable!(),
+            };
+            self.debugs
+                .push(Instruction::name(function_id, function_name));
+        }
+        let mut function = Function::default();
+
+        let function_type_id = self.get_function_type(LookupFunctionType {
+            parameter_type_ids: vec![left_type_id, right_type_id],
+            return_type_id,
+        });
+        function.signature = Some(Instruction::function(
+            return_type_id,
+            function_id,
+            spirv::FunctionControl::empty(),
+            function_type_id,
+        ));
+
+        let lhs_id = self.id_gen.next();
+        let rhs_id = self.id_gen.next();
+        if self.flags.contains(WriterFlags::DEBUG) {
+            self.debugs.push(Instruction::name(lhs_id, "lhs"));
+            self.debugs.push(Instruction::name(rhs_id, "rhs"));
+        }
+        let left_par = Instruction::function_parameter(left_type_id, lhs_id);
+        let right_par = Instruction::function_parameter(right_type_id, rhs_id);
+        for instruction in [left_par, right_par] {
+            function.parameters.push(FunctionArgument {
+                instruction,
+                handle_id: 0,
+            });
+        }
+
+        let label_id = self.id_gen.next();
+        let mut block = Block::new(label_id);
+
+        let bool_type = return_type.with_scalar(crate::Scalar::BOOL);
+        let bool_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(bool_type)));
+
+        let maybe_splat_const = |writer: &mut Self, const_id| match return_type {
+            NumericType::Scalar(_) => const_id,
+            NumericType::Vector { size, .. } => {
+                let constituent_ids = [const_id; crate::VectorSize::MAX];
+                writer.get_constant_composite(
+                    LookupType::Local(LocalType::Numeric(return_type)),
+                    &constituent_ids[..size as usize],
+                )
+            }
+            NumericType::Matrix { .. } => unreachable!(),
+        };
+
+        let const_zero_id = self.get_constant_scalar_with(0, scalar)?;
+        let composite_zero_id = maybe_splat_const(self, const_zero_id);
+        let rhs_eq_zero_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::IEqual,
+            bool_type_id,
+            rhs_eq_zero_id,
+            rhs_id,
+            composite_zero_id,
+        ));
+        let divisor_selector_id = match scalar.kind {
+            crate::ScalarKind::Sint => {
+                let (const_min_id, const_neg_one_id) = match scalar.width {
+                    4 => Ok((
+                        self.get_constant_scalar(crate::Literal::I32(i32::MIN)),
+                        self.get_constant_scalar(crate::Literal::I32(-1i32)),
+                    )),
+                    8 => Ok((
+                        self.get_constant_scalar(crate::Literal::I64(i64::MIN)),
+                        self.get_constant_scalar(crate::Literal::I64(-1i64)),
+                    )),
+                    _ => Err(Error::Validation("Unexpected scalar width")),
+                }?;
+                let composite_min_id = maybe_splat_const(self, const_min_id);
+                let composite_neg_one_id = maybe_splat_const(self, const_neg_one_id);
+
+                let lhs_eq_int_min_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IEqual,
+                    bool_type_id,
+                    lhs_eq_int_min_id,
+                    lhs_id,
+                    composite_min_id,
+                ));
+                let rhs_eq_neg_one_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IEqual,
+                    bool_type_id,
+                    rhs_eq_neg_one_id,
+                    rhs_id,
+                    composite_neg_one_id,
+                ));
+                let lhs_eq_int_min_and_rhs_eq_neg_one_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::LogicalAnd,
+                    bool_type_id,
+                    lhs_eq_int_min_and_rhs_eq_neg_one_id,
+                    lhs_eq_int_min_id,
+                    rhs_eq_neg_one_id,
+                ));
+                let rhs_eq_zero_or_lhs_eq_int_min_and_rhs_eq_neg_one_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::LogicalOr,
+                    bool_type_id,
+                    rhs_eq_zero_or_lhs_eq_int_min_and_rhs_eq_neg_one_id,
+                    rhs_eq_zero_id,
+                    lhs_eq_int_min_and_rhs_eq_neg_one_id,
+                ));
+                rhs_eq_zero_or_lhs_eq_int_min_and_rhs_eq_neg_one_id
+            }
+            crate::ScalarKind::Uint => rhs_eq_zero_id,
+            _ => unreachable!(),
+        };
+
+        let const_one_id = self.get_constant_scalar_with(1, scalar)?;
+        let composite_one_id = maybe_splat_const(self, const_one_id);
+        let divisor_id = self.id_gen.next();
+        block.body.push(Instruction::select(
+            right_type_id,
+            divisor_id,
+            divisor_selector_id,
+            composite_one_id,
+            rhs_id,
+        ));
+        let op = match (op, scalar.kind) {
+            (crate::BinaryOperator::Divide, crate::ScalarKind::Sint) => spirv::Op::SDiv,
+            (crate::BinaryOperator::Divide, crate::ScalarKind::Uint) => spirv::Op::UDiv,
+            (crate::BinaryOperator::Modulo, crate::ScalarKind::Sint) => spirv::Op::SRem,
+            (crate::BinaryOperator::Modulo, crate::ScalarKind::Uint) => spirv::Op::UMod,
+            _ => unreachable!(),
+        };
+        let return_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            op,
+            return_type_id,
+            return_id,
+            lhs_id,
+            divisor_id,
+        ));
+
+        function.consume(block, Instruction::return_value(return_id));
+        function.to_words(&mut self.logical_layout.function_definitions);
+        Instruction::function_end().to_words(&mut self.logical_layout.function_definitions);
+        Ok(())
+    }
+
     fn write_function(
         &mut self,
         ir_function: &crate::Function,
@@ -313,6 +556,8 @@ impl Writer {
         mut interface: Option<FunctionInterface>,
         debug_info: &Option<DebugInfoInner>,
     ) -> Result<Word, Error> {
+        self.write_wrapped_functions(ir_function, info, ir_module)?;
+
         log::trace!("Generating code for {:?}", ir_function.name);
         let mut function = Function::default();
 
@@ -919,7 +1164,7 @@ impl Writer {
             }
             LocalType::Image(image) => {
                 let local_type = LocalType::Numeric(NumericType::Scalar(image.sampled_type));
-                let type_id = self.get_type_id(LookupType::Local(local_type));
+                let type_id = self.get_localtype_id(local_type);
                 Instruction::type_image(id, type_id, image.dim, image.flags, image.image_format)
             }
             LocalType::Sampler => Instruction::type_sampler(id),

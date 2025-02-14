@@ -1,9 +1,9 @@
 [numthreads(1, 1, 1)]
 void main()
 {
-    int2 i2_ = (0).xx;
-    int3 i3_ = (0).xxx;
-    int4 i4_ = (0).xxxx;
+    int2 i2_ = (int(0)).xx;
+    int3 i3_ = (int(0)).xxx;
+    int4 i4_ = (int(0)).xxxx;
     uint2 u2_ = (0u).xx;
     uint3 u3_ = (0u).xxx;
     uint4 u4_ = (0u).xxxx;

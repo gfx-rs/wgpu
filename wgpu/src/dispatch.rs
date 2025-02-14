@@ -192,7 +192,7 @@ pub trait DeviceInterface: CommonTraits {
     fn start_capture(&self);
     fn stop_capture(&self);
 
-    fn poll(&self, maintain: crate::Maintain) -> crate::MaintainResult;
+    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;

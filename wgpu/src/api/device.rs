@@ -33,7 +33,7 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
+    /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -42,8 +42,8 @@ impl Device {
     /// other threads could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
-        self.inner.poll(maintain)
+    pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
+        self.inner.poll(poll_type)
     }
 
     /// The features which can be used on this device.

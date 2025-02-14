@@ -14,7 +14,7 @@ struct GLFence {
 pub struct Fence {
     last_completed: AtomicFenceValue,
     pending: Vec<GLFence>,
-    fence_mode: wgt::GlFenceBehavior,
+    fence_behavior: wgt::GlFenceBehavior,
 }
 
 impl crate::DynFence for Fence {}
@@ -29,7 +29,7 @@ impl Fence {
         Self {
             last_completed: AtomicFenceValue::new(0),
             pending: Vec::new(),
-            fence_mode: options.short_circuit_fences,
+            fence_behavior: options.fence_behavior,
         }
     }
 
@@ -38,7 +38,7 @@ impl Fence {
         gl: &glow::Context,
         value: crate::FenceValue,
     ) -> Result<(), crate::DeviceError> {
-        if self.fence_mode.is_auto_finish() {
+        if self.fence_behavior.is_auto_finish() {
             *self.last_completed.get_mut() = value;
             return Ok(());
         }
@@ -57,7 +57,7 @@ impl Fence {
     pub fn get_latest(&self, gl: &glow::Context) -> crate::FenceValue {
         let mut max_value = self.last_completed.load(Ordering::Acquire);
 
-        if self.fence_mode.is_auto_finish() {
+        if self.fence_behavior.is_auto_finish() {
             return max_value;
         }
 
@@ -82,7 +82,7 @@ impl Fence {
     }
 
     pub fn maintain(&mut self, gl: &glow::Context) {
-        if self.fence_mode.is_auto_finish() {
+        if self.fence_behavior.is_auto_finish() {
             return;
         }
 
@@ -105,7 +105,7 @@ impl Fence {
     ) -> Result<bool, crate::DeviceError> {
         let last_completed = self.last_completed.load(Ordering::Acquire);
 
-        if self.fence_mode.is_auto_finish() {
+        if self.fence_behavior.is_auto_finish() {
             return Ok(last_completed >= wait_value);
         }
 
@@ -154,7 +154,7 @@ impl Fence {
     }
 
     pub fn destroy(self, gl: &glow::Context) {
-        if self.fence_mode.is_auto_finish() {
+        if self.fence_behavior.is_auto_finish() {
             return;
         }
 
