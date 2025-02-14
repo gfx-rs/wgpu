@@ -120,13 +120,13 @@ static-dxc = ["wgpu-hal/static-dxc"]
 # platform crates collude to provide platform-specific behavior.
 
 ## DX12 backend
-dx12 = ["wgpu-core-platform-windows-linux-android-emscripten/dx12"]
+dx12 = ["wgpu-core-platform-windows-linux-android/dx12"]
 ## Metal backend
 metal = ["wgpu-core-platform-apple/metal"]
 ## Vulkan backend, only available on Windows, Linux, Android
-vulkan = ["wgpu-core-platform-windows-linux-android-emscripten/vulkan"]
+vulkan = ["wgpu-core-platform-windows-linux-android/vulkan"]
 ## OpenGL backend, only available on Windows, Linux, Android, and Emscripten
-gles = ["wgpu-core-platform-windows-linux-android-emscripten/gles"]
+gles = ["wgpu-core-platform-windows-linux-android/gles", "wgpu-core-platform-emscripten/gles"]
 
 ## WebGL backend, only available on Emscripten
 webgl = ["wgpu-core-platform-wasm/webgl"]
@@ -135,16 +135,24 @@ angle = ["wgpu-core-platform-apple/angle"]
 ## Vulkan portability backend, only available on macOS
 vulkan-portability = ["wgpu-core-platform-apple/vulkan-portability"]
 ## Renderdoc integration, only available on Windows, Linux, and Android
-renderdoc = ["wgpu-core-platform-windows-linux-android-emscripten/renderdoc"]
+renderdoc = ["wgpu-core-platform-windows-linux-android/renderdoc"]
 
 [dependencies]
 naga.workspace = true
 wgpu-hal.workspace = true
 wgpu-types.workspace = true
 
-wgpu-core-platform-windows-linux-android-emscripten = { workspace = true, optional = true }
+# The target limitation here isn't needed, but prevents more than one of these
+# platform crates from being included in the build at a time, preventing users
+# from getting confused by seeing them in the list of crates.
+[target.'cfg(target_vendor = "apple")'.dependencies]
 wgpu-core-platform-apple = { workspace = true, optional = true }
+[target.'cfg(target_os = "emscripten")'.dependencies]
+wgpu-core-platform-emscripten = { workspace = true, optional = true }
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wgpu-core-platform-wasm = { workspace = true, optional = true }
+[target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
+wgpu-core-platform-windows-linux-android = { workspace = true, optional = true }
 
 arrayvec.workspace = true
 bit-vec.workspace = true

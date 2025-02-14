@@ -56,12 +56,16 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
 # wgpu-core's features are defined to enable the backends on their "default" platforms. For example we
 # exclude the Vulkan backend on MacOS unless a separate feature `vulkan-portability` is enabled. In response
 # to these features, it enables features of platform specific crates. For example, the `vulkan` feature in wgpu-core
-# enables the `vulkan` feature in `wgpu-core-platform-windows-linux-android-emscripten` which in turn enables the
+# enables the `vulkan` feature in `wgpu-core-platform-windows-linux-android` which in turn enables the
 # `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it 
 # will enable the `vulkan` feature in `wgpu-core-platform-apple`. The only way to do this is unfortunately to have
 # a separate crate for each platform category that participates in the feature unification.
 #
-# See https://github.com/gfx-rs/wgpu/issues/3514 and https://github.com/gfx-rs/wgpu/pull/7076 for more information.
+# This trick doesn't work at the `wgpu` level, because the `wgpu` -> `wgpu-core` dependency is conditional,
+# making the Cargo.toml signifigantly more complicated in all areas.
+#
+# See https://github.com/gfx-rs/wgpu/issues/3514, https://github.com/gfx-rs/wgpu/pull/7076,
+# and https://github.com/rust-lang/cargo/issues/1197 for more information.
 
 ## Enables the Metal backend when targeting Apple platforms.
 metal = [

@@ -43,7 +43,7 @@ metal = ["wgpu-core?/metal"]
 ## Enables the Vulkan backend on Windows, Linux, and Android.
 vulkan = ["wgpu-core?/vulkan"]
 
-## Enables the OpenGL backend on Windows, Linux, Android, and Emscripten.
+## Enables the OpenGL/GLES backend on Windows, Linux, Android, and Emscripten.
 gles = ["wgpu-core?/gles"]
 
 ## Enables the WebGPU backend on WebAssembly.

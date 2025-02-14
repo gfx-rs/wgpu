@@ -70,6 +70,14 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
             search_terms: &[Search::Positive("glow")],
         },
         Requirement {
+            human_readable_name: "windows with `webgl` does not depend on `glow`",
+            target: "x86_64-pc-windows-msvc",
+            packages: &["wgpu"],
+            features: &["webgl"],
+            default_features: false,
+            search_terms: &[Search::Negative("glow")],
+        },
+        Requirement {
             human_readable_name: "apple with `vulkan` feature does not depend on `ash`",
             target: "aarch64-apple-darwin",
             packages: &["wgpu"],
@@ -130,6 +138,22 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
             features: &[],
             default_features: false,
             search_terms: &[Search::Positive("renderdoc-sys")],
+        },
+        Requirement {
+            human_readable_name: "emscripten with webgl feature does not depend on glow",
+            target: "wasm32-unknown-emscripten",
+            packages: &["wgpu"],
+            features: &["webgl"],
+            default_features: false,
+            search_terms: &[Search::Negative("glow")],
+        },
+        Requirement {
+            human_readable_name: "emscripten with gles feature depends on glow",
+            target: "wasm32-unknown-emscripten",
+            packages: &["wgpu"],
+            features: &["gles"],
+            default_features: false,
+            search_terms: &[Search::Positive("glow")],
         },
     ];
 
