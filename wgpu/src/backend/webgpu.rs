@@ -5,7 +5,6 @@ mod ext_bindings;
 #[allow(clippy::allow_attributes)]
 mod webgpu_sys;
 
-use hashbrown::HashMap;
 use js_sys::Promise;
 use std::{
     cell::RefCell,
@@ -1756,14 +1755,17 @@ impl dispatch::DeviceInterface for WebDevice {
             crate::ShaderSource::Glsl {
                 ref shader,
                 stage,
-                ref defines,
+                defines,
             } => {
                 use naga::front;
 
                 // Parse the given shader code and store its representation.
                 let options = front::glsl::Options {
                     stage,
-                    defines: defines.clone(),
+                    defines: defines
+                        .iter()
+                        .map(|&(key, value)| (String::from(key), String::from(value)))
+                        .collect(),
                 };
                 let mut parser = front::glsl::Frontend::default();
                 parser
@@ -3835,19 +3837,23 @@ impl Drop for WebQueueWriteBuffer {
 /// exposed by `wasm-bindgen`. See the following issues for details:
 /// - [gfx-rs/wgpu#5688](https://github.com/gfx-rs/wgpu/pull/5688)
 /// - [rustwasm/wasm-bindgen#3587](https://github.com/rustwasm/wasm-bindgen/issues/3587)
-fn insert_constants_map(target: &JsValue, map: &HashMap<String, f64>) {
+fn insert_constants_map(target: &JsValue, map: &[(&str, f64)]) {
     if !map.is_empty() {
-        js_sys::Reflect::set(target, &"constants".into(), &hashmap_to_jsvalue(map))
-            .expect("Setting the values in a Javascript pipeline descriptor should never fail");
+        js_sys::Reflect::set(
+            target,
+            &JsValue::from_str("constants"),
+            &hashmap_to_jsvalue(map),
+        )
+        .expect("Setting the values in a Javascript pipeline descriptor should never fail");
     }
 }
 
 /// Converts a hashmap to a Javascript object.
-fn hashmap_to_jsvalue(map: &HashMap<String, f64>) -> JsValue {
+fn hashmap_to_jsvalue(map: &[(&str, f64)]) -> JsValue {
     let obj = js_sys::Object::new();
 
-    for (k, v) in map.iter() {
-        js_sys::Reflect::set(&obj, &k.into(), &(*v).into())
+    for &(key, v) in map.iter() {
+        js_sys::Reflect::set(&obj, &JsValue::from_str(key), &JsValue::from_f64(v))
             .expect("Setting the values in a Javascript map should never fail");
     }
 

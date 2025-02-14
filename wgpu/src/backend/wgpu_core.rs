@@ -996,7 +996,10 @@ impl dispatch::DeviceInterface for CoreDevice {
             } => {
                 let options = naga::front::glsl::Options {
                     stage,
-                    defines: defines.iter().cloned().collect(),
+                    defines: defines
+                        .iter()
+                        .map(|&(key, value)| (String::from(key), String::from(value)))
+                        .collect(),
                 };
                 wgc::pipeline::ShaderModuleSource::Glsl(Borrowed(shader), options)
             }
@@ -1269,7 +1272,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .compilation_options
             .constants
             .iter()
-            .cloned()
+            .map(|&(key, value)| (String::from(key), value))
             .collect();
 
         let descriptor = pipe::RenderPipelineDescriptor {
@@ -1291,7 +1294,12 @@ impl dispatch::DeviceInterface for CoreDevice {
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
             fragment: desc.fragment.as_ref().map(|frag| {
-                let frag_constants = frag.compilation_options.constants.iter().cloned().collect();
+                let frag_constants = frag
+                    .compilation_options
+                    .constants
+                    .iter()
+                    .map(|&(key, value)| (String::from(key), value))
+                    .collect();
                 pipe::FragmentState {
                     stage: pipe::ProgrammableStageDescriptor {
                         module: frag.module.inner.as_core().id,
@@ -1338,7 +1346,12 @@ impl dispatch::DeviceInterface for CoreDevice {
     ) -> dispatch::DispatchComputePipeline {
         use wgc::pipeline as pipe;
 
-        let constants = desc.compilation_options.constants.iter().cloned().collect();
+        let constants = desc
+            .compilation_options
+            .constants
+            .iter()
+            .map(|&(key, value)| (String::from(key), value))
+            .collect();
 
         let descriptor = pipe::ComputePipelineDescriptor {
             label: desc.label.map(Borrowed),

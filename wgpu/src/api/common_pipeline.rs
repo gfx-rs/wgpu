@@ -14,7 +14,7 @@ pub struct PipelineCompilationOptions<'a> {
     /// If the given constant is specified more than once, the last value specified is used.
     ///
     /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a [(String, f64)],
+    pub constants: &'a [(&'a str, f64)],
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided

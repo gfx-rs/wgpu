@@ -189,7 +189,7 @@ pub enum ShaderSource<'a> {
         /// Key-value pairs to represent defines sent to the glsl preprocessor.
         ///
         /// If the same name is defined multiple times, the last value is used.
-        defines: &'a [(String, String)],
+        defines: &'a [(&'a str, &'a str)],
     },
     /// WGSL module as a string slice.
     #[cfg(feature = "wgsl")]
