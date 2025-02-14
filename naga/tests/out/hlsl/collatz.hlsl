@@ -1,5 +1,13 @@
 RWByteAddressBuffer v_indices : register(u0);
 
+uint naga_mod(uint lhs, uint rhs) {
+    return lhs % (rhs == 0u ? 1u : rhs);
+}
+
+uint naga_div(uint lhs, uint rhs) {
+    return lhs / (rhs == 0u ? 1u : rhs);
+}
+
 uint collatz_iterations(uint n_base)
 {
     uint n = (uint)0;
@@ -17,9 +25,9 @@ uint collatz_iterations(uint n_base)
         }
         {
             uint _e7 = n;
-            if (((_e7 % 2u) == 0u)) {
+            if ((naga_mod(_e7, 2u) == 0u)) {
                 uint _e12 = n;
-                n = (_e12 / 2u);
+                n = naga_div(_e12, 2u);
             } else {
                 uint _e16 = n;
                 n = ((3u * _e16) + 1u);

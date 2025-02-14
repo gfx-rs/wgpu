@@ -84,7 +84,7 @@ FooStruct ConstructFooStruct(float3 arg0, float arg1) {
 
 void test_msl_packed_vec3_()
 {
-    int idx = 1;
+    int idx = int(1);
 
     alignment.Store3(0, asuint((1.0).xxx));
     alignment.Store(0+0, asuint(1.0));

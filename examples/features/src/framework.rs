@@ -438,6 +438,7 @@ async fn start<E: Example>(title: &str) {
                             .unwrap()
                             .render(&view, &context.device, &context.queue);
 
+                        window_loop.window.pre_present_notify();
                         frame.present();
 
                         window_loop.window.request_redraw();
@@ -591,9 +592,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-                ctx.async_poll(wgpu::Maintain::wait())
-                    .await
-                    .panic_on_timeout();
+                ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
                 wgpu_test::image::compare_image_output(

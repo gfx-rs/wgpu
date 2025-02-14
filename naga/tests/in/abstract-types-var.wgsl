@@ -43,6 +43,10 @@ var<private> xafpaiaf: array<f32, 2> = array(1,   2.0);
 var<private> xafpafai: array<f32, 2> = array(1.0, 2);
 var<private> xafpafaf: array<f32, 2> = array(1.0, 2.0);
 
+var<private> xavipai: array<vec3<i32>, 1> = array(vec3(1));
+var<private> xavfpai: array<vec3<f32>, 1> = array(vec3(1));
+var<private> xavfpaf: array<vec3<f32>, 1> = array(vec3(1.0));
+
 var<private> ivispai = vec2(1);
 var<private> ivfspaf = vec2(1.0);
 var<private> ivis_ai = vec2<i32>(1);
@@ -57,6 +61,10 @@ var<private> iaipaiai = array(1,   2);
 var<private> iafpafaf = array(1.0, 2.0);
 var<private> iafpaiaf = array(1, 2.0);
 var<private> iafpafai = array(1.0, 2);
+
+var<private> iavipai = array(vec3(1));
+var<private> iavfpai = array(vec3(1));
+var<private> iavfpaf = array(vec3(1.0));
 
 fn all_constant_arguments() {
     var xvipaiai: vec2<i32> = vec2(42, 43);
@@ -99,6 +107,10 @@ fn all_constant_arguments() {
     var xafpaiaf: array<f32, 2> = array(1,   2.0);
     var xafpafai: array<f32, 2> = array(1.0, 2);
     var xafpafaf: array<f32, 2> = array(1.0, 2.0);
+
+    var xavipai: array<vec3<i32>, 1> = array(vec3(1));
+    var xavfpai: array<vec3<f32>, 1> = array(vec3(1));
+    var xavfpaf: array<vec3<f32>, 1> = array(vec3(1.0));
 
     var iaipaiai = array(1,   2);
     var iafpaiaf = array(1,   2.0);
@@ -146,6 +158,10 @@ fn all_constant_arguments() {
     xafpaiaf = array(1,   2.0);
     xafpafai = array(1.0, 2);
     xafpafaf = array(1.0, 2.0);
+
+    xavipai = array(vec3(1));
+    xavfpai = array(vec3(1));
+    xavfpaf = array(vec3(1.0));
 
     iaipaiai = array(1,   2);
     iafpaiaf = array(1,   2.0);

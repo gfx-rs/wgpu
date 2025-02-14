@@ -73,7 +73,7 @@ async fn run_test(ctx: TestingContext, use_many_writes: bool) {
             let result_cell = result_cell.clone();
             move |result| result_cell.set(result).unwrap()
         });
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::PollType::Wait).unwrap();
         result_cell
             .get()
             .as_ref()

@@ -355,7 +355,7 @@ impl crate::framework::Example for Example {
             rpass.draw_indexed(0..12, 0, 0..1);
         }
         queue.submit(Some(encoder.finish()));
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::PollType::Wait).unwrap();
     }
 }
 

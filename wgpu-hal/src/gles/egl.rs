@@ -259,11 +259,12 @@ fn choose_config(
                     log::warn!("EGL says it can present to the window but not natively",);
                 }
                 // Android emulator can't natively present either.
-                let tier_threshold = if cfg!(target_os = "android") || cfg!(windows) {
-                    1
-                } else {
-                    2
-                };
+                let tier_threshold =
+                    if cfg!(target_os = "android") || cfg!(windows) || cfg!(target_env = "ohos") {
+                        1
+                    } else {
+                        2
+                    };
                 return Ok((config, tier_max >= tier_threshold));
             }
             Ok(None) => {
@@ -956,6 +957,7 @@ impl crate::Instance for Instance {
             (Rwh::Xcb(_), _) => {}
             (Rwh::Win32(_), _) => {}
             (Rwh::AppKit(_), _) => {}
+            (Rwh::OhosNdk(_), _) => {}
             #[cfg(target_os = "android")]
             (Rwh::AndroidNdk(handle), _) => {
                 let format = inner
@@ -1306,6 +1308,7 @@ impl crate::Surface for Surface {
                     (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => {
                         handle.a_native_window.as_ptr()
                     }
+                    (WindowKind::Unknown, Rwh::OhosNdk(handle)) => handle.native_window.as_ptr(),
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
                         let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
@@ -1349,8 +1352,11 @@ impl crate::Surface for Surface {
                     // We don't want any of the buffering done by the driver, because we
                     // manage a swapchain on our side.
                     // Some drivers just fail on surface creation seeing `EGL_SINGLE_BUFFER`.
-                    if cfg!(any(target_os = "android", target_os = "macos"))
-                        || cfg!(windows)
+                    if cfg!(any(
+                        target_os = "android",
+                        target_os = "macos",
+                        target_env = "ohos"
+                    )) || cfg!(windows)
                         || self.wsi.kind == WindowKind::AngleX11
                     {
                         khronos_egl::BACK_BUFFER

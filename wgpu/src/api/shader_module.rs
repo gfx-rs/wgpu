@@ -186,8 +186,10 @@ pub enum ShaderSource<'a> {
         shader: Cow<'a, str>,
         /// The shader stage that the shader targets. For example, `naga::ShaderStage::Vertex`
         stage: naga::ShaderStage,
-        /// Defines to unlock configured shader features.
-        defines: naga::FastHashMap<String, String>,
+        /// Key-value pairs to represent defines sent to the glsl preprocessor.
+        ///
+        /// If the same name is defined multiple times, the last value is used.
+        defines: &'a [(&'a str, &'a str)],
     },
     /// WGSL module as a string slice.
     #[cfg(feature = "wgsl")]

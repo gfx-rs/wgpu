@@ -1,13 +1,13 @@
-# Copyright 2018-2024 the Deno authors. All rights reserved. MIT license.
+# Copyright 2018-2025 the Deno authors. MIT license.
 
 [package]
 name = "deno_webgpu"
-version = "0.146.0"
+version = "0.157.0"
 authors = ["the Deno authors"]
 edition.workspace = true
 license = "MIT"
 readme = "README.md"
-repository.workspace = true
+repository = "https://github.com/gfx-rs/wgpu"
 description = "WebGPU implementation for Deno"
 
 [lib]
@@ -28,11 +28,14 @@ wgpu-core = { workspace = true, features = [
 wgpu-types = { workspace = true, features = ["serde"] }
 
 deno_core.workspace = true
-hashbrown = { workspace = true, features = ["serde"] }
-raw-window-handle = { workspace = true }
+deno_error.workspace = true
 serde = { workspace = true, features = ["derive"] }
-thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
+raw-window-handle = { workspace = true }
+thiserror.workspace = true
+indexmap.workspace = true
+serde_json.workspace = true
+deno_unsync.workspace = true
 
 # Apple Platforms
 #

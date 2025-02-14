@@ -392,6 +392,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        _src: &super::AccelerationStructure,
+        _dst: &super::AccelerationStructure,
+        _copy: wgt::AccelerationStructureCopy,
+    ) {
+        unimplemented!()
+    }
+
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
         match set.ty {
             wgt::QueryType::Occlusion => {
@@ -1289,6 +1298,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        _acceleration_structure: &super::AccelerationStructure,
+        _buf: &super::Buffer,
     ) {
         unimplemented!()
     }

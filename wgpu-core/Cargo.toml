@@ -137,6 +137,10 @@ vulkan-portability = ["wgpu-core-platform-apple/vulkan-portability"]
 ## Renderdoc integration, only available on Windows, Linux, and Android
 renderdoc = ["wgpu-core-platform-windows-linux-android/renderdoc"]
 
+## Enable the `noop` backend.
+# TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
+noop = []
+
 [dependencies]
 naga.workspace = true
 wgpu-hal.workspace = true

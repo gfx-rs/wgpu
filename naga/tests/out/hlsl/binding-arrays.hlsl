@@ -62,7 +62,7 @@ float4 main(FragmentInput_main fragmentinput_main) : SV_Target0
     uint uniform_index = uni.index;
     uint non_uniform_index = fragment_in.index;
     float2 uv = (0.0).xx;
-    int2 pix = (0).xx;
+    int2 pix = (int(0)).xx;
     uint2 _e22 = u2_;
     u2_ = (_e22 + NagaDimensions2D(texture_array_unbounded[0]));
     uint2 _e27 = u2_;
@@ -87,13 +87,13 @@ float4 main(FragmentInput_main fragmentinput_main) : SV_Target0
     float4 _e76 = texture_array_depth[NonUniformResourceIndex(non_uniform_index)].GatherCmp(nagaComparisonSamplerHeap[NonUniformResourceIndex(nagaGroup0SamplerIndexArray[samp_comp + non_uniform_index])], uv, 0.0);
     float4 _e77 = v4_;
     v4_ = (_e77 + _e76);
-    float4 _e82 = texture_array_unbounded[0].Load(int3(pix, 0));
+    float4 _e82 = texture_array_unbounded[0].Load(int3(pix, int(0)));
     float4 _e83 = v4_;
     v4_ = (_e83 + _e82);
-    float4 _e88 = texture_array_unbounded[uniform_index].Load(int3(pix, 0));
+    float4 _e88 = texture_array_unbounded[uniform_index].Load(int3(pix, int(0)));
     float4 _e89 = v4_;
     v4_ = (_e89 + _e88);
-    float4 _e94 = texture_array_unbounded[NonUniformResourceIndex(non_uniform_index)].Load(int3(pix, 0));
+    float4 _e94 = texture_array_unbounded[NonUniformResourceIndex(non_uniform_index)].Load(int3(pix, int(0)));
     float4 _e95 = v4_;
     v4_ = (_e95 + _e94);
     uint _e100 = u1_;

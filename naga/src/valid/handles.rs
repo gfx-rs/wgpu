@@ -139,13 +139,13 @@ impl super::Validator {
             validate_const_expr(init)?;
         }
 
-        for (_handle, override_) in overrides.iter() {
+        for (_handle, r#override) in overrides.iter() {
             let &crate::Override {
                 name: _,
                 id: _,
                 ty,
                 init,
-            } = override_;
+            } = r#override;
             validate_type(ty)?;
             if let Some(init_expr) = init {
                 validate_const_expr(init_expr)?;
@@ -323,9 +323,9 @@ impl super::Validator {
                         crate::PendingArraySize::Expression(expr) => Some(expr),
                         crate::PendingArraySize::Override(h) => {
                             Self::validate_override_handle(h, overrides)?;
-                            let override_ = &overrides[h];
-                            handle.check_dep(override_.ty)?;
-                            override_.init
+                            let r#override = &overrides[h];
+                            handle.check_dep(r#override.ty)?;
+                            r#override.init
                         }
                     },
                     crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => None,
@@ -363,9 +363,9 @@ impl super::Validator {
                 handle.check_dep(constants[constant].init)?;
                 None
             }
-            crate::Expression::Override(override_) => {
-                validate_override(override_)?;
-                if let Some(init) = overrides[override_].init {
+            crate::Expression::Override(r#override) => {
+                validate_override(r#override)?;
+                if let Some(init) = overrides[r#override].init {
                     handle.check_dep(init)?;
                 }
                 None
@@ -416,8 +416,8 @@ impl super::Validator {
             crate::Expression::Constant(constant) => {
                 validate_constant(constant)?;
             }
-            crate::Expression::Override(override_) => {
-                validate_override(override_)?;
+            crate::Expression::Override(r#override) => {
+                validate_override(r#override)?;
             }
             crate::Expression::ZeroValue(ty) => {
                 validate_type(ty)?;
@@ -707,6 +707,10 @@ impl super::Validator {
                     crate::RayQueryFunction::Proceed { result } => {
                         validate_expr(result)?;
                     }
+                    crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                        validate_expr(hit_t)?;
+                    }
+                    crate::RayQueryFunction::ConfirmIntersection => {}
                     crate::RayQueryFunction::Terminate => {}
                 }
                 Ok(())

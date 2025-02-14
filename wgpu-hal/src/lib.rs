@@ -239,14 +239,15 @@ extern crate wgpu_types as wgt;
 /// DirectX12 API internals.
 #[cfg(dx12)]
 pub mod dx12;
-/// A dummy API implementation.
-pub mod empty;
 /// GLES API internals.
 #[cfg(gles)]
 pub mod gles;
 /// Metal API internals.
 #[cfg(metal)]
 pub mod metal;
+/// A dummy API implementation.
+// TODO(https://github.com/gfx-rs/wgpu/issues/7120): this should have a cfg
+pub mod noop;
 /// Vulkan API internals.
 #[cfg(vulkan)]
 pub mod vulkan;
@@ -255,11 +256,11 @@ pub mod auxil;
 pub mod api {
     #[cfg(dx12)]
     pub use super::dx12::Api as Dx12;
-    pub use super::empty::Api as Empty;
     #[cfg(gles)]
     pub use super::gles::Api as Gles;
     #[cfg(metal)]
     pub use super::metal::Api as Metal;
+    pub use super::noop::Api as Noop;
     #[cfg(vulkan)]
     pub use super::vulkan::Api as Vulkan;
 }
@@ -298,6 +299,7 @@ pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_COLOR_ATTACHMENTS: usize = 8;
 pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
+/// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
 
 pub type Label<'a> = Option<&'a str>;
@@ -936,6 +938,8 @@ pub trait Device: WasmNotSendSync {
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
+    /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
+    ///
     /// [`Fence`]: Api::Fence
     /// [`FencePool`]: vulkan/enum.Fence.html#variant.FencePool
     unsafe fn wait(
@@ -1249,6 +1253,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     ) where
         T: Iterator<Item = BufferTextureCopy>;
 
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        src: &<Self::A as Api>::AccelerationStructure,
+        dst: &<Self::A as Api>::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
+    );
     // pass common
 
     /// Sets the bind group at `index` to `group`.
@@ -1508,6 +1518,12 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         barrier: AccelerationStructureBarrier,
+    );
+    // modeled off dx12, because this is able to be polyfilled in vulkan as opposed to the other way round
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        acceleration_structure: &<Self::A as Api>::AccelerationStructure,
+        buf: &<Self::A as Api>::Buffer,
     );
 }
 
@@ -1954,6 +1970,7 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
     }
 }
 
+/// cbindgen:ignore
 #[derive(Clone, Debug)]
 pub struct BindGroupEntry {
     pub binding: u32,
@@ -2311,6 +2328,7 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub label: Label<'a>,
     pub size: wgt::BufferAddress,
     pub format: AccelerationStructureFormat,
+    pub allow_compaction: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -2397,6 +2415,11 @@ pub struct AccelerationStructureAABBs<'a, B: DynBuffer + ?Sized> {
     pub flags: AccelerationStructureGeometryFlags,
 }
 
+pub struct AccelerationStructureCopy {
+    pub copy_flags: wgt::AccelerationStructureCopy,
+    pub type_flags: wgt::AccelerationStructureType,
+}
+
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
 pub struct AccelerationStructureInstances<'a, B: DynBuffer + ?Sized> {
@@ -2433,6 +2456,12 @@ bitflags::bitflags! {
         const BUILD_OUTPUT = 1 << 1;
         // Tlas used in a shader
         const SHADER_INPUT = 1 << 2;
+        // Blas used to query compacted size
+        const QUERY_INPUT = 1 << 3;
+        // BLAS used as a src for a copy operation
+        const COPY_SRC = 1 << 4;
+        // BLAS used as a dst for a copy operation
+        const COPY_DST = 1 << 5;
     }
 }
 
