@@ -1,3 +1,6 @@
+; SPIR-V
+; Version: 1.0
+
 ;; Ensure that `do`-`while`-style loops, with conditional backedges, are properly
 ;; supported, via `break if` (as `continuing { ... if c { break; } }` is illegal).
 ;;

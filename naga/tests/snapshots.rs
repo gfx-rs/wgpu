@@ -1046,11 +1046,36 @@ fn unconsumed_vertex_outputs_hlsl_out() {
 
 #[cfg(feature = "spv-in")]
 fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
+    use std::process::Command;
+
     let _ = env_logger::try_init();
 
-    let input = Input::new(Some("spv"), name, "spv");
+    let input = Input::new(Some("spv"), name, "spvasm");
+
+    println!("Assembling '{}'", input.file_name.display());
+
+    let command = Command::new("spirv-as")
+        .arg(input.input_path())
+        .arg("-o")
+        .arg("-")
+        .output()
+        .expect(
+            "Failed to execute spirv-as. It can be installed \
+            by installing the Vulkan SDK and adding it to your path.",
+        );
+
+    println!("Processing '{}'", input.file_name.display());
+
+    if !command.status.success() {
+        panic!(
+            "spirv-as failed: {}\n{}",
+            String::from_utf8_lossy(&command.stdout),
+            String::from_utf8_lossy(&command.stderr)
+        );
+    }
+
     let mut module = naga::front::spv::parse_u8_slice(
-        &input.read_bytes(),
+        &command.stdout,
         &naga::front::spv::Options {
             adjust_coordinate_space,
             strict_capabilities: false,
@@ -1058,6 +1083,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         },
     )
     .unwrap();
+
     check_targets(&input, &mut module, targets, None, None);
 }
 
