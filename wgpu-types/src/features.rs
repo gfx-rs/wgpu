@@ -1144,7 +1144,7 @@ bitflags_array! {
         /// - The `count` field of `BindGroupLayoutEntry`s with `Uniform` buffers, to be set to `Some`.
         ///
         /// Supported platforms:
-        /// - None (https://github.com/gfx-rs/wgpu/issues/7149)
+        /// - None (<https://github.com/gfx-rs/wgpu/issues/7149>)
         ///
         /// Potential Platforms:
         /// - DX12
