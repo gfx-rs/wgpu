@@ -43,6 +43,12 @@ pub enum EnableExtension {
     Unimplemented(UnimplementedEnableExtension),
 }
 
+impl From<ImplementedEnableExtension> for EnableExtension {
+    fn from(value: ImplementedEnableExtension) -> Self {
+        Self::Implemented(value)
+    }
+}
+
 impl EnableExtension {
     const F16: &'static str = "f16";
     const CLIP_DISTANCES: &'static str = "clip_distances";
