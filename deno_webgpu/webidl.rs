@@ -391,8 +391,10 @@ pub enum GPUFeatureName {
     StorageResourceBindingArray,
     #[webidl(rename = "sampled-texture-and-storage-buffer-array-non-uniform-indexing")]
     SampledTextureAndStorageBufferArrayNonUniformIndexing,
-    #[webidl(rename = "uniform-buffer-and-storage-texture-array-non-uniform-indexing")]
-    UniformBufferAndStorageTextureArrayNonUniformIndexing,
+    #[webidl(rename = "storage-texture-array-non-uniform-indexing")]
+    StorageTextureArrayNonUniformIndexing,
+    #[webidl(rename = "uniform-buffer-binding-arrays")]
+    UniformBufferBindingArrays,
     #[webidl(rename = "partially-bound-binding-array")]
     PartiallyBoundBindingArray,
     #[webidl(rename = "multi-draw-indirect")]
@@ -462,7 +464,8 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::BufferBindingArray => Features::BUFFER_BINDING_ARRAY,
       GPUFeatureName::StorageResourceBindingArray => Features::STORAGE_RESOURCE_BINDING_ARRAY,
       GPUFeatureName::SampledTextureAndStorageBufferArrayNonUniformIndexing => Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-      GPUFeatureName::UniformBufferAndStorageTextureArrayNonUniformIndexing => Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+      GPUFeatureName::StorageTextureArrayNonUniformIndexing => Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+      GPUFeatureName::UniformBufferBindingArrays => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
       GPUFeatureName::PartiallyBoundBindingArray => Features::PARTIALLY_BOUND_BINDING_ARRAY,
       GPUFeatureName::MultiDrawIndirect => Features::MULTI_DRAW_INDIRECT,
       GPUFeatureName::MultiDrawIndirectCount => Features::MULTI_DRAW_INDIRECT_COUNT,
@@ -575,10 +578,11 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     ) {
         return_features.insert(SampledTextureAndStorageBufferArrayNonUniformIndexing);
     }
-    if features.contains(
-        wgpu_types::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-    ) {
-        return_features.insert(UniformBufferAndStorageTextureArrayNonUniformIndexing);
+    if features.contains(wgpu_types::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) {
+        return_features.insert(StorageTextureArrayNonUniformIndexing);
+    }
+    if features.contains(wgpu_types::Features::UNIFORM_BUFFER_BINDING_ARRAYS) {
+        return_features.insert(UniformBufferBindingArrays);
     }
     if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.insert(PartiallyBoundBindingArray);

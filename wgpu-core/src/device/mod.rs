@@ -392,9 +392,12 @@ pub fn create_validator(
             .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
     );
     caps.set(
-        Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-        features
-            .contains(wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+        Caps::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        features.contains(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS),
     );
     // TODO: This needs a proper wgpu feature
     caps.set(

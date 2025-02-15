@@ -925,7 +925,7 @@ impl super::PrivateCapabilities {
         features.set(
             F::TEXTURE_BINDING_ARRAY
                 | F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | F::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | F::PARTIALLY_BOUND_BINDING_ARRAY,
             self.msl_version >= MTLLanguageVersion::V3_0
                 && self.supports_arrays_of_textures
