@@ -834,7 +834,7 @@ fn unconsumed_vertex_outputs_hlsl_out() {
 }
 
 #[cfg(feature = "spv-in")]
-fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
+fn convert_spv(name: &str, adjust_coordinate_space: bool) {
     use std::process::Command;
 
     let _ = env_logger::try_init();
@@ -877,56 +877,28 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
 
 #[cfg(feature = "spv-in")]
 #[test]
-fn convert_spv_all() {
-    convert_spv(
-        "quad-vert",
-        false,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv("shadow", true, Targets::IR | Targets::ANALYSIS);
-    convert_spv(
-        "inv-hyperbolic-trig-functions",
-        true,
-        Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv(
-        "empty-global-name",
-        true,
-        Targets::HLSL | Targets::WGSL | Targets::METAL,
-    );
-    convert_spv("degrees", false, Targets::empty());
-    convert_spv("binding-arrays.dynamic", true, Targets::WGSL);
-    convert_spv("binding-arrays.static", true, Targets::WGSL);
-    convert_spv(
-        "do-while",
-        true,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv(
-        "unnamed-gl-per-vertex",
-        true,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
-    convert_spv("spec-constants", true, Targets::IR);
-    convert_spv("spec-constants-issue-5598", true, Targets::GLSL);
-    convert_spv(
-        "subgroup-operations-s",
-        false,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv("atomic_i_increment", false, Targets::WGSL);
-    convert_spv("atomic_load_and_store", false, Targets::WGSL);
-    convert_spv("atomic_exchange", false, Targets::WGSL);
-    convert_spv("atomic_compare_exchange", false, Targets::WGSL);
-    convert_spv("atomic_i_decrement", false, Targets::WGSL);
-    convert_spv("atomic_i_add_sub", false, Targets::WGSL);
-    convert_spv("atomic_global_struct_field_vertex", false, Targets::WGSL);
-    convert_spv(
-        "fetch_depth",
-        false,
-        Targets::IR | Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-    );
+fn convert_snapshots_spv() {
+    convert_spv("quad-vert", false);
+    convert_spv("shadow", true);
+    convert_spv("inv-hyperbolic-trig-functions", true);
+    convert_spv("empty-global-name", true);
+    convert_spv("degrees", false);
+    convert_spv("binding-arrays.dynamic", true);
+    convert_spv("binding-arrays.static", true);
+    convert_spv("do-while", true);
+    convert_spv("unnamed-gl-per-vertex", true);
+    convert_spv("builtin-accessed-outside-entrypoint", true);
+    convert_spv("spec-constants", true);
+    convert_spv("spec-constants-issue-5598", true);
+    convert_spv("subgroup-operations-s", false);
+    convert_spv("atomic_i_increment", false);
+    convert_spv("atomic_load_and_store", false);
+    convert_spv("atomic_exchange", false);
+    convert_spv("atomic_compare_exchange", false);
+    convert_spv("atomic_i_decrement", false);
+    convert_spv("atomic_i_add_sub", false);
+    convert_spv("atomic_global_struct_field_vertex", false);
+    convert_spv("fetch_depth", false);
 }
 
 #[cfg(feature = "glsl-in")]
