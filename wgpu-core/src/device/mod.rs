@@ -397,7 +397,7 @@ pub fn create_validator(
     );
     caps.set(
         Caps::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        features.contains(wgt::Features::UNIFORM_BUFFER_INDEXING),
+        features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS),
     );
     // TODO: This needs a proper wgpu feature
     caps.set(

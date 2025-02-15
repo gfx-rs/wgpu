@@ -13,7 +13,7 @@ fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
 fn indexing_features() -> wgt::Features {
     wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
         | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-        | wgt::Features::UNIFORM_BUFFER_INDEXING
+        | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS
         | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY
 }
 
@@ -219,7 +219,7 @@ impl PhysicalDeviceFeatures {
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         );
         let needs_uniform_buffer_non_uniform =
-            requested_features.contains(wgt::Features::UNIFORM_BUFFER_INDEXING);
+            requested_features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS);
         let needs_storage_image_non_uniform = requested_features.contains(
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
@@ -585,6 +585,8 @@ impl PhysicalDeviceFeatures {
         features.set(F::SHADER_F64, self.core.shader_float64 != 0);
         features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
+
+        features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
 
         if let Some(ref shader_atomic_int64) = self.shader_atomic_int64 {
             features.set(
@@ -1823,7 +1825,7 @@ impl super::Adapter {
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                    | wgt::Features::UNIFORM_BUFFER_INDEXING,
+                    | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS,
             ) {
                 capabilities.push(spv::Capability::ShaderNonUniform);
             }

@@ -486,31 +486,22 @@ bitflags::bitflags! {
         // Native Features:
         //
 
-        /// Allows shaders to index uniform buffer binding arrays:
+        /// Allows uniform buffers to be bound as binding arrays.
         ///
-        /// ex. `uniform_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
-        ///
-        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
-        ///
-        /// or as `nonuniformEXT` constructor:
-        ///
-        /// ex. `uniform_array[nonuniformEXT(vertex_data)]`
-        ///
-        /// WGSL and HLSL do not need any extension.
+        /// This allows:
+        /// - Shaders to contain `var<uniform> buffer: binding_array<UniformBuffer>;`
+        /// - The `count` field of `BindGroupLayoutEntry`s with `Uniform` buffers, to be set to `Some`.
         ///
         /// Supported platforms:
+        /// - None (https://github.com/gfx-rs/wgpu/issues/7149)
+        ///
+        /// Potential Platforms:
         /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing feature)
+        /// - Metal
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s `shaderUniformBufferArrayNonUniformIndexing` feature)
         ///
         /// This is a native only feature.
-        const UNIFORM_BUFFER_INDEXING = 1 << 17;
+        const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 17;
         /// Enables R64Uint image atomic min and max.
         ///
         /// Supported platforms:
@@ -585,8 +576,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES = 1 << 22;
-
-        // API:
 
         /// Enables use of Pipeline Statistics Queries. These queries tell the count of various operations
         /// performed between the start and stop call. Call [`RenderPass::begin_pipeline_statistics_query`] to start
